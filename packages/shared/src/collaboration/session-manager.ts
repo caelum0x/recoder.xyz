@@ -430,7 +430,7 @@ export class SessionManager extends EventEmitter {
     }
   }
 
-  private updateCollaborationScore(sessionId: string, change: CodeChange): void {
+  private updateCollaborationScore(sessionId: string, _change: CodeChange): void {
     const analytics = this.analytics.get(sessionId);
     const session = this.sessions.get(sessionId);
     if (!analytics || !session) return;

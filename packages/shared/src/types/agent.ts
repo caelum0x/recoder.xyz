@@ -2,7 +2,7 @@
  * Agent types and interfaces
  */
 
-import { Timestamp, ProjectType, ValidationLevel } from './common';
+import { Timestamp, ValidationLevel } from './common';
 
 export enum AgentRole {
   ARCHITECT = 'architect',

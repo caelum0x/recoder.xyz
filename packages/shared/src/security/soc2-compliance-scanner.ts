@@ -358,7 +358,7 @@ export class SOC2ComplianceScanner {
 
   // Rule Implementation Methods
 
-  private async checkInputValidation(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkInputValidation(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -395,7 +395,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkSQLInjection(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkSQLInjection(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -434,7 +434,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkAuthentication(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkAuthentication(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -478,7 +478,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkAuthorization(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkAuthorization(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -547,7 +547,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkEncryptionInTransit(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkEncryptionInTransit(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -582,7 +582,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkErrorHandling(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkErrorHandling(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -618,7 +618,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkRateLimiting(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkRateLimiting(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -684,7 +684,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkTransactionIntegrity(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkTransactionIntegrity(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 
@@ -692,7 +692,7 @@ export class SOC2ComplianceScanner {
     let hasCommit = false;
     let hasRollback = false;
 
-    lines.forEach((line, index) => {
+    lines.forEach((line, _index) => {
       if (line.includes('transaction') || line.includes('BEGIN')) {
         hasTransactionStart = true;
       } else if (line.includes('COMMIT')) {
@@ -721,7 +721,7 @@ export class SOC2ComplianceScanner {
     return violations;
   }
 
-  private async checkPIIProtection(code: string, context: ComplianceContext): Promise<ComplianceViolation[]> {
+  private async checkPIIProtection(code: string, _context: ComplianceContext): Promise<ComplianceViolation[]> {
     const violations: ComplianceViolation[] = [];
     const lines = code.split('\n');
 

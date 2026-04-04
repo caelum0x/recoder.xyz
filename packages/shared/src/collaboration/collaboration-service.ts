@@ -6,7 +6,7 @@
 
 import { EventEmitter } from 'events';
 import { Logger } from '../utils/logger';
-import { CollaborationServer, CollaborationUser, CollaborationSession, CodeChange, AISuggestion } from './websocket-server';
+import { CollaborationServer, CollaborationUser, CollaborationSession, AISuggestion } from './websocket-server';
 import { SessionManager, SessionPersistence, UserPresence } from './session-manager';
 import { RedisSessionPersistence } from './redis-session-persistence';
 import { CodeSyncEngine, CodeDocument, CodeOperation } from './code-sync-engine';
@@ -560,7 +560,7 @@ export class CollaborationService extends EventEmitter {
     });
   }
 
-  private handleUserLeft(data: any): void {
+  private handleUserLeft(_data: any): void {
     // Handled by session manager
   }
 
@@ -604,7 +604,7 @@ export class CollaborationService extends EventEmitter {
     });
   }
 
-  private broadcastToSession(sessionId: string, message: any): void {
+  private broadcastToSession(_sessionId: string, _message: any): void {
     // Use WebSocket server to broadcast
     // This is handled internally by the WebSocket server
   }

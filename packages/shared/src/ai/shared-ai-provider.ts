@@ -375,7 +375,7 @@ export class GroqProvider implements AIProvider {
     return response;
   }
 
-  private extractDependencies(code: string): string[] {
+  private extractDependencies(_code: string): string[] {
     // Similar implementation to Claude
     return [];
   }
