@@ -15255,12 +15255,35 @@ app.use('/api/a2a/dashboard', dashboardRouter);
 
 // ── Coding Runtime API ──────────────────────────────────────────────────────
 // Deep coding mode: start/prompt/dispose sessions via runtime adapters
+const codingRuntimeSelectionByProject = new Map<string, {
+  runtimeType: string;
+  selectedAt: string;
+  classification?: unknown;
+  routeDecision?: unknown;
+}>();
+
 app.post('/api/coding-runtime/session', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
-  const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey } = req.body;
+  const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt } = req.body;
   if (!projectId || !sandboxId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and sandboxId required'));
-  const runtime = getRuntime(runtimeType);
-  if (!runtime) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${runtimeType}`));
+  let resolvedRuntimeType = runtimeType;
+  let autoSelection: { classification: unknown; routeDecision: unknown } | undefined;
+
+  if (runtimeType === 'auto') {
+    if (typeof prompt !== 'string' || !prompt.trim()) {
+      return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'prompt is required when runtimeType=auto'));
+    }
+
+    const { classifyIntent } = await import('./a2a/intent-gate.js');
+    const { routeByCategory } = await import('./a2a/category-router.js');
+    const classification = classifyIntent(prompt);
+    const routeDecision = routeByCategory(classification);
+    resolvedRuntimeType = routeDecision.runtimeType;
+    autoSelection = { classification, routeDecision };
+  }
+
+  const runtime = getRuntime(resolvedRuntimeType as never);
+  if (!runtime) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${resolvedRuntimeType}`));
   const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
   const session = await runtime.startSession({
     projectId, sandboxId,
@@ -15268,29 +15291,79 @@ app.post('/api/coding-runtime/session', authenticateRequest, verifyProjectOwners
     daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
     model, provider, apiKey,
   });
-  sendSuccess(res, session);
+
+  codingRuntimeSelectionByProject.set(projectId, {
+    runtimeType: resolvedRuntimeType,
+    selectedAt: new Date().toISOString(),
+    classification: autoSelection?.classification,
+    routeDecision: autoSelection?.routeDecision,
+  });
+
+  sendSuccess(res, {
+    ...session,
+    selectedRuntime: resolvedRuntimeType,
+    autoSelection,
+  });
 }));
 
 app.post('/api/coding-runtime/prompt', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
-  const { projectId, prompt, runtimeType = 'opencode', agent } = req.body;
+  const { projectId, prompt, runtimeType, agent, enableCompletionLoop, maxIterations, backoffMs } = req.body;
   if (!projectId || !prompt) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
-  const runtime = getRuntime(runtimeType);
-  if (!runtime) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${runtimeType}`));
+  const selection = codingRuntimeSelectionByProject.get(projectId);
+  let resolvedRuntimeType = typeof runtimeType === 'string' ? runtimeType : selection?.runtimeType ?? 'opencode';
+  const autoSelection = selection?.classification && selection?.routeDecision
+    ? { classification: selection.classification, routeDecision: selection.routeDecision }
+    : undefined;
+
+  if (resolvedRuntimeType === 'auto') {
+    if (!selection?.runtimeType) {
+      return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No auto-selected runtime session. Call /session first.'));
+    }
+    resolvedRuntimeType = selection.runtimeType;
+  }
+
+  const runtime = getRuntime(resolvedRuntimeType as never);
+  if (!runtime) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${resolvedRuntimeType}`));
   const state = runtime.getState(projectId);
   if (!state || state.status !== 'ready') return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No ready session. Call /session first.'));
   const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
-  const result = await runtime.sendPrompt({
+  const promptParams = {
     projectId, prompt, agent,
     sandboxExecUrl: `${daytonaUrl}/api/toolbox/${state.sandboxId}/toolbox/process/execute`,
     daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+  };
+
+  const shouldRunCompletionLoop = (enableCompletionLoop === true || runtimeType === 'auto') && resolvedRuntimeType !== 'native';
+
+  if (shouldRunCompletionLoop) {
+    const { runWithCompletionLoop } = await import('./a2a/completion-loop.js');
+    const outcome = await runWithCompletionLoop(runtime, promptParams, {
+      maxIterations: typeof maxIterations === 'number' ? maxIterations : 3,
+      backoffMs: typeof backoffMs === 'number' ? backoffMs : 1000,
+    });
+
+    return sendSuccess(res, {
+      ...outcome.result,
+      selectedRuntime: resolvedRuntimeType,
+      autoSelection,
+      completed: outcome.completed,
+      iterations: outcome.iterations,
+      history: outcome.history,
+    });
+  }
+
+  const result = await runtime.sendPrompt(promptParams);
+  sendSuccess(res, {
+    ...result,
+    selectedRuntime: resolvedRuntimeType,
+    autoSelection,
   });
-  sendSuccess(res, result);
 }));
 
 app.get('/api/coding-runtime/runtimes', (_req, res) => {
   import('./a2a/coding-runtime.js').then(({ listRuntimes }) => {
-    sendSuccess(res, { runtimes: listRuntimes() });
+    sendSuccess(res, { runtimes: ['auto', ...listRuntimes()] });
   });
 });
 
