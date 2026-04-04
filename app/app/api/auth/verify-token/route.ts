@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
-import { prisma } from '@/lib/prisma';
+import { findFallbackSessionByToken } from '@/lib/session-fallback';
 
 const SESSION_COOKIE_CANDIDATES = [
   '__Secure-recoder.session_token',
@@ -79,56 +79,20 @@ async function resolveSessionFromToken(token: string) {
     }
   }
 
-  // Fallback: direct DB lookup (handles cases where Better Auth cookie
-  // prefix mismatch prevents getSession from finding valid sessions).
-  // Check "sessions" (primary, where adapter writes) then "session" (legacy).
-  // Use Prisma instead of dynamic pg import so Next standalone includes the
-  // dependency path in production builds.
   try {
-    const sessionToken = token.includes('.') ? token.split('.')[0] : token;
-    const activeSessionWhere = {
-      token: sessionToken,
-      expiresAt: { gt: new Date() },
-    };
-
-    const primarySession = await prisma.sessions.findFirst({
-      where: activeSessionWhere,
-      include: { users: true },
-    });
-
-    if (primarySession?.users) {
+    const fallbackSession = await findFallbackSessionByToken(token);
+    if (fallbackSession?.user) {
       return {
         user: {
-          id: primarySession.users.id,
-          email: primarySession.users.email,
-          name: primarySession.users.name,
-          image: primarySession.users.image,
+          id: fallbackSession.user.id,
+          email: fallbackSession.user.email,
+          name: fallbackSession.user.name,
+          image: fallbackSession.user.image,
         },
         session: {
-          userId: primarySession.userId,
-          expiresAt: primarySession.expiresAt,
-          token: sessionToken,
-        },
-      };
-    }
-
-    const legacySession = await prisma.session.findFirst({
-      where: activeSessionWhere,
-      include: { user: true },
-    });
-
-    if (legacySession?.user) {
-      return {
-        user: {
-          id: legacySession.user.id,
-          email: legacySession.user.email,
-          name: legacySession.user.name,
-          image: legacySession.user.image,
-        },
-        session: {
-          userId: legacySession.userId,
-          expiresAt: legacySession.expiresAt,
-          token: sessionToken,
+          userId: fallbackSession.userId,
+          expiresAt: fallbackSession.expiresAt,
+          token: token.includes('.') ? token.split('.')[0] : token,
         },
       };
     }
