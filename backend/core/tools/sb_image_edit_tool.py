@@ -21,6 +21,7 @@ from core.billing.credits.media_integration import media_billing
 from core.billing.credits.media_calculator import select_image_quality, cap_quality_for_tier, FREE_TIERS
 from core.utils.image_processing import upscale_image_sync, remove_background_sync, UPSCALE_MODEL, REMOVE_BG_MODEL
 from core.utils.file_name_generator import generate_smart_filename
+from core.utils.media_fallbacks import build_fallback_image_bytes, is_provider_quota_error
 
 
 def parse_image_paths(image_path: Optional[str | list[str]]) -> list[str]:
@@ -328,12 +329,13 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 logger.info(f"Batch completed: {len(image_files)}/{len(prompts)} successful")
                 
                 # BILLING: Deduct credits for successful batch images
-                if account_id and not use_mock and len(image_files) > 0:
+                billable_image_files = [image_file for image_file in image_files if not self._is_fallback_asset(image_file)]
+                if account_id and not use_mock and len(billable_image_files) > 0:
                     await media_billing.deduct_replicate_image(
                         account_id=account_id,
                         model="openai/gpt-image-1.5",
-                        count=len(image_files),
-                        description=f"Batch image {mode} ({len(image_files)} images, quality={quality_variant})",
+                        count=len(billable_image_files),
+                        description=f"Batch image {mode} ({len(billable_image_files)} images, quality={quality_variant})",
                         thread_id=thread_id,
                         variant=quality_variant,
                     )
@@ -351,6 +353,9 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     lines.append(f"Images saved ({len(image_files)}):")
                     for f in image_files:
                         lines.append(f"- {f}")
+                fallback_count = len(image_files) - len(billable_image_files)
+                if fallback_count > 0:
+                    lines.append(f"Fallback previews created ({fallback_count}) because media providers were unavailable or out of credits.")
                 if canvas_info:
                     lines.append(f"Added to canvas: {canvas_path} ({canvas_info['total_elements']} total elements)")
                 if errors:
@@ -436,9 +441,11 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     
                     if isinstance(result, ToolResult):
                         return ToolResult(success=True, output=f"Failed: {result.output}")
+
+                    is_fallback_image = result.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"))
                     
                     # BILLING: Deduct credits for successful video generation
-                    if account_id and not use_mock:
+                    if account_id and not use_mock and not is_fallback_image:
                         video_duration = (video_options or {}).get("duration", 5)
                         generate_audio = (video_options or {}).get("generate_audio", False)
                         await media_billing.deduct_replicate_video(
@@ -449,8 +456,20 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                             description=f"Video generation ({video_duration}s{' + audio' if generate_audio else ''})",
                             thread_id=thread_id,
                         )
-                    
-                    return ToolResult(success=True, output=f"Video saved as: /workspace/{result}")
+
+                    output_lines = [
+                        f"Image saved as: /workspace/{result}" if is_fallback_image else f"Video saved as: /workspace/{result}"
+                    ]
+                    if is_fallback_image:
+                        output_lines.append("Created a fallback storyboard image because video providers were unavailable or out of credits.")
+                        if canvas_path:
+                            canvas_info = await self._add_images_to_canvas(
+                                [result], canvas_path, canvas_x, canvas_y, frame_id
+                            )
+                            if canvas_info:
+                                output_lines.append(f"Added to canvas: {canvas_path} ({canvas_info['total_elements']} total elements)")
+
+                    return ToolResult(success=True, output="\n".join(output_lines))
                 
                 # Image mode (generate/edit)
                 img_aspect_ratio = aspect_ratio or "1:1"
@@ -461,9 +480,11 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 if isinstance(result, ToolResult):
                     # Error - return gracefully with friendly message
                     return ToolResult(success=True, output=f"Failed: {result.output}")
+
+                is_fallback_image = self._is_fallback_asset(result)
                 
                 # BILLING: Deduct credits for successful image generation
-                if account_id and not use_mock:
+                if account_id and not use_mock and not is_fallback_image:
                     await media_billing.deduct_replicate_image(
                         account_id=account_id,
                         model="openai/gpt-image-1.5",
@@ -475,6 +496,8 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 
                 # Success - result is filename (include full path so AI knows exact location)
                 output_lines = [f"Image saved as: /workspace/{result}"]
+                if is_fallback_image:
+                    output_lines.append("Created a fallback image preview because media providers were unavailable or out of credits.")
                 
                 # If canvas_path provided, add to canvas
                 if canvas_path:
@@ -500,8 +523,34 @@ Generate, edit, upscale, or remove background from images. Video generation supp
         os.environ["REPLICATE_API_TOKEN"] = token
         return token
 
-    async def _generate_image_openrouter(self, prompt: str, image_bytes: Optional[bytes] = None) -> Optional[str]:
-        """Generate or edit image via OpenRouter API. Returns base64 data URL or None.
+    @staticmethod
+    def _is_fallback_asset(filename: str) -> bool:
+        return filename.lower().startswith("fallback ")
+
+    async def _write_fallback_asset(
+        self,
+        prompt: str,
+        media_type: str,
+        aspect_ratio: str,
+        reason: str,
+    ) -> str | ToolResult:
+        try:
+            image_bytes = build_fallback_image_bytes(
+                prompt=prompt,
+                media_type=media_type,
+                aspect_ratio=aspect_ratio,
+                reason=reason,
+            )
+            filename_prefix = "Fallback Video Frame" if media_type == "video" else "Fallback Image"
+            fallback_filename = f"{filename_prefix} {uuid.uuid4().hex[:6]}.png"
+            sandbox_path = f"{self.workspace_path}/{fallback_filename}"
+            await self.write_file(sandbox_path, image_bytes)
+            return fallback_filename
+        except Exception as e:
+            return self.fail_response(f"Failed to create local fallback {media_type} preview: {str(e)}")
+
+    async def _generate_image_openrouter(self, prompt: str, image_bytes: Optional[bytes] = None) -> tuple[Optional[str], Optional[str]]:
+        """Generate or edit image via OpenRouter API.
 
         If image_bytes is provided, performs an edit operation by sending the
         image alongside the prompt to the vision model.
@@ -511,8 +560,9 @@ Generate, edit, upscale, or remove background from images. Video generation supp
         config = get_config()
         api_key = config.OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            logger.warning("No OPENROUTER_API_KEY configured for image generation (checked config + env)")
-            return None
+            message = "No OPENROUTER_API_KEY configured for image generation (checked config + env)"
+            logger.warning(message)
+            return None, message
 
         try:
             # Build message content
@@ -547,8 +597,9 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 )
                 if response.status_code != 200:
                     body = response.text[:500]
-                    logger.warning(f"OpenRouter image gen failed: {response.status_code} — {body}")
-                    return None
+                    message = f"OpenRouter image gen failed ({response.status_code}): {body}"
+                    logger.warning(message)
+                    return None, message
 
                 data = response.json()
 
@@ -563,20 +614,22 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                         if isinstance(part, dict) and part.get("type") == "image_url":
                             url = part.get("image_url", {}).get("url")
                             if url:
-                                return url
+                                return url, None
 
                 # Fallback: check legacy .images field (some providers)
                 images = message.get("images", [])
                 if images:
                     url = images[0].get("image_url", {}).get("url") if isinstance(images[0], dict) else None
                     if url:
-                        return url
+                        return url, None
 
-                logger.warning("OpenRouter image gen: no image found in response")
-                return None
+                message = "OpenRouter image gen: no image found in response"
+                logger.warning(message)
+                return None, message
         except Exception as e:
-            logger.warning(f"OpenRouter image gen error: {e}")
-            return None
+            message = str(e)
+            logger.warning(f"OpenRouter image gen error: {message}")
+            return None, message
 
     async def _execute_single_image_operation(
         self,
@@ -642,7 +695,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             if has_openrouter:
                 try:
                     logger.info(f"Using OpenRouter for image {mode} (primary path)")
-                    image_url = await self._generate_image_openrouter(prompt, image_bytes=edit_image_bytes)
+                    image_url, openrouter_error = await self._generate_image_openrouter(prompt, image_bytes=edit_image_bytes)
                     if image_url:
                         if image_url.startswith("data:"):
                             b64_data = image_url.split(",", 1)[1]
@@ -662,7 +715,6 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                         await self.write_file(sandbox_path, result_bytes)
                         return smart_filename
                     else:
-                        openrouter_error = "No image returned"
                         logger.warning(f"OpenRouter image {mode} returned no image, will try Replicate fallback")
                 except Exception as e:
                     openrouter_error = str(e)
@@ -732,6 +784,17 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 except Exception as e:
                     replicate_error = str(e)
                     logger.error(f"Replicate image {mode} also failed: {replicate_error}")
+                    if is_provider_quota_error(openrouter_error or "") or is_provider_quota_error(replicate_error):
+                        fallback_image = await self._write_fallback_asset(
+                            prompt=prompt,
+                            media_type="image",
+                            aspect_ratio=aspect_ratio,
+                            reason="Image providers are out of credits or temporarily rate-limited",
+                        )
+                        if isinstance(fallback_image, ToolResult):
+                            return fallback_image
+                        return fallback_image
+
                     # Both providers failed — report both errors + suggest alternatives
                     errors = []
                     if openrouter_error:
@@ -743,6 +806,17 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     return self.fail_response(f"Image {mode} failed with all providers.\n{chr(10).join(errors)}{quota_hint}")
 
             # OpenRouter was tried but failed, and no Replicate key available
+            if openrouter_error and is_provider_quota_error(openrouter_error):
+                fallback_image = await self._write_fallback_asset(
+                    prompt=prompt,
+                    media_type="image",
+                    aspect_ratio=aspect_ratio,
+                    reason="Image providers are out of credits or temporarily rate-limited",
+                )
+                if isinstance(fallback_image, ToolResult):
+                    return fallback_image
+                return fallback_image
+
             quota_hint = ""
             if openrouter_error and ("quota" in str(openrouter_error).lower() or "rate" in str(openrouter_error).lower()):
                 quota_hint = "\n\n💡 Tip: You can create diagrams and visual designs using Excalidraw boards instead — use create_file to write a .excalidraw JSON file under /workspace/canvases/."
@@ -795,6 +869,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
 
             opts = video_options or {}
             has_image = bool(image_path)
+            provider_errors: list[str] = []
 
             import httpx
 
@@ -846,10 +921,21 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     logger.info(f"Video saved via fal.ai: {smart_filename}")
                     return smart_filename
                 except Exception as e:
+                    provider_errors.append(f"fal.ai: {str(e)}")
                     logger.warning(f"fal.ai video failed, will try fallback: {e}")
 
             # ── SiliconFlow path (secondary) ──
             if not sf_key and not replicate_key:
+                if any(is_provider_quota_error(error) for error in provider_errors):
+                    fallback_image = await self._write_fallback_asset(
+                        prompt=prompt,
+                        media_type="video",
+                        aspect_ratio=str(opts.get("aspect_ratio", "16:9")),
+                        reason="Video providers are out of credits or temporarily rate-limited",
+                    )
+                    if isinstance(fallback_image, ToolResult):
+                        return fallback_image
+                    return fallback_image
                 return self.fail_response("Video generation failed. No fallback provider available (FAL_KEY failed, SILICONFLOW_API_KEY and REPLICATE_API_TOKEN not set).")
 
             sf_succeeded = False
@@ -949,75 +1035,99 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     sf_succeeded = True
                     return smart_filename
                 except Exception as e:
+                    provider_errors.append(f"SiliconFlow: {str(e)}")
                     logger.warning(f"SiliconFlow video failed, will try Replicate fallback: {e}")
 
             # ── Replicate path (tertiary fallback via seedance-1.5-pro) ──
             if not sf_succeeded and replicate_key:
-                self._get_replicate_token()
-                logger.info(f"Using Replicate seedance-1.5-pro for video generation: '{prompt[:60]}...'")
+                try:
+                    self._get_replicate_token()
+                    logger.info(f"Using Replicate seedance-1.5-pro for video generation: '{prompt[:60]}...'")
 
-                replicate_input: dict = {
-                    "prompt": prompt,
-                    "duration": int(opts.get("duration", 5)),
-                }
-                if "seed" in opts:
-                    try:
-                        replicate_input["seed"] = int(opts["seed"])
-                    except (ValueError, TypeError):
-                        pass
+                    replicate_input: dict = {
+                        "prompt": prompt,
+                        "duration": int(opts.get("duration", 5)),
+                    }
+                    if "seed" in opts:
+                        try:
+                            replicate_input["seed"] = int(opts["seed"])
+                        except (ValueError, TypeError):
+                            pass
 
-                # Image-to-video: attach image
-                if has_image:
-                    _img_path = image_path
-                    if isinstance(_img_path, list):
-                        _img_path = _img_path[0] if _img_path else None
-                    if _img_path:
-                        _img_bytes = await self._get_image_bytes(_img_path)
-                        if not isinstance(_img_bytes, ToolResult):
-                            _img_b64 = base64.b64encode(_img_bytes).decode('utf-8')
-                            replicate_input["image"] = f"data:image/png;base64,{_img_b64}"
+                    if has_image:
+                        _img_path = image_path
+                        if isinstance(_img_path, list):
+                            _img_path = _img_path[0] if _img_path else None
+                        if _img_path:
+                            _img_bytes = await self._get_image_bytes(_img_path)
+                            if not isinstance(_img_bytes, ToolResult):
+                                _img_b64 = base64.b64encode(_img_bytes).decode('utf-8')
+                                replicate_input["image"] = f"data:image/png;base64,{_img_b64}"
 
-                output = await asyncio.to_thread(
-                    replicate.run,
-                    "bytedance/seedance-1.5-pro",
-                    input=replicate_input,
-                )
+                    output = await asyncio.to_thread(
+                        replicate.run,
+                        "bytedance/seedance-1.5-pro",
+                        input=replicate_input,
+                    )
 
-                # Replicate video output: could be a FileOutput or URL
-                if hasattr(output, 'read'):
-                    result_bytes = output.read()
-                elif hasattr(output, '__iter__') and not isinstance(output, (str, bytes)):
-                    output_list = list(output)
-                    if len(output_list) == 0:
-                        return self.fail_response("No output from Replicate video model")
-                    first = output_list[0]
-                    if hasattr(first, 'read'):
-                        result_bytes = first.read()
+                    if hasattr(output, 'read'):
+                        result_bytes = output.read()
+                    elif hasattr(output, '__iter__') and not isinstance(output, (str, bytes)):
+                        output_list = list(output)
+                        if len(output_list) == 0:
+                            return self.fail_response("No output from Replicate video model")
+                        first = output_list[0]
+                        if hasattr(first, 'read'):
+                            result_bytes = first.read()
+                        else:
+                            url = str(first.url) if hasattr(first, 'url') else str(first)
+                            async with httpx.AsyncClient(timeout=120) as client:
+                                dl_resp = await client.get(url)
+                                dl_resp.raise_for_status()
+                                result_bytes = dl_resp.content
                     else:
-                        url = str(first.url) if hasattr(first, 'url') else str(first)
+                        url = str(output.url) if hasattr(output, 'url') else str(output)
                         async with httpx.AsyncClient(timeout=120) as client:
                             dl_resp = await client.get(url)
                             dl_resp.raise_for_status()
                             result_bytes = dl_resp.content
-                else:
-                    url = str(output.url) if hasattr(output, 'url') else str(output)
-                    async with httpx.AsyncClient(timeout=120) as client:
-                        dl_resp = await client.get(url)
-                        dl_resp.raise_for_status()
-                        result_bytes = dl_resp.content
 
-                smart_filename = await generate_smart_filename(prompt=prompt, file_type="video", extension="mp4")
-                sandbox_path = f"{self.workspace_path}/{smart_filename}"
-                await self.write_file(sandbox_path, result_bytes)
+                    smart_filename = await generate_smart_filename(prompt=prompt, file_type="video", extension="mp4")
+                    sandbox_path = f"{self.workspace_path}/{smart_filename}"
+                    await self.write_file(sandbox_path, result_bytes)
 
-                logger.info(f"Video saved via Replicate: {smart_filename}")
-                return smart_filename
+                    logger.info(f"Video saved via Replicate: {smart_filename}")
+                    return smart_filename
+                except Exception as e:
+                    provider_errors.append(f"Replicate: {str(e)}")
+                    logger.warning(f"Replicate video failed after other providers: {e}")
+
+            if any(is_provider_quota_error(error) for error in provider_errors):
+                fallback_image = await self._write_fallback_asset(
+                    prompt=prompt,
+                    media_type="video",
+                    aspect_ratio=str(opts.get("aspect_ratio", "16:9")),
+                    reason="Video providers are out of credits or temporarily rate-limited",
+                )
+                if isinstance(fallback_image, ToolResult):
+                    return fallback_image
+                return fallback_image
 
             return self.fail_response("Video generation failed via all available providers.")
 
         except Exception as e:
             error_message = str(e)
             logger.error(f"Error generating video for prompt '{prompt[:50]}...': {error_message}")
+
+            if is_provider_quota_error(error_message):
+                fallback_image = await self._write_fallback_asset(
+                    prompt=prompt,
+                    media_type="video",
+                    aspect_ratio=str((video_options or {}).get("aspect_ratio", "16:9")),
+                    reason="Video providers are out of credits or temporarily rate-limited",
+                )
+                if not isinstance(fallback_image, ToolResult):
+                    return fallback_image
             
             friendly_message = self._extract_friendly_error(e)
             return self.fail_response(friendly_message)
@@ -1164,6 +1274,10 @@ Generate, edit, upscale, or remove background from images. Video generation supp
         # Check for rate limits
         if "rate" in error_str and "limit" in error_str:
             return "Rate limit reached. Please wait a moment and try again."
+
+        # Check for missing provider configuration
+        if "not configured" in error_str or ("api key" in error_str and "no " in error_str):
+            return "Media provider not configured. Add OPENROUTER_API_KEY, FAL_KEY, SILICONFLOW_API_KEY, or REPLICATE_API_TOKEN to backend/.env."
         
         # Check for invalid image format
         if "invalid" in error_str and "image" in error_str:
