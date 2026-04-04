@@ -446,7 +446,7 @@ export class CollaborationServer extends EventEmitter {
     });
   }
 
-  private handleHeartbeat(ws: WebSocket, data: any): void {
+  private handleHeartbeat(ws: WebSocket, _data: any): void {
     const { sessionId, userId } = this.getUserSession(ws);
     if (!sessionId || !userId) return;
 
@@ -535,7 +535,7 @@ export class CollaborationServer extends EventEmitter {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
-    for (const [userId, user] of session.users) {
+    for (const [userId] of session.users) {
       if (excludeUserId && userId === excludeUserId) continue;
       
       const ws = this.connections.get(userId);
@@ -623,7 +623,7 @@ export class CollaborationServer extends EventEmitter {
   private transformChangeAgainstChange(newChange: CodeChange, existingChange: CodeChange): CodeChange {
     // Simplified operational transform - in production, use a full OT library
     const transformedChanges = newChange.changes.map(change => {
-      let transformedChange = { ...change };
+      const transformedChange = { ...change };
       
       for (const existingOp of existingChange.changes) {
         // Transform based on operation type and position

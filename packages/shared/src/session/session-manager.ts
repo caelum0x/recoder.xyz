@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { EventEmitter } from 'events';
+import chokidar from 'chokidar';
 
 export interface SessionMessage {
   id: string;
@@ -98,7 +99,6 @@ export class SessionManager extends EventEmitter {
   private setupFileWatcher(): void {
     if (this.watchMode) {
       try {
-        const chokidar = require('chokidar');
         const watcher = chokidar.watch(this.sessionDir, {
           ignored: /^\./, 
           persistent: true

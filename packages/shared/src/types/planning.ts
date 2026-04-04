@@ -2,7 +2,7 @@
  * Planning types and interfaces for project requirements, architecture, and validation
  */
 
-import { ProjectType, Environment, ValidationLevel, RealityCheckConfig } from './common';
+import { ProjectType, Environment, RealityCheckConfig } from './common';
 
 export enum PlanningPhase {
   DISCOVERY = 'discovery',
