@@ -90,6 +90,10 @@ export const A2AEventType = {
 
   // Canvas events
   CanvasUpdate: 'canvas.update',
+
+  // Inbox push events
+  InboxNew: 'inbox.new',
+  InboxTaskAssigned: 'inbox.task-assigned',
 } as const;
 
 export type A2AEventTypeValue = (typeof A2AEventType)[keyof typeof A2AEventType];

@@ -15267,6 +15267,59 @@ app.get('/api/coding-runtime/runtimes', (_req, res) => {
   });
 });
 
+// ── Agent Terminal Registry ─────────────────────────────────────────────────
+// Per-terminal discovery so the system knows exactly how many Claude Code,
+// Codex, OpenCode, etc. instances are connected and can route to each one.
+
+app.post('/api/a2a/terminals/register', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { registerTerminal } = await import('./a2a/agent-terminal-registry.js');
+  const { agentType, sessionId, displayName, callbackUrl, projectId, workspaceDir, capabilities, version, hostname } = req.body || {};
+  if (!agentType || typeof agentType !== 'string') {
+    return res.status(400).json({ success: false, error: 'agentType is required' });
+  }
+  const session = registerTerminal({
+    agentType,
+    sessionId: typeof sessionId === 'string' ? sessionId : undefined,
+    displayName: typeof displayName === 'string' ? displayName : undefined,
+    callbackUrl: typeof callbackUrl === 'string' ? callbackUrl : undefined,
+    projectId: typeof projectId === 'string' ? projectId : undefined,
+    workspaceDir: typeof workspaceDir === 'string' ? workspaceDir : undefined,
+    capabilities: Array.isArray(capabilities) ? capabilities : undefined,
+    version: typeof version === 'string' ? version : undefined,
+    hostname: typeof hostname === 'string' ? hostname : undefined,
+  });
+  sendSuccess(res, session);
+}));
+
+app.post('/api/a2a/terminals/:sessionId/heartbeat', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { heartbeat } = await import('./a2a/agent-terminal-registry.js');
+  const ok = heartbeat(req.params.sessionId, req.body);
+  if (!ok) return res.status(404).json({ success: false, error: 'Terminal not found' });
+  sendSuccess(res, { ok: true });
+}));
+
+app.delete('/api/a2a/terminals/:sessionId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { deregisterTerminal } = await import('./a2a/agent-terminal-registry.js');
+  deregisterTerminal(req.params.sessionId);
+  sendSuccess(res, { ok: true });
+}));
+
+app.get('/api/a2a/terminals', asyncHandler(async (_req, res) => {
+  const { listTerminals, getSummary } = await import('./a2a/agent-terminal-registry.js');
+  sendSuccess(res, { terminals: listTerminals(), summary: getSummary() });
+}));
+
+app.get('/api/a2a/terminals/summary', asyncHandler(async (_req, res) => {
+  const { getSummary } = await import('./a2a/agent-terminal-registry.js');
+  sendSuccess(res, getSummary());
+}));
+
+app.post('/api/a2a/terminals/:sessionId/push', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res) => {
+  const { pushToTerminal } = await import('./a2a/agent-terminal-registry.js');
+  const ok = await pushToTerminal(req.params.sessionId, req.body);
+  sendSuccess(res, { delivered: ok });
+}));
+
 // Wire the A2A event bridge (TaskLifecycleService audit -> SSE event bus)
 wireA2AEventBridge();
 
