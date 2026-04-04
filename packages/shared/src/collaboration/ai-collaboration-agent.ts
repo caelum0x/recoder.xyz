@@ -351,7 +351,7 @@ export class AICollaborationAgent extends EventEmitter {
     };
   }
 
-  private async generateDebugResponse(request: AIAgentRequest): Promise<any> {
+  private async generateDebugResponse(_request: AIAgentRequest): Promise<any> {
     const messages: AIMessage[] = [];
 
     const debugMessage: AIMessage = {
@@ -381,7 +381,7 @@ export class AICollaborationAgent extends EventEmitter {
   }
 
   // Helper methods
-  private generateIntroductionMessage(context: AIAgentContext): AIMessage {
+  private generateIntroductionMessage(_context: AIAgentContext): AIMessage {
     const greeting = this.getPersonalizedGreeting();
     const capabilities = this.capabilities.slice(0, 3).map(c => c.name).join(', ');
     
@@ -429,7 +429,7 @@ export class AICollaborationAgent extends EventEmitter {
     return Math.round(baseTime * complexityMultiplier * personalityMultiplier);
   }
 
-  private getTriggeredCapabilities(operation: CodeOperation, context: AIAgentContext): AIAgentCapability[] {
+  private getTriggeredCapabilities(operation: CodeOperation, _context: AIAgentContext): AIAgentCapability[] {
     // Simple trigger logic - could be more sophisticated
     return this.capabilities.filter(capability => {
       if (operation.type === 'insert' && capability.triggers.includes('code-insertion')) return true;
@@ -442,7 +442,7 @@ export class AICollaborationAgent extends EventEmitter {
   private async generateProactiveSuggestion(
     operation: CodeOperation, 
     capability: AIAgentCapability, 
-    context: AIAgentContext
+    _context: AIAgentContext
   ): Promise<AIMessage | null> {
     // Generate contextual suggestion based on the operation
     if (capability.name.includes('review') && operation.content) {
@@ -475,7 +475,7 @@ export class AICollaborationAgent extends EventEmitter {
     return keywords.some(keyword => message.toLowerCase().includes(keyword.toLowerCase()));
   }
 
-  private async generateUserResponseMessage(userId: string, message: string, context: AIAgentContext): Promise<AIMessage> {
+  private async generateUserResponseMessage(userId: string, message: string, _context: AIAgentContext): Promise<AIMessage> {
     const userInteractionCount = this.userInteractions.get(userId) || 0;
     const isNewUser = userInteractionCount <= 2;
 
@@ -766,8 +766,8 @@ export class AICollaborationAgent extends EventEmitter {
   private calculateAnalysisConfidence(issues: any[], linesOfCode: number): number {
     // More sophisticated confidence calculation based on issue types and code size
     const criticalIssues = issues.filter(i => i.severity === 'critical').length;
-    const highIssues = issues.filter(i => i.severity === 'high').length;
-    const mediumIssues = issues.filter(i => i.severity === 'medium').length;
+    issues.filter(i => i.severity === 'high').length;
+    issues.filter(i => i.severity === 'medium').length;
     
     let baseConfidence = 0.8;
     
@@ -798,7 +798,7 @@ export class AICollaborationAgent extends EventEmitter {
     const complexity = this.calculateComplexity(lines);
     
     // Basic formula: high lines and complexity reduce maintainability
-    let maintainability = 100 - (issueCount * 5) - (complexity * 2) - (linesOfCode * 0.1);
+    const maintainability = 100 - (issueCount * 5) - (complexity * 2) - (linesOfCode * 0.1);
     
     return Math.max(0, Math.min(100, maintainability));
   }
@@ -901,7 +901,7 @@ export class AICollaborationAgent extends EventEmitter {
     }
   }
 
-  private generateAPISnippet(language: string, framework?: string): string {
+  private generateAPISnippet(language: string, _framework?: string): string {
     if (language === 'typescript' || language === 'javascript') {
       return `// AI-generated API client with error handling
 interface ApiResponse<T> {
@@ -1047,7 +1047,7 @@ class UserService {
     return this.generateGenericSnippet(language);
   }
 
-  private generateAuthSnippet(language: string, framework?: string): string {
+  private generateAuthSnippet(language: string, _framework?: string): string {
     if (language === 'typescript') {
       return `// AI-generated authentication middleware
 import jwt from 'jsonwebtoken';
@@ -1096,7 +1096,7 @@ export const authenticate = async (
     return this.generateGenericSnippet(language);
   }
 
-  private generateTestSnippet(language: string, framework?: string): string {
+  private generateTestSnippet(language: string, _framework?: string): string {
     if (language === 'typescript') {
       return `// AI-generated test suite with Jest
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -1323,7 +1323,7 @@ class AsyncUtils {
     };
   }
 
-  private async generateOptimizationResponse(request: AIAgentRequest): Promise<any> {
+  private async generateOptimizationResponse(_request: AIAgentRequest): Promise<any> {
     const messages: AIMessage[] = [{
       id: uuidv4(),
       agentId: this.id,
@@ -1347,7 +1347,7 @@ class AsyncUtils {
     };
   }
 
-  private async generateSecurityResponse(request: AIAgentRequest): Promise<any> {
+  private async generateSecurityResponse(_request: AIAgentRequest): Promise<any> {
     const messages: AIMessage[] = [{
       id: uuidv4(),
       agentId: this.id,
@@ -1372,7 +1372,7 @@ class AsyncUtils {
     };
   }
 
-  private async generateGenericResponse(request: AIAgentRequest): Promise<any> {
+  private async generateGenericResponse(_request: AIAgentRequest): Promise<any> {
     const messages: AIMessage[] = [{
       id: uuidv4(),
       agentId: this.id,

@@ -470,7 +470,7 @@ export class PackageRegistry {
     }
 
     // Check dependencies
-    for (const [depName, depVersion] of Object.entries(pkg.dependencies)) {
+    for (const [depName] of Object.entries(pkg.dependencies)) {
       if (depName.startsWith('@recoder/')) {
         const depPackage = this.packages.get(depName);
         if (!depPackage) {

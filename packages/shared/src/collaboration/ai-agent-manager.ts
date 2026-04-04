@@ -5,7 +5,6 @@
  */
 
 import { EventEmitter } from 'events';
-import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '../utils/logger';
 import { 
   AICollaborationAgent, 
@@ -422,7 +421,7 @@ export class AIAgentManager extends EventEmitter {
 
   // Helper methods
   private findAgentByName(name: string): AICollaborationAgent | undefined {
-    for (const [_, agent] of this.agents) {
+    for (const agent of this.agents.values()) {
       if (agent.name === name) {
         return agent;
       }

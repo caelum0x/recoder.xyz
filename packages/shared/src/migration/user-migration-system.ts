@@ -270,7 +270,6 @@ export class UserMigrationSystem {
    */
   private async migrateConfiguration(migrationData: MigrationData, result: MigrationResult): Promise<void> {
     try {
-      const currentConfig = this.configManager.getConfig();
       const sourceConfig = migrationData.config;
 
       // Map common settings
@@ -305,11 +304,6 @@ export class UserMigrationSystem {
       }
 
       // Merge with current configuration
-      const mergedConfig = {
-        ...currentConfig,
-        ...mappedConfig
-      };
-
       // Update configuration (this will save automatically)
       Object.entries(mappedConfig).forEach(([key, value]) => {
         if (key === 'extension') {
@@ -396,7 +390,7 @@ export class UserMigrationSystem {
           const convertedProject = this.convertProjectFormat(projectData, migrationData.source.name);
           
           // Create session for project
-          const session = this.sessionManager.createSession(
+          this.sessionManager.createSession(
             convertedProject.title || 'Migrated Project',
             {
               projectPath: convertedProject.path,
@@ -517,7 +511,7 @@ export class UserMigrationSystem {
     return undefined;
   }
 
-  private async detectCursorVersion(source: MigrationSource): Promise<string | undefined> {
+  private async detectCursorVersion(_source: MigrationSource): Promise<string | undefined> {
     // Cursor version detection would be implemented here
     return undefined;
   }
@@ -625,7 +619,7 @@ export class UserMigrationSystem {
     return providerMap[sourceProvider] || 'claude';
   }
 
-  private convertSessionFormat(sessionData: any, sourceName: string): any {
+  private convertSessionFormat(sessionData: any, _sourceName: string): any {
     // Convert session data to Recoder format
     // Implementation would vary based on source format
     return {
@@ -645,7 +639,7 @@ export class UserMigrationSystem {
     };
   }
 
-  private convertProjectFormat(projectData: any, sourceName: string): any {
+  private convertProjectFormat(projectData: any, _sourceName: string): any {
     // Convert project data to Recoder format
     return {
       id: projectData.id || `migrated-${Date.now()}`,

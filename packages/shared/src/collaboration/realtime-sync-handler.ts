@@ -8,8 +8,7 @@
 import { EventEmitter } from 'events';
 import * as WebSocket from 'ws';
 import { Logger } from '../utils/logger';
-import { CodeSyncEngine, CodeOperation, CodeDocument, ConflictResolution } from './code-sync-engine';
-import { CollaborationUser } from './websocket-server';
+import { CodeSyncEngine, CodeOperation, CodeDocument } from './code-sync-engine';
 
 export interface SyncMessage {
   type: 'operation' | 'cursor_position' | 'selection_change' | 'file_open' | 'file_close' | 'sync_request';
@@ -386,9 +385,6 @@ export class RealtimeSyncHandler extends EventEmitter {
   private startTypingIndicatorCleanup(): void {
     // Clean up stale typing indicators every 5 seconds
     setInterval(() => {
-      const now = Date.now();
-      const timeout = 5000; // 5 seconds
-
       for (const [documentId, typingUsers] of this.typingIndicators.entries()) {
         for (const userId of typingUsers) {
           const activity = this.userActivities.get(userId);

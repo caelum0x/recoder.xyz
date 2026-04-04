@@ -267,8 +267,10 @@ export class CodeSyncEngine extends EventEmitter {
                content.slice(operation.position);
       
       case 'delete':
+      {
         const deleteEnd = operation.position + (operation.length || 0);
         return content.slice(0, operation.position) + content.slice(deleteEnd);
+      }
       
       case 'retain':
         return content; // No change for retain operations
