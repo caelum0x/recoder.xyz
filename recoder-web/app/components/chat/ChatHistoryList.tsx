@@ -43,6 +43,8 @@ export function ChatHistoryList() {
 
       const params = new URLSearchParams();
       if (user?.id) params.set('userId', user.id);
+      if (user?.email) params.set('userEmail', user.email);
+      if (user?.name) params.set('userName', user.name);
       if (anonymousId) params.set('anonymousId', anonymousId);
       params.set('limit', '100');
 

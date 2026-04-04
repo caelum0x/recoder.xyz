@@ -336,6 +336,10 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
+echo "--- Building recoder-base workspace image ---"
+docker compose -f docker-compose.deploy.yml --profile build-base build recoder-base
+echo "[$(date -u)] recoder-base built"
+
 echo "--- Building docker-backend ---"
 docker build -f docker-backend/Dockerfile -t recoderxyz-docker-backend:latest .
 echo "[$(date -u)] docker-backend built"

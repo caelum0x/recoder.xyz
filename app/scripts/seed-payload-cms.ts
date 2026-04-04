@@ -1,9 +1,9 @@
 import { pathToFileURL } from 'node:url';
 import { getPayload } from 'payload';
 
-import { fallbackBlogPosts } from '../lib/cms/blog-content.ts';
-import { fallbackChangelogEntries } from '../lib/cms/changelog-content.ts';
-import config from '../payload.config.ts';
+import { fallbackBlogPosts } from '../lib/cms/blog-content';
+import { fallbackChangelogEntries } from '../lib/cms/changelog-content';
+import config from '../payload.config';
 
 type CliOptions = {
   dryRun: boolean;
@@ -87,7 +87,7 @@ async function upsertBlogPosts() {
     if (current?.id) {
       await payload.update({
         collection: 'blog-posts',
-        data,
+        data: data as any,
         id: current.id,
         overrideAccess: true,
       });
@@ -97,7 +97,7 @@ async function upsertBlogPosts() {
 
     await payload.create({
       collection: 'blog-posts',
-      data,
+      data: data as any,
       overrideAccess: true,
     });
     created += 1;
@@ -131,7 +131,7 @@ async function upsertChangelogEntries() {
     if (current?.id) {
       await payload.update({
         collection: 'changelog-entries',
-        data,
+        data: data as any,
         id: current.id,
         overrideAccess: true,
       });
@@ -141,7 +141,7 @@ async function upsertChangelogEntries() {
 
     await payload.create({
       collection: 'changelog-entries',
-      data,
+      data: data as any,
       overrideAccess: true,
     });
     created += 1;

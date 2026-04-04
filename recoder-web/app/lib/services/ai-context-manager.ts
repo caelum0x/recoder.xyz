@@ -33,7 +33,7 @@ import {
   type FileContext,
   type ProjectContext,
 } from './code-context';
-import { dockerReadFile, DOCKER_URL, getSessionToken } from './docker-api';
+import { dockerReadFile, DOCKER_URL, withDockerCredentials } from './docker-api';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('AIContextManager');
@@ -144,11 +144,7 @@ async function fetchFileContent(projectId: string, path: string): Promise<string
  */
 async function getFileList(projectId: string): Promise<Array<{ path: string; type: string }>> {
   try {
-    const response = await fetch(`${DOCKER_URL}/api/files/${projectId}`, {
-      headers: {
-        'Authorization': `Bearer ${getSessionToken() || ''}`,
-      },
-    });
+    const response = await fetch(`${DOCKER_URL}/api/files/${projectId}`, withDockerCredentials());
 
     if (!response.ok) return [];
 

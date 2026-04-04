@@ -29,7 +29,12 @@ if daytona_config.target:
 else:
     logger.warning("No Daytona target found in environment variables")
 
-daytona = AsyncDaytona(daytona_config)
+try:
+    daytona = AsyncDaytona(daytona_config)
+    logger.info("Daytona client initialized successfully")
+except Exception as e:
+    logger.warning(f"Daytona client initialization failed (sandbox features disabled): {e}")
+    daytona = None  # type: ignore
 
 async def _ensure_workspace(sandbox: AsyncSandbox):
     """Ensure /workspace is a symlink to /home/daytona.
@@ -175,8 +180,8 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
         #     memory=4,
         #     disk=5,
         # ),
-        auto_stop_interval=1800,
-        auto_archive_interval=3600,
+        auto_stop_interval=43200,   # 12 hours (was 30 min — too aggressive, broke agent coding loop)
+        auto_archive_interval=43200,
     )
     
     # Create the sandbox

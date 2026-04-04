@@ -11,22 +11,14 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { assertAuthSessionGetResponse } from '@/lib/contracts/auth-session-contracts';
 import { logger } from '@/lib/logger';
-import {
-  extractSessionTokenFromHeader,
-  verifySession as verifySessionFromDB,
-} from '@recoder/auth';
+import { extractSessionTokenFromHeader } from '@recoder/auth';
+import { findFallbackSessionByToken } from '@/lib/session-fallback';
 
 function getOptionalStringField(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const record = value as Record<string, unknown>;
   const field = record[key];
   return typeof field === 'string' ? field : undefined;
-}
-
-function getCookieFromHeader(cookieHeader: string, name: string): string | null {
-  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${escapedName}=([^;]*)`));
-  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 export async function GET(request: NextRequest) {
@@ -47,11 +39,11 @@ export async function GET(request: NextRequest) {
       headers: reqHeaders
     });
 
-    if (!session?.user && cookieVal && extractSessionTokenFromHeader(cookieVal)) {
+    const sessionToken = cookieVal ? extractSessionTokenFromHeader(cookieVal) : null;
+
+    if (!session?.user && sessionToken) {
       try {
-        const fallbackSession = await verifySessionFromDB((name) =>
-          getCookieFromHeader(cookieVal, name),
-        );
+        const fallbackSession = await findFallbackSessionByToken(sessionToken);
 
         if (fallbackSession?.user) {
           logger.info('Session verified via DB fallback', {

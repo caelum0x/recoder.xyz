@@ -164,6 +164,26 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 /**
+ * Build fetch init for raw docker-backend requests.
+ * Always include browser credentials so secure shared-session cookies are sent,
+ * and only attach an Authorization header when a readable token is actually present.
+ */
+export function withDockerCredentials(init: RequestInit = {}): RequestInit {
+  const headers = new Headers(init.headers);
+  const token = getSessionToken();
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return {
+    ...init,
+    headers,
+    credentials: init.credentials ?? 'include',
+  };
+}
+
+/**
  * Parse and handle API response
  * Throws DockerApiError for error responses
  * Maps HTTP status codes to specific error types

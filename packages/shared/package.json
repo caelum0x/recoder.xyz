@@ -13,6 +13,12 @@
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./a2a": {
+      "node": "./dist/a2a/index.js",
+      "import": "./dist/a2a/index.js",
+      "require": "./dist/a2a/index.js",
+      "types": "./dist/a2a/index.d.ts"
+    },
     "./types/ai-models": {
       "node": "./dist/types/ai-models.js",
       "import": "./dist/types/ai-models.js",

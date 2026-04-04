@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
     procps \
     # Compression (tar, gzip, gunzip built-in, adding extras)
     gzip \
+    zstd \
     zip \
     # Network utilities
     net-tools \
