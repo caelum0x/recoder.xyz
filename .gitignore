@@ -172,9 +172,7 @@ oh-my-openagent/
 oh-my-codex/
 claw-code-parity/
 packages/recoder-code/packages/core/src/external/
-opencode/*
-!opencode/Dockerfile.service
-!opencode/.dockerignore
+/opencode/
 
 # Runtime data
 pids/
