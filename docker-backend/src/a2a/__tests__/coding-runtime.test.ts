@@ -19,9 +19,10 @@ describe('coding-runtime', () => {
   describe('registry', () => {
     it('lists registered runtimes', () => {
       const runtimes = listRuntimes();
-      // native and opencode are auto-registered on module import
+      // native, opencode, and omo are auto-registered on module import
       expect(runtimes).toContain('native');
       expect(runtimes).toContain('opencode');
+      expect(runtimes).toContain('omo');
     });
 
     it('getRuntime returns the registered adapter', () => {
