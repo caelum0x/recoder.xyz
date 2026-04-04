@@ -35,6 +35,9 @@ export interface ImageGenerateResponse {
   success: boolean;
   images: string[];
   error?: string;
+  message?: string;
+  degraded?: boolean;
+  provider?: string;
 }
 
 export interface ConvertToSvgRequest {
