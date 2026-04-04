@@ -580,3 +580,193 @@ Preview URLs — biggest immediate win
   Codex) is a first-class node on the fabric with a real identity. So "sandbox talks to A2A bridge" and "browser accesses sandbox preview" and "Claude Code connects to A2A" are all  
   the same system, not three separate tunnel configurations.               
                                                                                                                                    
+That is the right framing.
+
+  The gap is not “Recoder needs a different website.” The gap is that Recoder’s agent runtime is weaker than Codex/Claude Code on the things
+  that matter for real software work:
+
+  - persistent session state across consecutive prompts
+  - reliable file edits on existing code
+  - durable terminal/test/build loops
+  - strong self-correction after failures
+  - better context packing for medium/large repos
+
+  So the right move is to keep recoder-web, recoder-agents, auth, billing, previews, projects, and A2A as the product shell, and upgrade the
+  coding engine underneath.
+
+  What I’d build:
+
+  1. Add a deep coding runtime behind docker-backend
+
+  - Keep Recoder as control plane.
+  - Spawn a stronger engine per project/session inside the sandbox workspace.
+  - First candidate: opencode as a connector, not as a replacement app.
+  - Pass user BYOK keys into that worker env for OpenRouter / Anthropic / OpenAI.
+
+  2. Keep Recoder’s infra ownership
+
+  - Recoder still owns sandbox lifecycle, previews, file APIs, chat history, auth, billing, routing.
+  - The external engine only does the hard coding loop: inspect, edit, run, verify, iterate.
+
+  3. Fix the edit protocol
+
+  - Borrow the hash-anchored edit idea from oh-my-openagent.
+  - Today our XML/action path is too lossy for follow-up edits.
+  - We need stable line/file anchors, conflict rejection, and retryable patch application.
+
+  4. Make sessions durable
+
+  - One long-lived worker per project/thread, not stateless “one prompt in, one response out”.
+  - Preserve shell state, running dev server, test context, and repo understanding across turns.
+
+  5. Add automatic verification loops
+
+  - After edits, run tsc, tests, lint, build, preview health.
+  - Feed failures back into the same worker until success or a real blocker.
+
+  So yes, we should fork or vendor targeted pieces, but not fork entire products blindly.
+
+  My recommendation:
+
+  - opencode: best candidate to integrate as a backend worker runtime
+  - oh-my-openagent: best source to borrow edit/harness ideas from
+  - oh-my-codex: useful for workflow ideas, not the core runtime
+  - claw-code-parity: not a good foundation for production Recoder
+
+  I already opened the right follow-ups under recoder-96g:
+
+  - recoder-coi for the opencode connector spike
+  - recoder-4bc for hash-anchored edits
+
+  If you want, I’ll move from strategy to implementation and start recoder-coi: add an experimental opencode connector in docker-backend
+  without replacing the existing stack.
+
+  Sources:
+
+  - https://github.com/anomalyco/opencode
+  - https://github.com/code-yeongyu/oh-my-openagent
+  - https://github.com/Yeachan-Heo/oh-my-codex
+  - https://github.com/ultraworkers/claw-code-parity
+As of April 4, 2026, that means:
+
+  - opencode is the best candidate to integrate as a real execution runtime.
+  - oh-my-openagent is the best source of harness ideas, especially its hash-anchored edit model.
+  - oh-my-codex is useful for workflow/operator ideas, not as the core runtime.
+  - I would not import code from the claw-code lineage into a commercial product. Its current parity repo publicly describes the Claude Code
+    source as having been exposed, then says it became a “clean-room rewrite.” That may still be too much provenance risk. That is my
+    engineering-risk inference from their own README, not a legal ruling.
+
+  Target Shape
+
+  Recoder should have two coding paths:
+
+  - Native Mode: today’s fast XML/action-based path for UI generation, MVPs, small edits, and cheap turns. This stays in recoder-web/app/lib/
+    runtime/message-parser.ts and the current web flow.
+  - Deep Coding Mode: a durable agent runtime living behind docker-backend, working directly inside the same sandbox workspace, with
+    persistent shell/build/test state across turns.
+
+  That fits the seams you already have in:
+
+  - docker-backend/src/a2a/workflow-step-executor.ts
+  - docker-backend/src/a2a/codex-connector-runtime.service.ts
+  - docker-backend/src/a2a/claude-connector-runtime.service.ts
+  - docker-backend/src/daytona-file-ops.ts
+  - docker-backend/src/preview.ts
+
+  Architecture Plan
+
+  1. Keep Recoder as the control plane.
+     Recoder still owns auth, projects, billing, chat UI, previews, sandbox lifecycle, telemetry, and A2A routing.
+  2. Add a runtime abstraction in docker-backend.
+     Create a common CodingRuntime interface: startSession, sendPrompt, streamEvents, cancel, getState, dispose.
+     Implement adapters for:
+
+  - current native Recoder flow
+  - Codex
+  - Claude Code
+  - experimental OpenCode
+
+  3. Do not force deep runtimes through <recoderAction> XML.
+     For hard tasks, let the runtime operate directly on the mounted workspace in the sandbox. Recoder should observe and summarize:
+
+  - stdout/stderr
+  - git diff / changed files
+  - test/build results
+  - preview URL state
+
+  4. Make sessions durable per projectId + threadId.
+     One long-lived worker session should preserve:
+
+  - cwd
+  - running dev server
+  - shell history
+  - repo understanding
+  - recent failures and fixes
+
+  5. Keep BYOK ephemeral.
+     Inject user OpenRouter/OpenAI/Anthropic keys into the worker env only for the active session. Do not write them into project files or
+     persist them in chat history.
+  6. Separate lightweight editing from hard-code editing.
+
+  - Lightweight mode keeps the current parser path.
+  - Hard mode bypasses the parser and uses the external engine directly.
+  - In parallel, improve the native path with hash-anchored edits.
+
+  What To Borrow
+
+  - From opencode: runtime/session model, provider-agnostic engine approach, remote/client-server execution.
+  - From oh-my-openagent: hash-anchored edit protocol, persistent completion loops, better harness discipline.
+  - From oh-my-codex: team/planner workflow patterns if you want operator tools later.
+  - From claw-code / parity: only high-level ideas, no code.
+
+  Execution Order
+
+  1. Finish current live blockers first.
+     recoder-96g still needs real end-to-end browser verification, and recoder-sti still needs the undefined watch/terminal WebSocket fix. A
+     stronger engine does not remove those bugs.
+  2. Build recoder-coi.
+     Add an experimental OpenCode connector in docker-backend behind a feature flag. Goal: one project, one durable session, one follow-up
+     edit loop, streaming output into Recoder UI.
+  3. Build recoder-4bc.
+     Add hash-anchored edits to the native Recoder path so follow-up file mutations stop being fragile.
+  4. Add a Deep Coding mode in recoder-web and recoder-agents.
+     Let users choose:
+
+  - Fast Prototype
+  - Native Agent
+  - Deep Coding
+
+  5. Add auto-verification loops.
+     After each deep turn, run repo-specific checks: tsc, tests, lint, build, preview health. Feed failures back into the same runtime before
+     surfacing “done”.
+  6. Benchmark before broad rollout.
+     Use 5 real tasks:
+
+  - Next.js feature in existing repo
+  - React refactor across multiple files
+  - Node API bugfix with tests
+  - follow-up edit after first successful build
+  - broken build recovery
+
+  Ship only if deep mode materially beats current Recoder across consecutive turns.
+
+  Red Line
+
+  I would not fork claw-code code into Recoder. If you want, we can read it for ideas, but product code should come from:
+
+  - permissive upstreams with clean provenance
+  - or our own reimplementation
+
+  That is the cleanest way to improve capability without contaminating the codebase.
+
+  I already filed the two right follow-ups:
+
+  - recoder-coi for the OpenCode connector spike
+  - recoder-4bc for hash-anchored edits
+
+  Sources:
+
+  - https://github.com/anomalyco/opencode
+  - https://github.com/code-yeongyu/oh-my-openagent
+  - https://github.com/Yeachan-Heo/oh-my-codex
+  - https://github.com/ultraworkers/claw-code-parity

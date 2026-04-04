@@ -14,7 +14,7 @@
  */
 
 import { atom, map, computed, type WritableAtom, type MapStore } from 'nanostores';
-import { dockerPost, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { dockerPost, DOCKER_URL, withDockerCredentials } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('FileBatcher');
@@ -535,14 +535,13 @@ class FileBatcher {
       relativePath = relativePath.substring(1);
     }
 
-    const response = await fetch(`${DOCKER_URL}${endpoint}`, {
+    const response = await fetch(`${DOCKER_URL}${endpoint}`, withDockerCredentials({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${getSessionToken() || ''}`,
       },
       body: JSON.stringify({ path: relativePath, content }),
-    });
+    }));
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Unknown error' }));

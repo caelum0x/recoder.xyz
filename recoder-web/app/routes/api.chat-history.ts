@@ -45,12 +45,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     const url = new URL(request.url);
 
     const userId = url.searchParams.get('userId');
+    const userEmail = url.searchParams.get('userEmail');
+    const userName = url.searchParams.get('userName');
     const anonymousId = url.searchParams.get('anonymousId');
     const urlId = url.searchParams.get('urlId');
     const limit = parseInt(url.searchParams.get('limit') || '50');
 
     logger.info('📋 [api.chat-history.loader] Request received:', {
       userId,
+      userEmail,
       anonymousId,
       urlId,
       limit,
@@ -97,7 +100,13 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     }
 
     logger.info('📋 [api.chat-history.loader] Fetching history...');
-    const history = await chatDB.getChatHistory(userId || undefined, anonymousId || undefined, limit);
+    const history = await chatDB.getChatHistory(
+      userId || undefined,
+      anonymousId || undefined,
+      limit,
+      userEmail || undefined,
+      userName || undefined
+    );
 
     logger.info('📋 [api.chat-history.loader] History fetched:', history.length, 'sessions');
 
@@ -149,14 +158,24 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Handle claim endpoint
     if (url.pathname.endsWith('/claim')) {
-      const claimBody = await request.json() as { anonymousId?: string; userId?: string };
-      const { anonymousId, userId } = claimBody;
+      const claimBody = await request.json() as {
+        anonymousId?: string;
+        userId?: string;
+        userEmail?: string;
+        userName?: string;
+      };
+      const { anonymousId, userId, userEmail, userName } = claimBody;
 
       if (!anonymousId || !userId) {
         return json({ error: 'anonymousId and userId required' }, { status: 400 });
       }
 
-      const claimedCount = await chatDB.claimAnonymousSessions(anonymousId, userId);
+      const claimedCount = await chatDB.claimAnonymousSessions(
+        anonymousId,
+        userId,
+        userEmail,
+        userName
+      );
 
       return json({
         success: true,
@@ -185,6 +204,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // POST - Save chat
     const data = await request.json() as {
       userId?: string;
+      userEmail?: string;
+      userName?: string;
       anonymousId?: string;
       urlId?: string;
       title?: string;
@@ -197,10 +218,25 @@ export async function action({ request, context }: ActionFunctionArgs) {
       cliVersion?: string;
     };
 
-    const { userId, anonymousId, urlId, title, description, messages, artifactId, fileSnapshot, projectId, source, cliVersion } = data;
+    const {
+      userId,
+      userEmail,
+      userName,
+      anonymousId,
+      urlId,
+      title,
+      description,
+      messages,
+      artifactId,
+      fileSnapshot,
+      projectId,
+      source,
+      cliVersion,
+    } = data;
 
     logger.info('💾 [api.chat-history.action] Save request received:', {
       userId,
+      userEmail,
       anonymousId,
       urlId,
       title,
@@ -231,6 +267,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     logger.info('💾 [api.chat-history.action] Saving to database...');
     const session = await chatDB.saveChat({
       userId,
+      userEmail,
+      userName,
       anonymousId,
       urlId,
       title,

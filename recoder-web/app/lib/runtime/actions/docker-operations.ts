@@ -3,7 +3,7 @@
  * Provides primitives for file operations and command execution in Docker containers.
  */
 
-import { DOCKER_URL, getSessionToken, dockerFetch } from '~/lib/services/docker-api';
+import { DOCKER_URL, dockerFetch, withDockerCredentials } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('DockerOperations');
@@ -102,14 +102,13 @@ export async function dockerWriteFile(
   content: string
 ): Promise<void> {
   const fullPath = path.startsWith('/') ? path : `/workspace/${path}`;
-  const res = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
+  const res = await fetch(`${DOCKER_URL}/api/file/${projectId}`, withDockerCredentials({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getSessionToken() || ''}`,
     },
     body: JSON.stringify({ path: fullPath, content }),
-  });
+  }));
   if (!res.ok) {
     const errData = await res.json() as { error?: string };
     throw new Error(errData.error || 'Docker write failed');
@@ -126,14 +125,13 @@ export async function dockerExec(
   background: boolean = false
 ): Promise<string> {
   const workDir = cwd ? (cwd.startsWith('/') ? cwd : `/workspace/${cwd}`) : '/workspace';
-  const res = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+  const res = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, withDockerCredentials({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getSessionToken() || ''}`,
     },
     body: JSON.stringify({ command, cwd: workDir, background }),
-  });
+  }));
   const data = await res.json() as DockerExecResponse;
   if (!res.ok) throw new Error(data.error || 'Docker exec failed');
 
@@ -167,14 +165,13 @@ export async function dockerMkdir(projectId: string, path: string): Promise<void
  */
 export async function dockerReadFile(projectId: string, path: string): Promise<string> {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const res = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, {
+  const res = await fetch(`${DOCKER_URL}/api/exec/${projectId}`, withDockerCredentials({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getSessionToken() || ''}`,
     },
     body: JSON.stringify({ command: `cat "/workspace${normalizedPath}"` }),
-  });
+  }));
   if (!res.ok) {
     throw new Error('Docker read failed');
   }

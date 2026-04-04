@@ -20,6 +20,8 @@ export interface ChatHistoryItem {
 
 export interface UseChatHistoryOptions {
   userId?: string;
+  userEmail?: string;
+  userName?: string;
   anonymousId?: string;
   limit?: number;
 }
@@ -31,7 +33,7 @@ interface ApiResponse<T = any> {
   claimedCount?: number;
 }
 
-export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHistoryOptions = {}) {
+export function useChatHistory({ userId, userEmail, userName, anonymousId, limit = 50 }: UseChatHistoryOptions = {}) {
   const [history, setHistory] = useState<ChatHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,8 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
     try {
       const params = new URLSearchParams();
       if (userId) params.append('userId', userId);
+      if (userEmail) params.append('userEmail', userEmail);
+      if (userName) params.append('userName', userName);
       if (anonymousId) params.append('anonymousId', anonymousId);
       params.append('limit', limit.toString());
 
@@ -68,7 +72,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
     } finally {
       setIsLoading(false);
     }
-  }, [userId, anonymousId, limit]);
+  }, [userId, userEmail, userName, anonymousId, limit]);
 
   /**
    * Save chat session to database
@@ -86,6 +90,8 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
+          userEmail,
+          userName,
           anonymousId,
           ...data,
         }),
@@ -104,7 +110,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
       logger.error('Failed to save chat:', err);
       throw err;
     }
-  }, [userId, anonymousId, loadHistory]);
+  }, [userId, userEmail, userName, anonymousId, loadHistory]);
 
   /**
    * Delete a chat session
@@ -141,6 +147,8 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: newUserId,
+          userEmail,
+          userName,
           anonymousId: oldAnonymousId,
         }),
       });
@@ -158,7 +166,7 @@ export function useChatHistory({ userId, anonymousId, limit = 50 }: UseChatHisto
       logger.error('Failed to claim sessions:', err);
       throw err;
     }
-  }, [loadHistory]);
+  }, [userEmail, userName, loadHistory]);
 
   // Load history when component mounts or when userId/anonymousId changes
   useEffect(() => {

@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 const mockGetSession = vi.fn();
 const mockHeaders = vi.fn();
 const mockExtractSessionTokenFromHeader = vi.fn();
-const mockVerifySessionFromDB = vi.fn();
+const mockFindFallbackSessionByToken = vi.fn();
 
 vi.mock('@/lib/auth-config', () => ({
   auth: {
@@ -20,7 +20,10 @@ vi.mock('next/headers', () => ({
 
 vi.mock('@recoder/auth', () => ({
   extractSessionTokenFromHeader: (...args: unknown[]) => mockExtractSessionTokenFromHeader(...args),
-  verifySession: (...args: unknown[]) => mockVerifySessionFromDB(...args),
+}));
+
+vi.mock('@/lib/session-fallback', () => ({
+  findFallbackSessionByToken: (...args: unknown[]) => mockFindFallbackSessionByToken(...args),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -46,7 +49,7 @@ describe('GET /api/auth/session', () => {
     }));
     mockGetSession.mockResolvedValue(null);
     mockExtractSessionTokenFromHeader.mockReturnValue('test-token');
-    mockVerifySessionFromDB.mockResolvedValue(null);
+    mockFindFallbackSessionByToken.mockResolvedValue(null);
   });
 
   it('returns the Better Auth session when available', async () => {
@@ -82,11 +85,11 @@ describe('GET /api/auth/session', () => {
         expiresAt: '2026-04-04T00:00:00.000Z',
       },
     });
-    expect(mockVerifySessionFromDB).not.toHaveBeenCalled();
+    expect(mockFindFallbackSessionByToken).not.toHaveBeenCalled();
   });
 
   it('falls back to DB-backed session verification when Better Auth misses', async () => {
-    mockVerifySessionFromDB.mockResolvedValue({
+    mockFindFallbackSessionByToken.mockResolvedValue({
       sessionId: 'session-db-1',
       userId: 'user-1',
       expiresAt: new Date('2026-04-04T00:00:00.000Z'),
@@ -120,7 +123,7 @@ describe('GET /api/auth/session', () => {
         expiresAt: '2026-04-04T00:00:00.000Z',
       },
     });
-    expect(mockVerifySessionFromDB).toHaveBeenCalledTimes(1);
+    expect(mockFindFallbackSessionByToken).toHaveBeenCalledTimes(1);
   });
 
   it('returns a null user when neither session path succeeds', async () => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
+import { prisma } from '@/lib/prisma';
 
 const SESSION_COOKIE_CANDIDATES = [
   '__Secure-recoder.session_token',
@@ -81,44 +82,55 @@ async function resolveSessionFromToken(token: string) {
   // Fallback: direct DB lookup (handles cases where Better Auth cookie
   // prefix mismatch prevents getSession from finding valid sessions).
   // Check "sessions" (primary, where adapter writes) then "session" (legacy).
+  // Use Prisma instead of dynamic pg import so Next standalone includes the
+  // dependency path in production builds.
   try {
-    const { Pool } = await import('pg');
-    const dbUrl = process.env.DATABASE_URL;
-    if (dbUrl) {
-      const pool = new Pool({ connectionString: dbUrl, max: 1 });
-      try {
-        const sessionToken = token.includes('.') ? token.split('.')[0] : token;
+    const sessionToken = token.includes('.') ? token.split('.')[0] : token;
+    const activeSessionWhere = {
+      token: sessionToken,
+      expiresAt: { gt: new Date() },
+    };
 
-        // Primary: "sessions" table joined with "users" table
-        let result = await pool.query(
-          `SELECT s."userId", s."expiresAt", u.id, u.email, u.name, u.image
-           FROM "sessions" s JOIN "users" u ON s."userId" = u.id
-           WHERE s.token = $1 AND s."expiresAt" > NOW()
-           LIMIT 1`,
-          [sessionToken]
-        );
+    const primarySession = await prisma.sessions.findFirst({
+      where: activeSessionWhere,
+      include: { users: true },
+    });
 
-        // Fallback: legacy "session" table joined with "users" table
-        if (!result.rows[0]) {
-          result = await pool.query(
-            `SELECT s."userId", s."expiresAt", u.id, u.email, u.name, u.image
-             FROM "session" s JOIN "users" u ON s."userId" = u.id
-             WHERE s.token = $1 AND s."expiresAt" > NOW()
-             LIMIT 1`,
-            [sessionToken]
-          );
-        }
+    if (primarySession?.users) {
+      return {
+        user: {
+          id: primarySession.users.id,
+          email: primarySession.users.email,
+          name: primarySession.users.name,
+          image: primarySession.users.image,
+        },
+        session: {
+          userId: primarySession.userId,
+          expiresAt: primarySession.expiresAt,
+          token: sessionToken,
+        },
+      };
+    }
 
-        if (result.rows[0]) {
-          const row = result.rows[0];
-          return {
-            user: { id: row.id, email: row.email, name: row.name, image: row.image },
-            session: { userId: row.userId, expiresAt: row.expiresAt, token: sessionToken },
-          };
-        }
-      } finally {
-        await pool.end();
-      }
+    const legacySession = await prisma.session.findFirst({
+      where: activeSessionWhere,
+      include: { user: true },
+    });
+
+    if (legacySession?.user) {
+      return {
+        user: {
+          id: legacySession.user.id,
+          email: legacySession.user.email,
+          name: legacySession.user.name,
+          image: legacySession.user.image,
+        },
+        session: {
+          userId: legacySession.userId,
+          expiresAt: legacySession.expiresAt,
+          token: sessionToken,
+        },
+      };
     }
   } catch (e) {
     console.error('Direct DB session lookup fallback failed:', e);

@@ -9,6 +9,24 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('ChatHistoryDB');
 
+type DatabaseErrorLike = {
+  code?: string;
+  constraint?: string;
+  message?: string;
+};
+
+type ChatUserIdentity = {
+  userId?: string;
+  userEmail?: string;
+  userName?: string | null;
+};
+
+type ChatUserRecord = {
+  id: string;
+  email: string;
+  name: string;
+};
+
 /**
  * Sanitize content for PostgreSQL UTF8 encoding
  * Removes null bytes (0x00) and other invalid UTF8 sequences
@@ -24,6 +42,16 @@ function sanitizeContent(content: string): string {
   sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
   return sanitized;
+}
+
+function isProjectIdForeignKeyViolation(error: unknown): boolean {
+  const dbError = error as DatabaseErrorLike | undefined;
+  if (!dbError) return false;
+
+  return dbError.code === '23503' && (
+    dbError.constraint === 'chat_sessions_projectId_fkey'
+    || dbError.message?.includes('chat_sessions_projectId_fkey') === true
+  );
 }
 
 export interface ChatSession {
@@ -56,6 +84,104 @@ export class ChatHistoryDB {
 
   constructor(databaseUrl: string) {
     this.sql = createSql(databaseUrl);
+  }
+
+  private normalizeUserEmail(email?: string): string | undefined {
+    const normalized = email?.trim().toLowerCase();
+    return normalized ? normalized : undefined;
+  }
+
+  private async getStoredUserById(userId: string): Promise<ChatUserRecord | null> {
+    const result = await this.sql`
+      SELECT id, email, name
+      FROM "user"
+      WHERE id = ${userId}
+      LIMIT 1
+    ` as unknown as ChatUserRecord[];
+
+    return result[0] || null;
+  }
+
+  private async getStoredUserByEmail(userEmail: string): Promise<ChatUserRecord | null> {
+    const normalizedEmail = this.normalizeUserEmail(userEmail);
+    if (!normalizedEmail) {
+      return null;
+    }
+
+    const result = await this.sql`
+      SELECT id, email, name
+      FROM "user"
+      WHERE lower(email) = ${normalizedEmail}
+      LIMIT 1
+    ` as unknown as ChatUserRecord[];
+
+    return result[0] || null;
+  }
+
+  private async createStoredUser(identity: Required<Pick<ChatUserIdentity, 'userId' | 'userEmail'>> & Pick<ChatUserIdentity, 'userName'>): Promise<ChatUserRecord> {
+    const normalizedEmail = this.normalizeUserEmail(identity.userEmail);
+    if (!normalizedEmail) {
+      throw new Error('Cannot create chat-history user without email');
+    }
+
+    const fallbackName = normalizedEmail.split('@')[0] || 'Recoder User';
+    const userName = identity.userName?.trim() || fallbackName;
+
+    const result = await this.sql`
+      INSERT INTO "user" (
+        id,
+        name,
+        email,
+        "emailVerified",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        ${identity.userId},
+        ${userName},
+        ${normalizedEmail},
+        ${false},
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        name = COALESCE(NULLIF(EXCLUDED.name, ''), "user".name),
+        email = EXCLUDED.email,
+        "updatedAt" = NOW()
+      RETURNING id, email, name
+    ` as unknown as ChatUserRecord[];
+
+    return result[0];
+  }
+
+  private async resolveStoredUser(identity: ChatUserIdentity): Promise<ChatUserRecord | null> {
+    if (!identity.userId && !identity.userEmail) {
+      return null;
+    }
+
+    if (identity.userId) {
+      const byId = await this.getStoredUserById(identity.userId);
+      if (byId) {
+        return byId;
+      }
+    }
+
+    const normalizedEmail = this.normalizeUserEmail(identity.userEmail);
+    if (normalizedEmail) {
+      const byEmail = await this.getStoredUserByEmail(normalizedEmail);
+      if (byEmail) {
+        return byEmail;
+      }
+    }
+
+    if (identity.userId && normalizedEmail) {
+      return await this.createStoredUser({
+        userId: identity.userId,
+        userEmail: normalizedEmail,
+        userName: identity.userName,
+      });
+    }
+
+    return null;
   }
 
   /**
@@ -104,6 +230,34 @@ export class ChatHistoryDB {
     ` as unknown as ChatSession[];
 
     return result[0];
+  }
+
+  private async createSessionWithProjectFallback(data: {
+    userId?: string;
+    anonymousId?: string;
+    urlId: string;
+    title?: string;
+    description?: string;
+    artifactId?: string;
+    projectId?: string;
+  }): Promise<ChatSession> {
+    try {
+      return await this.createSession(data);
+    } catch (error) {
+      if (!data.projectId || !isProjectIdForeignKeyViolation(error)) {
+        throw error;
+      }
+
+      logger.warn('⚠️ [createSession] projectId rejected by FK, retrying without relational projectId:', {
+        urlId: data.urlId,
+        projectId: data.projectId,
+      });
+
+      return await this.createSession({
+        ...data,
+        projectId: undefined,
+      });
+    }
   }
 
   /**
@@ -272,10 +426,21 @@ export class ChatHistoryDB {
    */
   async claimAnonymousSessions(
     anonymousId: string,
-    userId: string
+    userId: string,
+    userEmail?: string,
+    userName?: string | null
   ): Promise<number> {
+    const resolvedUser = await this.resolveStoredUser({
+      userId,
+      userEmail,
+      userName,
+    });
+    if (!resolvedUser) {
+      throw new Error('Unable to resolve chat-history user');
+    }
+
     const result = await this.sql`
-      SELECT claim_anonymous_sessions(${anonymousId}, ${userId}) as count
+      SELECT claim_anonymous_sessions(${anonymousId}, ${resolvedUser.id}) as count
     ` as unknown as Array<{ count: number }>;
 
     return result[0]?.count || 0;
@@ -301,6 +466,8 @@ export class ChatHistoryDB {
    */
   async saveChat(data: {
     userId?: string;
+    userEmail?: string;
+    userName?: string | null;
     anonymousId?: string;
     urlId: string;
     title?: string;
@@ -312,6 +479,12 @@ export class ChatHistoryDB {
     source?: 'web' | 'cli';
     cliVersion?: string;
   }): Promise<ChatSession> {
+    const resolvedUser = await this.resolveStoredUser({
+      userId: data.userId,
+      userEmail: data.userEmail,
+      userName: data.userName,
+    });
+
     // Check if session exists
     let session = await this.getSessionByUrlId(data.urlId);
 
@@ -346,18 +519,23 @@ export class ChatHistoryDB {
 
     // Prepare metadata with merged file snapshot
     const sessionMetadata = {
+      ...(session?.metadata || {}),
       fileSnapshot: mergedFileSnapshot,
       fileCount,
       totalFileSize,
-      source: data.source || 'web',
-      cliVersion: data.cliVersion,
+      source: data.source || session?.metadata?.source || 'web',
+      cliVersion: data.cliVersion ?? session?.metadata?.cliVersion,
+      sandboxProjectId: data.projectId || session?.metadata?.sandboxProjectId,
+      authUserId: data.userId || session?.metadata?.authUserId,
+      authUserEmail: data.userEmail || session?.metadata?.authUserEmail,
+      resolvedUserId: resolvedUser?.id || session?.metadata?.resolvedUserId,
       lastUpdated: new Date().toISOString(),
     };
 
     if (!session) {
       // Create new session
-      session = await this.createSession({
-        userId: data.userId,
+      session = await this.createSessionWithProjectFallback({
+        userId: resolvedUser?.id,
         anonymousId: data.anonymousId,
         urlId: data.urlId,
         title: data.title,
@@ -476,7 +654,7 @@ export class ChatHistoryDB {
       id: session.id,
       urlId: session.urlId,
       description: session.description || undefined,
-      projectId: session.projectId,
+      projectId: session.metadata?.sandboxProjectId || session.projectId,
       messages,
       fileSnapshot,
     };
@@ -489,7 +667,9 @@ export class ChatHistoryDB {
   async getChatHistory(
     userId?: string,
     anonymousId?: string,
-    limit: number = 50
+    limit: number = 50,
+    userEmail?: string,
+    userName?: string | null
   ): Promise<Array<{
     id: string;
     urlId: string;
@@ -508,7 +688,14 @@ export class ChatHistoryDB {
     let sessions: ChatSession[];
 
     if (userId) {
-      sessions = await this.getUserSessions(userId, limit);
+      const resolvedUser = await this.resolveStoredUser({
+        userId,
+        userEmail,
+        userName,
+      });
+      sessions = resolvedUser
+        ? await this.getUserSessions(resolvedUser.id, limit)
+        : [];
     } else if (anonymousId) {
       sessions = await this.getAnonymousSessions(anonymousId, limit);
     } else {
@@ -526,7 +713,7 @@ export class ChatHistoryDB {
       lastMessageAt: session.lastMessageAt?.toISOString(),
       createdAt: session.createdAt.toISOString(),
       updatedAt: session.updatedAt.toISOString(),
-      projectId: session.projectId,
+      projectId: session.metadata?.sandboxProjectId || session.projectId,
       artifactId: session.artifactId,
       metadata: session.metadata,
     }));
