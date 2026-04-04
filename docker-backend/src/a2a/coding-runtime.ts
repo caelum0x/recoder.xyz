@@ -20,7 +20,7 @@ const logger = createLogger('coding-runtime');
 // Types
 // ---------------------------------------------------------------------------
 
-export type RuntimeType = 'native' | 'opencode' | 'codex' | 'claude-code';
+export type RuntimeType = 'native' | 'opencode' | 'codex' | 'claude-code' | 'omo';
 
 export interface CodingSession {
   id: string;
@@ -255,8 +255,90 @@ export function createNativeAdapter(): RuntimeAdapter {
 }
 
 // ---------------------------------------------------------------------------
+// OMO (oh-my-openagent) adapter
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-project session tracker for OMO. Unlike opencode which has durable
+ * HTTP sessions, OMO is one-shot per subprocess invocation. We track a
+ * virtual session ID for resumption semantics.
+ */
+const omoProjectSessions = new Map<string, { sessionId: string; sandboxId: string; createdAt: string }>();
+
+export function createOmoAdapter(): RuntimeAdapter {
+  return {
+    type: 'omo',
+
+    async startSession(params: StartSessionParams): Promise<CodingSession> {
+      const sessionId = `omo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      omoProjectSessions.set(params.projectId, {
+        sessionId,
+        sandboxId: params.sandboxId,
+        createdAt: new Date().toISOString(),
+      });
+
+      return {
+        id: sessionId,
+        projectId: params.projectId,
+        sandboxId: params.sandboxId,
+        threadId: params.threadId,
+        runtimeType: 'omo',
+        status: 'ready',
+        createdAt: new Date().toISOString(),
+      };
+    },
+
+    async sendPrompt(params: SendPromptParams): Promise<PromptResult> {
+      const { getOmoConnectorRuntime } = await import('./omo-connector-runtime.service.js');
+      const runtime = getOmoConnectorRuntime();
+      const session = omoProjectSessions.get(params.projectId);
+
+      const result = await runtime.executeTask({
+        taskId: `omo_task_${Date.now().toString(36)}`,
+        prompt: params.prompt,
+        sessionId: session?.sessionId,
+        continueSession: Boolean(session),
+      });
+
+      // Update session ID if OMO returned a new one
+      if (result.sessionId && session) {
+        session.sessionId = result.sessionId;
+      }
+
+      return {
+        messageId: result.taskId,
+        parts: [
+          {
+            type: 'text',
+            content: result.resultText || (result.error ?? 'OMO returned no output'),
+          },
+        ],
+      };
+    },
+
+    getState(projectId: string): CodingSession | undefined {
+      const session = omoProjectSessions.get(projectId);
+      if (!session) return undefined;
+      return {
+        id: session.sessionId,
+        projectId,
+        sandboxId: session.sandboxId,
+        runtimeType: 'omo',
+        status: 'ready',
+        createdAt: session.createdAt,
+      };
+    },
+
+    async dispose(projectId: string): Promise<void> {
+      omoProjectSessions.delete(projectId);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Auto-register on import
 // ---------------------------------------------------------------------------
 
 registerRuntime(createNativeAdapter());
 registerRuntime(createOpenCodeAdapter());
+registerRuntime(createOmoAdapter());
