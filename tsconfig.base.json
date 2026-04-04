@@ -25,8 +25,8 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "paths": {
-      "@recoder/shared": ["packages/shared/src"],
-      "@recoder/shared/*": ["packages/shared/src/*"],
+      "@recoder/shared": ["shared/src/index.ts"],
+      "@recoder/shared/*": ["shared/src/*"],
       "@recoder/cli": ["packages/cli/src/index.ts"],
       "@recoder/cli/*": ["packages/cli/src/*"],
       "@recoder/web": ["packages/web/src/index.ts"],
