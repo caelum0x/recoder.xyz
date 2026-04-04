@@ -639,7 +639,30 @@ IMPORTANT:
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
     const systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
 
-    if (provider.toLowerCase() === 'opencode' || chatMode === 'deep-coding') {
+    if (chatMode === 'deep-coding') {
+      const { executeCodingRuntimeChat } = await import('~/lib/.server/llm/coding-runtime-exec');
+      const runtimeStream = await executeCodingRuntimeChat({
+        context,
+        request,
+        projectId: requestBody.projectId || '',
+        chatId: requestBody.chatId,
+        provider,
+        model,
+        systemPrompt,
+        messages,
+      });
+
+      stream.switchSource(runtimeStream);
+
+      return new Response(stream.readable, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+        },
+      });
+    }
+
+    if (provider.toLowerCase() === 'opencode') {
       const { executeOpencodeChat } = await import('~/lib/.server/llm/opencode-exec');
       const opencodeStream = await executeOpencodeChat({
         context,
