@@ -167,6 +167,15 @@ lerna-debug.log*
 # Local runtime artifacts
 .run/
 
+# Local external reference checkouts
+oh-my-openagent/
+oh-my-codex/
+claw-code-parity/
+packages/recoder-code/packages/core/src/external/
+opencode/*
+!opencode/Dockerfile.service
+!opencode/.dockerignore
+
 # Runtime data
 pids/
 *.pid
