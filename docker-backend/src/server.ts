@@ -4878,36 +4878,18 @@ app.post('/api/opencode/:projectId', authenticateRequest, verifyProjectOwnership
 
     // If OPENCODE_SERVICE_URL is set, route through the centralized opencode service
     if (process.env.OPENCODE_SERVICE_URL) {
-      const { promptProject, setProviderKey } = await import('./a2a/opencode-service-adapter.js');
-
-      // Forward BYOK keys to the service
-      if (providerKeys) {
-        const keyMap: Record<string, string | undefined> = {
-          openrouter: providerKeys.openrouter,
-          openai: providerKeys.openai,
-          anthropic: providerKeys.anthropic,
-          google: providerKeys.google || providerKeys.gemini,
-        };
-        for (const [provider, key] of Object.entries(keyMap)) {
-          if (key) await setProviderKey(provider, key).catch(() => {});
-        }
-      }
-
-      const result = await promptProject(projectId, {
-        content: prompt,
-        agent: model,
+      const { handleOpencodeServicePrompt } = await import('./a2a/opencode-service-handler.js');
+      const result = await handleOpencodeServicePrompt({
+        projectId,
+        prompt,
+        model,
+        providerKeys: providerKeys as Record<string, string | undefined> | undefined,
       });
-
-      const textParts = result.parts
-        .filter((p) => p.type === 'text' || p.type === 'tool-result')
-        .map((p) => (p as Record<string, unknown>).text || (p as Record<string, unknown>).content || '')
-        .filter(Boolean);
-
       return res.json({
-        success: true,
-        sessionId: result.info.sessionID,
-        text: textParts.join('\n\n'),
-        output: JSON.stringify(result),
+        success: result.success,
+        sessionId: result.sessionId,
+        text: result.text,
+        output: result.output,
       });
     }
 
