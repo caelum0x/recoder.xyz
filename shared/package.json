@@ -23,7 +23,8 @@
       "default": "./src/a2a/schemas/index.js"
     },
     "./constants": "./src/constants/upload-limits.ts",
-    "./errors": "./src/errors/index.ts"
+    "./errors": "./src/errors/index.ts",
+    "./opencode-client": "./src/opencode-client.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
