@@ -3547,27 +3547,45 @@ export class ActionRunner {
         return;
       }
 
+      // recoder-i3v fix: read the file from the project's sandbox container via
+      // docker-backend, apply the replacement in-process, then write the result
+      // back to the same sandbox. Previously this routed through
+      // /api/enterprise-tools -> searchReplace() which operates on the
+      // recoder-web server's own /workspace filesystem, so follow-up edits
+      // never reached the user's sandbox volume and the preview never updated.
+      const currentContent = await this.#dockerReadFile(action.filePath);
+
       const anchoredRefs = [action.startLineRef, action.endLineRef].filter((value): value is string => Boolean(value));
       if (anchoredRefs.length > 0) {
-        const currentContent = await this.#dockerReadFile(action.filePath);
         validateLineRefs(currentContent.split('\n'), anchoredRefs);
       }
 
-      // Call enterprise tools API for search-replace
-      const replaceResponse = await fetch('/api/enterprise-tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'searchReplace',
-          params: {
-            file_path: action.filePath,
-            old_string: action.oldString,
-            new_string: action.newString,
-          }
-        })
-      });
-      
-      const result = await replaceResponse.json() as EnterpriseToolsResponse;
+      // Perform the replacement in-process against the sandbox file contents.
+      // Normalize line endings on both sides so CRLF files match LF patterns.
+      const normalizedContent = currentContent.replace(/\r\n/g, '\n');
+      const normalizedOldString = action.oldString.replace(/\r\n/g, '\n');
+      const normalizedNewString = action.newString.replace(/\r\n/g, '\n');
+
+      let result: EnterpriseToolsResponse;
+      const matchCount = normalizedContent.split(normalizedOldString).length - 1;
+      if (matchCount === 0) {
+        result = {
+          success: false,
+          message: `No match found for old_string in ${action.filePath}. Ensure it matches exactly, including whitespace and indentation.`,
+        };
+      } else if (matchCount > 1) {
+        result = {
+          success: false,
+          message: `Found ${matchCount} matches for old_string in ${action.filePath}. Make old_string more specific so exactly one match exists.`,
+        };
+      } else {
+        const newContent = normalizedContent.replace(normalizedOldString, normalizedNewString);
+        await this.#dockerWriteFile(action.filePath, newContent);
+        result = {
+          success: true,
+          message: `Successfully replaced text in ${action.filePath}`,
+        };
+      }
 
       if (result.success) {
         action.content = (result.message || '') + (result.diff ? `\n\nDiff:\n${result.diff}` : '');
@@ -4333,29 +4351,47 @@ export class ActionRunner {
         return;
       }
 
-      const response = await fetch('/api/enterprise-tools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tool: 'editFile',
-          params: {
-            filePath: action.filePath,
-            edits: [{
-              lineNumber: resolvedLineNumber,
-              operation: action.operation,
-              content: action.content,
-              endLine: resolvedEndLineNumber
-            }],
-            workingDir: '/workspace'
-          }
-        })
-      });
-      const result = await response.json() as EnterpriseToolsResponse;
-
-      if (!result.success) {
-        action.content = `File edit failed: ${result.error || 'Unknown error'}`;
-        return;
+      // recoder-i3v fix: read the file from the sandbox via docker-backend,
+      // apply the line-based edit in-process, then write it back to the same
+      // sandbox. Previously this routed through /api/enterprise-tools ->
+      // applyEdits() which edited the recoder-web server's own /workspace
+      // filesystem instead of the user's container, so follow-up line edits
+      // never reached the preview.
+      //
+      // NOTE: if lineRef/endLineRef are set we already read the file above for
+      // ref resolution. If not, #ensureDockerReady was not yet called, so do
+      // it here before reading.
+      let fileContent: string;
+      if (action.lineRef || action.endLineRef) {
+        fileContent = await this.#dockerReadFile(action.filePath);
+      } else {
+        await this.#ensureDockerReady();
+        fileContent = await this.#dockerReadFile(action.filePath);
       }
+
+      const lines = fileContent.split('\n');
+      const idx = resolvedLineNumber - 1; // 0-based
+
+      switch (action.operation) {
+        case 'insert':
+          if (action.content !== undefined) {
+            lines.splice(idx, 0, action.content);
+          }
+          break;
+        case 'delete': {
+          const deleteCount = resolvedEndLineNumber ? resolvedEndLineNumber - resolvedLineNumber + 1 : 1;
+          lines.splice(idx, deleteCount);
+          break;
+        }
+        case 'replace':
+          if (action.content !== undefined) {
+            const replaceCount = resolvedEndLineNumber ? resolvedEndLineNumber - resolvedLineNumber + 1 : 1;
+            lines.splice(idx, replaceCount, action.content);
+          }
+          break;
+      }
+
+      await this.#dockerWriteFile(action.filePath, lines.join('\n'));
 
       action.content = `File edit completed. Modified ${action.filePath} at line ${resolvedLineNumber}`;
       logger.info(`File edit completed: ${action.operation} at line ${resolvedLineNumber}`);
