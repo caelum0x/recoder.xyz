@@ -171,11 +171,21 @@ Recoder should have two coding paths:
 
 ### Execution Order
 
-1. finish the current live blockers first (`recoder-96g`, `recoder-sti`, `recoder-i3v`)
-2. build `recoder-coi` (`opencode` connector spike)
-3. build `recoder-4bc` (hash-anchored edit protocol)
-4. expose a `Deep Coding` mode in `recoder-web` and `recoder-agents`
-5. benchmark on real tasks before broad rollout
+1. ~~finish the current live blockers first (`recoder-96g`, `recoder-sti`, `recoder-i3v`)~~ — need browser verification only
+2. ~~build `recoder-coi` (`opencode` connector spike)~~ — DONE (committed `a61914a9`)
+3. ~~build `recoder-4bc` (hash-anchored edit protocol)~~ — DONE (committed `f7a5cb32`)
+4. ~~expose a `Deep Coding` mode in `recoder-web` and `recoder-agents`~~ — DONE (deployed 2026-04-04)
+   - `recoder-web`: ChatMode `deep-coding` added, routes through `/api/opencode/:projectId` backend bridge
+   - `recoder-agents`: ModeType `deep-coding` added to modes panel with Terminal icon and sample prompts
+5. benchmark on real tasks before broad rollout — NEXT
+
+### External Runtime Sources (copied 2026-04-04)
+
+Full source copies live in the monorepo root for reference and integration:
+- `opencode/` — primary coding runtime (Bun/TS), HTTP server, session management, tools
+- `oh-my-openagent/` — hashline edits, LSP, interactive bash, tools
+- `oh-my-codex/` — pipeline, subagents, verification, planning
+- `claw-code-parity/` — Rust runtime, API, tools (reference only)
 
 ## Architecture
 

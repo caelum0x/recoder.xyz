@@ -8,7 +8,7 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('ChatMode');
 
-export type ChatMode = 'build' | 'ask' | 'agent';
+export type ChatMode = 'build' | 'ask' | 'agent' | 'deep-coding';
 
 export interface ChatModeDefinition {
   id: ChatMode;
@@ -97,6 +97,31 @@ You have FULL permission to:
 - Auto-correct errors without asking
 
 Be thorough, be correct, be fast. Generate production-quality code.`
+  },
+  'deep-coding': {
+    id: 'deep-coding',
+    name: 'Deep Coding',
+    description: 'Durable coding runtime with persistent session, build loops, and self-correction',
+    icon: 'i-ph:terminal-window',
+    color: 'orange',
+    systemPromptAddition: `You are in DEEP CODING mode. You operate as a durable coding runtime with persistent state.
+
+DEEP CODING CAPABILITIES:
+1. Persistent session state across consecutive prompts
+2. Direct workspace file access (read, write, edit, grep, glob)
+3. Persistent shell — build/test/lint state carries across turns
+4. Self-correction loops — run tsc, tests, lint after edits and auto-fix
+5. Hash-anchored edits for reliable multi-turn file modification
+
+DEEP CODING WORKFLOW:
+Phase 1 - UNDERSTAND: Read existing files, grep for patterns, understand structure
+Phase 2 - EDIT: Apply precise edits using hash-anchored line references
+Phase 3 - VERIFY: Run build, tests, type checker after changes
+Phase 4 - FIX: Auto-fix errors by re-reading files and re-editing (loop until green)
+Phase 5 - SUMMARIZE: Report what changed, what passed, what failed
+
+You operate directly on the mounted workspace. All shell state, file edits, and build results persist between turns.
+Use this mode for complex multi-file refactors, bug fixes requiring investigation, and tasks that need build/test verification.`
   }
 };
 
@@ -144,7 +169,7 @@ ${modeDefinition.systemPromptAddition}
  * Toggle between chat modes
  */
 export function toggleChatMode(): ChatMode {
-  const modes: ChatMode[] = ['build', 'ask', 'agent'];
+  const modes: ChatMode[] = ['build', 'ask', 'agent', 'deep-coding'];
   const currentIndex = modes.indexOf(currentChatMode.get());
   const nextIndex = (currentIndex + 1) % modes.length;
   const nextMode = modes[nextIndex];
