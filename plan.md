@@ -22,12 +22,13 @@ Use this section as the source of truth when older handoff notes or chat transcr
 - Agents/canvas follow-up still pending:
   - Excalidraw incremental-update behavior should still explicitly call `recoder_canvas_update`
   - the live board-update path still needs browser verification in the deployed UI
-- A2A productionization backlog still pending:
-  - inbox push notifications
-  - per-terminal discovery/session IDs for Claude Code and Codex
-  - task claim/lock
-  - production deployment of the Redis-backed persistent task store
-  - package release, threading/history, and workspace discovery follow-ups
+- A2A productionization backlog:
+  - ~~inbox push notifications~~ — DONE (commit `cab1b8d0`, zrok-agent-tunnel.ts)
+  - ~~per-terminal discovery/session IDs for Claude Code and Codex~~ — DONE (commit `cab1b8d0`, agent-terminal-registry.ts + REST endpoints)
+  - ~~production deployment of the Redis-backed persistent task store~~ — DONE (auto-activates via REDIS_URL in docker-compose)
+  - task claim/lock — still pending
+  - package release, threading/history, and workspace discovery follow-ups — still pending
+  - wire recoder-code CLI to auto-register terminals on startup — pending
 - Source-level compose corrections that are not yet the same thing as a live closeout:
   - Umami host-DB compose fix exists in source, but this file should not be read as claiming live Umami deploy/database verification unless stated explicitly in a later correction
 
