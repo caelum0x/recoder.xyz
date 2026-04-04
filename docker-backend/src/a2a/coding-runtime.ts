@@ -92,11 +92,30 @@ export function listRuntimes(): RuntimeType[] {
 // ---------------------------------------------------------------------------
 
 export function createOpenCodeAdapter(): RuntimeAdapter {
+  const useCentralized = !!process.env.OPENCODE_SERVICE_URL;
+
   return {
     type: 'opencode',
 
     async startSession(params: StartSessionParams): Promise<CodingSession> {
-      const { startSession } = await import('./opencode-connector.service');
+      if (useCentralized) {
+        const { getOrCreateSession } = await import('./opencode-service-adapter.js');
+        const session = await getOrCreateSession(params.projectId, {
+          directory: '/workspace',
+          title: `Project ${params.projectId}`,
+        });
+        return {
+          id: session.id,
+          projectId: params.projectId,
+          sandboxId: params.sandboxId,
+          threadId: params.threadId,
+          runtimeType: 'opencode',
+          status: 'ready',
+          createdAt: new Date(session.time.created).toISOString(),
+        };
+      }
+
+      const { startSession } = await import('./opencode-connector.service.js');
       const session = await startSession(params);
       return {
         id: session.id,
@@ -110,31 +129,79 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
     },
 
     async sendPrompt(params: SendPromptParams): Promise<PromptResult> {
-      const { sendPrompt } = await import('./opencode-connector.service');
+      if (useCentralized) {
+        const { promptProject } = await import('./opencode-service-adapter.js');
+        const result = await promptProject(params.projectId, {
+          content: params.prompt,
+          agent: params.agent,
+        });
+
+        const textParts = result.parts
+          .filter((p: Record<string, unknown>) => p.type === 'text')
+          .map((p: Record<string, unknown>) => String(p.text || p.content || ''))
+          .filter(Boolean);
+
+        return {
+          messageId: result.info.id,
+          parts: textParts.map((t: string) => ({ type: 'text' as const, content: t })),
+        };
+      }
+
+      const { sendPrompt } = await import('./opencode-connector.service.js');
       return sendPrompt(params);
     },
 
     getState(projectId: string): CodingSession | undefined {
-      const { getSession } = require('./opencode-connector.service');
-      const session = getSession(projectId);
-      if (!session) return undefined;
-      return {
-        id: session.id,
-        projectId,
-        sandboxId: session.sandboxId,
-        runtimeType: 'opencode',
-        status: session.status,
-        createdAt: session.createdAt,
-      };
+      if (useCentralized) {
+        // Dynamic import not usable in sync function — check session map
+        try {
+          const adapter = require('./opencode-service-adapter.js');
+          const projects = adapter.getActiveProjects();
+          const match = projects.find((p: { projectId: string }) => p.projectId === projectId);
+          if (!match) return undefined;
+          return {
+            id: match.sessionId,
+            projectId,
+            sandboxId: projectId,
+            runtimeType: 'opencode',
+            status: 'ready',
+            createdAt: new Date().toISOString(),
+          };
+        } catch {
+          return undefined;
+        }
+      }
+
+      try {
+        const { getSession } = require('./opencode-connector.service.js');
+        const session = getSession(projectId);
+        if (!session) return undefined;
+        return {
+          id: session.id,
+          projectId,
+          sandboxId: session.sandboxId,
+          runtimeType: 'opencode',
+          status: session.status,
+          createdAt: session.createdAt,
+        };
+      } catch {
+        return undefined;
+      }
     },
 
     async dispose(projectId: string): Promise<void> {
-      const { disposeSession, getSession } = await import('./opencode-connector.service');
+      if (useCentralized) {
+        const { disposeProjectSession } = await import('./opencode-service-adapter.js');
+        await disposeProjectSession(projectId);
+        return;
+      }
+
+      const { disposeSession, getSession } = await import('./opencode-connector.service.js');
       const session = getSession(projectId);
       if (!session) return;
       await disposeSession({
         projectId,
-        sandboxExecUrl: '', // Caller should provide
+        sandboxExecUrl: '',
         daytonaApiKey: '',
       });
     },
