@@ -49,6 +49,9 @@ import type { AnyToolInvocation } from '../tools/tools.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import { WebSearchTool } from '../tools/web-search.js';
 import { WriteFileTool } from '../tools/write-file.js';
+import { MultiEditTool } from '../tools/multi-edit.js';
+import { BatchToolsTool } from '../tools/batch-tools.js';
+import { ApplyPatchTool } from '../tools/apply-patch.js';
 import { shouldAttemptBrowserLaunch } from '../utils/browser.js';
 import { FileExclusions } from '../utils/ignorePatterns.js';
 import { WorkspaceContext } from '../utils/workspaceContext.js';
@@ -1057,6 +1060,11 @@ export class Config {
     // Web search always registered — uses SearXNG (self-hosted, no API key needed)
     // Falls back to Tavily if TAVILY_API_KEY is set, then DuckDuckGo
     registerCoreTool(WebSearchTool, this);
+
+    // OpenCode-inspired tools: multi-edit, batch, apply-patch
+    registerCoreTool(MultiEditTool, this);
+    registerCoreTool(BatchToolsTool);
+    registerCoreTool(ApplyPatchTool, this);
 
     await registry.discoverAllTools();
     return registry;
