@@ -622,6 +622,73 @@ async def start_agent_run(
     }
 
 
+async def _execute_deep_coding_run(
+    agent_run_id: str,
+    thread_id: str,
+    project_id: str,
+    prompt: str,
+    model_name: str,
+    account_id: str,
+    cancellation_event: asyncio.Event,
+) -> None:
+    """Route a deep-coding mode run through docker-backend's opencode service."""
+    import httpx
+
+    docker_backend_url = os.getenv("DOCKER_BACKEND_URL", "http://localhost:3100")
+    url = f"{docker_backend_url}/api/opencode/{project_id}"
+
+    logger.info(f"[DEEP_CODING] Routing to opencode service: {url}")
+
+    try:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            resp = await client.post(url, json={
+                "prompt": prompt,
+                "model": model_name,
+            })
+
+            if resp.status_code != 200:
+                error_text = resp.text[:500]
+                logger.error(f"[DEEP_CODING] opencode request failed: {resp.status_code} {error_text}")
+                from core.agents.runner import update_agent_run_status
+                await update_agent_run_status(agent_run_id, "failed", error=f"OpenCode service error: {resp.status_code}", account_id=account_id)
+                return
+
+            result = resp.json()
+
+        text = result.get("text") or result.get("output") or ""
+        session_id = result.get("sessionId")
+
+        logger.info(f"[DEEP_CODING] Completed: sessionId={session_id}, text_len={len(text)}")
+
+        # Write assistant message to thread
+        from core.threads import repo as threads_repo
+        await threads_repo.write_assistant_message(
+            thread_id=thread_id,
+            content=text,
+            agent_run_id=agent_run_id,
+            model=model_name,
+        )
+
+        # Publish to Redis stream for SSE delivery to browser
+        stream_key = f"agent_run:{agent_run_id}:events"
+        await redis.get_client().xadd(stream_key, {
+            "type": "text",
+            "content": text,
+            "done": "true",
+        }, maxlen=1000)
+
+        from core.agents.runner import update_agent_run_status
+        await update_agent_run_status(agent_run_id, "completed", account_id=account_id)
+
+    except Exception as e:
+        logger.error(f"[DEEP_CODING] Error: {e}")
+        try:
+            from core.agents.runner import update_agent_run_status
+            await update_agent_run_status(agent_run_id, "failed", error=str(e)[:200], account_id=account_id)
+        except Exception:
+            pass
+
+
 async def _background_setup_and_execute(
     account_id: str,
     prompt: str,
@@ -739,20 +806,34 @@ async def _background_setup_and_execute(
         run_timeout_seconds = int(os.getenv("AGENT_RUN_TIMEOUT_SECONDS", "3000"))  # 65min, > MAX_DURATION so cleanup always runs
         
         try:
-            await asyncio.wait_for(
-                execute_agent_run(
-                    agent_run_id=agent_run_id,
-                    thread_id=thread_id,
-                    project_id=project_id,
-                    model_name=effective_model,
-                    agent_config=agent_config,
-                    account_id=account_id,
-                    cancellation_event=cancellation_event,
-                    is_new_thread=is_new_thread,
-                    user_message=final_message_content
-                ),
-                timeout=run_timeout_seconds,
-            )
+            if mode == 'deep-coding':
+                await asyncio.wait_for(
+                    _execute_deep_coding_run(
+                        agent_run_id=agent_run_id,
+                        thread_id=thread_id,
+                        project_id=project_id,
+                        prompt=final_message_content,
+                        model_name=effective_model,
+                        account_id=account_id,
+                        cancellation_event=cancellation_event,
+                    ),
+                    timeout=run_timeout_seconds,
+                )
+            else:
+                await asyncio.wait_for(
+                    execute_agent_run(
+                        agent_run_id=agent_run_id,
+                        thread_id=thread_id,
+                        project_id=project_id,
+                        model_name=effective_model,
+                        agent_config=agent_config,
+                        account_id=account_id,
+                        cancellation_event=cancellation_event,
+                        is_new_thread=is_new_thread,
+                        user_message=final_message_content
+                    ),
+                    timeout=run_timeout_seconds,
+                )
             final_status = "completed"
         except asyncio.TimeoutError:
             cancellation_event.set()
