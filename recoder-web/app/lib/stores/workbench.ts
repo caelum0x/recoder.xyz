@@ -9,7 +9,7 @@ import { EditorStore } from './editor';
 import { FilesStore, type FileMap } from './files';
 import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
-import { dockerGet, dockerPost, dockerDelete, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, getSessionToken } from '~/lib/services/docker-api';
+import { dockerGet, dockerPost, dockerDelete, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, withDockerCredentials } from '~/lib/services/docker-api';
 import { getCurrentUserId } from '~/lib/stores/user';
 import type { ProjectContext, RelatedFiles } from '~/lib/services/code-context';
 import type { ParsedError } from '~/lib/services/error-analyzer';
@@ -1377,11 +1377,10 @@ export class WorkbenchStore {
     if (!projectId) return null;
 
     try {
-      const res = await fetch(`${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(filePath)}`, {
-        headers: {
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
-        },
-      });
+      const res = await fetch(
+        `${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(filePath)}`,
+        withDockerCredentials()
+      );
       if (!res.ok) return null;
       return await res.text();
     } catch (error) {

@@ -23,7 +23,7 @@
  */
 
 import { atom, map, computed, type WritableAtom, type MapStore } from 'nanostores';
-import { dockerReadFile, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { dockerReadFile, DOCKER_URL, withDockerCredentials } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('BatchFileReader');
@@ -415,11 +415,7 @@ export class BatchFileReader {
     } catch (error) {
       // Fallback to direct fetch if dockerReadFile fails
       const url = `${DOCKER_URL}/api/file/${this.projectId}?path=${encodeURIComponent(normalizedPath)}`;
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
-        },
-      });
+      const response = await fetch(url, withDockerCredentials());
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

@@ -9,7 +9,7 @@
  * 4. Tracks file relationships for smart file selection
  */
 
-import { dockerGet, DOCKER_URL, getSessionToken } from './docker-api';
+import { dockerGet, DOCKER_URL, withDockerCredentials } from './docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('CodeContext');
 
@@ -293,11 +293,7 @@ export async function findRelatedFiles(
 export async function loadProjectContext(projectId: string): Promise<ProjectContext | null> {
   try {
     // Get file list from Docker
-    const filesRes = await fetch(`${DOCKER_URL}/api/files/${projectId}`, {
-      headers: {
-        'Authorization': `Bearer ${getSessionToken() || ''}`,
-      },
-    });
+    const filesRes = await fetch(`${DOCKER_URL}/api/files/${projectId}`, withDockerCredentials());
 
     if (!filesRes.ok) return null;
 
@@ -320,11 +316,10 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
     // Read each code file
     for (const file of codeFiles) {
       try {
-        const fileRes = await fetch(`${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(file.path)}`, {
-          headers: {
-            'Authorization': `Bearer ${getSessionToken() || ''}`,
-          },
-        });
+        const fileRes = await fetch(
+          `${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(file.path)}`,
+          withDockerCredentials()
+        );
 
         if (fileRes.ok) {
           const content = await fileRes.text();
@@ -347,11 +342,10 @@ export async function loadProjectContext(projectId: string): Promise<ProjectCont
     const packageJsonFile = filesData.files.find(f => f.name === 'package.json');
     if (packageJsonFile) {
       try {
-        const pkgRes = await fetch(`${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(packageJsonFile.path)}`, {
-          headers: {
-            'Authorization': `Bearer ${getSessionToken() || ''}`,
-          },
-        });
+        const pkgRes = await fetch(
+          `${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(packageJsonFile.path)}`,
+          withDockerCredentials()
+        );
 
         if (pkgRes.ok) {
           const pkgContent = await pkgRes.text();

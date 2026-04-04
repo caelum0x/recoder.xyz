@@ -28,12 +28,14 @@ export interface ChatHistorySession {
 
 interface UseChatHistoryOptions {
   userId?: string;
+  userEmail?: string;
+  userName?: string;
   anonymousId?: string;
   autoLoad?: boolean;
 }
 
 export function useChatHistory(options: UseChatHistoryOptions = {}) {
-  const { userId, anonymousId, autoLoad = true } = options;
+  const { userId, userEmail, userName, anonymousId, autoLoad = true } = options;
   const [history, setHistory] = useState<ChatHistorySession[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,8 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
     try {
       const params = new URLSearchParams();
       if (userId) params.set('userId', userId);
+      if (userEmail) params.set('userEmail', userEmail);
+      if (userName) params.set('userName', userName);
       if (effectiveAnonymousId) params.set('anonymousId', effectiveAnonymousId);
       params.set('limit', '50');
 
@@ -78,7 +82,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [userId, effectiveAnonymousId]);
+  }, [userId, userEmail, userName, effectiveAnonymousId]);
 
   /**
    * Save or update a chat session
@@ -98,6 +102,8 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
+          userEmail,
+          userName,
           anonymousId: effectiveAnonymousId,
           urlId: sessionData.urlId,
           title: sessionData.title,
@@ -125,7 +131,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
       logger.error('[useChatHistory] Save error:', errorMessage);
       throw err;
     }
-  }, [userId, effectiveAnonymousId, loadHistory]);
+  }, [userId, userEmail, userName, effectiveAnonymousId, loadHistory]);
 
   /**
    * Load messages for a specific session
@@ -195,6 +201,8 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: newUserId,
+          userEmail,
+          userName,
           anonymousId: effectiveAnonymousId,
         }),
       });
@@ -214,7 +222,7 @@ export function useChatHistory(options: UseChatHistoryOptions = {}) {
       logger.error('[useChatHistory] Claim error:', errorMessage);
       throw err;
     }
-  }, [effectiveAnonymousId, loadHistory]);
+  }, [effectiveAnonymousId, userEmail, userName, loadHistory]);
 
   // Auto-load on mount
   useEffect(() => {

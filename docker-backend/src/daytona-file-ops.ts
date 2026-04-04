@@ -36,9 +36,32 @@ export function isDaytonaSandbox(entry: ContainerEntry | undefined): entry is Co
   return !!(entry && (entry as any).daytona === true);
 }
 
+// ── Auto-wake helper ──
+// All file operations must wake stopped sandboxes before proceeding.
+// Without this, file reads/writes fail silently after Daytona's auto-stop
+// timer expires (30 min for Python sandboxes, 12h for docker-backend ones).
+
+async function ensureRunningBeforeOp(sandboxId: string): Promise<void> {
+  const dc = getDaytonaClient();
+  try {
+    const sandbox = await dc.getSandbox(sandboxId);
+    if (sandbox.state === 'started' || sandbox.state === 'running') return;
+    logger.info({ sandboxId: sandboxId.slice(0, 12), state: sandbox.state }, 'Daytona: sandbox stopped, auto-waking for file op');
+    const result = await ensureDaytonaSandboxRunning(sandboxId);
+    if (!result.running) {
+      throw new Error(`Sandbox ${sandboxId} could not be woken: ${result.error ?? 'unknown'}`);
+    }
+  } catch (err: any) {
+    // If getSandbox itself fails (network issue), let the caller retry
+    if (err.message?.includes('could not be woken')) throw err;
+    logger.debug({ sandboxId: sandboxId.slice(0, 12), err: err.message }, 'Daytona: pre-op sandbox check failed (will retry in op)');
+  }
+}
+
 // ── File operations ──
 // These operations use the native Toolbox filesystem API via DaytonaClient,
 // which automatically falls back to exec-based commands if native endpoints fail.
+// All operations call ensureRunningBeforeOp() first to auto-wake stopped sandboxes.
 
 /**
  * Write a file into a Daytona sandbox.
@@ -46,6 +69,7 @@ export function isDaytonaSandbox(entry: ContainerEntry | undefined): entry is Co
  * Uses the native Toolbox filesystem API with exec-based fallback.
  */
 export async function daytonaWriteFile(sandboxId: string, relativePath: string, content: string): Promise<void> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   const fullPath = `/home/daytona/${relativePath}`;
   logger.info({ sandboxId: sandboxId.slice(0, 12), path: relativePath }, 'Daytona: writing file');
@@ -78,6 +102,7 @@ export async function daytonaWriteFiles(
   sandboxId: string,
   files: Array<{ path: string; content: string }>,
 ): Promise<{ failed: Array<{ path: string; error: string }> }> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   const failed: Array<{ path: string; error: string }> = [];
   const BATCH = 10;
@@ -103,6 +128,7 @@ export async function daytonaWriteFiles(
  * Uses the native Toolbox filesystem API with exec-based fallback.
  */
 export async function daytonaReadFile(sandboxId: string, relativePath: string): Promise<string> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   const fullPath = `/home/daytona/${relativePath}`;
   return dc.downloadFile(sandboxId, fullPath);
@@ -113,6 +139,7 @@ export async function daytonaReadFile(sandboxId: string, relativePath: string): 
  * Uses the native Toolbox filesystem API with exec-based fallback.
  */
 export async function daytonaDeleteFile(sandboxId: string, relativePath: string): Promise<void> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   const fullPath = `/home/daytona/${relativePath}`;
   try {
@@ -131,6 +158,7 @@ export async function daytonaDeleteFile(sandboxId: string, relativePath: string)
  * Uses native mkdir for the target directory, then exec for the mv operation.
  */
 export async function daytonaRenameFile(sandboxId: string, oldRelPath: string, newRelPath: string): Promise<void> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   const dir = newRelPath.substring(0, newRelPath.lastIndexOf('/'));
 
@@ -156,6 +184,7 @@ export async function daytonaRenameFile(sandboxId: string, oldRelPath: string, n
  * Uses the native Toolbox filesystem API with exec-based fallback.
  */
 export async function daytonaCreateFolder(sandboxId: string, relativePath: string): Promise<void> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   try {
     await dc.createDirectoryNative(sandboxId, `/home/daytona/${relativePath}`);
@@ -174,6 +203,7 @@ export async function daytonaCreateFolder(sandboxId: string, relativePath: strin
  * Returns a list of absolute paths (matching the Docker find-based output).
  */
 export async function daytonaListFiles(sandboxId: string, dirPath: string = '/home/daytona'): Promise<string[]> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
 
   // Try native filesystem list first
@@ -208,6 +238,7 @@ export async function daytonaExec(
   command: string,
   options?: { cwd?: string; timeoutSecs?: number },
 ): Promise<ExecResult> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   return dc.execCommand(sandboxId, command, {
     cwd: options?.cwd,
@@ -224,6 +255,7 @@ export async function daytonaExecBackground(
   command: string,
   cwd: string = '/home/daytona',
 ): Promise<void> {
+  await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
   // Don't escape $ — it breaks $PATH which npm/node need.
   // Only escape backticks to prevent command injection.

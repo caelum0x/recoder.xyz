@@ -171,6 +171,8 @@ export async function loadAllSessions(limit: number = 50): Promise<ChatSessionMe
 
     const params = new URLSearchParams();
     if (user?.id) params.set('userId', user.id);
+    if (user?.email) params.set('userEmail', user.email);
+    if (user?.name) params.set('userName', user.name);
     if (anonymousId) params.set('anonymousId', anonymousId);
     params.set('limit', String(limit));
 
@@ -271,6 +273,8 @@ export async function renameSessionPersistent(sessionId: string, newTitle: strin
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId: user?.id,
+        userEmail: user?.email,
+        userName: user?.name,
         anonymousId,
         urlId: session.urlId,
         title: newTitle,
@@ -530,6 +534,8 @@ async function saveChatToDatabase(
 
       const payload = {
         userId: user?.id,
+        userEmail: user?.email,
+        userName: user?.name,
         anonymousId,
         urlId,
         title: desc?.substring(0, 100),
@@ -594,6 +600,8 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
 
     const params = new URLSearchParams();
     if (user?.id) params.set('userId', user.id);
+    if (user?.email) params.set('userEmail', user.email);
+    if (user?.name) params.set('userName', user.name);
     if (anonymousId) params.set('anonymousId', anonymousId);
     params.set('urlId', mixedId);
 

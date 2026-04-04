@@ -9,12 +9,14 @@ Completed rollouts and historical investigations were removed from this file for
 Use this section as the source of truth when older handoff notes or chat transcripts conflict with the current state.
 
 - `recoder-96g` — still open. The core agent coding loop is not closed yet for real app tasks.
-  - Concrete live blocker under it: `recoder-sti` (watch/terminal WebSocket proxy resolving to `undefined`)
+  - Concrete live blocker under it: `recoder-sti` (watch/terminal WebSocket proxy resolving to `undefined`) — ws:false fix deployed, needs browser verification
   - Support regressions around preview/file listing were fixed live on 2026-04-03, but the full create -> follow-up edit -> file mutation -> preview update path still needs end-to-end production browser verification
 - `recoder-i3v` — still open. `web.recoder.xyz` multi-turn editing still needs explicit production browser verification before it can be claimed fixed live
-- Approved next capability work under the coding-loop track:
-  - `recoder-coi` — spike an `opencode` connector runtime behind `docker-backend`
-  - `recoder-4bc` — design hash-anchored edits for reliable multi-turn file modification
+- Deep Coding runtime integration — DONE in source (commits `f99e94a8`, `772850ef`, `a61914a9`):
+  - `recoder-coi` — opencode connector + centralized service adapter + docker-compose entry
+  - `recoder-4bc` — hash-anchored edits + apply_patch/multi_edit/batch tools in recoder-code
+  - Deep Coding mode wired end-to-end: recoder-web, recoder-agents, backend, docker-backend, A2A connector
+  - Remaining: deploy opencode-service container on Hetzner, browser-verify the mode
 - Connector/runtime follow-up still pending:
   - Windsurf connector needs real-binary method verification plus live/browser verification
 - Agents/canvas follow-up still pending:

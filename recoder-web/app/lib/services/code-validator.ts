@@ -10,7 +10,7 @@
  */
 
 import { detectLanguage, extractImports } from './code-context';
-import { DOCKER_URL, getSessionToken } from './docker-api';
+import { DOCKER_URL, withDockerCredentials } from './docker-api';
 
 export interface ValidationResult {
   valid: boolean;
@@ -383,12 +383,10 @@ async function validateImports(
  */
 async function getProjectDependencies(projectId: string): Promise<Record<string, string>> {
   try {
-    const res = await fetch(`${DOCKER_URL}/api/file/${projectId}?path=package.json`, {
-      headers: {
-        'Authorization': `Bearer ${getSessionToken() || ''}`,
-      },
-      signal: AbortSignal.timeout(2000),
-    });
+    const res = await fetch(
+      `${DOCKER_URL}/api/file/${projectId}?path=package.json`,
+      withDockerCredentials({ signal: AbortSignal.timeout(2000) })
+    );
 
     if (!res.ok) return {};
 
@@ -564,13 +562,10 @@ export async function validateRelativeImports(
     for (const ext of extensions) {
       const checkPath = resolvedPath + ext;
       try {
-        const res = await fetch(`${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(checkPath)}`, {
-          method: 'HEAD',
-          headers: {
-            'Authorization': `Bearer ${getSessionToken() || ''}`,
-          },
-          signal: AbortSignal.timeout(1000),
-        });
+        const res = await fetch(
+          `${DOCKER_URL}/api/file/${projectId}?path=${encodeURIComponent(checkPath)}`,
+          withDockerCredentials({ method: 'HEAD', signal: AbortSignal.timeout(1000) })
+        );
 
         if (res.ok) {
           found = true;

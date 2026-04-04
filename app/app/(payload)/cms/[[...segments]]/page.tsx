@@ -11,8 +11,8 @@ type Params = {
 };
 
 type PageProps = {
-  params: Promise<Params> | Params;
-  searchParams: Promise<SearchParams> | SearchParams;
+  params: Promise<Params>;
+  searchParams: Promise<SearchParams>;
 };
 
 export async function generateMetadata({
