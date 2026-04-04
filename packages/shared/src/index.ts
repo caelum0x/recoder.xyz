@@ -54,8 +54,6 @@ export type {
 } from './constants';
 
 export * from './utils';
-
-// OpenCode client for backend service integration
 // Security exports
 export * from './security/soc2-compliance-scanner';
 
