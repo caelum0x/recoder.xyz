@@ -3284,9 +3284,13 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
       });
       if (result.success && result.images?.length > 0) {
         setGeneratedPreviews(result.images);
-        toast.success(`Generated ${result.images.length} images!`);
+        if (result.degraded) {
+          toast.warning(result.message || 'Showing a deterministic fallback preview because image providers are unavailable right now.');
+        } else {
+          toast.success(`Generated ${result.images.length} images!`);
+        }
       } else {
-        toast.error(result.error || 'Failed to generate images');
+        toast.error(result.error || result.message || 'Failed to generate images');
       }
     } catch (err) {
       console.error('AI generate error:', err);
@@ -3309,6 +3313,13 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
         imgHeight = Math.round(imgHeight * scaleFactor);
       }
       const { x, y } = getNextImagePosition(imgWidth, imgHeight);
+      const extension = imageSrc.startsWith('data:image/svg+xml')
+        ? 'svg'
+        : imageSrc.startsWith('data:image/png')
+          ? 'png'
+          : imageSrc.startsWith('data:image/jpeg')
+            ? 'jpg'
+            : 'webp';
 
       const newElement: CanvasElement = {
         id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -3318,7 +3329,7 @@ export function CanvasRenderer({ content, filePath, fileName, sandboxId, classNa
         width: imgWidth,
         height: imgHeight,
         rotation: 0, scaleX: 1, scaleY: 1, opacity: 1, locked: false,
-        name: `generated-${Date.now()}.webp`,
+        name: `generated-${Date.now()}.${extension}`,
       };
       setElements(prev => [...prev, newElement]);
       toast.success('Added to canvas');

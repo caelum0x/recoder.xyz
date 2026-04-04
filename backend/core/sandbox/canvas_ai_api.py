@@ -18,6 +18,11 @@ from core.utils.auth_utils import verify_and_get_user_id_from_jwt
 from core.utils.config import get_config
 from core.services.http_client import get_http_client
 from core.billing.credits.media_integration import media_billing
+from core.utils.media_fallbacks import (
+    build_fallback_svg_data_url,
+    is_provider_quota_error,
+    summarize_provider_errors,
+)
 
 router = APIRouter(prefix="/canvas-ai", tags=["Canvas AI"])
 
@@ -70,6 +75,9 @@ class ImageGenerateResponse(BaseModel):
     success: bool
     images: list[str] = []  # List of base64 encoded images
     error: Optional[str] = None
+    message: Optional[str] = None
+    degraded: bool = False
+    provider: Optional[str] = None
 
 
 class OCRTextLine(BaseModel):
@@ -303,12 +311,16 @@ def _replicate_output_to_base64(output, output_format: str = "png") -> str:
         return f"data:{mime};base64,{result_b64}"
 
 
-async def _generate_image_openrouter(prompt: str) -> Optional[str]:
-    """Generate an image from text prompt via OpenRouter Gemini. Returns base64 data URL or None."""
+async def _generate_image_openrouter(prompt: str) -> tuple[Optional[str], Optional[str]]:
+    """Generate an image from text prompt via OpenRouter Gemini.
+
+    Returns a tuple of (image_data_url, error_message).
+    """
     api_key = OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY", "")
     if not api_key:
-        logger.warning("No OPENROUTER_API_KEY configured for canvas image generation")
-        return None
+        message = "OpenRouter API key not configured for canvas image generation"
+        logger.warning(message)
+        return None, message
 
     try:
         async with get_http_client() as client:
@@ -329,8 +341,9 @@ async def _generate_image_openrouter(prompt: str) -> Optional[str]:
             )
 
             if response.status_code != 200:
-                logger.warning(f"OpenRouter canvas image gen failed: {response.status_code} — {response.text[:300]}")
-                return None
+                message = f"OpenRouter canvas image gen failed ({response.status_code}): {response.text[:300]}"
+                logger.warning(message)
+                return None, message
 
             result = response.json()
             message = result.get("choices", [{}])[0].get("message", {})
@@ -341,19 +354,21 @@ async def _generate_image_openrouter(prompt: str) -> Optional[str]:
                     if isinstance(part, dict) and part.get("type") == "image_url":
                         url = part.get("image_url", {}).get("url")
                         if url:
-                            return url
+                            return url, None
 
             images = message.get("images", [])
             if images and isinstance(images[0], dict):
                 url = images[0].get("image_url", {}).get("url")
                 if url:
-                    return url
+                    return url, None
 
-            logger.warning("OpenRouter canvas image gen: no image in response")
-            return None
+            message = "OpenRouter canvas image gen returned no image in the response"
+            logger.warning(message)
+            return None, message
     except Exception as e:
-        logger.warning(f"OpenRouter canvas image gen error: {e}")
-        return None
+        message = str(e)
+        logger.warning(f"OpenRouter canvas image gen error: {message}")
+        return None, message
 
 
 async def process_with_replicate_remove_bg(image_bytes: bytes, mime_type: str) -> str:
@@ -709,6 +724,8 @@ async def generate_images(
         use_replicate = bool(config.REPLICATE_API_TOKEN)
 
         generated_images: list[str] = []
+        provider_errors: list[str] = []
+        actual_provider: Optional[str] = None
 
         if use_replicate:
             _get_replicate_token()
@@ -732,10 +749,12 @@ async def generate_images(
                     try:
                         image_b64 = _replicate_output_to_base64(img_output, "webp")
                         generated_images.append(image_b64)
+                        actual_provider = "replicate"
                     except Exception as e:
                         logger.error(f"Failed to process output: {e}")
                         continue
             except Exception as e:
+                provider_errors.append(f"Replicate: {str(e)}")
                 logger.warning(f"Flux generation failed ({e}), falling back to OpenRouter Gemini")
                 # Fall through to OpenRouter fallback below
 
@@ -749,17 +768,38 @@ async def generate_images(
                     # can produce images via the modalities API.  However, Gemini
                     # supports text-only image generation, so we use a direct
                     # OpenRouter call instead.
-                    result_b64 = await _generate_image_openrouter(request.prompt)
+                    result_b64, openrouter_error = await _generate_image_openrouter(request.prompt)
                     if result_b64:
                         generated_images.append(result_b64)
+                        actual_provider = "openrouter"
+                    elif openrouter_error:
+                        provider_errors.append(f"OpenRouter: {openrouter_error}")
                 except Exception as e:
+                    provider_errors.append(f"OpenRouter: {str(e)}")
                     logger.error(f"OpenRouter image gen {i} failed: {e}")
                     continue
 
         if len(generated_images) == 0:
+            if any(is_provider_quota_error(error) for error in provider_errors):
+                fallback_preview = build_fallback_svg_data_url(
+                    prompt=request.prompt,
+                    aspect_ratio=request.aspect_ratio,
+                    title="Fallback frame preview",
+                    reason="Image providers are out of credits or temporarily rate-limited",
+                )
+                return ImageGenerateResponse(
+                    success=True,
+                    images=[fallback_preview],
+                    degraded=True,
+                    message="Image providers are temporarily out of credits or rate-limited. Showing a deterministic fallback preview so you can still keep laying out the frame.",
+                    provider="fallback-svg",
+                )
+
+            actionable_error = summarize_provider_errors(provider_errors) or "Failed to generate any images"
             return ImageGenerateResponse(
                 success=False,
-                error="Failed to generate any images"
+                error=actionable_error,
+                message="Retry after provider availability recovers, or configure OPENROUTER_API_KEY / REPLICATE_API_TOKEN for another generation path.",
             )
 
         # BILLING: Deduct credits for successful generation
@@ -774,7 +814,8 @@ async def generate_images(
 
         return ImageGenerateResponse(
             success=True,
-            images=generated_images
+            images=generated_images,
+            provider=actual_provider,
         )
         
     except Exception as e:
