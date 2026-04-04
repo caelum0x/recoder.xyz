@@ -5,22 +5,19 @@ import { unreachable } from '~/utils/unreachable';
 import type { ActionCallbackData } from './message-parser';
 import { autoSyncToGitHub } from './github-auto-sync';
 import { WORK_DIR } from '~/utils/constants';
-import { snapshotBeforeAI, snapshotAfterAI, setAutoSave, createSnapshot } from '~/lib/stores/snapshots';
+import { snapshotBeforeAI, snapshotAfterAI, setAutoSave } from '~/lib/stores/snapshots';
 import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, withDockerCredentials } from '~/lib/services/docker-api';
 import { isNonNodeFramework, getInstallCommand, getDevServerCommand } from './language-generators';
 import * as undoManager from '~/lib/services/undo-manager';
-import type { FileChange } from '~/lib/types/proposals';
-import { validateCode, formatValidationResult, canWriteWithValidation, type ValidationResult } from '~/lib/services/code-validator';
+import { validateCode, canWriteWithValidation, type ValidationResult } from '~/lib/services/code-validator';
 import * as actionQueue from './action-queue';
 import {
-  fileBatcher,
   queueFileWrite,
   flushFileWrites,
   setFileBatcherProject,
   configureFileBatcher,
   waitForBatchCompletion,
   batchStatus,
-  batchProgress,
   type BatchResult,
   type BatchProgress,
 } from '~/lib/services/file-batcher';
@@ -33,12 +30,10 @@ import {
 } from './package-json-sanitizer';
 import { isLikelySandboxProjectId } from '~/lib/services/sandbox-project-id';
 import { HashlineMismatchError, formatHashLines, resolveLineRef, validateLineRefs } from './hashline';
-import { 
-  runTypeCheck, 
-  formatTypeCheckErrors, 
-  hasBlockingErrors as hasBlockingTypeErrors,
+import {
+  runTypeCheck,
+  formatTypeCheckErrors,
   generateAutoFixContext,
-  type TypeCheckResult,
 } from '~/lib/services/typecheck-service';
 
 // Import types and utilities from extracted modules
@@ -49,18 +44,6 @@ import type {
   DockerHealthCheckResponse,
 } from './actions/docker-operations';
 import type { EnterpriseToolsResponse, CloneUrlResponse } from './actions';
-import {
-  checkDockerAvailable as checkDockerAvailableUtil,
-  waitForFile,
-} from './actions/docker-operations';
-import {
-  SHELL_PATTERNS,
-  detectFramework as detectFrameworkUtil,
-  generatePackageJson as generatePackageJsonUtil,
-  BACKEND_SERVER_PATHS,
-  isServerFile,
-  getBackendRunCommand,
-} from './actions/shell-actions';
 
 interface ErrorResponse {
   error?: string;
@@ -329,7 +312,6 @@ export class ActionRunner {
   #modifiedFiles: Array<{ path: string; content: string }> = [];
   #repositoryCloned: boolean = false;
   #clonedRepoUrl: string | null = null;
-  #devServerProcess: any = null;
   #packageJsonCreated: boolean = false;
   #autoInstallTimer: NodeJS.Timeout | null = null;
   #staticServerTimer: NodeJS.Timeout | null = null;  // Timer for static file server
@@ -338,18 +320,12 @@ export class ActionRunner {
   #projectId: string | null = null;
   #dockerReady: boolean = false;
   #isRestoredChat: boolean = false;  // True if this is a restored past chat
-  #restoredFilePaths: Set<string> = new Set();  // Files that were restored from snapshot
   #proposalStarted: boolean = false;  // True if proposal collection has been started for this runner
-
-  #normalizeFilePath(filePath: string): string {
-    if (!filePath) return '';
-    let normalized = filePath.trim();
-    normalized = normalized.replace(/^\/+/, '');
-    if (normalized.startsWith('workspace/')) {
-      normalized = normalized.slice('workspace/'.length);
-    }
-    return normalized;
-  }
+  // D1 fix: only fire the "sandbox unavailable" user-visible event once per
+  // ActionRunner. Without this, a single broken sandbox state (e.g. missing
+  // base image) produces one identical error per file/shell/edit action the
+  // LLM emits — typically 5–10 per turn — burying the real cause in the log.
+  #sandboxUnavailableNotified: boolean = false;
   #snapshotTaken: boolean = false;  // Track if snapshot was taken before AI changes
   #cachedFramework: string | null = null;
   // Note: #npmInstallRunning and #autoInstallTriggered are now GLOBAL flags above
@@ -514,9 +490,7 @@ export class ActionRunner {
     // that poisons ALL runners (including ones for new user messages).
     // useChatHistory handles its own npm install for restored chats independently.
 
-    // Track which files were restored so we only skip those, not new files
     if (restoredFiles) {
-      this.#restoredFilePaths = new Set(restoredFiles.map((p) => this.#normalizeFilePath(p)));
       logger.info(`📂 ActionRunner marked as restored chat with ${restoredFiles.length} files`);
     } else {
       logger.info('📂 ActionRunner marked as restored chat');
@@ -1116,6 +1090,48 @@ export class ActionRunner {
       throw new Error(`Action ${actionId} not found`);
     }
 
+    // D1 fix: if the workbench already flagged container creation as failed
+    // (e.g. the sandbox base image is missing on the host, Daytona is
+    // unreachable, or dockerode returned 404), short-circuit every
+    // container-dependent action for this turn with a single user-visible
+    // "sandbox unavailable" event instead of spamming one identical error per
+    // action. Must run before globalActionsInProgress++ so nothing leaks on
+    // the return-early path.
+    const containerDependentActionTypes: Array<string> = [
+      'file', 'shell', 'str_replace', 'multi_apply_diff',
+      'readFile', 'listFiles', 'searchFiles', 'importStarter',
+      'cloneGitHub', 'cloneUrl', 'edit_file', 'read_many_files',
+      'glob_search', 'ripgrep_search',
+    ];
+    if (containerDependentActionTypes.includes(action.type)) {
+      try {
+        const { workbenchStore } = await import('~/lib/stores/workbench');
+        if (workbenchStore.containerCreationFailed.get()) {
+          if (!this.#sandboxUnavailableNotified) {
+            this.#sandboxUnavailableNotified = true;
+            logger.error('❌ [ActionRunner] Sandbox unavailable — short-circuiting all container-dependent actions for this artifact (first action: ' + action.type + ' ' + ((action as any).filePath ?? '') + ')');
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('recoder:sandbox-unavailable', {
+                detail: {
+                  projectId: this.#projectId,
+                  firstActionType: action.type,
+                  firstActionFilePath: (action as any).filePath,
+                },
+              }));
+            }
+          }
+          this.#updateAction(actionId, {
+            status: 'failed',
+            error: 'Sandbox unavailable — container creation failed. Retry when the sandbox is ready.',
+          });
+          return;
+        }
+      } catch (importError) {
+        // Defensive: if workbenchStore import fails, fall through to the
+        // normal path so any real error is surfaced via #waitForContainerReady.
+      }
+    }
+
     // 🔒 FIX 0B: Track actions in progress for streaming timeout
     globalActionsInProgress++;
 
@@ -1383,7 +1399,7 @@ export class ActionRunner {
    * The containerReady flag in workbenchStore is for the dev server preview, which
    * won't exist for new projects until files are created.
    */
-  async #waitForContainerReady(timeoutMs: number = 60000): Promise<void> {
+  async #waitForContainerReady(): Promise<void> {
     logger.debug('⏳ [ActionRunner] #waitForContainerReady starting...');
 
     try {
@@ -3240,7 +3256,6 @@ export class ActionRunner {
 
     try {
       const installCmd = getInstallCommand(framework);
-      const { command: devCmd, port } = getDevServerCommand(framework);
 
       // Run install command
       if (installCmd) {
@@ -5227,7 +5242,7 @@ export class ActionRunner {
     }
 
     // Otherwise, set up a timeout to wait for potential late closures
-    for (const { actionId, action } of orphans) {
+    for (const { actionId } of orphans) {
       // Don't set duplicate timeouts
       if (this.#orphanTimeouts.has(actionId)) {
         continue;
@@ -5303,7 +5318,7 @@ export class ActionRunner {
    * Clean up all orphan timeouts (call on component unmount or chat reset).
    */
   cleanupOrphanTimeouts(): void {
-    for (const [actionId, timeout] of this.#orphanTimeouts) {
+    for (const timeout of this.#orphanTimeouts.values()) {
       clearTimeout(timeout);
     }
     this.#orphanTimeouts.clear();
