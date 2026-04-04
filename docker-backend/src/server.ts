@@ -551,6 +551,14 @@ const authNegativeCache = new Map<string, { expiresAt: number; attempts: number;
 const NEG_AUTH_TTL = 60_000; // 60 seconds
 const NEG_AUTH_LOG_INTERVAL = 300_000; // only log once every 5 min per token
 
+// Periodic sweep to keep authNegativeCache bounded
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, entry] of authNegativeCache) {
+    if (entry.expiresAt <= now) authNegativeCache.delete(token);
+  }
+}, 5 * 60_000).unref();
+
 // Ownership cache - avoid repeated HTTP calls for the same user+project
 const ownershipCache = new Map<string, { isOwner: boolean; expiresAt: number }>();
 const OWNERSHIP_CACHE_TTL = 120_000; // 2 minutes
