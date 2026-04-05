@@ -150,7 +150,7 @@ export async function runSetupMcp(options: {
     command: 'node',
     args: [mcpServerPath],
     env: {
-      RECODER_API_TOKEN: token,
+      RECODER_SESSION_TOKEN: token,
       RECODER_DOCKER_URL: process.env['RECODER_DOCKER_URL'] || 'https://docker.recoder.xyz',
       RECODER_API_URL: process.env['RECODER_API_URL'] || 'https://api.recoder.xyz',
       DAYTONA_API_KEY: process.env['DAYTONA_API_KEY'] || '',

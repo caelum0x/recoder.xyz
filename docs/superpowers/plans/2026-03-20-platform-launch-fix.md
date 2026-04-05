@@ -155,13 +155,13 @@ ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19 "pm2 restart recoder-backend"
 # Test: start a run, wait for completion, start another
 ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19 "
   curl -s -X POST http://127.0.0.1:8000/v1/agent/start \
-    -H 'Authorization: Bearer TW4RckaW72UaCulXixoDHDY6czsECP2u' \
+    -H 'Authorization: Bearer <session-token>' \
     -F 'prompt=say hello' -F 'optimistic=false'
 "
 # Wait 30s, then:
 ssh -i ~/.ssh/id_ed25519_hetzner root@77.42.23.19 "
   curl -s -X POST http://127.0.0.1:8000/v1/agent/start \
-    -H 'Authorization: Bearer TW4RckaW72UaCulXixoDHDY6czsECP2u' \
+    -H 'Authorization: Bearer <session-token>' \
     -F 'prompt=say goodbye' -F 'optimistic=false'
 "
 ```

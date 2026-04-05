@@ -95,15 +95,14 @@ The only runtime dependency is `ws` (WebSocket client for the A2A bridge).
 Set these in your shell or in a `.env`:
 
 ```bash
-export RECODER_API_TOKEN="your_session_token"       # Required: auth token from recoder.xyz
+export RECODER_SESSION_TOKEN="your_session_token"   # Required: Better Auth session token
 export RECODER_DOCKER_URL="https://docker.recoder.xyz"
 export RECODER_API_URL="https://api.recoder.xyz"
 export DAYTONA_API_KEY="dyt_..."                     # Optional: enables sandbox execution
 ```
 
-To get your `RECODER_API_TOKEN`, sign in to recoder.xyz and either:
-- Copy your session token from browser cookies, or
-- Generate an API key from Settings > API Keys
+To get your `RECODER_SESSION_TOKEN`, sign in to recoder.xyz and copy the
+`recoder.session_token` / Better Auth session token from browser cookies.
 
 ### 3. Add to Claude Code MCP config
 
@@ -118,7 +117,7 @@ Add this to your project's `.mcp.json` or `~/.claude/mcp.json`:
       "env": {
         "RECODER_DOCKER_URL": "https://docker.recoder.xyz",
         "RECODER_API_URL": "https://api.recoder.xyz",
-        "RECODER_API_TOKEN": "YOUR_TOKEN_HERE",
+        "RECODER_SESSION_TOKEN": "YOUR_SESSION_TOKEN_HERE",
         "DAYTONA_API_KEY": "YOUR_DAYTONA_KEY_HERE"
       }
     }
@@ -165,7 +164,7 @@ When sending tasks, it tries the WebSocket bridge first for real-time delivery, 
 The Codex adapter at `mcp/recoder-codex-adapter.js` provides the same functionality with Codex's protocol format.
 
 ```bash
-export RECODER_API_TOKEN="your_session_token"
+export RECODER_SESSION_TOKEN="your_session_token"
 export DAYTONA_API_KEY="dyt_..."
 node mcp/recoder-codex-adapter.js
 ```
@@ -736,7 +735,7 @@ import { A2ABridge } from './integrations/a2a-bridge';
 
 const bridge = new A2ABridge({
   apiUrl: 'https://api.recoder.xyz',
-  apiToken: process.env.RECODER_API_TOKEN,
+  apiToken: process.env.RECODER_SESSION_TOKEN,
   dockerUrl: 'https://docker.recoder.xyz',
 });
 
@@ -782,7 +781,8 @@ const result = await bridge.delegateTask(
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `RECODER_API_TOKEN` | Yes | -- | Session token or API key for authentication |
+| `RECODER_SESSION_TOKEN` | Yes | -- | Better Auth session token for bridge/API auth |
+| `RECODER_API_TOKEN` | No | -- | Optional API-key pair for Python API compatibility |
 | `RECODER_DOCKER_URL` | No | `https://docker.recoder.xyz` | Docker backend URL (A2A control plane) |
 | `RECODER_API_URL` | No | `https://api.recoder.xyz` | Python backend API URL |
 | `RECODER_A2A_URL` | No | Derived from `RECODER_DOCKER_URL` | WebSocket bridge URL (auto-derived as `wss://docker.recoder.xyz/agent-bridge`) |
@@ -851,7 +851,7 @@ curl -X POST http://localhost:3900/sandbox/<sandbox_id>/toolbox/process/exec \
 - Look for `[recoder-a2a]` messages on stderr -- the server logs its configuration on startup
 
 **Authentication failures:**
-- Verify `RECODER_API_TOKEN` is set and valid
+- Verify `RECODER_SESSION_TOKEN` is set and valid
 - Tokens expire; generate a fresh one from recoder.xyz Settings > API Keys
 - The MCP server logs `[recoder-a2a] API auth configured` on startup if the token is set
 

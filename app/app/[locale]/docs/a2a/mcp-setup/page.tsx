@@ -86,7 +86,7 @@ export default function MCPSetupPage() {
       "command": "npx",
       "args": ["-y", "recoder-code", "--mcp"],
       "env": {
-        "RECODER_API_TOKEN": "your-token-here"
+        "RECODER_SESSION_TOKEN": "your-session-token-here"
       }
     }
   }
@@ -95,7 +95,7 @@ export default function MCPSetupPage() {
             <div className="mt-4 flex items-start gap-3 rounded-lg border border-yellow-800/50 bg-yellow-900/20 p-4">
               <AlertTriangle className="h-5 w-5 text-yellow-400 mt-0.5 shrink-0" />
               <p className="text-sm text-zinc-300">
-                Never commit your API token to version control. Use environment variables or a <code className="bg-zinc-800 px-1 rounded">.env</code> file.
+                Never commit your session token to version control. Use environment variables or a <code className="bg-zinc-800 px-1 rounded">.env</code> file.
               </p>
             </div>
           </section>
