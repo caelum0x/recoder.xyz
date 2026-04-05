@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
 import { toast } from '@/lib/toast';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const API_URL = resolveBrowserBackendApiUrl();
 
 interface OAuthIntegration {
   trigger_id: string;

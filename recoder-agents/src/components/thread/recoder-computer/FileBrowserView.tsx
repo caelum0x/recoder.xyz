@@ -69,8 +69,9 @@ import { PresentationSlideSkeleton } from '../tool-views/presentation-tools/Pres
 import { PdfRenderer } from '@/components/file-renderers/pdf-renderer';
 import { UnifiedMarkdown } from '@/components/markdown/unified-markdown';
 import { useSandboxStatusWithAutoStart, isSandboxUsable } from '@/hooks/files/use-sandbox-details';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getApiUrl = () => resolveBrowserBackendApiUrl();
 
 // Image extensions for thumbnail preview
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'ico', 'bmp', 'tiff'];
@@ -960,7 +961,7 @@ export function FileBrowserView({
               continue;
             }
             const response = await fetch(
-              `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
+              `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
               {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
               }
@@ -994,7 +995,7 @@ export function FileBrowserView({
                   continue;
                 }
                 const fallbackResponse = await fetch(
-                  `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
+                  `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
                   { headers: { 'Authorization': `Bearer ${accessToken}` } }
                 );
                 if (fallbackResponse.ok) {
@@ -1068,7 +1069,7 @@ export function FileBrowserView({
       toast.loading(`Downloading ${fileName}...`, { id: 'download-file' });
       
       const response = await fetch(
-        `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
+        `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
         {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         }
@@ -1127,7 +1128,7 @@ export function FileBrowserView({
         }
 
         const response = await fetch(
-          `${API_URL}/sandboxes/${sandboxId}/files`,
+          `${getApiUrl()}/sandboxes/${sandboxId}/files`,
           {
             method: 'POST',
             headers: {
@@ -1307,7 +1308,7 @@ export function FileBrowserView({
     setIsLoadingVersions(true);
     try {
       // Fetch git log for entire workspace (no specific path)
-      const url = `${API_URL}/sandboxes/${sandboxId}/files/history?path=/workspace&limit=100`;
+      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/history?path=/workspace&limit=100`;
       const headers: Record<string, string> = {};
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
@@ -1361,7 +1362,7 @@ export function FileBrowserView({
     // Load files at that commit using the new /files/tree endpoint
     setIsLoadingVersionFiles(true);
     try {
-      const url = `${API_URL}/sandboxes/${sandboxId}/files/tree?path=${encodeURIComponent(currentPath)}&commit=${encodeURIComponent(commit)}`;
+      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/tree?path=${encodeURIComponent(currentPath)}&commit=${encodeURIComponent(commit)}`;
       const headers: Record<string, string> = {};
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
@@ -1402,7 +1403,7 @@ export function FileBrowserView({
     setRevertLoadingInfo(true);
     setRevertCommitInfo(null);
     try {
-      const url = `${API_URL}/sandboxes/${sandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}`;
+      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}`;
       const res = await fetch(url, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
       if (!res.ok) {
         const text = await res.text();
@@ -1427,7 +1428,7 @@ export function FileBrowserView({
       // Always revert entire commit (no paths specified)
       const body: any = { commit: revertCommitInfo.commit };
 
-      const res = await fetch(`${API_URL}/sandboxes/${sandboxId}/files/revert`, {
+      const res = await fetch(`${getApiUrl()}/sandboxes/${sandboxId}/files/revert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

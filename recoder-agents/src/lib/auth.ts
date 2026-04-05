@@ -1,13 +1,14 @@
 import { createAuth } from "@recoder/auth";
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "";
+const getBackendUrl = () => resolveBrowserBackendApiUrl();
 
 export const auth = createAuth({
   sendMagicLink: async ({ email, url }) => {
     // Use the backend API to send magic link emails
     // This keeps email delivery consistent with the existing Resend setup
     try {
-      await fetch(`${backendUrl}/auth/send-magic-link`, {
+      await fetch(`${getBackendUrl()}/auth/send-magic-link`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, url }),
@@ -21,7 +22,7 @@ export const auth = createAuth({
     const email = user.email;
     if (!email) return;
     try {
-      await fetch(`${backendUrl}/auth/send-password-reset`, {
+      await fetch(`${getBackendUrl()}/auth/send-password-reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, url }),
@@ -34,7 +35,7 @@ export const auth = createAuth({
     const email = user.email;
     if (!email) return;
     try {
-      await fetch(`${backendUrl}/auth/send-verification`, {
+      await fetch(`${getBackendUrl()}/auth/send-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, url }),

@@ -17,6 +17,7 @@ import { UploadedFile } from './chat-input';
 import { normalizeFilenameToNFC, normalizeMimeType } from '@recoder/shared';
 import { backendApi } from '@/lib/api-client';
 import JSZip from 'jszip';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 import {
   UPLOAD_LIMITS,
   ALLOWED_EXTENSIONS,
@@ -25,7 +26,7 @@ import {
   formatFileSize,
 } from '@/lib/constants/upload-limits';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getApiUrl = () => resolveBrowserBackendApiUrl();
 
 const ALLOWED_EXTENSIONS_STRING = ALLOWED_EXTENSIONS.join(',');
 
@@ -199,7 +200,7 @@ const uploadFiles = async (
       formData.append('file', file, normalizedName);
       formData.append('path', uploadPath);
 
-      const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
+      const response = await fetch(`${getApiUrl()}/sandboxes/${sandboxId}/files`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -316,7 +317,7 @@ const uploadFilesToProject = async (
       formData.append('file', file, normalizedName);
       formData.append('path', uploadPath);
 
-      const response = await fetch(`${API_URL}/project/${projectId}/files`, {
+      const response = await fetch(`${getApiUrl()}/project/${projectId}/files`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -563,7 +564,7 @@ export const uploadPendingFilesToProject = async (
   const token = await requireSessionAccessToken();
 
   try {
-    await fetch(`${API_URL}/project/${projectId}/files/upload-started`, {
+    await fetch(`${getApiUrl()}/project/${projectId}/files/upload-started`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -592,7 +593,7 @@ export const uploadPendingFilesToProject = async (
         formData.append('file', file, normalizedName);
         formData.append('path', uploadPath);
 
-        const response = await fetch(`${API_URL}/project/${projectId}/files`, {
+        const response = await fetch(`${getApiUrl()}/project/${projectId}/files`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -620,7 +621,7 @@ export const uploadPendingFilesToProject = async (
     }
   } finally {
     try {
-      await fetch(`${API_URL}/project/${projectId}/files/upload-completed`, {
+      await fetch(`${getApiUrl()}/project/${projectId}/files/upload-completed`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

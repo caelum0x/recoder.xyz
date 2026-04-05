@@ -12,6 +12,7 @@ import { ToolViewIconTitle } from '../shared/ToolViewIconTitle';
 import { LoadingState } from '../shared/LoadingState';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 import { useDownloadRestriction } from '@/hooks/billing';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export function PdfExportToolView({
   toolCall,
@@ -80,7 +81,7 @@ export function PdfExportToolView({
         : `/workspace/${outputFile}`;
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${project.sandbox.id}/files/content?path=${encodeURIComponent(downloadPath)}`,
+        `${resolveBrowserBackendApiUrl()}/sandboxes/${project.sandbox.id}/files/content?path=${encodeURIComponent(downloadPath)}`,
         { headers }
       );
 

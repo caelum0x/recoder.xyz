@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const API_URL = resolveBrowserBackendApiUrl();
 
 async function getAuthHeaders(contentType = false): Promise<Record<string, string>> {
   const token = await requireSessionAccessToken();

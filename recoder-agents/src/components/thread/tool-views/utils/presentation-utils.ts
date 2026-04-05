@@ -1,6 +1,7 @@
 import { backendApi } from "@/lib/api-client";
 import { requireSessionAccessToken } from "@/lib/auth/session-token";
 import { toast } from "@/lib/toast";
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export enum DownloadFormat {
   PDF = 'pdf',
@@ -18,8 +19,8 @@ export enum DownloadFormat {
  * @returns The full PDF URL with parameters
  */
 export const getPdfUrl = (templateId: string): string => {
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  return `${API_URL}/presentation-templates/${templateId}/pdf#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
+  const apiUrl = resolveBrowserBackendApiUrl();
+  return `${apiUrl}/presentation-templates/${templateId}/pdf#toolbar=0&navpanes=0&scrollbar=0&view=FitH`;
 };
 
 /**
@@ -29,8 +30,8 @@ export const getPdfUrl = (templateId: string): string => {
  * @returns The full image URL
  */
 export const getImageUrl = (templateId: string, hasImage: boolean): string => {
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "";
-  return `${API_URL}/presentation-templates/${templateId}/image.png`;
+  const apiUrl = resolveBrowserBackendApiUrl();
+  return `${apiUrl}/presentation-templates/${templateId}/image.png`;
 };
 
 /**

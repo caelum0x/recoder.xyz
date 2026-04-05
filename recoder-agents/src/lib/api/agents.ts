@@ -24,14 +24,11 @@ import {
   parseOptimisticAgentStartResponse,
   parseUnifiedAgentStartResponse,
 } from './contracts';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-// Guard: never use a localhost backend URL in production (can leak in via .env.local at build time)
-const API_URL = (_envUrl && !_envUrl.includes('localhost'))
-  ? _envUrl
-  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://api.recoder.xyz/v1'
-    : _envUrl);
+function getApiUrl(): string {
+  return resolveBrowserBackendApiUrl();
+}
 
 export type AgentRun = {
   id: string;
@@ -102,7 +99,7 @@ export const unifiedAgentStart = async (options: {
   files?: File[];
 }): Promise<{ thread_id: string; agent_run_id: string; project_id?: string; sandbox_id?: string; status: string }> => {
   try {
-    if (!API_URL) {
+    if (!getApiUrl()) {
       throw new Error(
         'Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_URL in your environment.',
       );
@@ -412,7 +409,7 @@ export const optimisticAgentStart = async (options: {
   files?: File[];  // Files to upload with the agent start
 }): Promise<OptimisticAgentStartResponse> => {
   try {
-    if (!API_URL) {
+    if (!getApiUrl()) {
       throw new Error(
         'Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_URL in your environment.',
       );
@@ -639,7 +636,7 @@ export const streamAgent = (
       }
 
       const streamUrl = buildTokenizedSSEUrl(
-        `${API_URL}/agent-run/${agentRunId}/stream`,
+        `${getApiUrl()}/agent-run/${agentRunId}/stream`,
         token
       );
       const eventSource = new EventSource(streamUrl);

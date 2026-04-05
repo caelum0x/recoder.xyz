@@ -3,13 +3,14 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { connectTokenizedSSE } from '@/lib/realtime/sse';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export function useVapiCallRealtime(callId?: string, threadId?: string) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!callId && !threadId) return;
-    const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    const baseUrl = resolveBrowserBackendApiUrl();
     if (!baseUrl) return;
 
     const connection = connectTokenizedSSE({
