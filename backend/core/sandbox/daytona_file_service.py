@@ -84,11 +84,20 @@ class DaytonaFileService:
         try:
             sandbox = await self._get_sandbox(sandbox_id)
             result = await sandbox.process.exec(
-                f"base64 '{path}'",
+                f"test -f '{path}' && base64 < '{path}' | tr -d '\\n' || true",
                 timeout=self.timeout,
             )
-            if result.result:
-                return base64.b64decode(result.result.strip())
+
+            output: Optional[str] = None
+            if hasattr(result, "result") and result.result:
+                output = result.result
+            elif hasattr(result, "output") and result.output:
+                output = result.output
+            elif isinstance(result, dict):
+                output = result.get("result") or result.get("output")
+
+            if output:
+                return base64.b64decode(output.strip())
             return None
         except Exception as e:
             logger.warning(f"[DaytonaFileService] read_file error: {e}")
