@@ -1,6 +1,6 @@
 # Recoder Platform — Current Status
 
-Last updated: 2026-04-04
+Last updated: 2026-04-05 (afternoon)
 
 This is the single current status doc for the repository.
 
@@ -11,7 +11,96 @@ This is the single current status doc for the repository.
 - `errorsss.md` and `TASKS.md` now intentionally redirect here.
 - Historical rollout notes live in git history, not in duplicated root markdown.
 
-## P0 RESOLVED (2026-04-05) — end-to-end coding loop unblocked
+## 2026-04-05 SECURITY INCIDENT — XMRig cryptominer on recoder-app [RESOLVED]
+
+**Status: contained, root-caused, remediated, hardened. recoder-app rebuilt
+clean by Codex (17:01 UTC) on Next.js 15.4.11. All live services healthy.**
+
+### Root cause
+
+**CVE-2025-66478** — Next.js React Server Components unauthenticated RCE (CVSS 10.0),
+downstream of React CVE-2025-55182. recoder-app was running Next.js 15.4.3
+which is in the vulnerable range 15.4.0–15.4.7. Attacker exploited the RSC
+Flight protocol to drop an XMRig Monero miner into `/app/.next/` every ~90 min
+with randomized filenames. Rotating pool IPs on evasion ports:
+
+- `45.196.97.119`, `91.208.184.203`, `156.246.94.183` on 80/443/53/123
+- Pool user: `imeatingpoop`
+- Loader sha256: `7d6032764df8e706c458e663e5501ce627e4f2985c16ea61e299f2ac429cbcc9`
+- XMRig sha256: `aa0c6cdbeb3bc3ce07d5060958e1a38e54287bc89e25f6def98b620999ff4f7a`
+
+Image verified clean (184k files hashed across old + new image layers). The
+miner was runtime-injected via the RCE, never baked into any image.
+
+### Hardening shipped this session
+
+Commits on `fix/agent-blockers-create-loop-codemirror-sandbox-autowake`:
+- `05218b49` refactor(docker-backend): drop 64 unused symbols + Buffer.subarray in server.ts
+- `3708b0ff` fix(deploy): block env file drift across deploy paths
+- `3a76f82a` chore(security): refresh workspace lockfiles
+- `0586bcf1` fix(security): tighten template and email dependency floors
+- `bdfad7f4` Harden deploy env sync and security header handling
+- `b121ab30` chore(security): harden next and axios dependency audit
+- `9596c0a4`, `375972c0`, `faf029a9` — Next.js security gate + exposure patches
+
+Live server-side changes (not source, applied directly on Hetzner):
+1. **Next.js 15.4.3 → 15.4.11** on recoder-app (Codex rebuild at 17:01 UTC) — closes CVE
+2. **iptables OUTPUT + FORWARD DROP** for 3 C2 IPs, persisted via unmasked
+   `netfilter-persistent` (was `/dev/null` symlink) + redundant
+   `iptables-restore-recoder.service` oneshot
+3. **`USE_DAYTONA_CONTAINERS=true`** + `DAYTONA_SERVER_URL` corrected from
+   `localhost:3900` (container-local, unreachable) to `host.docker.internal:3900`
+   — eliminates R1 missing-image incident class going forward
+4. **`API_ENCRYPTION_KEY`** placeholder rotated via `openssl rand -hex 32`
+   (verified unused in source — real encryption uses `API_KEY_ENCRYPTION_SECRET`)
+5. **recoder-app healthcheck** `curl -f` → `node -e fetch(...)` in
+   docker-compose.deploy.yml (curl was getting cgroup OOM-killed during the
+   attack, causing false "unhealthy" status with exit 137)
+
+Defense-in-depth:
+- `app/.env.production`, `backend/.env`, `docker-backend/.env`, and all
+  `**/.env*` patterns now excluded from the rsync deploy path (prevents the
+  same drift that wiped `backend/.env` on 2026-04-03)
+- Duplicate response headers between nginx and Express eliminated (nginx is
+  now sole source of truth for X-Frame-Options / CSP / etc.)
+- 64 unused imports/functions/variables dropped from docker-backend/src/server.ts
+  (TypeScript `noUnusedLocals` sweep surfaced by the audit; also replaced 14
+  deprecated `Buffer.slice()` calls with `Buffer.subarray()`)
+
+### Post-incident state (verified 17:30 UTC)
+
+- All 5 docker services healthy: recoder-app, recoder-docker-backend,
+  recoder-web, recoder-opencode, recoder-frontend
+- All 5 PM2 services online: recoder-agency, recoder-backend, recoder-pm,
+  vcpeer, vcpeer-cron
+- **Load average: 8.66 → 0.23** (miner was burning 2+ cores)
+- **recoder-app memory: 1.99 GiB (99%) → 258 MiB (13%)**
+- **recoder-app CPU: 209% → 0%**
+- Zero uncaughtExceptions in 60s observation window
+- All Next.js workspaces patched: app 15.4.11, frontend 15.5.9, agents 15.5.9,
+  agency 16.0.10, pm 16.0.10
+
+### Forensics preserved
+
+- `/root/ioc-recoder-app/` — 3 IoC binaries + sha256 manifest
+- `/tmp/recoder-incident-artifacts/` — 4 dropped loader copies (filename
+  rotation across the day), process dumps, container diffs, inspect JSON,
+  and the Claude-Codex coordination log at `claude-findings.md`
+
+### Known non-blocking follow-ups
+
+- Root `pnpm-lock.yaml` still contains deprecated `next@16.0.1` and
+  `recoder-pm/pnpm-lock.yaml` still contains deprecated `next@15.3.2`, both
+  forced by a transitive package with a broken peerDep constraint
+  (`>=13.4 <14.0.2 || ^14.0.3`). Neither is loaded at runtime — verified via
+  `docker exec` + `node_modules` inspection. Hygiene cleanup only.
+- Pre-existing TS `noUnusedLocals` warnings in server.ts are now zero after
+  commit `05218b49`.
+- `docker-backend/data/*` runtime files (performance-profiler.json, projects.json,
+  SQLite WAL/SHM) show up dirty in git on every restart — candidates for
+  `.gitignore` addition.
+
+## P0 RESOLVED (2026-04-05, morning) — end-to-end coding loop unblocked
 
 **Status: all 5 distinct failure modes from the 2026-04-05 incident are
 fixed and live on Hetzner as of commit `1f8ee636`.**
