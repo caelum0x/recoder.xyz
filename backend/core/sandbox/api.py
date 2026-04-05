@@ -1156,7 +1156,7 @@ async def get_sandbox_status_by_id(
                 {"rid": resource['id']}
             )
             if project_row:
-                project_id = project_row['project_id']
+                project_id = str(project_row['project_id'])
 
         # Only fetch health if Daytona reports started
         services_health = None
