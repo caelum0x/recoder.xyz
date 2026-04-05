@@ -85,7 +85,8 @@ Server → Client: {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","
 
 **Env vars:**
 - `RECODER_API_URL` — Backend API (default: https://api.recoder.xyz)
-- `RECODER_API_TOKEN` — Session token for auth
+- `RECODER_SESSION_TOKEN` — Better Auth session token for bridge/API auth
+- `RECODER_API_TOKEN` — Optional API-key pair for Python API compatibility
 - `RECODER_DOCKER_URL` — Docker backend (default: https://docker.recoder.xyz)
 - `DAYTONA_API_KEY` — Daytona sandbox key
 - `RECODER_A2A_URL` — A2A WebSocket bridge (default: wss://docker.recoder.xyz/agent-bridge)
