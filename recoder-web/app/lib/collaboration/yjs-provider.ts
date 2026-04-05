@@ -10,7 +10,7 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import * as syncProtocol from 'y-protocols/sync';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
-import { getSessionToken, DOCKER_URL } from '../services/docker-api';
+import { appendDockerAuthQuery, getSessionToken, DOCKER_URL } from '../services/docker-api';
 
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('YjsProvider');
@@ -136,7 +136,7 @@ export class YjsProvider {
         ...(token ? { token } : {}),
       });
 
-      const wsUrl = `${wsProtocol}://${wsHost}/collab?${params.toString()}`;
+      const wsUrl = appendDockerAuthQuery(`${wsProtocol}://${wsHost}/collab?${params.toString()}`);
 
       this.ws = new WebSocket(wsUrl);
       this.ws.binaryType = 'arraybuffer';

@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { webcontainer } from '~/lib/webcontainer';
 import type { WebContainer } from '@webcontainer/api';
-import { dockerFetch, dockerPost, dockerGet, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery, dockerFetch, dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('RuntimeHook');
@@ -155,10 +155,9 @@ export function useRuntime(projectId: string) {
     (onData: (data: string) => void) => {
       if (state.mode === 'docker' && DOCKER_URL) {
         const wsUrl = DOCKER_URL.replace('http', 'ws');
-        // Include auth token for cross-origin authentication
-        const token = getSessionToken();
-        const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-        terminalWsRef.current = new WebSocket(`${wsUrl}/terminal/${projectId}${tokenParam}`);
+        terminalWsRef.current = new WebSocket(
+          appendDockerAuthQuery(`${wsUrl}/terminal/${projectId}`)
+        );
         terminalWsRef.current.onmessage = (e) => onData(e.data);
 
         return {

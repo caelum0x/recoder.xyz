@@ -41,6 +41,7 @@ const CONTAINER_CREATE_TIMEOUT_MS = Number(import.meta.env.VITE_CONTAINER_CREATE
 const ANONYMOUS_ID_STORAGE_KEY = 'recoder_anonymous_id';
 const ANONYMOUS_ID_COOKIE_NAME = 'recoder_anonymous_id';
 const ANONYMOUS_ID_HEADER_NAME = 'X-Recoder-Anonymous-Id';
+const ANONYMOUS_ID_QUERY_PARAM = 'anonymousId';
 const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 // Request ID counter for tracing
@@ -97,6 +98,27 @@ function ensureAnonymousIdentityCookie(): string | null {
   } catch {
     return null;
   }
+}
+
+export function getAnonymousIdentityId(): string | null {
+  return ensureAnonymousIdentityCookie();
+}
+
+export function appendDockerAuthQuery(url: string): string {
+  const token = getSessionToken();
+  const anonymousId = getAnonymousIdentityId();
+  const isAbsolute = /^(?:wss?:|https?:)/.test(url);
+  const parsed = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+
+  if (token && !parsed.searchParams.has('token')) {
+    parsed.searchParams.set('token', token);
+  }
+
+  if (anonymousId && !parsed.searchParams.has(ANONYMOUS_ID_QUERY_PARAM)) {
+    parsed.searchParams.set(ANONYMOUS_ID_QUERY_PARAM, anonymousId);
+  }
+
+  return isAbsolute ? parsed.toString() : `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
 /**
@@ -584,8 +606,7 @@ export function createDockerWebSocket(
 ): ReconnectingWebSocket {
   const normalizedPath = normalizeDockerWebSocketPath(path);
   const wsUrl = DOCKER_URL.replace(/^http/, 'ws') + normalizedPath;
-  const token = getSessionToken();
-  const urlWithToken = token ? `${wsUrl}${wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : wsUrl;
+  const urlWithToken = appendDockerAuthQuery(wsUrl);
 
   return new ReconnectingWebSocket(urlWithToken, options.protocols, {
     maxReconnects: 10,

@@ -1,6 +1,6 @@
 import type { ITerminal } from '~/types/terminal';
 import { withResolvers } from './promises';
-import { getSessionToken } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery } from '~/lib/services/docker-api';
 import { updateTerminalStatus } from '~/lib/stores/connection';
 
 let DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
@@ -117,9 +117,9 @@ export async function newShellProcess(terminal: ITerminal, projectId: string, te
       }
 
       // Include auth token for cross-origin authentication
-      const token = getSessionToken();
-      const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-      const wsEndpoint = `${wsUrl}/terminal/${projectId}?terminalId=${encodeURIComponent(id)}${tokenParam}`;
+      const wsEndpoint = appendDockerAuthQuery(
+        `${wsUrl}/terminal/${projectId}?terminalId=${encodeURIComponent(id)}`
+      );
 
       // Report connecting status
       updateTerminalStatus('connecting');
