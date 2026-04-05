@@ -6,19 +6,24 @@ DOCKER_BACKEND_DIR="${REPO_ROOT}/docker-backend"
 SRC_DIR="${DOCKER_BACKEND_DIR}/src"
 DIST_DIR="${DOCKER_BACKEND_DIR}/dist"
 
-echo "== docker-backend Dist Parity Check =="
-echo "repo: ${REPO_ROOT}"
+run_backend_build() {
+  echo "docker-backend-dist-parity: rebuilding docker-backend dist"
 
-if [[ ! -d "${SRC_DIR}" ]]; then
-  echo "docker-backend-dist-parity: FAIL (missing src dir: ${SRC_DIR})"
+  if command -v pnpm >/dev/null 2>&1; then
+    pnpm --dir "${DOCKER_BACKEND_DIR}" run build
+    return
+  fi
+
+  if command -v corepack >/dev/null 2>&1; then
+    corepack pnpm --dir "${DOCKER_BACKEND_DIR}" run build
+    return
+  fi
+
+  echo "docker-backend-dist-parity: FAIL (pnpm not found; cannot rebuild dist)"
   exit 1
-fi
+}
 
-if [[ ! -f "${DIST_DIR}/server.js" ]]; then
-  echo "docker-backend-dist-parity: FAIL (missing dist/server.js)"
-  exit 1
-fi
-
+run_parity_check() {
 python3 - "${SRC_DIR}" "${DIST_DIR}" <<'PY'
 import pathlib
 import re
@@ -75,8 +80,6 @@ for source_file in src_dir.rglob("*"):
         try:
             rel_from_src = existing_source.relative_to(src_dir)
         except ValueError:
-            # Imports that resolve outside src are not emitted into dist by the
-            # docker-backend tsconfig and are usually test-only helpers.
             continue
 
         expected_dist = dist_dir / rel_from_src.with_suffix(".js")
@@ -93,3 +96,35 @@ if missing:
 
 print("docker-backend-dist-parity: PASS")
 PY
+}
+
+echo "== docker-backend Dist Parity Check =="
+echo "repo: ${REPO_ROOT}"
+
+if [[ ! -d "${SRC_DIR}" ]]; then
+  echo "docker-backend-dist-parity: FAIL (missing src dir: ${SRC_DIR})"
+  exit 1
+fi
+
+if [[ ! -f "${DIST_DIR}/server.js" ]]; then
+  run_backend_build
+fi
+
+set +e
+PARITY_OUTPUT="$(run_parity_check 2>&1)"
+PARITY_STATUS=$?
+set -e
+
+if [[ ${PARITY_STATUS} -eq 0 ]]; then
+  printf '%s\n' "${PARITY_OUTPUT}"
+  exit 0
+fi
+
+printf '%s\n' "${PARITY_OUTPUT}"
+
+if [[ "${DOCKER_BACKEND_DIST_AUTO_BUILD:-1}" != "1" ]]; then
+  exit ${PARITY_STATUS}
+fi
+
+run_backend_build
+run_parity_check
