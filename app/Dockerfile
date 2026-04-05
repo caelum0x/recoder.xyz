@@ -29,6 +29,14 @@ RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm insta
 WORKDIR /app/app
 RUN pnpm exec prisma generate
 
+# @recoder/auth uses a separately generated Prisma client with a custom output
+# path under packages/auth/prisma/auth-client. Some build-time/static generation
+# paths import @recoder/auth before the final runner-stage copy happens, and
+# Prisma then looks relative to the app cwd (/app/app/prisma/auth-client).
+# Mirror the generated client into that build-stage location as well so Next
+# page-data/static generation does not emit non-fatal initialization warnings.
+RUN mkdir -p ./prisma && cp -rf /app/packages/auth/prisma/auth-client ./prisma/auth-client
+
 # Copy source code into the workspace root paths (not nested under /app/app)
 WORKDIR /app
 COPY app/ ./app/
