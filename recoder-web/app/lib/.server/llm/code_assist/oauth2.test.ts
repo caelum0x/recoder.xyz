@@ -11,7 +11,6 @@ import http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import readline from 'node:readline';
-import open from 'open';
 import {
   afterEach,
   beforeEach,
@@ -23,6 +22,7 @@ import {
 } from 'vitest';
 import type { Config } from '../config/config.js';
 import { AuthType } from '../core/contentGenerator.js';
+import { openBrowserSecurely } from '../utils/secure-browser-launcher.js';
 import { UserAccountManager } from '../utils/userAccountManager.js';
 import {
   clearCachedCredentialFile,
@@ -42,11 +42,13 @@ vi.mock('os', async (importOriginal) => {
 
 vi.mock('google-auth-library');
 vi.mock('node:http');
-vi.mock('open');
 vi.mock('crypto');
 vi.mock('node:readline');
 vi.mock('../utils/browser.js', () => ({
   shouldAttemptBrowserLaunch: () => true,
+}));
+vi.mock('../utils/secure-browser-launcher.js', () => ({
+  openBrowserSecurely: vi.fn(),
 }));
 
 const mockConfig = {
@@ -107,7 +109,7 @@ describe('oauth2', () => {
     );
 
     vi.spyOn(crypto, 'randomBytes').mockReturnValue(mockState as never);
-    (open as unknown as Mock).mockImplementation(async () => ({ on: vi.fn() }) as never);
+    (openBrowserSecurely as unknown as Mock).mockResolvedValue(undefined);
 
     // Mock the UserInfo API response
     (global.fetch as Mock).mockResolvedValue({
@@ -173,7 +175,7 @@ describe('oauth2', () => {
     const client = await clientPromise;
     expect(client).toBe(mockOAuth2Client);
 
-    expect(open).toHaveBeenCalledWith(mockAuthUrl);
+    expect(openBrowserSecurely).toHaveBeenCalledWith(mockAuthUrl);
     expect(mockGetToken).toHaveBeenCalledWith({
       code: mockCode,
       redirect_uri: `http://localhost:${capturedPort}/oauth2callback`,
@@ -250,9 +252,13 @@ describe('oauth2', () => {
     // Verify the auth flow
     expect(mockGenerateCodeVerifierAsync).toHaveBeenCalled();
     expect(mockGenerateAuthUrl).toHaveBeenCalled();
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining(mockAuthUrl),
-    );
+    expect(
+      consoleLogSpy.mock.calls.some((call) =>
+        call.some(
+          (arg) => typeof arg === 'string' && arg.includes(mockAuthUrl),
+        ),
+      ),
+    ).toBe(true);
     expect(mockReadline.question).toHaveBeenCalledWith(
       'Enter the authorization code: ',
       expect.any(Function),

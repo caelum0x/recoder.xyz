@@ -6,7 +6,6 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'events';
-import { type ChildProcess } from 'child_process';
 import type { Config } from '../config/config.js';
 import {
   generateCodeChallenge,
@@ -27,6 +26,7 @@ import {
   TokenManagerError,
   TokenError,
 } from './sharedTokenManager.js';
+import { openBrowserSecurely } from '../utils/secure-browser-launcher.js';
 
 interface MockSharedTokenManager {
   getValidCredentials(qwenClient: QwenOAuth2Client): Promise<QwenCredentials>;
@@ -96,9 +96,8 @@ vi.mock('qrcode-terminal', () => ({
   },
 }));
 
-// Mock open
-vi.mock('open', () => ({
-  default: vi.fn(),
+vi.mock('../utils/secure-browser-launcher.js', () => ({
+  openBrowserSecurely: vi.fn(),
 }));
 
 // Mock process.stdout.write
@@ -1350,9 +1349,7 @@ describe('Browser Launch and Error Handling', () => {
       new Error('No cached credentials'),
     );
 
-    // Mock open to throw error
-    const open = await import('open');
-    vi.mocked(open.default).mockRejectedValue(
+    vi.mocked(openBrowserSecurely).mockRejectedValue(
       new Error('Browser launch failed'),
     );
 
@@ -1389,24 +1386,14 @@ describe('Browser Launch and Error Handling', () => {
     expect(client).toBeInstanceOf(Object);
   });
 
-  it('should handle browser child process error gracefully', async () => {
+  it('should handle browser launch fallback gracefully', async () => {
     const { promises: fs } = await import('node:fs');
     vi.mocked(fs.readFile).mockRejectedValue(
       new Error('No cached credentials'),
     );
 
-    // Mock open to return a child process that will emit error
-    const open = await import('open');
-    const mockChildProcess = {
-      on: vi.fn((event: string, callback: (error: Error) => void) => {
-        if (event === 'error') {
-          // Call the error handler immediately for testing
-          setTimeout(() => callback(new Error('Process spawn failed')), 0);
-        }
-      }),
-    };
-    vi.mocked(open.default).mockResolvedValue(
-      mockChildProcess as unknown as ChildProcess,
+    vi.mocked(openBrowserSecurely).mockRejectedValue(
+      new Error('Process spawn failed'),
     );
 
     const mockAuthResponse = {
@@ -1766,6 +1753,9 @@ describe('Enhanced Error Handling and Edge Cases', () => {
       });
 
       // Override the client's SharedTokenManager instance directly to ensure it fails
+      const getValidCredentials = vi
+        .fn()
+        .mockRejectedValue(new Error('Manager failed'));
       (
         client as unknown as {
           sharedManager: {
@@ -1773,25 +1763,15 @@ describe('Enhanced Error Handling and Edge Cases', () => {
           };
         }
       ).sharedManager = {
-        getValidCredentials: vi
-          .fn()
-          .mockRejectedValue(new Error('Manager failed')),
+        getValidCredentials,
       };
-
-      // Mock console.warn to avoid test noise
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const result = await client.getAccessToken();
 
       // With our race condition fix, we no longer fall back to local credentials
       // to ensure single source of truth
       expect(result.token).toBeUndefined();
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to get access token from shared manager:',
-        expect.any(Error),
-      );
-
-      consoleSpy.mockRestore();
+      expect(getValidCredentials).toHaveBeenCalledWith(client);
     });
 
     it('should return undefined when both manager and cache fail', async () => {

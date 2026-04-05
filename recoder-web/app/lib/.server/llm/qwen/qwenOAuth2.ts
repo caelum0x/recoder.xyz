@@ -9,7 +9,6 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import * as os from 'os';
 
-import open from 'open';
 import { EventEmitter } from 'events';
 import type { Config } from '../config/config.js';
 import { randomUUID } from 'node:crypto';
@@ -18,6 +17,7 @@ import {
   TokenManagerError,
   TokenError,
 } from './sharedTokenManager.js';
+import { openBrowserSecurely } from '../utils/secure-browser-launcher.js';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('QwenOAuth2');
@@ -608,21 +608,9 @@ async function authWithQwenDeviceFlow(
     // If browser launch is not suppressed, try to open the URL
     if (!config.isBrowserLaunchSuppressed()) {
       try {
-        const childProcess = await open(deviceAuth.verification_uri_complete);
-
-        // IMPORTANT: Attach an error handler to the returned child process.
-        // Without this, if `open` fails to spawn a process (e.g., `xdg-open` is not found
-        // in a minimal Docker container), it will emit an unhandled 'error' event,
-        // causing the entire Node.js process to crash.
-        if (childProcess) {
-          childProcess.on('error', () => {
-            logger.debug(
-              'Failed to open browser. Visit this URL to authorize:',
-            );
-            showFallbackMessage();
-          });
-        }
+        await openBrowserSecurely(deviceAuth.verification_uri_complete);
       } catch (_err) {
+        logger.debug('Failed to open browser. Visit this URL to authorize:');
         showFallbackMessage();
       }
     } else {

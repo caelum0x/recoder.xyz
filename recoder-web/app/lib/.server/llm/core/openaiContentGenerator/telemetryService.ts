@@ -10,6 +10,7 @@ import { ApiErrorEvent, ApiResponseEvent } from '../../telemetry/types.js';
 import { openaiLogger } from '../../utils/openaiLogger.js';
 import type { GenerateContentResponse } from '@google/genai';
 import type OpenAI from 'openai';
+import { isFunctionToolCall, type FunctionToolCall } from './toolCallGuards.js';
 
 export interface RequestContext {
   userPromptId: string;
@@ -157,7 +158,7 @@ export class DefaultTelemetryService implements TelemetryService {
 
     // Combine all content from chunks
     let combinedContent = '';
-    const toolCalls: OpenAI.Chat.ChatCompletionMessageToolCall[] = [];
+    const toolCalls: FunctionToolCall[] = [];
     let finishReason:
       | 'stop'
       | 'length'
@@ -193,11 +194,14 @@ export class DefaultTelemetryService implements TelemetryService {
                 };
               }
 
-              if (toolCall.function?.name) {
+              if (toolCall.function?.name && isFunctionToolCall(toolCalls[toolCall.index])) {
                 toolCalls[toolCall.index].function.name +=
                   toolCall.function.name;
               }
-              if (toolCall.function?.arguments) {
+              if (
+                toolCall.function?.arguments &&
+                isFunctionToolCall(toolCalls[toolCall.index])
+              ) {
                 toolCalls[toolCall.index].function.arguments +=
                   toolCall.function.arguments;
               }

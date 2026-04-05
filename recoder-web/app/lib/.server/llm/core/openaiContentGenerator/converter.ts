@@ -22,6 +22,7 @@ import { GenerateContentResponse, FinishReason } from '@google/genai';
 import type OpenAI from 'openai';
 import { safeJsonParse } from '../../utils/safeJsonParse.js';
 import { StreamingToolCallParser } from './streamingToolCallParser.js';
+import { isFunctionToolCall } from './toolCallGuards.js';
 
 /**
  * Tool call accumulator for streaming responses
@@ -509,7 +510,7 @@ export class OpenAIContentConverter {
     // Handle tool calls
     if (choice.message.tool_calls) {
       for (const toolCall of choice.message.tool_calls) {
-        if (toolCall.function) {
+        if (isFunctionToolCall(toolCall)) {
           let args: Record<string, unknown> = {};
           if (toolCall.function.arguments) {
             args = safeJsonParse(toolCall.function.arguments, {});
