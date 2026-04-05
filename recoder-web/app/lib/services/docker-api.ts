@@ -38,11 +38,64 @@ if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' &&
   DOCKER_URL = 'https://docker.recoder.xyz';
 }
 const CONTAINER_CREATE_TIMEOUT_MS = Number(import.meta.env.VITE_CONTAINER_CREATE_TIMEOUT_MS || 120000);
+const ANONYMOUS_ID_STORAGE_KEY = 'recoder_anonymous_id';
+const ANONYMOUS_ID_COOKIE_NAME = 'recoder_anonymous_id';
+const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 // Request ID counter for tracing
 let requestIdCounter = 0;
 function getNextRequestId(): string {
   return `req-${++requestIdCounter}-${Date.now().toString(36)}`;
+}
+
+function getAnonymousCookieDomain(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  const hostname = window.location.hostname;
+  if (hostname === 'recoder.xyz' || hostname.endsWith('.recoder.xyz')) {
+    return '.recoder.xyz';
+  }
+
+  return null;
+}
+
+function persistAnonymousIdCookie(anonymousId: string): void {
+  if (typeof document === 'undefined') return;
+
+  const parts = [
+    `${ANONYMOUS_ID_COOKIE_NAME}=${encodeURIComponent(anonymousId)}`,
+    'Path=/',
+    'Max-Age=31536000',
+    'SameSite=Lax',
+  ];
+
+  const sharedDomain = getAnonymousCookieDomain();
+  if (sharedDomain) {
+    parts.push(`Domain=${sharedDomain}`);
+  }
+
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    parts.push('Secure');
+  }
+
+  document.cookie = parts.join('; ');
+}
+
+function ensureAnonymousIdentityCookie(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    let anonymousId = localStorage.getItem(ANONYMOUS_ID_STORAGE_KEY);
+    if (!anonymousId || !SAFE_ANONYMOUS_ID_RE.test(anonymousId)) {
+      anonymousId = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+      localStorage.setItem(ANONYMOUS_ID_STORAGE_KEY, anonymousId);
+    }
+
+    persistAnonymousIdCookie(anonymousId);
+    return anonymousId;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -104,6 +157,8 @@ export class DockerApiError extends ApiErrorException {
  */
 function getSessionToken(): string | null {
   if (typeof document === 'undefined') return null;
+
+  ensureAnonymousIdentityCookie();
 
   const cookies = document.cookie.split(';');
   // Priority order for cookie names (production secure cookies first)

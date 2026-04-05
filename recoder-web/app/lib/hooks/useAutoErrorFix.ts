@@ -21,37 +21,9 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { map } from 'nanostores';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { dockerGet } from '~/lib/services/docker-api';
+import { dockerGet, getSessionToken } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('AutoErrorFix');
-
-/**
- * Get the Better Auth session token from cookies
- */
-function getSessionToken(): string | null {
-  if (typeof document === 'undefined') return null;
-
-  const cookies = document.cookie.split(';');
-  const cookieNames = [
-    '__Secure-recoder.session_token',
-    'recoder.session_token',
-    '__Secure-better-auth.session_token',
-    'better-auth.session_token',
-    '__Secure-session_token',
-    'session_token',
-    'recoder_session_token',
-  ];
-
-  for (const cookie of cookies) {
-    const [name, ...valueParts] = cookie.trim().split('=');
-    const value = valueParts.join('=');
-    if (cookieNames.includes(name) && value) {
-      return decodeURIComponent(value);
-    }
-  }
-
-  return null;
-}
 
 // ============================================
 // Types

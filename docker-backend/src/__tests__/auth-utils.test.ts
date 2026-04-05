@@ -269,6 +269,46 @@ describe('Auth Migration Mode Scenarios', () => {
     });
   });
 
+  describe('getAnonymousIdFromRequest', () => {
+    it('prefers explicit anonymous headers over cookies', async () => {
+      const { getAnonymousIdFromRequest } = await import('../auth-utils');
+
+      const mockReq = {
+        headers: {
+          'x-recoder-anonymous-id': 'anon_header_123',
+          cookie: 'recoder_anonymous_id=anon_cookie_999',
+        },
+      } as any;
+
+      expect(getAnonymousIdFromRequest(mockReq)).toBe('anon_header_123');
+    });
+
+    it('falls back to recoder anonymous cookie when header is absent', async () => {
+      const { getAnonymousIdFromRequest } = await import('../auth-utils');
+
+      const mockReq = {
+        headers: {
+          cookie: 'foo=bar; recoder_anonymous_id=anon_cookie_456; another=value',
+        },
+      } as any;
+
+      expect(getAnonymousIdFromRequest(mockReq)).toBe('anon_cookie_456');
+    });
+
+    it('ignores invalid anonymous identifiers', async () => {
+      const { getAnonymousIdFromRequest } = await import('../auth-utils');
+
+      const mockReq = {
+        headers: {
+          'x-recoder-anonymous-id': '../../bad-value',
+          cookie: 'recoder_anonymous_id=anon_cookie_valid',
+        },
+      } as any;
+
+      expect(getAnonymousIdFromRequest(mockReq)).toBe('anon_cookie_valid');
+    });
+  });
+
   describe('resolveA2ASystemSession', () => {
     it('accepts the shared secret and uses default system identity', async () => {
       process.env.RECODER_A2A_SHARED_SECRET = 'shared-secret-1234';

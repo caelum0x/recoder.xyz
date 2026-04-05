@@ -5,6 +5,9 @@ const SESSION_COOKIE_NAMES = [
   'session_token',
   'recoder_session_token',
 ];
+const ANONYMOUS_ID_COOKIE_NAME = 'recoder_anonymous_id';
+const ANONYMOUS_ID_HEADER_NAME = 'X-Recoder-Anonymous-Id';
+const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 export class DockerHttpError extends Error {
   public readonly status: number;
@@ -51,6 +54,35 @@ export function getSessionTokenFromRequest(request: Request): string | null {
   return null;
 }
 
+function getAnonymousIdFromRequest(request: Request): string | null {
+  const normalize = (value: string | null): string | null => {
+    const trimmed = value?.trim();
+    if (!trimmed || trimmed === 'anonymous') return null;
+    return SAFE_ANONYMOUS_ID_RE.test(trimmed) ? trimmed : null;
+  };
+
+  const headerValue = normalize(request.headers.get(ANONYMOUS_ID_HEADER_NAME));
+  if (headerValue) {
+    return headerValue;
+  }
+
+  const cookieHeader = request.headers.get('Cookie');
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const cookies = cookieHeader.split(';');
+  for (const cookie of cookies) {
+    const [name, ...valueParts] = cookie.trim().split('=');
+    const value = valueParts.join('=');
+    if (name === ANONYMOUS_ID_COOKIE_NAME && value) {
+      return normalize(decodeURIComponent(value));
+    }
+  }
+
+  return null;
+}
+
 export function getBearerOrSessionTokenFromRequest(request: Request): string | null {
   const authHeader = request.headers.get('Authorization');
   const bearerMatch = authHeader?.match(/^Bearer\s+(.+)$/i);
@@ -69,6 +101,10 @@ export function createDockerAuthHeaders(
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  const anonymousId = getAnonymousIdFromRequest(request);
+  if (anonymousId) {
+    headers[ANONYMOUS_ID_HEADER_NAME] = anonymousId;
+  }
   return headers;
 }
 
@@ -80,6 +116,10 @@ export function createDockerProxyHeaders(
   const token = getBearerOrSessionTokenFromRequest(request);
   if (token) {
     headers.Authorization = `Bearer ${token}`;
+  }
+  const anonymousId = getAnonymousIdFromRequest(request);
+  if (anonymousId) {
+    headers[ANONYMOUS_ID_HEADER_NAME] = anonymousId;
   }
   return headers;
 }

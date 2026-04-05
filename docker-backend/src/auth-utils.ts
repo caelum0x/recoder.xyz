@@ -2,6 +2,44 @@ import type express from 'express';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
+export const RECODER_ANONYMOUS_ID_COOKIE = 'recoder_anonymous_id';
+export const RECODER_ANONYMOUS_ID_HEADER = 'x-recoder-anonymous-id';
+
+function parseCookies(cookieHeader: string | null | undefined): Record<string, string> {
+  const cookies: Record<string, string> = {};
+  if (!cookieHeader) {
+    return cookies;
+  }
+
+  for (const cookie of cookieHeader.split(';')) {
+    const [name, ...valueParts] = cookie.trim().split('=');
+    const value = valueParts.join('=');
+    if (name && value) {
+      cookies[name] = decodeURIComponent(value);
+    }
+  }
+
+  return cookies;
+}
+
+function normalizeAnonymousId(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'anonymous') {
+    return undefined;
+  }
+
+  if (!SAFE_ANONYMOUS_ID_RE.test(trimmed)) {
+    return undefined;
+  }
+
+  return trimmed;
+}
 
 export function getProjectIdFromRequest(req: express.Request): string | undefined {
   const params = req.params as Record<string, string | undefined> | undefined;
@@ -23,6 +61,26 @@ export function isLikelySandboxProjectId(value?: string | null): value is string
   }
 
   return value.startsWith('project-') || UUID_RE.test(value);
+}
+
+export function getAnonymousIdFromRequest(req: express.Request): string | undefined {
+  const headerValue = req.headers[RECODER_ANONYMOUS_ID_HEADER];
+  if (Array.isArray(headerValue)) {
+    for (const entry of headerValue) {
+      const normalized = normalizeAnonymousId(entry);
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+
+  const fromHeader = normalizeAnonymousId(headerValue);
+  if (fromHeader) {
+    return fromHeader;
+  }
+
+  const cookies = parseCookies(req.headers.cookie);
+  return normalizeAnonymousId(cookies[RECODER_ANONYMOUS_ID_COOKIE]);
 }
 
 function readFirstQueryString(value: unknown): string | undefined {
