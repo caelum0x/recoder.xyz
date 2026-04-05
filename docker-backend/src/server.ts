@@ -28,7 +28,6 @@ import { ContainerLifecycleManager } from './container-lifecycle.js';
 import { snapshotManager, registerDaytonaId, unregisterDaytonaId } from './snapshot-manager.js';
 import { contextCache, computeFileHash, computeFileHashes, type ContextDiff } from './context-cache.js';
 import { autoRestoreManager, parseAllErrors, hasBlockingErrors } from './auto-restore.js';
-import { languageServerManager } from './language-server.js';
 import { searchService } from './search.js';
 import { fileWatcher } from './file-watcher.js';
 import { sessionStore } from './session-store.js';
@@ -40,24 +39,14 @@ import { gitOperations } from './git-operations.js';
 import { getWsRateLimiter, getAllWsRateLimitStats } from './security/ws-rate-limiter.js';
 import {
   abusePrevention,
-  sendAlert,
-  alertFromAbuseEvent,
-  alertWsRateLimitExceeded,
-  alertAuthFailure,
-  alertSuspiciousRequest,
-  alertSystemIssue,
   getAlerts,
   acknowledgeAlert,
   getAlertCounts,
 } from './security/index.js';
 import {
-  validateProjectId,
-  validateFilePath,
   validateBranchName,
   validateCommitMessage,
   validateCommitHash,
-  validateDomainName,
-  validatePositiveInt,
 } from './public-api/validation.js';
 import { syncManager, diffFileSets, getDetailedDiff, getDiffStats, generateUnifiedDiff } from './cli-sync/index.js';
 import { lspServerManager, getConfigForExtension, LSP_SERVER_CONFIGS } from './lsp/index.js';
@@ -69,7 +58,7 @@ import { projectRouter, initProjectRoutes, type ProjectDependencies } from './pu
 import { getPromptTaskQueueDiagnostics } from './public-api/prompt-task-queue.js';
 import { getByokReadiness } from './public-api/byok-readiness.js';
 import openclawKeysRouter from './public-api/routes/openclaw-keys.js';
-import { identityRouter, setUserInfoProvider } from './public-api/routes/identity.js';
+import { identityRouter } from './public-api/routes/identity.js';
 import { moltbookAuthRouter } from './public-api/routes/auth-moltbook.js';
 import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
@@ -86,7 +75,7 @@ import { workflowTriggerRouter } from './a2a/workflow-trigger.routes.js';
 import { duckdbRouter } from './a2a/duckdb.routes.js';
 import { createCanvasRouter } from './a2a/canvas.routes.js';
 import { indexFile as codeSearchIndexFile } from './a2a/code-search.js';
-import { indexFile as meiliIndexFile, indexThread as meiliIndexThread } from './a2a/search-proxy.js';
+import { indexFile as meiliIndexFile } from './a2a/search-proxy.js';
 import { trackLlmCall, trackSandboxExec, trackFileOp, trackPublish } from './metering/openmeter-client.js';
 import {
   createPreviewShare,
@@ -171,7 +160,6 @@ import type { ProviderCredentials, DeploymentConfig } from './deployment/types.j
 import {
   authenticateApiKey,
   rateLimitMiddleware,
-  sandboxLimitMiddleware,
   requireScope,
   requestLoggingMiddleware,
   asyncApiHandler,
@@ -179,30 +167,22 @@ import {
 } from './public-api/middleware.js';
 import {
   initPortManager,
-  findAvailablePort,
-  reservePort,
   releasePort as releasePortFromManager,
-  releasePortsByContainer,
   getContainerPort,
   getContainerByPort,
-  allocatePortBlock,
   allocatePortBlockWithVerification,
-  reassignPortForRestart,
   syncWithDocker as syncPortsWithDocker,
   getPortStats,
   createPortLabels,
   isPortAvailable,
   markPortBlockUnavailable,
-  findAvailablePortWithVerification,
   BASE_PORT,
   MAX_PORT,
   PORTS_PER_CONTAINER,
-  PROJECT_LABEL,
 } from './port-manager.js';
 import {
   // Organization
   OrganizationRole,
-  Permission,
   createOrganization,
   getOrganization,
   updateOrganization,
@@ -267,12 +247,9 @@ import {
   createMobileApiRouter,
   initializeMobileApi,
   getMobileApiStats,
-  pushNotificationService,
-  syncManager as mobileSyncManager,
   type MobileApiDependencies,
 } from './mobile/index.js';
 import {
-  AppError,
   ErrorCode,
   createError,
   globalErrorHandler,
@@ -281,8 +258,6 @@ import {
   sendSuccess,
   requestIdMiddleware,
   requestTimingMiddleware,
-  sendWsError,
-  closeWsWithError,
   logError,
   logWarning,
 } from './errors/index.js';
@@ -726,7 +701,6 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
 
 // Authentication middleware - verifies user token
 // In strict mode (default in production): always requires token
-const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
 const STRICT_AUTH = isStrictAuthMode();
 const ALLOW_LOCALHOST_ORIGIN = process.env.NODE_ENV !== 'production';
 
@@ -999,12 +973,6 @@ function sanitizePath(path: string): string {
   return sanitized;
 }
 
-function sanitizeCommand(cmd: string): string {
-  if (!cmd || typeof cmd !== 'string') return '';
-  // Only allow safe characters for commands
-  // Note: This is restrictive - for shell commands, we should use execFile instead
-  return cmd.replace(/[;&|`$\\]/g, '');
-}
 
 function sanitizeProjectId(projectId: string): string {
   if (!projectId || typeof projectId !== 'string') return '';
@@ -2042,12 +2010,12 @@ async function execInContainer(containerId: string, cmd: string): Promise<string
         if (i + 8 <= raw.length) {
           const size = raw.readUInt32BE(i + 4);
           if (i + 8 + size <= raw.length) {
-            result += raw.slice(i + 8, i + 8 + size).toString();
+            result += raw.subarray(i + 8, i + 8 + size).toString();
             i += 8 + size;
             continue;
           }
         }
-        result += raw.slice(i).toString();
+        result += raw.subarray(i).toString();
         break;
       }
       resolve(result.trim());
@@ -3176,7 +3144,9 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
                 },
               });
 
-              const containerInstance = await container;
+              // `container` is already the resolved Container object from the
+              // `await docker.createContainer(...)` above — awaiting it again is a no-op.
+              const containerInstance = container;
               const createDuration = Date.now() - createStart;
               const startStart = Date.now();
               await containerInstance.start();
@@ -3801,7 +3771,7 @@ app.get('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, asy
             content = raw.toString('utf-8');
             break;
           }
-          content += raw.slice(i + 8, i + 8 + size).toString('utf-8');
+          content += raw.subarray(i + 8, i + 8 + size).toString('utf-8');
           i += 8 + size;
         }
       } catch (parseErr) {
@@ -4037,7 +4007,7 @@ app.get('/api/files/read', authenticateRequest, verifyProjectOwnership, async (r
             content = raw.toString('utf-8');
             break;
           }
-          content += raw.slice(i + 8, i + 8 + size).toString('utf-8');
+          content += raw.subarray(i + 8, i + 8 + size).toString('utf-8');
           i += 8 + size;
         }
       } catch (parseErr) {
@@ -4082,7 +4052,7 @@ app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwn
     const countStream = await countExec.start({});
     const fileCountRaw = await new Promise<string>((resolve, reject) => {
       let out = '';
-      countStream.on('data', (chunk: Buffer) => { out += chunk.slice(8).toString(); });
+      countStream.on('data', (chunk: Buffer) => { out += chunk.subarray(8).toString(); });
       countStream.on('end', () => resolve(out.trim()));
       countStream.on('error', reject);
     });
@@ -4096,7 +4066,7 @@ app.get('/api/workspace-state/:projectId', authenticateRequest, verifyProjectOwn
     const pkgStream = await pkgExec.start({});
     const pkgRaw = await new Promise<string>((resolve, reject) => {
       let out = '';
-      pkgStream.on('data', (chunk: Buffer) => { out += chunk.slice(8).toString(); });
+      pkgStream.on('data', (chunk: Buffer) => { out += chunk.subarray(8).toString(); });
       pkgStream.on('end', () => resolve(out.trim()));
       pkgStream.on('error', reject);
     });
@@ -4323,7 +4293,6 @@ app.post('/api/workspace/copy', authenticateRequest, async (req: AuthenticatedRe
     sourceEntry.lastActive = Date.now();
     targetEntry.lastActive = Date.now();
 
-    const sourceContainer = docker.getContainer(sourceEntry.id);
     const targetContainer = docker.getContainer(targetEntry.id);
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'recoder-copy-'));
     const localTarPath = path.join(tempDir, 'workspace-copy.tar');
@@ -4530,7 +4499,7 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
         if (idx + 8 <= rawFind.length) {
           const size = rawFind.readUInt32BE(idx + 4);
           if (idx + 8 + size <= rawFind.length) {
-            findOutput += rawFind.slice(idx + 8, idx + 8 + size).toString();
+            findOutput += rawFind.subarray(idx + 8, idx + 8 + size).toString();
             idx += 8 + size;
           } else break;
         } else break;
@@ -4568,7 +4537,7 @@ app.get('/api/export/:projectId', authenticateRequest, verifyProjectOwnership, a
               if (j + 8 <= rawCat.length) {
                 const size = rawCat.readUInt32BE(j + 4);
                 if (j + 8 + size <= rawCat.length) {
-                  content += rawCat.slice(j + 8, j + 8 + size).toString();
+                  content += rawCat.subarray(j + 8, j + 8 + size).toString();
                   j += 8 + size;
                 } else break;
               } else break;
@@ -5764,29 +5733,6 @@ app.post('/api/keep-alive/:projectId', authenticateRequest, verifyProjectOwnersh
 });
 
 // Helper: Wait for PTY server to be ready (with retries)
-async function waitForPtyServer(port: number, maxRetries = 10, delayMs = 500): Promise<boolean> {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      // Try to establish a test connection
-      const testWs = new WebSocket(`ws://127.0.0.1:${port}`);
-      await new Promise((resolve, reject) => {
-        testWs.on('open', () => {
-          testWs.close();
-          resolve(true);
-        });
-        testWs.on('error', reject);
-        setTimeout(() => reject(new Error('Timeout')), 1000);
-      });
-      return true; // PTY server is ready
-    } catch {
-      if (i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
-    }
-  }
-  return false;
-}
-
 // Helper: Wait for dev server to be ready (HTTP health check)
 async function waitForDevServer(ports: number[], maxWaitMs = 60000): Promise<{ ready: boolean; port?: number }> {
   const startTime = Date.now();
@@ -5872,7 +5818,7 @@ app.get('/terminal-test/:projectId', authenticateRequest, (req: AuthenticatedReq
 });
 
 // Log all upgrade attempts
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   if (req.headers.upgrade === 'websocket') {
     logger.info({ method: req.method, url: req.url, origin: req.headers.origin || 'unknown' }, 'WebSocket upgrade request');
   }
@@ -8256,7 +8202,7 @@ app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProject
       const stream = await exec.start({ hijack: true, stdin: false });
       return new Promise((resolve, reject) => {
         let content = '';
-        stream.on('data', (chunk: Buffer) => { content += chunk.slice(8).toString(); });
+        stream.on('data', (chunk: Buffer) => { content += chunk.subarray(8).toString(); });
         stream.on('end', () => resolve(content));
         stream.on('error', reject);
       });
@@ -8406,7 +8352,7 @@ app.get('/api/lsp/:projectId/status', authenticateRequest, verifyProjectOwnershi
 });
 
 // Get available LSP server configurations
-app.get('/api/lsp/configs', authenticateRequest, (req: AuthenticatedRequest, res) => {
+app.get('/api/lsp/configs', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   res.json({
     success: true,
     configs: Object.values(LSP_SERVER_CONFIGS).map(c => ({
@@ -8526,7 +8472,7 @@ app.post('/api/lsp/:projectId/sync', authenticateRequest, verifyProjectOwnership
 });
 
 // Get LSP manager statistics
-app.get('/api/lsp/stats', authenticateRequest, (req: AuthenticatedRequest, res) => {
+app.get('/api/lsp/stats', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   const stats = lspServerManager.getStats();
   const clientStats = lspServerManager.getStats();
 
@@ -8544,7 +8490,7 @@ app.get('/api/lsp/stats', authenticateRequest, (req: AuthenticatedRequest, res) 
 // ==================== Collaboration API ====================
 
 // Get collaboration statistics
-app.get('/api/collab/stats', authenticateRequest, (req: AuthenticatedRequest, res) => {
+app.get('/api/collab/stats', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   try {
     const stats = getCollaborationStats();
     res.json({
@@ -8657,7 +8603,7 @@ async function execCommand(container: Docker.Container, cmd: string, allowTermin
     let out = '';
     stream.on('data', (chunk: Buffer) => {
       // Docker multiplexes stdout/stderr, skip header bytes
-      out += chunk.slice(8).toString();
+      out += chunk.subarray(8).toString();
     });
     stream.on('end', () => resolve(out.trim()));
     stream.on('error', reject);
@@ -9155,7 +9101,6 @@ async function startupSequence() {
   try {
     const meteringCollector = getMeteringCollector(docker);
     const usageAggregator = getUsageAggregator();
-    const quotaEnforcer = getQuotaEnforcer();
 
     // Wire metrics flush from collector into aggregator
     meteringCollector.onMetricsFlush((metrics) => {
@@ -9522,8 +9467,8 @@ app.ws('/cli-sync/:projectId', async (ws: WebSocket, req: express.Request) => {
   const cliSyncRateLimiter = getWsRateLimiter('cli-sync');
   cliSyncRateLimiter.track(ws as any);
 
-  // Register session with authenticated userId
-  const session = syncManager.registerSession({
+  // Register session with authenticated userId (return value unused; side-effect is the registration)
+  syncManager.registerSession({
     projectId: sanitizedProjectId,
     userId: authSession.userId,
     clientId,
@@ -9629,7 +9574,7 @@ syncManager.on('sync-event', (event) => {
 // ==================== MCP Server Management ====================
 
 // Get available MCP servers (marketplace catalog)
-app.get('/api/mcp/catalog', authenticateRequest, (req: AuthenticatedRequest, res) => {
+app.get('/api/mcp/catalog', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   const preinstalled = Object.entries(PREINSTALLED_SERVERS).map(([id, config]) => ({
     id,
     ...config,
@@ -9813,15 +9758,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
   return new Promise((resolve, reject) => {
     logger.info({ localUrl }, 'Tunnel: starting cloudflared tunnel');
 
-    // Try to find cloudflared in common locations
-    const cloudflaredPaths = [
-      'cloudflared',  // In PATH
-      '/usr/local/bin/cloudflared',
-      '/opt/homebrew/bin/cloudflared',
-      '/usr/bin/cloudflared',
-    ];
-
-    // Check if cloudflared is available
+    // Check if cloudflared is available (falls back to PATH lookup via `which`)
     const which = spawn('which', ['cloudflared']);
     let cloudflaredPath = 'cloudflared';
 
@@ -9829,7 +9766,7 @@ async function startCloudflaredTunnel(localUrl: string): Promise<{ publicUrl: st
       cloudflaredPath = data.toString().trim();
     });
 
-    which.on('close', (code) => {
+    which.on('close', (_code) => {
       // Start the tunnel
       const tunnelProcess = spawn(cloudflaredPath, ['tunnel', '--url', localUrl], {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -10888,7 +10825,7 @@ startupInfo('routes.eas-share', 'registered');
 // POST /api/eas-submit/:projectId - Submit build to App Store / Play Store
 app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { projectId } = req.params;
-  const { expoToken, platform, buildId, profile = 'production' } = req.body;
+  const { expoToken, platform, buildId } = req.body;
 
   if (!expoToken || typeof expoToken !== 'string') {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
@@ -11090,7 +11027,7 @@ app.post('/api/backend-db/:projectId/init', authenticateRequest, verifyProjectOw
 // POST /api/backend-db/:projectId/query - Run SQL query
 app.post('/api/backend-db/:projectId/query', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { projectId } = req.params;
-  const { query, params } = req.body;
+  const { query } = req.body;
 
   if (!query || typeof query !== 'string') {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Missing query.'));
@@ -11370,7 +11307,6 @@ function figmaColorToRGBA(color: { r: number; g: number; b: number; a?: number }
 
 function figmaNodeToReactNative(node: any, indent = 2): string {
   const pad = ' '.repeat(indent);
-  const name = (node.name || 'Component').replace(/[^a-zA-Z0-9]/g, '');
 
   if (node.type === 'TEXT') {
     const style: Record<string, any> = {};
@@ -11815,7 +11751,7 @@ import {
 // Browser automation endpoint
 app.post('/api/browser/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
   const { projectId } = req.params;
-  const { action, url, selector, text, script, direction } = req.body;
+  const { action, url, selector, text, script } = req.body;
 
   if (!action) {
     return res.status(400).json({ error: 'action is required' });
@@ -11918,7 +11854,6 @@ import {
   getIndexStats,
   getIndexingProgress,
   clearIndex,
-  isIndexed,
 } from './code-index.js';
 
 // Index workspace
@@ -12282,7 +12217,7 @@ app.post(
   requestIdMiddleware,
   authenticateApiKey as any,
   requireScope('projects:read') as any,
-  asyncApiHandler(async (req: AuthenticatedApiRequest, res: express.Response) => {
+  asyncApiHandler(async (_req: AuthenticatedApiRequest, res: express.Response) => {
     const cleared = laneStatusStore.size;
     laneStatusStore.clear();
     sendSuccess(res, {
@@ -12593,7 +12528,7 @@ app.get('/api/database/:projectId/schemas', authenticateRequest, verifyProjectOw
 });
 
 // Get database connection statistics
-app.get('/api/database/stats', authenticateRequest, (req: AuthenticatedRequest, res) => {
+app.get('/api/database/stats', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   try {
     const connectionStats = connectionManager.getStats();
     const queryStats = queryExecutor.getStats();
@@ -13214,7 +13149,7 @@ app.post('/api/debug/:projectId/evaluate', authenticateRequest, verifyProjectOwn
 });
 
 // Get debug manager stats
-app.get('/api/debug/stats', authenticateRequest, (req: AuthenticatedRequest, res) => {
+app.get('/api/debug/stats', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   try {
     const stats = debugManager.getStats();
     res.json({
@@ -13319,7 +13254,6 @@ const WATCHER_STOP_GRACE_MS = 30000; // 30 seconds
 const fileWatchStopTimers = new Map<string, NodeJS.Timeout>();
 
 // Pending watch connections waiting for container to be ready
-const pendingWatchConnections = new Map<string, Set<{ ws: WebSocket; userId: string }>>();
 
 // Helper to wait for container with timeout
 async function waitForContainer(projectId: string, timeoutMs: number = 5000): Promise<{ id: string; lastActive: number; port: number; ptyPort: number; backgroundDev?: boolean; userId?: string } | undefined> {
@@ -13685,7 +13619,7 @@ app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
 });
 
 // GET /api/a2a/bridge/agents — live connected bridge sessions
-app.get('/api/a2a/bridge/agents', async (req: express.Request, res: express.Response) => {
+app.get('/api/a2a/bridge/agents', async (_req: express.Request, res: express.Response) => {
   try {
     const sessions = getAgentBridgeService().listConnectedSessions();
     res.json({
@@ -13768,7 +13702,7 @@ const mobileApiDependencies: MobileApiDependencies = {
   },
 
   // Fetch project files
-  fetchProjectFiles: async (userId, projectId, path) => {
+  fetchProjectFiles: async (_userId, projectId, path) => {
     logger.info({ projectId, path: path || '/' }, 'Mobile: fetching files');
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
@@ -13840,7 +13774,7 @@ app.use('/api/mobile', mobileRouter);
 startupInfo('routes.mobile', 'mounted', { basePath: '/api/mobile' });
 
 // Mobile API stats endpoint
-app.get('/api/mobile/stats', authenticateRequest, (req: AuthenticatedRequest, res) => {
+app.get('/api/mobile/stats', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   try {
     const stats = getMobileApiStats();
     res.json({
@@ -14703,7 +14637,7 @@ app.get('/api/organizations/:orgId/invoices/:invoiceId', authenticateRequest, as
 app.use(globalErrorHandler);
 
 // Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   logger.error({
     type: 'UNHANDLED_REJECTION',
     err: reason instanceof Error ? reason : undefined,
@@ -14917,9 +14851,9 @@ const sandboxDependencies: SandboxDependencies = {
 
       stream.on('data', (chunk: Buffer) => {
         // Docker multiplexed stream format
-        const header = chunk.slice(0, 8);
+        const header = chunk.subarray(0, 8);
         const type = header[0]; // 1 = stdout, 2 = stderr
-        const content = chunk.slice(8).toString();
+        const content = chunk.subarray(8).toString();
         if (type === 1) stdout += content;
         else stderr += content;
       });
@@ -15000,7 +14934,7 @@ const sandboxDependencies: SandboxDependencies = {
     return new Promise((resolve, reject) => {
       let content = '';
       stream.on('data', (chunk: Buffer) => {
-        content += chunk.slice(8).toString();
+        content += chunk.subarray(8).toString();
       });
       stream.on('end', () => {
         // Detect MIME type from extension
@@ -15066,7 +15000,7 @@ const sandboxDependencies: SandboxDependencies = {
     return new Promise((resolve) => {
       let output = '';
       stream.on('data', (chunk: Buffer) => {
-        output += chunk.slice(8).toString();
+        output += chunk.subarray(8).toString();
       });
       stream.on('end', () => {
         const files = output.trim().split('\n').filter(Boolean).map((line) => {
@@ -15099,7 +15033,7 @@ initSandboxRoutes(daytonaDeps || sandboxDependencies);
 
 // Project dependencies for Public API
 const projectDependencies: ProjectDependencies = {
-  createContainer: async (options) => {
+  createContainer: async (_options) => {
     const pooledContainer = await containerPool.acquire();
     if (!pooledContainer) {
       throw new Error('Failed to acquire container from pool');
@@ -15830,7 +15764,7 @@ app.post('/api/deploy/cloudflare/validate', asyncHandler(async (req: express.Req
 }));
 
 app.post('/api/deploy/cloudflare/deploy', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { apiToken, accountId, projectId, workerName, customDomain, config, files } = req.body;
+  const { apiToken, accountId, projectId, workerName, config, files } = req.body;
   if (!apiToken || !accountId || !workerName || !files) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token, account ID, worker name, and files are required'));
   }
@@ -15978,7 +15912,7 @@ async function restorePublishedZrokSharesFromDisk(): Promise<void> {
   await restorePublishedShares(restorable);
   startupInfo('zrok-publish', 'restored', { shares: restorable.length });
 }
-import { execSync, execFileSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 /**
  * Detect the build output directory based on framework/package.json
@@ -16002,7 +15936,6 @@ async function detectBuildOutput(entry: ContainerEntry): Promise<{ buildCmd: str
   }
 
   const deps = { ...(pkgJson.dependencies || {}), ...(pkgJson.devDependencies || {}) };
-  const scripts = pkgJson.scripts || {};
 
   // Detect framework and set build command + output dir
   if (deps['next']) {
@@ -16062,13 +15995,13 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
     }
 
     // 3. Run build (longer timeout — builds can take 2+ minutes)
+    // Output is captured by exec for side-effect only; verification below uses
+    // a separate `ls` check to confirm the output directory exists.
     logger.info({ projectId }, 'Publish: building project');
-    let buildOutput: string;
     if (isDaytona) {
-      const buildResult = await daytonaExec(entry.id, `cd ${workspaceRoot} && ${buildCmd} 2>&1`, { timeoutSecs: 180 });
-      buildOutput = buildResult.output;
+      await daytonaExec(entry.id, `cd ${workspaceRoot} && ${buildCmd} 2>&1`, { timeoutSecs: 180 });
     } else {
-      buildOutput = await execInContainer(entry.id, `cd ${workspaceRoot} && ${buildCmd} 2>&1`);
+      await execInContainer(entry.id, `cd ${workspaceRoot} && ${buildCmd} 2>&1`);
     }
     logger.info({ projectId }, 'Publish: build complete');
 
@@ -16332,7 +16265,7 @@ performanceProfiler.startMonitoring();
 // ── S9-1: Abuse Prevention Endpoints ──
 
 // GET /api/admin/abuse/stats - Get abuse prevention statistics
-app.get('/api/admin/abuse/stats', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/abuse/stats', authenticateRequest, requireAdmin, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
   const stats = abusePrevention.getStats();
   sendSuccess(res, stats);
 }));
@@ -16345,7 +16278,7 @@ app.get('/api/admin/abuse/events', authenticateRequest, requireAdmin, asyncHandl
 }));
 
 // GET /api/admin/abuse/blocklist - Get blocklist entries
-app.get('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
   const blocklist = abusePrevention.getBlocklist();
   sendSuccess(res, { blocklist, total: blocklist.length });
 }));
@@ -16417,7 +16350,7 @@ app.post('/api/admin/alerts/:id/acknowledge', authenticateRequest, requireAdmin,
 }));
 
 // GET /api/admin/security/stats - Combined security statistics
-app.get('/api/admin/security/stats', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/security/stats', authenticateRequest, requireAdmin, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
   const abuseStats = abusePrevention.getStats();
   const alertCounts = getAlertCounts();
   const wsRateLimitStats = getAllWsRateLimitStats();
@@ -16445,7 +16378,7 @@ app.get('/api/admin/backups', authenticateRequest, requireAdmin, asyncHandler(as
 }));
 
 // GET /api/admin/backups/stats - Get backup statistics
-app.get('/api/admin/backups/stats', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/backups/stats', authenticateRequest, requireAdmin, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
   const stats = backupService.getStats();
   sendSuccess(res, stats);
 }));
@@ -16493,7 +16426,7 @@ logger.info('backup & recovery endpoints registered');
 // ── S9-4: Performance Profiling Endpoints ──
 
 // GET /api/admin/performance/metrics - Get performance metrics
-app.get('/api/admin/performance/metrics', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/performance/metrics', authenticateRequest, requireAdmin, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
   const metrics = performanceProfiler.getMetrics();
   sendSuccess(res, metrics);
 }));
@@ -16520,7 +16453,7 @@ app.get('/api/admin/performance/traces', authenticateRequest, requireAdmin, asyn
 }));
 
 // GET /api/admin/performance/heap - Get V8 heap statistics
-app.get('/api/admin/performance/heap', authenticateRequest, requireAdmin, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/admin/performance/heap', authenticateRequest, requireAdmin, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
   const heapStats = performanceProfiler.getHeapStats();
   sendSuccess(res, heapStats);
 }));
@@ -17755,7 +17688,7 @@ app.post('/api/daytona/sandbox', authenticateRequest, asyncHandler(async (req: A
 }));
 
 // GET /api/daytona/sandbox - List Daytona sandboxes
-app.get('/api/daytona/sandbox', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/daytona/sandbox', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
   if (!isDaytonaConfigured()) {
     return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
   }
