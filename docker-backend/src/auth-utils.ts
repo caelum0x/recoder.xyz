@@ -79,6 +79,30 @@ export function getAnonymousIdFromRequest(req: express.Request): string | undefi
     return fromHeader;
   }
 
+  const query = req.query as Record<string, unknown> | undefined;
+  const queryCandidates = [
+    query?.anonymousId,
+    query?.[RECODER_ANONYMOUS_ID_COOKIE],
+    query?.[RECODER_ANONYMOUS_ID_HEADER],
+  ];
+
+  for (const candidate of queryCandidates) {
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate) {
+        const normalized = normalizeAnonymousId(entry);
+        if (normalized) {
+          return normalized;
+        }
+      }
+      continue;
+    }
+
+    const normalized = normalizeAnonymousId(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
   const cookies = parseCookies(req.headers.cookie);
   return normalizeAnonymousId(cookies[RECODER_ANONYMOUS_ID_COOKIE]);
 }

@@ -9,7 +9,7 @@
 
 import { createScopedLogger } from '~/utils/logger';
 import { WORK_DIR } from '~/utils/constants';
-import { DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { DOCKER_URL, withDockerCredentials } from '~/lib/services/docker-api';
 
 const logger = createScopedLogger('CloneActions');
 
@@ -230,14 +230,10 @@ export async function cloneWebsiteUrl(
   }
 
   // Call docker-backend to clone the website
-  const response = await fetch(`${DOCKER_URL}/api/clone-url/${ctx.projectId}`, {
+  const response = await fetch(`${DOCKER_URL}/api/clone-url/${ctx.projectId}`, withDockerCredentials({
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${getSessionToken() || ''}`,
-    },
     body: JSON.stringify({ url }),
-  });
+  }));
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to clone URL' })) as { error?: string };

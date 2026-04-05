@@ -295,6 +295,19 @@ describe('Auth Migration Mode Scenarios', () => {
       expect(getAnonymousIdFromRequest(mockReq)).toBe('anon_cookie_456');
     });
 
+    it('accepts anonymous identifiers from query params for websocket flows', async () => {
+      const { getAnonymousIdFromRequest } = await import('../auth-utils');
+
+      const mockReq = {
+        headers: {},
+        query: {
+          anonymousId: 'anon_query_123',
+        },
+      } as any;
+
+      expect(getAnonymousIdFromRequest(mockReq)).toBe('anon_query_123');
+    });
+
     it('ignores invalid anonymous identifiers', async () => {
       const { getAnonymousIdFromRequest } = await import('../auth-utils');
 

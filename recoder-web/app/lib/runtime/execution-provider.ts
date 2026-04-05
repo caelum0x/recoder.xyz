@@ -3,7 +3,7 @@
  * Switches between WebContainer (free) and Docker (production)
  */
 
-import { getSessionToken } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery, getSessionToken, withDockerCredentials } from '~/lib/services/docker-api';
 
 export interface ExecutionProvider {
   init(): Promise<void>;
@@ -44,20 +44,11 @@ export class DockerProvider implements ExecutionProvider {
     }
   }
 
-  private getAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {};
-    const token = getSessionToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return headers;
-  }
-
   async writeFile(path: string, content: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/api/file/${this.projectId}`, {
+    const res = await fetch(`${this.baseUrl}/api/file/${this.projectId}`, withDockerCredentials({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
-      credentials: 'include',
       body: JSON.stringify({ path: `/workspace${path}`, content }),
-    });
+    }));
     if (!res.ok) {
       const errData = await res.json() as { error?: string };
       throw new Error(errData.error || 'Write failed');
@@ -65,32 +56,30 @@ export class DockerProvider implements ExecutionProvider {
   }
 
   async readFile(path: string): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/api/file/${this.projectId}?path=/workspace${path}`, {
-      credentials: 'include',
-      headers: this.getAuthHeaders(),
-    });
+    const res = await fetch(
+      `${this.baseUrl}/api/file/${this.projectId}?path=/workspace${path}`,
+      withDockerCredentials()
+    );
     const data = await res.json() as { content?: string; error?: string };
     if (!res.ok) throw new Error(data.error || 'Read failed');
     return data.content || '';
   }
 
   async listFiles(path: string = '/'): Promise<string[]> {
-    const res = await fetch(`${this.baseUrl}/api/files/${this.projectId}?path=/workspace${path}`, {
-      credentials: 'include',
-      headers: this.getAuthHeaders(),
-    });
+    const res = await fetch(
+      `${this.baseUrl}/api/files/${this.projectId}?path=/workspace${path}`,
+      withDockerCredentials()
+    );
     const data = await res.json() as { files?: string[]; error?: string };
     if (!res.ok) throw new Error(data.error || 'List failed');
     return (data.files || []).map((f: string) => f.replace('/workspace', ''));
   }
 
   async exec(command: string, cwd: string = '/'): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/api/exec/${this.projectId}`, {
+    const res = await fetch(`${this.baseUrl}/api/exec/${this.projectId}`, withDockerCredentials({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
-      credentials: 'include',
       body: JSON.stringify({ command, cwd: `/workspace${cwd}` }),
-    });
+    }));
     const data = await res.json() as { output?: string; error?: string };
     if (!res.ok) throw new Error(data.error || 'Exec failed');
     return data.output || '';
@@ -117,9 +106,9 @@ export class DockerProvider implements ExecutionProvider {
   connectTerminal(onData: (data: string) => void) {
     const wsUrl = this.baseUrl.replace('http', 'ws');
     // Include auth token for cross-origin authentication
-    const token = getSessionToken();
-    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    this.terminalWs = new WebSocket(`${wsUrl}/terminal/${this.projectId}${tokenParam}`);
+    this.terminalWs = new WebSocket(
+      appendDockerAuthQuery(`${wsUrl}/terminal/${this.projectId}`)
+    );
     
     this.terminalWs.onmessage = (e) => onData(e.data);
     this.terminalWs.onerror = (e) => console.error('Terminal error:', e);
@@ -132,11 +121,9 @@ export class DockerProvider implements ExecutionProvider {
 
   async destroy(): Promise<void> {
     this.terminalWs?.close();
-    await fetch(`${this.baseUrl}/api/container/${this.projectId}`, {
+    await fetch(`${this.baseUrl}/api/container/${this.projectId}`, withDockerCredentials({
       method: 'DELETE',
-      headers: this.getAuthHeaders(),
-      credentials: 'include',
-    });
+    }));
   }
 }
 

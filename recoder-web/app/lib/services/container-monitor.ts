@@ -11,7 +11,7 @@
  * - Auto-restart on failure (configurable)
  */
 
-import { dockerGet, dockerPost, DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery, dockerGet, dockerPost, DOCKER_URL } from '~/lib/services/docker-api';
 import {
   containerStatusStore,
   updateContainerStatus,
@@ -488,8 +488,7 @@ export function streamContainerLogs(
   onLog: (log: string) => void
 ): () => void {
   const wsUrl = DOCKER_URL.replace(/^http/, 'ws');
-  const token = getSessionToken();
-  const url = `${wsUrl}/api/container/${projectId}/logs/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  const url = appendDockerAuthQuery(`${wsUrl}/api/container/${projectId}/logs/stream`);
 
   let ws: WebSocket | null = null;
   let reconnectTimeout: NodeJS.Timeout | null = null;

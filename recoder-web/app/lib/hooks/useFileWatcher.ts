@@ -16,7 +16,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { getSessionToken } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery } from '~/lib/services/docker-api';
 import { updateFileWatcherStatus } from '~/lib/stores/connection';
 import { FileEventDeduper, type FileChange } from './file-watcher-dedup';
 import { createScopedLogger } from '~/utils/logger';
@@ -281,10 +281,7 @@ export function useFileWatcher(options: UseFileWatcherOptions = {}) {
     }
 
     const wsUrl = DOCKER_URL.replace('http', 'ws');
-    // Include auth token in WebSocket URL for cross-origin authentication
-    const token = getSessionToken();
-    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-    const ws = new WebSocket(`${wsUrl}/watch/${projectId}${tokenParam}`);
+    const ws = new WebSocket(appendDockerAuthQuery(`${wsUrl}/watch/${projectId}`));
 
     ws.onopen = () => {
       isConnectingRef.current = false;

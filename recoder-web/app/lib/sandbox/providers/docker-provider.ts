@@ -22,7 +22,7 @@ import {
   type SandboxFile,
   type SandboxProviderConfig,
 } from '../types';
-import { getSessionToken } from '~/lib/services/docker-api';
+import { withDockerCredentials } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('DockerProvider');
@@ -40,30 +40,29 @@ export class DockerProvider extends SandboxProvider {
     this.projectId = config.docker?.containerId || null;
   }
 
-  /**
-   * Create headers for API requests
-   */
-  private getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    const token = this.authToken || getSessionToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+  private withAuth(init: RequestInit = {}): RequestInit {
+    const headers = new Headers(init.headers || {});
+
+    if (this.authToken && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${this.authToken}`);
     }
-    return headers;
+
+    return withDockerCredentials({
+      ...init,
+      headers,
+    });
+  }
+
+  /**
+   * Legacy header helper for older direct fetch call sites in this provider.
+   * New code should prefer `this.withAuth(...)` so credentials are included too.
+   */
+  private getHeaders(initHeaders: HeadersInit = {}): HeadersInit {
+    return this.withAuth({ headers: initHeaders }).headers || initHeaders;
   }
 
   private async request(path: string, init: RequestInit = {}): Promise<Response> {
-    const headers = new Headers(this.getHeaders());
-    const initHeaders = new Headers(init.headers || {});
-    initHeaders.forEach((value, key) => headers.set(key, value));
-
-    return fetch(`${this.apiEndpoint}${path}`, {
-      ...init,
-      headers,
-      credentials: 'include',
-    });
+    return fetch(`${this.apiEndpoint}${path}`, this.withAuth(init));
   }
 
   /**
@@ -176,14 +175,13 @@ export class DockerProvider extends SandboxProvider {
     const normalizedPath = path.startsWith('/') ? path.slice(1) : path;
 
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/file/${projectId}`, {
+      const response = await fetch(`${this.apiEndpoint}/api/file/${projectId}`, this.withAuth({
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({
           path: normalizedPath,
           content,
         }),
-      });
+      }));
 
       if (!response.ok) {
         const error = await response.text();
@@ -206,16 +204,15 @@ export class DockerProvider extends SandboxProvider {
 
     // Use batch endpoint for better performance
     try {
-      const response = await fetch(`${this.apiEndpoint}/api/files/${projectId}/batch`, {
+      const response = await fetch(`${this.apiEndpoint}/api/files/${projectId}/batch`, this.withAuth({
         method: 'POST',
-        headers: this.getHeaders(),
         body: JSON.stringify({
           files: files.map(f => ({
             path: f.path.startsWith('/') ? f.path.slice(1) : f.path,
             content: f.content,
           })),
         }),
-      });
+      }));
 
       if (!response.ok) {
         // Fall back to individual writes
@@ -254,9 +251,7 @@ export class DockerProvider extends SandboxProvider {
     try {
       const response = await fetch(
         `${this.apiEndpoint}/api/file/${projectId}?path=${encodeURIComponent(normalizedPath)}`,
-        {
-          headers: this.getHeaders(),
-        }
+        this.withAuth()
       );
 
       if (!response.ok) {
@@ -282,9 +277,7 @@ export class DockerProvider extends SandboxProvider {
     try {
       const response = await fetch(
         `${this.apiEndpoint}/api/files/${projectId}?directory=${encodeURIComponent(directory)}`,
-        {
-          headers: this.getHeaders(),
-        }
+        this.withAuth()
       );
 
       if (!response.ok) {
