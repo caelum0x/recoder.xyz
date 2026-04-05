@@ -196,7 +196,20 @@ KEY RULES:
 - Make MINIMAL changes - use str_replace for targeted edits instead of regenerating entire files
 - If you get an error, EXPLORE to understand why, then fix specifically
 - For modification requests: ALWAYS output at least one <recoderAction> tag — text alone is not enough
-- ALWAYS use "latest" for package versions in package.json — NEVER use specific version numbers like "^6.22.2" because they may not exist. Use "latest" and let npm resolve the correct version.
+- Package versions in package.json — use these PINNED ranges for common packages (do NOT use "latest" for these, because "latest" can resolve to a major version with breaking changes):
+  - "vite": "^5.4.0"                     (NOT ^6, ^7, ^8 — they break tsconfig resolution in emitted templates)
+  - "@vitejs/plugin-react": "^4.3.0"     (must match Vite 5)
+  - "react": "^18.3.0"
+  - "react-dom": "^18.3.0"
+  - "@types/react": "^18.3.0"
+  - "@types/react-dom": "^18.3.0"
+  - "typescript": "^5.4.0"
+  - "tailwindcss": "^3.4.17"             (v4 is not supported by the preview starter)
+  - "postcss": "^8.4.49"
+  - "autoprefixer": "^10.4.21"
+  - "@tailwindcss/postcss": DO NOT USE (Tailwind v4 only)
+  - "@tailwindcss/vite": DO NOT USE (Tailwind v4 only)
+  For any OTHER package not in this list, you MAY use "latest" — the runtime will still let npm resolve it. Never hallucinate made-up version numbers like "^6.22.2".
 
 ## 🐛 DEBUG MODE: Systematic Problem Solving
 
@@ -1696,15 +1709,15 @@ Here are some examples of correct usage of artifacts:
               "preview": "vite preview"
             },
             "dependencies": {
-              "react": "latest",
-              "react-dom": "latest",
+              "react": "^18.3.0",
+              "react-dom": "^18.3.0",
               "react-spring": "latest"
             },
             "devDependencies": {
-              "@types/react": "latest",
-              "@types/react-dom": "latest",
-              "@vitejs/plugin-react": "latest",
-              "vite": "latest"
+              "@types/react": "^18.3.0",
+              "@types/react-dom": "^18.3.0",
+              "@vitejs/plugin-react": "^4.3.0",
+              "vite": "^5.4.0"
             }
           }
         </recoderAction>

@@ -101,7 +101,10 @@ export const DEFAULT_AI_PREFERENCES: AIPreferences = {
   temperature: 0.7,
   maxTokens: 4096,
   streamResponses: true,
-  autoFixEnabled: true,
+  // Default off — automatic error-fix retry loop made errors worse in practice
+  // by injecting synthetic [AUTO-FIX] turns that the LLM sometimes responded
+  // to with destructive actions. Users can re-enable via the Problems Panel.
+  autoFixEnabled: false,
   autoFixDebounceMs: 3000,
   autoFixMaxAttempts: 5,
   thinkingBudget: 'medium',
