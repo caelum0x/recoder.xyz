@@ -291,7 +291,12 @@
       "@types/react-dom": "19.2.3",
       "@codemirror/state": "6.5.4",
       "@modelcontextprotocol/sdk": "1.23.0",
-      "axios": "1.13.5"
+      "axios": "1.13.5",
+      "fast-xml-parser": ">=5.3.5",
+      "simple-git": ">=3.32.3",
+      "handlebars": ">=4.7.9",
+      "happy-dom": ">=20.0.0",
+      "minimist": ">=0.2.4"
     },
     "onlyBuiltDependencies": [
       "duckdb",
