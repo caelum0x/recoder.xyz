@@ -85,8 +85,10 @@ async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
     try:
         sandbox = await daytona.get(sandbox_id)
 
-        # Check if sandbox needs to be started
-        if sandbox.state in [SandboxState.ARCHIVED, SandboxState.STOPPED, SandboxState.ARCHIVING]:
+        # Treat any non-STARTED state as needing recovery/startup. In practice we
+        # have seen sandboxes in "error" state be reported as "ready", which then
+        # causes downstream file/terminal operations to fail with "No such container".
+        if sandbox.state != SandboxState.STARTED:
             logger.info(f"Sandbox is in {sandbox.state} state. Starting...")
             try:
                 await daytona.start(sandbox)
@@ -97,6 +99,11 @@ async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
                     sandbox = await daytona.get(sandbox_id)
                     if sandbox.state == SandboxState.STARTED:
                         break
+
+                if sandbox.state != SandboxState.STARTED:
+                    raise RuntimeError(
+                        f"Sandbox {sandbox_id} failed to reach STARTED state (current: {sandbox.state})"
+                    )
 
                 # Ensure /workspace symlink, start file server and computer use
                 await _ensure_workspace(sandbox)
