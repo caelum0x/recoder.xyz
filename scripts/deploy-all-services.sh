@@ -169,6 +169,8 @@ echo "All 4 secrets validated."
 
 echo "=== Phase 2: Sync code to server ==="
 
+LOCAL_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+
 # Tag current state on the remote server for rollback before overwriting
 echo "Creating pre-deploy git tag on server..."
 ssh_cmd "cd ${REMOTE_DIR} && git tag -f \"pre-deploy-\$(date +%Y%m%d-%H%M%S)\" || true" 2>/dev/null || true
@@ -176,6 +178,12 @@ ssh_cmd "cd ${REMOTE_DIR} && git tag -f \"pre-deploy-\$(date +%Y%m%d-%H%M%S)\" |
 rsync -az --timeout=120 --progress \
   --exclude='node_modules' --exclude='.git' \
   --exclude='/.env' \
+  --exclude='**/.env' \
+  --exclude='**/.env.production' \
+  --exclude='**/.env.local' \
+  --exclude='**/.env.development' \
+  --exclude='**/.env.production.local' \
+  --exclude='**/.env.backup*' \
   --exclude='.next' --exclude='.turbo' --exclude='coverage' \
   --exclude='.aitimemachine' --exclude='.claude' --exclude='.codex' \
   --exclude='*.log' --exclude='logs' \
@@ -246,8 +254,13 @@ bash scripts/check-hetzner-docker-disk-pressure.sh
 
 echo "--- Checking docker-backend build context cleanliness ---"
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+TARGET_BRANCH="${DEPLOY_BRANCH:-}"
 BUILD_CONTEXT_COMPARE_REF="HEAD"
-if [[ -n "$CURRENT_BRANCH" && "$CURRENT_BRANCH" != "HEAD" ]]; then
+if [[ -n "$TARGET_BRANCH" && "$TARGET_BRANCH" != "HEAD" ]]; then
+  echo "Fetching origin/${TARGET_BRANCH} for build-context comparison (passed from deploy host)..."
+  git fetch origin "$TARGET_BRANCH"
+  BUILD_CONTEXT_COMPARE_REF="origin/${TARGET_BRANCH}"
+elif [[ -n "$CURRENT_BRANCH" && "$CURRENT_BRANCH" != "HEAD" ]]; then
   echo "Fetching origin/${CURRENT_BRANCH} for build-context comparison..."
   git fetch origin "$CURRENT_BRANCH"
   BUILD_CONTEXT_COMPARE_REF="origin/${CURRENT_BRANCH}"
@@ -423,7 +436,11 @@ echo "=== Phase 4: Build and start services (runs on server via nohup) ==="
 ssh_cmd "rm -f /root/.deploy-build-done /root/deploy-build.log"
 
 # Launch the build in a nohup session so it survives SSH drops
-ssh_cmd "nohup ${REMOTE_DIR}/_remote-build.sh > /dev/null 2>&1 &"
+if [ -n "${LOCAL_BRANCH:-}" ] && [ "${LOCAL_BRANCH}" != "HEAD" ]; then
+  ssh_cmd "nohup env DEPLOY_BRANCH=${LOCAL_BRANCH} ${REMOTE_DIR}/_remote-build.sh > /dev/null 2>&1 &"
+else
+  ssh_cmd "nohup ${REMOTE_DIR}/_remote-build.sh > /dev/null 2>&1 &"
+fi
 echo "Build launched on server. Tailing logs..."
 
 # Poll the log and wait for completion, reconnecting if SSH drops

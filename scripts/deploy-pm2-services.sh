@@ -13,7 +13,6 @@ fi
 RSYNC_RSH="ssh ${SSH_OPTS[*]}"
 
 SYNC_PATHS=(
-  ".env.production"
   "ecosystem.config.js"
   "package.json"
   "pnpm-lock.yaml"
@@ -31,6 +30,12 @@ SYNC_PATHS=(
 
 RSYNC_EXCLUDES=(
   "--exclude=.git"
+  "--exclude=.env"
+  "--exclude=.env.production"
+  "--exclude=.env.local"
+  "--exclude=.env.development"
+  "--exclude=.env.production.local"
+  "--exclude=.env.backup*"
   "--exclude=.venv"
   "--exclude=.pytest_cache"
   "--exclude=.mypy_cache"
@@ -73,6 +78,8 @@ if (( available_kb < minimum_kb )); then
 fi
 
 echo "--- Sync PM2 runtime sources ---"
+# Preserve server-managed env files. They may contain rotated secrets or host-only
+# overrides that should not be overwritten by local rsync metadata/content.
 for path in "${SYNC_PATHS[@]}"; do
   if [[ ! -e "$path" ]]; then
     continue
@@ -163,7 +170,7 @@ build_app() {
 build_app "recoder-app" "$REMOTE_DIR/app" "./app" "pnpm exec prisma generate"
 build_app "recoder-agents" "$REMOTE_DIR/recoder-agents" "./recoder-agents"
 build_app "recoder-studio" "$REMOTE_DIR/recoder-studio" "./recoder-studio"
-build_app "recoder-pm" "$REMOTE_DIR/recoder-pm/apps/web" "./recoder-pm/apps/web"
+build_app "recoder-pm" "$REMOTE_DIR/recoder-pm/apps/app" "./recoder-pm/apps/app"
 build_app "recoder-agency" "$REMOTE_DIR/recoder-agency/apps/agency" "./recoder-agency/apps/agency"
 
 echo "--- Reload PM2 ecosystem ---"
