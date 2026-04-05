@@ -88,7 +88,13 @@ export interface AutoFixState {
 // ============================================
 
 const initialState: AutoFixState = {
-  enabled: true,
+  // Default off. The auto-fix retry loop historically made errors worse by
+  // auto-injecting synthetic [AUTO-FIX] turns that the LLM sometimes
+  // responded to with destructive actions (cloneGitHub, importStarter) or
+  // read-only debug sessions that never converged. Users can re-enable it
+  // via setAutoFixEnabled(true) or the Problems Panel toggle if they want
+  // the automated retry behavior.
+  enabled: false,
   isFixing: false,
   lastFixAttempt: 0,
   fixCount: 0,
@@ -200,31 +206,94 @@ function normalizeErrorBlock(value?: string): string {
   return stripAnsi(value || '').trim();
 }
 
+// A "weak" parsed message is a short header-only string like "Error:",
+// "Transform failed:", "Internal server error:" etc. that carries no
+// actionable content on its own. When the parsed message is weak, we must
+// fall back to the raw error block so the LLM has enough context to fix it.
+const WEAK_MESSAGE_MIN_LENGTH = 15;
+const WEAK_MESSAGE_PATTERNS = [
+  /^error:?$/i,
+  /^error:\s*$/i,
+  /^transform failed:?\s*$/i,
+  /^internal server error:?\s*$/i,
+  /^pre-transform error:?\s*$/i,
+  /^build failed:?\s*$/i,
+  /^syntax error:?\s*$/i,
+  /^unknown error:?\s*$/i,
+  /^failed:?\s*$/i,
+];
+
+function isWeakMessage(candidate: string): boolean {
+  if (candidate.length < WEAK_MESSAGE_MIN_LENGTH) return true;
+  return WEAK_MESSAGE_PATTERNS.some((re) => re.test(candidate));
+}
+
+function pickFirstMeaningfulLine(block: string): string {
+  const lines = block.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.length < WEAK_MESSAGE_MIN_LENGTH) continue;
+    // Skip lines that are just stack frames
+    if (/^(at\s|\s*at\s)/.test(line)) continue;
+    // Skip lines that are just file:line:col markers without text
+    if (/^[^\s:]+:\d+:\d+$/.test(line)) continue;
+    // Skip section markers like "Plugin:" or "File:" without a body
+    if (/^(Plugin|File|Code):\s*$/i.test(line)) continue;
+    return line;
+  }
+  return '';
+}
+
 function getPreferredErrorMessage(error: BuildError): string {
   const candidates = [
     normalizeErrorLine(error.message),
     normalizeErrorLine(error.shortMessage),
-    normalizeErrorLine(error.rawError),
   ];
 
-  return candidates.find((candidate) => candidate.length >= 5) || '';
+  // First try parsed message / shortMessage if either is meaningful
+  const firstMeaningful = candidates.find((candidate) => !isWeakMessage(candidate));
+  if (firstMeaningful) return firstMeaningful;
+
+  // Fallback: find a meaningful line in the raw error block
+  const rawBlock = normalizeErrorBlock(error.rawError);
+  if (rawBlock) {
+    const firstRawLine = pickFirstMeaningfulLine(rawBlock);
+    if (firstRawLine) return firstRawLine;
+  }
+
+  // Last resort: return the longest weak candidate so we at least show something
+  const longest = candidates.reduce((a, b) => (a.length >= b.length ? a : b), '');
+  return longest;
 }
 
 function formatErrorsForAI(errors: BuildError[]): string {
   if (errors.length === 0) return '';
 
-  const preparedErrors = errors
-    .map((error) => ({
-      error,
-      preferredMessage: getPreferredErrorMessage(error),
-      rawBlock: normalizeErrorBlock(error.rawError),
-    }))
-    .filter(({ preferredMessage }) => preferredMessage.length >= 5);
+  const preparedErrors = errors.map((error) => ({
+    error,
+    preferredMessage: getPreferredErrorMessage(error),
+    rawBlock: normalizeErrorBlock(error.rawError),
+  }));
 
-  if (preparedErrors.length === 0) return '';
+  // Only drop errors that have NO useful info at all (no preferredMessage
+  // AND no raw block AND no file path). A degraded error is still better
+  // than no error, because AutoFix relies on SOMETHING being in the prompt.
+  const informative = preparedErrors.filter(({ preferredMessage, rawBlock, error }) =>
+    preferredMessage.length > 0 || rawBlock.length > 0 || Boolean(error.filePath)
+  );
 
-  const errorDetails = preparedErrors.map(({ error, preferredMessage, rawBlock }, index) => {
-    let detail = `Error ${index + 1}: ${preferredMessage}`;
+  if (informative.length === 0) return '';
+
+  const errorDetails = informative.map(({ error, preferredMessage, rawBlock }, index) => {
+    // Synthesize a header if preferredMessage is empty or weak
+    const header = preferredMessage && !isWeakMessage(preferredMessage)
+      ? preferredMessage
+      : (error.filePath
+          ? `Build failure in ${error.filePath}`
+          : (error.type ? `Build failure (${error.type})` : 'Build failure'));
+
+    let detail = `Error ${index + 1}: ${header}`;
 
     if (error.filePath) {
       detail += `\nFile: ${error.filePath}`;
@@ -234,7 +303,14 @@ function formatErrorsForAI(errors: BuildError[]): string {
       }
     }
 
-    if (rawBlock && normalizeErrorLine(rawBlock) !== preferredMessage) {
+    // Always include the raw block if it has content the header doesn't already cover.
+    // This is the most important change vs the old code: previously the raw block
+    // was dropped whenever preferredMessage was "sufficient", but when
+    // preferredMessage was a short header like "Error:" the real body was lost.
+    if (rawBlock && rawBlock.length > 0 && !rawBlock.toLowerCase().includes(header.toLowerCase().slice(0, 30))) {
+      detail += `\n\nRaw error:\n${rawBlock}`;
+    } else if (rawBlock && rawBlock.length > header.length + 20) {
+      // rawBlock has strictly more info than just the header — always include
       detail += `\n\nRaw error:\n${rawBlock}`;
     }
 
@@ -242,14 +318,23 @@ function formatErrorsForAI(errors: BuildError[]): string {
   }).join('\n\n---\n\n');
 
   // Add specific guidance for module/dependency resolution errors
-  const hasMissingImport = preparedErrors.some(({ error }) => error.type === 'module');
-  const hasNpmError = preparedErrors.some(({ error }) => error.source === 'npm');
+  const hasMissingImport = informative.some(({ error }) => error.type === 'module');
+  const hasNpmError = informative.some(({ error }) => error.source === 'npm');
+  const hasTsconfigError = informative.some(({ rawBlock }) => /tsconfig/i.test(rawBlock));
+  const hasViteVersionError = informative.some(({ rawBlock }) =>
+    /vite:oxc|oxc.*tsconfig|TSCONFIG_ERROR|Failed to load tsconfig/i.test(rawBlock)
+  );
   let suffix = '\n\nPlease fix all errors above. The app won\'t run until these are resolved.';
   if (hasMissingImport) {
     suffix += '\n\nFor missing imports: use a shell action `npm install <package-name>` to add the missing package. Do NOT edit package.json directly — write the complete file or use npm install.';
   }
   if (hasNpmError) {
     suffix += '\n\nFor npm errors: check that package.json is valid JSON. If rewriting it, always write the COMPLETE valid JSON object, not just a fragment.';
+  }
+  if (hasViteVersionError) {
+    suffix += '\n\nThis is a Vite 8 + oxc tsconfig resolver issue. Downgrade Vite in package.json to "vite": "^5.4.0" and "@vitejs/plugin-react": "^4.3.0", then re-run `npm install` followed by `npm run dev`. Do NOT edit tsconfig.json — the tsconfig is correct; Vite 8 just cannot read it.';
+  } else if (hasTsconfigError) {
+    suffix += '\n\nFor tsconfig errors: ensure tsconfig.json exists at the project root with at least {"compilerOptions":{},"include":["src"]}. Do NOT add tsconfig.node.json or references unless the original file had them.';
   }
 
   return `[AUTO-FIX] Fix these build/runtime errors blocking the preview:\n\n${errorDetails}${suffix}`;

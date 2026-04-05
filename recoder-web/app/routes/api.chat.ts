@@ -637,7 +637,18 @@ IMPORTANT:
 
     const { getWebToolCapabilityPrompt } = modesModule;
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
-    const systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
+    let systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
+
+    // Auto-fix action allowlist: when the user message is an auto-fix retry
+    // (starts with [AUTO-FIX]), the project scaffold already exists and the
+    // LLM's job is to mutate existing files, not to reset / reimport / clone.
+    // Without this guard, the LLM tends to hallucinate escape hatches like
+    // `cloneGitHub` when it can't diagnose the error, which blows away the
+    // project and makes recovery impossible. Strip those action types from
+    // the available actions for auto-fix turns only.
+    if (lastUserMessageStr.startsWith('[AUTO-FIX]')) {
+      systemPrompt += `\n\n## AUTO-FIX TURN — RESTRICTED ACTION SET\n\nThis turn is an automatic error-recovery retry. The project scaffold is already in place and files exist on the sandbox. You MUST NOT use any of these actions:\n\n- cloneGitHub (would replace the current project with a foreign repository)\n- cloneUrl (would replace the current project with a website clone)\n- importStarter (would overwrite the current project with a template)\n- copy_project (would clone to a different project id)\n- spawn_task (would defer work to a subagent and lose context)\n\nIf you cannot diagnose the error from the provided error message + raw error block, respond with readFile actions on the files mentioned in the error. Do NOT attempt to work around the error by resetting the project.\n\nYour ONLY tools for this turn are: readFile, listFiles, searchFiles, str_replace, edit_file, file, shell (for npm install / npm run), glob_search, ripgrep_search, read_many_files.\n`;
+    }
 
     if (chatMode === 'deep-coding') {
       const { executeCodingRuntimeChat } = await import('~/lib/.server/llm/coding-runtime-exec');
