@@ -112,7 +112,7 @@
 		"radix-ui": "catalog:",
 		"react": "catalog:",
 		"react-dom": "catalog:",
-		"react-email": "5.0.5",
+		"react-email": "5.2.10",
 		"require-in-the-middle": "catalog:",
 		"shiki": "catalog:",
 		"@polar-sh/sdk": "0.43.0",

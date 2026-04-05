@@ -17,6 +17,9 @@ const ignoreDirs = new Set([
 ]);
 const compromisedAxiosVersions = new Set(['1.14.1', '0.30.4']);
 const compromisedPackages = new Set(['plain-crypto-js@4.2.1']);
+const minimumReactEmailVersion = { major: 5, minor: 2, patch: 10 };
+const minimumNextAuthVersion = { major: 4, minor: 24, patch: 13 };
+
 
 function parseVersion(input) {
   const match = String(input).match(/(\d+)\.(\d+)\.(\d+)/);
@@ -114,11 +117,38 @@ for (const filePath of files) {
   if (relPath === 'pnpm-workspace.yaml') continue;
   if (path.basename(filePath) === 'package.json') {
     const pkg = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    for (const section of ['dependencies', 'devDependencies']) {
-      const spec = pkg?.[section]?.next;
-      if (spec && !isSafeManifestNext(spec)) {
-        issues.push(`${relPath}: next spec ${spec} is below the enforced safe floor`);
+    const dependencySections = ['dependencies', 'devDependencies'];
+    let hasNext = false;
+    let hasNextAuth = false;
+    for (const section of dependencySections) {
+      const nextSpec = pkg?.[section]?.next;
+      if (nextSpec) {
+        hasNext = true;
+        if (!isSafeManifestNext(nextSpec)) {
+          issues.push(`${relPath}: next spec ${nextSpec} is below the enforced safe floor`);
+        }
       }
+
+      const nextAuthSpec = pkg?.[section]?.['next-auth'];
+      if (nextAuthSpec) {
+        hasNextAuth = true;
+        const parsed = parseVersion(nextAuthSpec);
+        if (!parsed || compareVersions(parsed, minimumNextAuthVersion) < 0) {
+          issues.push(`${relPath}: next-auth spec ${nextAuthSpec} is below 4.24.13`);
+        }
+      }
+
+      const reactEmailSpec = pkg?.[section]?.['react-email'];
+      if (reactEmailSpec) {
+        const parsed = parseVersion(reactEmailSpec);
+        if (!parsed || compareVersions(parsed, minimumReactEmailVersion) < 0) {
+          issues.push(`${relPath}: react-email spec ${reactEmailSpec} is below 5.2.10`);
+        }
+      }
+    }
+
+    if (hasNextAuth && !hasNext) {
+      issues.push(`${relPath}: next-auth is declared without an explicit next dependency`);
     }
     continue;
   }
