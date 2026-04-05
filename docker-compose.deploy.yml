@@ -75,6 +75,10 @@ services:
       - NATS_URL=nats://nats:4222
       - USE_DAYTONA_CONTAINERS=${USE_DAYTONA_CONTAINERS:-true}
       - DAYTONA_SERVER_URL=${DAYTONA_SERVER_URL:-http://host.docker.internal:3900/api}
+      # The live preview path uses the separate zrok2 stack in
+      # docker-compose.zrok.yml. Set ZROK_API_URL explicitly in docker-backend/.env
+      # when wiring that stack; do not rely on the deprecated legacy services
+      # below.
       - ZROK_API_URL=${ZROK_API_URL:-http://zrok-controller:18080}
       - ZROK_TOKEN=${ZROK_TOKEN:-}
       - ZROK_FRONTEND=${ZROK_FRONTEND:-preview.recoder.xyz}
@@ -683,15 +687,21 @@ services:
       - recoder
 
   # ================================================================
-  # Zrok — Zero-trust overlay tunnels for instant preview URLs
-  # Provides {projectId}.preview.recoder.xyz → sandbox:5173
-  # Prerequisite: Cloudflare wildcard DNS *.preview.recoder.xyz → 77.42.23.19
-  # Bootstrap: docker exec recoder-zrok zrok admin bootstrap
+  # Legacy zrok v1 controller / frontend (DEPRECATED / OPT-IN ONLY)
+  #
+  # Do not treat this as the deployed Recoder preview path.
+  # The live stack uses docker-compose.zrok.yml + zrok2 with explicit Ziti,
+  # Postgres, and RabbitMQ backing services.
+  #
+  # These services remain only for one-off/manual experiments and are hidden
+  # behind the `legacy-zrok` profile so normal deploys do not accidentally
+  # start a non-functional preview stack.
   # ================================================================
   zrok-controller:
     image: openziti/zrok:latest
     container_name: recoder-zrok
     restart: unless-stopped
+    profiles: ["legacy-zrok"]
     ports:
       - "127.0.0.1:18080:18080"
     environment:
@@ -720,6 +730,7 @@ services:
     image: openziti/zrok:latest
     container_name: recoder-zrok-frontend
     restart: unless-stopped
+    profiles: ["legacy-zrok"]
     ports:
       - "127.0.0.1:8082:8080"
     command: ["access", "public", "--headless"]
