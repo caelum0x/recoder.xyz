@@ -40,6 +40,7 @@ if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' &&
 const CONTAINER_CREATE_TIMEOUT_MS = Number(import.meta.env.VITE_CONTAINER_CREATE_TIMEOUT_MS || 120000);
 const ANONYMOUS_ID_STORAGE_KEY = 'recoder_anonymous_id';
 const ANONYMOUS_ID_COOKIE_NAME = 'recoder_anonymous_id';
+const ANONYMOUS_ID_HEADER_NAME = 'X-Recoder-Anonymous-Id';
 const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 // Request ID counter for tracing
@@ -210,6 +211,11 @@ function getAuthHeaders(): Record<string, string> {
     'Content-Type': 'application/json',
   };
 
+  const anonymousId = ensureAnonymousIdentityCookie();
+  if (anonymousId) {
+    headers[ANONYMOUS_ID_HEADER_NAME] = anonymousId;
+  }
+
   const token = getSessionToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -225,7 +231,12 @@ function getAuthHeaders(): Record<string, string> {
  */
 export function withDockerCredentials(init: RequestInit = {}): RequestInit {
   const headers = new Headers(init.headers);
+  const anonymousId = ensureAnonymousIdentityCookie();
   const token = getSessionToken();
+
+  if (anonymousId && !headers.has(ANONYMOUS_ID_HEADER_NAME)) {
+    headers.set(ANONYMOUS_ID_HEADER_NAME, anonymousId);
+  }
 
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
