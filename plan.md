@@ -11,7 +11,122 @@ This is the single current status doc for the repository.
 - `errorsss.md` and `TASKS.md` now intentionally redirect here.
 - Historical rollout notes live in git history, not in duplicated root markdown.
 
-## P0 BLOCKER (2026-04-05) — recoder-web cannot code or run anything
+## P0 RESOLVED (2026-04-05) — end-to-end coding loop unblocked
+
+**Status: all 5 distinct failure modes from the 2026-04-05 incident are
+fixed and live on Hetzner as of commit `1f8ee636`.**
+
+Commits landed on `fix/agent-blockers-create-loop-codemirror-sandbox-autowake`
+(in order):
+- `f683efaa` — `str_replace`/`edit_file` actions now write to the sandbox
+  volume instead of the recoder-web app server's local fs (recoder-i3v).
+- `11bd379e` — `#executeAction` short-circuits container-dependent actions
+  with a single `recoder:sandbox-unavailable` event when
+  `containerCreationFailed` is set, instead of spamming one identical error
+  per action. Also cleans up 15 dead-code TS warnings in `action-runner.ts`
+  (D1 + cleanups).
+- `08675844` — documentation of the original P0 error inventory (this
+  section's previous content; full history available in git log).
+- `1f8ee636` — four related bugs that together broke the coding loop for
+  real React+Vite projects:
+    1. `prompts.ts` used to tell the LLM "ALWAYS use latest" for every
+       package.json version. Combined with npm's `latest` currently
+       resolving Vite to 8.0.3, this produced projects that crashed at
+       dep-scan with `[TSCONFIG_ERROR] Failed to load tsconfig for
+       'src/main.tsx'` because Vite 8's new `vite:oxc` scanner can't read
+       the minimal tsconfig the LLM emits. Fix: pinned ranges for common
+       packages (vite ^5.4, @vitejs/plugin-react ^4.3, react ^18.3,
+       tailwindcss ^3.4, postcss ^8.4.49, typescript ^5.4) and a rewritten
+       bouncing-ball example template that uses those same pins.
+    2. `useAutoErrorFix.ts` dropped errors whose parsed message was a
+       short header like "Error:" even when the raw error block contained
+       the real body. Rewrote `getPreferredErrorMessage` and
+       `formatErrorsForAI` to: (a) detect weak message patterns
+       ("Error:", "Transform failed:", etc.) with a 15-char minimum, (b)
+       fall back to the first meaningful line of the raw error block when
+       the parsed message is weak, (c) never filter out errors entirely,
+       (d) always include the raw block when it has more info than the
+       header, (e) add Vite-8-specific guidance when the error text
+       contains `vite:oxc` or `TSCONFIG_ERROR`.
+    3. `api.chat.ts` now appends an action-restriction block to the
+       system prompt when `lastUserMessageStr.startsWith('[AUTO-FIX]')`,
+       forbidding `cloneGitHub`, `cloneUrl`, `importStarter`,
+       `copy_project`, and `spawn_task`. The LLM had been hallucinating
+       `cloneGitHub build/runtime` as an escape hatch during failed
+       auto-fix turns — this gate closes that path.
+    4. `DEFAULT_AI_PREFERENCES.autoFixEnabled` + `autoFixStore.initialState.enabled`
+       both default to `false` now. Per product direction, errors surface
+       in the Problems Panel and the user (or the AI in a normal chat
+       turn with full context) handles them, instead of an automated
+       retry loop that was making failures worse. Users who want the
+       retry behavior can still toggle it on via the Problems Panel or
+       `setAutoFixEnabled(true)`; improvements 2 and 3 stay in place so
+       that if they do, it works correctly.
+
+### Root cause (R1), now fixed
+
+`recoder-workspace:latest` base image went missing from the Hetzner host
+on 2026-04-04 (pruned by a disk-reclaim pass during a prior deploy). New
+sandbox creation 404'd until the user rebuilt the image via
+`docker compose -f docker-compose.deploy.yml --profile build-base build
+recoder-base`. Image is now present (12.9GB, includes node/python3/go/rustc)
+and verified with a `docker run --rm` smoke test.
+
+### Original failure modes from the 2026-04-05 incident
+
+(Retained for historical reference. All resolved.)
+
+1. **R1: sandbox base image missing** — RESOLVED by user rebuild.
+2. **Follow-up edits failed to reach the sandbox volume** (recoder-i3v) —
+   RESOLVED by `f683efaa`.
+3. **Multiple identical "Container creation failed" errors per turn**
+   (D1) — RESOLVED by `11bd379e`.
+4. **Vite 8 tsconfig crash on fresh project creation** — RESOLVED by
+   `1f8ee636` (pinned package versions in system prompt).
+5. **Empty error payload to auto-fix retry loop** — RESOLVED by
+   `1f8ee636` (weak-message detection + raw block fallback).
+6. **Hallucinated `cloneGitHub build/runtime` during auto-fix** —
+   RESOLVED by `1f8ee636` (auto-fix action allowlist).
+7. **Auto-fix loop itself making failures worse** — RESOLVED by
+   `1f8ee636` (auto-fix default-off).
+
+### Still-open follow-ups (not blocking the coding loop)
+
+These were flagged as Se* items in the original inventory and remain
+open. They are quality/defense issues, not blockers:
+
+- **Se2**: `/api/container` uses `flexibleProjectOwnership` but
+  `/api/files/:projectId` uses strict `verifyProjectOwnership`. Anonymous
+  users can create containers but get 403 on subsequent file reads.
+  Align the two middlewares.
+- **Se3**: No circuit breaker on `POST /api/container` client retries.
+  Frontend still blasts 4 retries in under 5 seconds on a 500.
+- **Se4**: No automated check that `recoder-workspace:latest` exists on
+  host startup. `deploy-all-services.sh` should verify the image is
+  present before marking deploy successful.
+- **Ownership flip on container recreate**: when a sandbox container is
+  replaced, the anonymous user id is regenerated and the old project's
+  ACL entry no longer matches. Every subsequent API call to the old
+  project returns 403 "Access denied: You do not own this project". New
+  ticket worth filing in bd.
+- **CORS headers missing on error responses from docker-backend**: 403
+  and 500 responses don't include `Access-Control-Allow-Origin`, so the
+  browser can't read error bodies.
+
+### What's live on Hetzner right now
+
+- `recoder-web` image `sha256:bbfed04da4a17bd6…` — contains all 4 fixes
+  from `1f8ee636` plus the earlier i3v fix. Built 2026-04-05 00:46 UTC.
+- `recoder-docker-backend` image `sha256:03d4da665e18…` — contains the
+  D1 gate fix and dead-code cleanup from `11bd379e`. Built earlier this
+  session.
+- `recoder-workspace:latest` (12.9GB) — the sandbox base image, rebuilt
+  by the user mid-session.
+- Rollback tags retained for both services:
+  - `recoderxyz-recoder-web:rollback-20260405-003527` (previous build)
+  - `recoderxyz-docker-backend:rollback-20260404-213542` (two builds ago)
+
+### Original P0 error inventory (collapsed)
 
 State: **web.recoder.xyz is unusable for any real project work.** New projects
 load, the LLM streams file actions into the chat UI, but every single file
