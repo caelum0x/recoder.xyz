@@ -1,0 +1,38 @@
+[
+  {
+    "id": "sse_mnl4l1ju00006c26",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.786Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mnl4l1kq00012a65",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.818Z",
+    "data": {
+      "agentId": "recoder_web",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mnl4l1kr0002a76a",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.819Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mnl4l1kr0003c6de",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.819Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  }
+]

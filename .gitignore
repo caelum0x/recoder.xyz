@@ -391,3 +391,5 @@ check-errors.sh
 .dolt/
 .env.tmp
 .gstack/
+.omx/
+.codex/
