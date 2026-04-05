@@ -1,6 +1,5 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { spawn } from 'node:child_process';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { logger } from '@/lib/logger';
 
@@ -24,6 +23,53 @@ export interface MCPToolResult {
   isError?: boolean;
 }
 
+const SAFE_PROCESS_ENV_KEYS = [
+  'CI',
+  'HOME',
+  'HOSTNAME',
+  'LANG',
+  'LC_ALL',
+  'LOGNAME',
+  'NODE_ENV',
+  'PATH',
+  'PWD',
+  'SHELL',
+  'SYSTEMROOT',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'TZ',
+  'USER',
+];
+
+export function buildMcpProcessEnv(env?: Record<string, string>): NodeJS.ProcessEnv {
+  const safeEnv = {} as NodeJS.ProcessEnv;
+  safeEnv.CI = '1';
+  safeEnv.NPM_CONFIG_AUDIT = 'false';
+  safeEnv.NPM_CONFIG_FUND = 'false';
+  safeEnv.NPM_CONFIG_IGNORE_SCRIPTS = 'true';
+  safeEnv.NPM_CONFIG_UPDATE_NOTIFIER = 'false';
+  safeEnv.npm_config_audit = 'false';
+  safeEnv.npm_config_fund = 'false';
+  safeEnv.npm_config_ignore_scripts = 'true';
+  safeEnv.npm_config_update_notifier = 'false';
+
+  for (const key of SAFE_PROCESS_ENV_KEYS) {
+    const value = process.env[key];
+    if (value) {
+      safeEnv[key] = value;
+    }
+  }
+
+  if (env) {
+    for (const [key, value] of Object.entries(env)) {
+      safeEnv[key] = value;
+    }
+  }
+
+  return safeEnv;
+}
+
 export class MCPClient {
   private clients = new Map<string, Client>();
   private transports = new Map<string, Transport>();
@@ -34,7 +80,7 @@ export class MCPClient {
       const transport = new StdioClientTransport({
         command: config.command,
         args: config.args,
-        env: { ...process.env, ...config.env },
+        env: buildMcpProcessEnv(config.env),
       });
 
       // Create MCP client

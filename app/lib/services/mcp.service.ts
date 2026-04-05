@@ -1,5 +1,6 @@
 import { MCPClient, type MCPServerConfig } from '../mcp/client';
-import { getServerById, validateServerConfig, ALL_SERVERS } from '../mcp/registry';
+import { validateServerConfig, ALL_SERVERS, buildServerConfig } from '../mcp/registry';
+import { assertMcpRuntimeEnabled } from '../mcp/runtime';
 import { prisma } from '../prisma';
 
 const clients = new Map<string, MCPClient>();
@@ -26,18 +27,8 @@ export async function getUserServers(userId: string) {
 }
 
 export async function installServer(userId: string, serverId: string, config?: Partial<MCPServerConfig>) {
-  const definition = getServerById(serverId);
-  if (!definition) {
-    throw new Error(`Server ${serverId} not found in registry`);
-  }
-
-  const serverConfig: MCPServerConfig = {
-    id: definition.id,
-    name: definition.name,
-    command: definition.command,
-    args: definition.args,
-    env: { ...definition.env, ...config?.env },
-  };
+  assertMcpRuntimeEnabled();
+  const serverConfig = buildServerConfig(serverId, config);
 
   const validation = validateServerConfig(serverConfig);
   if (!validation.valid) {
@@ -45,7 +36,7 @@ export async function installServer(userId: string, serverId: string, config?: P
   }
 
   const existing = await prisma.mCPServer.findFirst({
-    where: { userId, serverId },
+      where: { userId, serverId },
   });
 
   if (existing) {
@@ -62,7 +53,7 @@ export async function installServer(userId: string, serverId: string, config?: P
     data: {
       userId,
       serverId,
-      name: definition.name,
+      name: serverConfig.name,
       config: serverConfig as any,
       enabled: true,
     },
@@ -100,6 +91,7 @@ export async function disableServer(userId: string, serverId: string) {
 }
 
 export async function connectServer(userId: string, serverId: string) {
+  assertMcpRuntimeEnabled();
   const server = await prisma.mCPServer.findFirst({
     where: { userId, serverId, enabled: true },
   });
@@ -113,11 +105,13 @@ export async function connectServer(userId: string, serverId: string) {
     return { status: 'already_connected' };
   }
 
-  await client.connect(server.config as unknown as MCPServerConfig);
+  const safeConfig = buildServerConfig(server.serverId, server.config as Partial<MCPServerConfig> | null);
+  await client.connect(safeConfig);
   return { status: 'connected' };
 }
 
 export async function listTools(userId: string, serverId: string) {
+  assertMcpRuntimeEnabled();
   const client = getUserClient(userId);
   
   if (!client.isConnected(serverId)) {
@@ -128,6 +122,7 @@ export async function listTools(userId: string, serverId: string) {
 }
 
 export async function callTool(userId: string, serverId: string, toolName: string, args: any) {
+  assertMcpRuntimeEnabled();
   const client = getUserClient(userId);
   
   if (!client.isConnected(serverId)) {
@@ -138,6 +133,7 @@ export async function callTool(userId: string, serverId: string, toolName: strin
 }
 
 export async function getServerHealth(userId: string, serverId: string) {
+  assertMcpRuntimeEnabled();
   const client = getUserClient(userId);
   const isConnected = client.isConnected(serverId);
 
@@ -158,6 +154,7 @@ export async function getServerHealth(userId: string, serverId: string) {
 }
 
 export async function getAllServersHealth(userId: string) {
+  assertMcpRuntimeEnabled();
   const servers = await getUserServers(userId);
   const healthChecks = await Promise.all(
     servers.map(async (server) => ({

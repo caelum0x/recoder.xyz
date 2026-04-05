@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/verify-next-security.js",
     "build": "pnpm exec prisma generate && next build",
     "start": "next start",
     "cms:importmap": "payload generate:importmap",
@@ -74,7 +75,7 @@
     "lucide-react": "^0.400.0",
     "mjml": "^4.16.1",
     "nanoid": "^5.1.6",
-    "next": "15.4.3",
+    "next": "15.4.11",
     "next-intl": "^4.6.1",
     "nodemailer": "^7.0.9",
     "otplib": "^12.0.1",

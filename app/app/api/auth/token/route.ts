@@ -8,21 +8,25 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import * as jwt from 'jsonwebtoken';
 
+const skipJwtValidation =
+  process.env.SKIP_ENV_VALIDATION === 'true' ||
+  process.env.NEXT_PHASE === 'phase-production-build';
+
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && !skipJwtValidation) {
       throw new Error('JWT_SECRET or NEXTAUTH_SECRET must be set in production');
     }
-    return 'dev-jwt-secret-not-for-production';
+    return 'build-jwt-secret-not-for-runtime';
   }
   return secret;
 }
 
-const JWT_SECRET = getJwtSecret();
-
 export async function GET(request: NextRequest) {
   try {
+    const jwtSecret = getJwtSecret();
+
     // Get session from Better Auth
     const session = await auth.api.getSession({ headers: await headers() });
 
@@ -40,7 +44,7 @@ export async function GET(request: NextRequest) {
       role: 'user', // Default role, can be customized
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, {
+    const token = jwt.sign(payload, jwtSecret, {
       expiresIn: '15m', // Match backend token expiry
     });
 

@@ -65,29 +65,33 @@ function isRealCredential(val: string): boolean {
   return val.length > 0 && !val.startsWith('placeholder');
 }
 
+const skipAuthConfigValidation =
+  process.env.SKIP_ENV_VALIDATION === 'true' ||
+  process.env.NEXT_PHASE === 'phase-production-build';
+
 const hasGithub = isRealCredential(githubClientId) && isRealCredential(githubClientSecret);
 const hasGoogle = isRealCredential(googleClientId) && isRealCredential(googleClientSecret);
 
 // Validate: if only one half of a credential pair is set, something is wrong.
-if (isRealCredential(githubClientId) && !isRealCredential(githubClientSecret)) {
+if (!skipAuthConfigValidation && isRealCredential(githubClientId) && !isRealCredential(githubClientSecret)) {
   throw new Error(
     'GITHUB_CLIENT_ID (or GITHUB_ID) is set but GITHUB_CLIENT_SECRET (or GITHUB_SECRET) is missing. ' +
     'Both must be provided for GitHub OAuth to work.'
   );
 }
-if (!isRealCredential(githubClientId) && isRealCredential(githubClientSecret)) {
+if (!skipAuthConfigValidation && !isRealCredential(githubClientId) && isRealCredential(githubClientSecret)) {
   throw new Error(
     'GITHUB_CLIENT_SECRET (or GITHUB_SECRET) is set but GITHUB_CLIENT_ID (or GITHUB_ID) is missing. ' +
     'Both must be provided for GitHub OAuth to work.'
   );
 }
-if (isRealCredential(googleClientId) && !isRealCredential(googleClientSecret)) {
+if (!skipAuthConfigValidation && isRealCredential(googleClientId) && !isRealCredential(googleClientSecret)) {
   throw new Error(
     'GOOGLE_CLIENT_ID is set but GOOGLE_CLIENT_SECRET is missing. ' +
     'Both must be provided for Google OAuth to work.'
   );
 }
-if (!isRealCredential(googleClientId) && isRealCredential(googleClientSecret)) {
+if (!skipAuthConfigValidation && !isRealCredential(googleClientId) && isRealCredential(googleClientSecret)) {
   throw new Error(
     'GOOGLE_CLIENT_SECRET is set but GOOGLE_CLIENT_ID is missing. ' +
     'Both must be provided for Google OAuth to work.'
@@ -95,7 +99,7 @@ if (!isRealCredential(googleClientId) && isRealCredential(googleClientSecret)) {
 }
 
 // In production, require at least one OAuth provider to be fully configured.
-if (process.env.NODE_ENV === 'production' && !hasGithub && !hasGoogle) {
+if (!skipAuthConfigValidation && process.env.NODE_ENV === 'production' && !hasGithub && !hasGoogle) {
   throw new Error(
     'No OAuth providers configured. In production at least one of GitHub or Google OAuth ' +
     'must be fully configured (both client ID and secret). Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET ' +

@@ -45,7 +45,16 @@ ARG NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 ENV NEXT_PUBLIC_RECODER_WEB_URL=${NEXT_PUBLIC_RECODER_WEB_URL}
 
-RUN SKIP_ENV_VALIDATION=true DATABASE_URL="postgresql://build:build@localhost:5432/build" NODE_OPTIONS=--max_old_space_size=${BUILD_NODE_MAX_OLD_SPACE} pnpm run build
+RUN SKIP_ENV_VALIDATION=true \
+    API_KEY_ENCRYPTION_SECRET="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+    ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+    BETTER_AUTH_SECRET="build-only-better-auth-secret-not-for-runtime" \
+    JWT_SECRET="build-only-jwt-secret-not-for-runtime" \
+    NEXTAUTH_SECRET="build-only-jwt-secret-not-for-runtime" \
+    SESSION_SYNC_SECRET="build-only-session-sync-secret-not-for-runtime" \
+    DATABASE_URL="postgresql://build:build@localhost:5432/build" \
+    NODE_OPTIONS=--max_old_space_size=${BUILD_NODE_MAX_OLD_SPACE} \
+    pnpm run build
 
 # Production stage
 FROM node:20-slim AS runner

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-helpers';
 import { getAllServersHealth } from '@/lib/services/mcp.service';
+import { isMcpRuntimeDisabledError, toMcpRuntimeErrorResponse } from '@/lib/mcp/runtime';
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,6 +19,18 @@ export async function GET(req: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
+    if (isMcpRuntimeDisabledError(error)) {
+      const response = toMcpRuntimeErrorResponse();
+      return NextResponse.json(
+        {
+          healthy: false,
+          timestamp: new Date().toISOString(),
+          ...response.body,
+        },
+        { status: response.status }
+      );
+    }
+
     console.error('Failed to check MCP health:', error);
     return NextResponse.json(
       { 
