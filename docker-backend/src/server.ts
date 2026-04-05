@@ -3984,6 +3984,11 @@ app.get('/api/files/read', authenticateRequest, verifyProjectOwnership, async (r
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({ error: 'Container not running', canRetry: true });
+    }
+
     entry.lastActive = Date.now();
     const safePath = sanitizePath(filePath);
 
@@ -4220,6 +4225,11 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
+    const containerStatus = await ensureContainerRunning(entry, projectId);
+    if (!containerStatus.running) {
+      return res.status(503).json({ error: 'Container not running', canRetry: true });
+    }
+
     entry.lastActive = Date.now();
 
     if (isDaytonaSandbox(entry)) {
@@ -4234,33 +4244,11 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
     // Docker container
     const container = docker.getContainer(entry.id);
 
-    // Use array-based exec for find command
-    const findExec = await container.exec({
-      Cmd: ['find', safePath, '-maxdepth', '2', '(', '-type', 'f', '-o', '-type', 'd', ')'],
-      AttachStdout: true,
-      AttachStderr: true,
-    });
-    const stream = await findExec.start({});
-    const chunks: Buffer[] = [];
-
-    await new Promise<void>((resolve) => {
-      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-      stream.on('end', resolve);
-    });
-
-    // Parse Docker multiplexed stream
-    const raw = Buffer.concat(chunks);
-    let output = '';
-    let i = 0;
-    while (i < raw.length) {
-      if (i + 8 <= raw.length) {
-        const size = raw.readUInt32BE(i + 4);
-        if (i + 8 + size <= raw.length) {
-          output += raw.slice(i + 8, i + 8 + size).toString();
-          i += 8 + size;
-        } else break;
-      } else break;
-    }
+    const escapedPath = safePath.replace(/"/g, '\\"');
+    const output = await execCommand(
+      container,
+      `find "${escapedPath}" -maxdepth 2 \\( -type f -o -type d \\) 2>/dev/null || true`
+    );
 
     res.json({ files: output.split('\n').filter(Boolean) });
   } catch (err: any) {
