@@ -106,6 +106,15 @@ service-account*.json
 *password*
 *passwd*
 
+# Allow-list: security tooling that has "secret" in its filename by design.
+# Without these negations, .gitignore's *secret*/*token* rules hide the
+# scanners themselves and they never propagate to other machines.
+!scripts/scan-secrets-strict.sh
+!scripts/scan-secrets.sh
+!scripts/secret-scan-allowlist.regex
+!scripts/detect-tokens*.sh
+!.husky/pre-commit
+
 # Keep legitimate source files that include "token" in their names.
 !recoder-web/app/lib/hooks/useTokenCount.ts
 !recoder-web/app/**/*.ts
