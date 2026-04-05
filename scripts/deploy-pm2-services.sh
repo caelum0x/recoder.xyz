@@ -30,12 +30,7 @@ SYNC_PATHS=(
 
 RSYNC_EXCLUDES=(
   "--exclude=.git"
-  "--exclude=.env"
-  "--exclude=.env.production"
-  "--exclude=.env.local"
-  "--exclude=.env.development"
-  "--exclude=.env.production.local"
-  "--exclude=.env.backup*"
+  "--exclude=.env*"
   "--exclude=.venv"
   "--exclude=.pytest_cache"
   "--exclude=.mypy_cache"

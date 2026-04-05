@@ -12,8 +12,7 @@ tar -czf deploy.tar.gz \
   build/ \
   server.js \
   package.json \
-  pnpm-lock.yaml \
-  .env.production 2>/dev/null || tar -czf deploy.tar.gz build/ server.js package.json pnpm-lock.yaml
+  pnpm-lock.yaml
 
 echo "🚀 Uploading to Oracle Cloud..."
 scp deploy.tar.gz $SERVER:/tmp/

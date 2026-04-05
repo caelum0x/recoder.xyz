@@ -177,13 +177,8 @@ ssh_cmd "cd ${REMOTE_DIR} && git tag -f \"pre-deploy-\$(date +%Y%m%d-%H%M%S)\" |
 
 rsync -az --timeout=120 --progress \
   --exclude='node_modules' --exclude='.git' \
-  --exclude='/.env' \
-  --exclude='**/.env' \
-  --exclude='**/.env.production' \
-  --exclude='**/.env.local' \
-  --exclude='**/.env.development' \
-  --exclude='**/.env.production.local' \
-  --exclude='**/.env.backup*' \
+  --exclude='/.env*' \
+  --exclude='**/.env*' \
   --exclude='.next' --exclude='.turbo' --exclude='coverage' \
   --exclude='.aitimemachine' --exclude='.claude' --exclude='.codex' \
   --exclude='*.log' --exclude='logs' \
