@@ -1,5 +1,10 @@
 # Daytona Self-Hosted API Reference
 
+> **Important:** For the self-hosted runner used on Hetzner, sandbox disk limits
+> require Docker `overlay2` on XFS with `pquota`/`prjquota` enabled. See
+> [`docs/daytona-xfs-pquota-runbook.md`](./daytona-xfs-pquota-runbook.md) before
+> debugging sandbox creation failures.
+
 ## Connection
 - **URL**: `http://localhost:3900/api`
 - **API Key**: `dyt_8532c63d57a211830b617731b30787d913870bfc0d82479a3ad6ff6e916e1946`
