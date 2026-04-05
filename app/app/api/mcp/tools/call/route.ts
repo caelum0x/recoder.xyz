@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-helpers';
 import { callTool } from '@/lib/services/mcp.service';
 import { prisma } from '@/lib/prisma';
+import { isMcpRuntimeDisabledError, toMcpRuntimeErrorResponse } from '@/lib/mcp/runtime';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,6 +36,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
+    if (isMcpRuntimeDisabledError(error)) {
+      const response = toMcpRuntimeErrorResponse();
+      return NextResponse.json(response.body, { status: response.status });
+    }
+
     console.error('Failed to call tool:', error);
     return NextResponse.json(
       { error: 'Failed to call tool' },
