@@ -291,7 +291,8 @@ async def create_file(
         content = await file.read()
         
         # Create file using DaytonaFileService
-        await get_file_service().write_file(sandbox_id, final_path, content)
+        if not await get_file_service().write_file(sandbox_id, final_path, content):
+            raise HTTPException(status_code=500, detail=f"Failed to write file: {final_path}")
         logger.info(f"File uploaded successfully: {final_path} in sandbox {sandbox_id}")
 
         return {
@@ -325,7 +326,8 @@ async def update_file_binary(
         
         content = await file.read()
         
-        await get_file_service().write_file(sandbox_id, path, content)
+        if not await get_file_service().write_file(sandbox_id, path, content):
+            raise HTTPException(status_code=500, detail=f"Failed to write file: {path}")
         logger.info(f"Binary file updated successfully: {path} in sandbox {sandbox_id}")
         
         return {
@@ -360,7 +362,8 @@ async def update_file(
         sandbox = await get_sandbox_by_id_safely(sandbox_id)
         
         content_bytes = content.encode('utf-8') if isinstance(content, str) else content
-        await get_file_service().write_file(sandbox_id, path, content_bytes)
+        if not await get_file_service().write_file(sandbox_id, path, content_bytes):
+            raise HTTPException(status_code=500, detail=f"Failed to write file: {path}")
         logger.debug(f"File updated at {path} in sandbox {sandbox_id}")
         
         return {"status": "success", "updated": True, "path": path}
@@ -1381,7 +1384,8 @@ async def create_file_in_project(
         content = await file.read()
         
         # Upload file to sandbox
-        await get_file_service().write_file(sandbox_id, final_path, content)
+        if not await get_file_service().write_file(sandbox_id, final_path, content):
+            raise HTTPException(status_code=500, detail=f"Failed to write file: {final_path}")
         logger.info(f"File uploaded successfully: {final_path} in sandbox {sandbox_id}")
         
         return {
