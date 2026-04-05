@@ -1152,7 +1152,7 @@ async def get_sandbox_status_by_id(
             config = resource.get('config', {})
             # Try to find the project
             project_row = await execute_one(
-                "SELECT project_id FROM projects WHERE sandbox_resource_id::text = :rid",
+                "SELECT project_id FROM projects WHERE sandbox_resource_id = :rid",
                 {"rid": resource['id']}
             )
             if project_row:
