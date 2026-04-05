@@ -30,7 +30,7 @@ Add this to your project's `.mcp.json` (or `~/.mcp.json` for global access):
       "env": {
         "RECODER_DOCKER_URL": "https://docker.recoder.xyz",
         "RECODER_API_URL": "https://api.recoder.xyz",
-        "RECODER_API_TOKEN": "YOUR_API_TOKEN_HERE"
+        "RECODER_SESSION_TOKEN": "YOUR_SESSION_TOKEN_HERE"
       }
     }
   }
@@ -58,7 +58,7 @@ To enable code execution in isolated sandboxes, add the Daytona environment vari
       "env": {
         "RECODER_DOCKER_URL": "https://docker.recoder.xyz",
         "RECODER_API_URL": "https://api.recoder.xyz",
-        "RECODER_API_TOKEN": "YOUR_API_TOKEN_HERE",
+        "RECODER_SESSION_TOKEN": "YOUR_SESSION_TOKEN_HERE",
         "RECODER_DAYTONA_URL": "http://YOUR_DAYTONA_HOST:3900/api",
         "DAYTONA_API_KEY": "YOUR_DAYTONA_API_KEY"
       }
@@ -109,20 +109,22 @@ recoder-a2a-server.js  (MCP Server)
 4. The gateway routes the task to the target agent
 5. The target agent processes the task and reports results back through the bridge
 
-## Getting Your API Token
+## Getting Your Session Token
 
-1. Go to [https://recoder.xyz/tr/dashboard/api-keys](https://recoder.xyz/tr/dashboard/api-keys)
-2. Click **"Create API Key"**
-3. Copy the `sk-recoder-*` token
-4. Use it as `RECODER_API_TOKEN` in your `.mcp.json`
+1. Sign in to Recoder in your browser
+2. Copy the `recoder.session_token` / Better Auth session token from cookies
+3. Use it as `RECODER_SESSION_TOKEN` in your `.mcp.json`
 
-Alternatively, run `recoder-code login` to authenticate interactively.
+If you need Python API-key auth for non-bridge routes, `RECODER_API_TOKEN` still
+supports `pk_xxx:sk_xxx` pairs, but the realtime A2A bridge should use
+`RECODER_SESSION_TOKEN`.
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `RECODER_API_TOKEN` | Yes | -- | Your Recoder API token (`sk-recoder-*`) |
+| `RECODER_SESSION_TOKEN` | Yes | -- | Better Auth session token for bridge/API auth |
+| `RECODER_API_TOKEN` | No | -- | Optional API-key pair (`pk_xxx:sk_xxx`) for Python API compatibility |
 | `RECODER_DOCKER_URL` | No | `https://docker.recoder.xyz` | Docker backend URL |
 | `RECODER_API_URL` | No | `https://api.recoder.xyz` | Recoder API URL |
 | `RECODER_DAYTONA_URL` | No | `http://localhost:3900/api` | Daytona sandbox API URL |

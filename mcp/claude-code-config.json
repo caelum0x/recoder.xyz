@@ -8,7 +8,7 @@
         "RECODER_API_URL": "https://api.recoder.xyz",
         "RECODER_DAYTONA_URL": "http://77.42.23.19:3900/api",
         "DAYTONA_API_KEY": "dyt_8532c63d57a211830b617731b30787d913870bfc0d82479a3ad6ff6e916e1946",
-        "RECODER_API_TOKEN": "TW4RckaW72UaCulXixoDHDY6czsECP2u"
+        "RECODER_SESSION_TOKEN": "YOUR_RECODER_SESSION_TOKEN"
       }
     }
   }
