@@ -22,6 +22,7 @@ import type {
 import { SandboxError, SandboxErrorType, SandboxStatus } from '../types';
 import { tryCatch, createSandboxLogger } from '../utils';
 import { CONTAINER_TIMEOUTS } from '../config';
+import { getSessionToken } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('DockerProviderService');
 
@@ -36,34 +37,6 @@ const getDockerUrl = (): string => {
   }
   return url;
 };
-
-/**
- * Get session token for authentication
- */
-function getSessionToken(): string | null {
-  if (typeof document === 'undefined') return null;
-
-  const cookies = document.cookie.split(';');
-  const cookieNames = [
-    '__Secure-recoder.session_token',
-    'recoder.session_token',
-    '__Secure-better-auth.session_token',
-    'better-auth.session_token',
-    '__Secure-session_token',
-    'session_token',
-    'recoder_session_token',
-  ];
-
-  for (const cookie of cookies) {
-    const [name, ...valueParts] = cookie.trim().split('=');
-    const value = valueParts.join('=');
-    if (cookieNames.includes(name) && value) {
-      return decodeURIComponent(value);
-    }
-  }
-
-  return null;
-}
 
 /**
  * Get headers with authentication
