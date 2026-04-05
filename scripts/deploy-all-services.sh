@@ -289,6 +289,18 @@ ensure_shared_network() {
   fi
 }
 
+require_docker_image() {
+  local image_name="$1"
+
+  if docker image inspect "$image_name" >/dev/null 2>&1; then
+    echo "Verified Docker image: ${image_name}"
+    return 0
+  fi
+
+  echo "FATAL: Required Docker image missing: ${image_name}"
+  exit 1
+}
+
 # Remove stale generated/legacy files that can survive rsync and break Next typecheck.
 rm -rf /root/recoder.xyz/app/app/api/auth/[...nextauth].disabled || true
 rm -rf /root/recoder.xyz/app/api/auth/[...nextauth].disabled || true
@@ -338,6 +350,7 @@ done
 
 echo "--- Building recoder-base workspace image ---"
 docker compose -f docker-compose.deploy.yml --profile build-base build recoder-base
+require_docker_image "recoder-workspace:latest"
 echo "[$(date -u)] recoder-base built"
 
 echo "--- Building docker-backend ---"

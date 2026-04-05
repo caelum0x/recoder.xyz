@@ -10,6 +10,11 @@ import { FilesStore, type FileMap } from './files';
 import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
 import { dockerGet, dockerPost, dockerDelete, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, withDockerCredentials } from '~/lib/services/docker-api';
+import {
+  clearContainerCreateFailure,
+  noteContainerCreateFailure,
+  shouldAttemptContainerCreate,
+} from '~/lib/services/container-create-breaker';
 import { getCurrentUserId } from '~/lib/stores/user';
 import type { ProjectContext, RelatedFiles } from '~/lib/services/code-context';
 import type { ParsedError } from '~/lib/services/error-analyzer';
@@ -41,6 +46,8 @@ export interface ContainerCreationOptions {
   framework?: string;
   /** Template ID used when the project was created */
   templateId?: string;
+  /** Allow user-triggered retries to bypass the automatic failure cooldown */
+  bypassFailureCooldown?: boolean;
 }
 
 /**
@@ -64,8 +71,23 @@ export async function ensureContainerExists(
     return existingPromise;
   }
 
+  const attemptDecision = shouldAttemptContainerCreate(projectId, {
+    bypassCooldown: options?.bypassFailureCooldown,
+  });
+  if (!attemptDecision.allowed) {
+    logger.warn(
+      `⏸️ [ensureContainerExists] Skipping auto-retry for ${projectId}; cooldown active for ${Math.ceil(attemptDecision.retryAfterMs / 1000)}s`
+    );
+    return false;
+  }
+
   // Create new promise for this container
   const createPromise = (async (): Promise<boolean> => {
+    const containerCreateRequestOptions = {
+      timeout: CONTAINER_CREATE_TIMEOUT_MS,
+      skipRetry: true,
+    } as const;
+
     try {
       const userId = getCurrentUserId();
       logger.info('🐳 [ensureContainerExists] Creating container for', projectId,
@@ -81,13 +103,15 @@ export async function ensureContainerExists(
       }
 
       // Container creation can take 30-120s (Docker pull, pool acquire, env setup).
-      await dockerPost<{ success: boolean }>('/api/container', body, { timeout: CONTAINER_CREATE_TIMEOUT_MS });
+      await dockerPost<{ success: boolean }>('/api/container', body, containerCreateRequestOptions);
 
+      clearContainerCreateFailure(projectId);
       logger.info('✅ [ensureContainerExists] Container ready for', projectId);
       return true;
     } catch (error: any) {
       // 409 Conflict means container already exists - that's OK
       if (error?.statusCode === 409 || error?.message?.includes('already exists')) {
+        clearContainerCreateFailure(projectId);
         logger.info('✅ [ensureContainerExists] Container already exists for', projectId);
         return true;
       }
@@ -118,7 +142,8 @@ export async function ensureContainerExists(
           if (options?.framework) retryBody.framework = options.framework;
           if (options?.templateId) retryBody.templateId = options.templateId;
 
-          await dockerPost<{ success: boolean }>('/api/container', retryBody, { timeout: CONTAINER_CREATE_TIMEOUT_MS });
+          await dockerPost<{ success: boolean }>('/api/container', retryBody, containerCreateRequestOptions);
+          clearContainerCreateFailure(projectId);
           logger.info('✅ [ensureContainerExists] Container created after eviction for', projectId);
           return true;
         } catch (retryError: any) {
@@ -126,7 +151,10 @@ export async function ensureContainerExists(
         }
       }
 
-      logger.error('❌ [ensureContainerExists] Error:', error.message);
+      const failure = noteContainerCreateFailure(projectId, error?.message ?? 'Container creation failed');
+      logger.error(
+        `❌ [ensureContainerExists] Error: ${error?.message ?? 'Container creation failed'} (cooldown ${Math.ceil(failure.retryAfterMs / 1000)}s)`
+      );
       return false;
     } finally {
       containerCreationPromises.delete(projectId);
@@ -143,8 +171,10 @@ export async function ensureContainerExists(
 export function clearContainerState(projectId?: string) {
   if (projectId) {
     containerCreationPromises.delete(projectId);
+    clearContainerCreateFailure(projectId);
   } else {
     containerCreationPromises.clear();
+    clearContainerCreateFailure();
   }
 }
 
@@ -342,7 +372,7 @@ export class WorkbenchStore {
     this.containerReady.set(false);
 
     try {
-      const success = await ensureContainerExists(projectId);
+      const success = await ensureContainerExists(projectId, { bypassFailureCooldown: true });
 
       if (success) {
         this.containerCreationFailed.set(false);
@@ -483,8 +513,12 @@ export class WorkbenchStore {
     }
 
     // Now it's safe to initialize other stores - container exists
-    await this.#terminalStore.setProjectId(projectId);
-    await this.#previewsStore.setProjectId(projectId);
+    if (!DOCKER_URL || containerExists) {
+      await this.#terminalStore.setProjectId(projectId);
+      await this.#previewsStore.setProjectId(projectId);
+    } else {
+      logger.warn('⚠️ [WorkbenchStore] Skipping terminal/preview initialization until the container is available');
+    }
 
     // Initialize workspace and restore saved state
     this.#initializeWorkspace(projectId);

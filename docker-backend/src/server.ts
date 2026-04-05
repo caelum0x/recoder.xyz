@@ -19,6 +19,7 @@ import { createReadStream } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { mountFiles } from './fileMount.js';
+import { CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, getCorsHeadersForOrigin } from './cors-utils.js';
 import { fastWriteFile, fastWriteFiles } from './fast-file-writer.js';
 import * as pty from 'node-pty';
 import { WebSocketRPC } from './websocket-rpc.js';
@@ -1673,13 +1674,16 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Recoder-Anonymous-Id'],
+  methods: CORS_ALLOWED_METHODS,
+  allowedHeaders: CORS_ALLOWED_HEADERS,
 }));
 
-app.use((_req, res, next) => {
+app.use((req, res, next) => {
+  const corsHeaders = getCorsHeadersForOrigin(req.headers.origin, ALLOWED_ORIGINS);
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  // CORS headers handled by cors() middleware above — do NOT set them here to avoid duplicates with nginx
   next();
 });
 // Keep raw JSON text for signed A2A payload verification
