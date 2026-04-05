@@ -2,24 +2,6 @@
   "slowRequests": [],
   "alerts": [
     {
-      "id": "5d80ef54-24a1-4016-9c20-e400bcd69f98",
-      "type": "high_memory",
-      "severity": "critical",
-      "message": "High memory usage: 96.9%",
-      "value": 96.87804888150919,
-      "threshold": 80,
-      "timestamp": 1775368808061
-    },
-    {
-      "id": "dc385add-5930-48f5-aff6-b096df3123a0",
-      "type": "event_loop_lag",
-      "severity": "warning",
-      "message": "Event loop lag: 217.14ms",
-      "value": 217.13849999941885,
-      "threshold": 100,
-      "timestamp": 1775368842912
-    },
-    {
       "id": "71b1ed3b-50d6-45ec-92b0-f13422e846fe",
       "type": "high_memory",
       "severity": "critical",
@@ -9000,6 +8982,24 @@
       "value": 96.5037744218171,
       "threshold": 80,
       "timestamp": 1775411950711
+    },
+    {
+      "id": "2ae72c2d-6331-4334-89ba-05fc027cb98a",
+      "type": "event_loop_lag",
+      "severity": "warning",
+      "message": "Event loop lag: 165.02ms",
+      "value": 165.0168340000091,
+      "threshold": 100,
+      "timestamp": 1775412000964
+    },
+    {
+      "id": "aabda8a6-9528-449b-9472-345f7fd0e057",
+      "type": "high_memory",
+      "severity": "critical",
+      "message": "High memory usage: 96.7%",
+      "value": 96.65927595380865,
+      "threshold": 80,
+      "timestamp": 1775412010773
     }
   ],
   "aggregatedStats": {
