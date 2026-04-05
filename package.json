@@ -214,7 +214,8 @@
     "typecheck:studio": "cd recoder-studio && pnpm run typecheck",
     "typecheck:pm": "cd recoder-pm && pnpm run typecheck",
     "typecheck:agency": "cd recoder-agency && pnpm run check-types",
-    "build:platforms": "npm-run-all --parallel build:web build:frontend build:mobile build:desktop build:studio build:pm build:agency"
+    "build:platforms": "npm-run-all --parallel build:web build:frontend build:mobile build:desktop build:studio build:pm build:agency",
+    "audit:deps:security": "node scripts/audit-dependency-security.mjs"
   },
   "keywords": [
     "ai",
@@ -288,7 +289,8 @@
       "@types/react": "19.2.7",
       "@types/react-dom": "19.2.3",
       "@codemirror/state": "6.5.4",
-      "@modelcontextprotocol/sdk": "1.23.0"
+      "@modelcontextprotocol/sdk": "1.23.0",
+      "axios": "1.13.5"
     },
     "onlyBuiltDependencies": [
       "duckdb",
