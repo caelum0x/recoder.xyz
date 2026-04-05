@@ -35,7 +35,7 @@ function isSafeNextVersion(versionString) {
   }
 
   if (current.major === 16) {
-    return isAtLeast(current, { major: 16, minor: 0, patch: 1 });
+    return isAtLeast(current, { major: 16, minor: 0, patch: 7 });
   }
 
   if (current.minor < 4) {
@@ -47,7 +47,7 @@ function isSafeNextVersion(versionString) {
   }
 
   if (current.minor === 5) {
-    return isAtLeast(current, { major: 15, minor: 5, patch: 4 });
+    return isAtLeast(current, { major: 15, minor: 5, patch: 7 });
   }
 
   return true;
@@ -56,7 +56,7 @@ function isSafeNextVersion(versionString) {
 if (!isSafeNextVersion(version)) {
   throw new Error(
     `Blocked build: Next.js ${version} is below the minimum patched version. `
-    + 'Use 15.4.11+, 15.5.4+, or 16.0.1+ before deploying.'
+    + 'Use 15.4.11+, 15.5.7+, or 16.0.7+ before deploying.'
   );
 }
 
