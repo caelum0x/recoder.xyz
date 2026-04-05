@@ -8,14 +8,11 @@ import {
   parseThreadSearchResponse,
   parseThreadsResponse,
 } from './contracts';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-// Production-safe backend URL with localhost guard
-const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-const API_URL = (_envUrl && !_envUrl.includes('localhost'))
-  ? _envUrl
-  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://api.recoder.xyz/v1'
-    : _envUrl);
+function getApiUrl(): string {
+  return resolveBrowserBackendApiUrl();
+}
 
 export type ThreadStatus = 'pending' | 'initializing' | 'ready' | 'error';
 
@@ -223,7 +220,7 @@ export const getProjectThreads = async (projectId: string, page: number = 1, lim
 export const createThreadInProject = async (projectId: string): Promise<{ thread_id: string; project_id: string }> => {
   const token = await requireSessionAccessToken();
 
-  const response = await fetch(`${API_URL}/projects/${projectId}/threads`, {
+  const response = await fetch(`${getApiUrl()}/projects/${projectId}/threads`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -478,7 +475,7 @@ export const createThread = async (projectId?: string): Promise<Thread> => {
   }
 
   // Otherwise, create new project + thread (legacy behavior)
-  const response = await fetch(`${API_URL}/threads`, {
+  const response = await fetch(`${getApiUrl()}/threads`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -519,7 +516,7 @@ export const addUserMessage = async (
     }
 
     // Use backend API endpoint with auth handling
-    const response = await fetch(`${API_URL}/threads/${threadId}/messages/add`, {
+    const response = await fetch(`${getApiUrl()}/threads/${threadId}/messages/add`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -570,7 +567,7 @@ export const getMessages = async (threadId: string): Promise<Message[]> => {
     const useOptimized = shouldUseOptimizedMessages();
 
     const response = await fetch(
-      `${API_URL}/threads/${threadId}/messages?order=asc&optimized=${useOptimized}`,
+      `${getApiUrl()}/threads/${threadId}/messages?order=asc&optimized=${useOptimized}`,
       {
       headers,
       credentials: 'include',

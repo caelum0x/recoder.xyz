@@ -3,8 +3,9 @@ import { saveAs } from 'file-saver';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getBackendUrl = () => resolveBrowserBackendApiUrl();
 
 export type ExportFormat = 'pdf' | 'docx' | 'html' | 'markdown';
 
@@ -423,13 +424,10 @@ export async function exportDocument({ content, fileName, format }: DocumentExpo
         const toastId = toast.loading('Exporting to PDF...');
         
         try {
-          if (!BACKEND_URL) {
-            throw new Error('Backend API URL not configured');
-          }
-
+          const backendUrl = getBackendUrl();
           const token = await requireSessionAccessToken();
 
-          const response = await fetch(`${BACKEND_URL}/export/pdf`, {
+          const response = await fetch(`${backendUrl}/export/pdf`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -472,13 +470,10 @@ export async function exportDocument({ content, fileName, format }: DocumentExpo
         const toastId = toast.loading('Exporting to Word...');
         
         try {
-          if (!BACKEND_URL) {
-            throw new Error('Backend API URL not configured');
-          }
-
+          const backendUrl = getBackendUrl();
           const token = await requireSessionAccessToken();
 
-          const response = await fetch(`${BACKEND_URL}/export/docx`, {
+          const response = await fetch(`${backendUrl}/export/docx`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

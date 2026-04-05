@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from core.agentpress.thread_manager import ThreadManager
 from datetime import datetime, timezone
 from core.utils.config import config, EnvMode
+from core.utils.cors_headers import ALLOW_ORIGIN_REGEX, build_allowed_origins, get_cors_headers
 import asyncio
 from core.utils.logger import logger, structlog
 import time
@@ -352,9 +353,9 @@ async def traced_http_exception_handler(request: Request, exc: HTTPException):
     if trace_ctx:
         body["_meta"] = trace_ctx.as_response_meta()
 
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = get_cors_headers(request, env_mode=config.ENV_MODE)
     if trace_ctx:
-        headers = trace_ctx.as_response_headers()
+        headers.update(trace_ctx.as_response_headers())
     # Merge any headers the exception itself carries (e.g. WWW-Authenticate)
     if exc.headers:
         headers.update(exc.headers)
@@ -465,25 +466,8 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-allowed_origins = [
-    "https://www.recoder.xyz",
-    "https://recoder.xyz",
-    "https://dev.recoder.xyz",
-    "https://staging.recoder.xyz",
-    "https://prod-test.recoder.xyz",
-]
-# Allow all *.recoder.xyz subdomains and Vercel preview deployments
-allow_origin_regex = r"https://([a-z0-9-]+\.)?recoder\.xyz|https://.*-recoderxyz\.vercel\.app"
-
-# Add local origins for development
-if config.ENV_MODE == EnvMode.LOCAL:
-    allowed_origins.append("http://localhost:3000")
-    allowed_origins.append("http://127.0.0.1:3000")
-
-# Add staging-specific origins
-if config.ENV_MODE == EnvMode.STAGING:
-    allowed_origins.append("https://staging.recoder.xyz")
-    allowed_origins.append("http://localhost:3000")
+allowed_origins = build_allowed_origins(config.ENV_MODE)
+allow_origin_regex = ALLOW_ORIGIN_REGEX.pattern
 
 app.add_middleware(
     CORSMiddleware,

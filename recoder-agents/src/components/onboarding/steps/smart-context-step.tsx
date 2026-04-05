@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { StepWrapper } from '../shared/step-wrapper';
 import { userContext, updateUserContext } from '../shared/context';
 import type { UserContext } from '../shared/types';
-import { resolveBackendApiUrl } from '@/lib/runtime-urls';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export const SmartContextStep = () => {
   const [localContext, setLocalContext] = useState<UserContext>(userContext);
@@ -32,7 +32,7 @@ export const SmartContextStep = () => {
     setIsExtracting(true);
 
     try {
-      const backendUrl = resolveBackendApiUrl();
+      const backendUrl = resolveBrowserBackendApiUrl();
       const response = await fetch(`${backendUrl}/website-analysis/extract-context`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

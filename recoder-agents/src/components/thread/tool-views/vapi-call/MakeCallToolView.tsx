@@ -13,6 +13,7 @@ import { useVapiCallRealtime } from '@/hooks/integrations';
 import { useQuery } from '@tanstack/react-query';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 import { motion, AnimatePresence } from 'framer-motion';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export function MakeCallToolView({
   toolCall,
@@ -39,7 +40,7 @@ export function MakeCallToolView({
       if (!callData?.call_id) return null;
       
       try {
-        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+        const apiUrl = resolveBrowserBackendApiUrl();
         const token = await getSessionAccessToken();
         
         const headers: Record<string, string> = {
@@ -50,7 +51,7 @@ export function MakeCallToolView({
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${API_URL}/vapi/calls/${callData.call_id}`, {
+        const response = await fetch(`${apiUrl}/vapi/calls/${callData.call_id}`, {
           headers,
         });
 

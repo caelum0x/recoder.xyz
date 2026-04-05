@@ -25,7 +25,7 @@ import {
   Palette,
 } from 'lucide-react';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
-import { resolveBackendApiUrl } from '@/lib/runtime-urls';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 import { cn } from '@/lib/utils';
 import { useProcessImage, usePerformOCR, useGenerateImages, useConvertToSvg } from '@/hooks/canvas/use-canvas-ai';
 import { Button } from '@/components/ui/button';
@@ -168,7 +168,7 @@ function getSandboxFileUrl(sandboxId: string | undefined, path: string): string 
   if (normalizedPath.startsWith('/')) normalizedPath = normalizedPath.substring(1);
   if (normalizedPath.startsWith('workspace/')) normalizedPath = normalizedPath.substring(10);
   normalizedPath = `/workspace/${normalizedPath}`;
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+  const baseUrl = resolveBrowserBackendApiUrl() || '';
   return `${baseUrl}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(normalizedPath)}`;
 }
 
@@ -2231,7 +2231,7 @@ function MultiSelectToolbar({
       );
 
       // Send to backend - use correct backend URL
-      const backendUrl = resolveBackendApiUrl();
+      const backendUrl = resolveBrowserBackendApiUrl();
       const response = await fetch(`${backendUrl}/canvas-ai/merge`, {
         method: 'POST',
         headers: {

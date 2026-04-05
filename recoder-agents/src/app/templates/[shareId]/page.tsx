@@ -39,7 +39,7 @@ import { useTheme } from 'next-themes';
 import ColorThief from 'colorthief';
 import { AgentAvatar } from '@/components/thread/content/agent-avatar';
 import { RecoderLogo } from '@/components/sidebar/recoder-logo';
-import { resolveBackendApiUrl } from '@/lib/runtime-urls';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 interface MarketplaceTemplate {
   template_id: string;
@@ -100,7 +100,7 @@ const IntegrationIcon: React.FC<{
   useEffect(() => {
     if (extractedSlug && !hasError) {
       setIsLoading(true);
-      const backendUrl = resolveBackendApiUrl();
+      const backendUrl = resolveBrowserBackendApiUrl();
       fetch(`${backendUrl}/composio/toolkits/${extractedSlug}/icon`)
         .then(res => res.json())
         .then(data => {
@@ -246,7 +246,7 @@ export default function TemplateSharePage() {
   const { data: template, isLoading, error } = useQuery({
     queryKey: ['template-public', templateId],
     queryFn: async () => {
-      const backendUrl = resolveBackendApiUrl();
+      const backendUrl = resolveBrowserBackendApiUrl();
       const response = await fetch(`${backendUrl}/templates/public/${templateId}`);
       if (!response.ok) {
         throw new Error('Template not found');

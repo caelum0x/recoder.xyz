@@ -1,18 +1,9 @@
 import { StreamConnection, StreamConnectionOptions, createStreamConnection } from './stream-connection';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-// Guard: never use localhost/stale URLs in production
-const _isValidBackendUrl = (url: string) => {
-  if (!url) return false;
-  if (url.includes('localhost') || url.includes('127.0.0.1')) return false;
-  if (url.includes('neon.tech')) return false;
-  return url.includes('recoder.xyz');
-};
-const API_URL = _isValidBackendUrl(_envUrl)
-  ? _envUrl
-  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://api.recoder.xyz/v1'
-    : _envUrl);
+function getApiUrl(): string {
+  return resolveBrowserBackendApiUrl();
+}
 
 export interface PreconnectedStream {
   connection: StreamConnection;
@@ -98,7 +89,7 @@ class StreamPreconnectService {
     };
 
     const connection = createStreamConnection({
-      apiUrl: API_URL,
+      apiUrl: getApiUrl(),
       runId: agentRunId,
       getAuthToken,
       onMessage: (data: string) => {

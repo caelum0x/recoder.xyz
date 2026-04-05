@@ -11,17 +11,14 @@ import {
   type PhoneVerificationVerify,
 } from '@/lib/api/phone-verification';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 import { z } from 'zod';
 
 // Cutoff date for new user phone verification requirement.
 const PHONE_VERIFICATION_CUTOFF_DATE = new Date('2025-12-24T00:09:30.000Z');
 
 function getBackendUrl(): string {
-  const url = process.env.NEXT_PUBLIC_BACKEND_URL;
-  if (!url) {
-    throw new Error('NEXT_PUBLIC_BACKEND_URL is not configured');
-  }
-  return url.replace(/\/$/, '');
+  return resolveBrowserBackendApiUrl().replace(/\/$/, '');
 }
 
 type ApiErrorResponse = {

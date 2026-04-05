@@ -387,6 +387,7 @@ async def start_agent_run(
     )
     from core.agents.pipeline.time_estimator import time_estimator
     from core.agents.pipeline.ux_streaming import stream_ack, stream_estimate
+    from core.utils.agent_startup_files import prepare_uploaded_files_for_agent_start
     
     total_start = time.time()
     is_new_thread = thread_id is None or is_optimistic
@@ -452,53 +453,22 @@ async def start_agent_run(
     has_files = files_data and len(files_data) > 0
     
     if has_files:
-        # WITH FILES: Create sandbox and upload files
-        # Use a 45s timeout to stay well under gunicorn's 75s limit
-        # If sandbox creation exceeds timeout, fall back to background upload
-        placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt if prompt else "Untitled"
-        if is_new_thread:
-            try:
-                await threads_repo.create_project(project_id, account_id, placeholder_name)
-            except Exception as e:
-                logger.debug(f"Project creation skipped (may already exist): {e}")
-        else:
-            try:
-                existing_project = await threads_repo.get_project(project_id)
-                if not existing_project:
-                    await threads_repo.create_project(project_id, account_id, placeholder_name)
-            except Exception as e:
-                logger.debug(f"Project check/creation skipped: {e}")
+        from core.files.upload_handler import upload_files_to_sandbox
 
-        try:
-            # Resolve sandbox with 45s timeout to avoid gunicorn timeout
-            sandbox_info = await asyncio.wait_for(
-                resolve_sandbox(project_id, account_id, None, require_started=True),
-                timeout=45.0,
-            )
-            sandbox_id = sandbox_info.sandbox_id if sandbox_info else None
-
-            if sandbox_id:
-                logger.info(f"✅ [AGENT_START] Resolved sandbox {sandbox_id} for file uploads (project {project_id})")
-                from core.files.upload_handler import upload_files_to_sandbox
-                await upload_files_to_sandbox(project_id, thread_id, files_data, account_id)
-                logger.info(f"✅ [AGENT_START] Uploaded {len(files_data)} files to sandbox {sandbox_id}")
-            else:
-                logger.warning(f"⚠️ [AGENT_START] Failed to resolve sandbox for file uploads (project {project_id})")
-        except asyncio.TimeoutError:
-            # Sandbox creation too slow — fall back to background upload
-            logger.warning(f"⏱️ [AGENT_START] Sandbox creation timed out (45s) for project {project_id}, moving to background")
-
-            async def _background_file_upload(proj_id, acc_id, thr_id, fdata):
-                try:
-                    sinfo = await resolve_sandbox(proj_id, acc_id, None, require_started=True)
-                    if sinfo and sinfo.sandbox_id:
-                        from core.files.upload_handler import upload_files_to_sandbox
-                        await upload_files_to_sandbox(proj_id, thr_id, fdata, acc_id)
-                        logger.info(f"✅ [BACKGROUND] Uploaded {len(fdata)} files to sandbox {sinfo.sandbox_id}")
-                except Exception as e:
-                    logger.error(f"❌ [BACKGROUND] File upload failed for project {proj_id}: {e}")
-
-            asyncio.create_task(_background_file_upload(project_id, account_id, thread_id, files_data))
+        sandbox_id = await prepare_uploaded_files_for_agent_start(
+            project_id=project_id,
+            thread_id=thread_id,
+            prompt=prompt,
+            account_id=account_id,
+            is_new_thread=is_new_thread,
+            files_data=files_data,
+            create_project_fn=threads_repo.create_project,
+            get_project_fn=threads_repo.get_project,
+            resolve_sandbox_fn=lambda proj_id, acc_id, db_client, require_started: resolve_sandbox(
+                proj_id, acc_id, db_client, require_started=require_started
+            ),
+            upload_files_fn=upload_files_to_sandbox,
+        )
     
     elif is_new_thread:
         # NO FILES but NEW THREAD: Start sandbox creation in background (non-blocking)

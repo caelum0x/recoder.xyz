@@ -11,8 +11,9 @@ import {
 } from '@/lib/api/pipelines';
 import type { Pipeline, PipelineRun } from '@/lib/api/pipelines';
 import { connectTokenizedSSE, type TokenizedSSEConnection } from '@/lib/realtime/sse';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.recoder.xyz/v1';
+const API_URL = resolveBrowserBackendApiUrl();
 
 export function usePipelines() {
   return useQuery({

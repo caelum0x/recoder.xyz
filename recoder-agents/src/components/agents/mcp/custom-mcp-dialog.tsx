@@ -10,8 +10,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
 import { Input } from '@/components/ui/input';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getApiUrl = () => resolveBrowserBackendApiUrl();
 
 interface CustomMCPDialogProps {
   open: boolean;
@@ -73,7 +74,7 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
 
       const token = await requireSessionAccessToken();
 
-      const response = await fetch(`${API_URL}/mcp/discover-custom-tools`, {
+      const response = await fetch(`${getApiUrl()}/mcp/discover-custom-tools`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

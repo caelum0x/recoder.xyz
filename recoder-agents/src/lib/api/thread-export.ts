@@ -1,4 +1,5 @@
 import { backendApi } from '@/lib/api-client';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export type ExportFormat = 'markdown' | 'json' | 'txt';
 
@@ -37,7 +38,7 @@ export const getExportPdfUrl = (
   includeToolCalls: boolean = false,
   includeMetadata: boolean = true
 ): string => {
-  const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+  const API_URL = resolveBrowserBackendApiUrl();
   const params = new URLSearchParams({
     include_tool_calls: String(includeToolCalls),
     include_metadata: String(includeMetadata),

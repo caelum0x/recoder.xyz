@@ -77,6 +77,7 @@ import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { cn } from '@/lib/utils';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { exportDocument, type ExportFormat } from '@/lib/utils/document-export';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 interface MarkdownToolbarProps {
   editor: Editor;
@@ -343,7 +344,7 @@ export function MarkdownToolbar({
       return null;
     }
 
-    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+    const apiUrl = resolveBrowserBackendApiUrl();
     
     try {
       const token = await requireSessionAccessToken();
@@ -354,7 +355,7 @@ export function MarkdownToolbar({
       formData.append('path', uploadPath);
 
       // Step 1: Upload the file
-      const uploadResponse = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
+      const uploadResponse = await fetch(`${apiUrl}/sandboxes/${sandboxId}/files`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -370,7 +371,7 @@ export function MarkdownToolbar({
       const actualPath = responseData.path || uploadPath;
       
       // Step 2: Fetch the uploaded image with auth and create blob URL
-      const contentUrl = `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(actualPath)}`;
+      const contentUrl = `${apiUrl}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(actualPath)}`;
       const contentResponse = await fetch(contentUrl, {
         headers: {
           Authorization: `Bearer ${token}`,

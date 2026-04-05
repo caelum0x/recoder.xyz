@@ -3,6 +3,7 @@ import { requireSessionAccessToken } from '@/lib/auth/session-token';
 import { fileQueryKeys } from './use-file-queries';
 import { FileCache } from '@/hooks/files';
 import { toast } from '@/lib/toast';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 // Import the normalizePath function from use-file-queries
 function normalizePath(path: string): string {
   if (!path) return '/';
@@ -48,7 +49,7 @@ function normalizeWorkspacePath(path: string): string {
   return `/workspace/${path.replace(/^\//, '')}`;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getApiUrl = () => resolveBrowserBackendApiUrl();
 
 /**
  * Hook for uploading files
@@ -72,7 +73,7 @@ export function useFileUpload() {
       formData.append('file', file);
       formData.append('path', targetPath);
 
-      const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
+      const response = await fetch(`${getApiUrl()}/sandboxes/${sandboxId}/files`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -125,7 +126,7 @@ export function useFileDelete() {
       const token = await requireSessionAccessToken();
 
       const response = await fetch(
-        `${API_URL}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(filePath)}`,
+        `${getApiUrl()}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(filePath)}`,
         {
           method: 'DELETE',
           headers: {
@@ -225,7 +226,7 @@ export function useFileCreate() {
     }) => {
       const token = await requireSessionAccessToken();
 
-      const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files`, {
+      const response = await fetch(`${getApiUrl()}/sandboxes/${sandboxId}/files`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

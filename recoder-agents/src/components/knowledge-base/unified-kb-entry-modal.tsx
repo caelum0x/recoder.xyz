@@ -42,6 +42,7 @@ import { requireSessionAccessToken } from '@/lib/auth/session-token';
 import { useNameValidation } from '@/lib/validation';
 import { cn } from '@/lib/utils';
 import { type Folder as FolderType } from '@/hooks/knowledge-base/use-folders';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 interface FileUploadStatus {
     file: File;
@@ -57,7 +58,7 @@ interface UnifiedKbEntryModalProps {
     defaultTab?: 'upload' | 'text' | 'git';
 }
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getApiUrl = () => resolveBrowserBackendApiUrl();
 
 export function UnifiedKbEntryModal({
     folders,
@@ -129,7 +130,7 @@ export function UnifiedKbEntryModal({
         try {
             const token = await requireSessionAccessToken();
 
-            const response = await fetch(`${API_URL}/knowledge-base/folders`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/folders`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -176,7 +177,7 @@ export function UnifiedKbEntryModal({
         try {
             const token = await requireSessionAccessToken();
 
-            const response = await fetch(`${API_URL}/knowledge-base/folders`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/folders`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -280,7 +281,7 @@ export function UnifiedKbEntryModal({
                     const formData = new FormData();
                     formData.append('file', file);
 
-                    const response = await fetch(`${API_URL}/knowledge-base/folders/${folderId}/upload`, {
+                    const response = await fetch(`${getApiUrl()}/knowledge-base/folders/${folderId}/upload`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${token}` },
                         body: formData
@@ -357,7 +358,7 @@ export function UnifiedKbEntryModal({
             const formData = new FormData();
             formData.append('file', file);
 
-            const response = await fetch(`${API_URL}/knowledge-base/folders/${folderId}/upload`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/folders/${folderId}/upload`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
@@ -397,7 +398,7 @@ export function UnifiedKbEntryModal({
         try {
             const token = await requireSessionAccessToken();
 
-            const response = await fetch(`${API_URL}/knowledge-base/folders/${folderId}/clone-git-repo`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/folders/${folderId}/clone-git-repo`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

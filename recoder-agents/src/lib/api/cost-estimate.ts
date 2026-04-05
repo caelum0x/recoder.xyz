@@ -1,4 +1,4 @@
-import { resolveBackendApiUrl } from '@/lib/runtime-urls';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export interface CostEstimate {
   model: string;
@@ -13,7 +13,7 @@ export async function getCostEstimate(
   promptLength: number,
   model: string,
 ): Promise<CostEstimate> {
-  const url = `${resolveBackendApiUrl()}/agents/${agentId}/cost-estimate?prompt_length=${promptLength}&model=${encodeURIComponent(model)}`;
+  const url = `${resolveBrowserBackendApiUrl()}/agents/${agentId}/cost-estimate?prompt_length=${promptLength}&model=${encodeURIComponent(model)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Cost estimate failed: ${res.status}`);
   return res.json();

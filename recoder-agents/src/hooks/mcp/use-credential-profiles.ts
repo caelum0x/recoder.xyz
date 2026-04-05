@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export interface CredentialProfile {
   profile_id: string;
@@ -23,7 +24,7 @@ export interface CreateCredentialProfileRequest {
   is_default?: boolean;
 }
 
-const API_BASE = `${process.env.NEXT_PUBLIC_BACKEND_URL}/secure-mcp`;
+const API_BASE = `${resolveBrowserBackendApiUrl()}/secure-mcp`;
 
 async function fetchAllCredentialProfiles(): Promise<CredentialProfile[]> {
   const token = await requireSessionAccessToken();
