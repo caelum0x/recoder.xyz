@@ -17,11 +17,11 @@ import * as net from 'node:net';
 import path from 'node:path';
 import readline from 'node:readline';
 import url from 'node:url';
-import open from 'open';
 import type { Config } from '../config/config.js';
 import { Storage } from '../config/storage.js';
 import { AuthType } from '../core/contentGenerator.js';
 import { FatalAuthenticationError, getErrorMessage } from '../utils/errors.js';
+import { openBrowserSecurely } from '../utils/secure-browser-launcher.js';
 import { UserAccountManager } from '../utils/userAccountManager.js';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -155,21 +155,7 @@ async function initOauthClient(
         `Otherwise navigate to:\n\n${webLogin.authUrl}\n\n`,
     );
     try {
-      // Attempt to open the authentication URL in the default browser.
-      // We do not use the `wait` option here because the main script's execution
-      // is already paused by `loginCompletePromise`, which awaits the server callback.
-      const childProcess = await open(webLogin.authUrl);
-
-      // IMPORTANT: Attach an error handler to the returned child process.
-      // Without this, if `open` fails to spawn a process (e.g., `xdg-open` is not found
-      // in a minimal Docker container), it will emit an unhandled 'error' event,
-      // causing the entire Node.js process to crash.
-      childProcess.on('error', (_) => {
-        logger.error(
-          'Failed to open browser automatically. Please try running again with NO_BROWSER=true set.',
-        );
-        throw new FatalAuthenticationError('Failed to open browser.');
-      });
+      await openBrowserSecurely(webLogin.authUrl);
     } catch (err) {
       logger.error(
         'An unexpected error occurred while trying to open the browser:',
