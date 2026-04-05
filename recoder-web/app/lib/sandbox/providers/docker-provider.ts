@@ -835,10 +835,9 @@ body {
 
       // Optionally delete the container
       try {
-        await fetch(`${this.apiEndpoint}/api/container/${this.projectId}`, {
+        await fetch(`${this.apiEndpoint}/api/container/${this.projectId}`, this.withAuth({
           method: 'DELETE',
-          headers: this.getHeaders(),
-        });
+        }));
       } catch {
         // Ignore errors during termination
       }
@@ -857,9 +856,7 @@ body {
   async reconnect(sandboxId: string): Promise<boolean> {
     try {
       // Verify the backend is available
-      const response = await fetch(`${this.apiEndpoint}/health`, {
-        headers: this.getHeaders(),
-      });
+      const response = await fetch(`${this.apiEndpoint}/health`, this.withAuth());
 
       if (response.ok) {
         this.projectId = sandboxId;
@@ -892,10 +889,9 @@ body {
     }
 
     try {
-      await fetch(`${this.apiEndpoint}/api/keep-alive/${this.projectId}`, {
+      await fetch(`${this.apiEndpoint}/api/keep-alive/${this.projectId}`, this.withAuth({
         method: 'POST',
-        headers: this.getHeaders(),
-      });
+      }));
     } catch {
       // Ignore errors
     }
@@ -907,9 +903,7 @@ body {
   async exportProject(): Promise<Blob> {
     const projectId = this.getProjectId();
 
-    const response = await fetch(`${this.apiEndpoint}/api/export/${projectId}`, {
-      headers: this.getHeaders(),
-    });
+    const response = await fetch(`${this.apiEndpoint}/api/export/${projectId}`, this.withAuth());
 
     if (!response.ok) {
       throw new Error('Failed to export project');
@@ -925,10 +919,9 @@ body {
     const projectId = this.getProjectId();
     const normalizedPath = path.startsWith('/') ? path.slice(1) : path;
 
-    const response = await fetch(`${this.apiEndpoint}/api/file/${projectId}?path=${encodeURIComponent(normalizedPath)}`, {
+    const response = await fetch(`${this.apiEndpoint}/api/file/${projectId}?path=${encodeURIComponent(normalizedPath)}`, this.withAuth({
       method: 'DELETE',
-      headers: this.getHeaders(),
-    });
+    }));
 
     if (!response.ok) {
       throw new Error('Failed to delete file');
@@ -945,14 +938,13 @@ body {
     const normalizedOldPath = oldPath.startsWith('/') ? oldPath.slice(1) : oldPath;
     const normalizedNewPath = newPath.startsWith('/') ? newPath.slice(1) : newPath;
 
-    const response = await fetch(`${this.apiEndpoint}/api/file/${projectId}/rename`, {
+    const response = await fetch(`${this.apiEndpoint}/api/file/${projectId}/rename`, this.withAuth({
       method: 'PUT',
-      headers: this.getHeaders(),
       body: JSON.stringify({
         oldPath: normalizedOldPath,
         newPath: normalizedNewPath,
       }),
-    });
+    }));
 
     if (!response.ok) {
       throw new Error('Failed to rename file');
