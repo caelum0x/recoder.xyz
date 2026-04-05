@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "🚀 Deploying Recoder Docker Backend to Oracle Cloud"
 
@@ -18,6 +18,7 @@ rsync -avz --progress \
   --exclude 'node_modules' \
   --exclude '.git' \
   --exclude 'dist' \
+  --exclude '.env*' \
   . $SERVER_USER@$SERVER_IP:$REMOTE_DIR/
 
 echo "🔧 Step 3: Installing Node.js on server..."
