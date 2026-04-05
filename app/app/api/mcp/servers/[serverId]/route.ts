@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-helpers';
 import { enableServer, disableServer, uninstallServer, getServerHealth } from '@/lib/services/mcp.service';
+import { isMcpRuntimeDisabledError, toMcpRuntimeErrorResponse } from '@/lib/mcp/runtime';
 
 export async function GET(
   req: NextRequest,
@@ -16,6 +17,11 @@ export async function GET(
     const health = await getServerHealth(user.id, serverId);
     return NextResponse.json(health);
   } catch (error) {
+    if (isMcpRuntimeDisabledError(error)) {
+      const response = toMcpRuntimeErrorResponse();
+      return NextResponse.json(response.body, { status: response.status });
+    }
+
     console.error('Failed to get server health:', error);
     return NextResponse.json(
       { error: 'Failed to get server health' },

@@ -92,12 +92,68 @@ export const CUSTOM_SERVERS: MCPServerDefinition[] = [
 
 export const ALL_SERVERS = [...REFERENCE_SERVERS, ...CUSTOM_SERVERS];
 
+const RESERVED_ENV_KEY_PATTERN = /^(?:npm_config_|NPM_CONFIG_|PNPM_|YARN_|BUN_|NODE_OPTIONS|PATH|HOME|SHELL|LD_|DYLD_)/;
+
 export function getServerById(id: string): MCPServerDefinition | undefined {
   return ALL_SERVERS.find((s) => s.id === id);
 }
 
 export function getServersByCategory(category: MCPServerDefinition['category']): MCPServerDefinition[] {
   return ALL_SERVERS.filter((s) => s.category === category);
+}
+
+function getAllowedEnvKeys(definition: MCPServerDefinition): Set<string> {
+  return new Set((definition.envVars || []).map((envVar) => envVar.key));
+}
+
+export function sanitizeServerEnv(
+  definition: MCPServerDefinition,
+  env?: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!env) {
+    return definition.env ? { ...definition.env } : undefined;
+  }
+
+  const allowedEnvKeys = getAllowedEnvKeys(definition);
+  const mergedEnv: Record<string, string> = { ...(definition.env || {}) };
+  const invalidKeys: string[] = [];
+
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value !== 'string' || value.length === 0) {
+      continue;
+    }
+
+    if (RESERVED_ENV_KEY_PATTERN.test(key) || !allowedEnvKeys.has(key)) {
+      invalidKeys.push(key);
+      continue;
+    }
+
+    mergedEnv[key] = value;
+  }
+
+  if (invalidKeys.length > 0) {
+    throw new Error(`Unsupported MCP environment key(s): ${invalidKeys.join(', ')}`);
+  }
+
+  return Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined;
+}
+
+export function buildServerConfig(
+  serverId: string,
+  config?: Partial<MCPServerConfig> | null,
+): MCPServerConfig {
+  const definition = getServerById(serverId);
+  if (!definition) {
+    throw new Error(`Server ${serverId} not found in registry`);
+  }
+
+  return {
+    id: definition.id,
+    name: definition.name,
+    command: definition.command,
+    args: [...definition.args],
+    env: sanitizeServerEnv(definition, config?.env),
+  };
 }
 
 export function validateServerConfig(config: MCPServerConfig): { valid: boolean; errors: string[] } {
@@ -107,6 +163,20 @@ export function validateServerConfig(config: MCPServerConfig): { valid: boolean;
   if (!definition) {
     errors.push(`Unknown server: ${config.id}`);
     return { valid: false, errors };
+  }
+
+  if (config.command !== definition.command) {
+    errors.push(`Command mismatch for server: ${config.id}`);
+  }
+
+  if (JSON.stringify(config.args) !== JSON.stringify(definition.args)) {
+    errors.push(`Args mismatch for server: ${config.id}`);
+  }
+
+  try {
+    sanitizeServerEnv(definition, config.env);
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error));
   }
 
   if (definition.requiresAuth && definition.envVars) {
