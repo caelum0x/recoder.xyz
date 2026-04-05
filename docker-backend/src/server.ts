@@ -160,6 +160,7 @@ import {
   isStrictAuthMode,
   resolveA2ASystemSession,
 } from './auth-utils.js';
+import { recoverContainerFromDocker } from './container-recovery.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
 // Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
 const getVercelDeploy = () => import('./deployment/vercel.js');
@@ -1794,6 +1795,12 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
     daytonaSandboxIds.delete(existing.id);
     unregisterDaytonaId(existing.id);
     persistContainers();
+  }
+
+  const recoveredDocker = await recoverContainerFromDocker(docker, projectId, containers);
+  if (recoveredDocker) {
+    persistContainers();
+    return recoveredDocker as ContainerEntry;
   }
 
   // Try to recover from Daytona
