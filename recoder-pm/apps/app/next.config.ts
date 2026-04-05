@@ -1,6 +1,7 @@
 import { withBackend } from "@repo/backend/next-config";
 import { config, withAnalyzer } from "@repo/next-config";
-import { withLogtail, withSentry } from "@repo/observability/next-config";
+import { withLogtail } from "@logtail/next";
+import { withSentry } from "@repo/observability/next-config";
 import type { NextConfig } from "next";
 import { env } from "@/env";
 
