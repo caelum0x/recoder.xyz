@@ -12,6 +12,7 @@ import { getToolTitle } from '../utils';
 import { useVapiCallRealtime } from '@/hooks/integrations';
 import { useQuery } from '@tanstack/react-query';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 interface MonitorCallData {
   call_id: string;
@@ -105,7 +106,7 @@ export function MonitorCallToolView({
       if (!initialData?.call_id) return null;
       
       try {
-        const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+        const apiUrl = resolveBrowserBackendApiUrl();
         const token = await getSessionAccessToken();
         
         const headers: Record<string, string> = {
@@ -116,7 +117,7 @@ export function MonitorCallToolView({
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${API_URL}/vapi/calls/${initialData.call_id}`, {
+        const response = await fetch(`${apiUrl}/vapi/calls/${initialData.call_id}`, {
           headers,
         });
 

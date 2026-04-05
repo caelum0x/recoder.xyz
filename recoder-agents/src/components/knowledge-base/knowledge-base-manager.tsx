@@ -54,8 +54,9 @@ import { KbFolderTree } from './kb-folder-tree';
 import { FileNameValidator } from '@/lib/validation';
 import { backendApi } from '@/lib/api-client';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getApiUrl = () => resolveBrowserBackendApiUrl();
 
 interface TreeItem {
     id: string;
@@ -250,7 +251,7 @@ export function KnowledgeBaseManager({
             const token = await requireSessionAccessToken();
 
             
-            const response = await fetch(`${API_URL}/knowledge-base/agents/${agentId}/assignments`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/agents/${agentId}/assignments`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -349,7 +350,7 @@ export function KnowledgeBaseManager({
         try {
             const token = await requireSessionAccessToken();
 
-            const response = await fetch(`${API_URL}/knowledge-base/folders/${folderId}/entries`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/folders/${folderId}/entries`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -443,7 +444,7 @@ export function KnowledgeBaseManager({
         try {
             const token = await requireSessionAccessToken();
 
-            const response = await fetch(`${API_URL}/knowledge-base/agents/${agentId}/assignments`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/agents/${agentId}/assignments`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -562,7 +563,7 @@ export function KnowledgeBaseManager({
         try {
             const token = await requireSessionAccessToken();
 
-            const response = await fetch(`${API_URL}/knowledge-base/entries/${editSummaryModal.fileId}`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/entries/${editSummaryModal.fileId}`, {
                 method: 'PATCH',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -613,8 +614,8 @@ export function KnowledgeBaseManager({
             const token = await requireSessionAccessToken();
 
             const endpoint = type === 'folder'
-                ? `${API_URL}/knowledge-base/folders/${id}`
-                : `${API_URL}/knowledge-base/entries/${id}`;
+                ? `${getApiUrl()}/knowledge-base/folders/${id}`
+                : `${getApiUrl()}/knowledge-base/entries/${id}`;
 
             const response = await fetch(endpoint, {
                 method: 'DELETE',
@@ -660,7 +661,7 @@ export function KnowledgeBaseManager({
         try {
             const token = await requireSessionAccessToken();
 
-            const response = await fetch(`${API_URL}/knowledge-base/entries/${fileId}/move`, {
+            const response = await fetch(`${getApiUrl()}/knowledge-base/entries/${fileId}/move`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -828,7 +829,7 @@ export function KnowledgeBaseManager({
                     const formData = new FormData();
                     formData.append('file', file);
 
-                    const response = await fetch(`${API_URL}/knowledge-base/folders/${folderId}/upload`, {
+                    const response = await fetch(`${getApiUrl()}/knowledge-base/folders/${folderId}/upload`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${token}`,

@@ -37,20 +37,11 @@ import {
   consumePreconnectInfo,
 } from './stream-preconnect';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-// Guard: never use localhost/stale URLs in production
-const _isValidBackendUrl = (url: string) => {
-  if (!url) return false;
-  if (url.includes('localhost') || url.includes('127.0.0.1')) return false;
-  if (url.includes('neon.tech')) return false;
-  return url.includes('recoder.xyz') || url.includes('recoder.xyz');
-};
-const API_URL = _isValidBackendUrl(_envUrl)
-  ? _envUrl
-  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://api.recoder.xyz/v1'
-    : _envUrl);
+function getApiUrl(): string {
+  return resolveBrowserBackendApiUrl();
+}
 
 export interface AgentStreamCallbacks {
   onMessage: (message: UnifiedMessage) => void;
@@ -300,7 +291,7 @@ export function useAgentStream(
   }, []);
   
   const checkAgentStatus = useCallback(async (runId: string): Promise<{ status: string; error?: string }> => {
-    const response = await fetch(`${API_URL}/agent-runs/${runId}/status`, {
+    const response = await fetch(`${getApiUrl()}/agent-runs/${runId}/status`, {
       headers: {
         'Authorization': `Bearer ${await getAuthToken()}`,
       },
@@ -717,7 +708,7 @@ export function useAgentStream(
     
     
     const connection = new StreamConnection({
-      apiUrl: API_URL,
+      apiUrl: getApiUrl(),
       runId,
       getAuthToken,
       onMessage: stableMessageHandler,
@@ -755,7 +746,7 @@ export function useAgentStream(
     if (runId) {
       try {
         const token = await getAuthToken();
-        await fetch(`${API_URL}/agent-runs/${runId}/stop`, {
+        await fetch(`${getApiUrl()}/agent-runs/${runId}/stop`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

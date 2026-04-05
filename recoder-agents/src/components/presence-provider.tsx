@@ -4,6 +4,7 @@ import { backendApi } from '@/lib/api-client';
 import { useAuth } from '@/components/AuthProvider';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
 import { connectTokenizedSSE, type TokenizedSSEConnection, type SSEConnectionState } from '@/lib/realtime/sse';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 type PresenceStatus = 'online' | 'idle' | 'offline';
@@ -229,7 +230,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        const apiUrl = resolveBrowserBackendApiUrl();
         if (!apiUrl) {
           // Don't set error state — just stay idle. Presence is non-critical.
           setConnectionState('idle');
@@ -287,7 +288,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     if (DISABLE_PRESENCE || typeof navigator === 'undefined' || !sessionId) {
       return;
     }
-    const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+    const apiUrl = resolveBrowserBackendApiUrl();
     if (!apiUrl) {
       return;
     }

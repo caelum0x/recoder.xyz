@@ -28,6 +28,8 @@ type TokenizedSSEOptions = {
   events?: Record<string, SSEEventHandler>;
   reconnectDelayMs?: number;
   maxReconnectDelayMs?: number;
+  maxReconnectAttempts?: number;
+  circuitBreakerCooldownMs?: number;
   tokenParamName?: string;
   onStateChange?: (state: SSEConnectionState) => void;
 };
@@ -68,6 +70,10 @@ const BACKOFF_MAX_MS = 30000;
 const BACKOFF_MULTIPLIER = 2;
 /** Maximum reconnect attempts before giving up */
 const MAX_RECONNECT_ATTEMPTS = 15;
+/** Cooldown after repeated failures for the same endpoint */
+const CIRCUIT_BREAKER_COOLDOWN_MS = 60000;
+/** Shared endpoint cooldowns to avoid retry storms across mounts */
+const endpointCooldowns = new Map<string, number>();
 
 /**
  * Calculate exponential backoff with jitter.
@@ -116,7 +122,11 @@ export function connectTokenizedSSE(options: TokenizedSSEOptions): TokenizedSSEC
 
   const baseDelayMs = options.reconnectDelayMs ?? BACKOFF_BASE_MS;
   const maxDelayMs = options.maxReconnectDelayMs ?? BACKOFF_MAX_MS;
+  const maxReconnectAttempts = options.maxReconnectAttempts ?? MAX_RECONNECT_ATTEMPTS;
+  const circuitBreakerCooldownMs =
+    options.circuitBreakerCooldownMs ?? CIRCUIT_BREAKER_COOLDOWN_MS;
   const tokenParamName = options.tokenParamName ?? 'token';
+  const endpointKey = options.url;
 
   const setState = (newState: SSEConnectionState) => {
     if (connectionState !== newState) {
@@ -129,19 +139,54 @@ export function connectTokenizedSSE(options: TokenizedSSEOptions): TokenizedSSEC
     }
   };
 
+  const getCircuitCooldownRemaining = () => {
+    const cooldownUntil = endpointCooldowns.get(endpointKey) ?? 0;
+    const remainingMs = cooldownUntil - Date.now();
+    return remainingMs > 0 ? remainingMs : 0;
+  };
+
+  const clearCircuitCooldown = () => {
+    endpointCooldowns.delete(endpointKey);
+  };
+
+  const armCircuitCooldown = () => {
+    endpointCooldowns.set(endpointKey, Date.now() + circuitBreakerCooldownMs);
+  };
+
   const scheduleReconnect = () => {
     if (closed || reconnectTimer) {
       return;
     }
 
+    const circuitCooldownRemaining = getCircuitCooldownRemaining();
+    if (circuitCooldownRemaining > 0) {
+      setState('error');
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connect().catch((err) => {
+          if (!closed) {
+            if (!isTransientNetworkError(err)) {
+              console.warn('[connectTokenizedSSE] Cooldown reconnect error:', err);
+            }
+            scheduleReconnect();
+          }
+        });
+      }, circuitCooldownRemaining);
+      return;
+    }
+
     // Stop reconnecting after max attempts to prevent infinite loops
-    if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
-      if (reconnectAttempt === MAX_RECONNECT_ATTEMPTS) {
+    if (reconnectAttempt >= maxReconnectAttempts) {
+      if (reconnectAttempt === maxReconnectAttempts) {
         console.warn(
-          `[connectTokenizedSSE] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up.`
+          `[connectTokenizedSSE] Max reconnect attempts (${maxReconnectAttempts}) reached, entering cooldown.`
         );
       }
+      armCircuitCooldown();
+      reconnectAttempt = 0;
+      consecutiveFailures = 0;
       setState('error');
+      scheduleReconnect();
       return;
     }
 
@@ -165,6 +210,25 @@ export function connectTokenizedSSE(options: TokenizedSSEOptions): TokenizedSSEC
 
   const connect = async () => {
     if (closed) return;
+
+    const circuitCooldownRemaining = getCircuitCooldownRemaining();
+    if (circuitCooldownRemaining > 0) {
+      setState('error');
+      if (!reconnectTimer) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect().catch((err) => {
+            if (!closed) {
+              if (!isTransientNetworkError(err)) {
+                console.warn('[connectTokenizedSSE] Deferred reconnect error:', err);
+              }
+              scheduleReconnect();
+            }
+          });
+        }, circuitCooldownRemaining);
+      }
+      return;
+    }
 
     setState('connecting');
 
@@ -229,6 +293,7 @@ export function connectTokenizedSSE(options: TokenizedSSEOptions): TokenizedSSEC
     eventSource.onopen = () => {
       consecutiveFailures = 0;
       reconnectAttempt = 0;
+      clearCircuitCooldown();
       setState('connected');
     };
 
@@ -313,6 +378,7 @@ export function connectTokenizedSSE(options: TokenizedSSEOptions): TokenizedSSEC
 
       consecutiveFailures = 0;
       reconnectAttempt = 0;
+      clearCircuitCooldown();
       setState('connected');
 
       const reader = response.body.getReader();

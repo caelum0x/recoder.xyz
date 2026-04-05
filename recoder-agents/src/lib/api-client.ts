@@ -1,14 +1,11 @@
 import { handleApiError, handleNetworkError, ErrorContext, ApiError } from './error-handler';
 import { parseTierRestrictionError, RequestTooLargeError } from './api/errors';
 import { getSessionAccessToken } from '@/lib/auth/session-token';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-// Guard: never use a localhost backend URL in production (can leak in via .env.local at build time)
-const API_URL = (_envUrl && !_envUrl.includes('localhost'))
-  ? _envUrl
-  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://api.recoder.xyz/v1'
-    : _envUrl);
+function getApiUrl(): string {
+  return resolveBrowserBackendApiUrl();
+}
 
 export interface ApiClientOptions {
   showErrors?: boolean;
@@ -243,38 +240,38 @@ async function makeRequest<T = any>(
 
 export const backendApi = {
   get: <T = any>(endpoint: string, options?: Omit<RequestInit & ApiClientOptions, 'method' | 'body'>) =>
-    makeRequest<T>(`${API_URL}${endpoint}`, { ...options, method: 'GET' }),
+    makeRequest<T>(`${getApiUrl()}${endpoint}`, { ...options, method: 'GET' }),
 
   post: <T = any>(endpoint: string, data?: any, options?: Omit<RequestInit & ApiClientOptions, 'method'>) =>
-    makeRequest<T>(`${API_URL}${endpoint}`, {
+    makeRequest<T>(`${getApiUrl()}${endpoint}`, {
       ...options,
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     }),
 
   put: <T = any>(endpoint: string, data?: any, options?: Omit<RequestInit & ApiClientOptions, 'method'>) =>
-    makeRequest<T>(`${API_URL}${endpoint}`, {
+    makeRequest<T>(`${getApiUrl()}${endpoint}`, {
       ...options,
       method: 'PUT',
       body: data ? JSON.stringify(data) : undefined,
     }),
 
   patch: <T = any>(endpoint: string, data?: any, options?: Omit<RequestInit & ApiClientOptions, 'method'>) =>
-    makeRequest<T>(`${API_URL}${endpoint}`, {
+    makeRequest<T>(`${getApiUrl()}${endpoint}`, {
       ...options,
       method: 'PATCH',
       body: data ? JSON.stringify(data) : undefined,
     }),
 
   delete: <T = any>(endpoint: string, options?: Omit<RequestInit & ApiClientOptions, 'method' | 'body'>) =>
-    makeRequest<T>(`${API_URL}${endpoint}`, { ...options, method: 'DELETE' }),
+    makeRequest<T>(`${getApiUrl()}${endpoint}`, { ...options, method: 'DELETE' }),
 
   upload: <T = any>(endpoint: string, formData: FormData, options?: Omit<RequestInit & ApiClientOptions, 'method' | 'body'>) => {
     const { headers, ...restOptions } = options || {};
     const uploadHeaders = { ...headers as Record<string, string> };
     delete uploadHeaders['Content-Type'];
 
-    return makeRequest<T>(`${API_URL}${endpoint}`, {
+    return makeRequest<T>(`${getApiUrl()}${endpoint}`, {
       ...restOptions,
       method: 'POST',
       body: formData,
@@ -287,11 +284,11 @@ export const backendApi = {
     const uploadHeaders = { ...headers as Record<string, string> };
     delete uploadHeaders['Content-Type'];
 
-    return makeRequest<T>(`${API_URL}${endpoint}`, {
+    return makeRequest<T>(`${getApiUrl()}${endpoint}`, {
       ...restOptions,
       method: 'PUT',
       body: formData,
       headers: uploadHeaders,
     });
   },
-}; 
+};

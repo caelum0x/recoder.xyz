@@ -1,13 +1,11 @@
 import { backendApi } from "@/lib/api-client";
 import { getProject, updateProject, type Project } from "@/lib/api/threads";
 import { getSessionAccessToken, requireSessionAccessToken } from "@/lib/auth/session-token";
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const _envUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '';
-const API_URL = (_envUrl && !_envUrl.includes('localhost'))
-  ? _envUrl
-  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'https://api.recoder.xyz/v1'
-    : _envUrl);
+function getApiUrl(): string {
+  return resolveBrowserBackendApiUrl();
+}
 
 // Re-export Project type for consistent imports
 export type { Project };
@@ -40,7 +38,7 @@ export type Thread = {
     }
 
     // Use backend API endpoint with auth handling
-    const response = await fetch(`${API_URL}/threads/${threadId}`, {
+    const response = await fetch(`${getApiUrl()}/threads/${threadId}`, {
       headers,
       credentials: 'include',
       cache: 'no-store',
@@ -62,7 +60,7 @@ export const updateThread = async (
     const token = await requireSessionAccessToken();
 
     // Use backend API endpoint with auth handling
-    const response = await fetch(`${API_URL}/threads/${threadId}`, {
+    const response = await fetch(`${getApiUrl()}/threads/${threadId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -107,7 +105,7 @@ export const deleteThread = async (threadId: string, sandboxId?: string): Promis
       }
 
       // Use the backend DELETE endpoint which handles everything
-      const response = await fetch(`${API_URL}/threads/${threadId}`, {
+      const response = await fetch(`${getApiUrl()}/threads/${threadId}`, {
         method: 'DELETE',
         headers,
         credentials: 'include',

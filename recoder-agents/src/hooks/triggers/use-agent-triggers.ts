@@ -2,8 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { TriggerConfiguration } from '@/components/agents/triggers/types';
 import { requireSessionAccessToken } from '@/lib/auth/session-token';
 import { TriggerLimitError } from '@/lib/api/errors';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+const API_URL = resolveBrowserBackendApiUrl();
 
 const getHeaders = async () => {
   const accessToken = await requireSessionAccessToken();

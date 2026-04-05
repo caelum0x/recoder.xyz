@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 import { CheckCircle, XCircle, MessageCircle, AlertTriangle } from 'lucide-react';
-import { resolveBackendApiUrl } from '@/lib/runtime-urls';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 import { connectTokenizedSSE, type TokenizedSSEConnection } from '@/lib/realtime/sse';
 
 interface NotificationEvent {
@@ -60,7 +60,7 @@ export function NotificationToastProvider() {
       // ignore parse errors
     }
 
-    const backendUrl = resolveBackendApiUrl();
+    const backendUrl = resolveBrowserBackendApiUrl();
     const url = `${backendUrl}/notifications/stream`;
 
     // Use connectTokenizedSSE which has:

@@ -1,11 +1,10 @@
 """SSE streaming response headers with proper CORS support."""
 
-import re
 from typing import Dict, Optional
+
 from fastapi import Request
 
-
-_ALLOWED_ORIGIN_RE = re.compile(r"^https://([a-z0-9-]+\.)?recoder\.xyz$")
+from core.utils.cors_headers import get_cors_headers
 
 
 def get_sse_headers(request: Optional[Request] = None) -> Dict[str, str]:
@@ -16,18 +15,21 @@ def get_sse_headers(request: Optional[Request] = None) -> Dict[str, str]:
     included.  Falls back to the generic recoder.xyz origin when the request
     is unavailable or the origin doesn't match.
     """
-    origin = "https://agents.recoder.xyz"  # safe default
-
-    if request:
-        req_origin = request.headers.get("origin", "")
-        if req_origin and _ALLOWED_ORIGIN_RE.match(req_origin):
-            origin = req_origin
-
-    return {
+    headers = {
         "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",
         "Content-Type": "text/event-stream",
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Credentials": "true",
     }
+
+    cors_headers = get_cors_headers(request)
+    if not cors_headers:
+        cors_headers = {
+            "Access-Control-Allow-Origin": "https://agents.recoder.xyz",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Expose-Headers": "X-Trace-Id, X-Request-Id, X-Connector-Id, X-Interop-Metadata",
+            "Vary": "Origin",
+        }
+
+    headers.update(cors_headers)
+    return headers

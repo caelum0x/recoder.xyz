@@ -1,8 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export interface IMaintenanceNotice {
   enabled: boolean;
@@ -28,7 +27,7 @@ export interface SystemStatusResponse {
 
 async function fetchSystemStatus(): Promise<SystemStatusResponse> {
   try {
-    const response = await fetch(`${BACKEND_URL}/system/status`);
+    const response = await fetch(`${resolveBrowserBackendApiUrl()}/system/status`);
     
     if (!response.ok) {
       console.warn('Failed to fetch system status:', response.status);

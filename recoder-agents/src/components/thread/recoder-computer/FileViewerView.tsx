@@ -66,11 +66,12 @@ import { fileQueryKeys } from '@/hooks/files/use-file-queries';
 import { VersionBanner } from './VersionBanner';
 import { FileDownloadButton } from '../tool-views/shared/FileDownloadButton';
 import { useSandboxStatusWithAutoStart, isSandboxUsable } from '@/hooks/files/use-sandbox-details';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 
 
 // Define API_URL
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const getApiUrl = () => resolveBrowserBackendApiUrl();
 
 /**
  * Normalize a file path to ensure it starts with /workspace
@@ -101,7 +102,7 @@ async function fetchFileHistory(
   sessionToken?: string,
   limit: number = 100
 ): Promise<{ path: string; versions: Array<{ commit: string; author_name: string; author_email: string; date: string; message: string }> }> {
-  const url = `${API_URL}/sandboxes/${sandboxId}/files/history?path=${encodeURIComponent(filePath)}&limit=${limit}`;
+  const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/history?path=${encodeURIComponent(filePath)}&limit=${limit}`;
   const headers: Record<string, string> = {};
   if (sessionToken) {
     headers['Authorization'] = `Bearer ${sessionToken}`;
@@ -121,7 +122,7 @@ async function fetchFileByHash(
   commit: string,
   sessionToken?: string
 ): Promise<Blob> {
-  const url = `${API_URL}/sandboxes/${sandboxId}/files/content-by-hash?path=${encodeURIComponent(filePath)}&commit=${encodeURIComponent(commit)}`;
+  const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/content-by-hash?path=${encodeURIComponent(filePath)}&commit=${encodeURIComponent(commit)}`;
   const headers: Record<string, string> = {};
   if (sessionToken) {
     headers['Authorization'] = `Bearer ${sessionToken}`;
@@ -468,7 +469,7 @@ export function FileViewerView({
     setRevertLoadingInfo(true);
     setRevertCommitInfo(null);
     try {
-      const url = `${API_URL}/sandboxes/${sandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}${filePath ? `&path=${encodeURIComponent(filePath)}` : ''}`;
+      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}${filePath ? `&path=${encodeURIComponent(filePath)}` : ''}`;
       const token = await getSessionAccessToken();
       const res = await fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -512,7 +513,7 @@ export function FileViewerView({
       }
 
       const token = await getSessionAccessToken();
-      const res = await fetch(`${API_URL}/sandboxes/${sandboxId}/files/revert`, {
+      const res = await fetch(`${getApiUrl()}/sandboxes/${sandboxId}/files/revert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -709,7 +710,7 @@ export function FileViewerView({
     try {
       const token = await requireSessionAccessToken();
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files`,
+        `${getApiUrl()}/sandboxes/${sandboxId}/files`,
         {
           method: 'PUT',
           headers: {
@@ -785,7 +786,7 @@ export function FileViewerView({
             }
             const token = await getSessionAccessToken();
             const response = await fetch(
-              `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
+              `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
               { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }
             );
 
@@ -814,7 +815,7 @@ export function FileViewerView({
       }
       const token = await getSessionAccessToken();
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
+        `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
         { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }
       );
 

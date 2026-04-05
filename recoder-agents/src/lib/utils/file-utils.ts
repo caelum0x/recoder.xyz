@@ -8,6 +8,7 @@ import {
     FileAudio, FileType, Database, Archive, File
 } from 'lucide-react';
 import { getExtension } from './file-types';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
 export type FileType =
     | 'image' | 'code' | 'text' | 'pdf'
@@ -140,7 +141,7 @@ export function getFileUrl(sandboxId: string | undefined, path: string): string 
         // Unicode escape processing failed — use path as-is
     }
 
-    const url = new URL(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content`);
+    const url = new URL(`${resolveBrowserBackendApiUrl()}/sandboxes/${sandboxId}/files/content`);
 
     // Properly encode the path parameter for UTF-8 support
     url.searchParams.append('path', path);
