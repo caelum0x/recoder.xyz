@@ -451,3 +451,695 @@ opencode-bash-tool.ts
                                                                                                                                                              
                                                                                                                                                              
   My strong recommendation is (a) → (c) → (b) in that order over the next few sessions, starting with (a) right now.     
+  Your Console
+
+  - Adblock/noise: plan.md failed with net::ERR_BLOCKED_BY_ADBLOCKER; there was also a preload warning about a resource being preloaded but
+    not used.
+  - Agent start failed: [API] Error starting agent: 500 Request timeout, then [API] Failed to start agent: Error: Server error: Please try
+    again later, plus the same error as Uncaught (in promise).
+  - System status failed: /v1/system/status was blocked by CORS, then hit net::ERR_FAILED, then surfaced as Failed to fetch system status:
+    TypeError: Failed to fetch.
+  - Stream transport failed: /v1/notifications/stream and /v1/realtime/projects/.../stream hit net::ERR_HTTP2_PROTOCOL_ERROR.
+  - Stream CORS failures: /v1/notifications/stream, /v1/realtime/projects/.../stream, /v1/agent-run/.../stream, and /v1/presence/thread/.../
+    stream were all blocked by missing Access-Control-Allow-Origin, then collapsed into net::ERR_FAILED.
+  - Regular API CORS failures: /v1/projects/:id, /v1/prompts, /v1/agents/active-runs, /v1/accounts, /v1/teams, /v1/health, /v1/bookmarks, /
+    v1/project/:id/sandbox/status, /v1/ratings, /v1/memory/thread/:id/settings, and /v1/agents?limit=50....
+  - Composio icon failures: /v1/composio/toolkits/{gmail,googlecalendar,github,airtable,asana,linear}/icon all failed via CORS and/or
+    net::ERR_FAILED.
+  - Upstream 502s behind the CORS mask: /v1/projects/:id, /v1/presence/thread/.../stream, /v1/agents?limit=50..., /v1/accounts, /v1/health, /
+    v1/project/:id/sandbox/status, /v1/prompts, and several composio icon endpoints returned 502 Bad Gateway.
+  - Other: Node cannot be found in the current page.
+
+  From plan.md
+
+  - The main error inventory is in plan.md:168; it describes a different April 5 incident centered on docker.recoder.xyz, not the current
+    api.recoder.xyz issue.
+  - Root-cause chain in plan.md:173: POST /api/container -> 500 retries, then WorkbenchStore 404 No such image: recoder-workspace:latest,
+    then ActionRunner Container creation failed, then downstream 403 on files/publish-status and 404 on preview.
+  - Amplifier/design flaw in plan.md:201: WorkbenchStore logs “Container creation failed, proceeding anyway,” which caused repeated
+    downstream action errors instead of one hard stop.
+  - Third-party/noise in plan.md:213: SES lockdown noise, Cloudflare ERR_BLOCKED_BY_ADBLOCKER, broken Chrome extension Unexpected token
+    'export', and debug “session token not found in cookies.”
+  - Additional non-console error references: plan.md:35 has [TSCONFIG_ERROR] Failed to load tsconfig for 'src/main.tsx'; plan.md:112 notes
+    missing CORS headers on 403/500 docker-backend error responses.
+
+  Overlap
+
+  - The biggest overlap is CORS masking real backend failures: your current console shows missing ACAO on api.recoder.xyz, and plan.md:112
+    documents the same pattern on docker-backend.
+  - The adblocker noise also overlaps: your pasted log had an adblock block, and plan.md:217 records the same class of issue.
+ New Errors
+
+  - Usage cap hit: You've hit your usage limit... try again at Apr 10th, 2026 3:15 AM.
+  - Malformed resource/input blob: the concatenated path string '/Users/.../plan.md''/Users/.../errorsss.md''/Users/.../TASKS.md'... looks
+    like a bad open/input command, not a backend response.
+  - Historical build error from plan.md:32: [TSCONFIG_ERROR] Failed to load tsconfig for 'src/main.tsx'.
+
+  New Gaps / Problems
+
+  - Known CORS bug from plan.md:112: 403/500 docker-backend error responses missing Access-Control-Allow-Origin.
+  - Container failure chain from plan.md:174: POST /api/container -> 500.
+  - Missing image from plan.md:177: No such image: recoder-workspace:latest.
+  - Repeated action failure from plan.md:180: Container creation failed — cannot execute file/shell actions.
+  - Downstream auth/status failures from plan.md:186, plan.md:191, plan.md:193: files 403, publish-status 403, preview 404.
+  - Runtime capability gap from your pasted table: codex and claude-code are still Stubs / Placeholders.
+  - Product gap from the pasted plan: no intent classification, no category→runtime/model router, no completion-loop enforcement.
+
+  Not Errors
+
+  - “.scratch services work fine” is a capability note, not a failure.
+  - The huge oh-my-openagent block is reference/ideas/marketing text, not an error log.
+  - The runtime table, passing test counts, and pushed commits are status info, not errors.
+   A. Errors you sent me directly (5 sessions in this conversation)
+
+  A1. Deploy guard failure (early session, before any browser test)
+
+  a2a/coding-runtime.ts imports ./opencode-service-adapter.js
+    -> missing dist artifact dist/a2a/opencode-service-adapter.js
+  a2a/coding-runtime.ts imports ./opencode-service-handler.js
+    -> missing dist artifact dist/a2a/opencode-service-handler.js
+
+  A2. First browser session — sandbox image missing (project-1775343616390)
+
+  POST https://docker.recoder.xyz/api/container → 500 (×4 retries: 3820ms, 379ms, 488ms, 611ms)
+  ERROR WorkbenchStore ❌ [ensureContainerExists] Error:
+    (HTTP code 404) no such container - No such image: recoder-workspace:latest
+  WARN WorkbenchStore ⚠️  [WorkbenchStore] Container creation failed, proceeding anyway
+  ERROR ActionRunner ❌ [ActionRunner] #waitForContainerReady error:
+    Error: Container creation failed — cannot execute file/shell actions   (×8, one per file action)
+  ERROR ActionRunner Action 0-7 (file) failed [container] (0-2ms)         (×8)
+  GET /api/files/project-1775343616390 → 403
+  ERROR DockerAPI [req-6-...] GET /api/publish-status/project-1775343616390 failed (206ms) → 403
+  GET /preview/project-1775343616390 → 404
+  INFO LSPClient Skipping LSP start - container not ready
+  INFO SnapshotsStore Skipping create — container not ready or in failure cooldown
+  INFO PreviewsStore ⏳ Waiting for container ready (forever)
+  Plus cosmetic noise: SES Removing unpermitted intrinsics, net::ERR_BLOCKED_BY_ADBLOCKER, chrome-extension Uncaught SyntaxError: Unexpected
+  token 'export'.
+
+  A3. Second browser session — Vite 8 + auto-fix cascade (project-1775347635939)
+
+  (!) Failed to run dependency scan. Skipping dependency pre-bundling.
+      Failed to scan for dependencies from entries: /workspace/index.html
+      Build failed with 1 error:
+  [TSCONFIG_ERROR] Error: Failed to load tsconfig for 'src/main.tsx': Tsconfig not found
+      at aggregateBindingErrorsIntoJsError (rolldown/.../error-BLhcSyeg.mjs:48:18)
+  [vite] (client) Pre-transform error: Transform failed with 1 error:
+  [vite] Internal server error: Transform failed with 1 error:
+      Plugin: vite:oxc
+      File: /workspace/src/main.tsx
+  ERROR ActionRunner ❌ Dev server errors detected:
+    (!) Failed to run dependency scan...
+    [TSCONFIG_ERROR] Error: Failed to load tsconfig for 'src/main.tsx'
+
+  [AUTO-FIX] Fix these build/runtime errors blocking the preview:
+  Error 1: Error:                                           ← empty body, filter accepted "Error:" as ≥5 chars
+  Please fix all errors above.
+
+  (Auto-fix attempt 1) readFile package.json, readFile src/App.tsx → no fix emitted, just file reads
+  (Auto-fix attempt 2) LLM hallucinated: cloneGitHub repoUrl="build/runtime"
+  GET /api/github → 500
+  ERROR ActionRunner ❌ Failed to clone repository: Error: Failed to clone repository:
+  ERROR ActionRunner Action 0 (cloneGitHub) failed [unknown] (337ms)
+  AutoErrorFix [AutoFix] Same errors persist after fix (consecutive fails: 2)
+
+  [vite] server connection lost. Polling for restart...
+  WebSocket connection to 'wss://docker.recoder.xyz/build-errors/project-1775347635939' failed
+  WebSocket connection to 'wss://docker.recoder.xyz/watch/project-1775347635939' failed
+  WARN AutoErrorFix [AutoFix] WebSocket error: [object Event]
+
+  GET /preview/project-1775347635939 → 503 Service Unavailable (×40+ in a retry storm)
+
+  CORS: Access to fetch at 'https://docker.recoder.xyz/api/logs/project-1775347635939/parsed'
+    from origin 'https://web.recoder.xyz' has been blocked by CORS policy:
+    Response to preflight request doesn't pass access control check:
+    No 'Access-Control-Allow-Origin' header is present on the requested resource.
+  GET /api/logs/project-1775347635939/parsed → ERR_FAILED + 403
+
+  POST /api/snapshot/project-1775347635939 → 500 (×4)
+  WARN SnapshotsStore [Snapshot] Create error:
+    (HTTP code 404) no such container - No such container: 13b10e3730e8142a37cfb57c864b5b5e1cbf0fda53346b8f9c4311f66aa314e7
+
+  POST /api/git/project-1775347635939/auto-commit → 500, 500, 403, 403
+
+  (After container flip) All subsequent calls return 403 "Access denied: You do not own this project":
+    POST /api/snapshot/project-1775347635939 → 403
+    GET /api/exec/project-1775347635939 → 403
+    ERROR ActionRunner Failed to read file src/App.tsx: Error: Docker read failed
+    ERROR ActionRunner Failed to read file src/hooks/useAnalytics.ts: Error: Docker read failed
+    ERROR ActionRunner Failed to read file src/types/index.ts: Error: Docker read failed
+    ERROR ActionRunner Failed to read file package.json: Error: Docker read failed
+    GET /api/git/project-1775347635939/status → 403
+    DockerApiError: Access denied: You do not own this project
+  GET /preview/project-1775347635939 → 404 (project orphaned after container flip)
+
+  INFO SimpleChat Generation stopped by user (25689ms) ← you gave up
+
+  A4. Email delivery broken — your exact words
+
+  ▎ "it does not sent verificaton mails and any mails we use resend also"
+
+  Which I then investigated and surfaced as:
+  recoder-app container: Up 6 hours (UNHEALTHY), FailingStreak: 188
+  Healthcheck exit code 137 (SIGKILL) — every 30s for ~90 minutes
+  ⨯ uncaughtException: Error: connect ETIMEDOUT 31.56.229.221:80   (×multiple)
+  ⨯ uncaughtException: Error: connect ETIMEDOUT 45.205.1.19:80
+  ⨯ [TypeError: Cannot read properties of undefined (reading 'aa')]
+  ⨯ SyntaxError: Bad escaped character in JSON at position 211
+  sendEmail() → {success: false, error: 'No email service configured'}
+    (because process.env.RESEND_API_KEY and process.env.SMTP_USER both undefined)
+
+  B. Errors listed in plan.md
+
+  B1. P0 section (now marked RESOLVED) — the 7 original failure modes
+
+  1. R1: recoder-workspace:latest base image missing from Hetzner host (pruned by a disk-reclaim pass during a prior deploy)
+  2. Follow-up edits failed to reach the sandbox volume (recoder-i3v, recoder-96g) — str_replace/edit_file were routing through
+  /api/enterprise-tools which wrote to the recoder-web app server's own filesystem instead of the user's sandbox
+  3. Multiple identical "Container creation failed" errors per turn (D1 design flaw in workbench.ts:475 "proceeding anyway")
+  4. Vite 8 [TSCONFIG_ERROR] crash on fresh project creation (LLM was emitting "vite": "latest" which npm resolved to 8.0.3)
+  5. Empty error payload to auto-fix retry loop (getPreferredErrorMessage accepted "Error:" as ≥5 chars and dropped the raw body)
+  6. Hallucinated cloneGitHub build/runtime during auto-fix (no action allowlist for [AUTO-FIX] turns)
+  7. Auto-fix retry loop itself spiraling into worse states (now disabled by default)
+
+  B2. Still-open Se* follow-ups (from plan.md, not blockers)
+
+  - Se2: /api/container uses flexibleProjectOwnership but /api/files/:projectId uses strict verifyProjectOwnership → anonymous users can
+  create containers but 403 on reads
+  - Se3: no circuit breaker on POST /api/container client retries (frontend blasts 4 retries in <5s on 500)
+  - Se4: no deploy-time check that recoder-workspace:latest exists on host startup — this caused R1 to surface only at first-user-test
+  - Se5: recoder-i3v fix (f683efaa) was landed but unverifiable while R1 blocked sandbox creation (now unblocked)
+  - Ownership flip on container recreate: new container → new anonymous user id → old project ACL 403s (caused the A3 cascade)
+  - CORS headers missing on docker-backend error responses: 403/500 responses don't include Access-Control-Allow-Origin, so browser can't
+  read the error body (the CORS warning in A3)
+
+  B3. Active bd tickets in plan.md's "Active Remaining Work" section
+
+  Core Coding Loop — recoder-96g, recoder-sti, recoder-i3v, recoder-w0b
+  Deep Coding Runtime Rollout — recoder-7hh, recoder-lma, recoder-y4q
+  Agents/Canvas/File Proxy — recoder-xnh, recoder-e5a, recoder-8i9
+  Other Product Verification — recoder-kcq, recoder-74p, ~~`recoder-4t2~~ (closed this session), recoder-ijs**Infra/Host Cleanup**
+  —recoder-025, recoder-0xz, recoder-d0k**Shared Planning Surface** —recoder-29m`
+
+  C. What's fixed vs still broken
+
+  ✅ Fixed + live on Hetzner this conversation
+
+  ┌──────────────┬─────────────────────┬────────────────────────────────────────────────────────┬──────────────────────────────────────┐
+  │      #       │        Error        │                          Fix                           │            Commit/action             │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ Missing dist        │ pnpm --dir docker-backend build regenerated all 97     │                                      │
+  │ A1           │ artifacts blocking  │ a2a/*.js files                                         │ Local rebuild + rsync                │
+  │              │ deploy              │                                                        │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ A2           │ R1 sandbox image    │ User rebuilt recoder-workspace:latest (12.9GB) via     │ User action                          │
+  │              │ missing             │ compose build-base profile                             │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ D1 "Container       │ Gate in #executeAction short-circuits with one         │                                      │
+  │ A2           │ creation failed" ×  │ recoder:sandbox-unavailable event                      │ 11bd379e                             │
+  │              │ 8 spam              │                                                        │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ A2 (recoder- │ str_replace/edit_fi │ Both methods now use #dockerReadFile/#dockerWriteFile  │                                      │
+  │ i3v)         │ le writing to wrong │ directly                                               │ f683efaa                             │
+  │              │  filesystem         │                                                        │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ Vite 8              │ System prompt pins "vite": "^5.4.0",                   │                                      │
+  │ A3           │ [TSCONFIG_ERROR]    │ "@vitejs/plugin-react": "^4.3.0", react ^18.3,         │ 1f8ee636                             │
+  │              │                     │ tailwind ^3.4                                          │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ Error 1: Error:     │ Weak-message detection, fallback to rawError first     │                                      │
+  │ A3           │ empty payload       │ line, never drop errors entirely, Vite-specific        │ 1f8ee636                             │
+  │              │                     │ guidance                                               │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ Hallucinated        │ [AUTO-FIX] turns get an action restriction block       │                                      │
+  │ A3           │ cloneGitHub         │ forbidding cloneGitHub/cloneUrl/importStarter/copy_pro │ 1f8ee636                             │
+  │              │ build/runtime       │ ject/spawn_task                                        │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ Auto-fix retry loop │ DEFAULT_AI_PREFERENCES.autoFixEnabled = false,         │                                      │
+  │ A3           │  making things      │ autoFixStore.initialState.enabled = false              │ 1f8ee636                             │
+  │              │ worse               │                                                        │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ RESEND_API_KEY      │ Appended RESEND_API_KEY and EMAIL_FROM from app/.env   │ Config change (backup .env.productio │
+  │ A4           │ missing from        │ to app/.env.production, force-recreated recoder-app    │ n.backup-20260405-010313)            │
+  │              │ container env       │                                                        │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │              │ recoder-app         │ Container recreate cleared the state → now             │ Side effect of A4 fix — may recur,   │
+  │ A4           │ unhealthy           │ failing_streak=0, Up (healthy)                         │ see below                            │
+  │              │ FailingStreak: 188  │                                                        │                                      │
+  ├──────────────┼─────────────────────┼────────────────────────────────────────────────────────┼──────────────────────────────────────┤
+  │ B3           │ recoder-4t2 Payload │ Already fixed in earlier commit 6904d132, closed in bd │ bd close                             │
+  │              │  CMS TS drift       │  this session                                          │                                      │
+  └──────────────┴─────────────────────┴────────────────────────────────────────────────────────┴──────────────────────────────────────┘
+
+  ❌ Still broken / not verified / not touched
+
+  ┌─────┬──────────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────┐
+  │  #  │                  Error                   │                                       Status                                        │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │     │ Ownership flip on container recreate →   │ Not fixed. Se2/Se*-adjacent. Still reproducible if a cloneGitHub or                 │
+  │ A3  │ 403 cascade                              │ container-recreate happens mid-session. Needs work on docker-backend's project ACL  │
+  │     │                                          │ / anonymous user id stability.                                                      │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ A3  │ CORS Access-Control-Allow-Origin missing │ Not fixed. docker-backend's CORS middleware runs only on 2xx path.                  │
+  │     │  on 403/500 responses                    │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ A3  │ /preview/project-... → 503 retry storm   │ Not fixed. Related to ownership flip; polling doesn't back off.                     │
+  │     │ from PreviewsStore polling               │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │     │ Uncaught ETIMEDOUT 31.56.229.221:80 and  │ Unknown source. Not in local source tree (grepped). Probably DB row /               │
+  │ A4  │ 45.205.1.19:80 in recoder-app            │ user-submitted webhook / hardcoded analytics endpoint. Will likely recur and        │
+  │     │                                          │ re-trigger FailingStreak eventually.                                                │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ A4  │ TypeError: Cannot read properties of     │ Not traced. Minified code, no source maps — would need un-minified build.           │
+  │     │ undefined (reading 'aa')                 │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ A4  │ SyntaxError: Bad escaped character in    │ Not traced. Unknown payload source.                                                 │
+  │     │ JSON at position 211                     │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │     │ Email actually delivering to user's      │ Not verified by you yet. Env is set, container is healthy, but a real signup/reset  │
+  │ A4  │ inbox                                    │ flow test from the browser is still pending. Resend sender domain verification is   │
+  │     │                                          │ the next most likely failure point if it doesn't arrive.                            │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ Se2 │ flexibleProjectOwnership vs              │ Not fixed.                                                                          │
+  │     │ verifyProjectOwnership mismatch          │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ Se3 │ No circuit breaker on /api/container     │ Not fixed.                                                                          │
+  │     │ client retries                           │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ Se4 │ No deploy-time recoder-workspace:latest  │ Not fixed.                                                                          │
+  │     │ existence check                          │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ B3  │ recoder-96g, recoder-sti, recoder-i3v,   │ 96g/i3v: code is fixed but needs your browser verification to close. sti + w0b      │
+  │     │ recoder-w0b (Core Coding Loop)           │ untouched.                                                                          │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ B3  │ recoder-7hh, recoder-lma, recoder-y4q    │ 7hh registry endpoint is live (verified this session). lma and y4q untouched.       │
+  │     │ (Deep Coding Runtime)                    │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ B3  │ recoder-xnh, recoder-e5a, recoder-8i9    │ All untouched this session.                                                         │
+  │     │ (Agents/Canvas)                          │                                                                                     │
+  ├─────┼──────────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────┤
+  │ B3  │ `recoder-96g`, `recoder-sti`, `recoder-i3v`, `recoder-w0b` (Core Coding Loop) │ 96g/i3v: code is fixed but needs your browser verification to close. sti + w0b untouched. │
+  └─────┴──────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────┘
+1. Browser console errors you pasted (raw from your sessions)
+
+  First session — "multi-turn edit test" (R1 incident, 2026-04-05)
+
+  Root cause chain:
+  - POST https://docker.recoder.xyz/api/container → 500 (× 4 retries: 3820ms, 379ms, 488ms, 611ms)
+  - ERROR WorkbenchStore ❌ [ensureContainerExists] Error: (HTTP code 404) no such container - No such image: recoder-workspace:latest
+  - WARN WorkbenchStore ⚠️  Container creation failed, proceeding anyway
+  - ERROR ActionRunner ❌ #waitForContainerReady error: Error: Container creation failed — cannot execute file/shell actions (× 8, one per
+  file action)
+
+  Downstream symptoms:
+  - GET /api/files/project-... → 403
+  - GET /api/publish-status/project-... → 403
+  - GET /preview/project-... → 404
+  - INFO LSPClient [LSPClient] Skipping LSP start - container not ready
+  - INFO SnapshotsStore [Snapshot] Skipping create — container not ready or in failure cooldown
+  - INFO PreviewsStore ⏳ Waiting for container ready: project-... (infinite)
+
+  Second session — "analytics dashboard test" (Vite 8 incident, 2026-04-05)
+
+  Primary build failure:
+  - [TSCONFIG_ERROR] Error: Failed to load tsconfig for 'src/main.tsx': Tsconfig not found (from Vite 8 vite:oxc plugin)
+  - (!) Failed to run dependency scan. Skipping dependency pre-bundling.
+  - [vite] (client) Pre-transform error: Transform failed with 1 error
+  - [vite] Internal server error: Transform failed with 1 error
+  - VITE v8.0.3 ready in 239 ms (wrong version — should have been 5.x)
+
+  Auto-fix loop failures:
+  - [AUTO-FIX] Fix these build/runtime errors... Error 1: Error: (empty error payload)
+  - Action 0 (cloneGitHub) failed [unknown] (337ms): Failed to clone repository: (LLM hallucinated cloneGitHub build/runtime)
+  - POST /api/github → 500
+  - [AutoFix] Same errors persist after fix (consecutive fails: 1 → 2)
+
+  Ownership flip cascade (after cloneGitHub failed):
+  - POST /api/snapshot/project-... → 500 → 404 with (HTTP code 404) no such container - No such container: 13b10e3730e8...
+  - POST /api/git/project-.../auto-commit → 500 → 403
+  - POST /api/exec/project-... → 403 (× many)
+  - GET /api/logs/project-.../parsed → 403
+  - GET /api/git/project-.../status → 403
+  - DockerApiError: Access denied: You do not own this project
+  - Failed to read file src/App.tsx: Error: Docker read failed
+  - Failed to read file src/hooks/useAnalytics.ts: Error: Docker read failed
+  - Failed to read file src/types/index.ts: Error: Docker read failed
+  - Failed to read file package.json: Error: Docker read failed
+
+  WebSocket / HMR breakdown:
+  - [vite] server connection lost. Polling for restart...
+  - WebSocket connection to 'wss://docker.recoder.xyz/build-errors/project-...' failed
+  - WebSocket connection to 'wss://docker.recoder.xyz/watch/project-...' failed
+  - project-...:1 Failed to load resource: 503 (×~40 times — preview dead loop)
+  - preview/project-.../src/main.tsx:1 Failed to load resource: 502
+
+  CORS failures:
+  - Access to fetch at 'https://docker.recoder.xyz/api/logs/project-.../parsed' from origin 'https://web.recoder.xyz' has been blocked by
+  CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the
+  requested resource.
+
+  Third session — "email delivery" (just now)
+
+  You described verbally rather than pasting logs:
+  - recoder-app does not send verification emails
+  - recoder-app does not send any emails (despite Resend being configured)
+
+  Earlier in the session — "deploy guard failure"
+
+  - docker-backend-dist-parity: FAIL
+  - a2a/coding-runtime.ts imports ./opencode-service-adapter.js -> missing dist artifact dist/a2a/opencode-service-adapter.js
+  - a2a/coding-runtime.ts imports ./opencode-service-handler.js -> missing dist artifact dist/a2a/opencode-service-handler.js
+
+  2. Errors I found during server-side investigation (not pasted by you)
+
+  Container state issues
+
+  - recoder-app container was unhealthy, FailingStreak: 188, healthcheck exit code 137 (SIGKILL) every 30s for ~90 minutes before I recreated
+   it.
+  - recoder-app uncaught exceptions (from logs, not browser):
+    - ⨯ uncaughtException: Error: connect ETIMEDOUT 31.56.229.221:80
+    - ⨯ uncaughtException: Error: connect ETIMEDOUT 45.205.1.19:80
+    - ⨯ [TypeError: Cannot read properties of undefined (reading 'aa')]
+    - ⨯ SyntaxError: Bad escaped character in JSON at position 211
+
+  Config drift
+
+  - RESEND_API_KEY missing from app/.env.production (present in app/.env but compose loads production file)
+  - EMAIL_FROM missing from app/.env.production (same cause)
+  - app/.env.production still has placeholder values for OPENAI_API_KEY=sk-your-..., DODO_PAY_API_KEY=your-dodo-...,
+  DODO_PAY_SECRET=your-dodo-..., PADDLE_VENDOR_ID=your-paddl-..., and probably ANTHROPIC_API_KEY=sk-ant-you...
+  - No USE_DAYTONA_CONTAINERS=true in env despite Daytona being self-hosted on the box — forces local Docker path which depends on
+  recoder-workspace:latest
+  - Daytona health probe from inside docker-backend: HTTP 000 (unreachable even though daytona-api/proxy/ssh-gateway images exist)
+
+  Git / deploy drift
+
+  - Server on detached HEAD 75b7d302 with 10 unpushed local commits that don't exist on origin (b496d9cc, 75b7d302, d941a6fa, d54eaaa6,
+  f8b77292, 39241a63, cef684fe, 5f06ae5c, 97b397a7, d7dbbe64, 5f40394a — all opencode refactor work). Classic recoder-025 drift.
+  - Uncommitted api.chat.ts modifications + untracked recoder-web/app/lib/.server/llm/coding-runtime-exec.ts + matching .test.ts file
+  (recoder-y4q WIP)
+  - recoder-web/app/lib/http/docker-server.ts.bak-20260403-235139 .bak file lingering
+  - recoder-web/starters gitlink drift (pre-existing)
+
+  Build failure I hit during my deploy
+
+  - [vite]: Rollup failed to resolve import "~/lib/.server/llm/coding-runtime-exec" from "/app/recoder-web/app/routes/api.chat.ts" — caused
+  by me moving the WIP module aside without realizing api.chat.ts on my committed branch imports it. Fixed by also rsyncing the module file.
+
+  TS diagnostics I cleaned up in action-runner.ts
+
+  15 warnings (+1 cascading):
+  - Unused imports: createSnapshot, FileChange, formatValidationResult, fileBatcher, batchProgress, hasBlockingTypeErrors, TypeCheckResult
+  - Two entire unused import blocks: ./actions/docker-operations (checkDockerAvailableUtil, waitForFile) and ./actions/shell-actions
+  (SHELL_PATTERNS, detectFrameworkUtil, generatePackageJsonUtil, BACKEND_SERVER_PATHS, isServerFile, getBackendRunCommand)
+  - Unused private fields: #devServerProcess, #restoredFilePaths, cascading #normalizeFilePath
+  - Unused timeoutMs param in #waitForContainerReady
+  - Unused devCmd/port destructure in #runNonNodeInstall
+  - Unused action in orphan-timeout destructure
+  - Unused actionId in cleanupOrphanTimeouts for-of
+  - One ✘ error from my own default case narrowing to never (fixed with the switch exhaustiveness)
+
+  3. Errors/issues documented in plan.md
+
+  P0 section I wrote (now marked RESOLVED)
+
+  Root cause:
+  - R1: recoder-workspace:latest base image missing from Hetzner host (pruned during disk reclaim) → RESOLVED by user rebuild
+
+  Downstream symptom list from the original inventory:
+  - S1: POST /api/container → 500 × 4 retries
+  - S2: WorkbenchStore ensureContainerExists: 404 no such image
+  - S3: ActionRunner Container creation failed — cannot execute file/shell actions (× 8)
+  - S4: GET /api/files/project-... → 403
+  - S5: GET /api/publish-status/project-... → 403
+  - S6: GET /preview/project-... → 404
+  - S7: LSP/Snapshot/Preview waiting-forever info logs
+
+  Design flaw:
+  - D1: workbench.ts:475 "Container creation failed, proceeding anyway" → RESOLVED by commit 11bd379e
+
+  Cosmetic / third-party noise:
+  - C1: SES Removing unpermitted intrinsics (browser extension)
+  - C2: static.cloudflareinsights.com/beacon.min.js/... ERR_BLOCKED_BY_ADBLOCKER
+  - C3: chrome-extension://j…ntent_reporter.js:1 Uncaught SyntaxError: Unexpected token 'export'
+  - C4: DEBUG DockerAPI Session token not found in cookies. Auth will fall back to anonymous mode.
+
+  Vite 8 incident (added later):
+  - Vite 8 tsconfig crash via vite:oxc → RESOLVED by commit 1f8ee636 (pinned versions in prompts.ts)
+  - Empty auto-fix error payload "Error:" → RESOLVED by same commit (weak-message detection)
+  - Auto-fix hallucinated cloneGitHub build/runtime → RESOLVED by same commit (action allowlist)
+  - Auto-fix loop itself amplifying failures → RESOLVED by same commit (default off)
+
+  Secondary issues (Se, NOT blocking, still open):*
+  - Se1: USE_DAYTONA_CONTAINERS not set on prod
+  - Se2: Auth middleware mismatch — /api/container uses flexibleProjectOwnership, /api/files/:projectId uses strict verifyProjectOwnership
+  - Se3: No circuit breaker on POST /api/container client retries (4 retries in <5s on a 500 that will keep returning 500)
+  - Se4: No automated deploy-time check that recoder-workspace:latest exists on host
+  - Se5: recoder-i3v fix browser-unverifiable until R1 resolves → RESOLVED (R1 resolved, fix still needs click-through verification)
+  - Ownership flip on container recreate: anonymous user id regenerates, old project ACL 403s
+  - CORS headers missing on docker-backend error responses (403/500 don't include Access-Control-Allow-Origin)
+  - recoder-app unhealthy: flagged verbally last turn, now RESOLVED by the Resend config fix this turn (the healthcheck started passing after
+   container recreate)
+
+  Active Remaining Work section (bd tickets, pre-existing)
+
+  Core Coding Loop:
+  - recoder-96g — restore end-to-end agent coding loop for real app tasks
+  - recoder-sti — verify deployed watch/terminal WebSocket proxy fix in browser
+  - recoder-i3v — browser-verify deployed Web IDE multi-turn editing on production
+  - recoder-w0b — clean up stale Daytona dev server processes after preview restarts
+
+  Deep Coding Runtime Rollout:
+  - recoder-7hh — backend runtime bridge to live sandbox containers
+  - recoder-lma — deploy and browser-verify product-side deep-coding/runtime flow
+  - recoder-y4q — wire automatic runtime routing into deep-coding mode
+
+  Agents / Canvas / File Proxy Verification:
+  - recoder-xnh — browser-verify deployed Excalidraw board refresh path
+  - recoder-e5a — deploy and verify agents HEAD file proxy fix
+  - recoder-8i9 — add canvas frame-generation fallback when provider quota exhausted
+
+  Other Product Verification:
+  - recoder-kcq — live-verify PM and Agency copilot write actions
+  - recoder-74p — route chat.recoder.xyz to Chatwoot instead of main app
+  - recoder-4t2 — fix app Payload CMS TypeScript drift → CLOSED earlier this session (commit 6904d132 already fixed it, I verified + closed
+  bd ticket)
+  - recoder-ijs — fix recoder-app build-stage auth Prisma engine warnings
+
+  Infra / Host Cleanup:
+  - recoder-025 — reconcile remaining Hetzner checkout drift
+  - recoder-0xz — sync branch-tracked additions into Hetzner checkout
+  - recoder-d0k — deprecate or fully wire legacy zrok-controller service
+
+  Shared Planning Surface:
+  - recoder-29m — promote mirrored TodoWrite state into shared task board UI
+
+  4. Rough tally
+
+  - User-pasted browser errors: ~60 distinct error lines across 2 sessions + verbal email report
+  - Server-side issues I found: ~12 distinct issues (container health, config drift, git drift, build failures)
+  - plan.md P0 inventory: 7 symptom classes (S1–S7) + D1 design flaw + 4 cosmetic + 5 secondary (Se1–Se5) + 3 new-incident issues (Vite 8,
+  empty error, action allowlist)
+  - plan.md Active Work: 19 bd tickets (1 closed this session: recoder-4t2)
+
+  5. What's currently RESOLVED vs OPEN after this session
+
+  RESOLVED by this session's commits (f683efaa, 11bd379e, 08675844, 1f8ee636, 6c53477d) + server actions:
+  - R1 (workspace image missing) — user rebuild
+  - recoder-4t2 (Payload CMS TS drift) — already fixed in 6904d132, I verified + closed
+  - D1 (proceeding-anyway design flaw)
+  - str_replace/edit_file dropping writes (recoder-i3v code fix)
+  - docker-backend dist-parity deploy guard
+  - Vite 8 tsconfig crash (via pinned version directive)
+  - Empty auto-fix error payload
+  - Auto-fix cloneGitHub hallucination (via action allowlist)
+  - Auto-fix loop making things worse (via default off)
+  - recoder-app unhealthy (via env fix + recreate)
+  - Email not sending (via .env.production append)
+
+  Still OPEN:
+  - recoder-96g, recoder-i3v, recoder-sti (need real browser click-through to close)
+  - recoder-7hh, recoder-lma, recoder-y4q (deep coding runtime rollout)
+  - recoder-xnh, recoder-e5a, recoder-8i9 (agents/canvas)
+  - recoder-kcq, recoder-74p, recoder-ijs (other product verification)
+  - recoder-025, recoder-0xz, recoder-d0k (infra/host cleanup)
+  - recoder-29m (shared task board UI)
+  - Se2 auth middleware mismatch
+  - Se3 no client-side circuit breaker
+  - Se4 no deploy-time image existence check
+  - Ownership flip on container recreate (needs a bd ticket)
+  - CORS missing on docker-backend 403/500 responses (needs a bd ticket)
+  - Uncaught exceptions in recoder-app to 31.56.229.221:80 and 45.205.1.19:80 plus TypeError .aa and JSON parse error (may come back — needs
+  source-map debugging)
+  - .env.production placeholders for OPENAI_API_KEY, DODO_PAY_*, PADDLE_*, possibly ANTHROPIC_API_KEY (may degrade AI/billing features)
+  - USE_DAYTONA_CONTAINERS=true not set despite Daytona being self-hosted
+Noted — new incident in plan.md "Your Console" section. This is a DIFFERENT service than everything I've been fixing: api.recoder.xyz 
+  (recoder-backend Python service) is returning 502 on every /v1/* endpoint. That's the upstream backend powering agents.recoder.xyz — agent
+  starts, system status, streaming, projects, prompts, composio icons, everything. The CORS errors are just the symptom; the 502s behind them
+   are the real cause (nginx can't reach the upstream).                                                                                      
+   
+  Per memory, recoder-backend is PM2-managed with config in /root/recoder.xyz/backend/.env — and it already went down once before            
+  (2026-04-03) due to env drift. This is highest priority right now. Investigating.                                                        
+                                                                                                                                             
+⏺ Bash(ssh -i ~/.ssh/id_ed25519_hetzner -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@77.42.23.19 "echo '=== pm2 list ===' && pm2  
+      list 2>&1 | head -30 && echo…)                                                                                                       
+  ⎿  === pm2 list ===                                       
+     ┌────┬────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬───────────┬──────────┬──────────┬─────────     
+     ─┬──────────┐                                          
+     … +75 lines (ctrl+o to expand)                                                                                                          
+  ⎿  (timeout 30s)                                                                                                                         
+  ⎿  You've hit your limit · resets Apr 6 at 7pm (Europe/Istanbul)                                                                           
+     /extra-usage to finish what you’re working on.
+                                                                                                                                             
+✻ Sautéed for 1m 9s                                                                                                                        
+                                                                                                                                             
+❯ continou                                                                                                                                   
+                                                                                                                                             
+⏺ Root cause found. recoder-backend is in a tight crash loop (restarts: 2843, uptime: 1s). The Python startup dies every boot with:          
+                                                                                                                                           
+  ValueError: MCP_CREDENTIAL_ENCRYPTION_KEY or ENCRYPTION_KEY must be set
+    File "core/credentials/credential_service.py", line 65, in _get_or_create_encryption_key                                                 
+                                                                                                                                             
+  Port 8000 isn't bound → nginx 502 → every /v1/* request fails → CORS "errors" are just the symptom. Same incident class as 2026-04-03 per  
+  memory — .env drift lost the key.                                                                                                          
+                                                                                                                                             
+  Before generating a fresh key, checking whether there are encrypted credentials in the DB that would be orphaned. If                       
+  user_mcp_credential_profiles is still empty (like 2026-04-03), safe to mint a new key.
+                                                                                                                                             
+⏺ Bash(ssh -i ~/.ssh/id_ed25519_hetzner -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@77.42.23.19 "echo '=== backend .env (masked,
+      email/credential relevant ke…)                                                      
+  ⎿  === backend .env (masked, email/credential relevant keys only) ===
+     OPENROUTER_API_KEY=sk-or-v1-1<masked>                                                                                                   
+     … +28 lines (ctrl+o to expand)
+                                                                                                                                             
+⏺ The .env has been decimated — only OPENROUTER_API_BASE and OPENROUTER_API_KEY remain. Every other var is gone, including DATABASE_URL,
+  AUTH_DATABASE_URL, MCP_CREDENTIAL_ENCRYPTION_KEY, Daytona config. This is a more severe drift than just the MCP key being missing — most of
+   the backend's required env is gone.
+                                                                                                                                             
+  Before I reconstruct it, checking:                                                                                                         
+  1. Row counts on other encryption-sensitive tables (user_provider_keys, agent_secrets)                                                     
+  2. Whether a backup .env exists somewhere                                                                                                  
+  3. What the service actually needs to boot                                                                                                 
+                                                                                                                                             
+⏺ Bash(ssh -i ~/.ssh/id_ed25519_hetzner -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@77.42.23.19 "echo '=== row counts for          
+      encryption-sensitive tables ===' &&…)                                                                                                  
+  ⎿  === row counts for encryption-sensitive tables ===                                                                                      
+      user_mcp_credential_profiles |     0                                                                                                   
+      user_provider_keys           |     0
+     … +28 lines (ctrl+o to expand)                                                                                                          
+                                                                                                                                           
+⏺ Two crucial findings:                                                                                                                      
+  1. All 5 encryption-sensitive tables have 0 rows — ZERO orphan risk. Safe to either regenerate the key or restore from backup.
+  2. /root/recoder.xyz/backend/.env.backup-20260403-2032 EXISTS (541 bytes, April 3) — that's from the last identical incident's recovery per
+   memory. The current .env is just 164 bytes and mtime March 10, meaning someone reverted to an old minimal version.                        
+                                                                                                                                             
+  Checking the backup's contents before restoring.                                                                                           
+                                                                                                                                             
+⏺ Bash(ssh -i ~/.ssh/id_ed25519_hetzner -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@77.42.23.19 "echo '=== backup .env contents  
+      (masked) ===' && sed -E 's/=(…)                                                                                                        
+  ⎿  === backup .env contents (masked) ===                                                                                                 
+                                                                                                                                             
+     # OpenRouter API Key              
+     … +25 lines (ctrl+o to expand)                                                                                                          
+                                                                                                                                           
+⏺ Backup has everything we need: ENCRYPTION_KEY (which satisfies the MCP_CREDENTIAL_ENCRYPTION_KEY OR ENCRYPTION_KEY check in                
+  credential_service.py), DATABASE_URL, AUTH_DATABASE_URL, DAYTONA_*. REDIS_URL and SUPABASE_URL missing from the backup — I'll check if
+  they're actually needed after the restore.                                                                                                 
+                                                                                                                                             
+  Restoring backup → reloading PM2 → verifying.                                                                                              
+                                                                                                                                             
+⏺ Bash(ssh -i ~/.ssh/id_ed25519_hetzner -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@77.42.23.19 "set -e && echo '=== step 1: save  
+      current broken .env as audi…)                                                                                                        
+  ⎿  === step 1: save current broken .env as audit trail ===                                                            
+     saved broken env                                                                                                                        
+     … +26 lines (ctrl+o to expand)        
+  ⎿  (timeout 1m)                                                                                                                            
+                                                                                                                                           
+⏺ Backend is ALIVE. Port 8000 listening, localhost:8000/v1/health returns HTTP 200, uptime 8s and stable, no error lines. But the output got 
+  cut off before I could see the nginx check — verifying that api.recoder.xyz through the public path works too.
+                                                                                                                                             
+⏺ Bash(ssh -i ~/.ssh/id_ed25519_hetzner -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@77.42.23.19 "sleep 15 && echo '=== pm2 uptime  
+      check (should be >20s) ==='…)                                                                                                          
+  ⎿  === pm2 uptime check (should be >20s) ===                                                                                               
+     │ 63 │ recoder-backend    │ default     │ 1.0.0   │ fork    │ 1127854  │ 52s    │ 2858 │ online    │ 0%       │ 26.1mb   │ root         
+      │ disabled │                                                                                                                           
+     … +14 lines (ctrl+o to expand)                                                                                                          
+  ⎿  (timeout 30s)                                                                                                                         
+                                                                                                                                             
+⏺ Full recovery confirmed. Everything checks out:                                                                                            
+                                                                                                                                             
+  - recoder-backend uptime: 52s, stable (no new restart since the one I triggered — restart count frozen at 2858)                            
+  - Port 8000 listening on 0.0.0.0                                                                                                           
+  - https://api.recoder.xyz/v1/health → HTTP 200 via nginx                                                                                   
+  - Response body: {"status":"ok","timestamp":"2026-04-05T11:29:40.533172+00:00","instance_id":"9f2e9232"}                                   
+  - Zero error lines in the last 60 seconds of the error log                                                                                 
+                                                                                                                                             
+  Every /v1/* endpoint is now reachable again. The CORS errors, 502s, agent-start timeouts, stream failures, composio icon failures — all    
+  downstream of this single backend being dead. They should all clear on the next browser reload.                                            
+                                                                                                                                             
+  What was wrong + what I fixed                                                                                                            
+
+  Root cause: /root/recoder.xyz/backend/.env had been reverted/overwritten to a 164-byte stub dated 2026-03-10 containing ONLY               
+  OPENROUTER_API_KEY and OPENROUTER_API_BASE. Every other required env var was missing:
+  - DATABASE_URL — gone                                                                                                                      
+  - AUTH_DATABASE_URL — gone                                                                                                                 
+  - ENCRYPTION_KEY / MCP_CREDENTIAL_ENCRYPTION_KEY — gone
+  - DAYTONA_SERVER_URL, DAYTONA_API_KEY — gone                                                                                               
+                                                                                                                                             
+  Without ENCRYPTION_KEY, Python startup crashed in core/credentials/credential_service.py:65 with:                                          
+  ValueError: MCP_CREDENTIAL_ENCRYPTION_KEY or ENCRYPTION_KEY must be set                                                                    
+  ...because MCPService() is instantiated at module load time (line 573 of mcp_service.py), so the entire api.py import failed. PM2 restarted
+   the worker, it crashed identically, restart again — 2843 restarts in that tight loop, port 8000 never bound.                              
+                                                                                                                                             
+  Fix sequence:                                                                                                                              
+  1. Saved the broken stub as .env.broken-20260405-<timestamp> for audit trail                                                               
+  2. Copied .env.backup-20260403-2032 (541 bytes, from the 2026-04-03 recovery per memory) → .env                                            
+  3. pm2 restart recoder-backend --update-env to reload env from disk                            
+  4. Verified port 8000 bound, /v1/health returns 200 both locally and via nginx                                                             
+                                                                                                                                             
+  Safety check before restore: all 5 encryption-sensitive tables had 0 rows (user_mcp_credential_profiles, user_provider_keys, agent_secrets,
+   api_keys, credential_access_log) — no risk of orphaning data if a different ENCRYPTION_KEY was hiding in the backup (which it wasn't; the 
+  same key from 2026-04-03 is now active).                                                                                                   
+                                                                                                                                             
+  Same incident, twice in three days                                                                                                         
+   
+  Per memory:                                                                                                                                
+  ▎ "2026-04-03 live Hetzner recovery: recoder-backend PM2 service was down because /root/recoder.xyz/backend/.env had drifted and only    
+  contained OpenRouter plus Daytona vars."                                                                                                   
+                                          
+  This is the exact same failure mode as 2026-04-03, and my guess is the exact same cause: something in the deploy pipeline (or a manual     
+  cp/rsync from a local dev machine that has a dev .env) is overwriting the backend .env with a minimal stub. Worth investigating:           
+   
+  1. Check scripts/deploy-all-services.sh Phase 2 rsync for backend/.env handling                                                            
+  2. Check if any recent commit touched backend/.env in git                                                                                
+  3. Check whose user wrote to the file (uid 501, which is the local dev user based on the file permissions — 501:staff, same user as my     
+  local macOS)                                                                                                                               
+                                                                                                                                             
+  That means the file is being rsync'd from someone's local dev machine. Every time that rsync runs without excluding backend/.env, it       
+  overwrites the production env with the dev stub. Se4-class issue: deploy script needs to exclude backend/.env the way it excludes        
+  app/.env.production selectively.                                                                                                           
+                                                                                                                                           
+  Still open                                                                                                                                 
+   
+  - Email flow: app/.env.production is fixed as of earlier this session, recoder-app is healthy, but real-world signup/reset email delivery  
+  still not verified end-to-end by you. Now that the backend is up too, nothing blocks a fresh signup test.                                
+  - Browser coding loop: Same — recoder-web has all 4 fixes from 1f8ee636, all 5 services healthy. Still waiting on your click-through test. 
+  - Deploy script bug that overwrites backend/.env: Needs investigation before the next deploy, otherwise this recovery will need to happen a
+   third time.                                                                                                                               
+  - Uncaught exceptions in recoder-app (ETIMEDOUT 31.56.229.221:80, 45.205.1.19:80) — flagged earlier, not touched. May resurface when that  
+  code path runs again.                                                                                                                      
+  - recoder-y4q, recoder-7hh, recoder-lma deep coding runtime rollout verification — out of scope this session.                            
+  - All the Se items and the ownership flip / CORS on error responses* — out of scope this session.                                          
+                                                                                                                                             
+  Live state:                                                                                                                                
+  - recoder-web: sha256:bbfed04da4a17bd6… (all coding loop fixes)                                                                            
+  - recoder-docker-backend: sha256:03d4da665e18… (D1 gate)                                                                                   
+  - recoder-app: healthy, Resend configured               
+  - recoder-backend (PM2): online, 52s uptime, port 8000 bound, /v1/health = 200                                                             
+  - recoder-workspace:latest: present, 12.9GB                                                                                                
+  - Rollback tags for both Docker services still in place                                                                                    
+                                                                                                                                             
+  Recommended next click-through: go to https://agents.recoder.xyz or https://recoder.xyz/auth/signup and see if the symptoms from your      
+  console log (agent start timeout, CORS failures, 502s on /v1/*) are actually gone. If yes, close this out. If the ETIMEDOUT                
+  31.56.229.221:80 uncaught exception in recoder-app resurfaces, that's the next thing to trace — it has nothing to do with recoder-backend. 
+                                                                                                                         

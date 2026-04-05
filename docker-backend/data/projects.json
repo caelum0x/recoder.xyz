@@ -11,13 +11,87 @@
         "userId": "user-1",
         "prompt": "cancel me",
         "model": "openrouter/auto",
-        "status": "running",
+        "status": "failed",
         "createdAt": 1770610338585,
-        "updatedAt": 1770610338585
+        "updatedAt": 1775355087765,
+        "error": "Prompt execution failed"
       }
     ]
   ],
   "promptTasksByProject": [],
-  "taskEventSequences": [],
-  "taskEventHistory": []
+  "taskEventSequences": [
+    [
+      "task-cancel",
+      2
+    ]
+  ],
+  "taskEventHistory": [
+    [
+      "task-cancel",
+      [
+        {
+          "id": "task-cancel:1",
+          "order": 1,
+          "event": {
+            "type": "data",
+            "data": {
+              "task": {
+                "id": "task-cancel",
+                "projectId": "project-1",
+                "status": "queued",
+                "model": "openrouter/auto",
+                "createdAt": 1770610338585,
+                "updatedAt": 1775355087716,
+                "error": "Recovered after service restart"
+              }
+            }
+          }
+        },
+        {
+          "id": "task-cancel:2",
+          "order": 2,
+          "event": {
+            "type": "data",
+            "data": {
+              "task": {
+                "id": "task-cancel",
+                "projectId": "project-1",
+                "status": "running",
+                "model": "openrouter/auto",
+                "createdAt": 1770610338585,
+                "updatedAt": 1775355087765,
+                "error": "Recovered after service restart"
+              }
+            }
+          }
+        },
+        {
+          "id": "task-cancel:3",
+          "order": 3,
+          "event": {
+            "type": "data",
+            "data": {
+              "task": {
+                "id": "task-cancel",
+                "projectId": "project-1",
+                "status": "failed",
+                "model": "openrouter/auto",
+                "createdAt": 1770610338585,
+                "updatedAt": 1775355087765,
+                "error": "Prompt execution failed"
+              }
+            }
+          }
+        },
+        {
+          "id": "task-cancel:4",
+          "order": 4,
+          "event": {
+            "type": "end",
+            "status": "failed"
+          }
+        }
+      ]
+    ]
+  ]
 }
