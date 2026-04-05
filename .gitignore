@@ -263,6 +263,15 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+
+# docker-backend runtime state (regenerated on every start; noisy in git)
+docker-backend/data/a2a-events.json
+docker-backend/data/performance-profiler.json
+docker-backend/data/projects.json
+docker-backend/data/public-api-queue.sqlite*
 
 # Uploads
 uploads/
