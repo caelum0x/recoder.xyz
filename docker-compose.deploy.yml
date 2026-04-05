@@ -73,6 +73,8 @@ services:
       - OPENMETER_URL=http://openmeter:8888  # internal Docker port (host: 8889)
       - FLAGSMITH_URL=http://flagsmith:8000
       - NATS_URL=nats://nats:4222
+      - USE_DAYTONA_CONTAINERS=${USE_DAYTONA_CONTAINERS:-true}
+      - DAYTONA_SERVER_URL=${DAYTONA_SERVER_URL:-http://host.docker.internal:3900/api}
       - ZROK_API_URL=${ZROK_API_URL:-http://zrok-controller:18080}
       - ZROK_TOKEN=${ZROK_TOKEN:-}
       - ZROK_FRONTEND=${ZROK_FRONTEND:-preview.recoder.xyz}
@@ -221,7 +223,11 @@ services:
       docker-backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      # Use node fetch instead of curl: recoder-app can hit its 2G cgroup limit,
+      # at which point forking curl triggers OOM-kill (exit 137) even when the
+      # app itself is responsive. node -e runs in-process, no fork. See
+      # plan.md "recoder-app unhealthy" section for the 2026-04-05 incident.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

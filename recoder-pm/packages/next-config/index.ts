@@ -31,6 +31,14 @@ export const config: NextConfig = {
 
   // biome-ignore lint/suspicious/useAwait: "headers" is an async function
   async headers() {
+    // Production PM deploys sit behind nginx, which already injects the
+    // canonical security headers for pm.recoder.xyz. Returning them from
+    // Next.js as well causes duplicate CSP/XFO/HSTS headers in responses,
+    // and browsers enforce all CSP headers together.
+    if (process.env.NODE_ENV === "production") {
+      return [];
+    }
+
     return [
       {
         source: "/(.*)",
