@@ -29,7 +29,7 @@ import {
   revertFileToState,
 } from '~/lib/stores/undo-stack';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { DOCKER_URL, getSessionToken } from '~/lib/services/docker-api';
+import { DOCKER_URL, withDockerCredentials } from '~/lib/services/docker-api';
 import type { FileState } from '~/lib/services/undo-manager';
 import { createScopedLogger } from '~/utils/logger';
 
@@ -165,14 +165,10 @@ export function useUndoRedo(options: UseUndoRedoOptions = {}): [UndoRedoState, U
     }
 
     try {
-      const res = await fetch(`${DOCKER_URL}/api/file/${projectId}`, {
+      const res = await fetch(`${DOCKER_URL}/api/file/${projectId}`, withDockerCredentials({
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getSessionToken() || ''}`,
-        },
         body: JSON.stringify({ path: relativePath, content }),
-      });
+      }));
 
       if (!res.ok) {
         const errData = await res.json() as { error?: string };

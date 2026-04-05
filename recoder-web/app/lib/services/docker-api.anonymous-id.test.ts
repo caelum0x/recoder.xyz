@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { withDockerCredentials } from './docker-api';
+import { appendDockerAuthQuery, withDockerCredentials } from './docker-api';
 
 function createStorage() {
   const store = new Map<string, string>();
@@ -69,5 +69,26 @@ describe('withDockerCredentials anonymous identity forwarding', () => {
     const headers = new Headers(init.headers);
 
     expect(headers.get('X-Recoder-Anonymous-Id')).toBe('anon_explicit');
+  });
+
+  it('adds the anonymous ID to websocket query params', () => {
+    const localStorage = createStorage();
+    const sessionStorage = createStorage();
+    localStorage.setItem('recoder_anonymous_id', 'anon_query_789');
+
+    vi.stubGlobal('window', {
+      location: {
+        hostname: 'web.recoder.xyz',
+        protocol: 'https:',
+        origin: 'https://web.recoder.xyz',
+      },
+    });
+    vi.stubGlobal('localStorage', localStorage);
+    vi.stubGlobal('sessionStorage', sessionStorage);
+    vi.stubGlobal('document', { cookie: '' });
+
+    expect(appendDockerAuthQuery('wss://docker.recoder.xyz/watch/project-123')).toBe(
+      'wss://docker.recoder.xyz/watch/project-123?anonymousId=anon_query_789'
+    );
   });
 });

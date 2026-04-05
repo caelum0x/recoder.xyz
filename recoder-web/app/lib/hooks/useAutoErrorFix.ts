@@ -21,7 +21,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { map } from 'nanostores';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { dockerGet, getSessionToken } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery, dockerGet } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('AutoErrorFix');
 
@@ -601,10 +601,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
     const wsUrl = `${protocol}//${host}/build-errors/${projectId}`;
 
     try {
-      const token = getSessionToken();
-      const authUrl = token ? `${wsUrl}?token=${encodeURIComponent(token)}` : wsUrl;
-
-      const ws = new WebSocket(authUrl);
+      const ws = new WebSocket(appendDockerAuthQuery(wsUrl));
       wsRef.current = ws;
       connectedProjectRef.current = projectId;
       wsIntentionalCloseRef.current = false;

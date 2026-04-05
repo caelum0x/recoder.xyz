@@ -22,7 +22,7 @@ import type {
 import { SandboxError, SandboxErrorType, SandboxStatus } from '../types';
 import { tryCatch, createSandboxLogger } from '../utils';
 import { CONTAINER_TIMEOUTS } from '../config';
-import { getSessionToken } from '~/lib/services/docker-api';
+import { withDockerCredentials } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('DockerProviderService');
 
@@ -39,22 +39,6 @@ const getDockerUrl = (): string => {
 };
 
 /**
- * Get headers with authentication
- */
-function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  const token = getSessionToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  return headers;
-}
-
-/**
  * Make authenticated fetch request to docker-backend
  */
 async function dockerFetch<T>(
@@ -68,15 +52,10 @@ async function dockerFetch<T>(
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(url, withDockerCredentials({
       ...fetchOptions,
-      headers: {
-        ...getAuthHeaders(),
-        ...(fetchOptions.headers || {}),
-      },
-      credentials: 'include',
       signal: controller.signal,
-    });
+    }));
 
     clearTimeout(timeoutId);
 
