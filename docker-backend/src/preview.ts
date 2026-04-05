@@ -8,6 +8,7 @@ import http from 'http';
 import Docker from 'dockerode';
 import WebSocket from 'ws';
 import { isLikelySandboxProjectId } from './auth-utils.js';
+import { recoverContainerFromDocker } from './container-recovery.js';
 import { devServerManager, detectFrameworkFromContainer } from './dev-server.js';
 import { getDaytonaClient } from './daytona-client.js';
 import { daytonaGetLogs, ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
@@ -277,72 +278,6 @@ function escapeHtml(str: string): string {
 }
 
 /**
- * Try to recover container info from Docker API if not in memory.
- * This helps when the backend restarts but containers are still running.
- */
-async function recoverContainerFromDocker(
-  projectId: string,
-  containers: Map<string, { id: string; lastActive: number; port: number; ptyPort?: number; userId?: string }>
-): Promise<{ id: string; lastActive: number; port: number; ptyPort?: number; userId?: string } | undefined> {
-  try {
-    // Look for containers with our naming pattern
-    const allContainers = await docker.listContainers({ all: false }); // only running
-    
-    for (const containerInfo of allContainers) {
-      // Check if this container has bindings for a recoder volume with this projectId
-      const names = containerInfo.Names || [];
-      const volumes = Object.keys(containerInfo.Mounts?.reduce((acc: any, m: any) => {
-        if (m.Name) acc[m.Name] = true;
-        return acc;
-      }, {}) || {});
-      
-      // Check if any volume matches our projectId pattern
-      const hasProjectVolume = volumes.some(v => v.includes(`recoder-${projectId}`));
-      
-      if (hasProjectVolume) {
-        // Found a matching container! Extract port mappings
-        const ports = containerInfo.Ports || [];
-        let port3000Host = 0;
-        let port5173Host = 0;
-        let port8080Host = 0;
-        let port9999Host = 0;
-        
-        for (const p of ports) {
-          if (p.PrivatePort === 3000 && p.PublicPort) port3000Host = p.PublicPort;
-          if (p.PrivatePort === 5173 && p.PublicPort) port5173Host = p.PublicPort;
-          if (p.PrivatePort === 8080 && p.PublicPort) port8080Host = p.PublicPort;
-          if (p.PrivatePort === 9999 && p.PublicPort) port9999Host = p.PublicPort;
-        }
-        
-        // The "port" in our schema is the base port (mapped to 3000)
-        // Parentheses needed: without them, `port5173Host - 1` evaluates to -1 when port5173Host is 0 (truthy!)
-        const basePort = port3000Host || (port5173Host ? port5173Host - 1 : 0) || (port8080Host ? port8080Host - 2 : 0);
-        
-        if (basePort > 0) {
-          const recovered = {
-            id: containerInfo.Id,
-            lastActive: Date.now(),
-            port: basePort,
-            ptyPort: port9999Host || basePort + 3,
-            userId: containerInfo.Labels?.userId,
-          };
-          
-          console.log(`🔄 [Preview] Recovered container for ${projectId}: ${containerInfo.Id.slice(0, 12)} (port: ${basePort})`);
-          containers.set(projectId, recovered);
-          return recovered;
-        }
-      }
-    }
-    
-    console.log(`❌ [Preview] No running container found for ${projectId} in Docker`);
-    return undefined;
-  } catch (err) {
-    console.error(`❌ [Preview] Error recovering container for ${projectId}:`, err);
-    return undefined;
-  }
-}
-
-/**
  * Recover a Daytona sandbox for a project by querying the Daytona API.
  * Agent-created sandboxes are only in Daytona (not Docker), so we need
  * to look them up separately. Uses the same pattern as the health check.
@@ -573,7 +508,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     let entry = containers.get(projectId) as any;
 
     if (!entry) {
-      entry = await recoverContainerFromDocker(projectId, containers);
+      entry = await recoverContainerFromDocker(docker, projectId, containers);
     }
     if (!entry) {
       entry = await recoverContainerFromDaytona(projectId, containers);
@@ -699,7 +634,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     if (!entry) {
       console.warn(`[Preview] Request for unknown project: ${projectId}`);
       // Try Docker first, then Daytona (agent-created sandboxes)
-      entry = await recoverContainerFromDocker(projectId, containers);
+      entry = await recoverContainerFromDocker(docker, projectId, containers);
       if (!entry) {
         entry = await recoverContainerFromDaytona(projectId, containers);
       }
@@ -1014,7 +949,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     const projectId = req.params.projectId;
     let entry = containers.get(projectId);
     if (!entry) {
-      entry = await recoverContainerFromDocker(projectId, containers);
+      entry = await recoverContainerFromDocker(docker, projectId, containers);
     }
     if (!entry) {
       entry = await recoverContainerFromDaytona(projectId, containers);
@@ -1101,7 +1036,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
 
     let entry = containers.get(projectId);
     if (!entry) {
-      entry = await recoverContainerFromDocker(projectId, containers);
+      entry = await recoverContainerFromDocker(docker, projectId, containers);
     }
     // For Daytona sandboxes, proxy through docker-backend instead of using
     // the external *.sandbox.recoder.xyz URL — avoids needing wildcard SSL cert
@@ -1148,7 +1083,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     let entry = containers.get(projectId);
     if (!entry) {
       // Try Docker recovery first, then Daytona recovery
-      entry = await recoverContainerFromDocker(projectId, containers);
+      entry = await recoverContainerFromDocker(docker, projectId, containers);
       if (!entry && process.env.USE_DAYTONA_CONTAINERS === 'true') {
         try {
           const dc = getDaytonaClient();
@@ -1260,7 +1195,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     if (!entry) {
       // Try to recover from Docker
       console.log(`⚠️ [Preview Logs] Container not in memory for ${projectId}, attempting recovery...`);
-      entry = await recoverContainerFromDocker(projectId, containers);
+      entry = await recoverContainerFromDocker(docker, projectId, containers);
     }
     
     if (!entry) {
