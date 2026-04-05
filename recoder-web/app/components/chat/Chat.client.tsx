@@ -55,6 +55,7 @@ const toastAnimation = cssTransition({
 });
 
 const logger = createScopedLogger('ChatClient');
+const CODE_CONTEXT_LOAD_TIMEOUT_MS = 2500;
 
 export function Chat() {
   renderLogger.trace('Chat');
@@ -208,6 +209,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
 
   const { showChat } = useStore(chatStore);
   const isCommandPaletteOpen = useStore(commandPaletteOpen);
+  const isContainerReady = useStore(workbenchStore.containerReady);
 
   const [animationScope, animate] = useAnimate();
 
@@ -320,6 +322,11 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   // Uses ProjectContextCache to avoid redundant Docker API calls
   const loadCodeContext = async (userMessage: string) => {
     try {
+      if (!isContainerReady) {
+        logger.debug('Skipping code context load until container is ready');
+        return '';
+      }
+
       // Priority 1: focused context from edit intent (already cached via shared cache)
       if (focusedContext && editIntent && intentRequiresCodeChanges(editIntent)) {
         logger.debug('Using focused context from edit intent analyzer');
@@ -329,7 +336,13 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
       }
 
       // Priority 2: cached project context — only fetches if files changed
-      const context = await projectContextCache.getContext(projectIdForDocker);
+      const context = await Promise.race([
+        projectContextCache.getContext(projectIdForDocker),
+        new Promise<null>((resolve) => {
+          window.setTimeout(() => resolve(null), CODE_CONTEXT_LOAD_TIMEOUT_MS);
+        }),
+      ]);
+
       if (context) {
         const { generateContextPrompt } = await import('~/lib/services/code-context');
         const xml = generateContextPrompt(context, userMessage, 4000);
@@ -337,6 +350,8 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
         setCodeContext(xml);           // async — for any downstream state consumers
         return xml;
       }
+
+      logger.debug('Skipping code context load after timeout');
     } catch (error) {
       logger.warn('Failed to load code context:', error);
     }
