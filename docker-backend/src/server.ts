@@ -1693,12 +1693,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/api/v1', express.json({ limit: '2mb' }));
 app.use('/api/', apiLimiter);
 
-// Security headers (lightweight, no Helmet dependency)
+// Strip X-Powered-By (nginx can't remove Express-generated headers).
+// All other security headers (X-Frame-Options, X-Content-Type-Options,
+// X-XSS-Protection, Referrer-Policy, CSP) are set globally by nginx in
+// nginx-production.conf lines 85-88 with `always`, so setting them here
+// would create duplicates AND break per-location overrides — nginx blanks
+// X-Frame-Options for preview iframe endpoints, but Express's DENY would win.
 app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('X-XSS-Protection', '0'); // modern browsers use CSP instead
   res.removeHeader('X-Powered-By');
   next();
 });

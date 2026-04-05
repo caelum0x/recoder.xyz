@@ -63,6 +63,12 @@ const nextConfig: NextConfig = {
 	},
 	// biome-ignore lint/suspicious/useAwait: Next.js specification
 	async headers() {
+		// agency.recoder.xyz is fronted by nginx in production, so duplicating
+		// security headers here causes double CSP/XFO/HSTS emission.
+		if (process.env.NODE_ENV === "production") {
+			return [];
+		}
+
 		return [
 			{
 				source: "/:path*",

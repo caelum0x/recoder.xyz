@@ -25,7 +25,7 @@ import { handleError } from "@repo/design-system/lib/handle-error";
 import { toast } from "@repo/design-system/lib/toast";
 import { createFuse } from "@repo/lib/fuse";
 import { EyeIcon, LinkIcon, TrashIcon } from "lucide-react";
-import { parseAsString, useQueryState } from "next-usequerystate";
+import { parseAsString, useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { updateFeature } from "@/actions/feature/update";
 import { deleteMarker } from "@/actions/roadmap-event/delete";
