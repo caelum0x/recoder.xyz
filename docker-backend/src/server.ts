@@ -154,6 +154,7 @@ import {
   type OpencodeSandboxProviderKeys,
 } from './opencode-sandbox.js';
 import {
+  getAnonymousIdFromRequest,
   getProjectIdFromRequest,
   isLikelySandboxProjectId,
   isStrictAuthMode,
@@ -429,6 +430,14 @@ function getSessionTokenFromRequest(req: express.Request): string | null {
     || null;
 }
 
+function getAnonymousFallbackIdentity(req: express.Request): { userId: string; sessionId: string } {
+  const anonymousId = getAnonymousIdFromRequest(req);
+  return {
+    userId: anonymousId ?? 'anonymous',
+    sessionId: anonymousId ?? 'anon',
+  };
+}
+
 // WebSocket authentication helper
 // For WebSockets, token is passed via query string (?token=xxx) or cookies
 interface WebSocketAuthOptions {
@@ -470,10 +479,11 @@ async function authenticateWebSocket(
   if (!token) {
     // In migration mode, allow anonymous access with warning
     if (allowAnonymous && !STRICT_AUTH) {
+      const anonymousIdentity = getAnonymousFallbackIdentity(req);
       logWarning(ErrorCode.AUTH_REQUIRED, 'Anonymous WebSocket connection in migration mode', {
         path: req.path,
       });
-      return { userId: 'anonymous', sessionId: 'anon' };
+      return anonymousIdentity;
     }
     logWarning(ErrorCode.AUTH_REQUIRED, 'Rejected WebSocket connection without auth token', {
       path: req.path,
@@ -516,10 +526,11 @@ async function authenticateWebSocket(
 
     // In migration mode, allow with warning
     if (allowAnonymous && !STRICT_AUTH) {
+      const anonymousIdentity = getAnonymousFallbackIdentity(req);
       logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Invalid WebSocket token accepted in migration mode', {
         path: req.path,
       });
-      return { userId: 'anonymous', sessionId: 'anon' };
+      return anonymousIdentity;
     }
     logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Rejected WebSocket connection with invalid token', {
       path: req.path,
@@ -645,9 +656,13 @@ async function checkProjectOwnership(userId: string, projectId: string): Promise
   }
 
   // Fast-path: check local containers map (survives restarts via containers.json)
-  const localEntry = containers.get(projectId);
+  // and fall back to live recovery before the remote ownership API. This prevents
+  // auth failures when the route-level ownership check runs before the handler has
+  // a chance to recover the sandbox mapping.
+  const localEntry = containers.get(projectId) ?? await getOrRecoverContainer(projectId);
   if (localEntry?.userId) {
-    const isOwner = localEntry.userId === userId;
+    const isOwner = localEntry.userId === userId
+      || (localEntry.userId === 'anonymous' && userId.startsWith('anon_'));
     ownershipCache.set(cacheKey, { isOwner, expiresAt: Date.now() + OWNERSHIP_CACHE_TTL });
     return isOwner;
   }
@@ -737,7 +752,9 @@ function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Res
 
   if (!token) {
     // No token - allow as anonymous
-    req.userId = 'anonymous';
+    const anonymousIdentity = getAnonymousFallbackIdentity(req);
+    req.userId = anonymousIdentity.userId;
+    req.sessionId = anonymousIdentity.sessionId;
     return next();
   }
 
@@ -747,11 +764,15 @@ function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Res
       req.userId = session.userId;
       req.sessionId = session.sessionId;
     } else {
-      req.userId = 'anonymous';
+      const anonymousIdentity = getAnonymousFallbackIdentity(req);
+      req.userId = anonymousIdentity.userId;
+      req.sessionId = anonymousIdentity.sessionId;
     }
     next();
   }).catch(() => {
-    req.userId = 'anonymous';
+    const anonymousIdentity = getAnonymousFallbackIdentity(req);
+    req.userId = anonymousIdentity.userId;
+    req.sessionId = anonymousIdentity.sessionId;
     next();
   });
 }
@@ -770,13 +791,15 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
       (ALLOW_LOCALHOST_ORIGIN && isLocalhostOrigin(origin));
 
     if (!STRICT_AUTH && isAllowedOrigin) {
+      const anonymousIdentity = getAnonymousFallbackIdentity(req);
       // Migration mode: allow but log warning
       logWarning(ErrorCode.AUTH_REQUIRED, 'Request without auth token accepted in migration mode', {
         origin: origin || 'same-origin',
         method: req.method,
         path: req.path,
       });
-      req.userId = 'anonymous'; // Set anonymous user for audit logging
+      req.userId = anonymousIdentity.userId;
+      req.sessionId = anonymousIdentity.sessionId;
       return next();
     }
 
@@ -792,12 +815,14 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
         origin === '' ||
         (ALLOW_LOCALHOST_ORIGIN && isLocalhostOrigin(origin));
       if (!STRICT_AUTH && isAllowedOrigin) {
+        const anonymousIdentity = getAnonymousFallbackIdentity(req);
         logWarning(ErrorCode.AUTH_INVALID_TOKEN, 'Invalid token accepted in migration mode', {
           origin: origin || 'same-origin',
           method: req.method,
           path: req.path,
         });
-        req.userId = 'anonymous';
+        req.userId = anonymousIdentity.userId;
+        req.sessionId = anonymousIdentity.sessionId;
         return next();
       }
       return res.status(401).json({ error: 'Invalid or expired session' });
@@ -814,11 +839,13 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
     });
     // Allow in migration mode
     if (!STRICT_AUTH) {
+      const anonymousIdentity = getAnonymousFallbackIdentity(req);
       logWarning(ErrorCode.AUTH_SERVICE_ERROR, 'Auth service error accepted in migration mode', {
         method: req.method,
         path: req.path,
       });
-      req.userId = 'anonymous';
+      req.userId = anonymousIdentity.userId;
+      req.sessionId = anonymousIdentity.sessionId;
       return next();
     }
     return res.status(500).json({ error: 'Authentication service error' });
@@ -1646,7 +1673,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Recoder-Anonymous-Id'],
 }));
 
 app.use((_req, res, next) => {

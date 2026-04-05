@@ -37,6 +37,36 @@ describe('docker-server http helpers', () => {
     expect(headers['Content-Type']).toBe('application/json');
   });
 
+  it('forwards anonymous identity from cookies when no auth token is present', () => {
+    const request = {
+      headers: {
+        get: (key: string) =>
+          key.toLowerCase() === 'cookie'
+            ? 'recoder_anonymous_id=anon_12345_xyz'
+            : null,
+      },
+    } as unknown as Request;
+
+    const headers = createDockerAuthHeaders(request);
+    expect(headers['X-Recoder-Anonymous-Id']).toBe('anon_12345_xyz');
+  });
+
+  it('prefers explicit anonymous header over cookie value', () => {
+    const request = {
+      headers: {
+        get: (key: string) => {
+          const normalized = key.toLowerCase();
+          if (normalized === 'x-recoder-anonymous-id') return 'anon_header_999';
+          if (normalized === 'cookie') return 'recoder_anonymous_id=anon_cookie_111';
+          return null;
+        },
+      },
+    } as unknown as Request;
+
+    const headers = createDockerProxyHeaders(request);
+    expect(headers['X-Recoder-Anonymous-Id']).toBe('anon_header_999');
+  });
+
   it('resolves docker backend URL from cloudflare context first', () => {
     const url = getDockerBackendUrl({
       cloudflare: {

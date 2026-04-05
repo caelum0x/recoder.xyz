@@ -6,6 +6,45 @@
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('AnonymousId');
+const STORAGE_KEY = 'recoder_anonymous_id';
+const COOKIE_NAME = 'recoder_anonymous_id';
+
+function getCookieDomain(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const hostname = window.location.hostname;
+  if (hostname === 'recoder.xyz' || hostname.endsWith('.recoder.xyz')) {
+    return '.recoder.xyz';
+  }
+
+  return null;
+}
+
+function writeAnonymousCookie(value: string, maxAgeSeconds: number): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const parts = [
+    `${COOKIE_NAME}=${encodeURIComponent(value)}`,
+    'Path=/',
+    `Max-Age=${maxAgeSeconds}`,
+    'SameSite=Lax',
+  ];
+
+  const cookieDomain = getCookieDomain();
+  if (cookieDomain) {
+    parts.push(`Domain=${cookieDomain}`);
+  }
+
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    parts.push('Secure');
+  }
+
+  document.cookie = parts.join('; ');
+}
 
 export function getOrCreateAnonymousId(): string {
   // Server-side rendering check
@@ -13,15 +52,16 @@ export function getOrCreateAnonymousId(): string {
     return '';
   }
 
-  const key = 'recoder_anonymous_id';
-  let id = localStorage.getItem(key);
+  let id = localStorage.getItem(STORAGE_KEY);
 
   if (!id) {
     // Generate unique anonymous ID
     id = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
-    localStorage.setItem(key, id);
+    localStorage.setItem(STORAGE_KEY, id);
     logger.info('🆔 Created new anonymous ID:', id);
   }
+
+  writeAnonymousCookie(id, 31536000);
 
   return id;
 }
@@ -34,7 +74,11 @@ export function getAnonymousId(): string | null {
     return null;
   }
 
-  return localStorage.getItem('recoder_anonymous_id');
+  const id = localStorage.getItem(STORAGE_KEY);
+  if (id) {
+    writeAnonymousCookie(id, 31536000);
+  }
+  return id;
 }
 
 /**
@@ -45,7 +89,8 @@ export function clearAnonymousId(): void {
     return;
   }
 
-  localStorage.removeItem('recoder_anonymous_id');
+  localStorage.removeItem(STORAGE_KEY);
+  writeAnonymousCookie('', 0);
   logger.info('🗑️ Cleared anonymous ID');
 }
 
