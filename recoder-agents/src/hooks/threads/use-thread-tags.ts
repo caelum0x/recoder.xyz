@@ -25,6 +25,7 @@ export function useThreadTags() {
     queryKey: tagKeys.lists(),
     queryFn: getTags,
     staleTime: 60_000,
+    retry: false,
   });
 }
 
@@ -34,6 +35,7 @@ export function useThreadTagAssignments(threadId: string) {
     queryFn: () => getThreadTags(threadId),
     enabled: !!threadId,
     staleTime: 30_000,
+    retry: false,
   });
 }
 
