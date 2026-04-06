@@ -428,8 +428,51 @@ These are the current open workstreams that still matter after removing stale du
 
 - `recoder-96g` — restore the end-to-end agent coding loop for real app tasks
 - `recoder-sti` — verify the deployed watch/terminal WebSocket proxy fix in the browser
+  - CORS fix committed locally (12ed45e3): ALLOWED_ORIGINS shared, error handler emits CORS headers
+  - Needs deploy of docker-backend image to verify
 - `recoder-i3v` — browser-verify deployed Web IDE multi-turn editing on production
 - `recoder-w0b` — clean up stale Daytona dev server processes after preview restarts
+
+#### recoder-web can't code a landing page (2026-04-06 repro)
+
+**Repro**: "Build a modern landing page with hero, features, testimonials, pricing,
+contact form using Tailwind CSS" on web.recoder.xyz.
+
+**What happens**: AI creates 18 files (package.json through App.tsx), writes all
+to sandbox, runs `npm install && npm run dev`. Preview opens but crashes with
+`cn is not defined` in Features.tsx, Pricing.tsx, Contact.tsx. AI created
+`src/utils/cn.ts` but components import it via `@/utils/cn` — the Vite template
+has no `@/` path alias configured (needs `resolve.alias` in vite.config.ts and
+`paths` in tsconfig.json).
+
+**Auto-fix loop is broken** — 4 distinct failures in sequence:
+1. Auto-fix fires, AI emits only a `readFile` action ("Read Features.tsx"), stream
+   ends without any edit. No `str_replace` or file write action produced.
+2. Second auto-fix: AI returns **empty response** (0 chars), triggers continuation
+   system (1/3). Continuation eventually produces a `str_replace` action after 22s
+   but it only fixes 1 of 3 broken files.
+3. Third auto-fix: AI emits another `readFile` only, no edit. Skipped as "same
+   runtime errors as last attempt".
+4. Fourth auto-fix: AI produces a `str_replace` for Features.tsx but again only
+   1 file. Skipped again.
+
+**Root causes** (multiple, all must be fixed for the coding loop to work):
+1. **`POST /api/file/{projectId}` returns 500** — file writes to Docker sandbox
+   fail intermittently. The local file store gets the file, but Docker sync fails,
+   so Vite never sees the change. This is the **primary blocker** — even when the
+   AI produces a correct edit, it can't be written to the sandbox.
+2. **Auto-fix AI produces readFile instead of str_replace** — The auto-fix system
+   prompt doesn't restrict the AI to edit-only actions. The AI "thinks" by reading
+   first, but the stream ends before it emits the actual fix. Likely a system prompt
+   or max_tokens issue in the auto-fix path.
+3. **Empty auto-fix responses** — Second attempt returns 0 chars. The continuation
+   system rescues it but adds 22s latency and only partially fixes.
+4. **Path alias `@/` not configured** — The system prompt tells the LLM to use
+   `cn()` utility but the Vite template doesn't set up `@/` path aliases. Either
+   the template needs aliases or the prompt should tell the LLM to use relative
+   imports.
+5. **Framework detection returns "unknown"** — `detectFramework` can't identify
+   Vite+React, so the dev server starts without framework-specific optimizations.
 
 ### 2. Deep Coding Runtime Rollout
 
@@ -443,7 +486,42 @@ These are the current open workstreams that still matter after removing stale du
 - `recoder-e5a` — deploy and verify the agents HEAD file proxy fix
 - `recoder-8i9` — add canvas frame-generation fallback when provider quota is exhausted
 
-### 4. Other Product Verification
+### 4. recoder-web UI Issues (2026-04-06 visual audit)
+
+Screenshots captured from live web.recoder.xyz session:
+
+#### 4a. User profile dropdown — broken styling
+The user dropdown menu (click avatar top-right) has **white solid boxes** on a dark
+background. Dashboard/Account/Settings/Sign Out items are rendered as white
+rectangles with barely-visible white text. Looks completely unstyled or using a
+light-mode-only stylesheet. The dropdown container itself is dark but the menu
+items are aggressively white with hard rounded corners that don't match the rest
+of the dark-theme UI.
+
+#### 4b. Preview pane — blank white on runtime error
+When the AI-generated project crashes (e.g. `cn is not defined`), the preview
+pane shows a completely blank white rectangle. No error overlay, no "something
+went wrong" message, no error boundary catching the crash. Users see: left panel
+with error stack trace in chat, right panel with blank white. No way to
+understand what happened without reading the raw stack trace.
+
+**Should show**: An error overlay (like Vite's default error overlay, or a custom
+one) that says what crashed and how to fix it. The chat auto-fix system is
+supposed to handle this but as documented above, it's stuck in a read-only loop.
+
+#### 4c. Import from GitHub modal — minor styling
+The "Import from GitHub" modal is functional but the input field borders are
+inconsistent with the rest of the UI. The "Analyze" and "Import Repository"
+buttons use a flat blue that doesn't match the orange accent used elsewhere
+(Deploy, Go Live buttons). Low priority but part of the overall polish gap.
+
+#### 4d. Bottom status bar — cluttered
+The bottom bar shows "Fast auto / Balanced / Powerful" mode selector, OpenRouter
+dropdown, "Free Models Router" dropdown, a settings gear, and another "Balanced"
+chip — all crammed together. This duplicates the top header's model selection
+and adds visual noise. The bar itself has no clear hierarchy.
+
+### 5. Other Product Verification
 
 - `recoder-kcq` — live-verify PM and Agency copilot write actions after timeout fixes
 - `recoder-74p` — route `chat.recoder.xyz` to Chatwoot instead of the main app
