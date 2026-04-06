@@ -647,6 +647,36 @@ IMPORTANT:
     // project and makes recovery impossible. Strip those action types from
     // the available actions for auto-fix turns only.
     if (lastUserMessageStr.startsWith('[AUTO-FIX]')) {
+      // Route auto-fix through OpenCode if available — it has direct file
+      // access and can read/edit/verify in one shot instead of the fragile
+      // chat XML action parsing that burns tokens doing readFile.
+      if (process.env.DOCKER_URL) {
+        try {
+          const { executeOpencodeChat } = await import('~/lib/.server/llm/opencode-exec');
+          const opencodeStream = await executeOpencodeChat({
+            context,
+            request,
+            projectId: requestBody.projectId || '',
+            chatId: requestBody.chatId,
+            model,
+            systemPrompt: systemPrompt + '\n\nYou are fixing runtime errors. Read the error, fix ALL affected files, then verify the fix compiles. Do not explain — just fix.',
+            messages,
+          });
+
+          stream.switchSource(opencodeStream);
+
+          return new Response(stream.readable, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+            },
+          });
+        } catch {
+          // Fall through to normal chat path if OpenCode is unavailable
+        }
+      }
+
+      // Fallback: restrict the chat LLM to edit-only actions
       systemPrompt += `\n\n## AUTO-FIX TURN — RESTRICTED ACTION SET\n\nThis turn is an automatic error-recovery retry. The project scaffold is already in place and files exist on the sandbox. You MUST NOT use any of these actions:\n\n- cloneGitHub (would replace the current project with a foreign repository)\n- cloneUrl (would replace the current project with a website clone)\n- importStarter (would overwrite the current project with a template)\n- copy_project (would clone to a different project id)\n- spawn_task (would defer work to a subagent and lose context)\n- readFile (wastes the turn — you already have the error context, fix it directly)\n\nCRITICAL: You MUST emit str_replace or file actions that actually fix the code in this turn. Do NOT just read files — you have the error message and stack trace which tell you exactly what is wrong. Fix ALL files mentioned in the error, not just one.\n\nCommon fixes:\n- "X is not defined" → add the missing import to EVERY file that uses X\n- "Cannot find module '@/...'" → either fix the import to a relative path or add the path alias to vite.config.ts + tsconfig.json\n- Build errors → fix the code, don't restart or reinstall\n\nYour ONLY tools for this turn are: str_replace, edit_file, file, shell (for npm install / npm run).\n`;
     }
 
