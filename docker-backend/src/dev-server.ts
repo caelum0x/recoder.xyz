@@ -1,6 +1,7 @@
 import Docker from 'dockerode';
 import http from 'http';
 import { autoRestoreManager } from './auto-restore.js';
+import { cleanupDaytonaDevServerProcesses, daytonaExecBackground } from './daytona-file-ops.js';
 import { getDaytonaClient } from './daytona-client.js';
 
 const docker = new Docker();
@@ -55,16 +56,7 @@ export class DevServerManager {
     // Kill any existing dev server first
     try {
       if (isDaytona) {
-        // Daytona slim sandbox may not have pkill — use layered kill strategy:
-        // 1. Kill PID from file (left by previous daytonaExecBackground)
-        // 2. Try pkill (works if procps installed)
-        // 3. Fallback to ps+grep+kill (universal POSIX)
-        await exec(
-          `kill -9 $(cat /tmp/dev.pid 2>/dev/null) 2>/dev/null; ` +
-          `pkill -9 -f 'node|npm|vite|next' 2>/dev/null || ` +
-          `(ps -eo pid,args 2>/dev/null | grep -E 'node|npm|vite|next' | grep -v grep | awk '{print $1}' | while read pid; do kill -9 "$pid" 2>/dev/null; done); ` +
-          `rm -f /tmp/dev.pid; true`
-        );
+        await cleanupDaytonaDevServerProcesses(containerId, projectId);
       } else {
         const killPattern = this.getKillPattern(framework);
         await exec(`pkill -f "${killPattern}" || true`);
@@ -81,20 +73,8 @@ export class DevServerManager {
     const startScript = `cd ${workDir} && BROWSER=none nohup ${command} > /tmp/dev.log 2>&1 &`;
 
     if (isDaytona) {
-      // Use Daytona session API for persistent background processes.
-      // Regular exec kills the process when the exec session ends.
-      try {
-        const dc = getDaytonaClient();
-        const sessionId = `dev-server-${projectId}`;
-        // Clean up any existing session
-        try { await dc.deleteSession(containerId, sessionId); } catch {}
-        await dc.createSession(containerId, sessionId);
-        await dc.execInSession(containerId, sessionId, `cd ${workDir} && BROWSER=none ${command}`);
-        console.log(`[DevServer] Started via Daytona session: ${sessionId}`);
-      } catch (sessionErr: any) {
-        console.warn(`[DevServer] Session API failed, falling back to exec: ${sessionErr.message}`);
-        await exec(startScript);
-      }
+      await daytonaExecBackground(containerId, command, workDir, { skipCleanup: true, projectId });
+      console.log('[DevServer] Started via Daytona background exec');
     } else {
       const container = docker.getContainer(containerId);
       const dockerExec = await container.exec({
@@ -149,13 +129,7 @@ export class DevServerManager {
 
     try {
       if (isDaytona) {
-        // Layered kill strategy for Daytona slim sandbox
-        const cmd =
-          `kill -9 $(cat /tmp/dev.pid 2>/dev/null) 2>/dev/null; ` +
-          `pkill -9 -f 'node|npm|vite|next' 2>/dev/null || ` +
-          `(ps -eo pid,args 2>/dev/null | grep -E 'node|npm|vite|next' | grep -v grep | awk '{print $1}' | while read pid; do kill -9 "$pid" 2>/dev/null; done); ` +
-          `rm -f /tmp/dev.pid; true`;
-        await this.daytonaExec(containerId, cmd);
+        await cleanupDaytonaDevServerProcesses(containerId, projectId);
       } else {
         const killPattern = this.getKillPattern(framework);
         const cmd = `pkill -f "${killPattern}" || true`;

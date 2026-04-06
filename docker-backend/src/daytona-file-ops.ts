@@ -13,6 +13,7 @@ import { getDaytonaClient, type ExecResult, type DaytonaFileInfo } from './dayto
 import { createLogger } from './logger.js';
 
 const logger = createLogger('daytona-file-ops');
+const DAYTONA_DEV_SERVER_PORTS = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 3000, 3001, 4173, 4174, 8080, 8081] as const;
 
 // ── Container entry type shared with server.ts ──
 
@@ -34,6 +35,45 @@ export interface ContainerEntry {
  */
 export function isDaytonaSandbox(entry: ContainerEntry | undefined): entry is ContainerEntry & { daytona: true } {
   return !!(entry && (entry as any).daytona === true);
+}
+
+export function buildDaytonaDevServerSessionId(projectId: string): string {
+  return `dev-server-${projectId}`;
+}
+
+export function buildDaytonaDevServerCleanupCommand(): string {
+  const ports = DAYTONA_DEV_SERVER_PORTS.join(' ');
+  return `
+kill -9 $(cat /tmp/dev.pid 2>/dev/null) 2>/dev/null || true
+for p in ${ports}; do
+  {
+    if command -v lsof >/dev/null 2>&1; then
+      lsof -tiTCP:$p -sTCP:LISTEN 2>/dev/null || true
+    elif command -v ss >/dev/null 2>&1; then
+      ss -ltnp "( sport = :$p )" 2>/dev/null | sed -n 's/.*pid=\\([0-9]\\+\\).*/\\1/p' || true
+    elif command -v netstat >/dev/null 2>&1; then
+      netstat -ltnp 2>/dev/null | awk '$4 ~ /:'"$p"'$/ {print $7}' | cut -d/ -f1 || true
+    elif command -v fuser >/dev/null 2>&1; then
+      fuser -n tcp $p 2>/dev/null || true
+    fi
+  } | tr ' ' '\\n' | awk '/^[0-9]+$/' | while read -r pid; do
+    kill -9 "$pid" 2>/dev/null || true
+  done
+done
+pkill -9 -f 'node|npm|vite|next|react-scripts|expo|metro' 2>/dev/null || true
+rm -f /tmp/dev.pid
+: > /tmp/dev.log
+sleep 1
+true`.trim();
+}
+
+export async function cleanupDaytonaDevServerProcesses(sandboxId: string, projectId?: string): Promise<void> {
+  await ensureRunningBeforeOp(sandboxId);
+  const dc = getDaytonaClient();
+  if (projectId) {
+    await dc.deleteSession(sandboxId, buildDaytonaDevServerSessionId(projectId));
+  }
+  await dc.execCommand(sandboxId, buildDaytonaDevServerCleanupCommand(), { timeoutSecs: 15 });
 }
 
 // ── Auto-wake helper ──
@@ -254,6 +294,7 @@ export async function daytonaExecBackground(
   sandboxId: string,
   command: string,
   cwd: string = '/home/daytona',
+  options?: { skipCleanup?: boolean; projectId?: string },
 ): Promise<void> {
   await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
@@ -262,18 +303,12 @@ export async function daytonaExecBackground(
   const safeCmd = command.replace(/`/g, '\\`');
   const safeCwd = cwd.replace(/'/g, "'\\''");
 
-  // Kill any existing dev server processes first to prevent port conflicts
-  // (vite increments port when busy: 5173→5174→5175→...)
-  try {
-    await dc.execCommand(sandboxId,
-      `kill -9 $(cat /tmp/dev.pid 2>/dev/null) 2>/dev/null; ` +
-      `pkill -9 -f 'node|npm|vite|next' 2>/dev/null || ` +
-      `(ps -eo pid,args 2>/dev/null | grep -E 'node|npm|vite|next' | grep -v grep | awk '{print $1}' | while read pid; do kill -9 "$pid" 2>/dev/null; done); ` +
-      `rm -f /tmp/dev.pid; sleep 1; true`,
-      { timeoutSecs: 10 },
-    );
-  } catch {
-    // Non-fatal — proceed with starting the new process
+  if (!options?.skipCleanup) {
+    try {
+      await cleanupDaytonaDevServerProcesses(sandboxId, options?.projectId);
+    } catch {
+      // Non-fatal — proceed with starting the new process
+    }
   }
 
   // Use nohup + setsid + disown to keep process alive after exec returns.
