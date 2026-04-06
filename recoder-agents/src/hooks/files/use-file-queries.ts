@@ -222,9 +222,11 @@ export function useFileContentQuery(
     gcTime: options.gcTime || 10 * 60 * 1000, // 10 minutes
     // Smart retry with exponential backoff and reasonable limits to prevent server overload
     retry: (failureCount, error: any) => {
-      // Don't retry on auth errors
+      // Session-token bootstrap on agents.recoder.xyz can briefly race the first
+      // same-origin file proxy request. Give auth failures a couple of retries
+      // instead of permanently pinning the query in an empty state.
       if (error?.message?.includes('401') || error?.message?.includes('403')) {
-        return false;
+        return failureCount < 3;
       }
       // Retry up to 15 times (~8-10 minutes total with exponential backoff)
       // This prevents DDoS while still handling slow sandbox startups
