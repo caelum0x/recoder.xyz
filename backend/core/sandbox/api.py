@@ -10,7 +10,7 @@ from enum import Enum
 
 import httpx
 from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Form, Depends, Request, WebSocket, WebSocketDisconnect, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from daytona_sdk import AsyncSandbox, SessionExecuteRequest
 
@@ -789,27 +789,41 @@ def derive_sandbox_status(daytona_state: str, services_health: Optional[Dict] = 
     """
     Derive unified status from Daytona state and service health.
 
-    Logic:
-    - OFFLINE: Daytona stopped/archived
-    - STARTING: Daytona archiving/stopping
-    - LIVE: Daytona started and toolbox is reachable, even if HTTP health checks are absent
-    - FAILED: Daytona started but services degraded/unhealthy
-    - UNKNOWN: Cannot determine
+    Daytona SandboxState enum values (from daytona_api_client):
+        creating, restoring, destroyed, destroying, started, stopped,
+        starting, stopping, error, build_failed, pending_build,
+        building_snapshot, unknown, pulling_snapshot, archived, archiving
+
+    Mapping:
+    - OFFLINE:   stopped, archived, destroyed
+    - STARTING:  starting, creating, restoring, pending_build,
+                 building_snapshot, pulling_snapshot, archiving, stopping
+    - LIVE:      started (+ service health check)
+    - FAILED:    error, build_failed, destroying (+ started w/ unhealthy services)
+    - UNKNOWN:   unknown or unrecognised value
     """
     if not daytona_state:
         return UnifiedSandboxStatus.UNKNOWN.value
 
     state_lower = daytona_state.lower()
 
-    # If Daytona says stopped/archived, it's offline
-    if state_lower in ('stopped', 'archived'):
+    # Sandbox is intentionally off or gone
+    if state_lower in ('stopped', 'archived', 'destroyed'):
         return UnifiedSandboxStatus.OFFLINE.value
 
-    # If archiving or stopping, it's transitioning - treat as STARTING for faster polling
-    if state_lower in ('archiving', 'stopping'):
+    # Sandbox is transitioning toward ready — poll fast
+    if state_lower in (
+        'starting', 'creating', 'restoring',
+        'pending_build', 'building_snapshot', 'pulling_snapshot',
+        'archiving', 'stopping',
+    ):
         return UnifiedSandboxStatus.STARTING.value
 
-    # Daytona says started - check service health
+    # Sandbox hit an unrecoverable problem
+    if state_lower in ('error', 'build_failed', 'destroying'):
+        return UnifiedSandboxStatus.FAILED.value
+
+    # Daytona says started — check service health
     if state_lower == 'started':
         if not services_health:
             # Daytona reports STARTED, which is enough for toolbox/file operations.
@@ -1054,6 +1068,199 @@ async def get_project_sandbox_status(
             last_checked=datetime.now(timezone.utc).isoformat(),
             error=str(e)
         )
+
+
+@router.get("/project/{project_id}/sandbox/status/stream")
+async def stream_project_sandbox_status(
+    project_id: str,
+    request: Request,
+    token: Optional[str] = Query(None),
+):
+    """
+    SSE stream that pushes sandbox status changes in real time.
+
+    Polls Daytona internally every 5 s, fingerprints the unified status +
+    daytona_state, and only emits an event when something actually changed.
+    15 s keepalive frames keep Cloudflare / nginx happy.
+
+    Events:
+        ready         — connection established, includes current status snapshot
+        sandbox.status — status changed (full SandboxStatusResponse payload)
+
+    Follows the same SSE pattern as /realtime/projects/{project_id}/stream.
+    """
+    from core.utils.auth_utils import get_user_id_from_stream_auth
+    from core.utils.sse_headers import get_sse_headers
+
+    user_id = await get_user_id_from_stream_auth(request, token)
+
+    # Lightweight auth — same as GET status endpoint
+    project_data = await execute_one(
+        "SELECT * FROM projects WHERE project_id::text = :pid",
+        {"pid": project_id},
+    )
+    if not project_data:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project_data.get("is_public"):
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+    import time as _time
+
+    def _sse_frame(event: str, data: dict, event_id: Optional[str] = None) -> str:
+        lines: list[str] = []
+        if event_id:
+            lines.append(f"id: {event_id}")
+        lines.append(f"event: {event}")
+        payload = json.dumps(data, default=str)
+        for line in payload.splitlines():
+            lines.append(f"data: {line}")
+        return "\n".join(lines) + "\n\n"
+
+    async def _fetch_status() -> dict:
+        """Re-use the same logic as the GET endpoint but return a plain dict."""
+        sandbox_resource = await _get_project_sandbox_resource(project_id)
+        if not sandbox_resource:
+            return SandboxStatusResponse(
+                status=UnifiedSandboxStatus.UNKNOWN.value,
+                sandbox_id="",
+                project_id=project_id,
+                daytona_state="none",
+                last_checked=datetime.now(timezone.utc).isoformat(),
+                error="No sandbox found for this project",
+            ).model_dump()
+
+        sandbox_id = sandbox_resource.get("external_id")
+        config = sandbox_resource.get("config") or {}
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except (ValueError, TypeError):
+                config = {}
+
+        sandbox = None
+        daytona_state = "unknown"
+        try:
+            sandbox = await daytona.get(sandbox_id)
+            daytona_state = (
+                sandbox.state.value
+                if hasattr(sandbox.state, "value")
+                else str(sandbox.state)
+            )
+        except Exception as daytona_err:
+            logger.debug(f"[sandbox-stream] Daytona unreachable for {sandbox_id}: {daytona_err}")
+            return SandboxStatusResponse(
+                status=UnifiedSandboxStatus.UNKNOWN.value,
+                sandbox_id=sandbox_id or "",
+                project_id=project_id,
+                daytona_state="unreachable",
+                last_checked=datetime.now(timezone.utc).isoformat(),
+                error=f"Daytona API error: {str(daytona_err)}",
+            ).model_dump()
+
+        services_health = None
+        health_data = None
+        if daytona_state.lower() == "started":
+            sandbox_url = config.get("sandbox_url")
+            if sandbox_url:
+                health_data = await fetch_sandbox_health(sandbox_url)
+            if not health_data and sandbox:
+                health_data = await probe_sandbox_toolbox_health(sandbox)
+            if health_data:
+                services_health = ServiceHealth(
+                    status=health_data.get("status", "unknown"),
+                    services=health_data.get("services", {}),
+                    critical_services=health_data.get("critical_services", []),
+                    error=health_data.get("error"),
+                )
+
+        unified_status = derive_sandbox_status(daytona_state, health_data)
+
+        vnc_preview = config.get("vnc_preview")
+        sandbox_url = config.get("sandbox_url")
+        if not vnc_preview and sandbox_id and daytona_state.lower() == "started":
+            vnc_preview = f"https://6080-{sandbox_id}.sandbox.recoder.xyz"
+        if not sandbox_url and sandbox_id:
+            sandbox_url = f"https://8080-{sandbox_id}.sandbox.recoder.xyz"
+
+        return SandboxStatusResponse(
+            status=unified_status,
+            sandbox_id=sandbox_id or "",
+            project_id=project_id,
+            daytona_state=daytona_state,
+            services_health=services_health,
+            last_checked=datetime.now(timezone.utc).isoformat(),
+            vnc_preview=vnc_preview,
+            sandbox_url=sandbox_url,
+            cpu=getattr(sandbox, "cpu", None) if sandbox else None,
+            memory=getattr(sandbox, "memory", None) if sandbox else None,
+            disk=getattr(sandbox, "disk", None) if sandbox else None,
+            target=getattr(sandbox, "target", None) if sandbox else None,
+        ).model_dump()
+
+    async def event_generator():
+        event_id = 0
+        last_fingerprint: Optional[str] = None
+        last_keepalive = _time.monotonic()
+
+        # Emit current state immediately so the client doesn't start blind
+        try:
+            snapshot = await _fetch_status()
+        except Exception as e:
+            logger.warning(f"[sandbox-stream] Initial fetch failed for {project_id}: {e}")
+            snapshot = {
+                "status": UnifiedSandboxStatus.UNKNOWN.value,
+                "project_id": project_id,
+                "daytona_state": "error",
+                "error": str(e),
+            }
+
+        fingerprint = f"{snapshot.get('status')}|{snapshot.get('daytona_state')}"
+        last_fingerprint = fingerprint
+        event_id += 1
+        yield _sse_frame("ready", snapshot, str(event_id))
+
+        # If already LIVE, emit once more then slow-poll (30 s).
+        # If transitioning, poll every 5 s until stable.
+        while True:
+            if await request.is_disconnected():
+                break
+
+            try:
+                snapshot = await _fetch_status()
+            except Exception:
+                # Transient failure — skip this tick, try again next cycle
+                await asyncio.sleep(5)
+                continue
+
+            fingerprint = f"{snapshot.get('status')}|{snapshot.get('daytona_state')}"
+
+            if fingerprint != last_fingerprint:
+                last_fingerprint = fingerprint
+                event_id += 1
+                yield _sse_frame("sandbox.status", snapshot, str(event_id))
+                last_keepalive = _time.monotonic()
+
+            now = _time.monotonic()
+            if now - last_keepalive >= 15:
+                last_keepalive = now
+                yield ": keepalive\n\n"
+
+            # Adaptive sleep: fast while transitioning, slow when stable
+            current_status = snapshot.get("status", "")
+            if current_status in (
+                UnifiedSandboxStatus.STARTING.value,
+                UnifiedSandboxStatus.UNKNOWN.value,
+            ):
+                await asyncio.sleep(3)
+            else:
+                await asyncio.sleep(15)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers=get_sse_headers(request),
+    )
 
 
 @router.post("/project/{project_id}/sandbox/start")
