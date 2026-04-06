@@ -7,7 +7,32 @@ export const CORS_ALLOWED_HEADERS = [
 
 export const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
 
-export function getCorsHeadersForOrigin(origin: string | undefined, allowedOrigins: readonly string[]): Record<string, string> {
+/**
+ * Strict origin allowlist shared across CORS middleware and error handlers.
+ * Centralised here so globalErrorHandler can emit the same headers as the
+ * happy-path middleware — fixing the bug where 403/500 responses were missing
+ * Access-Control-Allow-Origin and browsers couldn't read error bodies.
+ */
+export const ALLOWED_ORIGINS: readonly string[] = [
+  'https://recoder.xyz',
+  'https://www.recoder.xyz',
+  'https://agents.recoder.xyz',
+  'https://app.recoder.xyz',
+  'https://web.recoder.xyz',
+  'https://studio.recoder.xyz',
+  'https://agency.recoder.xyz',
+  'https://pm.recoder.xyz',
+  'https://docker.recoder.xyz',
+  ...(process.env.NODE_ENV === 'production'
+    ? []
+    : [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:3100',
+      ]),
+];
+
+export function getCorsHeadersForOrigin(origin: string | undefined, allowedOrigins: readonly string[] = ALLOWED_ORIGINS): Record<string, string> {
   if (!origin || !allowedOrigins.includes(origin)) {
     return {};
   }

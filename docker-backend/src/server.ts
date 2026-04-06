@@ -19,7 +19,7 @@ import { createReadStream } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { mountFiles } from './fileMount.js';
-import { CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, getCorsHeadersForOrigin } from './cors-utils.js';
+import { ALLOWED_ORIGINS, CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, getCorsHeadersForOrigin } from './cors-utils.js';
 import { fastWriteFile, fastWriteFiles } from './fast-file-writer.js';
 import * as pty from 'node-pty';
 import { WebSocketRPC } from './websocket-rpc.js';
@@ -1592,25 +1592,7 @@ const containerLimiter = rateLimit({
   message: { error: 'Container creation rate limited' },
 });
 
-// CORS - Strict origin allowlist (SECURITY FIX: no wildcard fallback)
-const ALLOWED_ORIGINS = [
-  'https://recoder.xyz',
-  'https://www.recoder.xyz',
-  'https://agents.recoder.xyz',
-  'https://app.recoder.xyz',
-  'https://web.recoder.xyz',
-  'https://studio.recoder.xyz',
-  'https://agency.recoder.xyz',
-  'https://pm.recoder.xyz',
-  'https://docker.recoder.xyz', // Self-reference for same-origin API calls
-  ...(process.env.NODE_ENV === 'production'
-    ? []
-    : [
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://localhost:3100',
-      ]),
-];
+// CORS allowlist imported from cors-utils.ts (shared with globalErrorHandler)
 
 const PUBLIC_DOCKER_BACKEND_URL =
   process.env.DOCKER_BACKEND_PUBLIC_URL ||
@@ -15190,6 +15172,8 @@ app.use('/api/a2a/data', duckdbRouter);
 app.use('/api/a2a/canvas-update', authenticateRequest, createCanvasRouter({
   canvasHandlerUrl: process.env.RECODER_A2A_CANVAS_HANDLER_URL || '',
   internalServiceKey: process.env.INTERNAL_SERVICE_KEY || '',
+  writeFile: daytonaWriteFile,
+  readFile: daytonaReadFile,
 }));
 startupInfo('routes.canvas-update', 'registered');
 app.use('/api/a2a', connectorHealthRouter);
