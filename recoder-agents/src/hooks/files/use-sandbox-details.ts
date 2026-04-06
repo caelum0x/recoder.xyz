@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { backendApi } from '@/lib/api-client';
+import { connectTokenizedSSE, type TokenizedSSEConnection } from '@/lib/realtime/sse';
+import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 import { sandboxKeys } from './keys';
 import type {
   SandboxStatus,
@@ -87,6 +89,44 @@ export function useSandboxDetails(projectId: string | undefined, options?: { ena
  * - Combines Daytona state with in-container health checks
  */
 export function useSandboxStatus(projectId: string | undefined, options?: { enabled?: boolean }) {
+  const queryClient = useQueryClient();
+  const sseRef = useRef<TokenizedSSEConnection | null>(null);
+  const isEnabled = !!projectId && (options?.enabled !== false);
+
+  // SSE connection — pushes status updates into the React Query cache
+  useEffect(() => {
+    if (!isEnabled || !projectId) return;
+
+    const baseUrl = resolveBrowserBackendApiUrl();
+    if (!baseUrl) return;
+
+    const connection = connectTokenizedSSE({
+      url: `${baseUrl}/project/${projectId}/sandbox/status/stream`,
+      events: {
+        ready: (evt) => {
+          try {
+            const data = JSON.parse(evt.data) as SandboxState;
+            queryClient.setQueryData(sandboxKeys.status(projectId), data);
+          } catch { /* ignore parse errors */ }
+        },
+        'sandbox.status': (evt) => {
+          try {
+            const data = JSON.parse(evt.data) as SandboxState;
+            queryClient.setQueryData(sandboxKeys.status(projectId), data);
+          } catch { /* ignore parse errors */ }
+        },
+      },
+    });
+
+    sseRef.current = connection;
+
+    return () => {
+      connection.close();
+      sseRef.current = null;
+    };
+  }, [projectId, isEnabled, queryClient]);
+
+  // HTTP GET as initial load + fallback when SSE hasn't delivered yet
   return useQuery<SandboxState | null>({
     queryKey: sandboxKeys.status(projectId || ''),
     queryFn: async () => {
@@ -103,25 +143,11 @@ export function useSandboxStatus(projectId: string | undefined, options?: { enab
 
       return response.data;
     },
-    enabled: !!projectId && (options?.enabled !== false),
-    // Adaptive stale time - faster refresh when starting/unknown
-    staleTime: (query) => {
-      const status = query.state.data?.status;
-      // Very short stale time when transitioning or unknown
-      if (status === 'STARTING' || status === 'UNKNOWN') return 1000;
-      return 10 * 1000;
-    },
-    // Adaptive polling - faster when transitioning or unknown (sandbox might be starting)
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      // Poll faster when sandbox is starting up or unknown
-      if (status === 'STARTING') return 2000;
-      if (status === 'UNKNOWN') return 5000; // Sandbox might be being created
-      if (status === 'OFFLINE') return 10000; // User might start it
-      return 30000;
-    },
-    refetchOnWindowFocus: true, // Refetch when user comes back to tab
-    refetchOnMount: 'always', // Always fetch on mount to show current status immediately
+    enabled: isEnabled,
+    staleTime: 60 * 1000, // SSE keeps the cache fresh; only refetch if stale for 60s
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
+    // No refetchInterval — SSE handles real-time updates
   });
 }
 
