@@ -271,6 +271,8 @@ services:
       - PORT=3001
       - NEXT_PUBLIC_APP_URL=https://agents.recoder.xyz
       - NEXT_PUBLIC_API_URL=http://recoder-docker-backend:3100
+      - NEXT_PUBLIC_AUTH_URL=https://recoder.xyz
+      - AUTH_DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001',{redirect:'manual'}).then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
