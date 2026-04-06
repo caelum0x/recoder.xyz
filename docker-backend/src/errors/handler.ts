@@ -6,6 +6,7 @@
 import type { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import { AppError, ErrorCode, ErrorStatusMap, ApiErrorResponse } from './types.js';
 import { createLogger } from '../logger.js';
+import { getCorsHeadersForOrigin } from '../cors-utils.js';
 
 const logger = createLogger('error-handler');
 
@@ -139,6 +140,16 @@ export const globalErrorHandler: ErrorRequestHandler = (
     method: req.method,
     duration,
   });
+
+  // Ensure CORS headers are present on error responses so browsers can read
+  // the error body.  The happy-path CORS middleware may have already set them,
+  // but errors thrown before that middleware (e.g. from the cors() callback
+  // itself) will not have them.  Setting them here is a no-op when they're
+  // already present (setHeader overwrites) and a fix when they're missing.
+  const corsHeaders = getCorsHeadersForOrigin(req.headers.origin);
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    res.setHeader(key, value);
+  }
 
   // Send error response
   const response: ApiErrorResponse = appError.toResponse(requestId);
