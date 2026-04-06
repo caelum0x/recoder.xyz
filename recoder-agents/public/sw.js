@@ -1,4 +1,4 @@
-const CACHE_NAME = 'recoder-agents-v5';
+const CACHE_NAME = 'recoder-agents-v6';
 const STATIC_ASSETS = ['/manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -14,8 +14,8 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip API requests
-  if (url.pathname.startsWith('/api/')) return;
+  // Skip API requests and backend proxy routes
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/v1/')) return;
 
   // Skip external/cross-origin URLs entirely
   if (url.origin !== self.location.origin) return;
@@ -29,9 +29,11 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (response && response.ok) {
+        if (response && response.ok && response.type === 'basic') {
           const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          caches.open(CACHE_NAME).then((cache) =>
+            cache.put(event.request, clone).catch(() => {})
+          );
         }
         return response;
       })

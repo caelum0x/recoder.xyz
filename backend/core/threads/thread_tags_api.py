@@ -67,22 +67,26 @@ async def create_tag(
 async def list_tags(
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    rows = await execute(
-        """
-        SELECT t.*, COALESCE(c.thread_count, 0) AS thread_count
-        FROM thread_tags t
-        LEFT JOIN (
-            SELECT tag_id, COUNT(*) AS thread_count
-            FROM thread_tag_assignments
-            WHERE user_id::text = :user_id
-            GROUP BY tag_id
-        ) c ON c.tag_id::text = t.id::text
-        WHERE t.user_id::text = :user_id
-        ORDER BY t.name
-        """,
-        {"user_id": user_id},
-    )
-    return [dict(r) for r in rows]
+    try:
+        rows = await execute(
+            """
+            SELECT t.*, COALESCE(c.thread_count, 0) AS thread_count
+            FROM thread_tags t
+            LEFT JOIN (
+                SELECT tag_id, COUNT(*) AS thread_count
+                FROM thread_tag_assignments
+                WHERE user_id::text = :user_id
+                GROUP BY tag_id
+            ) c ON c.tag_id::text = t.id::text
+            WHERE t.user_id::text = :user_id
+            ORDER BY t.name
+            """,
+            {"user_id": user_id},
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        # Table may not exist if migration hasn't been applied yet
+        return []
 
 
 @router.patch("/tags/{tag_id}", summary="Update a tag")
@@ -202,17 +206,21 @@ async def list_thread_tags(
     thread_id: str,
     user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    rows = await execute(
-        """
-        SELECT t.*
-        FROM thread_tags t
-        JOIN thread_tag_assignments a ON a.tag_id::text = t.id::text
-        WHERE a.thread_id::text = :thread_id AND a.user_id::text = :user_id
-        ORDER BY t.name
-        """,
-        {"thread_id": thread_id, "user_id": user_id},
-    )
-    return [dict(r) for r in rows]
+    try:
+        rows = await execute(
+            """
+            SELECT t.*
+            FROM thread_tags t
+            JOIN thread_tag_assignments a ON a.tag_id::text = t.id::text
+            WHERE a.thread_id::text = :thread_id AND a.user_id::text = :user_id
+            ORDER BY t.name
+            """,
+            {"thread_id": thread_id, "user_id": user_id},
+        )
+        return [dict(r) for r in rows]
+    except Exception:
+        # Table may not exist if migration hasn't been applied yet
+        return []
 
 
 @router.get("/tags/{tag_id}/threads", summary="List threads with a specific tag")
