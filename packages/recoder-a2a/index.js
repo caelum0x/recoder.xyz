@@ -514,7 +514,7 @@ const TOOLS = [
   },
   {
     name: 'recoder_canvas_update',
-    description: 'Push live Excalidraw element updates to a canvas board open in the Recoder agents UI. The browser\'s CanvasPanel will call updateScene() immediately, adding or replacing elements without a full reload.',
+    description: 'Push live Excalidraw element updates to a canvas board. Updates the live UI immediately AND persists to the sandbox file so changes survive page refresh. Provide sandbox_id + file_path for persistence.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -525,8 +525,22 @@ const TOOLS = [
           description: 'Excalidraw elements array (shapes, text, arrows). Each element must have type, id, x, y, width, height at minimum.',
           items: { type: 'object' },
         },
+        sandbox_id: { type: 'string', description: 'Sandbox/container ID for file persistence (from project sandbox details)' },
+        file_path: { type: 'string', description: 'Path to the .excalidraw file inside the sandbox (e.g. canvases/board.excalidraw)' },
       },
       required: ['project_id', 'elements'],
+    },
+  },
+  {
+    name: 'recoder_canvas_read',
+    description: 'Read the current state of an Excalidraw board from the sandbox file. Returns elements array and element count. Use this before making targeted mutations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sandbox_id: { type: 'string', description: 'Sandbox/container ID' },
+        file_path: { type: 'string', description: 'Path to the .excalidraw file inside the sandbox (e.g. canvases/board.excalidraw)' },
+      },
+      required: ['sandbox_id', 'file_path'],
     },
   },
   {
@@ -1130,16 +1144,34 @@ async function handleToolCall(name, args, callParams = {}) {
       if (!args.project_id || !Array.isArray(args.elements)) {
         throw new Error('project_id and elements[] are required');
       }
-      await apiFetch(`${DOCKER_URL}/api/a2a/canvas-update`, {
+      const canvasRes = await apiFetch(`${DOCKER_URL}/api/a2a/canvas-update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: args.project_id,
           threadId: args.thread_id || '',
           elements: args.elements,
+          sandboxId: args.sandbox_id || '',
+          filePath: args.file_path || '',
         }),
       });
-      return `Canvas updated: ${args.elements.length} element(s) pushed to project ${args.project_id}. The board in the Recoder UI will update live.`;
+      const canvasData = await canvasRes.json().catch(() => ({}));
+      const persisted = canvasData?.data?.persisted ? ' and persisted to file' : '';
+      return `Canvas updated: ${args.elements.length} element(s) pushed to project ${args.project_id}${persisted}. The board in the Recoder UI will update live.`;
+    }
+
+    case 'recoder_canvas_read': {
+      if (!args.sandbox_id || !args.file_path) {
+        throw new Error('sandbox_id and file_path are required');
+      }
+      const readRes = await apiFetch(
+        `${DOCKER_URL}/api/a2a/canvas-update/read?sandboxId=${encodeURIComponent(args.sandbox_id)}&filePath=${encodeURIComponent(args.file_path)}`,
+      );
+      const readData = await readRes.json();
+      if (!readData.success) {
+        throw new Error(readData.error || 'Failed to read canvas');
+      }
+      return JSON.stringify(readData.data);
     }
 
     case 'recoder_query_data': {
