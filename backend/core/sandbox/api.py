@@ -791,8 +791,8 @@ def derive_sandbox_status(daytona_state: str, services_health: Optional[Dict] = 
 
     Logic:
     - OFFLINE: Daytona stopped/archived
-    - STARTING: Daytona archiving OR Daytona started but services not healthy yet
-    - LIVE: Daytona started AND services healthy (or legacy sandbox reachable)
+    - STARTING: Daytona archiving/stopping
+    - LIVE: Daytona started and toolbox is reachable, even if HTTP health checks are absent
     - FAILED: Daytona started but services degraded/unhealthy
     - UNKNOWN: Cannot determine
     """
@@ -812,8 +812,9 @@ def derive_sandbox_status(daytona_state: str, services_health: Optional[Dict] = 
     # Daytona says started - check service health
     if state_lower == 'started':
         if not services_health:
-            # No health info yet (timeout/unreachable) - assume starting
-            return UnifiedSandboxStatus.STARTING.value
+            # Daytona reports STARTED, which is enough for toolbox/file operations.
+            # Many sandboxes do not expose an HTTP /health endpoint on port 8080.
+            return UnifiedSandboxStatus.LIVE.value
 
         health_status = services_health.get('status', 'unknown')
         services = services_health.get('services', {})
@@ -875,6 +876,38 @@ async def fetch_sandbox_health(sandbox_url: str, timeout: float = 5.0) -> Option
         logger.debug(f"Health check timed out for {sandbox_url}")
     except Exception as e:
         logger.debug(f"Failed to fetch sandbox health from {sandbox_url}: {e}")
+
+    return None
+
+
+async def probe_sandbox_toolbox_health(sandbox: AsyncSandbox, timeout: float = 5.0) -> Optional[Dict]:
+    """
+    Probe sandbox readiness via Daytona toolbox exec.
+
+    Some sandboxes do not expose an HTTP health endpoint on port 8080 even though
+    the toolbox is healthy and file/exec operations already work. In those cases
+    we still want file-centric surfaces to treat the sandbox as usable.
+    """
+    try:
+        result = await sandbox.process.exec(
+            "test -d /home/daytona -a -d /tmp && echo TOOLBOX_READY || echo TOOLBOX_NOT_READY",
+            timeout=timeout,
+        )
+        output = (
+            getattr(result, "result", None)
+            or getattr(result, "output", None)
+            or ""
+        ).strip()
+        if "TOOLBOX_READY" in output:
+            return {
+                "status": "healthy",
+                "services": {
+                    "toolbox": "running",
+                },
+                "critical_services": [],
+            }
+    except Exception as e:
+        logger.debug(f"Toolbox health probe failed: {e}")
 
     return None
 
@@ -970,9 +1003,11 @@ async def get_project_sandbox_status(
             sandbox_url = config.get('sandbox_url')
             if sandbox_url:
                 health_data = await fetch_sandbox_health(sandbox_url)
-                if health_data:
-                    services_health = ServiceHealth(
-                        status=health_data.get('status', 'unknown'),
+            if not health_data and sandbox:
+                health_data = await probe_sandbox_toolbox_health(sandbox)
+            if health_data:
+                services_health = ServiceHealth(
+                    status=health_data.get('status', 'unknown'),
                         services=health_data.get('services', {}),
                         critical_services=health_data.get('critical_services', []),
                         error=health_data.get('error')
@@ -1168,9 +1203,11 @@ async def get_sandbox_status_by_id(
             sandbox_url = config.get('sandbox_url')
             if sandbox_url:
                 health_data = await fetch_sandbox_health(sandbox_url)
-                if health_data:
-                    services_health = ServiceHealth(
-                        status=health_data.get('status', 'unknown'),
+            if not health_data and sandbox:
+                health_data = await probe_sandbox_toolbox_health(sandbox)
+            if health_data:
+                services_health = ServiceHealth(
+                    status=health_data.get('status', 'unknown'),
                         services=health_data.get('services', {}),
                         critical_services=health_data.get('critical_services', []),
                         error=health_data.get('error')

@@ -7,8 +7,8 @@
  * Unified sandbox status that combines Daytona state + service health
  */
 export type SandboxStatus =
-  | 'LIVE'      // Daytona STARTED + all services healthy
-  | 'STARTING'  // Daytona transitioning OR services starting up
+  | 'LIVE'      // Daytona STARTED / toolbox reachable (services may not expose /health)
+  | 'STARTING'  // Daytona transitioning
   | 'OFFLINE'   // Daytona STOPPED/ARCHIVED (intentionally off)
   | 'FAILED'    // Daytona STARTED but services unhealthy/degraded
   | 'UNKNOWN';  // Cannot determine state
@@ -81,8 +81,8 @@ export interface SandboxState {
  *
  * Logic:
  * - OFFLINE: Daytona stopped/archived
- * - STARTING: Daytona archiving OR Daytona started but services not healthy yet
- * - LIVE: Daytona started AND services healthy
+ * - STARTING: Daytona archiving/stopping
+ * - LIVE: Daytona started (toolbox/file ops reachable), even if HTTP health is absent
  * - FAILED: Daytona started but services degraded/unhealthy
  * - UNKNOWN: Cannot determine
  */
@@ -109,8 +109,9 @@ export function deriveSandboxStatus(
   // Daytona says started - check service health
   if (normalizedState === 'started') {
     if (!servicesHealth) {
-      // No health info yet - assume starting
-      return 'STARTING';
+      // Many sandboxes do not expose a public /health endpoint even though
+      // toolbox/file operations already work. Treat STARTED as usable.
+      return 'LIVE';
     }
 
     switch (servicesHealth.status) {
