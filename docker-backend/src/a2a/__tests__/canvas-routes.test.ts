@@ -134,6 +134,7 @@ describe('canvas.routes', () => {
         threadId: null,
         elementCount: 1,
         relayed: false,
+        persisted: false,
       },
     });
     expect(publishMock).toHaveBeenCalledTimes(1);
@@ -186,6 +187,7 @@ describe('canvas.routes', () => {
         threadId: 'thread-789',
         elementCount: 1,
         relayed: true,
+        persisted: false,
       },
     });
     expect(relayFetch).toHaveBeenCalledWith(
@@ -231,9 +233,120 @@ describe('canvas.routes', () => {
         threadId: 'thread-999',
         elementCount: 1,
         relayed: false,
+        persisted: false,
       },
     });
     expect(publishMock).toHaveBeenCalledTimes(1);
     expect(broadcastToWorkspaceMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists elements to sandbox file when sandboxId and filePath are provided', async () => {
+    const existingScene = JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      source: 'https://agents.recoder.xyz',
+      elements: [{ id: 'old-1', type: 'rectangle', x: 0, y: 0, width: 50, height: 50 }],
+      appState: {},
+      files: {},
+    });
+
+    const readFile = vi.fn().mockResolvedValue(existingScene);
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+
+    const app = createTestApp(createCanvasRouter({ readFile, writeFile }));
+
+    const newElements = [{ id: 'new-1', type: 'ellipse', x: 100, y: 100, width: 60, height: 60 }];
+
+    const response = await request(app, 'POST', '/api/a2a/canvas-update', {
+      body: {
+        projectId: 'project-persist',
+        elements: newElements,
+        sandboxId: 'sandbox-abc',
+        filePath: 'canvases/board.excalidraw',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.persisted).toBe(true);
+    expect(readFile).toHaveBeenCalledWith('sandbox-abc', 'canvases/board.excalidraw');
+    expect(writeFile).toHaveBeenCalledWith(
+      'sandbox-abc',
+      'canvases/board.excalidraw',
+      expect.any(String),
+    );
+
+    // Verify merged content
+    const writtenScene = JSON.parse(writeFile.mock.calls[0][2]);
+    expect(writtenScene.elements).toHaveLength(2);
+    const ids = writtenScene.elements.map((e: any) => e.id);
+    expect(ids).toContain('old-1');
+    expect(ids).toContain('new-1');
+  });
+
+  it('creates new file when sandbox file does not exist', async () => {
+    const readFile = vi.fn().mockRejectedValue(new Error('not found'));
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+
+    const app = createTestApp(createCanvasRouter({ readFile, writeFile }));
+
+    const response = await request(app, 'POST', '/api/a2a/canvas-update', {
+      body: {
+        projectId: 'project-new',
+        elements: [{ id: 'first-1', type: 'text', x: 0, y: 0, width: 100, height: 30 }],
+        sandboxId: 'sandbox-new',
+        filePath: 'canvases/new-board.excalidraw',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.persisted).toBe(true);
+    expect(writeFile).toHaveBeenCalled();
+    const writtenScene = JSON.parse(writeFile.mock.calls[0][2]);
+    expect(writtenScene.type).toBe('excalidraw');
+    expect(writtenScene.elements).toHaveLength(1);
+    expect(writtenScene.elements[0].id).toBe('first-1');
+  });
+
+  it('reads current board state from sandbox via GET /read', async () => {
+    const scene = JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      source: 'https://agents.recoder.xyz',
+      elements: [
+        { id: 'a', type: 'rectangle', x: 0, y: 0, width: 100, height: 100 },
+        { id: 'b', type: 'ellipse', x: 50, y: 50, width: 60, height: 60 },
+      ],
+      appState: { theme: 'dark' },
+      files: {},
+    });
+
+    const readFile = vi.fn().mockResolvedValue(scene);
+    const app = createTestApp(createCanvasRouter({ readFile }));
+
+    const response = await request(
+      app,
+      'GET',
+      '/api/a2a/canvas-update/read?sandboxId=sandbox-read&filePath=canvases/board.excalidraw',
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.elementCount).toBe(2);
+    expect(response.body.data.elements).toHaveLength(2);
+    expect(readFile).toHaveBeenCalledWith('sandbox-read', 'canvases/board.excalidraw');
+  });
+
+  it('returns 404 when board file does not exist', async () => {
+    const readFile = vi.fn().mockRejectedValue(new Error('file not found'));
+    const app = createTestApp(createCanvasRouter({ readFile }));
+
+    const response = await request(
+      app,
+      'GET',
+      '/api/a2a/canvas-update/read?sandboxId=sandbox-missing&filePath=canvases/nope.excalidraw',
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body.success).toBe(false);
   });
 });
