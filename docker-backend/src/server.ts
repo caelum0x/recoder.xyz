@@ -2040,6 +2040,13 @@ async function ensureContainerRunning(
       // Container is stopped, try to restart it
       logger.info({ projectId, containerId: entry.id.slice(0, 12) }, 'Restarting stopped container');
       await container.start();
+      // Wait for container to be fully running before returning — putArchive
+      // fails with 500 if the filesystem layer isn't ready yet.
+      for (let i = 0; i < 10; i++) {
+        const check = await container.inspect();
+        if (check.State.Running) break;
+        await new Promise(r => setTimeout(r, 300));
+      }
       logger.info({ projectId }, 'Successfully restarted container');
       return { running: true, restarted: true };
     }
@@ -3382,6 +3389,10 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
   logger.info({ projectId, path: safePath }, 'file write request');
   try {
     const { content } = req.body;
+
+    if (content === undefined || content === null) {
+      return res.status(400).json({ error: 'content is required' });
+    }
 
     if (!safePath) {
       metricsCollector.recordFileOperation({
