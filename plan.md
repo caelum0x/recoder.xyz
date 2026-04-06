@@ -433,46 +433,65 @@ These are the current open workstreams that still matter after removing stale du
 - `recoder-i3v` — browser-verify deployed Web IDE multi-turn editing on production
 - `recoder-w0b` — clean up stale Daytona dev server processes after preview restarts
 
-#### recoder-web can't code a landing page (2026-04-06 repro)
+#### recoder-web coding loop is fundamentally broken (2026-04-06)
 
-**Repro**: "Build a modern landing page with hero, features, testimonials, pricing,
-contact form using Tailwind CSS" on web.recoder.xyz.
+**The problem is architectural, not a bug to patch.**
 
-**What happens**: AI creates 18 files (package.json through App.tsx), writes all
-to sandbox, runs `npm install && npm run dev`. Preview opens but crashes with
-`cn is not defined` in Features.tsx, Pricing.tsx, Contact.tsx. AI created
-`src/utils/cn.ts` but components import it via `@/utils/cn` — the Vite template
-has no `@/` path alias configured (needs `resolve.alias` in vite.config.ts and
-`paths` in tsconfig.json).
+Current flow: Chat LLM emits `<recoderAction type="file">` XML → frontend
+MessageParser extracts action → action-runner.ts POSTs to docker-backend →
+backend writes to sandbox. On error, auto-fix sends error back to LLM which
+tries to emit more XML edits. Every joint in this chain breaks:
 
-**Auto-fix loop is broken** — 4 distinct failures in sequence:
-1. Auto-fix fires, AI emits only a `readFile` action ("Read Features.tsx"), stream
-   ends without any edit. No `str_replace` or file write action produced.
-2. Second auto-fix: AI returns **empty response** (0 chars), triggers continuation
-   system (1/3). Continuation eventually produces a `str_replace` action after 22s
-   but it only fixes 1 of 3 broken files.
-3. Third auto-fix: AI emits another `readFile` only, no edit. Skipped as "same
-   runtime errors as last attempt".
-4. Fourth auto-fix: AI produces a `str_replace` for Features.tsx but again only
-   1 file. Skipped again.
+1. **File writes 500** — Docker putArchive race condition (container starting
+   but filesystem not ready). Fixed with readiness poll in ensureContainerRunning.
+   Daytona sandboxes bypass this via daytonaWriteFile() which is reliable.
+2. **Auto-fix burns tokens doing nothing** — system prompt told LLM to "respond
+   with readFile actions" on errors. LLM reads files, stream ends, no edit.
+   Fixed prompt to force str_replace/file actions only.
+3. **LLM generates broken imports** — `@/utils/cn` but no path alias configured.
+   Prompt needs to mandate relative imports or template needs alias setup.
+4. **Empty auto-fix responses** — 0 chars returned, continuation system rescues
+   after 22s, partially fixes 1 of N broken files.
 
-**Root causes** (multiple, all must be fixed for the coding loop to work):
-1. **`POST /api/file/{projectId}` returns 500** — file writes to Docker sandbox
-   fail intermittently. The local file store gets the file, but Docker sync fails,
-   so Vite never sees the change. This is the **primary blocker** — even when the
-   AI produces a correct edit, it can't be written to the sandbox.
-2. **Auto-fix AI produces readFile instead of str_replace** — The auto-fix system
-   prompt doesn't restrict the AI to edit-only actions. The AI "thinks" by reading
-   first, but the stream ends before it emits the actual fix. Likely a system prompt
-   or max_tokens issue in the auto-fix path.
-3. **Empty auto-fix responses** — Second attempt returns 0 chars. The continuation
-   system rescues it but adds 22s latency and only partially fixes.
-4. **Path alias `@/` not configured** — The system prompt tells the LLM to use
-   `cn()` utility but the Vite template doesn't set up `@/` path aliases. Either
-   the template needs aliases or the prompt should tell the LLM to use relative
-   imports.
-5. **Framework detection returns "unknown"** — `detectFramework` can't identify
-   Vite+React, so the dev server starts without framework-specific optimizations.
+**What's already built but not connected:**
+
+| Component | Status | What it does |
+|-----------|--------|-------------|
+| `recoder-opencode` (port 4096) | Running, healthy | Full coding agent with file edit, bash, grep, glob tools |
+| `deep-coding` chat mode | Code exists, not default | Routes through coding-runtime → OpenCode per-sandbox CLI |
+| `coding-runtime` layer | Code exists, adapters for opencode/codex/claude-code/native/auto | Registry + intent classification + runtime routing |
+| `daytonaWriteFile()` | Working, battle-tested | 3-retry file write directly to Daytona sandbox, bypasses Docker |
+| `opencode-exec.ts` | Fully implemented | Sends prompt to OpenCode, gets back file diffs, no XML parsing |
+| `opencode-service-adapter.ts` | Built, gap: directory is `/workspace` not sandbox | Centralized path to opencode-service at port 4096 |
+
+**The gap:** Centralized `recoder-opencode` edits files in its own `/workspace`
+volume, NOT in Daytona sandboxes. Per-sandbox OpenCode (deep-coding mode) has
+the right file access but requires opencode installed in each sandbox.
+
+**Strategy — make OpenCode the default coding backend:**
+
+Phase 1 (immediate): Bridge centralized opencode-service → Daytona file APIs.
+When opencode-service does a file write to `/workspace/foo.ts`, intercept it
+and route through `daytonaWriteFile(sandboxId, 'foo.ts', content)` instead.
+This gives the centralized agent direct sandbox access without installing
+opencode in every sandbox.
+
+Phase 2: Make `deep-coding` mode the default for "build" chat mode.
+User says "build a landing page" → coding-runtime dispatches to OpenCode →
+OpenCode creates all files, runs npm install, debugs errors iteratively with
+direct file access → results appear in preview. The chat LLM becomes a
+dispatcher, not a code generator.
+
+Phase 3: Auto-fix routes through OpenCode instead of re-prompting the chat LLM.
+Runtime error detected → send error to OpenCode session → OpenCode reads the
+file, fixes the import, writes the file, verifies the fix — all in one shot,
+no XML parsing, no frontend action-runner involvement.
+
+**Repro from 2026-04-06** (for reference):
+"Build a modern landing page with hero, features, testimonials, pricing,
+contact form using Tailwind CSS" on web.recoder.xyz. AI creates 18 files,
+preview crashes with `cn is not defined`. Auto-fix loops 4 times reading
+files but never editing. The whole thing is a Rube Goldberg machine.
 
 ### 2. Deep Coding Runtime Rollout
 
