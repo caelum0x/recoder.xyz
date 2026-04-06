@@ -4868,17 +4868,34 @@ app.post('/api/opencode/:projectId', authenticateRequest, verifyProjectOwnership
     // If OPENCODE_SERVICE_URL is set, route through the centralized opencode service
     if (process.env.OPENCODE_SERVICE_URL) {
       const { handleOpencodeServicePrompt } = await import('./a2a/opencode-service-handler.js');
+
+      // Resolve Daytona sandbox ID for file sync
+      const entry = await getOrRecoverContainer(projectId);
+      const sandboxId = entry && isDaytonaSandbox(entry) ? entry.id : undefined;
+
       const result = await handleOpencodeServicePrompt({
         projectId,
         prompt,
         model,
         providerKeys: providerKeys as Record<string, string | undefined> | undefined,
+        sandboxId,
+        readWorkspaceFile: sandboxId
+          ? async (path: string) => {
+              // Read from opencode's /workspace via its file API
+              const { createRecoderOpencodeClient } = await import('@recoder/shared/opencode-client');
+              const client = createRecoderOpencodeClient({ baseUrl: process.env.OPENCODE_SERVICE_URL! });
+              const content = await client.readFile(path, '/workspace');
+              return typeof content === 'string' ? content : JSON.stringify(content);
+            }
+          : undefined,
+        writeSandboxFile: sandboxId ? daytonaWriteFile : undefined,
       });
       return res.json({
         success: result.success,
         sessionId: result.sessionId,
         text: result.text,
         output: result.output,
+        syncedFiles: result.syncedFiles,
       });
     }
 
