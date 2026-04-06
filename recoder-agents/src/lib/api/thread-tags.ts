@@ -82,10 +82,10 @@ export const removeTag = async (threadId: string, tagId: string) => {
 export const getThreadTags = async (threadId: string): Promise<ThreadTag[]> => {
   const response = await backendApi.get<ThreadTag[]>(
     `/threads/${threadId}/tags`,
-    { showErrors: true }
+    { showErrors: false }
   );
-  if (response.error) throw new Error(response.error.message);
-  return response.data!;
+  if (response.error) return [];
+  return response.data ?? [];
 };
 
 export const getTaggedThreads = async (
