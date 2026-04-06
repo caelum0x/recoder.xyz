@@ -174,7 +174,13 @@ const nextConfig: NextConfig = {
   },
   
   async rewrites() {
+    const backendUrl = getBackendUrl().replace(/\/v1\/?$/, '');
     return [
+      // Proxy /v1/* to the Python backend so browser fetches stay same-origin
+      {
+        source: '/v1/:path*',
+        destination: `${backendUrl}/v1/:path*`,
+      },
       {
         source: '/ingest/static/:path*',
         destination: 'https://eu-assets.i.posthog.com/static/:path*',
