@@ -4,6 +4,70 @@ Last updated: 2026-04-07 (evening)
 
 This is the single current status doc for the repository.
 
+## ONE GOAL: Make all platforms work end to end
+
+### Honest platform state (2026-04-07 server check)
+
+| Platform | URL | Server Status | Actual User Experience |
+|----------|-----|---------------|----------------------|
+| **agents** | agents.recoder.xyz | Docker healthy, PM2 online | Can only do messages/chats. No real coding — agent can't create React apps, only HTML/CSS. Sandbox auto-stop + broken preview breaks the code→run→preview cycle. |
+| **web** | web.recoder.xyz | Docker healthy | Basic — no continuous development or edits. Other AI dev platforms (Bolt, Lovable, Cursor) do iterative edit→preview→fix loops. We can't. Pi agent wired but not deployed yet. |
+| **A2A** | docker.recoder.xyz/api/a2a | Docker healthy | Only works locally (Claude Code ↔ Codex via MCP bridge). No web UI, no docs, no public pages explaining how to use it. Zero external developer adoption path. |
+| **PM** | pm.recoder.xyz | **CRASH LOOP** (42,740 restarts) | `Cannot find module '@logtail/next'` — missing dependency in `next.config.ts`. Was working ~1 week ago. |
+| **Agency** | agency.recoder.xyz | PM2 online | Giselle engine broken ("Failed to create and start task from stage"). Services/quotes placeholder. Separate auth from recoder.xyz. |
+| **recoder.xyz** | recoder.xyz | Docker healthy | Auth source of truth (Better Auth). Dashboard/Billing/Projects pages are stubs. |
+
+### What each platform needs to be "working end to end"
+
+**agents.recoder.xyz — must be able to code real apps:**
+- [ ] Pi agent deployed as coding backend (code done, needs docker-backend rebuild with pi-coding-agent)
+- [ ] Agent coding loop: user says "build X" → Pi creates files in Daytona sandbox → preview shows result → user iterates
+- [ ] Sandbox stays alive during development (auto-stop disabled while active)
+- [ ] Preview reliably shows the running app (not blank white)
+- [ ] Error auto-fix through Pi agent (not chat LLM XML parsing)
+
+**web.recoder.xyz — must support continuous development:**
+- [ ] Pi agent as default chat backend (code done in api.chat.ts, needs deploy)
+- [ ] Iterative edit→preview→fix loop working (user says "change the header color" → Pi edits file → preview hot-reloads)
+- [ ] File tree shows current sandbox state (not stale local store)
+- [ ] Terminal connected to sandbox (WS proxy fix deployed but not verified)
+- [ ] Multi-turn editing: context carries across messages, Pi session persists
+
+**A2A — needs web presence + docs:**
+- [ ] Landing page or docs section at recoder.xyz explaining A2A
+- [ ] Web UI for viewing/sending A2A tasks (recoder-29m shared task board)
+- [ ] Deploy Redis-backed task persistence to production (in-memory store still active)
+- [ ] Integration guide for external developers
+- [ ] Push notifications (inbox is poll-only)
+
+**pm.recoder.xyz — needs crash fix:**
+- [ ] Fix `Cannot find module '@logtail/next'` — install missing dep or remove from next.config.ts
+- [ ] Verify copilot read+write works after restart
+- [ ] Unify auth with recoder.xyz (currently separate Supabase Auth)
+
+**agency.recoder.xyz — needs Giselle engine fix:**
+- [ ] Debug "Failed to create and start task from stage" 500 errors
+- [ ] Fix GitHub auth account_not_linked
+- [ ] Wire API keys edit/delete to real backend (currently console.log only)
+- [ ] Unify auth with recoder.xyz (currently separate Better Auth instance)
+
+### Priority order
+
+**P0 — Fix what's crashing:**
+1. PM crash fix (`@logtail/next` missing module)
+
+**P1 — Make coding work (the core product):**
+2. Deploy Pi agent to docker-backend (rebuild with pi-coding-agent)
+3. Deploy recoder-web with Pi-first chat routing
+4. Verify end-to-end: "build a landing page" on web.recoder.xyz
+5. Wire Pi into recoder-agents Python backend
+
+**P2 — Platform completeness:**
+6. A2A docs + web UI + Redis persistence
+7. Agency Giselle engine debug
+8. Auth unification across all platforms
+9. proxy.recoder.xyz deployment
+
 ## 2026-04-06–07 SESSION — Full deployment + live fixes
 
 ### Deployed to Hetzner (all verified)
