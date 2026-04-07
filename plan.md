@@ -1,8 +1,43 @@
 # Recoder Platform — Current Status
 
-Last updated: 2026-04-05 (afternoon)
+Last updated: 2026-04-06 (evening)
 
 This is the single current status doc for the repository.
+
+## 2026-04-06 SESSION — Sandbox status, CORS, Excalidraw, nginx proxy fixes
+
+### Deployed to Hetzner this session
+
+| Fix | Service | Status |
+|-----|---------|--------|
+| `derive_sandbox_status()` maps all 16 Daytona states | recoder-backend (Python) | **LIVE** — verified sandbox returns LIVE instead of STARTING |
+| SSE endpoint `/project/{id}/sandbox/status/stream` | recoder-backend (Python) | **LIVE** — push-based, eliminates 2s client polling |
+| CORS headers on 403/500 error responses | docker-backend (Express) | **LIVE** — verified 401 response includes Access-Control-Allow-Origin |
+| Excalidraw board mutation + file persistence | docker-backend (Express) | **LIVE** — canvas updates now write back to sandbox .excalidraw file |
+| `recoder_canvas_read` MCP tool | docker-backend (Express) | **LIVE** — agents can read current board state |
+| nginx `/v1/` proxy for agents.recoder.xyz | nginx | **LIVE** — browser /v1/* requests proxy to Python backend (was 524 timeout) |
+| `NEXT_PUBLIC_BACKEND_URL` localhost→host.docker.internal | recoder-frontend .env.local | **LIVE** — SSR can now reach Python backend from inside Docker |
+| `ALLOWED_ORIGINS` moved to shared cors-utils.ts | docker-backend (Express) | **LIVE** — single source of truth for CORS allowlist |
+
+### Discovered and fixed during deployment
+
+1. **`NEXT_PUBLIC_BACKEND_URL=localhost:8000`** in `recoder-agents/.env.local` — unreachable inside Docker container. Fixed to `host.docker.internal:8000`. This was the root cause of all thread pages showing skeleton forever (SSR couldn't fetch data).
+
+2. **nginx missing `/v1/` location block** for agents.recoder.xyz — browser-side `/v1/*` requests went to Next.js which had no handler → 524 Cloudflare timeout. Added `proxy_pass http://backend_api` with `Accept-Encoding ''` to prevent `ERR_CONTENT_DECODING_FAILED`.
+
+3. **nginx upstream failure state** after PM2 restart — `max_fails=3 fail_timeout=30s` marked backend as down during restart. Fixed with `nginx -s reload`.
+
+4. **Prisma engine mismatch** — locally-built `.next` tarball has macOS Prisma engines, container needs Linux. Must rebuild via Docker, not tarball copy.
+
+### Still in progress
+
+- **recoder-frontend Docker rebuild** — running now on Hetzner. Includes `next.config.ts` `/v1/` rewrite rule and all frontend SSE hook changes. Once done, browser-side JS will have correct `NEXT_PUBLIC_BACKEND_URL=https://api.recoder.xyz/v1` baked in.
+
+### Code landed locally (not yet deployed)
+
+- **recoder-sti** WS proxy fixes — preview.ts `ws:false`, docker-api.ts path normalization, all tested
+- **recoder-vtl** Excalidraw mutation — canvas.routes.ts persistence, recoder_canvas_read tool, 8 tests pass
+- **Frontend SSE hook** — `useSandboxStatus` uses `connectTokenizedSSE` instead of polling (in frontend rebuild)
 
 ## Source Of Truth
 
@@ -468,24 +503,80 @@ tries to emit more XML edits. Every joint in this chain breaks:
 volume, NOT in Daytona sandboxes. Per-sandbox OpenCode (deep-coding mode) has
 the right file access but requires opencode installed in each sandbox.
 
-**Strategy — make OpenCode the default coding backend:**
+**Strategy — Pi agents as the unified coding runtime:**
 
-Phase 1 (immediate): Bridge centralized opencode-service → Daytona file APIs.
-When opencode-service does a file write to `/workspace/foo.ts`, intercept it
-and route through `daytonaWriteFile(sandboxId, 'foo.ts', content)` instead.
-This gives the centralized agent direct sandbox access without installing
-opencode in every sandbox.
+Forked `badlogic/pi-mono` (32.7k stars, MIT) as `caelum0x/pi-mono`.
+Pi is a battle-tested coding agent toolkit with pluggable tool operations,
+unified LLM API (20+ providers), embeddable web UI, and SDK for embedding
+in any Node.js process. Cloned locally at `/Users/arhansubasi/pi-mono`.
 
-Phase 2: Make `deep-coding` mode the default for "build" chat mode.
-User says "build a landing page" → coding-runtime dispatches to OpenCode →
-OpenCode creates all files, runs npm install, debugs errors iteratively with
-direct file access → results appear in preview. The chat LLM becomes a
-dispatcher, not a code generator.
+Also forked: `pi-skills` (agent skills), `sitegeist` (browser AI),
+`proxy` (CORS proxy), `pi-share-hf` (session data collection).
 
-Phase 3: Auto-fix routes through OpenCode instead of re-prompting the chat LLM.
-Runtime error detected → send error to OpenCode session → OpenCode reads the
-file, fixes the import, writes the file, verifies the fix — all in one shot,
-no XML parsing, no frontend action-runner involvement.
+#### What's already built (2026-04-07)
+
+**Phase 1 DONE — Pi SDK → Daytona bridge (`pi-runtime-adapter.ts`):**
+- `docker-backend/src/a2a/pi-runtime-adapter.ts` implements all 4 Pi
+  tool operation interfaces against Daytona APIs:
+  - `ReadOperations` → `daytonaReadFile()`
+  - `WriteOperations` → `daytonaWriteFile()` + `daytonaCreateFolder()`
+  - `EditOperations` → `daytonaReadFile()` + `daytonaWriteFile()`
+  - `BashOperations` → `daytonaExec()`
+- `POST /api/pi/:projectId` endpoint in server.ts — sends prompt to Pi
+  agent, returns text response + changed files list. Requires Daytona sandbox.
+- Sessions are in-memory (`SessionManager.inMemory()`), pooled per projectId
+  with 30min TTL.
+
+**Phase 2 DONE — OpenCode bridge + auto-fix through OpenCode:**
+- `opencode-service-handler.ts` syncs files from opencode `/workspace`
+  to Daytona sandbox via diff extraction + daytonaWriteFile.
+- Auto-fix `[AUTO-FIX]` turns route through `executeOpencodeChat` instead
+  of re-prompting the chat LLM.
+
+#### Pi integration map across all Recoder surfaces
+
+| Pi Package | Recoder Surface | What it replaces/adds | Status |
+|---|---|---|---|
+| `@mariozechner/pi-coding-agent` SDK | **docker-backend** | OpenCode coding loop. Daytona-native via custom ops. `POST /api/pi/:projectId` | Code done, needs deploy |
+| `@mariozechner/pi-coding-agent` SDK | **recoder-code** | The `recoder-code` CLI agent can embed Pi sessions directly for local coding tasks, replacing the opencode vendor | Planned |
+| `@mariozechner/pi-ai` (unified LLM) | **docker-backend** + **recoder-web** + **recoder-agents** | Our provider abstraction. Pi supports Anthropic, OpenAI, Google, Bedrock, Mistral, Groq, OpenRouter, GitHub Copilot, Codex — all from one package | Planned |
+| `@mariozechner/pi-web-ui` | **recoder-web** | The XML action parsing chat UI. Pi's web components (mini-lit + Tailwind v4) handle streaming, artifacts, model selection natively. Embeddable via `document.body.appendChild(chatPanel)` | Planned |
+| `@mariozechner/pi-web-ui` | **recoder-agents** | The agents chat panel. Pi web UI can replace the current Next.js chat components with a framework-agnostic web component | Planned |
+| `pi-skills` (1.1k stars) | **A2A agent ecosystem** | Ready-made skills for coding agents, compatible with Claude Code/Codex CLI. Can be loaded by any agent in the A2A registry via the extension system | Planned |
+| `sitegeist` (397 stars) | **recoder-agents** browse/QA | Browser AI assistant for web automation. Could power QA testing, site audits, and the browse capability in agents | Planned |
+| `proxy` (CORS proxy) | **docker-backend** / **nginx** | Simple CORS proxy server. Cleaner solution for the nginx double-compression and CORS issues than patching nginx config | Planned |
+| `pi-share-hf` | **all surfaces** | Session data collection for HuggingFace dataset upload. Useful later for improving AI coding quality with fine-tuning data | Future |
+
+#### Key architecture advantage: pluggable operations
+
+Pi's tools use operation interfaces (`WriteOperations`, `BashOperations`, etc.)
+that can be swapped at session creation time. This means:
+
+- **docker-backend**: Pi writes to Daytona via `daytonaWriteFile()` — no file sync bridge needed
+- **recoder-code**: Pi writes to local disk via Node.js `fs` (default) — works out of the box
+- **recoder-agents**: Pi writes via A2A tool dispatch — agent calls `recoder_sandbox_exec` MCP tool
+- **Sandbox containers**: Pi writes to `/home/daytona/` directly when embedded inside the sandbox
+
+One codebase, four execution contexts, zero transport layer hacks.
+
+#### Remaining phases
+
+Phase 3: Wire `POST /api/pi/:projectId` into recoder-web's `api.chat.ts`
+as the default coding backend for "build" mode. User says "build X" → 
+request goes to Pi agent → Pi creates files, runs npm install, debugs
+errors iteratively → results appear in preview.
+
+Phase 4: Embed `@mariozechner/pi-web-ui` in recoder-web as the chat
+interface. Replaces the XML action parsing MessageParser with Pi's native
+streaming web components.
+
+Phase 5: Integrate `pi-ai` unified LLM API across all surfaces —
+docker-backend, recoder-web, recoder-agents. Single provider abstraction,
+single BYOK key management, 20+ providers.
+
+Phase 6: Load `pi-skills` into the A2A agent registry. Skills become
+callable by any agent (Claude Code, Codex, recoder-agents AI) via the
+A2A task dispatch system.
 
 **Repro from 2026-04-06** (for reference):
 "Build a modern landing page with hero, features, testimonials, pricing,
