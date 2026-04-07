@@ -72,6 +72,10 @@ COPY pi-mono-dist/ai/dist/ ./node_modules/@mariozechner/pi-ai/dist/
 COPY pi-mono-dist/ai/package.json ./node_modules/@mariozechner/pi-ai/
 COPY pi-mono-dist/agent/dist/ ./node_modules/@mariozechner/pi-agent-core/dist/
 COPY pi-mono-dist/agent/package.json ./node_modules/@mariozechner/pi-agent-core/
+COPY pi-mono-dist/tui/dist/ ./node_modules/@mariozechner/pi-tui/dist/
+COPY pi-mono-dist/tui/package.json ./node_modules/@mariozechner/pi-tui/
+COPY pi-mono-dist/web-ui/dist/ ./node_modules/@mariozechner/pi-web-ui/dist/
+COPY pi-mono-dist/web-ui/package.json ./node_modules/@mariozechner/pi-web-ui/
 
 WORKDIR /app/docker-backend
 
