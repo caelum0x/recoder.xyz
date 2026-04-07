@@ -1,0 +1,286 @@
+/**
+ * @module pi-runtime-adapter
+ *
+ * Bridges pi-coding-agent SDK to Daytona sandboxes.
+ *
+ * Creates Pi agent sessions with custom tool operations that route
+ * all file I/O and shell execution through Daytona APIs — the agent
+ * thinks it's editing /home/daytona/* locally but everything goes
+ * through daytonaWriteFile/daytonaReadFile/daytonaExec.
+ *
+ * This replaces the fragile chat-XML-action-runner pipeline with a
+ * proper coding agent that has direct sandbox access.
+ */
+
+import { createLogger } from '../logger.js';
+import {
+  daytonaWriteFile,
+  daytonaReadFile,
+  daytonaExec,
+  daytonaCreateFolder,
+} from '../daytona-file-ops.js';
+
+const logger = createLogger('pi-runtime');
+
+// ── Daytona-backed Operations ───────────────────────────────────────
+
+const DAYTONA_CWD = '/home/daytona';
+
+/** ReadOperations backed by Daytona */
+function createDaytonaReadOps(sandboxId: string) {
+  return {
+    readFile: async (absolutePath: string): Promise<Buffer> => {
+      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '');
+      const content = await daytonaReadFile(sandboxId, relativePath);
+      return Buffer.from(content, 'utf-8');
+    },
+    access: async (absolutePath: string): Promise<void> => {
+      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '');
+      try {
+        await daytonaReadFile(sandboxId, relativePath);
+      } catch {
+        throw new Error(`ENOENT: no such file: ${absolutePath}`);
+      }
+    },
+    detectImageMimeType: async (_path: string) => null as string | null,
+  };
+}
+
+/** WriteOperations backed by Daytona */
+function createDaytonaWriteOps(sandboxId: string) {
+  return {
+    writeFile: async (absolutePath: string, content: string): Promise<void> => {
+      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '');
+      await daytonaWriteFile(sandboxId, relativePath, content);
+      logger.debug({ sandboxId, path: relativePath }, 'Pi wrote file via Daytona');
+    },
+    mkdir: async (dir: string): Promise<void> => {
+      const relativePath = dir.replace(/^\/home\/daytona\//, '');
+      await daytonaCreateFolder(sandboxId, relativePath);
+    },
+  };
+}
+
+/** EditOperations backed by Daytona (read + write) */
+function createDaytonaEditOps(sandboxId: string) {
+  const readOps = createDaytonaReadOps(sandboxId);
+  const writeOps = createDaytonaWriteOps(sandboxId);
+  return {
+    readFile: readOps.readFile,
+    writeFile: writeOps.writeFile,
+    access: readOps.access,
+  };
+}
+
+/** BashOperations backed by Daytona */
+function createDaytonaBashOps(sandboxId: string) {
+  return {
+    exec: async (
+      command: string,
+      cwd: string,
+      options: {
+        onData: (data: Buffer) => void;
+        signal?: AbortSignal;
+        timeout?: number;
+      },
+    ): Promise<{ exitCode: number | null }> => {
+      try {
+        const result = await daytonaExec(sandboxId, command, {
+          cwd,
+          timeoutSecs: options.timeout || 120,
+        });
+
+        // Send output to Pi's streaming callback
+        if (result.output) {
+          options.onData(Buffer.from(result.output, 'utf-8'));
+        }
+
+        return { exitCode: result.exitCode ?? 0 };
+      } catch (err: any) {
+        options.onData(Buffer.from(`Error: ${err.message}\n`, 'utf-8'));
+        return { exitCode: 1 };
+      }
+    },
+  };
+}
+
+// ── Session Management ──────────────────────────────────────────────
+
+interface PiSession {
+  sessionPromise: Promise<any>;
+  session: any;
+  sandboxId: string;
+  projectId: string;
+  createdAt: number;
+}
+
+/** Map projectId → PiSession */
+const activeSessions = new Map<string, PiSession>();
+
+/** Session TTL: 30 minutes */
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
+/**
+ * Get or create a Pi coding agent session for a project's Daytona sandbox.
+ */
+export async function getOrCreatePiSession(
+  projectId: string,
+  sandboxId: string,
+  options?: {
+    model?: string;
+    providerKeys?: Record<string, string | undefined>;
+  },
+): Promise<any> {
+  // Check for existing valid session
+  const existing = activeSessions.get(projectId);
+  if (existing && existing.sandboxId === sandboxId) {
+    const age = Date.now() - existing.createdAt;
+    if (age < SESSION_TTL_MS) {
+      return existing.session;
+    }
+    // Expired — dispose and recreate
+    try { existing.session?.dispose?.(); } catch { /* best effort */ }
+    activeSessions.delete(projectId);
+  }
+
+  logger.info({ projectId, sandboxId }, 'Creating Pi coding agent session');
+
+  // Dynamic import to avoid hard dependency at module load time
+  const piModule = await import('@mariozechner/pi-coding-agent');
+  const {
+    createAgentSession,
+    createReadTool,
+    createBashTool,
+    createEditTool,
+    createWriteTool,
+  } = piModule;
+
+  // Get SessionManager for in-memory (no disk I/O)
+  const SessionManager = piModule.SessionManager;
+
+  const readOps = createDaytonaReadOps(sandboxId);
+  const writeOps = createDaytonaWriteOps(sandboxId);
+  const editOps = createDaytonaEditOps(sandboxId);
+  const bashOps = createDaytonaBashOps(sandboxId);
+
+  const { session } = await createAgentSession({
+    cwd: DAYTONA_CWD,
+    tools: [
+      createReadTool(DAYTONA_CWD, { operations: readOps }),
+      createBashTool(DAYTONA_CWD, { operations: bashOps }),
+      createEditTool(DAYTONA_CWD, { operations: editOps }),
+      createWriteTool(DAYTONA_CWD, { operations: writeOps }),
+    ],
+    sessionManager: SessionManager?.inMemory?.() ?? undefined,
+  });
+
+  const piSession: PiSession = {
+    sessionPromise: Promise.resolve(session),
+    session,
+    sandboxId,
+    projectId,
+    createdAt: Date.now(),
+  };
+
+  activeSessions.set(projectId, piSession);
+  logger.info({ projectId, sandboxId }, 'Pi session created');
+
+  return session;
+}
+
+/**
+ * Send a prompt to the Pi coding agent for a project.
+ * Returns the assistant's text response after all tool calls complete.
+ */
+export async function promptPiSession(
+  projectId: string,
+  sandboxId: string,
+  prompt: string,
+  options?: {
+    model?: string;
+    providerKeys?: Record<string, string | undefined>;
+  },
+): Promise<{ success: boolean; text: string; filesChanged: string[] }> {
+  const session = await getOrCreatePiSession(projectId, sandboxId, options);
+
+  const textParts: string[] = [];
+  const filesChanged: string[] = [];
+
+  // Subscribe to events to collect results
+  const unsubscribe = session.subscribe((event: any) => {
+    if (event.type === 'message_end' && event.message?.role === 'assistant') {
+      for (const content of event.message.content || []) {
+        if (content.type === 'text') {
+          textParts.push(content.text);
+        }
+      }
+    }
+
+    // Track file writes from tool executions
+    if (event.type === 'tool_execution_end') {
+      const toolName = event.toolName || event.name;
+      if (toolName === 'write' || toolName === 'edit') {
+        const path = event.args?.path || event.input?.path;
+        if (path) filesChanged.push(path);
+      }
+    }
+  });
+
+  try {
+    await session.prompt(prompt);
+
+    return {
+      success: true,
+      text: textParts.join('\n\n'),
+      filesChanged,
+    };
+  } catch (err: any) {
+    logger.error({ projectId, err }, 'Pi prompt failed');
+    return {
+      success: false,
+      text: `Error: ${err.message}`,
+      filesChanged,
+    };
+  } finally {
+    unsubscribe();
+  }
+}
+
+/**
+ * Dispose a project's Pi session.
+ */
+export function disposePiSession(projectId: string): void {
+  const existing = activeSessions.get(projectId);
+  if (existing) {
+    try { existing.session?.dispose?.(); } catch { /* best effort */ }
+    activeSessions.delete(projectId);
+    logger.info({ projectId }, 'Pi session disposed');
+  }
+}
+
+/**
+ * Check if Pi runtime is available (package installed).
+ */
+export async function isPiRuntimeAvailable(): Promise<boolean> {
+  try {
+    await import('@mariozechner/pi-coding-agent');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Get active Pi sessions info.
+ */
+export function getActivePiSessions(): Array<{
+  projectId: string;
+  sandboxId: string;
+  ageMs: number;
+}> {
+  return Array.from(activeSessions.entries()).map(([projectId, s]) => ({
+    projectId,
+    sandboxId: s.sandboxId,
+    ageMs: Date.now() - s.createdAt,
+  }));
+}
