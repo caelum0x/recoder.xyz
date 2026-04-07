@@ -20,10 +20,12 @@
     "ci:install-and-check": "pnpm run ci:check:noninteractive",
     "ci:install-and-check:local": "pnpm run ci:check:noninteractive"
   },
+  "optionalDependencies": {
+    "@mariozechner/pi-coding-agent": "file:../pi-mono/packages/coding-agent",
+    "@mariozechner/pi-ai": "file:../pi-mono/packages/ai"
+  },
   "dependencies": {
     "@babel/parser": "^7.29.0",
-    "@mariozechner/pi-coding-agent": "file:../pi-mono/packages/coding-agent",
-    "@mariozechner/pi-ai": "file:../pi-mono/packages/ai",
     "@babel/traverse": "^7.29.0",
     "@recoder/shared": "workspace:*",
     "@recoder/stream": "workspace:*",
