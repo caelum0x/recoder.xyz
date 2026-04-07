@@ -601,13 +601,14 @@ async def _execute_deep_coding_run(
     account_id: str,
     cancellation_event: asyncio.Event,
 ) -> None:
-    """Route a deep-coding mode run through docker-backend's opencode service."""
+    """Route a deep-coding mode run through docker-backend's Pi or OpenCode service."""
     import httpx
 
     docker_backend_url = os.getenv("DOCKER_BACKEND_URL", "http://localhost:3100")
-    url = f"{docker_backend_url}/api/opencode/{project_id}"
 
-    logger.info(f"[DEEP_CODING] Routing to opencode service: {url}")
+    # Try Pi agent first (Daytona-native), fall back to OpenCode
+    url = f"{docker_backend_url}/api/pi/{project_id}"
+    logger.info(f"[DEEP_CODING] Trying Pi agent: {url}")
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
@@ -617,11 +618,19 @@ async def _execute_deep_coding_run(
             })
 
             if resp.status_code != 200:
-                error_text = resp.text[:500]
-                logger.error(f"[DEEP_CODING] opencode request failed: {resp.status_code} {error_text}")
-                from core.agents.runner import update_agent_run_status
-                await update_agent_run_status(agent_run_id, "failed", error=f"OpenCode service error: {resp.status_code}", account_id=account_id)
-                return
+                # Pi failed — fall back to OpenCode
+                logger.warn(f"[DEEP_CODING] Pi agent failed ({resp.status_code}), trying OpenCode fallback")
+                opencode_url = f"{docker_backend_url}/api/opencode/{project_id}"
+                resp = await client.post(opencode_url, json={
+                    "prompt": prompt,
+                    "model": model_name,
+                })
+                if resp.status_code != 200:
+                    error_text = resp.text[:500]
+                    logger.error(f"[DEEP_CODING] Both Pi and OpenCode failed: {resp.status_code} {error_text}")
+                    from core.agents.runner import update_agent_run_status
+                    await update_agent_run_status(agent_run_id, "failed", error=f"Coding service error: {resp.status_code}", account_id=account_id)
+                    return
 
             result = resp.json()
 
