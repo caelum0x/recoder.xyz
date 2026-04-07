@@ -143,15 +143,16 @@ function buildOpencodePrompt(options: {
     ].join('\n\n');
   }
 
+  // Don't include the full system prompt (~100KB) — OpenCode has its own.
+  // Including it causes the OpenCode service to return empty responses.
+  const conversationContext = summarizeConversation(options.messages);
+
   return [
     'You are working directly inside the user\'s live Recoder sandbox at /workspace.',
     'Edit files directly, run verification commands when useful, and return a concise plain-English summary of what changed.',
     'Do not emit <recoderAction> XML or describe hypothetical edits. Make the changes in the repo.',
-    'Additional Recoder product guidance:',
-    options.systemPrompt,
-    'Conversation transcript:',
-    summarizeConversation(options.messages),
-  ].join('\n\n');
+    conversationContext ? `Conversation context:\n${conversationContext}` : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 function shellQuote(value: string): string {
