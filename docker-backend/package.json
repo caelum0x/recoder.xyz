@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@babel/parser": "^7.29.0",
+    "@mariozechner/pi-coding-agent": "file:../pi-mono/packages/coding-agent",
+    "@mariozechner/pi-ai": "file:../pi-mono/packages/ai",
     "@babel/traverse": "^7.29.0",
     "@recoder/shared": "workspace:*",
     "@recoder/stream": "workspace:*",
