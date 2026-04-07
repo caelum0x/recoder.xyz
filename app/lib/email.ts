@@ -55,15 +55,21 @@ export function sanitizeEmailLink(url: string, fallbackPath: string, options?: S
   }
 }
 
-// Initialize SMTP transporter (fallback if Resend is not configured)
+// Initialize SMTP transporter
+// Supports: authenticated SMTP (gmail, etc.) or local Postfix (no auth needed)
+const smtpHost = process.env.SMTP_HOST || 'localhost';
+const smtpPort = parseInt(process.env.SMTP_PORT || (smtpHost === 'localhost' ? '25' : '587'));
+const smtpAuth = process.env.SMTP_USER
+  ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
+  : undefined;
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // Use TLS
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
+  host: smtpHost,
+  port: smtpPort,
+  secure: false,
+  auth: smtpAuth,
+  // Local Postfix doesn't need TLS
+  ...(smtpHost === 'localhost' ? { tls: { rejectUnauthorized: false } } : {}),
 });
 
 interface EmailOptions {
@@ -75,7 +81,9 @@ interface EmailOptions {
 
 export async function sendEmail({ to, subject, html, text }: EmailOptions) {
   // Check if no email service is configured
-  if (!process.env.RESEND_API_KEY && !process.env.SMTP_USER) {
+  // Allow: Resend API key, SMTP with auth, or local Postfix (SMTP_HOST=localhost, no auth needed)
+  const hasEmailService = process.env.RESEND_API_KEY || process.env.SMTP_USER || smtpHost === 'localhost';
+  if (!hasEmailService) {
     if (process.env.NODE_ENV === 'development') {
       logger.info('[DEV] Email would be sent', { to, subject });
       return { success: true, messageId: 'dev-' + Date.now() };
