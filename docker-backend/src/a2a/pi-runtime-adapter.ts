@@ -30,12 +30,12 @@ const DAYTONA_CWD = '/home/daytona';
 function createDaytonaReadOps(sandboxId: string) {
   return {
     readFile: async (absolutePath: string): Promise<Buffer> => {
-      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '');
+      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '').replace(/^\//, '');
       const content = await daytonaReadFile(sandboxId, relativePath);
       return Buffer.from(content, 'utf-8');
     },
     access: async (absolutePath: string): Promise<void> => {
-      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '');
+      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '').replace(/^\//, '');
       try {
         await daytonaReadFile(sandboxId, relativePath);
       } catch {
@@ -50,12 +50,14 @@ function createDaytonaReadOps(sandboxId: string) {
 function createDaytonaWriteOps(sandboxId: string) {
   return {
     writeFile: async (absolutePath: string, content: string): Promise<void> => {
-      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '');
+      const relativePath = absolutePath.replace(/^\/home\/daytona\//, '').replace(/^\//, '');
       await daytonaWriteFile(sandboxId, relativePath, content);
       logger.debug({ sandboxId, path: relativePath }, 'Pi wrote file via Daytona');
     },
     mkdir: async (dir: string): Promise<void> => {
-      const relativePath = dir.replace(/^\/home\/daytona\//, '');
+      // Skip mkdir for the root workspace dir itself — it always exists
+      const relativePath = dir.replace(/^\/home\/daytona\/?/, '').replace(/^\//, '');
+      if (!relativePath || relativePath === '.') return;
       await daytonaCreateFolder(sandboxId, relativePath);
     },
   };
@@ -149,13 +151,12 @@ export async function getOrCreatePiSession(
   const piModule = await import('@mariozechner/pi-coding-agent');
   const {
     createAgentSession,
-    createReadTool,
-    createBashTool,
-    createEditTool,
-    createWriteTool,
+    createReadToolDefinition,
+    createBashToolDefinition,
+    createEditToolDefinition,
+    createWriteToolDefinition,
   } = piModule;
 
-  // Get SessionManager for in-memory (no disk I/O)
   const SessionManager = piModule.SessionManager;
 
   const readOps = createDaytonaReadOps(sandboxId);
@@ -163,13 +164,17 @@ export async function getOrCreatePiSession(
   const editOps = createDaytonaEditOps(sandboxId);
   const bashOps = createDaytonaBashOps(sandboxId);
 
+  // Use customTools with ToolDefinitions (not AgentTool) — this bypasses
+  // the allTools global registry and ensures our Daytona-backed operations
+  // are actually used instead of the default fs implementations.
   const { session } = await createAgentSession({
     cwd: DAYTONA_CWD,
-    tools: [
-      createReadTool(DAYTONA_CWD, { operations: readOps }),
-      createBashTool(DAYTONA_CWD, { operations: bashOps }),
-      createEditTool(DAYTONA_CWD, { operations: editOps }),
-      createWriteTool(DAYTONA_CWD, { operations: writeOps }),
+    tools: [],  // disable built-in tools
+    customTools: [
+      createWriteToolDefinition(DAYTONA_CWD, { operations: writeOps }),
+      createReadToolDefinition(DAYTONA_CWD, { operations: readOps }),
+      createEditToolDefinition(DAYTONA_CWD, { operations: editOps }),
+      createBashToolDefinition(DAYTONA_CWD, { operations: bashOps }),
     ],
     sessionManager: SessionManager?.inMemory?.() ?? undefined,
   });
