@@ -4844,7 +4844,47 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
   }
 });
 
-app.post('/api/opencode/:projectId', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
+// ── Pi Coding Agent endpoint (Daytona-native) ──
+app.post('/api/pi/:projectId', authenticateRequest, flexibleProjectOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const projectId = sanitizeProjectId(req.params.projectId);
+    const { prompt, model, providerKeys } = (req.body || {}) as {
+      prompt?: string;
+      model?: string;
+      providerKeys?: Record<string, string | undefined>;
+    };
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ success: false, error: 'prompt is required' });
+    }
+
+    const entry = await getOrRecoverContainer(projectId);
+    if (!entry) {
+      return res.status(404).json({ success: false, error: 'Sandbox not found' });
+    }
+
+    if (!isDaytonaSandbox(entry)) {
+      return res.status(400).json({ success: false, error: 'Pi runtime requires a Daytona sandbox' });
+    }
+
+    const { promptPiSession } = await import('./a2a/pi-runtime-adapter.js');
+    const result = await promptPiSession(projectId, entry.id, prompt, {
+      model,
+      providerKeys,
+    });
+
+    return res.json({
+      success: result.success,
+      text: result.text,
+      filesChanged: result.filesChanged,
+    });
+  } catch (err: any) {
+    logger.error({ err }, 'Pi coding agent error');
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/opencode/:projectId', authenticateRequest, flexibleProjectOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const projectId = sanitizeProjectId(req.params.projectId);
     const {
@@ -4873,11 +4913,19 @@ app.post('/api/opencode/:projectId', authenticateRequest, verifyProjectOwnership
       const entry = await getOrRecoverContainer(projectId);
       const sandboxId = entry && isDaytonaSandbox(entry) ? entry.id : undefined;
 
+      // Use request-supplied BYOK keys, or fall back to docker-backend's own keys
+      const effectiveProviderKeys = {
+        openrouter: (providerKeys as any)?.openrouter || process.env.OPENROUTER_API_KEY,
+        openai: (providerKeys as any)?.openai || process.env.OPENAI_API_KEY,
+        anthropic: (providerKeys as any)?.anthropic || process.env.ANTHROPIC_API_KEY,
+        google: (providerKeys as any)?.google || process.env.GOOGLE_AI_API_KEY,
+      };
+
       const result = await handleOpencodeServicePrompt({
         projectId,
         prompt,
         model,
-        providerKeys: providerKeys as Record<string, string | undefined> | undefined,
+        providerKeys: effectiveProviderKeys,
         sandboxId,
         readWorkspaceFile: sandboxId
           ? async (path: string) => {
@@ -15235,7 +15283,7 @@ const codingRuntimeSelectionByProject = new Map<string, {
   routeDecision?: unknown;
 }>();
 
-app.post('/api/coding-runtime/session', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
   const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt } = req.body;
   if (!projectId || !sandboxId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and sandboxId required'));
@@ -15279,7 +15327,7 @@ app.post('/api/coding-runtime/session', authenticateRequest, verifyProjectOwners
   });
 }));
 
-app.post('/api/coding-runtime/prompt', authenticateRequest, verifyProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
   const { projectId, prompt, runtimeType, agent, enableCompletionLoop, maxIterations, backoffMs } = req.body;
   if (!projectId || !prompt) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
