@@ -1,0 +1,133 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RECODER_ANONYMOUS_ID_HEADER = exports.RECODER_ANONYMOUS_ID_COOKIE = void 0;
+exports.getProjectIdFromRequest = getProjectIdFromRequest;
+exports.isLikelySandboxProjectId = isLikelySandboxProjectId;
+exports.getAnonymousIdFromRequest = getAnonymousIdFromRequest;
+exports.resolveA2ASystemSession = resolveA2ASystemSession;
+exports.isStrictAuthMode = isStrictAuthMode;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+exports.RECODER_ANONYMOUS_ID_COOKIE = 'recoder_anonymous_id';
+exports.RECODER_ANONYMOUS_ID_HEADER = 'x-recoder-anonymous-id';
+function parseCookies(cookieHeader) {
+    const cookies = {};
+    if (!cookieHeader) {
+        return cookies;
+    }
+    for (const cookie of cookieHeader.split(';')) {
+        const [name, ...valueParts] = cookie.trim().split('=');
+        const value = valueParts.join('=');
+        if (name && value) {
+            cookies[name] = decodeURIComponent(value);
+        }
+    }
+    return cookies;
+}
+function normalizeAnonymousId(value) {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === 'anonymous') {
+        return undefined;
+    }
+    if (!SAFE_ANONYMOUS_ID_RE.test(trimmed)) {
+        return undefined;
+    }
+    return trimmed;
+}
+function getProjectIdFromRequest(req) {
+    const params = req.params;
+    const body = req.body;
+    const query = req.query;
+    return (params?.projectId ||
+        body?.projectId ||
+        query?.projectId ||
+        query?.containerId ||
+        undefined);
+}
+function isLikelySandboxProjectId(value) {
+    if (!value) {
+        return false;
+    }
+    return value.startsWith('project-') || UUID_RE.test(value);
+}
+function getAnonymousIdFromRequest(req) {
+    const headerValue = req.headers[exports.RECODER_ANONYMOUS_ID_HEADER];
+    if (Array.isArray(headerValue)) {
+        for (const entry of headerValue) {
+            const normalized = normalizeAnonymousId(entry);
+            if (normalized) {
+                return normalized;
+            }
+        }
+    }
+    const fromHeader = normalizeAnonymousId(headerValue);
+    if (fromHeader) {
+        return fromHeader;
+    }
+    const query = req.query;
+    const queryCandidates = [
+        query?.anonymousId,
+        query?.[exports.RECODER_ANONYMOUS_ID_COOKIE],
+        query?.[exports.RECODER_ANONYMOUS_ID_HEADER],
+    ];
+    for (const candidate of queryCandidates) {
+        if (Array.isArray(candidate)) {
+            for (const entry of candidate) {
+                const normalized = normalizeAnonymousId(entry);
+                if (normalized) {
+                    return normalized;
+                }
+            }
+            continue;
+        }
+        const normalized = normalizeAnonymousId(candidate);
+        if (normalized) {
+            return normalized;
+        }
+    }
+    const cookies = parseCookies(req.headers.cookie);
+    return normalizeAnonymousId(cookies[exports.RECODER_ANONYMOUS_ID_COOKIE]);
+}
+function readFirstQueryString(value) {
+    if (typeof value === 'string') {
+        return value.trim() || undefined;
+    }
+    if (Array.isArray(value)) {
+        for (const entry of value) {
+            if (typeof entry === 'string' && entry.trim()) {
+                return entry.trim();
+            }
+        }
+    }
+    return undefined;
+}
+function resolveA2ASystemSession(token, query = {}) {
+    const normalizedToken = token?.trim();
+    if (!normalizedToken) {
+        return null;
+    }
+    const validTokens = [
+        process.env.RECODER_A2A_SHARED_SECRET,
+        process.env.RECODER_A2A_BRIDGE_TOKEN,
+        process.env.RECODER_A2A_WORKER_TOKEN,
+    ].filter((value) => Boolean(value?.trim()));
+    if (!validTokens.includes(normalizedToken)) {
+        return null;
+    }
+    const agentId = readFirstQueryString(query.agentId) || 'a2a-bridge';
+    const sessionId = readFirstQueryString(query.sessionId) || normalizedToken.slice(0, 8);
+    return {
+        userId: `agent:${agentId}`,
+        sessionId,
+    };
+}
+function isStrictAuthMode() {
+    // Allow explicit override via STRICT_AUTH=false (needed for web.recoder.xyz anonymous container creation)
+    if (process.env.STRICT_AUTH === 'false')
+        return false;
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    return process.env.REQUIRE_AUTH === 'true' || nodeEnv === 'production';
+}
