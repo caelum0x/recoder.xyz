@@ -142,7 +142,7 @@ export function ErrorBanner({ errors, onDismiss, onRetry, isStreaming = false }:
 
   return (
     <div
-      className="absolute top-2 left-2 right-2 z-30 bg-red-950 border border-red-800 rounded-lg shadow-lg overflow-hidden"
+      className="relative bg-red-950 border border-red-800 rounded-lg shadow-lg overflow-hidden"
       data-testid="preview-error-banner"
     >
       {/* Header with dismiss button */}
