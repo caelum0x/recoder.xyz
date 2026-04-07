@@ -1107,35 +1107,32 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       lower.includes('upgrade your plan');
 
     if (isBillingError) {
-      console.error(`[PAGE] Agent stopped due to billing error: ${errorMessage}`);
-      const billingError = new BillingError(402, {
-        message: errorMessage,
-      });
-      openBillingModal(billingError);
+      openBillingModal(new BillingError(402, { message: errorMessage }));
       pendingMessageRef.current = null;
       return;
     }
 
+    // Silently ignore only truly transient/expected errors (polling race conditions)
     if (isExpected) {
       return;
     }
 
-    console.error(`[PAGE] Stream hook error: ${errorMessage}`);
-
-    // Show error as a visible message in the chat thread so the user
-    // knows the agent failed (not just a disappearing toast)
+    // Build a user-friendly error message
     const userFriendly = lower.includes('parts field')
-      ? 'The AI model rejected this request. This usually means your API key is not set — go to Settings → API Keys to add your provider key.'
+      ? 'The AI model rejected this request. This usually means your API key is not set — go to Settings > API Keys to add your provider key.'
       : lower.includes('timeout')
         ? 'The request timed out. Please try again.'
-        : `Something went wrong: ${errorMessage.slice(0, 200)}`;
+        : lower.includes('unable to submit')
+          ? 'The AI provider could not process this message. Try a different model or add your own API key in Settings.'
+          : `Something went wrong: ${errorMessage.slice(0, 200)}`;
 
+    // Always show errors as visible chat messages so users know what happened
     setMessages((prev) => [
       ...prev,
       {
         message_id: `error-${Date.now()}`,
         role: 'assistant' as const,
-        content: `⚠️ ${userFriendly}`,
+        content: userFriendly,
         created_at: new Date().toISOString(),
         type: 'error',
       } as any,

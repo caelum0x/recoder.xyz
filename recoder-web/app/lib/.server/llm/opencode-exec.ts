@@ -313,6 +313,39 @@ function createTextStream(text: string): ReadableStream<Uint8Array> {
   });
 }
 
+/**
+ * Wrap OpenCode's response in recoderArtifact XML so the workbench parser
+ * creates a proper project and the IDE panel opens.  Without this wrapper,
+ * the response is shown as plain chat text and no project/files appear.
+ */
+function createArtifactWrappedStream(
+  text: string,
+  projectId: string,
+  filesChanged?: string[],
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const title = text.split('\n')[0]?.slice(0, 60) || 'Project';
+  const artifactId = projectId || `project-${Date.now()}`;
+
+  // Build file action blocks from the files OpenCode changed
+  let fileActions = '';
+  if (filesChanged && filesChanged.length > 0) {
+    for (const filePath of filesChanged) {
+      fileActions += `\n<recoderAction type="file" filePath="${filePath}">\n(file written by coding agent)\n</recoderAction>`;
+    }
+  }
+
+  const wrapped =
+    `<recoderArtifact id="${artifactId}" title="${title.replace(/"/g, '&quot;')}">${fileActions}\n</recoderArtifact>\n\n${text}`;
+
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(wrapped));
+      controller.close();
+    },
+  });
+}
+
 export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): Promise<ReadableStream<Uint8Array>> {
   if (!options.projectId) {
     return createTextStream('OpenCode requires an active project sandbox. Create or open a project, then try again.');
@@ -337,7 +370,29 @@ export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): 
   const dockerUrl = getDockerBackendUrl(options.context);
   const headers = createDockerProxyHeaders(options.request);
 
-  const upstream = await fetch(`${dockerUrl}/api/opencode/${encodeURIComponent(options.projectId)}`, {
+  // Ensure the project ID has the expected format and a container exists
+  let projectId = options.projectId;
+  if (!projectId.startsWith('project-')) {
+    projectId = `project-${projectId}`;
+  }
+
+  // Ensure a container/sandbox exists for this project before calling OpenCode
+  try {
+    const containerRes = await fetch(`${dockerUrl}/api/container`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ projectId }),
+    });
+    if (containerRes.ok) {
+      logger.info('Container ensured for project', { projectId });
+    } else {
+      logger.warn('Container creation returned', { status: containerRes.status, projectId });
+    }
+  } catch (containerErr) {
+    logger.warn('Container creation failed (non-fatal)', { error: String(containerErr), projectId });
+  }
+
+  const upstream = await fetch(`${dockerUrl}/api/opencode/${encodeURIComponent(projectId)}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -365,9 +420,13 @@ export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): 
     return createTextStream(failureText);
   }
 
-  if (execResult.text) {
-    return createTextStream(execResult.text);
+  // Wrap successful response in artifact XML so the workbench creates a project
+  const responseText = execResult.text || 'OpenCode completed.';
+  const filesChanged = (execResult as any).syncedFiles || (execResult as any).filesChanged;
+
+  if (options.projectId) {
+    return createArtifactWrappedStream(responseText, options.projectId, filesChanged);
   }
 
-  return createTextStream('OpenCode completed, but it did not return a textual summary.');
+  return createTextStream(responseText);
 }

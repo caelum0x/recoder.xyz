@@ -207,17 +207,33 @@ export function createRecoderOpencodeClient(config: OpencodeClientConfig) {
 
     /** Send a prompt to a session and wait for the response */
     async prompt(sessionID: string, input: PromptInput, directory?: string): Promise<MessageWithParts> {
+      // Transform PromptInput into the opencode server's expected format:
+      // { parts: [{ type: "text", text: "..." }], providerID?, modelID?, agent?, system? }
+      const body = {
+        parts: [{ type: 'text' as const, text: input.content }],
+        ...(input.providerID && { providerID: input.providerID }),
+        ...(input.modelID && { modelID: input.modelID }),
+        ...(input.agent && { agent: input.agent }),
+        ...(input.system && { system: input.system }),
+      };
       return request<MessageWithParts>(
         'POST',
         `/session/${sessionID}/message`,
-        input,
+        body,
         { directory, timeoutMs: 300_000 }, // 5 min for coding tasks
       );
     },
 
     /** Send a prompt asynchronously (returns immediately, results via events) */
     async promptAsync(sessionID: string, input: PromptInput, directory?: string): Promise<void> {
-      await request<void>('POST', `/session/${sessionID}/prompt_async`, input, { directory });
+      const body = {
+        parts: [{ type: 'text' as const, text: input.content }],
+        ...(input.providerID && { providerID: input.providerID }),
+        ...(input.modelID && { modelID: input.modelID }),
+        ...(input.agent && { agent: input.agent }),
+        ...(input.system && { system: input.system }),
+      };
+      await request<void>('POST', `/session/${sessionID}/prompt_async`, body, { directory });
     },
 
     /** Send a command to a session */
