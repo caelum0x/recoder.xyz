@@ -143,11 +143,20 @@ export function createRecoderOpencodeClient(config: OpencodeClientConfig) {
       }
 
       const contentType = res.headers.get('content-type') ?? '';
+      const rawText = await res.text();
+
       if (contentType.includes('application/json')) {
-        return (await res.json()) as T;
+        if (!rawText || rawText.length === 0) {
+          throw new Error(`opencode ${method} ${path} returned empty JSON body (status ${res.status})`);
+        }
+        try {
+          return JSON.parse(rawText) as T;
+        } catch (parseErr) {
+          throw new Error(`opencode ${method} ${path} JSON parse failed: ${(parseErr as Error).message}. Body (first 200 chars): ${rawText.slice(0, 200)}`);
+        }
       }
 
-      return (await res.text()) as unknown as T;
+      return rawText as unknown as T;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -162,7 +171,8 @@ export function createRecoderOpencodeClient(config: OpencodeClientConfig) {
       title?: string;
       parentID?: string;
     }): Promise<SessionInfo> {
-      return request<SessionInfo>('POST', '/session', opts ? { title: opts.title, parentID: opts.parentID } : undefined, {
+      // Always send a body — OpenCode service rejects POST /session without one
+      return request<SessionInfo>('POST', '/session', { title: opts?.title, parentID: opts?.parentID }, {
         directory: opts?.directory,
       });
     },

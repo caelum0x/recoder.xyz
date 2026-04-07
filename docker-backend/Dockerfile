@@ -37,6 +37,15 @@ RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" \
 COPY docker-backend/ ./docker-backend/
 COPY shared/ ./shared/
 
+# Compile shared opencode-client to JS (Node.js can't import .ts at runtime)
+RUN npx tsc shared/src/opencode-client.ts --outDir shared/dist \
+    --declaration --esModuleInterop --module commonjs --target es2020 --skipLibCheck 2>/dev/null || true
+# Update shared exports to point to compiled JS
+RUN node -e "const fs=require('fs'); \
+    const p=JSON.parse(fs.readFileSync('shared/package.json','utf8')); \
+    if(p.exports['./opencode-client']) p.exports['./opencode-client']='./dist/opencode-client.js'; \
+    fs.writeFileSync('shared/package.json',JSON.stringify(p,null,2));"
+
 # Verify prebuilt dist exists
 RUN test -f docker-backend/dist/server.js
 
