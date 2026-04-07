@@ -1318,18 +1318,22 @@ export const Preview = memo(() => {
               </div>
             )}
 
-            {/* ── Runtime Error Banner (anchored to bottom of preview) ── */}
+            {/* ── Runtime Error Overlay + Banner ── */}
             {runtimeErrors.length > 0 && (
-              <div className="absolute bottom-0 left-0 right-0 z-30">
-                <div className="relative">
-                  <ErrorBanner
-                    errors={runtimeErrors}
-                    onDismiss={dismissRuntimeErrors}
-                    onRetry={retryPreview}
-                    isStreaming={streamingState.isStreaming}
-                  />
+              <>
+                {/* Dark overlay so blank white iframe isn't jarring */}
+                <div className="absolute inset-0 z-20 bg-zinc-950/80 backdrop-blur-sm" />
+                <div className="absolute inset-0 z-30 flex items-start justify-center pt-4 px-4 overflow-auto">
+                  <div className="w-full max-w-2xl">
+                    <ErrorBanner
+                      errors={runtimeErrors}
+                      onDismiss={dismissRuntimeErrors}
+                      onRetry={retryPreview}
+                      isStreaming={streamingState.isStreaming}
+                    />
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </>
         ) : (
