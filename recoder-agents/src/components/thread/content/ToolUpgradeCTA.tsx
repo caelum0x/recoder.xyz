@@ -19,6 +19,8 @@ export const ToolUpgradeCTA: React.FC<ToolUpgradeCTAProps> = ({
   currentTierDisplay,
   className,
 }) => {
+  // Billing UI hidden — platform is free/BYOK
+  return null;
   const { openPricingModal } = usePricingModalStore();
   const handleUpgradeClick = () => {
     openPricingModal({
