@@ -146,7 +146,7 @@ export function UserMenu() {
           />
 
           {/* Menu */}
-          <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden bg-zinc-950 text-white">
+          <div className="absolute right-0 mt-2 w-64 rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden text-white" style={{ backgroundColor: '#09090b' }}>
             {/* User Info */}
             <div className="p-4 border-b border-white/10">
               <div className="font-medium truncate text-white">

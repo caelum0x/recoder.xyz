@@ -234,14 +234,17 @@ async def make_llm_api_call(
 ) -> Union[Dict[str, Any], AsyncGenerator, ModelResponse]:
     messages = _strip_internal_properties(messages)
 
-    # Gemini rejects messages with empty content ("must include at least one parts field").
-    # content can be: None, "", [], [{"type":"text","text":""}], or valid string/list.
-    def _has_content(msg):
+    # ── Gemini-safe message cleaning ──────────────────────────────────
+    # Google Gemini rejects messages with empty/null content ("must include
+    # at least one parts field").  It also rejects consecutive same-role
+    # messages.  The cleaning below ensures every message has non-empty
+    # content and merges consecutive same-role messages.
+
+    def _has_content(msg: dict) -> bool:
         c = msg.get("content")
         if c is None or c == "" or c == []:
             return False
         if isinstance(c, list):
-            # Check if all parts are empty
             return any(
                 (p.get("text", "").strip() if isinstance(p, dict) else str(p).strip())
                 for p in c
@@ -250,26 +253,58 @@ async def make_llm_api_call(
             return bool(c.strip())
         return bool(c)
 
+    def _ensure_content(msg: dict) -> dict:
+        """Guarantee every message has a non-null, non-empty content field."""
+        if _has_content(msg):
+            return msg
+        role = msg.get("role", "")
+        has_tool_calls = bool(msg.get("tool_calls"))
+        if has_tool_calls:
+            # Assistant with tool_calls but no content — Gemini needs content
+            return {**msg, "content": "I'll use a tool to help with this."}
+        if role == "tool" or msg.get("tool_call_id"):
+            return {**msg, "content": "(empty result)"}
+        if role == "system":
+            return {**msg, "content": "You are a helpful assistant."}
+        if role == "assistant":
+            return {**msg, "content": " "}
+        if role == "user":
+            return {**msg, "content": " "}
+        return msg
+
+    # Pass 1: ensure every message has content, drop truly unsalvageable ones
     cleaned_messages = []
     for msg in messages:
+        role = msg.get("role", "")
         has_tool_calls = bool(msg.get("tool_calls"))
         has_tool_call_id = bool(msg.get("tool_call_id"))
-        role = msg.get("role", "")
-        if _has_content(msg) or has_tool_calls or role == "system":
-            cleaned_messages.append(msg)
-        elif role == "tool" or has_tool_call_id:
-            # Tool result messages MUST be kept even with empty content —
-            # they pair with assistant tool_calls. Dropping them breaks
-            # pairing and causes "must include at least one parts field" errors.
-            cleaned_messages.append({**msg, "content": "(empty result)"})
-        elif role == "assistant":
-            # Empty assistant message — add placeholder to avoid Gemini 400
-            cleaned_messages.append({**msg, "content": " "})
+
+        if _has_content(msg) or has_tool_calls or has_tool_call_id or role == "system":
+            cleaned_messages.append(_ensure_content(msg))
+        elif role in ("user", "assistant", "tool"):
+            cleaned_messages.append(_ensure_content(msg))
         else:
             logger.warning(f"[LLM] Dropping empty message: role={role} content={repr(msg.get('content'))[:100]}")
 
+    # Pass 2: merge consecutive same-role messages (Gemini rejects these)
+    if cleaned_messages:
+        merged = [cleaned_messages[0]]
+        for msg in cleaned_messages[1:]:
+            prev = merged[-1]
+            if msg.get("role") == prev.get("role") and msg["role"] in ("user", "assistant"):
+                # Don't merge tool_calls or tool_call_id messages
+                if not msg.get("tool_calls") and not prev.get("tool_calls") and \
+                   not msg.get("tool_call_id") and not prev.get("tool_call_id"):
+                    prev_content = prev.get("content", "")
+                    msg_content = msg.get("content", "")
+                    if isinstance(prev_content, str) and isinstance(msg_content, str):
+                        merged[-1] = {**prev, "content": f"{prev_content}\n{msg_content}".strip()}
+                        continue
+            merged.append(msg)
+        cleaned_messages = merged
+
     if len(cleaned_messages) < len(messages):
-        logger.warning(f"[LLM] Cleaned {len(messages) - len(cleaned_messages)} empty messages ({len(messages)} → {len(cleaned_messages)})")
+        logger.warning(f"[LLM] Cleaned {len(messages)} → {len(cleaned_messages)} messages (empty/consecutive)")
     messages = cleaned_messages
 
     if model_name == "mock-ai":
