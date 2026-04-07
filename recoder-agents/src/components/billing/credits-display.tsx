@@ -14,6 +14,8 @@ import { trackCtaUpgrade } from '@/lib/analytics/gtm';
 import { formatCredits } from '@recoder/shared';
 
 export function CreditsDisplay() {
+  // Credits/billing UI hidden — platform is free/BYOK
+  return null;
   const { user } = useAuth();
   const { data: accountState, isLoading } = useAccountState({ enabled: !!user });
   const [showPlanModal, setShowPlanModal] = useState(false);

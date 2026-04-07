@@ -35,6 +35,8 @@ export interface UpgradeButtonCTAProps {
 export const UpgradeButtonCTA: React.FC<UpgradeButtonCTAProps> = ({
   className,
 }) => {
+  // Billing UI hidden — platform is free/BYOK
+  return null;
   const { openPricingModal } = usePricingModalStore();
 
   const handleUpgradeClick = () => {
