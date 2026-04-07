@@ -1143,7 +1143,19 @@ class SandboxCanvasTool(SandboxToolsBase):
             if account_id and not use_mock:
                 has_credits, credit_msg, balance = await media_billing.check_credits(account_id)
                 if not has_credits:
-                    return self.fail_response(f"Insufficient credits: {credit_msg}")
+                    # Write a fallback placeholder instead of hard-failing
+                    from core.utils.media_fallbacks import build_fallback_image_bytes
+                    fallback_bytes = build_fallback_image_bytes(
+                        prompt=f"Canvas element: {source_element.get('name', element_id)}",
+                        reason=f"Credits exhausted: {credit_msg}",
+                    )
+                    fallback_name = f"fallback_{element_id[:8]}.png"
+                    fallback_path = f"/home/daytona/{fallback_name}"
+                    await self.sandbox.fs.upload_file(fallback_path, fallback_bytes)
+                    return self.success_response(
+                        f"Credits unavailable ({credit_msg}). Wrote placeholder image to {fallback_name}. "
+                        f"Add provider API keys in Settings to enable AI image processing."
+                    )
             
             # Process the image
             logger.info(f"[Canvas AI] Processing element '{source_element.get('name', element_id)}' with action '{action}'")
