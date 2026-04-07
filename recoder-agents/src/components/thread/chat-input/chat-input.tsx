@@ -1359,6 +1359,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       onSubmit(message, {
         agent_id: selectedAgentId,
         model_name: baseModelName && baseModelName.trim() ? baseModelName.trim() : undefined,
+        mode: selectedMode || undefined,
       });
 
       // Keep files visible with loading spinner - they'll be cleared when agent starts running
