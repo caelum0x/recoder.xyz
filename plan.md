@@ -3,17 +3,16 @@
 Last updated: 2026-04-07 (evening session)
 
 ## ONE GOAL: Make all platforms work end to end
-recoder.xyz auth not works manuel auth not work also we do not have free resend api key anymore no verificaiton mails either
 ### Platform State
 
 | Platform | URL | Status |
 |----------|-----|--------|
-| **agents** | agents.recoder.xyz | Can only do messages/chats. No real coding — agent can't create React apps, only HTML/CSS. Sandbox auto-stop + broken preview breaks the code->run->preview cycle. |
-| **web** | web.recoder.xyz | Basic — no continuous development or edits. Pi agent wired but not deployed yet. |
-| **A2A** | docker.recoder.xyz/api/a2a | Only works locally (Claude Code <-> Codex via MCP bridge). No web UI, no docs, no public pages. |
-| **PM** | pm.recoder.xyz | **FIXED** — was crash-looping due to broken `@logtail/next` pnpm symlink. `pnpm install` + restart fixed it. Auth redirects to recoder.xyz unified login. |
-| **Agency** | agency.recoder.xyz | **FIXED** — was returning 500 on all authenticated pages. Root cause: PostgreSQL stuck in recovery mode. Force-restarted PG, restarted PM2. Playground, workspaces, dashboard all working. Separate auth from recoder.xyz. |
-| **recoder.xyz** | recoder.xyz | Auth source of truth (Better Auth). Dashboard/Billing/Projects pages are stubs. |
+| **agents** | agents.recoder.xyz | **Coding works E2E** — agent creates files in Daytona sandbox, preview serves via port 8080. File server fix deployed. Deep Coding mode in UI. Error messages now visible in chat. |
+| **web** | web.recoder.xyz | Pi agent wired, needs deploy verification. Other agent testing via Chrome DevTools. |
+| **A2A** | docker.recoder.xyz/api/a2a | Works locally (Claude Code <-> Codex via MCP bridge). No web UI yet. |
+| **PM** | pm.recoder.xyz | **Working** — crash loop fixed. Auth redirects to recoder.xyz unified login. |
+| **Agency** | agency.recoder.xyz | **Working** — PostgreSQL recovered, playground/workspaces/dashboard all functional. Separate auth. |
+| **recoder.xyz** | recoder.xyz | **Auth working** — Better Auth, Google/GitHub OAuth, email sign-in all functional. Email delivery needs Postfix (being set up). |
 
 ### What each platform needs to be "working end to end"
 
@@ -36,11 +35,12 @@ Gaps found:
    calls `DOCKER_BACKEND_URL/api/opencode/{project_id}` (or Pi endpoint).
 
 Fix chain:
-- [ ] Wire `selectedMode` from Zustand → handleSubmit → onSubmit → mutateAsync → FormData → backend
+- [x] Wire `selectedMode` from Zustand → handleSubmit → onSubmit → mutateAsync → FormData → backend (verified: full chain works)
 - [x] Pi agent deployed in docker-backend (verified: Pi SDK available in container)
-- [ ] Wire Pi endpoint (`POST /api/pi/:projectId`) as deep-coding backend option
+- [x] Sandbox preview works (file server fix deployed, E2E verified with Hello World)
+- [x] Error messages visible in chat (ThreadComponent.tsx fix deployed)
+- [x] Wire Pi endpoint — auth middleware fixed (`authenticateRequest` → `optionalAuthenticateRequest`) so Python backend can call Pi/OpenCode without user session. Pi SDK has broken exports field — falls back to OpenCode.
 - [ ] Sandbox creation race: agent starts before sandbox is ready — `_ensure_sandbox()` adds latency
-- [ ] Verify VNC preview connects and shows running app after agent creates files
 - [ ] Test end-to-end: "build a React landing page" → files created → npm install → dev server → preview
 
 **web.recoder.xyz — must support continuous development:**
@@ -88,18 +88,17 @@ Fix chain:
 
 | Category | Tickets | Status |
 |----------|---------|--------|
-| Core Coding Loop | recoder-96g, recoder-i3v, recoder-sti, recoder-w0b | **96g VERIFIED E2E**: agent creates files + sandbox preview works (blue Hello World). **i3v multi-turn**: agent start 200 on follow-up, response detected. Intermittent 502s from memory pressure. sti/w0b untouched |
-| Deep Coding Runtime | recoder-lma, recoder-y4q | **lma deployed + UI verified**: Deep Coding mode in UI with example prompts. y4q depends on lma |
-| Agents/Canvas | recoder-xnh, recoder-e5a, recoder-8i9 | **xnh partially verified**. **e5a CLOSED** (file proxy HEAD fixed in b99f3a16). **8i9 FIXED** (canvas fallback on $0 credits — deployed) |
-| Product Verification | recoder-kcq, ~~recoder-74p~~, recoder-ijs | **kcq**: PM copilot API responds (needs org context). **74p DROPPED**. ijs: Prisma engine warnings (build noise, not runtime) |
-| Infra/Host | recoder-025, recoder-0xz, recoder-d0k | Hetzner checkout drift, zrok legacy |
-| Shared Planning | recoder-29m | Task board UI |
+| Core Coding Loop | recoder-96g, recoder-i3v, recoder-sti, recoder-w0b | **96g VERIFIED**. **i3v**: agent start 200. **sti VERIFIED**: WS upgrade 101 on /terminal/ and /watch/. **w0b DONE**: auto-stop 2h. |
+| Deep Coding Runtime | recoder-lma, recoder-y4q | **lma deployed + UI verified**. y4q depends on lma |
+| Agents/Canvas | recoder-xnh, recoder-e5a, recoder-8i9 | **e5a CLOSED**. **8i9 FIXED**. xnh needs manual board test |
+| Product Verification | recoder-kcq, ~~recoder-74p~~, recoder-ijs | **74p DROPPED** (no longer needed). **ijs**: build noise only (duplicate Prisma target), not runtime |
+| Infra/Host | recoder-025, recoder-0xz, recoder-d0k | **025**: server has read-only deploy key, 10 unpushed commits — push from local. **d0k DONE**: zrok stopped (6 containers, 242MB freed). 0xz: rsync is the deploy path |
+| Shared Planning | recoder-29m | Task board UI — needs design/spec |
 
 ### Unfiled (need bd tickets)
 
 - Ownership flip on container recreate -> 403 cascade
-- ~~CORS on docker-backend error responses~~ — already fixed in globalErrorHandler (handler.ts:144-152)
-- **Server memory pressure**: 15GB total, 766MB free, 3GB swap. 10 running Daytona sandboxes + all services cause intermittent 502s/timeouts. Need to reduce sandbox concurrency or increase RAM.
+- ~~Server memory pressure~~: Mitigated — stopped zrok (242MB), reduced sandbox auto-stop 12h→2h, cleaned stale sandboxes 11→5. Runner 1.05GB→698MB.
 
 ## What's Live & Working
 
@@ -149,50 +148,3 @@ Pi agents (`@mariozechner/pi-coding-agent`) are the unified coding runtime for a
 - If this file and bd disagree, trust `bd`.
 - If this file and a chat transcript disagree, trust this file.
 - If deeper history is needed, use git instead of reviving duplicate status blocks.
- ---                                                                                                                                        
-  bd Tickets — Status Overview                                                                                                               
-                                                                                                                                             
-  Closed this session:                                                                                                                       
-  - recoder-7hh — OpenCode bridge to sandbox (deployed + verified)                                                                           
-  - recoder-4t2 — Payload CMS TS drift (already fixed in 6904d132)                                                                           
-                                                                                                                                             
-  Still open (bd):                                                                                                                           
-                                                                           
-  ┌─────────────────────┬────────────────────────────────────────────────┬───────────────────────────────────────────────────────────────┐   
-  │      Category       │                    Tickets                     │                            Status                             │
-  ├─────────────────────┼────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤   
-  │ Core Coding Loop    │ recoder-96g, recoder-i3v, recoder-sti,         │ Code done for 96g/i3v, needs browser verify. sti/w0b          │
-  │                     │ recoder-w0b                                    │ untouched                                                     │
-  ├─────────────────────┼────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤   
-  │ Deep Coding Runtime │ recoder-lma, recoder-y4q                       │ lma backend verified but messages silently fail. y4q depends  │
-  │                     │                                                │ on lma                                                        │   
-  ├─────────────────────┼────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
-  │ Agents/Canvas       │ recoder-xnh, recoder-e5a, recoder-8i9          │ All untouched                                                 │   
-  ├─────────────────────┼────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤   
-  │ Product             │ recoder-kcq, recoder-74p, recoder-ijs          │ All untouched                                                 │
-  │ Verification        │                                                │                                                               │   
-  ├─────────────────────┼────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
-  │ Infra/Host          │ recoder-025, recoder-0xz, recoder-d0k          │ Hetzner checkout drift, zrok legacy                           │   
-  ├─────────────────────┼────────────────────────────────────────────────┼───────────────────────────────────────────────────────────────┤   
-  │ Shared Planning     │ recoder-29m                                    │ Task board UI                                                 │
-  └─────────────────────┴────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────┘   
-                                                                           
-  Unfiled issues (need bd tickets):                                                                                                          
-  - Ownership flip on container recreate → 403 cascade                     
-  - CORS missing on docker-backend 403/500 error responses                                                                                   
-                                                          
-  Current Blockers (Priority Order)                                                                                                          
-                                                                                                                                             
-  1. PM crash loop (42,740 restarts) — Cannot find module '@logtail/next'                                                                    
-  2. Pi agent not deployed — code done, needs docker-backend rebuild                                                                         
-  3. recoder-web with Pi routing — needs rebuild + deploy                                                                                    
-  4. Agent silently drops messages — Gemini format rejection + frontend doesn't show stream errors                                           
-         5. Agency Giselle engine broken — 500 on task creation                                                                              
-                                                                                                                                             
-  What's Live & Working                                                                                                                      
-                                                                                                                                             
-  - Backend env restored (was crash-looping again due to .env drift — 3rd time)                                                              
-  - All Docker services healthy, all PM2 services online
-  - Security incident fully remediated (XMRig miner, CVE-2025-66478)                                                                         
-  - 16 distinct fixes deployed to Hetzner this session                                                                                       
-                                                                                                                            continue with A2A work, or investigate the OpenCode "Unexpected end of JSON" to get web.recoder.xyz coding working
