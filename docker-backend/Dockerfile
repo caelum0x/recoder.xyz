@@ -64,6 +64,15 @@ COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/packages ./packages
 COPY --from=zrok2 /usr/local/bin/zrok2 /usr/local/bin/zrok2
 
+# Pi coding agent SDK (optional — enables POST /api/pi/:projectId)
+# Copied from pi-mono-dist/ which is a snapshot of the built pi-mono packages
+COPY pi-mono-dist/coding-agent/dist/ ./node_modules/@mariozechner/pi-coding-agent/dist/
+COPY pi-mono-dist/coding-agent/package.json ./node_modules/@mariozechner/pi-coding-agent/
+COPY pi-mono-dist/ai/dist/ ./node_modules/@mariozechner/pi-ai/dist/
+COPY pi-mono-dist/ai/package.json ./node_modules/@mariozechner/pi-ai/
+COPY pi-mono-dist/agent/dist/ ./node_modules/@mariozechner/pi-agent-core/dist/
+COPY pi-mono-dist/agent/package.json ./node_modules/@mariozechner/pi-agent-core/
+
 WORKDIR /app/docker-backend
 
 # Run as non-root with docker group access
