@@ -730,14 +730,16 @@ CRITICAL RULES:
 
 4. USE VITE - For web apps, use Vite (not Next.js). Create vite.config.ts and index.html.
 
-5. SIMPLE FIRST - Start with minimal working code.
+5. USE RELATIVE IMPORTS - NEVER use path aliases like @/ or ~/. Always use relative imports (e.g. ../utils/cn, ./components/Hero). Path aliases require tsconfig paths + vite resolve.alias configuration which adds complexity and breaks if not set up perfectly. Relative imports always work.
 
-6. USE HASHROUTER - For React apps with routing, use HashRouter instead of BrowserRouter.
+6. SIMPLE FIRST - Start with minimal working code.
+
+7. USE HASHROUTER - For React apps with routing, use HashRouter instead of BrowserRouter.
    The preview system loads apps at /preview/projectId which breaks BrowserRouter's history-based routing.
    HashRouter uses URL hash (#) which works correctly in any context.
    Example: import { HashRouter } from 'react-router-dom' instead of BrowserRouter.
 
-7. ALWAYS IMPORT REACT - In EVERY .tsx/.jsx file that contains JSX markup, include:
+8. ALWAYS IMPORT REACT - In EVERY .tsx/.jsx file that contains JSX markup, include:
    import React from 'react';
    Also import hooks directly: import React, { useState, useEffect } from 'react';
    NEVER use React.useState — always destructure hooks.
