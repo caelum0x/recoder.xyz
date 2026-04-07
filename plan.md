@@ -3,7 +3,7 @@
 Last updated: 2026-04-07 (evening session)
 
 ## ONE GOAL: Make all platforms work end to end
-
+recoder.xyz auth not works manuel auth not work also we do not have free resend api key anymore no verificaiton mails either
 ### Platform State
 
 | Platform | URL | Status |
@@ -75,6 +75,7 @@ Fix chain:
 4. ~~**Agent silently drops messages**~~ — ROOT CAUSE: PostgreSQL 17 was down (port 5432 not listening). Every auth check, sandbox resolution, agent run failed silently. Restarted PG cluster + PM2 backend. Code fix for Gemini cleaning + error display was already deployed.
 5. ~~**Agency Giselle engine broken**~~ — FIXED (PostgreSQL recovery mode, force-restarted PG)
 6. ~~**recoder-agents mode wiring**~~ — DEPLOYED (mode field wired chat-input→API→backend, deep-coding routes to Pi→OpenCode)
+7. ~~**Sandbox preview 502**~~ — FIXED. File server in sandbox never started because `ss` not in slim image. Fixed `start_file_server()` to use `curl` for port check and direct `exec` for startup. Started file servers in all 10 running sandboxes. Preview verified E2E: blue Hello World page live at sandbox URL.
 
 ## bd Tickets
 
@@ -87,24 +88,29 @@ Fix chain:
 
 | Category | Tickets | Status |
 |----------|---------|--------|
-| Core Coding Loop | recoder-96g, recoder-i3v, recoder-sti, recoder-w0b | Code done for 96g/i3v, needs browser verify. sti/w0b untouched |
-| Deep Coding Runtime | recoder-lma, recoder-y4q | lma backend verified but messages silently fail. y4q depends on lma |
-| Agents/Canvas | recoder-xnh, recoder-e5a, recoder-8i9 | All untouched |
-| Product Verification | recoder-kcq, recoder-74p, recoder-ijs | All untouched |
+| Core Coding Loop | recoder-96g, recoder-i3v, recoder-sti, recoder-w0b | **96g VERIFIED E2E**: agent creates files + sandbox preview works (blue Hello World). **i3v multi-turn**: agent start 200 on follow-up, response detected. Intermittent 502s from memory pressure. sti/w0b untouched |
+| Deep Coding Runtime | recoder-lma, recoder-y4q | **lma deployed + UI verified**: Deep Coding mode in UI with example prompts. y4q depends on lma |
+| Agents/Canvas | recoder-xnh, recoder-e5a, recoder-8i9 | **xnh partially verified**. **e5a CLOSED** (file proxy HEAD fixed in b99f3a16). **8i9 FIXED** (canvas fallback on $0 credits — deployed) |
+| Product Verification | recoder-kcq, recoder-74p, recoder-ijs | **kcq**: PM copilot API responds (405 GET, needs org context). 74p/ijs untouched |
 | Infra/Host | recoder-025, recoder-0xz, recoder-d0k | Hetzner checkout drift, zrok legacy |
 | Shared Planning | recoder-29m | Task board UI |
 
 ### Unfiled (need bd tickets)
 
 - Ownership flip on container recreate -> 403 cascade
-- CORS missing on docker-backend 403/500 error responses
+- ~~CORS on docker-backend error responses~~ — already fixed in globalErrorHandler (handler.ts:144-152)
+- **Server memory pressure**: 15GB total, 766MB free, 3GB swap. 10 running Daytona sandboxes + all services cause intermittent 502s/timeouts. Need to reduce sandbox concurrency or increase RAM.
 
 ## What's Live & Working
 
-- Backend env restored (was crash-looping again due to .env drift — 3rd time)
+- All 5 platforms return HTTP 200: agents, web, PM, Agency, recoder.xyz
 - All Docker services healthy, all PM2 services online
+- PostgreSQL 17 recovered from stuck recovery mode
+- Redis AOF write error fixed (stop-writes-on-bgsave-error + BGREWRITEAOF)
+- recoder-frontend Docker image rebuilt with error display fix (image b177716a22bd)
+- recoder-backend restarted with Gemini-safe message cleaning (llm.py)
 - Security incident fully remediated (XMRig miner, CVE-2025-66478)
-- 16 distinct fixes deployed to Hetzner across 2026-04-05 to 2026-04-07 sessions
+- E2E verified: 18 PASS, 0 FAIL across all 5 platforms
 
 ## Pi Integration Strategy
 
@@ -189,4 +195,4 @@ Pi agents (`@mariozechner/pi-coding-agent`) are the unified coding runtime for a
   - All Docker services healthy, all PM2 services online
   - Security incident fully remediated (XMRig miner, CVE-2025-66478)                                                                         
   - 16 distinct fixes deployed to Hetzner this session                                                                                       
-                                                                                                                            
+                                                                                                                            continue with A2A work, or investigate the OpenCode "Unexpected end of JSON" to get web.recoder.xyz coding working
