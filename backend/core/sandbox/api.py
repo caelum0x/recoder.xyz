@@ -894,7 +894,7 @@ async def fetch_sandbox_health(sandbox_url: str, timeout: float = 5.0) -> Option
     return None
 
 
-async def probe_sandbox_toolbox_health(sandbox: AsyncSandbox, timeout: float = 5.0) -> Optional[Dict]:
+async def probe_sandbox_toolbox_health(sandbox: AsyncSandbox, timeout: int = 5) -> Optional[Dict]:
     """
     Probe sandbox readiness via Daytona toolbox exec.
 
@@ -1202,6 +1202,11 @@ async def stream_project_sandbox_status(
         event_id = 0
         last_fingerprint: Optional[str] = None
         last_keepalive = _time.monotonic()
+        stream_start = _time.monotonic()
+        # Max stream lifetime: 5 minutes. Client reconnects automatically.
+        # This prevents long-lived SSE connections from leaking memory
+        # and blocking gunicorn worker recycling (--max-requests).
+        MAX_STREAM_LIFETIME_S = 300
 
         # Emit current state immediately so the client doesn't start blind
         try:
@@ -1224,6 +1229,10 @@ async def stream_project_sandbox_status(
         # If transitioning, poll every 5 s until stable.
         while True:
             if await request.is_disconnected():
+                break
+            # Auto-close after MAX_STREAM_LIFETIME_S to free memory
+            if _time.monotonic() - stream_start > MAX_STREAM_LIFETIME_S:
+                yield _sse_frame("reconnect", {"reason": "max_lifetime"}, str(event_id + 1))
                 break
 
             try:
