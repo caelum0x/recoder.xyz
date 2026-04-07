@@ -91,7 +91,7 @@ Fix chain:
 | Core Coding Loop | recoder-96g, recoder-i3v, recoder-sti, recoder-w0b | **96g VERIFIED E2E**: agent creates files + sandbox preview works (blue Hello World). **i3v multi-turn**: agent start 200 on follow-up, response detected. Intermittent 502s from memory pressure. sti/w0b untouched |
 | Deep Coding Runtime | recoder-lma, recoder-y4q | **lma deployed + UI verified**: Deep Coding mode in UI with example prompts. y4q depends on lma |
 | Agents/Canvas | recoder-xnh, recoder-e5a, recoder-8i9 | **xnh partially verified**. **e5a CLOSED** (file proxy HEAD fixed in b99f3a16). **8i9 FIXED** (canvas fallback on $0 credits — deployed) |
-| Product Verification | recoder-kcq, recoder-74p, recoder-ijs | **kcq**: PM copilot API responds (405 GET, needs org context). 74p/ijs untouched |
+| Product Verification | recoder-kcq, ~~recoder-74p~~, recoder-ijs | **kcq**: PM copilot API responds (needs org context). **74p DROPPED**. ijs: Prisma engine warnings (build noise, not runtime) |
 | Infra/Host | recoder-025, recoder-0xz, recoder-d0k | Hetzner checkout drift, zrok legacy |
 | Shared Planning | recoder-29m | Task board UI |
 
