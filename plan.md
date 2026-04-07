@@ -1,43 +1,80 @@
 # Recoder Platform — Current Status
 
-Last updated: 2026-04-06 (evening)
+Last updated: 2026-04-07 (evening)
 
 This is the single current status doc for the repository.
 
-## 2026-04-06 SESSION — Sandbox status, CORS, Excalidraw, nginx proxy fixes
+## 2026-04-06–07 SESSION — Full deployment + live fixes
 
-### Deployed to Hetzner this session
+### Deployed to Hetzner (all verified)
 
 | Fix | Service | Status |
 |-----|---------|--------|
-| `derive_sandbox_status()` maps all 16 Daytona states | recoder-backend (Python) | **LIVE** — verified sandbox returns LIVE instead of STARTING |
+| `derive_sandbox_status()` maps all 16 Daytona states | recoder-backend (Python) | **LIVE** — sandbox returns LIVE instead of STARTING |
 | SSE endpoint `/project/{id}/sandbox/status/stream` | recoder-backend (Python) | **LIVE** — push-based, eliminates 2s client polling |
-| CORS headers on 403/500 error responses | docker-backend (Express) | **LIVE** — verified 401 response includes Access-Control-Allow-Origin |
-| Excalidraw board mutation + file persistence | docker-backend (Express) | **LIVE** — canvas updates now write back to sandbox .excalidraw file |
+| Pydantic `timeout` float→int fix in `probe_sandbox_toolbox_health` | recoder-backend (Python) | **LIVE** — was causing validation error loop + memory bloat |
+| CORS headers on 403/500 error responses | docker-backend (Express) | **LIVE** — 401 includes Access-Control-Allow-Origin |
+| Excalidraw board mutation + file persistence | docker-backend (Express) | **LIVE** — canvas updates write back to sandbox file |
 | `recoder_canvas_read` MCP tool | docker-backend (Express) | **LIVE** — agents can read current board state |
-| nginx `/v1/` proxy for agents.recoder.xyz | nginx | **LIVE** — browser /v1/* requests proxy to Python backend (was 524 timeout) |
-| `NEXT_PUBLIC_BACKEND_URL` localhost→host.docker.internal | recoder-frontend .env.local | **LIVE** — SSR can now reach Python backend from inside Docker |
-| `ALLOWED_ORIGINS` moved to shared cors-utils.ts | docker-backend (Express) | **LIVE** — single source of truth for CORS allowlist |
+| OpenCode bridge auth fix (`flexibleProjectOwnership`) | docker-backend (Express) | **LIVE** — was 403 on anonymous projects |
+| OpenCode client `parts` format fix | shared/opencode-client.ts | **LIVE** — was 400 invalid_type |
+| OpenCode auto-forward API keys from docker-backend env | docker-backend (Express) | **LIVE** — was hanging with no keys |
+| nginx `/v1/` proxy for agents.recoder.xyz | nginx (sites-enabled) | **LIVE** — in correct agents HTTPS server block |
+| nginx `CDN-Cache-Control: no-store` on agents | nginx (sites-enabled) | **LIVE** — prevents Cloudflare caching stale 503s |
+| `NEXT_PUBLIC_BACKEND_URL` localhost→host.docker.internal | recoder-frontend .env.local | **LIVE** — SSR reaches Python backend from Docker |
+| recoder-frontend Docker rebuild (production build) | Docker image `sha256:74022ce617` | **LIVE** — correct BACKEND_URL baked in, Prisma Linux engines |
+| `ALLOWED_ORIGINS` moved to shared cors-utils.ts | docker-backend (Express) | **LIVE** — single source of truth for CORS |
+| 25.9GB dangling Docker images pruned | Hetzner disk | **DONE** — disk 80% (was 100%) |
 
-### Discovered and fixed during deployment
+### bd tickets closed
 
-1. **`NEXT_PUBLIC_BACKEND_URL=localhost:8000`** in `recoder-agents/.env.local` — unreachable inside Docker container. Fixed to `host.docker.internal:8000`. This was the root cause of all thread pages showing skeleton forever (SSR couldn't fetch data).
+- **recoder-7hh** — OpenCode bridge to sandbox. Deployed and verified end-to-end (prompt→response with token usage).
 
-2. **nginx missing `/v1/` location block** for agents.recoder.xyz — browser-side `/v1/*` requests went to Next.js which had no handler → 524 Cloudflare timeout. Added `proxy_pass http://backend_api` with `Accept-Encoding ''` to prevent `ERR_CONTENT_DECODING_FAILED`.
+### Critical discoveries
 
-3. **nginx upstream failure state** after PM2 restart — `max_fails=3 fail_timeout=30s` marked backend as down during restart. Fixed with `nginx -s reload`.
+1. **nginx config lives in TWO places**: `/etc/nginx/sites-enabled/recoder-production.conf` (active) vs `/root/recoder.xyz/nginx/nginx-production.conf` (repo copy). They diverge. Always edit `sites-enabled` for live changes.
 
-4. **Prisma engine mismatch** — locally-built `.next` tarball has macOS Prisma engines, container needs Linux. Must rebuild via Docker, not tarball copy.
+2. **`NEXT_PUBLIC_*` env vars are baked at build time** — changing `.env.local` and restarting the container doesn't change what the client JS uses. Must rebuild the Docker image.
 
-### Still in progress
+3. **Pydantic float→int validation error** in `probe_sandbox_toolbox_health(timeout=5.0)` caused a tight error loop in the SSE stream endpoint, eating memory until the worker hit 88% (689MB) and became unresponsive → 503 on all endpoints.
 
-- **recoder-frontend Docker rebuild** — running now on Hetzner. Includes `next.config.ts` `/v1/` rewrite rule and all frontend SSE hook changes. Once done, browser-side JS will have correct `NEXT_PUBLIC_BACKEND_URL=https://api.recoder.xyz/v1` baked in.
+4. **Cloudflare edge cache** holds stale 503 responses for 2-4 hours. Added `CDN-Cache-Control: no-store` to the agents server block to prevent future caching. Existing cache needs manual purge via Cloudflare dashboard or wait for TTL expiry.
+
+5. **Deploy script (`rsync`) overwrites `backend/.env`** — same incident as 2026-04-03 and 2026-04-05. Need to exclude `backend/.env` from rsync.
+
+### Current blocker
+
+**Cloudflare edge cache** serving stale 503 responses for `/v1/*` endpoints on agents.recoder.xyz. Server returns 200 for all endpoints. Fix: purge cache in Cloudflare dashboard (dash.cloudflare.com → recoder.xyz zone → Caching → Purge Everything), or wait ~2h for TTL.
 
 ### Code landed locally (not yet deployed)
 
 - **recoder-sti** WS proxy fixes — preview.ts `ws:false`, docker-api.ts path normalization, all tested
 - **recoder-vtl** Excalidraw mutation — canvas.routes.ts persistence, recoder_canvas_read tool, 8 tests pass
-- **Frontend SSE hook** — `useSandboxStatus` uses `connectTokenizedSSE` instead of polling (in frontend rebuild)
+- **Frontend SSE hook** — `useSandboxStatus` uses `connectTokenizedSSE` instead of polling
+- **next.config.ts** `/v1/` rewrite rule (baked into deployed Docker image already)
+
+### Live bugs found during browser testing (2026-04-07)
+
+1. **Agent silently drops messages** — some user messages ("Create a spreadsheet", follow-up "hi") get no response at all. Console shows `litellm.BadRequestError: OpenrouterException - Unable to submit request because it must include at least one parts field`. **Root cause:** Recoder is a BYOK platform. When a user has no API key saved for the provider, `resolve_api_key()` (core/services/user_keys.py:108) falls back to the platform's `OPENROUTER_API_KEY` which routes through OpenRouter free tier → Google Gemini Flash. Gemini has strict message format requirements and rejects messages that Claude/GPT would accept. The backend catches the error and yields `{"type": "error"}` in the stream (execution.py:246-250), but the **frontend stream handler shows it as a console error instead of rendering a visible error message in the chat UI** — so the user sees nothing. **Fix needed:** (a) frontend must render stream error events as visible chat messages, (b) message cleaning in llm.py needs to handle all Gemini edge cases, (c) consider defaulting to Anthropic Claude when user has no BYOK key since it's more format-tolerant.
+
+2. **Spreadsheet creation broken** — agent should be able to create spreadsheets but the tool errors out. Blocked by #1: the LLM call that would trigger the spreadsheet tool fails before the tool is ever invoked. Also potentially affected by the DOCX truncation issue (create_file truncates large files) documented in original plan.md.
+
+3. **Recoder logo too small** in agents.recoder.xyz sidebar — cosmetic, user-reported.
+
+4. **`/v1/threads/{id}` 404** for thread `1db1e3ae-...` — thread exists in UI but backend returns 404. May be a stale reference or DB inconsistency.
+
+5. **`/v1/project/{id}/sandbox/status` 404** for project `bbe333e2-...` — project has no sandbox resource in DB. Expected for projects that were never given a sandbox.
+
+6. **`/v1/realtime/projects/{id}/stream` 404** — SSE stream for project without sandbox. `connectTokenizedSSE` correctly stops reconnecting on 404.
+
+7. **React render loop** — massive `uE/ux` call stack in console (hundreds of React re-renders). Likely triggered by a failed query that causes a state update loop. Pre-existing but amplified by the 404s on non-existent resources.
+
+### Still open (bd)
+
+- **recoder-lma** — OpenCode product flow wiring. Backend verified. Browser test shows chat works but some messages silently fail (see bug #1 above)
+- **recoder-y4q** — Automatic runtime routing (depends on lma)
+- **recoder-96g, recoder-i3v, recoder-sti** — Coding loop (code done, needs merge + browser verify)
+- **recoder-gl6, recoder-vtl, recoder-xnh** — Excalidraw canvas mode + refresh verify
 
 ## Source Of Truth
 
@@ -559,24 +596,72 @@ that can be swapped at session creation time. This means:
 
 One codebase, four execution contexts, zero transport layer hacks.
 
+#### Architecture decision: Pi/OpenCode as DEFAULT backend for ALL modes (2026-04-07)
+
+**NOT just build mode. ALL modes. ALL chat. Every request with a project goes
+through Pi or OpenCode as the coding backend.** The chat LLM XML action
+parsing pipeline is the legacy fallback, not the primary path.
+
+Routing priority in `api.chat.ts` (recoder-web):
+1. **Pi agent** (`POST /api/pi/:projectId`) — direct Daytona sandbox access
+2. **OpenCode** (`POST /api/opencode/:projectId`) — fallback if Pi unavailable
+3. **Normal chat LLM** with XML actions — final fallback only
+
+This applies to build, ask, agent, deep-coding — any mode where `projectId`
+exists in the request. The agent has direct read/write/edit/bash on the sandbox.
+No XML parsing, no action-runner, no frontend file write POST.
+
+#### What's done (2026-04-07)
+
+**Phase 3 DONE — Pi as default chat backend (recoder-web):**
+- `recoder-web/app/lib/.server/llm/pi-exec.ts` — calls `POST /api/pi/:projectId`,
+  builds prompt from conversation context, streams response back
+- `recoder-web/app/routes/api.chat.ts` — routing: Pi → OpenCode → chat LLM
+- Works for ALL modes when projectId is present
+
+**Extracted from forked repos:**
+- `@recoder/browser-tools` package — Playwright-backed navigate, REPL, skill
+  injection extracted from sitegeist. SkillsStore with domain glob matching.
+- `skills/brave-search`, `skills/browser-tools`, `skills/youtube-transcript`
+  — pi-skills symlinked for agent use
+- `skills/recoder-platform/SKILL.md` — platform API docs as a skill
+- `scripts/setup-proxy-service.sh` — deploys badlogic/proxy as `recoder-proxy`
+  PM2 service on port 3200 for platform-wide CORS proxy
+
+**recoder-agents integration — needs Python backend work:**
+The agents chat goes through `backend/core/agents/api.py` (Python), not
+docker-backend directly. To route agent runs through Pi:
+- Option A: Add a `pi` tool to the agent's MCP tool set that calls
+  `POST /api/pi/:projectId` on docker-backend for coding-specific tasks
+- Option B: Add a `runtime_type: "pi"` adapter to the coding-runtime
+  registry in docker-backend, wire it into agent run dispatch
+- Option C: In the Python backend agent run handler, detect coding-intent
+  prompts and proxy them to docker-backend's Pi endpoint
+
+All options converge on the same endpoint (`POST /api/pi/:projectId`).
+The choice is where in the pipeline the dispatch happens.
+
 #### Remaining phases
 
-Phase 3: Wire `POST /api/pi/:projectId` into recoder-web's `api.chat.ts`
-as the default coding backend for "build" mode. User says "build X" → 
-request goes to Pi agent → Pi creates files, runs npm install, debugs
-errors iteratively → results appear in preview.
+Phase 4: Deploy Pi runtime to production — rebuild docker-backend with
+pi-coding-agent dependency, verify end-to-end with a real Daytona sandbox.
 
-Phase 4: Embed `@mariozechner/pi-web-ui` in recoder-web as the chat
+Phase 5: Deploy recoder-web with Pi-first routing — rebuild and verify
+the "build a landing page" repro actually works end-to-end.
+
+Phase 6: Wire Pi into recoder-agents — implement one of the options above
+so agents.recoder.xyz chat also routes through Pi for coding tasks.
+
+Phase 7: Embed `@mariozechner/pi-web-ui` in recoder-web as the chat
 interface. Replaces the XML action parsing MessageParser with Pi's native
 streaming web components.
 
-Phase 5: Integrate `pi-ai` unified LLM API across all surfaces —
+Phase 8: Integrate `pi-ai` unified LLM API across all surfaces —
 docker-backend, recoder-web, recoder-agents. Single provider abstraction,
 single BYOK key management, 20+ providers.
 
-Phase 6: Load `pi-skills` into the A2A agent registry. Skills become
-callable by any agent (Claude Code, Codex, recoder-agents AI) via the
-A2A task dispatch system.
+Phase 9: Load `pi-skills` into the A2A agent registry + deploy
+`proxy.recoder.xyz` + wire `@recoder/browser-tools` into agent sandboxes.
 
 **Repro from 2026-04-06** (for reference):
 "Build a modern landing page with hero, features, testimonials, pricing,
@@ -1420,3 +1505,24 @@ Noted — new incident in plan.md "Your Console" section. This is a DIFFERENT se
   console log (agent start timeout, CORS failures, 502s on /v1/*) are actually gone. If yes, close this out. If the ETIMEDOUT                
   31.56.229.221:80 uncaught exception in recoder-app resurfaces, that's the next thing to trace — it has nothing to do with recoder-backend. 
                                                                                                                          
+
+
+                                                                                                                         so agents only can do messages and chat still after all fucking week of work                                                               
+                                                           
+⏺ You're right to be frustrated. Let me be honest about the current state:
+                                                                                                                                             
+  What actually works after this session:                                      
+  - Pages load (was fully broken/skeleton before)                                                                                            
+  - Basic chat messages get responses                                                                                                      
+  - Backend APIs reachable (was all 503)                                                                                                     
+  - Sandbox status returns LIVE (was stuck STARTING)                                         
+  - OpenCode bridge works (verified server-side)                                                                                             
+                                                                                             
+  What's still broken — the things that matter:                                                                                              
+  - Agent silently drops messages when tools are involved (the parts format error kills tool calls)                                          
+  - Spreadsheet/DOCX/file creation — dead because of the above                                                                               
+  - Sandbox coding loop — not verified in browser                                                                                            
+  - Deep coding mode — wired but untestable while chat drops messages                                                                        
+                                                                                                                                             
+  The single biggest blocker right now is bug #1: the litellm.BadRequestError in core/services/llm.py that silently kills messages. If I fix 
+  that, tools work, spreadsheets work, file creation works, and the agent stops being just a chatbot.    
