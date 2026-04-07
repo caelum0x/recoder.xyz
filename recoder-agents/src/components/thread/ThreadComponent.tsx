@@ -1121,10 +1121,30 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     }
 
     console.error(`[PAGE] Stream hook error: ${errorMessage}`);
-    toast.error(`Stream Error: ${errorMessage}`);
+
+    // Show error as a visible message in the chat thread so the user
+    // knows the agent failed (not just a disappearing toast)
+    const userFriendly = lower.includes('parts field')
+      ? 'The AI model rejected this request. This usually means your API key is not set — go to Settings → API Keys to add your provider key.'
+      : lower.includes('timeout')
+        ? 'The request timed out. Please try again.'
+        : `Something went wrong: ${errorMessage.slice(0, 200)}`;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        message_id: `error-${Date.now()}`,
+        role: 'assistant' as const,
+        content: `⚠️ ${userFriendly}`,
+        created_at: new Date().toISOString(),
+        type: 'error',
+      } as any,
+    ]);
+
+    toast.error(userFriendly, { duration: 10000 });
 
     pendingMessageRef.current = null;
-  }, [openBillingModal]);
+  }, [openBillingModal, setMessages]);
 
   const handleStreamClose = useCallback(() => { }, []);
 
@@ -1250,7 +1270,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const handleSubmitMessage = useCallback(
     async (
       message: string,
-      options?: { model_name?: string },
+      options?: { model_name?: string; mode?: string },
     ) => {
       if (!message.trim() || isShared || !startAgentMutation) return;
 
