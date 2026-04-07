@@ -171,10 +171,10 @@ export async function getOrCreatePiSession(
     cwd: DAYTONA_CWD,
     tools: [],  // disable built-in tools
     customTools: [
-      createWriteToolDefinition(DAYTONA_CWD, { operations: writeOps }),
-      createReadToolDefinition(DAYTONA_CWD, { operations: readOps }),
-      createEditToolDefinition(DAYTONA_CWD, { operations: editOps }),
-      createBashToolDefinition(DAYTONA_CWD, { operations: bashOps }),
+      createWriteToolDefinition(DAYTONA_CWD, { operations: writeOps }) as any,
+      createReadToolDefinition(DAYTONA_CWD, { operations: readOps }) as any,
+      createEditToolDefinition(DAYTONA_CWD, { operations: editOps }) as any,
+      createBashToolDefinition(DAYTONA_CWD, { operations: bashOps }) as any,
     ],
     sessionManager: SessionManager?.inMemory?.() ?? undefined,
   });
