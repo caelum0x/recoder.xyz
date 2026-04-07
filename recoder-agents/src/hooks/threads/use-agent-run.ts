@@ -39,6 +39,7 @@ export const useStartAgentMutation = () => {
       options?: {
         model_name?: string;
         agent_id?: string;
+        mode?: string;
         files?: File[];
       };
     }) => unifiedAgentStart({
@@ -46,6 +47,7 @@ export const useStartAgentMutation = () => {
       prompt,
       model_name: options?.model_name && options.model_name.trim() ? options.model_name.trim() : undefined,
       agent_id: options?.agent_id,
+      mode: options?.mode,
       files: options?.files,
     }),
     onSuccess: () => {
