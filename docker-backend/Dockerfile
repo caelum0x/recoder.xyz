@@ -65,17 +65,17 @@ COPY --from=builder /app/packages ./packages
 COPY --from=zrok2 /usr/local/bin/zrok2 /usr/local/bin/zrok2
 
 # Pi coding agent SDK (optional — enables POST /api/pi/:projectId)
-# Copied from pi-mono-dist/ which is a snapshot of the built pi-mono packages
-COPY pi-mono-dist/coding-agent/dist/ ./node_modules/@mariozechner/pi-coding-agent/dist/
-COPY pi-mono-dist/coding-agent/package.json ./node_modules/@mariozechner/pi-coding-agent/
-COPY pi-mono-dist/ai/dist/ ./node_modules/@mariozechner/pi-ai/dist/
-COPY pi-mono-dist/ai/package.json ./node_modules/@mariozechner/pi-ai/
-COPY pi-mono-dist/agent/dist/ ./node_modules/@mariozechner/pi-agent-core/dist/
-COPY pi-mono-dist/agent/package.json ./node_modules/@mariozechner/pi-agent-core/
-COPY pi-mono-dist/tui/dist/ ./node_modules/@mariozechner/pi-tui/dist/
-COPY pi-mono-dist/tui/package.json ./node_modules/@mariozechner/pi-tui/
-COPY pi-mono-dist/web-ui/dist/ ./node_modules/@mariozechner/pi-web-ui/dist/
-COPY pi-mono-dist/web-ui/package.json ./node_modules/@mariozechner/pi-web-ui/
+# Copy built pi-mono packages and install their npm dependencies
+COPY pi-mono-dist/ /tmp/pi-mono/
+RUN cd /tmp/pi-mono/coding-agent && npm install --omit=dev --ignore-scripts 2>/dev/null; \
+    for pkg in coding-agent ai agent tui web-ui; do \
+      src="/tmp/pi-mono/$pkg"; \
+      name=$(node -e "console.log(require('$src/package.json').name)"); \
+      dest="/app/node_modules/$name"; \
+      mkdir -p "$dest" && cp -r "$src/dist" "$dest/" && cp "$src/package.json" "$dest/"; \
+      [ -d "$src/node_modules" ] && cp -r "$src/node_modules"/* /app/node_modules/ 2>/dev/null; \
+    done; \
+    rm -rf /tmp/pi-mono
 
 WORKDIR /app/docker-backend
 
