@@ -13,6 +13,13 @@ interface UseBillingModalReturn {
  * Determines if credits are exhausted based on the error type and message.
  */
 export function useBillingModal(): UseBillingModalReturn {
+  // Billing UI disabled — platform is free/BYOK. Never show billing modals.
+  return {
+    showModal: false,
+    creditsExhausted: false,
+    openModal: () => {},
+    closeModal: () => {},
+  };
   const [showModal, setShowModal] = useState(false);
   const [creditsExhausted, setCreditsExhausted] = useState(false);
 
