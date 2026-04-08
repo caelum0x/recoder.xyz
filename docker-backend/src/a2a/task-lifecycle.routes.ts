@@ -431,7 +431,8 @@ taskLifecycleRouter.post(
       }
 
       const task = taskResult.data;
-      const prompt = task.payload?.prompt || task.payload?.message || task.payload?.content;
+      const payload = Array.isArray(task.payload) ? task.payload[0] : task.payload;
+      const prompt = (payload as any)?.prompt || (payload as any)?.message || (payload as any)?.content;
 
       if (!prompt || typeof prompt !== 'string') {
         sendError(res, 400, buildA2AError({
@@ -442,7 +443,7 @@ taskLifecycleRouter.post(
       }
 
       // Transition to working
-      service.transitionTask(taskId, 'working', { executed_by: 'a2a-execute' });
+      service.transitionTask(taskId, { target_state: 'working' as any, triggered_by: 'a2a-execute' });
 
       // Try Pi agent first, then OpenCode
       const targetProjectId = project_id || task.metadata?.project_id || taskId;
@@ -474,7 +475,7 @@ taskLifecycleRouter.post(
       }
 
       if (!result) {
-        service.transitionTask(taskId, 'failed', { error: 'No coding agent available (Pi + OpenCode both unavailable)' });
+        service.transitionTask(taskId, { target_state: 'failed' as any, reason: 'No coding agent available' });
         sendError(res, 503, buildA2AError({
           code: A2AErrorCodeEnum.InternalError,
           message: 'No coding agent available to execute the task',
@@ -484,12 +485,9 @@ taskLifecycleRouter.post(
 
       // Transition to completed or failed
       if (result.success) {
-        service.transitionTask(taskId, 'completed', {
-          result: result.text,
-          files_changed: result.filesChanged,
-        });
+        service.transitionTask(taskId, { target_state: 'completed' as any, reason: result.text });
       } else {
-        service.transitionTask(taskId, 'failed', { error: result.text });
+        service.transitionTask(taskId, { target_state: 'failed' as any, reason: result.text });
       }
 
       sendSuccess(res, {

@@ -13,10 +13,44 @@
  * | GET    | /:taskId                      | Get a task with full envelope            |
  * | GET    | /:taskId/history              | Get transition history for a task        |
  * | GET    | /                             | List tasks with optional filters         |
+ * | POST   | /:taskId/execute              | Execute a task via Pi/OpenCode agent     |
  *
  * All error responses use the canonical A2A error taxonomy from
  * `@recoder/shared/a2a/schemas`.
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.taskLifecycleRouter = void 0;
 const express_1 = require("express");
@@ -310,6 +344,100 @@ exports.taskLifecycleRouter.get('/', (req, res) => {
         sendError(res, 500, (0, a2a_1.buildA2AError)({
             code: a2a_1.A2AErrorCodeEnum.InternalError,
             message: 'Internal server error while listing tasks',
+        }));
+    }
+});
+// ---------------------------------------------------------------------------
+// POST /:taskId/execute -- Execute a task via Pi or OpenCode agent
+// ---------------------------------------------------------------------------
+// Takes a task that has a prompt in its payload and dispatches it to the
+// coding agent. The agent creates/edits files in the Daytona sandbox and
+// returns the result. The task is transitioned to "working" → "completed".
+exports.taskLifecycleRouter.post('/:taskId/execute', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const { project_id, sandbox_id } = req.body ?? {};
+        if (!taskId || taskId === 'undefined') {
+            sendError(res, 400, (0, a2a_1.buildA2AError)({
+                code: a2a_1.A2AErrorCodeEnum.MissingEnvelopeField,
+                message: 'taskId parameter is required',
+            }));
+            return;
+        }
+        const service = (0, task_lifecycle_service_1.getTaskLifecycleService)();
+        // Get the task
+        const taskResult = service.getTask(taskId);
+        if (!taskResult.ok) {
+            sendError(res, taskResult.httpStatus, taskResult.error);
+            return;
+        }
+        const task = taskResult.data;
+        const payload = Array.isArray(task.payload) ? task.payload[0] : task.payload;
+        const prompt = payload?.prompt || payload?.message || payload?.content;
+        if (!prompt || typeof prompt !== 'string') {
+            sendError(res, 400, (0, a2a_1.buildA2AError)({
+                code: a2a_1.A2AErrorCodeEnum.MissingEnvelopeField,
+                message: 'Task payload must contain a prompt, message, or content field',
+            }));
+            return;
+        }
+        // Transition to working
+        service.transitionTask(taskId, { target_state: 'working', triggered_by: 'a2a-execute' });
+        // Try Pi agent first, then OpenCode
+        const targetProjectId = project_id || task.metadata?.project_id || taskId;
+        let result;
+        if (sandbox_id) {
+            try {
+                const { promptPiSession } = await Promise.resolve().then(() => __importStar(require('./pi-runtime-adapter.js')));
+                result = await promptPiSession(targetProjectId, sandbox_id, prompt);
+            }
+            catch {
+                // Pi unavailable — try OpenCode
+            }
+        }
+        if (!result) {
+            try {
+                const { handleOpencodeServicePrompt } = await Promise.resolve().then(() => __importStar(require('./opencode-service-handler.js')));
+                const ocResult = await handleOpencodeServicePrompt({
+                    projectId: targetProjectId,
+                    prompt,
+                });
+                result = {
+                    success: ocResult.success,
+                    text: ocResult.text,
+                };
+            }
+            catch {
+                // OpenCode also unavailable
+            }
+        }
+        if (!result) {
+            service.transitionTask(taskId, { target_state: 'failed', reason: 'No coding agent available' });
+            sendError(res, 503, (0, a2a_1.buildA2AError)({
+                code: a2a_1.A2AErrorCodeEnum.InternalError,
+                message: 'No coding agent available to execute the task',
+            }));
+            return;
+        }
+        // Transition to completed or failed
+        if (result.success) {
+            service.transitionTask(taskId, { target_state: 'completed', reason: result.text });
+        }
+        else {
+            service.transitionTask(taskId, { target_state: 'failed', reason: result.text });
+        }
+        sendSuccess(res, {
+            task_id: taskId,
+            success: result.success,
+            text: result.text,
+            files_changed: result.filesChanged || [],
+        });
+    }
+    catch (err) {
+        logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/execute');
+        sendError(res, 500, (0, a2a_1.buildA2AError)({
+            code: a2a_1.A2AErrorCodeEnum.InternalError,
+            message: 'Internal server error while executing task',
         }));
     }
 });
