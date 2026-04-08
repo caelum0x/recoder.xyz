@@ -1,6 +1,20 @@
 # Recoder Platform — Current Status
 
-Last updated: 2026-04-07 (evening session)
+Last updated: 2026-04-08 (early morning session)
+
+### web.recoder.xyz coding status (latest)
+
+**What works:**
+- OpenCode bridge: `curl POST /api/opencode/:projectId` → `success:true`, creates files ✓
+- Container creation: new projects get Daytona sandboxes ✓  
+- Project ID format: `project-{timestamp}` prefix added ✓
+- Artifact wrapping: successful responses wrapped in `<recoderArtifact>` XML ✓
+- A2A bridge: 6 agents online, task dispatch works ✓
+
+**What's fixed this session (all deployed):**
+- ~~"Unexpected end of JSON input"~~ — FIXED: removed 106KB system prompt from OpenCode path, compiled shared TS to JS in Dockerfile, fixed createSession empty body
+- OpenCode coding loop **WORKS**: user types "Create a hello world page" → agent thinks → creates files in sandbox → response shown in chat
+- Remaining: "Failed to fetch" on preview (dev server not ready yet, separate from coding pipeline)
 
 ## ONE GOAL: Make all platforms work end to end
 ### Platform State
@@ -8,7 +22,7 @@ Last updated: 2026-04-07 (evening session)
 | Platform | URL | Status |
 |----------|-----|--------|
 | **agents** | agents.recoder.xyz | **Coding works E2E** — agent creates files in Daytona sandbox, preview serves via port 8080. File server fix deployed. Deep Coding mode in UI. Error messages now visible in chat. |
-| **web** | web.recoder.xyz | Pi agent wired, needs deploy verification. Other agent testing via Chrome DevTools. |
+| **web** | web.recoder.xyz | **Coding loop works** — OpenCode processes prompts, creates files in sandbox. Preview/dev server still needs work. |
 | **A2A** | docker.recoder.xyz/api/a2a | Works locally (Claude Code <-> Codex via MCP bridge). No web UI yet. |
 | **PM** | pm.recoder.xyz | **Working** — crash loop fixed. Auth redirects to recoder.xyz unified login. |
 | **Agency** | agency.recoder.xyz | **Working** — PostgreSQL recovered, playground/workspaces/dashboard all functional. Separate auth. |
@@ -39,8 +53,8 @@ Fix chain:
 - [x] Pi agent deployed in docker-backend (verified: Pi SDK available in container)
 - [x] Sandbox preview works (file server fix deployed, E2E verified with Hello World)
 - [x] Error messages visible in chat (ThreadComponent.tsx fix deployed)
-- [x] Wire Pi endpoint — auth middleware fixed (`authenticateRequest` → `optionalAuthenticateRequest`) so Python backend can call Pi/OpenCode without user session. Pi SDK has broken exports field — falls back to OpenCode.
-- [ ] Sandbox creation race: agent starts before sandbox is ready — `_ensure_sandbox()` adds latency
+- [x] Wire Pi endpoint — auth middleware fixed + deployed (`authenticateRequest` → `optionalAuthenticateRequest`). Pi SDK has broken `exports` field in package.json — needs fix in `@mariozechner/pi-coding-agent`. OpenCode fallback also needs debugging (JSON parse error in adapter).
+- [x] Sandbox creation race: fixed — agent start now waits up to 10s for sandbox before dispatching. Verified: "React Landing Page" agent started, created task plan via tool calls.
 - [ ] Test end-to-end: "build a React landing page" → files created → npm install → dev server → preview
 
 **web.recoder.xyz — must support continuous development:**

@@ -491,9 +491,15 @@ async def start_agent_run(
             except Exception as e:
                 logger.error(f"❌ [BACKGROUND] Error creating sandbox for project {proj_id}: {e}")
         
-        # Fire and forget - don't wait for sandbox creation
-        asyncio.create_task(create_sandbox_background(project_id, account_id, None))
-        logger.info(f"🚀 [AGENT_START] Started background sandbox creation for new project {project_id}")
+        # Start sandbox creation and give it a head start (up to 10s).
+        # If it finishes in time, the agent's first tool call won't block.
+        # If not, _ensure_sandbox() in the tool base will wait for the rest.
+        sandbox_task = asyncio.create_task(create_sandbox_background(project_id, account_id, None))
+        try:
+            await asyncio.wait_for(asyncio.shield(sandbox_task), timeout=10.0)
+            logger.info(f"[AGENT_START] Sandbox ready before agent dispatch for {project_id}")
+        except asyncio.TimeoutError:
+            logger.info(f"[AGENT_START] Sandbox still creating after 10s, agent will wait on first tool call for {project_id}")
     
     # Clean up stale runs before checking slot availability
     await _cleanup_stale_runs(account_id)
