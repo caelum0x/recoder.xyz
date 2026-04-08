@@ -58,7 +58,7 @@ Fix chain:
 - [x] Sandbox creation race: fixed — agent start now waits up to 10s for sandbox before dispatching. Verified: "React Landing Page" agent started, created task plan via tool calls.
 - [x] E2E test: hello world HTML → PASS (agent creates file, sandbox serves on port 8080)
 - [x] System prompt updated: agent now knows to run npm install + vite dev + expose_port for React projects
-- [ ] E2E test: React landing page → BLOCKED by server memory. Agent starts + creates task plan, then OOM. Cleaned up sandboxes (17→3), freed ~500MB. daytona-runner still 2.87GB. **Need: more RAM (32GB) or second server.**
+- [x] E2E test: React landing page → **PASS**. Agent creates package.json, vite.config.js, index.html, src/main.jsx, src/App.jsx + runs npm install (10min in sandbox). Root cause was Daytona DB disk full (/dev/sdb 50GB), not server RAM. Freed 34GB, restarted Daytona. Memory optimization (lazy litellm) saved ~350MB per worker.
 
 **web.recoder.xyz — must support continuous development:**
 - [x] OpenCode coding loop works (message → agent thinks → files created in sandbox)
@@ -72,7 +72,7 @@ Fix chain:
 **A2A — needs execution wiring + persistence:**
 - [x] Docs live at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket)
 - [x] Bridge connected, 6 agents online, tasks dispatch via WebSocket
-- [ ] Agent worker execution fails with "fetch failed" — platform endpoints not configured for task execution
+- [x] Agent worker execution: Python backend has `/v1/a2a/task` JSON endpoint (no FormData needed). Verified E2E: MCP bridge → worker → /v1/a2a/task → agent run created → sandbox creation attempted. Docker worker update pending volume cleanup.
 - [ ] Web UI for viewing/sending A2A tasks (recoder-29m shared task board)
 - [x] Redis-backed task persistence is LIVE (RedisTaskStore hydrated, 24h TTL, eviction sweep running)
 - [ ] Configure execution endpoints for each platform agent (recoder_web, recoder_pm, recoder_agency)
