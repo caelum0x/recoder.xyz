@@ -17,6 +17,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import APIRouter, HTTPException, Depends, Request, File, UploadFile, Form, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from core.utils.auth_utils import (
     verify_and_get_user_id_from_jwt,
@@ -890,6 +891,46 @@ async def _background_setup_and_execute(
             pass
         _cancellation_events.pop(agent_run_id, None)
         await notify_setup_error(agent_run_id, e)
+
+
+# ── A2A JSON endpoint for service-to-service task execution ──
+# The /agent/start endpoint uses FormData which is awkward for service-to-service
+# calls. This JSON endpoint accepts the same parameters as a JSON body.
+
+class A2ATaskRequest(BaseModel):
+    prompt: str
+    thread_id: Optional[str] = None
+    project_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    model_name: Optional[str] = None
+    mode: Optional[str] = None
+    task_id: Optional[str] = None
+
+@router.post("/a2a/task", summary="A2A Task Execution (JSON)", operation_id="a2a_task_execute")
+async def a2a_task_execute(
+    body: A2ATaskRequest,
+    request: Request,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Execute a task via A2A — JSON alternative to /agent/start FormData endpoint."""
+    account_id = user_id
+
+    try:
+        agent_run_id = await start_agent_run(
+            account_id=account_id,
+            prompt=body.prompt,
+            agent_id=body.agent_id,
+            model_name=body.model_name,
+            thread_id=body.thread_id,
+            project_id=body.project_id,
+            metadata={"source": "a2a", "task_id": body.task_id} if body.task_id else {"source": "a2a"},
+        )
+        return {"success": True, "agent_run_id": agent_run_id, "status": "running"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"A2A task execution failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/agent/start", response_model=UnifiedAgentStartResponse, summary="Start Agent", operation_id="unified_agent_start")
