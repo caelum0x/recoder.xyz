@@ -783,7 +783,23 @@ async def _background_setup_and_execute(
         final_status = "unknown"
         cleanup_errors = []
         run_timeout_seconds = int(os.getenv("AGENT_RUN_TIMEOUT_SECONDS", "3000"))  # 65min, > MAX_DURATION so cleanup always runs
-        
+
+        # Wait for sandbox to be ready before executing (max 30s)
+        # The sandbox was created in a fire-and-forget background task
+        # but tools will fail if it's not ready when execution starts.
+        try:
+            from core.sandbox.resolver import resolve_sandbox
+            for _attempt in range(6):
+                sandbox_info = await resolve_sandbox(project_id, account_id, None, require_started=True)
+                if sandbox_info and sandbox_info.sandbox_id:
+                    logger.info(f"✅ [SANDBOX_READY] Sandbox {sandbox_info.sandbox_id[:12]} ready for execution")
+                    break
+                await asyncio.sleep(5)
+            else:
+                logger.warning(f"⚠️ [SANDBOX_WAIT] Sandbox not ready after 30s, proceeding anyway")
+        except Exception as e:
+            logger.warning(f"⚠️ [SANDBOX_WAIT] Error checking sandbox: {e}")
+
         try:
             if mode == 'deep-coding':
                 await asyncio.wait_for(
