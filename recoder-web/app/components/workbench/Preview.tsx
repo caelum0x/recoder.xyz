@@ -833,11 +833,11 @@ export const Preview = memo(() => {
       setPreviewError(null);
       logger.info('✅ [Preview] Preview ready, loading iframe:', baseUrl);
     } else {
-      // Dev server not ready yet — set the iframe URL anyway so the user sees
-      // the docker-backend's friendly "starting up" page with auto-refresh
-      setIframeUrl(baseUrl);
+      // Dev server not ready yet — don't load iframe (avoids "Failed to fetch" errors)
+      // The iframe will load once activePreview.ready flips to true
+      setIframeUrl(undefined);
       setPreviewError(null);
-      logger.info('🔄 [Preview] Preview not ready yet, showing loading page:', baseUrl);
+      logger.info('🔄 [Preview] Preview not ready yet, waiting for dev server:', baseUrl);
     }
   }, [activePreview]);
 
