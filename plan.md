@@ -78,13 +78,13 @@ Fix chain:
 **pm.recoder.xyz:**
 - [x] Fix `Cannot find module '@logtail/next'` — pnpm install restored broken symlink
 - [ ] Verify copilot read+write works after restart
-- [ ] Unify auth with recoder.xyz
+- [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
 
 **agency.recoder.xyz:**
 - [x] Debug "Failed to create and start task from stage" 500 errors — was PostgreSQL in recovery mode, not Giselle engine
-- [ ] Fix GitHub auth account_not_linked
+- [x] Fix GitHub auth — root cause: recoder-app missing `GITHUB_APP_CLIENT_ID` env var (had `GITHUB_CLIENT_ID` instead). Added to .env.production + restarted container. Account linking was already enabled.
 - [ ] Wire API keys edit/delete to real backend
-- [ ] Unify auth with recoder.xyz
+- [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
 
 ## Current Blockers (Priority Order)
 
