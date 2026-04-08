@@ -18076,4 +18076,14 @@ server.listen(PORT, async () => {
       error: err instanceof Error ? err.message : 'unknown',
     });
   }
+
+  // Mount standards-compliant A2A server (official @a2a-js/sdk)
+  try {
+    const { mountA2AStandardServer } = await import('./a2a/a2a-standard-server.js');
+    await mountA2AStandardServer(app as any);
+  } catch (err) {
+    startupInfo('a2a-standard', 'not available', {
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
 });
