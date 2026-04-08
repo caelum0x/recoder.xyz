@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recoder A2A Task Board</title>
+<style>
+  :root { --bg: #0a0a0b; --card: #18181b; --border: #27272a; --text: #fafafa; --muted: #a1a1aa; --accent: #f59e0b; --green: #22c55e; --red: #ef4444; --blue: #3b82f6; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; }
+  h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+  .subtitle { color: var(--muted); margin-bottom: 24px; }
+  .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; min-width: 120px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .agents { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+  .agent { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .agent .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.online { background: var(--green); }
+  .dot.offline { background: var(--red); }
+  .tasks { display: flex; flex-direction: column; gap: 12px; }
+  .task { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .task-id { font-family: monospace; font-size: 12px; color: var(--muted); }
+  .task-state { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .task-state.submitted { background: var(--blue); color: white; }
+  .task-state.completed { background: var(--green); color: white; }
+  .task-state.failed { background: var(--red); color: white; }
+  .task-route { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .task-route .from { color: var(--accent); }
+  .task-route .to { color: var(--blue); }
+  .task-prompt { font-size: 14px; line-height: 1.5; }
+  .task-time { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .send-form { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 24px; }
+  .send-form h3 { font-size: 16px; margin-bottom: 12px; }
+  .form-row { display: flex; gap: 8px; margin-bottom: 8px; }
+  select, input, textarea { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 14px; flex: 1; }
+  textarea { min-height: 60px; resize: vertical; }
+  button { background: var(--accent); color: var(--bg); border: none; border-radius: 8px; padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:hover { opacity: 0.9; }
+  .empty { color: var(--muted); text-align: center; padding: 40px; }
+  .refresh { color: var(--muted); font-size: 12px; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>A2A Task Board</h1>
+<p class="subtitle">Agent-to-Agent task management — <span class="refresh" onclick="loadAll()">refresh</span></p>
+
+<div class="stats" id="stats"></div>
+<div class="agents" id="agents"></div>
+
+<div class="send-form">
+  <h3>Send Task</h3>
+  <div class="form-row">
+    <select id="target">
+      <option value="recoder_backend">recoder_backend</option>
+      <option value="recoder_web">recoder_web</option>
+      <option value="recoder_pm">recoder_pm</option>
+      <option value="recoder_agency">recoder_agency</option>
+      <option value="codex">codex</option>
+      <option value="claude_code">claude_code</option>
+    </select>
+    <select id="intent">
+      <option value="execute">execute</option>
+      <option value="plan">plan</option>
+      <option value="handoff">handoff</option>
+    </select>
+  </div>
+  <textarea id="taskPrompt" placeholder="Describe the task..."></textarea>
+  <div style="margin-top:8px"><button onclick="sendTask()">Send Task</button> <span id="sendStatus"></span></div>
+</div>
+
+<h3 style="margin-bottom:12px">Tasks</h3>
+<div class="tasks" id="tasks"></div>
+
+<script>
+const API = window.location.origin;
+
+async function loadHealth() {
+  try {
+    const r = await fetch(API + '/api/a2a/health');
+    const d = await r.json();
+    const agents = d.data?.agents || [];
+    document.getElementById('agents').innerHTML = agents.map(a =>
+      `<div class="agent"><span class="dot ${a.isOnline ? 'online' : 'offline'}"></span>${a.agentId} <span style="color:var(--muted);font-size:11px">${a.metadata?.sessionCount || 0} sessions</span></div>`
+    ).join('');
+    document.getElementById('stats').innerHTML = `
+      <div class="stat"><div class="stat-value">${agents.length}</div><div class="stat-label">Agents</div></div>
+      <div class="stat"><div class="stat-value">${agents.filter(a=>a.isOnline).length}</div><div class="stat-label">Online</div></div>
+    `;
+  } catch(e) { console.error('Health load failed:', e); }
+}
+
+async function loadTasks() {
+  try {
+    const r = await fetch(API + '/api/a2a/tasks');
+    const d = await r.json();
+    const tasks = d.data?.tasks || [];
+    if (tasks.length === 0) {
+      document.getElementById('tasks').innerHTML = '<div class="empty">No tasks yet. Send one above!</div>';
+      // Update stats
+      const stats = document.getElementById('stats');
+      stats.innerHTML += `<div class="stat"><div class="stat-value">0</div><div class="stat-label">Tasks</div></div>`;
+      return;
+    }
+    const stats = document.getElementById('stats');
+    stats.innerHTML += `
+      <div class="stat"><div class="stat-value">${tasks.length}</div><div class="stat-label">Tasks</div></div>
+      <div class="stat"><div class="stat-value">${tasks.filter(t=>t.state==='submitted').length}</div><div class="stat-label">Pending</div></div>
+      <div class="stat"><div class="stat-value">${tasks.filter(t=>t.state==='completed').length}</div><div class="stat-label">Completed</div></div>
+    `;
+    document.getElementById('tasks').innerHTML = tasks.reverse().map(t => `
+      <div class="task">
+        <div class="task-header">
+          <span class="task-id">${t.id}</span>
+          <span class="task-state ${t.state}">${t.state}</span>
+        </div>
+        <div class="task-route"><span class="from">${t.requester?.agent_id || '?'}</span> → <span class="to">${t.assignee?.agent_id || '?'}</span></div>
+        <div class="task-prompt">${(t.payload?.task || '').slice(0, 200)}</div>
+        <div class="task-time">${t.payload?.intent || ''} · ${new Date(t.created_at || Date.now()).toLocaleString()}</div>
+      </div>
+    `).join('');
+  } catch(e) { console.error('Tasks load failed:', e); }
+}
+
+async function sendTask() {
+  const target = document.getElementById('target').value;
+  const intent = document.getElementById('intent').value;
+  const task = document.getElementById('taskPrompt').value.trim();
+  if (!task) return;
+  document.getElementById('sendStatus').textContent = 'Sending...';
+  try {
+    // Use the A2A REST endpoint to dispatch
+    const r = await fetch(API + '/api/a2a/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_agent: target, task, intent }),
+    });
+    const d = await r.json();
+    document.getElementById('sendStatus').textContent = d.success ? 'Sent!' : 'Failed: ' + (d.error || '');
+    document.getElementById('taskPrompt').value = '';
+    setTimeout(loadAll, 1000);
+  } catch(e) {
+    document.getElementById('sendStatus').textContent = 'Error: ' + e.message;
+  }
+}
+
+function loadAll() { loadHealth(); loadTasks(); }
+loadAll();
+setInterval(loadAll, 15000); // Auto-refresh every 15s
+</script>
+</body>
+</html>
