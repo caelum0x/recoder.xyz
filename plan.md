@@ -65,9 +65,9 @@ Fix chain:
 - [x] Container auto-creation for new projects (project-{timestamp} format)
 - [x] 106KB system prompt removed from OpenCode path (was causing empty responses)
 - [x] Terminal/watch WS endpoints verified reachable
-- [ ] File tree broken: `sh: 1: Syntax error: "(" unexpected` — listing command uses bash syntax, Daytona shell is `sh`
+- [x] File tree fixed: POSIX-compatible find command (was using bash grouping parens in `sh` shell)
 - [ ] Preview "Failed to fetch" — dev server not ready when iframe loads
-- [ ] Multi-turn editing: OpenCode session persists per chat (sessionId stored)
+- [x] Multi-turn editing verified: OpenCode session persists per chat (sessionId passed, context maintained across messages)
 
 **A2A — needs execution wiring + persistence:**
 - [x] Docs live at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket)
