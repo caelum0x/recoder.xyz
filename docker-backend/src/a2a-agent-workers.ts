@@ -78,7 +78,7 @@ const INTERNAL_AGENTS: AgentConfig[] = [
     capabilities: ['plan', 'review'],
     // PM runs on host via PM2
     baseUrl: process.env.RECODER_PM_INTERNAL_URL || 'http://host.docker.internal:3004',
-    taskEndpoint: '/api/a2a/task',
+    taskEndpoint: '/v1/a2a/task',
     buildRequestBody: (task) => ({
       prompt: task.prompt,
       context: task.context,
@@ -90,7 +90,7 @@ const INTERNAL_AGENTS: AgentConfig[] = [
     capabilities: ['execute', 'plan'],
     // Agency runs on host via PM2
     baseUrl: process.env.RECODER_AGENCY_INTERNAL_URL || 'http://host.docker.internal:3007',
-    taskEndpoint: '/api/a2a/task',
+    taskEndpoint: '/v1/a2a/task',
     buildRequestBody: (task) => ({
       prompt: task.prompt,
       context: task.context,
