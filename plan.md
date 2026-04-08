@@ -57,7 +57,8 @@ Fix chain:
 - [x] Wire Pi endpoint — auth middleware fixed + deployed (`authenticateRequest` → `optionalAuthenticateRequest`). Pi SDK has broken `exports` field in package.json — needs fix in `@mariozechner/pi-coding-agent`. OpenCode fallback also needs debugging (JSON parse error in adapter).
 - [x] Sandbox creation race: fixed — agent start now waits up to 10s for sandbox before dispatching. Verified: "React Landing Page" agent started, created task plan via tool calls.
 - [x] E2E test: hello world HTML → PASS (agent creates file, sandbox serves on port 8080)
-- [ ] E2E test: React landing page → BLOCKED by server memory (15GB total, 7.5GB used by Docker, backend OOM killed mid-execution). Agent starts, creates task plan, then backend restarts from memory pressure. Litellm works (confirmed direct test). Stopped non-essential services (steel, chatwoot, flagsmith, umami, pgadmin, maildev, searxng) but daytona-runner alone uses 1.37GB. **Need either: more RAM (32GB), or move some services to a second server.**
+- [x] System prompt updated: agent now knows to run npm install + vite dev + expose_port for React projects
+- [ ] E2E test: React landing page → BLOCKED by server memory. Agent starts + creates task plan, then OOM. Cleaned up sandboxes (17→3), freed ~500MB. daytona-runner still 2.87GB. **Need: more RAM (32GB) or second server.**
 
 **web.recoder.xyz — must support continuous development:**
 - [ ] Pi agent as default chat backend (code done in api.chat.ts, needs deploy)
