@@ -34,6 +34,8 @@ interface AgentConfig {
   taskEndpoint: string;
   /** HTTP method (default POST) */
   method?: string;
+  /** Content type hint */
+  contentType?: string;
   /** Build the request body from a task assignment message */
   buildRequestBody?: (task: TaskAssignment) => unknown;
 }
@@ -53,11 +55,15 @@ const INTERNAL_AGENTS: AgentConfig[] = [
     // Python backend runs on host via PM2, not in Docker
     baseUrl: process.env.RECODER_BACKEND_INTERNAL_URL || 'http://host.docker.internal:8000',
     taskEndpoint: '/v1/agent/start',
-    buildRequestBody: (task) => ({
-      prompt: task.prompt,
-      context: task.context,
-      taskId: task.taskId,
-    }),
+    // Backend expects FormData, not JSON
+    method: 'POST',
+    contentType: 'multipart/form-data',
+    buildRequestBody: (task) => {
+      const form = new FormData();
+      form.append('prompt', task.prompt || '');
+      if (task.taskId) form.append('thread_id', task.taskId);
+      return form;
+    },
   },
   {
     agentId: 'recoder_web',
@@ -160,10 +166,13 @@ async function executeTask(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
+    const isFormData = body instanceof FormData;
+    const headers: Record<string, string> = isFormData ? {} : { 'Content-Type': 'application/json' };
+
     const response = await fetch(url, {
       method: config.method || 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      headers,
+      body: isFormData ? body : JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -181,11 +190,11 @@ async function executeTask(
     return { success: true, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unknown_error';
-    // Don't log connection refused as error — service might not be running
+    // Log all failures to help debug A2A worker issues
     if (message.includes('ECONNREFUSED') || message.includes('fetch failed')) {
-      logger.debug(
-        { agentId: config.agentId, url },
-        'service not reachable for task execution',
+      logger.warn(
+        { agentId: config.agentId, url, error: message },
+        'A2A worker: service not reachable',
       );
     } else {
       logger.warn({ agentId: config.agentId, url, err: message }, 'task execution failed');
