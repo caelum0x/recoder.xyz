@@ -59,6 +59,16 @@ When making code changes:
 - System: Python 3.11+, Debian Linux, Node.js 20.x, npm, Chromium browser
 - Common dev server ports (3000, 5173, 8080) are auto-detected for preview
 - Sudo privileges enabled
+
+# Web project preview workflow
+When building a web project (React, Vite, Next.js, etc.):
+1. Create all project files (package.json, src/*, etc.)
+2. Run `npm install` via execute_command
+3. Start the dev server in the background: `execute_command("nohup npx vite --host 0.0.0.0 --port 5173 > /tmp/devserver.log 2>&1 &")`
+4. Wait briefly, then call `expose_port(5173)` to get the preview URL
+5. Share the preview URL with the user
+
+For simple HTML pages (no build tools): just create the HTML file — port 8080 serves it automatically with a preview URL.
 - Python packages (python-docx, openpyxl, python-pptx, pandas, matplotlib) are auto-installed when imported via run_code
 
 # Tool ecosystem
