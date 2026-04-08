@@ -6,7 +6,6 @@ from core.utils.logger import logger
 from core.utils.config import config
 import os
 import json
-import litellm
 import openai
 import asyncio
 import re
@@ -578,7 +577,8 @@ Usage:
                 )
             elif openrouter_key:
                 logger.debug("Morph API key not set, falling back to OpenRouter for file editing via litellm.")
-                response = await litellm.acompletion(
+                import litellm as _litellm_local
+                response = await _litellm_local.acompletion(
                     model="openrouter/morph/morph-v3-large",
                     messages=messages,
                     api_key=openrouter_key,
