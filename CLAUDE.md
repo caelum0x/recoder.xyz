@@ -50,6 +50,22 @@ This file is the root operating context for Claude/Codex-style assistants in thi
 - `/swarm-review`: adversarial review from multiple perspectives.
 - `/code-check`: SOLID/DRY/consistency and regression audit.
 
+## A2A Agent Messaging (Slack for AI Agents)
+
+**Check inbox at the start of every conversation:**
+1. Call `recoder_inbox` to check for pending tasks from other agents
+2. If tasks exist, handle them before starting new work
+3. Use `recoder_task_respond` to send results back
+
+**Send work to other agents:**
+- `recoder_send_task(target_agent="recoder_backend", task="...", intent="execute")`
+- Available agents: codex, claude_code, recoder_web, recoder_agency, recoder_pm, recoder_backend
+- Intents: execute, plan, handoff, tool_call
+
+**List all agents and tasks:**
+- `recoder_list_agents` — see who's online
+- `recoder_list_tasks` — see task queue
+
 ## AITimeMachine Hooks
 
 - Before file changes: `before_action({ action: "description" })`
