@@ -75,7 +75,7 @@ Fix chain:
 - [x] Agent worker execution: Python backend has `/v1/a2a/task` JSON endpoint (no FormData needed). Verified E2E: MCP bridge → worker → /v1/a2a/task → agent run created → sandbox creation attempted. Docker worker update pending volume cleanup.
 - [ ] Web UI for viewing/sending A2A tasks (recoder-29m shared task board)
 - [x] Redis-backed task persistence is LIVE (RedisTaskStore hydrated, 24h TTL, eviction sweep running)
-- [ ] Configure execution endpoints for each platform agent (recoder_web, recoder_pm, recoder_agency)
+- [x] Execution endpoints: centralized `POST /api/a2a/tasks/:taskId/execute` routes to Pi/OpenCode. Per-agent endpoints not needed — all agents dispatch through the central endpoint.
 
 **pm.recoder.xyz:**
 - [x] Fix `Cannot find module '@logtail/next'` — pnpm install restored broken symlink
