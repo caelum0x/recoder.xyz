@@ -66,7 +66,7 @@ Fix chain:
 - [x] 106KB system prompt removed from OpenCode path (was causing empty responses)
 - [x] Terminal/watch WS endpoints verified reachable
 - [x] File tree fixed: POSIX-compatible find command (was using bash grouping parens in `sh` shell)
-- [ ] Preview "Failed to fetch" — dev server not ready when iframe loads
+- [x] Preview "Failed to fetch" — FIXED: iframe deferred until dev server ready (deployed)
 - [x] Multi-turn editing verified: OpenCode session persists per chat (sessionId passed, context maintained across messages)
 
 **A2A — needs execution wiring + persistence:**
@@ -85,7 +85,7 @@ Fix chain:
 **agency.recoder.xyz:**
 - [x] Debug "Failed to create and start task from stage" 500 errors — was PostgreSQL in recovery mode, not Giselle engine
 - [x] Fix GitHub auth — root cause: recoder-app missing `GITHUB_APP_CLIENT_ID` env var (had `GITHUB_CLIENT_ID` instead). Added to .env.production + restarted container. Account linking was already enabled.
-- [ ] Wire API keys edit/delete to real backend
+- [x] API keys edit/delete — already wired via Giselle's server actions (createApiKeyAction, revokeApiKeyAction)
 - [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
 
 ## Current Blockers (Priority Order)
