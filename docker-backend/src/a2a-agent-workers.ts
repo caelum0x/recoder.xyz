@@ -50,7 +50,8 @@ const INTERNAL_AGENTS: AgentConfig[] = [
   {
     agentId: 'recoder_backend',
     capabilities: ['execute', 'plan', 'review'],
-    baseUrl: process.env.RECODER_BACKEND_INTERNAL_URL || 'http://127.0.0.1:8000',
+    // Python backend runs on host via PM2, not in Docker
+    baseUrl: process.env.RECODER_BACKEND_INTERNAL_URL || 'http://host.docker.internal:8000',
     taskEndpoint: '/v1/agent/start',
     buildRequestBody: (task) => ({
       prompt: task.prompt,
@@ -61,7 +62,8 @@ const INTERNAL_AGENTS: AgentConfig[] = [
   {
     agentId: 'recoder_web',
     capabilities: ['execute', 'plan'],
-    baseUrl: process.env.RECODER_WEB_INTERNAL_URL || 'http://127.0.0.1:5173',
+    // recoder-web is a Docker container on the same network
+    baseUrl: process.env.RECODER_WEB_INTERNAL_URL || 'http://recoder-web:5173',
     taskEndpoint: '/api/chat',
     buildRequestBody: (task) => ({
       message: task.prompt,
@@ -72,7 +74,8 @@ const INTERNAL_AGENTS: AgentConfig[] = [
   {
     agentId: 'recoder_pm',
     capabilities: ['plan', 'review'],
-    baseUrl: process.env.RECODER_PM_INTERNAL_URL || 'http://127.0.0.1:3004',
+    // PM runs on host via PM2
+    baseUrl: process.env.RECODER_PM_INTERNAL_URL || 'http://host.docker.internal:3004',
     taskEndpoint: '/api/a2a/task',
     buildRequestBody: (task) => ({
       prompt: task.prompt,
@@ -83,7 +86,8 @@ const INTERNAL_AGENTS: AgentConfig[] = [
   {
     agentId: 'recoder_agency',
     capabilities: ['execute', 'plan'],
-    baseUrl: process.env.RECODER_AGENCY_INTERNAL_URL || 'http://127.0.0.1:3007',
+    // Agency runs on host via PM2
+    baseUrl: process.env.RECODER_AGENCY_INTERNAL_URL || 'http://host.docker.internal:3007',
     taskEndpoint: '/api/a2a/task',
     buildRequestBody: (task) => ({
       prompt: task.prompt,
