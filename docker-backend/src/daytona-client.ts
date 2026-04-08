@@ -208,8 +208,8 @@ export class DaytonaClient {
     timeoutMs?: number,
   ): Promise<T> {
     const toolboxBase = await this.getToolboxProxyUrl();
-    // Path format: /api/toolbox/{sandboxId}/toolbox/{operation}
-    const url = `${toolboxBase}/${sandboxId}/toolbox${path}`;
+    // Path format: /{sandboxId}{path} (e.g. /{id}/files, /{id}/process/execute)
+    const url = `${toolboxBase}/${sandboxId}${path}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs || this.timeoutMs);
 
@@ -251,14 +251,12 @@ export class DaytonaClient {
       return this._toolboxProxyUrl;
     }
 
-    // Use the main Daytona API at port 3900 for toolbox operations.
-    // The toolbox endpoint path is: /api/toolbox/{sandboxId}/toolbox/{operation}
-    // (double "toolbox" is intentional — first is the proxy route, second is sandbox service prefix)
+    // Daytona toolbox proxy path: /toolbox/{sandboxId}/{operation}
     // From inside Docker, use host.docker.internal to reach the host.
     const isDocker = require('fs').existsSync('/.dockerenv');
     this._toolboxProxyUrl = isDocker
-      ? 'http://host.docker.internal:3900/api/toolbox'
-      : `${this.baseUrl.replace(/\/api$/, '')}/api/toolbox`;
+      ? 'http://host.docker.internal:3900/toolbox'
+      : `${this.baseUrl.replace(/\/api$/, '')}/toolbox`;
     logger.info({ toolboxProxyUrl: this._toolboxProxyUrl }, 'Using Daytona API toolbox URL');
     return this._toolboxProxyUrl;
   }

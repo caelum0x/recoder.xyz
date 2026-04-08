@@ -16,6 +16,43 @@ const ioredis_1 = __importDefault(require("ioredis"));
 const a2a_1 = require("@recoder/shared/a2a");
 const router = (0, express_1.Router)();
 exports.a2aRouter = router;
+// A2A Agent Card (standard A2A protocol discovery)
+router.get('/.well-known/agent.json', (_req, res) => {
+    res.json({
+        name: 'Recoder Platform',
+        description: 'AI agent platform with coding, PM, agency, and A2A capabilities',
+        url: 'https://docker.recoder.xyz/api/a2a',
+        version: '2.0',
+        capabilities: {
+            streaming: false,
+            pushNotifications: false,
+            stateTransitionHistory: true,
+        },
+        skills: [
+            { id: 'coding', name: 'Code Generation', description: 'Create and edit code in sandboxed environments' },
+            { id: 'tasks', name: 'Task Management', description: 'Create, assign, and track tasks across agents' },
+            { id: 'search', name: 'Code Search', description: 'Search code across projects using vector + text search' },
+        ],
+        authentication: { schemes: ['hmac_shared_secret'] },
+        defaultInputModes: ['text'],
+        defaultOutputModes: ['text'],
+    });
+});
+// A2A discovery/index endpoint
+router.get('/', (_req, res) => {
+    res.json({
+        name: 'Recoder A2A Gateway',
+        version: '2.0',
+        protocol: 'Agent-to-Agent (A2A)',
+        docs: 'https://recoder.xyz/docs/a2a',
+        endpoints: {
+            agents: '/api/a2a/agents',
+            tasks: '/api/a2a/tasks',
+            channels: '/api/a2a/channels',
+            heartbeat: '/api/a2a/heartbeat',
+        },
+    });
+});
 const MAX_CLOCK_SKEW_MS = Number(process.env.RECODER_A2A_MAX_SKEW_MS || 5 * 60 * 1000);
 const IDEMPOTENCY_TTL_MS = Number(process.env.RECODER_A2A_IDEMPOTENCY_TTL_MS || 10 * 60 * 1000);
 const IDEMPOTENCY_KEY_PREFIX = process.env.RECODER_A2A_IDEMPOTENCY_KEY_PREFIX || 'recoder:a2a:idempotency';

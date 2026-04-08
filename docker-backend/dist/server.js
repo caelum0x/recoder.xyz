@@ -1288,6 +1288,25 @@ app.use((req, res, next) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
 });
+// A2A discovery endpoints (must be before body parsers)
+app.get('/api/a2a', (_req, res) => {
+    res.json({
+        name: 'Recoder A2A Gateway', version: '2.0', protocol: 'Agent-to-Agent (A2A)',
+        docs: 'https://recoder.xyz/docs/a2a',
+        endpoints: { agents: '/api/a2a/agents', tasks: '/api/a2a/tasks', channels: '/api/a2a/channels' },
+    });
+});
+app.get('/api/a2a/.well-known/agent.json', (_req, res) => {
+    res.json({
+        name: 'Recoder Platform', url: 'https://docker.recoder.xyz/api/a2a', version: '2.0',
+        capabilities: { streaming: false, pushNotifications: false, stateTransitionHistory: true },
+        skills: [
+            { id: 'coding', name: 'Code Generation' },
+            { id: 'tasks', name: 'Task Management' },
+        ],
+        authentication: { schemes: ['hmac_shared_secret'] },
+    });
+});
 // Keep raw JSON text for signed A2A payload verification
 app.use('/api/a2a', express_1.default.text({ type: 'application/json', limit: '2mb' }));
 app.use(express_1.default.json({ limit: '50mb' }));
@@ -4186,7 +4205,7 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     }
 });
 // ── Pi Coding Agent endpoint (Daytona-native) ──
-app.post('/api/pi/:projectId', authenticateRequest, flexibleProjectOwnership, async (req, res) => {
+app.post('/api/pi/:projectId', optionalAuthenticateRequest, flexibleProjectOwnership, async (req, res) => {
     try {
         const projectId = sanitizeProjectId(req.params.projectId);
         const { prompt, model, providerKeys } = (req.body || {});
@@ -4216,7 +4235,7 @@ app.post('/api/pi/:projectId', authenticateRequest, flexibleProjectOwnership, as
         return res.status(500).json({ success: false, error: err.message });
     }
 });
-app.post('/api/opencode/:projectId', authenticateRequest, flexibleProjectOwnership, async (req, res) => {
+app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjectOwnership, async (req, res) => {
     try {
         const projectId = sanitizeProjectId(req.params.projectId);
         const { prompt, model, sessionId, continueSession, providerKeys, } = (req.body || {});
@@ -4236,23 +4255,31 @@ app.post('/api/opencode/:projectId', authenticateRequest, flexibleProjectOwnersh
                 anthropic: providerKeys?.anthropic || process.env.ANTHROPIC_API_KEY,
                 google: providerKeys?.google || process.env.GOOGLE_AI_API_KEY,
             };
-            const result = await handleOpencodeServicePrompt({
-                projectId,
-                prompt,
-                model,
-                providerKeys: effectiveProviderKeys,
-                sandboxId,
-                readWorkspaceFile: sandboxId
-                    ? async (path) => {
-                        // Read from opencode's /workspace via its file API
-                        const { createRecoderOpencodeClient } = await Promise.resolve().then(() => __importStar(require('@recoder/shared/opencode-client')));
-                        const client = createRecoderOpencodeClient({ baseUrl: process.env.OPENCODE_SERVICE_URL });
-                        const content = await client.readFile(path, '/workspace');
-                        return typeof content === 'string' ? content : JSON.stringify(content);
-                    }
-                    : undefined,
-                writeSandboxFile: sandboxId ? daytona_file_ops_js_1.daytonaWriteFile : undefined,
-            });
+            logger.info({ projectId, promptLen: prompt.length, sandboxId, model }, 'OpenCode service prompt starting');
+            let result;
+            try {
+                result = await handleOpencodeServicePrompt({
+                    projectId,
+                    prompt,
+                    model,
+                    providerKeys: effectiveProviderKeys,
+                    sandboxId,
+                    readWorkspaceFile: sandboxId
+                        ? async (path) => {
+                            const { createRecoderOpencodeClient } = await Promise.resolve().then(() => __importStar(require('@recoder/shared/opencode-client')));
+                            const client = createRecoderOpencodeClient({ baseUrl: process.env.OPENCODE_SERVICE_URL });
+                            const content = await client.readFile(path, '/workspace');
+                            return typeof content === 'string' ? content : JSON.stringify(content);
+                        }
+                        : undefined,
+                    writeSandboxFile: sandboxId ? daytona_file_ops_js_1.daytonaWriteFile : undefined,
+                });
+            }
+            catch (handlerErr) {
+                logger.error({ projectId, err: handlerErr.message, stack: handlerErr.stack?.slice(0, 300) }, 'OpenCode handler threw');
+                return res.status(500).json({ success: false, error: handlerErr.message });
+            }
+            logger.info({ projectId, success: result.success, textLen: result.text?.length }, 'OpenCode service prompt completed');
             return res.json({
                 success: result.success,
                 sessionId: result.sessionId,

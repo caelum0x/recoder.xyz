@@ -226,8 +226,9 @@ async function daytonaListFiles(sandboxId, dirPath = '/home/daytona') {
     }
     catch (nativeErr) {
         logger.warn({ sandboxId: sandboxId.slice(0, 12), dirPath, error: nativeErr.message }, 'Native filesystem list failed, falling back to exec-based find');
-        // Fallback to exec-based find — same as the Docker route, producing same output format
-        const result = await dc.execCommand(sandboxId, `find '${dirPath}' -maxdepth 2 \\( -type f -o -type d \\) 2>/dev/null`, { timeoutSecs: 15 });
+        // Fallback to exec-based find — POSIX sh compatible (no grouping parens
+        // that break in dash/sh). Two separate finds produce the same result.
+        const result = await dc.execCommand(sandboxId, `find '${dirPath}' -maxdepth 2 -type f 2>/dev/null; find '${dirPath}' -maxdepth 2 -type d 2>/dev/null`, { timeoutSecs: 15 });
         return result.output.split('\n').filter(Boolean);
     }
 }
