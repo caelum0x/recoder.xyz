@@ -169,6 +169,26 @@ async function executeTask(
     const isFormData = body instanceof FormData;
     const headers: Record<string, string> = isFormData ? {} : { 'Content-Type': 'application/json' };
 
+    // Auth for service-to-service calls:
+    // 1. Session token from the task requester's context (forwarded from the MCP bridge)
+    // 2. Platform service account token from env (A2A_SERVICE_TOKEN)
+    // 3. Internal service key as fallback
+    const sessionToken =
+      (task.context as any)?.sessionToken ||
+      (task as any).sessionToken ||
+      process.env.A2A_SERVICE_TOKEN;
+    if (sessionToken) {
+      headers['Authorization'] = `Bearer ${sessionToken}`;
+      if (isFormData) {
+        // FormData needs headers set separately
+        headers['Cookie'] = `recoder.session_token=${sessionToken}`;
+      }
+    }
+    const internalKey = process.env.INTERNAL_SERVICE_KEY;
+    if (internalKey) {
+      headers['X-Internal-Service-Key'] = internalKey;
+    }
+
     const response = await fetch(url, {
       method: config.method || 'POST',
       headers,
