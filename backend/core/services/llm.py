@@ -6,24 +6,46 @@ import asyncio
 os.environ.setdefault("AIOHTTP_CONNECTOR_LIMIT", "0")
 os.environ.setdefault("AIOHTTP_CONNECTOR_LIMIT_PER_HOST", "0")
 
-import litellm
-from litellm.files.main import ModelResponse
+# Disable litellm telemetry before import to reduce memory + startup time
+os.environ.setdefault("LITELLM_TELEMETRY", "False")
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
+
 from core.utils.logger import logger
 from core.utils.config import config
 from core.utils.llm_debugger import llm_debug
 from core.agentpress.error_processor import ErrorProcessor
 
-litellm.modify_params = True
-litellm.drop_params = True
+# Lazy-load litellm — 104MB memory cost deferred until first LLM call
+_litellm = None
+_ModelResponse = None
 
-litellm.set_verbose = False
-import logging
-logging.getLogger("LiteLLM").setLevel(logging.WARNING)
-logging.getLogger("litellm").setLevel(logging.WARNING)
+def _get_litellm():
+    global _litellm, _ModelResponse
+    if _litellm is None:
+        import litellm as _lit
+        from litellm.files.main import ModelResponse as _MR
+        _litellm = _lit
+        _ModelResponse = _MR
 
-litellm.num_retries = int(os.environ.get("LITELLM_NUM_RETRIES", 1))
-litellm.request_timeout = int(os.environ.get("LITELLM_REQUEST_TIMEOUT", 300))  # 5 min (was 30 min)
-litellm.stream_timeout = int(os.environ.get("LITELLM_STREAM_TIMEOUT", 120))    # 2 min per-chunk
+        _litellm.modify_params = True
+        _litellm.drop_params = True
+        _litellm.set_verbose = False
+
+        import logging
+        logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+        logging.getLogger("litellm").setLevel(logging.WARNING)
+
+        _litellm.num_retries = int(os.environ.get("LITELLM_NUM_RETRIES", 1))
+        _litellm.request_timeout = int(os.environ.get("LITELLM_REQUEST_TIMEOUT", 300))
+        _litellm.stream_timeout = int(os.environ.get("LITELLM_STREAM_TIMEOUT", 120))
+
+        logger.info("litellm loaded lazily on first LLM call")
+    return _litellm
+
+# Backward compat — modules that do `from core.services.llm import litellm`
+# will get None until first call, but all LLM calls go through make_llm_api_call
+litellm = None  # type: ignore
+ModelResponse = None  # type: ignore
 
 # ── OpenMeter usage reporting ────────────────────────────────────
 OPENMETER_URL = os.environ.get("OPENMETER_URL", "")
@@ -75,12 +97,9 @@ def _report_usage_to_openmeter(
     except Exception:
         pass
 
-from litellm.integrations.custom_logger import CustomLogger
-
-class LLMTimingCallback(CustomLogger):
+class LLMTimingCallback:
     
     def __init__(self):
-        super().__init__()
         self._retry_counts = {}
     
     def log_pre_api_call(self, model, messages, kwargs):
@@ -119,11 +138,18 @@ class LLMTimingCallback(CustomLogger):
 
 
 _timing_callback = LLMTimingCallback()
+_callbacks_initialized = False
 
-if os.getenv("BRAINTRUST_API_KEY"):
-    litellm.callbacks = ["braintrust", _timing_callback]
-else:
-    litellm.callbacks = [_timing_callback]
+def _init_callbacks():
+    global _callbacks_initialized
+    if _callbacks_initialized:
+        return
+    _callbacks_initialized = True
+    lit = _get_litellm()
+    if os.getenv("BRAINTRUST_API_KEY"):
+        lit.callbacks = ["braintrust", _timing_callback]
+    else:
+        lit.callbacks = [_timing_callback]
 
 
 class LLMError(Exception):
@@ -231,7 +257,9 @@ async def make_llm_api_call(
     extra_headers: Optional[Dict[str, str]] = None,
     stop: Optional[List[str]] = None,
     frequency_penalty: Optional[float] = 0.2,
-) -> Union[Dict[str, Any], AsyncGenerator, ModelResponse]:
+) -> Union[Dict[str, Any], AsyncGenerator, Any]:
+    lit = _get_litellm()  # Lazy load litellm on first call
+    _init_callbacks()
     messages = _strip_internal_properties(messages)
 
     # ── Gemini-safe message cleaning ──────────────────────────────────
@@ -383,7 +411,7 @@ async def make_llm_api_call(
 
         if stream:
             response = await asyncio.wait_for(
-                litellm.acompletion(**params),
+                lit.acompletion(**params),
                 timeout=LLM_STREAM_TIMEOUT,
             )
             ttft = time_module.monotonic() - call_start
@@ -400,7 +428,7 @@ async def make_llm_api_call(
             return response
         else:
             response = await asyncio.wait_for(
-                litellm.acompletion(**params),
+                lit.acompletion(**params),
                 timeout=LLM_SYNC_TIMEOUT,
             )
             duration = time_module.monotonic() - call_start
@@ -540,7 +568,7 @@ def _save_debug_output(
 
 
 setup_api_keys()
-logger.info(f"[LLM] Module initialized: retries={litellm.num_retries}, timeout={litellm.request_timeout}s, stream_timeout={litellm.stream_timeout}s")
+logger.info("[LLM] Module initialized (litellm will load lazily on first LLM call)")
 
 
 _prewarm_cache: Dict[str, float] = {}
@@ -573,7 +601,7 @@ async def prewarm_llm_connection(model_name: str) -> None:
         
         try:
             await asyncio.wait_for(
-                litellm.acompletion(**params),
+                lit.acompletion(**params),
                 timeout=5.0
             )
         except asyncio.TimeoutError:
