@@ -12,6 +12,7 @@
  * | GET    | /:taskId                      | Get a task with full envelope            |
  * | GET    | /:taskId/history              | Get transition history for a task        |
  * | GET    | /                             | List tasks with optional filters         |
+ * | POST   | /:taskId/execute              | Execute a task via Pi/OpenCode agent     |
  *
  * All error responses use the canonical A2A error taxonomy from
  * `@recoder/shared/a2a/schemas`.
@@ -393,6 +394,115 @@ taskLifecycleRouter.get(
       sendError(res, 500, buildA2AError({
         code: A2AErrorCodeEnum.InternalError,
         message: 'Internal server error while listing tasks',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/execute -- Execute a task via Pi or OpenCode agent
+// ---------------------------------------------------------------------------
+// Takes a task that has a prompt in its payload and dispatches it to the
+// coding agent. The agent creates/edits files in the Daytona sandbox and
+// returns the result. The task is transitioned to "working" → "completed".
+
+taskLifecycleRouter.post(
+  '/:taskId/execute',
+  async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { project_id, sandbox_id } = req.body ?? {};
+
+      if (!taskId || taskId === 'undefined') {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.MissingEnvelopeField,
+          message: 'taskId parameter is required',
+        }));
+        return;
+      }
+
+      const service = getTaskLifecycleService();
+
+      // Get the task
+      const taskResult = service.getTask(taskId);
+      if (!taskResult.ok) {
+        sendError(res, taskResult.httpStatus, taskResult.error);
+        return;
+      }
+
+      const task = taskResult.data;
+      const prompt = task.payload?.prompt || task.payload?.message || task.payload?.content;
+
+      if (!prompt || typeof prompt !== 'string') {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.MissingEnvelopeField,
+          message: 'Task payload must contain a prompt, message, or content field',
+        }));
+        return;
+      }
+
+      // Transition to working
+      service.transitionTask(taskId, 'working', { executed_by: 'a2a-execute' });
+
+      // Try Pi agent first, then OpenCode
+      const targetProjectId = project_id || task.metadata?.project_id || taskId;
+      let result: { success: boolean; text: string; filesChanged?: string[] } | undefined;
+
+      if (sandbox_id) {
+        try {
+          const { promptPiSession } = await import('./pi-runtime-adapter.js');
+          result = await promptPiSession(targetProjectId, sandbox_id, prompt);
+        } catch {
+          // Pi unavailable — try OpenCode
+        }
+      }
+
+      if (!result) {
+        try {
+          const { handleOpencodeServicePrompt } = await import('./opencode-service-handler.js');
+          const ocResult = await handleOpencodeServicePrompt({
+            projectId: targetProjectId,
+            prompt,
+          });
+          result = {
+            success: ocResult.success,
+            text: ocResult.text,
+          };
+        } catch {
+          // OpenCode also unavailable
+        }
+      }
+
+      if (!result) {
+        service.transitionTask(taskId, 'failed', { error: 'No coding agent available (Pi + OpenCode both unavailable)' });
+        sendError(res, 503, buildA2AError({
+          code: A2AErrorCodeEnum.InternalError,
+          message: 'No coding agent available to execute the task',
+        }));
+        return;
+      }
+
+      // Transition to completed or failed
+      if (result.success) {
+        service.transitionTask(taskId, 'completed', {
+          result: result.text,
+          files_changed: result.filesChanged,
+        });
+      } else {
+        service.transitionTask(taskId, 'failed', { error: result.text });
+      }
+
+      sendSuccess(res, {
+        task_id: taskId,
+        success: result.success,
+        text: result.text,
+        files_changed: result.filesChanged || [],
+      });
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/execute');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while executing task',
       }));
     }
   },
