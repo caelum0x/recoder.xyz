@@ -138,18 +138,31 @@ async def start_file_server(sandbox: AsyncSandbox):
         except Exception:
             pass  # Session may already exist from a previous start
 
-        # Check if port 8080 is already in use
-        check = await sandbox.process.exec("ss -tlnp | grep ':8080' || true", timeout=5)
-        if check.result and ':8080' in (check.result or ''):
+        # Check if port 8080 is already in use (ss may not exist in slim images)
+        check = await sandbox.process.exec(
+            "curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://localhost:8080/ 2>/dev/null || echo '000'",
+            timeout=5
+        )
+        if check.result and check.result.strip() not in ('', '000'):
             logger.info("File server already running on port 8080")
             return
 
-        # Start python3 HTTP server in the background
-        await sandbox.process.execute_session_command(session_id, SessionExecuteRequest(
-            command="cd /home/daytona && nohup python3 -m http.server 8080 --bind 0.0.0.0 > /tmp/fileserver.log 2>&1 &",
-            var_async=True
-        ))
-        logger.info("File server started on port 8080")
+        # Start python3 HTTP server directly via exec (more reliable than sessions)
+        await sandbox.process.exec(
+            "cd /home/daytona && nohup python3 -m http.server 8080 --bind 0.0.0.0 > /tmp/fileserver.log 2>&1 &",
+            timeout=5
+        )
+        # Verify it started
+        import asyncio
+        await asyncio.sleep(1)
+        verify = await sandbox.process.exec(
+            "curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://localhost:8080/ 2>/dev/null || echo '000'",
+            timeout=5
+        )
+        if verify.result and verify.result.strip() not in ('', '000'):
+            logger.info("File server started and verified on port 8080")
+        else:
+            logger.warning(f"File server may not have started: verify={verify.result}")
     except Exception as e:
         # Don't fail sandbox creation if file server fails
         logger.warning(f"Could not start file server: {str(e)}")
@@ -187,8 +200,8 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
         #     memory=4,
         #     disk=5,
         # ),
-        auto_stop_interval=43200,   # 12 hours (was 30 min — too aggressive, broke agent coding loop)
-        auto_archive_interval=43200,
+        auto_stop_interval=7200,    # 2 hours — balances session length vs memory pressure (15GB server, 10+ sandboxes = OOM)
+        auto_archive_interval=14400, # 4 hours after stop
     )
     
     # Create the sandbox

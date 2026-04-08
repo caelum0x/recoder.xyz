@@ -393,16 +393,31 @@ export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): 
     logger.warn('Container creation failed (non-fatal)', { error: String(containerErr), projectId });
   }
 
-  const upstream = await fetch(`${dockerUrl}/api/opencode/${encodeURIComponent(projectId)}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      prompt,
-      model: options.model,
-      sessionId: existingSessionId,
-      providerKeys,
-    }),
-  });
+  const abortController = new AbortController();
+  const fetchTimeout = setTimeout(() => abortController.abort(), 120_000); // 2 min timeout
+
+  let upstream: Response;
+
+  try {
+    upstream = await fetch(`${dockerUrl}/api/opencode/${encodeURIComponent(projectId)}`, {
+      method: 'POST',
+      headers,
+      signal: abortController.signal,
+      body: JSON.stringify({
+        prompt,
+        model: options.model,
+        sessionId: existingSessionId,
+        providerKeys,
+      }),
+    });
+  } catch (fetchErr: unknown) {
+    clearTimeout(fetchTimeout);
+    const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+    logger.error('OpenCode exec fetch failed', { error: msg });
+    return createTextStream(msg.includes('abort') ? 'The coding request timed out. Please try again.' : `Coding service error: ${msg}`);
+  } finally {
+    clearTimeout(fetchTimeout);
+  }
 
   if (!upstream.ok) {
     const details = await upstream.text().catch(() => '');
@@ -410,7 +425,17 @@ export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): 
     return createTextStream(`OpenCode sandbox request failed with ${upstream.status}. ${details || 'No additional details were returned.'}`);
   }
 
-  const execResult = await upstream.json() as ExecCommandResponse;
+  // Read the response body as text first to avoid "Unexpected end of JSON input"
+  // when the upstream returns an empty or truncated response
+  const rawBody = await upstream.text().catch(() => '');
+  let execResult: ExecCommandResponse;
+
+  try {
+    execResult = rawBody ? JSON.parse(rawBody) : { success: false, error: 'Empty response from coding service' };
+  } catch {
+    logger.error('OpenCode exec: invalid JSON response', { bodyLength: rawBody.length, bodyPreview: rawBody.slice(0, 200) });
+    return createTextStream(`The coding service returned an invalid response. Please try again.`);
+  }
 
   if (execResult.sessionId) {
     storeSessionId(options.projectId, options.chatId, execResult.sessionId);

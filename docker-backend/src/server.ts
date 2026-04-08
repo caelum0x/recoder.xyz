@@ -1636,6 +1636,25 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
 });
+// A2A discovery endpoints (must be before body parsers)
+app.get('/api/a2a', (_req: express.Request, res: express.Response) => {
+  res.json({
+    name: 'Recoder A2A Gateway', version: '2.0', protocol: 'Agent-to-Agent (A2A)',
+    docs: 'https://recoder.xyz/docs/a2a',
+    endpoints: { agents: '/api/a2a/agents', tasks: '/api/a2a/tasks', channels: '/api/a2a/channels' },
+  });
+});
+app.get('/api/a2a/.well-known/agent.json', (_req: express.Request, res: express.Response) => {
+  res.json({
+    name: 'Recoder Platform', url: 'https://docker.recoder.xyz/api/a2a', version: '2.0',
+    capabilities: { streaming: false, pushNotifications: false, stateTransitionHistory: true },
+    skills: [
+      { id: 'coding', name: 'Code Generation' },
+      { id: 'tasks', name: 'Task Management' },
+    ],
+    authentication: { schemes: ['hmac_shared_secret'] },
+  });
+});
 // Keep raw JSON text for signed A2A payload verification
 app.use('/api/a2a', express.text({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '50mb' }));
