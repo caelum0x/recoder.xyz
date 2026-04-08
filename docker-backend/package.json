@@ -21,10 +21,11 @@
     "ci:install-and-check:local": "pnpm run ci:check:noninteractive"
   },
   "optionalDependencies": {
-    "@mariozechner/pi-coding-agent": "file:../pi-mono/packages/coding-agent",
-    "@mariozechner/pi-ai": "file:../pi-mono/packages/ai"
+    "@mariozechner/pi-ai": "file:../pi-mono/packages/ai",
+    "@mariozechner/pi-coding-agent": "file:../pi-mono/packages/coding-agent"
   },
   "dependencies": {
+    "@a2a-js/sdk": "^0.3.13",
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.29.0",
     "@recoder/shared": "workspace:*",
@@ -71,6 +72,10 @@
     "vitest": "^2.0.1"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["duckdb", "better-sqlite3", "node-pty"]
+    "onlyBuiltDependencies": [
+      "duckdb",
+      "better-sqlite3",
+      "node-pty"
+    ]
   }
 }
