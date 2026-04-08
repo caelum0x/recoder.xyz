@@ -68,9 +68,8 @@ const INTERNAL_AGENTS: AgentConfig[] = [
     baseUrl: process.env.RECODER_WEB_INTERNAL_URL || 'http://recoder-web:5173',
     taskEndpoint: '/api/chat',
     buildRequestBody: (task) => ({
-      message: task.prompt,
+      messages: [{ role: 'user', content: task.prompt }],
       context: task.context,
-      taskId: task.taskId,
     }),
   },
   {
