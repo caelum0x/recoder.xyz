@@ -167,9 +167,24 @@ async def start_file_server(sandbox: AsyncSandbox):
         # Don't fail sandbox creation if file server fails
         logger.warning(f"Could not start file server: {str(e)}")
 
+MAX_CONCURRENT_SANDBOXES = 4  # Hard limit — 15GB server can't handle more
+
+async def _evict_oldest_sandbox():
+    """Stop the oldest sandbox if we're at the concurrency limit."""
+    try:
+        all_sandboxes = await daytona.list()
+        started = [s for s in all_sandboxes if s.state.value == "started"]
+        if len(started) >= MAX_CONCURRENT_SANDBOXES:
+            oldest = min(started, key=lambda s: s.metadata.updated_at if hasattr(s, 'metadata') else '')
+            logger.info(f"Evicting oldest sandbox {oldest.id} to stay within {MAX_CONCURRENT_SANDBOXES} limit")
+            await daytona.stop(oldest)
+    except Exception as e:
+        logger.warning(f"Sandbox eviction check failed (non-fatal): {e}")
+
 async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     """Create a new sandbox with all required services configured and running."""
-    
+
+    await _evict_oldest_sandbox()
     logger.info("Creating new Daytona sandbox environment")
     # logger.debug("Configuring sandbox with snapshot and environment variables")
     
@@ -200,8 +215,8 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
         #     memory=4,
         #     disk=5,
         # ),
-        auto_stop_interval=7200,    # 2 hours — balances session length vs memory pressure (15GB server, 10+ sandboxes = OOM)
-        auto_archive_interval=14400, # 4 hours after stop
+        auto_stop_interval=1800,    # 30 min — aggressive to stay within 15GB RAM (server runs 40+ containers)
+        auto_archive_interval=3600,  # 1 hour after stop
     )
     
     # Create the sandbox
