@@ -916,16 +916,22 @@ async def a2a_task_execute(
     account_id = user_id
 
     try:
+        # Default to the platform's recommended model if none specified
+        model = body.model_name
+        if not model:
+            from core.ai_models import model_manager
+            model = await model_manager.get_default_model_for_user(None, account_id)
+
         agent_run_id = await start_agent_run(
             account_id=account_id,
             prompt=body.prompt,
             agent_id=body.agent_id,
-            model_name=body.model_name,
+            model_name=model,
             thread_id=body.thread_id,
             project_id=body.project_id,
             metadata={"source": "a2a", "task_id": body.task_id} if body.task_id else {"source": "a2a"},
         )
-        return {"success": True, "agent_run_id": agent_run_id, "status": "running"}
+        return {"success": True, "agent_run_id": agent_run_id, "status": "running", "model": model}
     except HTTPException:
         raise
     except Exception as e:
