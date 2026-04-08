@@ -23,7 +23,8 @@ Last updated: 2026-04-08 (early morning session)
 |----------|-----|--------|
 | **agents** | agents.recoder.xyz | **Coding works E2E** — agent creates files in Daytona sandbox, preview serves via port 8080. File server fix deployed. Deep Coding mode in UI. Error messages now visible in chat. |
 | **web** | web.recoder.xyz | **Coding loop works** — OpenCode processes prompts, creates files in sandbox. Preview/dev server still needs work. |
-| **A2A** | docker.recoder.xyz/api/a2a | Works locally (Claude Code <-> Codex via MCP bridge). No web UI yet. |
+| **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). No task board UI yet. |
+| **Docs** | docs.recoder.xyz | **Live** — Astro/Starlight site with A2A docs, API reference, getting-started, BYOK, MCP tools, self-hosting guides. nginx routing added to port 3008. |
 | **PM** | pm.recoder.xyz | **Working** — crash loop fixed. Auth redirects to recoder.xyz unified login. |
 | **Agency** | agency.recoder.xyz | **Working** — PostgreSQL recovered, playground/workspaces/dashboard all functional. Separate auth. |
 | **recoder.xyz** | recoder.xyz | **Auth working** — Better Auth, Google/GitHub OAuth, email sign-in all functional. Email delivery needs Postfix (being set up). |
@@ -55,7 +56,8 @@ Fix chain:
 - [x] Error messages visible in chat (ThreadComponent.tsx fix deployed)
 - [x] Wire Pi endpoint — auth middleware fixed + deployed (`authenticateRequest` → `optionalAuthenticateRequest`). Pi SDK has broken `exports` field in package.json — needs fix in `@mariozechner/pi-coding-agent`. OpenCode fallback also needs debugging (JSON parse error in adapter).
 - [x] Sandbox creation race: fixed — agent start now waits up to 10s for sandbox before dispatching. Verified: "React Landing Page" agent started, created task plan via tool calls.
-- [ ] Test end-to-end: "build a React landing page" → files created → npm install → dev server → preview
+- [x] E2E test: hello world HTML → PASS (agent creates file, sandbox serves on port 8080)
+- [ ] E2E test: React landing page → BLOCKED by server memory (15GB total, 7.5GB used by Docker, backend OOM killed mid-execution). Agent starts, creates task plan, then backend restarts from memory pressure. Litellm works (confirmed direct test). Stopped non-essential services (steel, chatwoot, flagsmith, umami, pgadmin, maildev, searxng) but daytona-runner alone uses 1.37GB. **Need either: more RAM (32GB), or move some services to a second server.**
 
 **web.recoder.xyz — must support continuous development:**
 - [ ] Pi agent as default chat backend (code done in api.chat.ts, needs deploy)
@@ -64,11 +66,13 @@ Fix chain:
 - [ ] Terminal connected to sandbox (WS proxy fix deployed but not verified)
 - [ ] Multi-turn editing: context carries across messages, Pi session persists
 
-**A2A — needs web presence + docs:**
-- [ ] Landing page or docs section at recoder.xyz explaining A2A
+**A2A — needs execution wiring + persistence:**
+- [x] Docs live at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket)
+- [x] Bridge connected, 6 agents online, tasks dispatch via WebSocket
+- [ ] Agent worker execution fails with "fetch failed" — platform endpoints not configured for task execution
 - [ ] Web UI for viewing/sending A2A tasks (recoder-29m shared task board)
-- [ ] Deploy Redis-backed task persistence to production (in-memory store still active)
-- [ ] Integration guide for external developers
+- [x] Redis-backed task persistence is LIVE (RedisTaskStore hydrated, 24h TTL, eviction sweep running)
+- [ ] Configure execution endpoints for each platform agent (recoder_web, recoder_pm, recoder_agency)
 
 **pm.recoder.xyz:**
 - [x] Fix `Cannot find module '@logtail/next'` — pnpm install restored broken symlink
