@@ -53,17 +53,13 @@ const INTERNAL_AGENTS: AgentConfig[] = [
     agentId: 'recoder_backend',
     capabilities: ['execute', 'plan', 'review'],
     // Python backend runs on host via PM2, not in Docker
+    // Uses the JSON-based /v1/a2a/task endpoint (not FormData /v1/agent/start)
     baseUrl: process.env.RECODER_BACKEND_INTERNAL_URL || 'http://host.docker.internal:8000',
-    taskEndpoint: '/v1/agent/start',
-    // Backend expects FormData, not JSON
-    method: 'POST',
-    contentType: 'multipart/form-data',
-    buildRequestBody: (task) => {
-      const form = new FormData();
-      form.append('prompt', task.prompt || '');
-      if (task.taskId) form.append('thread_id', task.taskId);
-      return form;
-    },
+    taskEndpoint: '/v1/a2a/task',
+    buildRequestBody: (task) => ({
+      prompt: task.prompt,
+      task_id: task.taskId,
+    }),
   },
   {
     agentId: 'recoder_web',
