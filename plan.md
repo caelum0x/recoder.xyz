@@ -61,11 +61,13 @@ Fix chain:
 - [ ] E2E test: React landing page → BLOCKED by server memory. Agent starts + creates task plan, then OOM. Cleaned up sandboxes (17→3), freed ~500MB. daytona-runner still 2.87GB. **Need: more RAM (32GB) or second server.**
 
 **web.recoder.xyz — must support continuous development:**
-- [ ] Pi agent as default chat backend (code done in api.chat.ts, needs deploy)
-- [ ] Iterative edit->preview->fix loop working
-- [ ] File tree shows current sandbox state (not stale local store)
-- [ ] Terminal connected to sandbox (WS proxy fix deployed but not verified)
-- [ ] Multi-turn editing: context carries across messages, Pi session persists
+- [x] OpenCode coding loop works (message → agent thinks → files created in sandbox)
+- [x] Container auto-creation for new projects (project-{timestamp} format)
+- [x] 106KB system prompt removed from OpenCode path (was causing empty responses)
+- [x] Terminal/watch WS endpoints verified reachable
+- [ ] File tree broken: `sh: 1: Syntax error: "(" unexpected` — listing command uses bash syntax, Daytona shell is `sh`
+- [ ] Preview "Failed to fetch" — dev server not ready when iframe loads
+- [ ] Multi-turn editing: OpenCode session persists per chat (sessionId stored)
 
 **A2A — needs execution wiring + persistence:**
 - [x] Docs live at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket)
