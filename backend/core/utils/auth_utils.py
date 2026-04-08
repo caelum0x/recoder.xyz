@@ -405,6 +405,16 @@ async def _get_user_id_from_account_cached(account_id: str) -> Optional[str]:
         return None
 
 async def verify_and_get_user_id_from_jwt(request: Request) -> str:
+    # Internal service-to-service auth (A2A agent workers, docker-backend)
+    import os
+    internal_key = request.headers.get('x-internal-service-key')
+    expected_key = os.environ.get('INTERNAL_SERVICE_KEY') or os.environ.get('A2A_SERVICE_TOKEN')
+    if internal_key and expected_key and _constant_time_compare(internal_key, expected_key):
+        # Service calls use a system user ID for A2A task execution
+        system_user_id = os.environ.get('A2A_SYSTEM_USER_ID', '38ee13d3-7209-482d-8a2a-4046b7a00593')
+        structlog.contextvars.bind_contextvars(user_id=system_user_id, auth_method="internal_service_key")
+        return system_user_id
+
     x_api_key = request.headers.get('x-api-key')
 
     if x_api_key:
