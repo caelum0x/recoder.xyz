@@ -92,7 +92,18 @@ describe('opencode-client', () => {
       expect(url.pathname).toBe('/session/sess_1/message');
 
       const body = JSON.parse((call[1] as RequestInit).body as string);
-      expect(body.content).toBe('Fix the bug');
+      expect(body.parts).toEqual([{ type: 'text', text: 'Fix the bug' }]);
+    });
+
+    it('throws a clear error when a JSON response is empty', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response('', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+      const client = createRecoderOpencodeClient({ baseUrl, fetchFn: mockFetch });
+
+      await expect(client.prompt('sess_1', { content: 'Fix the bug' })).rejects.toThrow(
+        /returned empty JSON body/,
+      );
     });
   });
 
