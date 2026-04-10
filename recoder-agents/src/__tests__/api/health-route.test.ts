@@ -90,4 +90,55 @@ describe('GET /api/health', () => {
     const body = await response.json();
     expect(body.status).toBe('down');
   });
+
+  it('returns 200 with status "degraded" when backend is healthy but auth is unreachable', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockRejectedValueOnce(new Error('Auth unavailable'));
+
+    const { GET } = await import('@/app/api/health/route');
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.status).toBe('degraded');
+    expect(body.checks.backend.ok).toBe(true);
+    expect(body.checks.auth.ok).toBe(false);
+  });
+
+  it('treats non-5xx auth responses as auth service reachable', async () => {
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'No active session' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+    const { GET } = await import('@/app/api/health/route');
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.status).toBe('ok');
+    expect(body.checks.backend.ok).toBe(true);
+    expect(body.checks.auth.ok).toBe(true);
+  });
 });

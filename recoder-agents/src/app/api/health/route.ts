@@ -1,3 +1,5 @@
+import { resolveAuthBaseUrl } from '@/lib/runtime-urls';
+
 export const dynamic = "force-dynamic";
 const startTime = Date.now();
 
@@ -16,13 +18,13 @@ async function checkBackend(): Promise<{ ok: boolean; latencyMs: number }> {
 }
 
 async function checkAuth(): Promise<boolean> {
-  const authUrl = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_URL;
+  const authUrl = resolveAuthBaseUrl();
   if (!authUrl) return false;
   try {
     const res = await fetch(`${authUrl}/api/auth/session`, {
       signal: AbortSignal.timeout(3000),
     });
-    return res.ok;
+    return res.status < 500;
   } catch {
     return false;
   }
@@ -36,6 +38,7 @@ export async function GET() {
 
   const allHealthy = backend.ok && authReachable;
   const status = allHealthy ? "ok" : backend.ok || authReachable ? "degraded" : "down";
+  const httpStatus = status === "down" ? 503 : 200;
 
   return Response.json(
     {
@@ -50,6 +53,6 @@ export async function GET() {
         auth: { ok: authReachable },
       },
     },
-    { status: allHealthy ? 200 : 503 },
+    { status: httpStatus },
   );
 }

@@ -12,6 +12,7 @@ import { useAdminRole } from '@/hooks/admin';
 import { usePresence } from '@/hooks/use-presence';
 import { featureFlags } from '@/lib/feature-flags';
 import { usePrefetchComposioIcons } from '@/hooks/composio/use-composio';
+import { shouldShowMaintenanceForApiOutage } from '@/components/dashboard/layout-health';
 
 import { useProjects } from '@/hooks/sidebar/use-sidebar';
 import { useIsMobile } from '@/hooks/utils';
@@ -165,7 +166,12 @@ export default function DashboardLayoutContent({
   }, [isMobile, projects, accounts, user]);
 
   // API health is now managed by useApiHealth hook
-  const isApiHealthy = healthData?.status === 'ok' && !healthError;
+  const shouldShowApiOutageMaintenance = shouldShowMaintenanceForApiOutage({
+    healthData: healthData ?? undefined,
+    isCheckingHealth,
+    isCheckingAdminRole,
+    isAdmin,
+  });
 
   // Check authentication status
   useEffect(() => {
@@ -211,7 +217,7 @@ export default function DashboardLayoutContent({
   }
 
   // Show maintenance page if API is not healthy
-  if (!isCheckingHealth && !isCheckingAdminRole && (!isApiHealthy || healthError) && !isAdmin) {
+  if (shouldShowApiOutageMaintenance) {
     return (
       <Suspense fallback={<DashboardSkeleton />}>
         <MaintenancePage />
