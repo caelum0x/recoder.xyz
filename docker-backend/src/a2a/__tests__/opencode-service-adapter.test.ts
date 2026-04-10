@@ -117,7 +117,7 @@ describe('opencode-service-adapter', () => {
       const body = JSON.parse((promptCall[1] as RequestInit).body as string);
 
       expect(url).toContain('/session/sess_prompt/message');
-      expect(body.content).toBe('Hi there');
+      expect(body.parts).toEqual([{ type: 'text', text: 'Hi there' }]);
     });
   });
 

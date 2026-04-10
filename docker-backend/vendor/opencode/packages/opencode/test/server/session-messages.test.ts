@@ -146,6 +146,17 @@ describe("session messages endpoint", () => {
 })
 
 describe("session.prompt_async error handling", () => {
+  test("sync message route returns JSON directly", async () => {
+    const src = await Bun.file(new URL("../../src/server/routes/session.ts", import.meta.url)).text()
+    const start = src.lastIndexOf('"/:sessionID/message"')
+    const end = src.indexOf('"/:sessionID/prompt_async"', start)
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const route = src.slice(start, end)
+    expect(route).toContain("return c.json(msg)")
+    expect(route).not.toContain("return stream(")
+  })
+
   test("prompt_async route has error handler for detached prompt call", async () => {
     const src = await Bun.file(new URL("../../src/server/routes/session.ts", import.meta.url)).text()
     const start = src.indexOf('"/:sessionID/prompt_async"')

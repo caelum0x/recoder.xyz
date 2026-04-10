@@ -405,10 +405,11 @@ const PREVIEW_TARGET_HOST = (() => {
   return isDocker ? 'host.docker.internal' : '127.0.0.1';
 })();
 
-async function checkPort(port: number): Promise<boolean> {
+export async function checkPort(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.get(`http://${PREVIEW_TARGET_HOST}:${port}`, { timeout: 500 }, (res) => {
-      resolve(res.statusCode !== undefined);
+      const status = res.statusCode || 0;
+      resolve(status > 0 && status < 500);
     });
     req.on('error', () => resolve(false));
     req.on('timeout', () => { req.destroy(); resolve(false); });
