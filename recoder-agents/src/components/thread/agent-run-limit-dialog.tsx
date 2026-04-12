@@ -163,7 +163,7 @@ export const AgentRunLimitDialog: React.FC<AgentRunLimitDialogProps> = ({
       queryKey: threadKeys.details(threadId),
       queryFn: () => getThread(threadId),
       enabled: open && !!threadId,
-      retry: 1,
+      retry: false,
     }))
   });
 
@@ -172,7 +172,7 @@ export const AgentRunLimitDialog: React.FC<AgentRunLimitDialogProps> = ({
       queryKey: threadKeys.agentRuns(threadId),
       queryFn: () => getAgentRuns(threadId),
       enabled: open && !!threadId,
-      retry: 1,
+      retry: false,
     }))
   });
 
@@ -185,7 +185,7 @@ export const AgentRunLimitDialog: React.FC<AgentRunLimitDialogProps> = ({
         queryKey: threadKeys.project(projectId || ""),
         queryFn: () => projectId ? getProject(projectId) : null,
         enabled: open && !!projectId,
-        retry: 1,
+        retry: false,
       };
     })
   });

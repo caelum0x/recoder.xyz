@@ -5,15 +5,15 @@ import { usePathname } from "next/navigation";
 
 const DOCS_LINKS = {
 	"/settings/account": {
-		href: "https://agency.recoder.xyz/docs/settings/account",
+		href: "https://docs.recoder.xyz",
 		label: "About Account Overview",
 	},
 	"/settings/account/general": {
-		href: "https://agency.recoder.xyz/docs/settings/account/general",
+		href: "https://docs.recoder.xyz",
 		label: "About Account Settings",
 	},
 	"/settings/account/authentication": {
-		href: "https://agency.recoder.xyz/docs/settings/account/authentication",
+		href: "https://docs.recoder.xyz",
 		label: "About Authentication",
 	},
 } as const;

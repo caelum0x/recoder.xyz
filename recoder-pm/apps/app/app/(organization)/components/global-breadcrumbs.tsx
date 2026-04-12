@@ -39,7 +39,7 @@ const getBreadcrumbsData = (segments: string[]) => {
 export const GlobalBreadcrumbs = () => {
   const pathname = usePathname();
   const segments = useSelectedLayoutSegments();
-  const [title, setTitle] = useState(getTitle() ?? "");
+  const [title, setTitle] = useState("");
   const data = getBreadcrumbsData(segments);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: "Refresh on path change"

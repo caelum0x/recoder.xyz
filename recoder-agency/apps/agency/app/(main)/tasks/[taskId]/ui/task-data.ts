@@ -74,6 +74,7 @@ export interface UITask {
 		steps: UIStep[];
 	};
 	finalStep: {
+		taskStatus: Task["status"];
 		totalStepItemsCount: number;
 		finishedStepItemsCount: number;
 		outputs: {
@@ -191,13 +192,24 @@ export async function getTaskData(taskId: TaskId): Promise<UITask> {
 		}),
 	);
 
-	const totalStepsCount = allSteps.length;
-	const completedStepsCount = allSteps.filter(
-		(step) => step.status === "completed",
-	).length;
-	const preparingStepsCount = allSteps.filter(
-		(step) => step.status === "queued",
-	).length;
+	const aggregateTotalSteps =
+		task.steps.queued +
+		task.steps.inProgress +
+		task.steps.completed +
+		task.steps.warning +
+		task.steps.cancelled +
+		task.steps.failed;
+
+	const totalStepsCount =
+		allSteps.length > 0 ? allSteps.length : aggregateTotalSteps;
+	const completedStepsCount =
+		allSteps.length > 0
+			? allSteps.filter((step) => step.status === "completed").length
+			: task.steps.completed;
+	const preparingStepsCount =
+		allSteps.length > 0
+			? allSteps.filter((step) => step.status === "queued").length
+			: task.steps.queued;
 
 	// Find the first running step's sequence number (1-based)
 	let runningStepNumber: number | null = null;
@@ -329,8 +341,8 @@ export async function getTaskData(taskId: TaskId): Promise<UITask> {
 
 	return {
 		status: task.status,
-		title: workspace.name || "Untitled",
-		description: app.description,
+		title: workspace.name || task.name || "Untitled",
+		description: app.description ?? "",
 		workspaceId: task.workspaceId,
 		input,
 		stepsSection: {
@@ -340,6 +352,7 @@ export async function getTaskData(taskId: TaskId): Promise<UITask> {
 			steps,
 		},
 		finalStep: {
+			taskStatus: task.status,
 			totalStepItemsCount,
 			finishedStepItemsCount,
 			outputs,

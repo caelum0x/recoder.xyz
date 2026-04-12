@@ -23,10 +23,7 @@ import { useReleaseForm } from "./use-release-form";
 
 export const ReleaseForm = () => {
   const [name, setName] = useState("");
-  const [date, setDate] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: undefined,
-  });
+  const [date, setDate] = useState<DateRange | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const disabled = !name.trim() || loading;
   const { isOpen, toggle, hide } = useReleaseForm();

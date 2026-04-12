@@ -1,3 +1,4 @@
+import path from "node:path";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 import type { NextConfig } from "next";
 import { createSecureHeaders } from "next-secure-headers";
@@ -27,6 +28,12 @@ export const config: NextConfig = {
     serverActions: {
       bodySizeLimit: "10mb",
     },
+  },
+
+  // Keep Turbopack scoped to the PM workspace even if unrelated lockfiles exist
+  // above this repo on the host machine.
+  turbopack: {
+    root: path.resolve(process.cwd(), "../../.."),
   },
 
   // biome-ignore lint/suspicious/useAwait: "headers" is an async function

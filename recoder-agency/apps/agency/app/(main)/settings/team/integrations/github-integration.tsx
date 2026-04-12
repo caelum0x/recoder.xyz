@@ -8,45 +8,66 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GitHubAppInstallButton } from "@/packages/components/github-app-install-button";
 import { getGitHubIdentityState } from "@/services/accounts";
 import { gitHubAppInstallURL } from "@/services/external/github";
+import {
+	connectGitHubIdentity,
+	reconnectGitHubIdentity,
+} from "../../account/actions";
 import { Card } from "../../components/card";
 
 export async function GitHubIntegration() {
-	const identityState = await getGitHubIdentityState();
-	if (identityState.status === "error") {
-		return <GitHubError message={identityState.errorMessage} />;
-	}
+	try {
+		const identityState = await getGitHubIdentityState();
+		if (identityState.status === "error") {
+			return <GitHubError message={identityState.errorMessage} />;
+		}
 
-	const installUrl = await gitHubAppInstallURL();
-	if (installUrl == null) {
-		return <GitHubError message="Failed to get GitHub App installation URL." />;
-	}
-	if (
-		identityState.status === "unauthorized" ||
-		identityState.status === "invalid-credential"
-	) {
-		return <GitHubIntegrationPresentation installationUrl={installUrl} />;
-	}
+		const installUrl = await gitHubAppInstallURL();
+		if (installUrl == null) {
+			return <GitHubError message="Failed to get GitHub App installation URL." />;
+		}
+		if (
+			identityState.status === "unauthorized" ||
+			identityState.status === "invalid-credential"
+		) {
+			return (
+				<GitHubIntegrationPresentation
+					connectButton={
+						identityState.status === "unauthorized"
+							? GitHubConnectButton
+							: GitHubReconnectButton
+					}
+					installationUrl={installUrl}
+				/>
+			);
+		}
 
-	const gitHubUserClient = identityState.gitHubUserClient;
-	const { installations } = await gitHubUserClient.getInstallations();
-	const installationsWithRepos = await Promise.all(
-		installations.map(async (installation) => {
-			const repos = await gitHubUserClient.getRepositories(installation.id);
-			return {
-				...installation,
-				repositories: repos.repositories,
-			};
-		}),
-	);
-	const gitHubUser = identityState.gitHubUser;
+		const gitHubUserClient = identityState.gitHubUserClient;
+		const { installations } = await gitHubUserClient.getInstallations();
+		const installationsWithRepos = await Promise.all(
+			installations.map(async (installation) => {
+				const repos = await gitHubUserClient.getRepositories(installation.id);
+				return {
+					...installation,
+					repositories: repos.repositories,
+				};
+			}),
+		);
+		const gitHubUser = identityState.gitHubUser;
 
-	return (
-		<GitHubIntegrationPresentation
-			account={gitHubUser.login}
-			installations={installationsWithRepos}
-			installationUrl={installUrl}
-		/>
-	);
+		return (
+			<GitHubIntegrationPresentation
+				account={gitHubUser.login}
+				installations={installationsWithRepos}
+				installationUrl={installUrl}
+			/>
+		);
+	} catch (error) {
+		const message =
+			error instanceof Error
+				? error.message
+				: "Unexpected GitHub integration error.";
+		return <GitHubError message={message} />;
+	}
 }
 
 type GitHubErrorProps = {
@@ -77,18 +98,21 @@ type GitHubIntegrationPresentationProps = {
 	account?: string;
 	installations?: InstallationWithRepositories[];
 	installationUrl?: string;
+	connectButton?: () => React.ReactNode;
 };
 
 function GitHubIntegrationPresentation({
 	account,
 	installations,
 	installationUrl,
+	connectButton,
 }: GitHubIntegrationPresentationProps) {
 	const installed = installations != null && installations?.length > 0;
 	return (
 		<div className="space-y-6">
 			<Header
 				account={account}
+				connectButton={connectButton}
 				installed={installed}
 				installationUrl={installationUrl}
 			/>
@@ -105,11 +129,17 @@ function GitHubIntegrationPresentation({
 
 type HeaderProps = {
 	account?: string;
+	connectButton?: () => React.ReactNode;
 	installed: boolean;
 	installationUrl?: string;
 };
 
-function Header({ account, installed, installationUrl }: HeaderProps) {
+function Header({
+	account,
+	connectButton: ConnectButton,
+	installed,
+	installationUrl,
+}: HeaderProps) {
 	return (
 		<Card title="">
 			<div className="flex items-center justify-between">
@@ -136,6 +166,8 @@ function Header({ account, installed, installationUrl }: HeaderProps) {
 							installationUrl={installationUrl}
 							installed={installed}
 						/>
+					) : ConnectButton ? (
+						<ConnectButton />
 					) : (
 						<Button asChild variant="primary" size="large">
 							<Link href="/settings/account/authentication">
@@ -146,6 +178,26 @@ function Header({ account, installed, installationUrl }: HeaderProps) {
 				</div>
 			</div>
 		</Card>
+	);
+}
+
+function GitHubConnectButton() {
+	return (
+		<form action={connectGitHubIdentity}>
+			<Button variant="primary" size="large" type="submit">
+				Connect GitHub
+			</Button>
+		</form>
+	);
+}
+
+function GitHubReconnectButton() {
+	return (
+		<form action={reconnectGitHubIdentity}>
+			<Button variant="primary" size="large" type="submit">
+				Reconnect GitHub
+			</Button>
+		</form>
 	);
 }
 

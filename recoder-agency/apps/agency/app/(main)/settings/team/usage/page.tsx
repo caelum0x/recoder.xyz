@@ -16,7 +16,7 @@ export default async function TeamUsagePage() {
 				<PageHeading as="h1" glow>
 					Usage
 				</PageHeading>
-				<DocsLink href="https://agency.recoder.xyz/docs/settings/team/usage">
+				<DocsLink href="https://docs.recoder.xyz">
 					About Usage
 				</DocsLink>
 			</div>

@@ -365,7 +365,7 @@ export function LobbyClient(props: LobbyClientProps) {
 									</Link>
 
 									<Link
-										href="/stage"
+										href="/playground"
 										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200"
 									>
 										<div className="w-9 h-9 rounded-lg bg-emerald-400/10 flex items-center justify-center mb-3 group-hover:bg-emerald-400/20 transition-colors">
@@ -494,8 +494,10 @@ export function LobbyClient(props: LobbyClientProps) {
 										</p>
 									</Link>
 
-									<Link
-										href="/stage"
+									<a
+										href="https://docs.recoder.xyz"
+										target="_blank"
+										rel="noopener"
 										className="group text-left p-5 rounded-xl bg-white/[0.02] border-[0.5px] border-border hover:border-primary-100/40 transition-all duration-200"
 									>
 										<div className="w-9 h-9 rounded-lg bg-emerald-400/10 flex items-center justify-center mb-3 group-hover:bg-emerald-400/20 transition-colors">
@@ -507,7 +509,7 @@ export function LobbyClient(props: LobbyClientProps) {
 										<p className="text-xs text-text/50">
 											See how workflows are built with a quick walkthrough.
 										</p>
-									</Link>
+									</a>
 								</div>
 
 								{/* How it works hint */}

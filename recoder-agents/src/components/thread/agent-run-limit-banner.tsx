@@ -60,7 +60,7 @@ export const AgentRunLimitBanner: React.FC<AgentRunLimitBannerProps> = ({
       queryKey: threadKeys.details(threadId),
       queryFn: () => getThread(threadId),
       enabled: open && !!threadId,
-      retry: 1,
+      retry: false,
       staleTime: 30000,
     }))
   });
@@ -70,7 +70,7 @@ export const AgentRunLimitBanner: React.FC<AgentRunLimitBannerProps> = ({
       queryKey: threadKeys.agentRuns(threadId),
       queryFn: () => getAgentRuns(threadId),
       enabled: open && !!threadId,
-      retry: 1,
+      retry: false,
       staleTime: 30000,
     }))
   });
@@ -83,7 +83,7 @@ export const AgentRunLimitBanner: React.FC<AgentRunLimitBannerProps> = ({
         queryKey: threadKeys.project(projectId || ""),
         queryFn: () => projectId ? getProject(projectId) : null,
         enabled: open && !!projectId,
-        retry: 1,
+        retry: false,
         staleTime: 30000,
       };
     })

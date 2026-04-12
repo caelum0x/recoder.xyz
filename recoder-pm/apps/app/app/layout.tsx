@@ -6,6 +6,7 @@ import Image from "next/image";
 import localFont from "next/font/local";
 import { type ReactNode, Suspense } from "react";
 import { AppSwitcher } from "@/components/app-switcher";
+import { MountedOnly } from "@/components/mounted-only";
 import { QueryProvider } from "@/providers/query-provider";
 import { Identify } from "./components/identify";
 import { Pageview } from "./components/pageview";
@@ -103,7 +104,9 @@ const RootLayout = ({ children }: RootLayoutProperties) => (
         <a href="/" aria-label="Recoder Home">
           <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
         </a>
-        <AppSwitcher />
+        <MountedOnly>
+          <AppSwitcher />
+        </MountedOnly>
       </div>
       <AnalyticsProvider>
         <Suspense fallback={null}>

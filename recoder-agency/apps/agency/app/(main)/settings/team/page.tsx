@@ -22,7 +22,7 @@ export default function TeamPage() {
 					Team Settings
 				</PageHeading>
 				<DocsLink
-					href="https://agency.recoder.xyz/docs/settings/team"
+					href="https://docs.recoder.xyz"
 					target="_blank"
 					rel="noopener noreferrer"
 				>

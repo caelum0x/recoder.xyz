@@ -1,6 +1,6 @@
 # Recoder Platform — Current Status
 
-Last updated: 2026-04-08 (early morning session)
+Last updated: 2026-04-12
 
 ### web.recoder.xyz coding status (latest)
 
@@ -17,16 +17,85 @@ Last updated: 2026-04-08 (early morning session)
 - Remaining: "Failed to fetch" on preview (dev server not ready yet, separate from coding pipeline)
 
 ## ONE GOAL: Make all platforms work end to end
+
+### Latest production errors (2026-04-09)
+
+- **Web OpenCode requests fail after session startup** — chat prompt execution returns `500` with `OpenCode sandbox request failed` because `opencode POST /session/ses_28c16e36affePTC0Nl490jl0US/message returned empty JSON body (status 200)`. bd: `recoder-il9`
+- **Web preview still returns 503 after container is marked ready** — `preview/project-1775766138575` fails with HTTP `503` even after container creation, ready state, and preview enable flow complete. bd: `recoder-m8s`
+- **Agents app pages return 503s in production** — `/activity`, `/runs`, `/pipelines`, `/schedules`, `/monitoring/incidents`, and `/agents/leaderboard` fail on RSC requests with HTTP `503`. Fixed in code pending deploy/production verification. bd: `recoder-kax`
+- **Agents thread detail APIs return 404s** — `/v1/threads/8889b7d8-b097-4383-a03d-469e76b11eaa`, `/messages?order=asc&optimized=true`, and `/v1/thread/.../agent-runs` return `404`, so thread state and run history cannot load. Fixed in code pending deploy/production verification; the fix set now includes shared API fallback from direct thread lookup to paginated thread lists and disables repeated query retries on terminal `404`s. bd: `recoder-ea7`
+- **Agents live stream / toolkit assets fail** — `stream?token=...` returns `503` and `/v1/composio/toolkits/icons/batch` returns `503`. Fixed in code pending deploy/production verification. bd: `recoder-dat`
+- **Agency GitHub Trigger is broken** — production page shows a GitHub sign-in/connect screen instead of a working trigger flow (`agency.recoder.xyz`, reported from production). Fixed in code pending deploy/production verification. bd: `recoder-138`
+- **Agency task detail route is not functional** — `https://agency.recoder.xyz/tasks/tsk-YpZhaKz77m7hXtUR` renders placeholder content (`Untitled`, `No task input`, `Completed 0 Steps`, `0/0`, `Results`, `Running...`). Fixed in code pending deploy/production verification; live back-link now resolves to `/dashboard` for the current authenticated session. bd: `recoder-9a3`
+- **Agency `Workflows` and `Settings` look like disconnected mock screens** — UI differs from the rest of Agency and currently appears to be stubbed / non-functional in production. Fixed in code pending deploy/production verification. bd: `recoder-bm4`
+- **Agency authenticated app routes return 503 during launch smoke** — 2026-04-12 authenticated browser smoke reached dashboard/workspaces/playground, but `/tasks` returned HTTP `503` and the browser captured `503` RSC requests for `/workspaces?_rsc=...` and `/settings/team/integrations?_rsc=...`. Fixed in code pending deploy/production verification: `/tasks` now degrades when individual `giselle.getTask()` calls fail, `/settings/team/integrations` renders an error card instead of throwing, and `/workspaces` tolerates enrichment failures. bd: `recoder-5ig`
+- **PM serves broken frontend JS in production** — original 2026-04-09 report showed `Uncaught SyntaxError: Unexpected token 'export'` from `ad36cc6263efb746.js`. Current direct fetch of that asset returns valid JavaScript, and an authenticated production bundle sweep (`scripts/check-pm-bundles.mjs`) found no top-level raw `export` in the 37 loaded Next chunks for `/insights`. The build-side fix set now includes pinning Turbopack root to the repo root and removing the PM client runtime dependency on `@recoder/ecosystem-config` entirely, so the app-switcher no longer pulls that raw TypeScript ESM package into the PM browser bundle. `recoder-mtq` stays open pending deploy and production verification. bd: `recoder-mtq`
+- **PM frontend crashes with React runtime error** — authenticated `/insights` still reproduces minified React error `#418` on current production. Fixed in code pending deploy/production verification; the fix set now includes route-level hydration cleanup in the roadmap Gantt sidebar, deterministic chart tooltip number formatting, and the earlier PM shell/breadcrumb fixes. bd: `recoder-lyz`
+- **PM insights chat is down** — `api/insights/chat` returns HTTP `503` and UI reports `AI service not configured`. Fixed in code pending deploy/production verification. bd: `recoder-01e`
+
+### Status correction (2026-04-09)
+
+- Prior assistant claims that `web.recoder.xyz` could build full apps, `agents.recoder.xyz` was working E2E, and "almost everything" was done are not reliable as a current status summary.
+- Current production evidence overrides those claims. As of 2026-04-09, Web, Agents, Agency, and PM all have live regressions reported from production and are therefore not "done".
+- Do not mark product surfaces as fixed, live, or verified unless the exact production path was tested successfully after deploy.
+
+### Launch cut (next 7 days)
+
+Launch-prep tracking ticket: `recoder-l7a`
+
+**Day 1 — remove misleading surfaces**
+- [x] Redirect Agency placeholder `/settings` root to `/settings/team`
+- [x] Remove misleading Agency admin sidebar links for `Workflows` and placeholder `Settings`
+- [x] Hide or relabel remaining launch-hostile nav items that pointed to placeholder surfaces in production
+
+**Day 2 — fix Web blockers**
+- [x] Fix `recoder-il9` — OpenCode `/session/:id/message` empty-body failure
+- [x] Fix `recoder-m8s` — preview `503` after container ready
+- [ ] Verify prompt -> file creation -> preview on production after deploy
+
+**Day 3 — fix Agents blockers**
+- [x] Fix `recoder-kax` — `503` RSC/app page failures
+- [x] Fix `recoder-ea7` — thread/messages/agent-runs `404` failures
+- [x] Fix `recoder-dat` — stream and Composio icon `503` failures
+
+**Day 4 — fix Agency blockers**
+- [x] Fix `recoder-138` — GitHub Trigger onboarding flow
+- [x] Fix `recoder-9a3` — broken task detail route and dead placeholder state
+- [x] Audit Agency nav and remove remaining launch-hostile dead links (`/stage` mobile/lobby/task-history links removed, mobile `/docs` now points to real docs)
+
+**Day 5 — fix PM blockers**
+- [ ] Verify `recoder-mtq` after deploy — code now pins Turbopack root to the repo root and removes the PM client runtime dependency on `@recoder/ecosystem-config`; current authenticated production bundle sweep finds no loaded Next chunk with a top-level raw `export`, so the original parse-failure path is not yet re-verified
+- [x] Fix `recoder-lyz` — React runtime crash `#418`
+- [x] Fix `recoder-01e` — `AI service not configured` / insights chat `503`
+
+**Day 6 — launch hardening**
+- [ ] Run auth, billing, onboarding, and error-state smoke tests across recoder.xyz, Web, Agents, PM, and Agency
+  - Public smoke (`scripts/e2e-platform-check.mjs`) now passes on entry surfaces for PM, Agency, Agents, Web, and recoder.xyz with no top-level 5xx failures
+  - Authenticated PM smoke still reproduces `/insights` React `#418` and `503 /api/insights/chat`
+  - Authenticated Agents smoke still shows live `500` failures on `/v1/threads`, `/v1/system/status`, and `/v1/agents`
+  - Authenticated Agency smoke reaches dashboard/workspaces/playground/settings, but `/tasks` still returns `503`; a code-side hardening patch is now in place pending deploy verification (`recoder-5ig`)
+- [ ] Confirm production navigation only exposes working routes and working CTAs
+- [ ] Verify support/contact/legal/docs links and basic analytics/error reporting
+  - Fixed in code: PM auth pages now link to public `recoder.xyz/legal/*` instead of protected `pm.recoder.xyz/legal/*`
+  - Fixed in code: Agency’s generic Docs links now point to `docs.recoder.xyz`
+  - Fixed in code: Agency app-facing section docs links (`Workspaces`, `Tasks`, `Settings`, `Usage`, `Vector Stores`, `Integrations`, account docs helper) now point to the live docs home instead of dead `agency.recoder.xyz/docs/...` pages
+  - Verified from live checks: the old `agency.recoder.xyz/docs/...` section links were returning redirects / dead pages; those app-facing links are now corrected locally
+
+**Day 7 — release candidate**
+- [ ] Re-run end-to-end production checks on exact launch flows
+- [ ] Close or explicitly defer non-launch-critical tickets in `bd`
+- [ ] Freeze copy, nav, and launch scope unless a blocker is found
+
 ### Platform State
 
 | Platform | URL | Status |
 |----------|-----|--------|
-| **agents** | agents.recoder.xyz | **Coding works E2E** — agent creates files in Daytona sandbox, preview serves via port 8080. File server fix deployed. Deep Coding mode in UI. Error messages now visible in chat. |
-| **web** | web.recoder.xyz | **Coding loop works** — OpenCode processes prompts, creates files in sandbox. Preview/dev server still needs work. |
-| **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). No task board UI yet. |
+| **agents** | agents.recoder.xyz | **Degraded** — core coding path previously worked E2E. The page-level `503` regressions, stream/toolkit proxy failures, and thread-detail collection fallbacks are fixed in code pending deploy verification, but current production remains degraded until those deploys are verified. |
+| **web** | web.recoder.xyz | **Degraded** — container startup works, but production chat requests can fail with OpenCode empty-body `500`s and preview URLs can still return `503` after the container is marked ready. |
+| **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). Shared task board UI is now implemented in Agents collaboration rooms via mirrored `todo-board:*` scratchpad state, pending deploy verification. |
 | **Docs** | docs.recoder.xyz | **Live** — Astro/Starlight site with A2A docs, API reference, getting-started, BYOK, MCP tools, self-hosting guides. nginx routing added to port 3008. |
-| **PM** | pm.recoder.xyz | **Working** — crash loop fixed. Auth redirects to recoder.xyz unified login. |
-| **Agency** | agency.recoder.xyz | **Working** — PostgreSQL recovered, playground/workspaces/dashboard all functional. Separate auth. |
+| **PM** | pm.recoder.xyz | **Degraded** — auth is up. `/api/insights/chat` is fixed in code and build-verified, the `React #418` fix set now includes route-specific roadmap Gantt cleanup plus deterministic chart tooltip formatting, and the bundle fix set now includes Turbopack root pinning plus removal of the PM client runtime dependency on `@recoder/ecosystem-config`; production still needs deploy verification and `recoder-mtq` remains open until the original parse-failure path is rechecked live. |
+| **Agency** | agency.recoder.xyz | **Degraded** — core dashboard/workspaces load, but GitHub Trigger is broken, task detail pages can render dead placeholders, and `Workflows`/`Settings` appear to be non-functional stub UIs. |
 | **recoder.xyz** | recoder.xyz | **Auth working** — Better Auth, Google/GitHub OAuth, email sign-in all functional. Email delivery needs Postfix (being set up). |
 
 ### What each platform needs to be "working end to end"
@@ -59,6 +128,9 @@ Fix chain:
 - [x] E2E test: hello world HTML → PASS (agent creates file, sandbox serves on port 8080)
 - [x] System prompt updated: agent now knows to run npm install + vite dev + expose_port for React projects
 - [x] E2E test: React landing page → **PASS**. Agent creates package.json, vite.config.js, index.html, src/main.jsx, src/App.jsx + runs npm install (10min in sandbox). Root cause was Daytona DB disk full (/dev/sdb 50GB), not server RAM. Freed 34GB, restarted Daytona. Memory optimization (lazy litellm) saved ~350MB per worker.
+- [x] Production page-level regressions — FIXED IN CODE: app health gating only trips on confirmed down status, and `/v1` proxy routes now bypass app auth at the matcher boundary; deploy verification still pending (`recoder-kax`)
+- [x] Production thread detail regressions — FIXED IN CODE: direct thread lookup now falls back to paginated thread lists, missing message/run collections resolve to empty instead of hard-failing the view, and thread detail queries no longer retry terminal `404`s; focused recoder-agents tests pass, deploy verification still pending (`recoder-ea7`)
+- [x] Live updates / toolkit assets degraded — FIXED IN CODE: same-origin `/v1` proxy routes bypass app auth middleware so tokenized stream and Composio icon requests reach the backend proxy; deploy verification still pending (`recoder-dat`)
 
 **web.recoder.xyz — must support continuous development:**
 - [x] OpenCode coding loop works (message → agent thinks → files created in sandbox)
@@ -68,35 +140,51 @@ Fix chain:
 - [x] File tree fixed: POSIX-compatible find command (was using bash grouping parens in `sh` shell)
 - [x] Preview "Failed to fetch" — FIXED: iframe deferred until dev server ready (deployed)
 - [x] Multi-turn editing verified: OpenCode session persists per chat (sessionId passed, context maintained across messages)
+- [x] Production OpenCode regression — FIXED IN CODE: sync `/session/:id/message` now returns JSON directly instead of streaming an early `200`, and the shared client tests cover the `parts` payload plus empty-body handling (`recoder-il9`)
+- [x] Production preview regression — FIXED IN CODE: preview readiness no longer treats `5xx` probe responses as healthy, with focused proxy tests covering `404` as ready and `503` as not ready (`recoder-m8s`)
 
 **A2A — needs execution wiring + persistence:**
 - [x] Docs live at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket)
 - [x] Bridge connected, 6 agents online, tasks dispatch via WebSocket
 - [x] Agent worker execution: Python backend has `/v1/a2a/task` JSON endpoint (no FormData needed). Verified E2E: MCP bridge → worker → /v1/a2a/task → agent run created → sandbox creation attempted. Docker worker update pending volume cleanup.
-- [ ] Web UI for viewing/sending A2A tasks (recoder-29m shared task board)
+- [x] Web UI for viewing/sending A2A tasks — FIXED IN CODE: Agents collaboration rooms can now attach a shared A2A session id and render mirrored `todo-board:*` scratchpad entries as a first-class shared task board (`recoder-29m`)
 - [x] Redis-backed task persistence is LIVE (RedisTaskStore hydrated, 24h TTL, eviction sweep running)
 - [x] Execution endpoints: centralized `POST /api/a2a/tasks/:taskId/execute` routes to Pi/OpenCode. Per-agent endpoints not needed — all agents dispatch through the central endpoint.
 
 **pm.recoder.xyz:**
 - [x] Fix `Cannot find module '@logtail/next'` — pnpm install restored broken symlink
-- [ ] Verify copilot read+write works after restart
+- [ ] Verify copilot read+write works after restart — authenticated browser smoke test now exists in `scripts/e2e-pm-authenticated.mjs` via `PM_E2E_COPILOT_PROMPT`, and current live production still returns `503` from `/api/insights/chat` until deploy
 - [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
+- [ ] Production bundle regression — original report was `ad36cc6263efb746.js` throwing `Unexpected token 'export'`; direct asset fetch now returns valid JS, an authenticated `/insights` bundle sweep finds no loaded Next chunk with a top-level raw `export`, Turbopack root is pinned to the repo root in code to prevent host-level lockfile mis-resolution, and the PM app-switcher no longer imports `@recoder/ecosystem-config` at runtime. Still open pending deploy + live recheck (`recoder-mtq`)
+- [x] Production React crash — FIXED IN CODE: removed PM app hydration-risk text mismatches in breadcrumbs/home greeting, gated unstable provider/chart surfaces, fixed the roadmap Gantt sidebar's time-relative duration text, and made shared chart tooltip number formatting deterministic so `/insights` has fewer locale-sensitive text hydration surfaces; PM app compile build passes, deploy verification still pending (`recoder-lyz`)
+- [x] Insights chat unavailable — FIXED IN CODE: `/api/insights/chat` now resolves OpenRouter credentials/model from org BYOK state before falling back to server env; PM app compile build passes, and the authenticated smoke script can now exercise the Insights copilot path directly. Current production still returns `503` until deploy verification (`recoder-01e`)
 
 **agency.recoder.xyz:**
 - [x] Debug "Failed to create and start task from stage" 500 errors — was PostgreSQL in recovery mode, not Giselle engine
 - [x] Fix GitHub auth — root cause: recoder-app missing `GITHUB_APP_CLIENT_ID` env var (had `GITHUB_CLIENT_ID` instead). Added to .env.production + restarted container. Account linking was already enabled.
 - [x] API keys edit/delete — already wired via Giselle's server actions (createApiKeyAction, revokeApiKeyAction)
 - [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
+- [x] Launch cut on misleading nav — placeholder `/settings` now redirects to `/settings/team`, and misleading admin `Workflows` / `Settings` links were removed (`recoder-l7a`)
+- [x] Remaining Agency launch-hostile nav links — FIXED IN CODE: dead `/stage` links were removed from the mobile menu, lobby CTAs, and task history CTA; mobile `/docs` now points to the real external docs URL
+- [x] GitHub Trigger flow — FIXED IN CODE: team GitHub integration/vector-store entry points now use direct GitHub connect/reconnect actions instead of dead-end account-auth links; deploy verification still pending (`recoder-138`)
+- [x] Task detail page regression — FIXED IN CODE: task detail now prefers task name and stored aggregate counts instead of rendering false placeholder state; terminal tasks with no outputs no longer display `Running...`; deploy verification still pending (`recoder-9a3`)
+- [x] `Workflows` and `Settings` launch-hostile stubs — FIXED IN CODE: misleading admin sidebar links were removed and `/settings` redirects to `/settings/team`; deploy verification still pending (`recoder-bm4`)
+- [x] Authenticated app-route smoke — FIXED IN CODE: `/tasks` now degrades when individual Giselle task fetches fail, `/settings/team/integrations` catches GitHub integration exceptions, and `/workspaces` tolerates enrichment failures; deploy verification still pending (`recoder-5ig`)
 
 ## Current Blockers (Priority Order)
 
-1. ~~**PM crash loop**~~ — FIXED (pnpm install + pm2 restart)
-2. ~~**Pi agent not deployed**~~ — DEPLOYED (Pi SDK verified in docker-backend container)
-3. ~~**recoder-web with Pi routing**~~ — DEPLOYED (pi-exec.ts + api.chat.ts routing live)
-4. ~~**Agent silently drops messages**~~ — ROOT CAUSE: PostgreSQL 17 was down (port 5432 not listening). Every auth check, sandbox resolution, agent run failed silently. Restarted PG cluster + PM2 backend. Code fix for Gemini cleaning + error display was already deployed.
-5. ~~**Agency Giselle engine broken**~~ — FIXED (PostgreSQL recovery mode, force-restarted PG)
-6. ~~**recoder-agents mode wiring**~~ — DEPLOYED (mode field wired chat-input→API→backend, deep-coding routes to Pi→OpenCode)
-7. ~~**Sandbox preview 502**~~ — FIXED. File server in sandbox never started because `ss` not in slim image. Fixed `start_file_server()` to use `curl` for port check and direct `exec` for startup. Started file servers in all 10 running sandboxes. Preview verified E2E: blue Hello World page live at sandbox URL.
+1. **Web production regressions** — OpenCode prompt execution can fail with empty-body `500`s and preview URLs can still return `503` after the container is marked ready
+2. **Agents production regressions** — app pages are returning `503`, thread/message/run APIs return `404`, and live stream/toolkit endpoints are failing in production
+3. **Agency production regressions** — GitHub Trigger onboarding is broken, task detail route `/tasks/tsk-YpZhaKz77m7hXtUR` renders placeholder UI, and `Workflows` / `Settings` look stubbed
+4. **Agency authenticated route stability** — launch-hardening smoke showed `/tasks` and related RSC fetches returning `503` in production, but a code-side hardening patch is now in place pending deploy verification (`recoder-5ig`)
+5. **PM production regressions** — production bundle throws `Unexpected token 'export'`, React runtime crashes with minified error `#418`, and `/api/insights/chat` returns `503 AI service not configured`
+5. ~~**PM crash loop**~~ — FIXED (pnpm install + pm2 restart)
+6. ~~**Pi agent not deployed**~~ — DEPLOYED (Pi SDK verified in docker-backend container)
+7. ~~**recoder-web with Pi routing**~~ — DEPLOYED (pi-exec.ts + api.chat.ts routing live)
+8. ~~**Agent silently drops messages**~~ — ROOT CAUSE: PostgreSQL 17 was down (port 5432 not listening). Every auth check, sandbox resolution, agent run failed silently. Restarted PG cluster + PM2 backend. Code fix for Gemini cleaning + error display was already deployed.
+9. ~~**Agency Giselle engine broken**~~ — FIXED (PostgreSQL recovery mode, force-restarted PG)
+10. ~~**recoder-agents mode wiring**~~ — DEPLOYED (mode field wired chat-input→API→backend, deep-coding routes to Pi→OpenCode)
+11. ~~**Sandbox preview 502**~~ — FIXED. File server in sandbox never started because `ss` not in slim image. Fixed `start_file_server()` to use `curl` for port check and direct `exec` for startup. Started file servers in all 10 running sandboxes. Preview verified E2E: blue Hello World page live at sandbox URL.
 
 ## bd Tickets
 
@@ -114,7 +202,7 @@ Fix chain:
 | Agents/Canvas | recoder-xnh, recoder-e5a, recoder-8i9 | **e5a CLOSED**. **8i9 FIXED**. xnh needs manual board test |
 | Product Verification | recoder-kcq, ~~recoder-74p~~, recoder-ijs | **74p DROPPED** (no longer needed). **ijs**: build noise only (duplicate Prisma target), not runtime |
 | Infra/Host | recoder-025, recoder-0xz, recoder-d0k | **025**: server has read-only deploy key, 10 unpushed commits — push from local. **d0k DONE**: zrok stopped (6 containers, 242MB freed). 0xz: rsync is the deploy path |
-| Shared Planning | recoder-29m | Task board UI — needs design/spec |
+| Shared Planning | recoder-29m | CLOSED — shared task board UI implemented in Agents collaboration rooms |
 
 ### Unfiled (need bd tickets)
 
@@ -168,4 +256,6 @@ Pi agents (`@mariozechner/pi-coding-agent`) are the unified coding runtime for a
 
 - If this file and bd disagree, trust `bd`.
 - If this file and a chat transcript disagree, trust this file.
+- If a prior assistant claimed something is "done" but production reports show failures, trust production and reopen the work.
+- Do not mark items as deployed, live, verified, or working E2E without a post-deploy production check on the exact route or flow.
 - If deeper history is needed, use git instead of reviving duplicate status blocks.

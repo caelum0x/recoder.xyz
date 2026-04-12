@@ -8,6 +8,7 @@ import { Digest } from "./components/digest";
 const Greeting = dynamic(
   () => import("./components/greeting").then((mod) => mod.Greeting),
   {
+    ssr: false,
     loading: () => <Skeleton className="h-10 w-full max-w-sm" />,
   }
 );

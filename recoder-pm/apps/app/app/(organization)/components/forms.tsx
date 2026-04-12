@@ -11,6 +11,7 @@ import { FeatureForm } from "@/components/feature-form";
 import { FeedbackForm } from "@/components/feedback-form";
 import { GroupForm } from "@/components/group-form";
 import { InitiativeForm } from "@/components/initiative-form";
+import { MountedOnly } from "@/components/mounted-only";
 import { ProductForm } from "@/components/product-form";
 import { ReleaseForm } from "@/components/release-form";
 import { database } from "@/lib/database";
@@ -81,7 +82,7 @@ export const Forms = async () => {
   }
 
   return (
-    <>
+    <MountedOnly>
       <FeedbackForm
         isSubscribed={Boolean(databaseOrganization.polarSubscriptionId)}
         organizations={databaseOrganization.feedbackOrganizations}
@@ -118,6 +119,6 @@ export const Forms = async () => {
           <CommandBar hasProducts={databaseOrganization.products.length > 0} />
         </>
       )}
-    </>
+    </MountedOnly>
   );
 };

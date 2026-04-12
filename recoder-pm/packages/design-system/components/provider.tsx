@@ -5,7 +5,7 @@ import Script from "next/script";
 import { AppProgressBar as ProgressBar } from "next-nprogress-bar";
 import type { ThemeProviderProps } from "next-themes";
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { TooltipProvider } from "./precomposed/tooltip";
 import { Toaster } from "./ui/sonner";
 
@@ -33,22 +33,34 @@ const IframelyEmbed = () => {
 export const DesignSystemProvider = ({
   children,
   ...properties
-}: DesignSystemProviderProperties) => (
-  <NextThemesProvider
-    attribute="class"
-    defaultTheme="system"
-    disableTransitionOnChange
-    enableSystem
-    {...properties}
-  >
-    <TooltipProvider>{children}</TooltipProvider>
-    <Toaster />
-    <ProgressBar
-      color={colors.orange}
-      height="2px"
-      options={{ showSpinner: false }}
-      shallowRouting
-    />
-    <IframelyEmbed />
-  </NextThemesProvider>
-);
+}: DesignSystemProviderProperties) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  return (
+    <NextThemesProvider
+      attribute="class"
+      defaultTheme="system"
+      disableTransitionOnChange
+      enableSystem
+      {...properties}
+    >
+      <TooltipProvider>{children}</TooltipProvider>
+      {mounted ? (
+        <>
+          <Toaster />
+          <ProgressBar
+            color={colors.orange}
+            height="2px"
+            options={{ showSpinner: false }}
+            shallowRouting
+          />
+          <IframelyEmbed />
+        </>
+      ) : null}
+    </NextThemesProvider>
+  );
+};

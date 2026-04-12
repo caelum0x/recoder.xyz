@@ -13,7 +13,7 @@ import { fetchCurrentTeam } from "@/services/teams";
 const links = [
 	{
 		title: "Docs",
-		href: "https://agency.recoder.xyz/docs",
+		href: "https://docs.recoder.xyz",
 	},
 	{
 		title: "Terms",

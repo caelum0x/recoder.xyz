@@ -10,14 +10,14 @@ export const useAgentRunsQuery = (threadId: string, options?) => {
     queryFn: () => getAgentRuns(threadId),
     enabled: !!threadId,
     retry: (failureCount, error: any) => {
-      if (error?.status === 404 && failureCount < 5) {
-        return true;
+      if (error?.status === 404) {
+        return false;
       }
       return failureCount < 1;
     },
     retryDelay: (attemptIndex, error: any) => {
       if (error?.status === 404) {
-        return Math.min(500 * (attemptIndex + 1), 2000);
+        return 0;
       }
       return 1000;
     },

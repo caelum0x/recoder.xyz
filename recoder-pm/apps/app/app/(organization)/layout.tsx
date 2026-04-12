@@ -12,6 +12,7 @@ import { redirect } from "next/navigation";
 import type { CSSProperties, ReactNode } from "react";
 import { Suspense } from "react";
 import { Sidebar } from "@/components/sidebar";
+import { MountedOnly } from "@/components/mounted-only";
 import { database } from "@/lib/database";
 import { AiCopilotChat } from "./insights/components/ai-copilot-chat";
 import { Forms } from "./components/forms";
@@ -61,10 +62,14 @@ const OrganizationLayout = async ({
         } as CSSProperties
       }
     >
-      <Sidebar organization={organization} user={user} />
+      <MountedOnly>
+        <Sidebar organization={organization} user={user} />
+      </MountedOnly>
       <SidebarInset className="bg-transparent">
         <div className="flex min-h-screen flex-1 flex-col">
-          <Navbar />
+          <MountedOnly>
+            <Navbar />
+          </MountedOnly>
           {children}
         </div>
       </SidebarInset>

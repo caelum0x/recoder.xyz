@@ -28,6 +28,11 @@ class CreateRoomRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000, description="Room description")
     agent_ids: Optional[List[str]] = Field(default_factory=list, description="Agent IDs to include")
     objective: Optional[str] = Field(None, max_length=2000, description="Room objective/goal")
+    shared_session_id: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Shared A2A session ID used to read mirrored todo-board scratchpad state",
+    )
 
 
 class UpdateRoomRequest(BaseModel):
@@ -36,6 +41,7 @@ class UpdateRoomRequest(BaseModel):
     agent_ids: Optional[List[str]] = None
     status: Optional[str] = Field(None, description="active | paused | completed | archived")
     objective: Optional[str] = Field(None, max_length=2000)
+    shared_session_id: Optional[str] = Field(None, max_length=200)
 
 
 class PostMessageRequest(BaseModel):
@@ -82,9 +88,9 @@ async def create_room(
         row = await execute_one(
             """
             INSERT INTO collaboration_rooms (
-                user_id, room_name, description, agent_ids, objective
+                user_id, room_name, description, agent_ids, objective, shared_session_id
             ) VALUES (
-                :user_id, :room_name, :description, :agent_ids, :objective
+                :user_id, :room_name, :description, :agent_ids, :objective, :shared_session_id
             )
             RETURNING *
             """,
@@ -94,6 +100,7 @@ async def create_room(
                 "description": body.description,
                 "agent_ids": body.agent_ids or [],
                 "objective": body.objective,
+                "shared_session_id": body.shared_session_id,
             },
         )
         return serialize_row(row)
@@ -211,6 +218,9 @@ async def update_room(
     if body.objective is not None:
         updates.append("objective = :objective")
         params["objective"] = body.objective
+    if body.shared_session_id is not None:
+        updates.append("shared_session_id = :shared_session_id")
+        params["shared_session_id"] = body.shared_session_id or None
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

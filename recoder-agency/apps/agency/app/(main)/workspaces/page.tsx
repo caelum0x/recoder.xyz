@@ -112,8 +112,16 @@ async function agentsQuery(teamDbId: number) {
 	>();
 	await Promise.all(
 		teamDbIds.map(async (teamDbId) => {
-			const stores = await getDocumentVectorStores(teamDbId);
-			documentStoresByTeam.set(teamDbId, stores);
+			try {
+				const stores = await getDocumentVectorStores(teamDbId);
+				documentStoresByTeam.set(teamDbId, stores);
+			} catch (error) {
+				console.error(
+					`Error loading document vector stores for team ${teamDbId}:`,
+					error,
+				);
+				documentStoresByTeam.set(teamDbId, []);
+			}
 		}),
 	);
 
