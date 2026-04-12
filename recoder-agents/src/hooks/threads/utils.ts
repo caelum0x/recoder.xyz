@@ -1,5 +1,10 @@
 import { backendApi } from "@/lib/api-client";
-import { getProject, updateProject, type Project } from "@/lib/api/threads";
+import {
+  getProject,
+  getThreadsPaginated,
+  updateProject,
+  type Project,
+} from "@/lib/api/threads";
 import { getSessionAccessToken, requireSessionAccessToken } from "@/lib/auth/session-token";
 import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
 
@@ -46,7 +51,25 @@ export type Thread = {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(errorText || `Failed to fetch thread: ${response.statusText}`);
+
+      if (response.status === 404) {
+        try {
+          const threadsResponse = await getThreadsPaginated(undefined, 1, 100);
+          const fallbackThread = threadsResponse.threads.find(
+            (thread) => thread.thread_id === threadId,
+          );
+
+          if (fallbackThread) {
+            return fallbackThread as Thread;
+          }
+        } catch {
+          // Preserve the original 404 if list fallback also fails.
+        }
+      }
+
+      throw new Error(
+        errorText || `Failed to fetch thread: ${response.statusText}`,
+      );
     }
 
     const data = await response.json();

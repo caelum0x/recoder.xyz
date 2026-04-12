@@ -17,7 +17,7 @@ export default function VectorStoresLayout({
 						Vector Stores
 					</PageHeading>
 					<DocsLink
-						href="https://agency.recoder.xyz/docs/settings/team/vector-stores"
+						href="https://docs.recoder.xyz"
 						target="_blank"
 						rel="noopener noreferrer"
 					>

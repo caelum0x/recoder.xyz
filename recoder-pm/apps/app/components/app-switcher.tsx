@@ -1,6 +1,5 @@
 "use client";
 
-import { getSwitcherApps, RECODER_SETTINGS_URLS } from "@recoder/ecosystem-config";
 import { Button } from "@repo/design-system/components/ui/button";
 import {
   Popover,
@@ -12,7 +11,38 @@ import { NotificationBell } from "./notification-bell";
 import { SubscriptionBadge } from "./subscription-badge";
 
 const currentAppId = "pm";
-const apps = getSwitcherApps();
+const apps = [
+  {
+    id: "web",
+    label: "Web",
+    description: "AI Workspace",
+    href: "https://web.recoder.xyz",
+  },
+  {
+    id: "agency",
+    label: "Agency",
+    description: "AI Agency Platform",
+    href: "https://agency.recoder.xyz",
+  },
+  {
+    id: "pm",
+    label: "PM",
+    description: "Product Management",
+    href: "https://pm.recoder.xyz",
+  },
+  {
+    id: "agents",
+    label: "Agents",
+    description: "AI Agent IDE",
+    href: "https://agents.recoder.xyz",
+  },
+] as const;
+
+const homeSettingsUrls = {
+  main: "https://recoder.xyz/settings",
+  security: "https://recoder.xyz/settings/security",
+  aiProviders: "https://recoder.xyz/settings/ai-providers",
+} as const;
 
 export const AppSwitcher = () => (
   <div className="flex items-center gap-2">
@@ -48,7 +78,7 @@ export const AppSwitcher = () => (
       })}
       <div className="my-1 border-t border-border" />
       <a
-        href={RECODER_SETTINGS_URLS.home.main}
+        href={homeSettingsUrls.main}
         rel="noopener noreferrer"
         className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
       >
@@ -56,7 +86,7 @@ export const AppSwitcher = () => (
         <Settings className="h-3.5 w-3.5 shrink-0 opacity-50" />
       </a>
       <a
-        href={RECODER_SETTINGS_URLS.home.security}
+        href={homeSettingsUrls.security}
         rel="noopener noreferrer"
         className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
       >
@@ -64,7 +94,7 @@ export const AppSwitcher = () => (
         <Shield className="h-3.5 w-3.5 shrink-0 opacity-50" />
       </a>
       <a
-        href={RECODER_SETTINGS_URLS.home.aiProviders}
+        href={homeSettingsUrls.aiProviders}
         rel="noopener noreferrer"
         className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
       >

@@ -12,8 +12,8 @@ export const useThreadQuery = (threadId: string, options?) => {
     retry: (failureCount, error: any) => {
       const errorStr = error?.message?.toLowerCase() || '';
       const is404 = errorStr.includes('404') || errorStr.includes('not found');
-      if (is404 && failureCount < 5) {
-        return true;
+      if (is404) {
+        return false;
       }
       return failureCount < 1;
     },
@@ -21,7 +21,7 @@ export const useThreadQuery = (threadId: string, options?) => {
       const errorStr = error?.message?.toLowerCase() || '';
       const is404 = errorStr.includes('404') || errorStr.includes('not found');
       if (is404) {
-        return Math.min(500 * (attemptIndex + 1), 2000);
+        return 0;
       }
       return 1000;
     },
@@ -107,4 +107,3 @@ export const useThreadsForProject = (projectId: string, options?) => {
     error: threadsQuery.error,
   };
 };
-

@@ -12,7 +12,11 @@ let nextConfig: NextConfig = withBackend(
 
     typescript: { ignoreBuildErrors: true },
 
-    transpilePackages: ["@sentry/nextjs", "@recoder/auth"],
+    transpilePackages: [
+      "@sentry/nextjs",
+      "@recoder/auth",
+      "@recoder/ecosystem-config",
+    ],
 
     // biome-ignore lint/suspicious/useAwait: Next.js expects async redirects.
     async redirects() {

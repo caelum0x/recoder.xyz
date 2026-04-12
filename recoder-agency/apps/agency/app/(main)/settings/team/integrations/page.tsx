@@ -14,7 +14,7 @@ export default function TeamIntegrationsPage() {
 					Integrations
 				</h1>
 				<DocsLink
-					href="https://agency.recoder.xyz/docs/settings/team/integrations"
+					href="https://docs.recoder.xyz"
 					target="_blank"
 					rel="noopener noreferrer"
 				>

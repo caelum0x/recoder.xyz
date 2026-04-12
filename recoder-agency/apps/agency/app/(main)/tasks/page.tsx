@@ -116,7 +116,7 @@ export default async function TaskListPage({
 	const hasNextPage = dbTasks.length > limit;
 	const _dbTasks = hasNextPage ? dbTasks.slice(0, limit) : dbTasks;
 
-	const tasks = await Promise.all(
+	const taskRows = await Promise.allSettled(
 		_dbTasks.map(async (dbTask) => {
 			const task = await giselle.getTask({ taskId: dbTask.id });
 			if (dbTask.app === null) {
@@ -144,6 +144,30 @@ export default async function TaskListPage({
 		}),
 	);
 
+	const tasks = taskRows.map((result, index) => {
+		if (result.status === "fulfilled") {
+			return result.value;
+		}
+
+		const dbTask = _dbTasks[index];
+		return {
+			id: dbTask.id,
+			startedAt: dbTask.createdAt.getTime(),
+			status: "failed" satisfies Task["status"],
+			inputSummary: "Task details unavailable",
+			origin:
+				dbTask.app === null
+					? {
+							type: "github",
+							repoName: "GitHub",
+						}
+					: {
+							type: "app",
+							appName: dbTask.app.workspace.name ?? "Untitled",
+						},
+		} satisfies UITaskListRow;
+	});
+
 	const nextOffset = hasNextPage ? offset + limit : null;
 	const prevOffset = offset - limit >= 0 ? offset - limit : null;
 
@@ -156,7 +180,7 @@ export default async function TaskListPage({
 
 				<div className="flex items-center gap-4">
 					<DocsLink
-						href="https://agency.recoder.xyz/docs/tasks"
+						href="https://docs.recoder.xyz"
 						target="_blank"
 						rel="noopener noreferrer"
 					>

@@ -19,7 +19,7 @@ const navLinks = [
 	{ href: "/lobby", label: "Lobby", icon: Home },
 	{ href: "/workspaces", label: "Workspaces", icon: Briefcase },
 	{ href: "/tasks", label: "Tasks", icon: FileText },
-	{ href: "/stage", label: "Stage", icon: LayoutGrid },
+	{ href: "/playground", label: "Playground", icon: LayoutGrid },
 	{ href: "/settings/account", label: "Account", icon: Settings },
 	{ href: "/settings/team", label: "Team", icon: Users },
 ];
@@ -110,14 +110,16 @@ export function MobileMenu({ children }: MobileMenuProps) {
 							<div className="border-t border-border my-3" />
 
 							{/* Docs link */}
-							<Link
-								href="/docs"
+							<a
+								href="https://docs.recoder.xyz"
+								target="_blank"
+								rel="noopener"
 								className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-inverse/60 hover:text-inverse hover:bg-white/5 transition-colors"
 								onClick={() => setOpen(false)}
 							>
 								<FileText className="w-4 h-4" />
 								<span>Docs</span>
-							</Link>
+							</a>
 
 							<div className="border-t border-border my-3" />
 

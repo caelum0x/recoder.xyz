@@ -243,9 +243,11 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
+     * - v1 proxy routes (same-origin backend proxy)
+     * - api routes
      * - public folder
      * - root path (/)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/|v1/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }; 
