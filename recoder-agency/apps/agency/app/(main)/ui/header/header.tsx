@@ -49,7 +49,7 @@ export function Header() {
 					/>
 				</Suspense>
 				<a
-					href="https://agency.recoder.xyz/docs"
+					href="https://docs.recoder.xyz"
 					className="text-link-muted hover:text-accent text-sm transition-colors"
 				>
 					Docs

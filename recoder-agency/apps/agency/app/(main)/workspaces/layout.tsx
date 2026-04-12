@@ -11,7 +11,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 					<PageHeading glow>Workspaces</PageHeading>
 					<div className="flex items-center gap-4">
 						<DocsLink
-							href="https://agency.recoder.xyz/docs/workspaces"
+							href="https://docs.recoder.xyz"
 							target="_blank"
 							rel="noopener noreferrer"
 						/>

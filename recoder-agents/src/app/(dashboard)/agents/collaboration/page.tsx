@@ -57,12 +57,14 @@ import {
   useRoomTasks,
   useCreateTask,
   useUpdateTask,
+  useMirroredTodoBoards,
 } from '@/hooks/agents/use-collaboration-rooms';
 import type {
   CollaborationRoom,
   CollaborationMessage,
   CollaborationTask,
 } from '@/lib/api/collaboration-rooms';
+import type { ScratchpadEntry, MirroredTodoBoard } from '@/lib/api/a2a-scratchpad';
 
 // ============================================================================
 // Constants
@@ -147,6 +149,7 @@ function NewRoomDialog({ onSuccess }: { onSuccess?: () => void }) {
     description: '',
     agent_ids_raw: '',
     objective: '',
+    shared_session_id: '',
   });
   const createRoom = useCreateRoom();
 
@@ -165,10 +168,17 @@ function NewRoomDialog({ onSuccess }: { onSuccess?: () => void }) {
         description: form.description.trim() || undefined,
         agent_ids: agentIds,
         objective: form.objective.trim() || undefined,
+        shared_session_id: form.shared_session_id.trim() || undefined,
       });
       toast.success('Collaboration room created');
       setOpen(false);
-      setForm({ room_name: '', description: '', agent_ids_raw: '', objective: '' });
+      setForm({
+        room_name: '',
+        description: '',
+        agent_ids_raw: '',
+        objective: '',
+        shared_session_id: '',
+      });
       onSuccess?.();
     } catch {
       toast.error('Failed to create room');
@@ -228,6 +238,17 @@ function NewRoomDialog({ onSuccess }: { onSuccess?: () => void }) {
               rows={2}
               value={form.objective}
               onChange={(e) => setForm((f) => ({ ...f, objective: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="shared_session_id">Shared A2A Session ID</Label>
+            <Input
+              id="shared_session_id"
+              placeholder="shared-session-1"
+              value={form.shared_session_id}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, shared_session_id: e.target.value }))
+              }
             />
           </div>
           <DialogFooter>
@@ -452,6 +473,140 @@ function TaskBoard({ roomId }: { roomId: string }) {
   );
 }
 
+function MirroredTodoStatusBadge({ status }: { status: string }) {
+  const cfg = TASK_STATUS_CONFIG[status] ?? TASK_STATUS_CONFIG.pending;
+  return (
+    <Badge className={`text-[10px] font-medium ${cfg.className}`}>
+      {cfg.label}
+    </Badge>
+  );
+}
+
+function MirroredTodoBoards({
+  sharedSessionId,
+  onSaveSessionId,
+  isSavingSessionId,
+}: {
+  sharedSessionId?: string | null;
+  onSaveSessionId: (value: string) => Promise<void>;
+  isSavingSessionId: boolean;
+}) {
+  const [draftSessionId, setDraftSessionId] = useState(sharedSessionId ?? '');
+  const { data, isLoading, isError } = useMirroredTodoBoards(sharedSessionId || undefined);
+
+  React.useEffect(() => {
+    setDraftSessionId(sharedSessionId ?? '');
+  }, [sharedSessionId]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSaveSessionId(draftSessionId.trim());
+  };
+
+  const boards = data ?? [];
+
+  return (
+    <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Shared Todo Boards</p>
+          <p className="text-xs text-muted-foreground">
+            Mirrored TodoWrite state from the shared A2A scratchpad.
+          </p>
+        </div>
+        {sharedSessionId ? (
+          <Badge variant="outline" className="text-[10px]">
+            {sharedSessionId}
+          </Badge>
+        ) : null}
+      </div>
+
+      <form onSubmit={handleSave} className="flex gap-2">
+        <Input
+          value={draftSessionId}
+          onChange={(e) => setDraftSessionId(e.target.value)}
+          placeholder="Shared A2A session id"
+          className="h-8 text-xs"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          className="h-8"
+          disabled={isSavingSessionId || !draftSessionId.trim()}
+        >
+          {isSavingSessionId ? 'Saving...' : 'Attach'}
+        </Button>
+      </form>
+
+      {!sharedSessionId ? (
+        <p className="text-xs text-muted-foreground">
+          Attach the shared A2A session id for this room to load mirrored TodoWrite boards.
+        </p>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center py-4">
+          <RecoderLoader size="small" />
+        </div>
+      ) : isError ? (
+        <p className="text-xs text-destructive">
+          Failed to load mirrored todo boards for this session.
+        </p>
+      ) : boards.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No mirrored todo boards found for this session yet.
+        </p>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {boards.map((entry: ScratchpadEntry<MirroredTodoBoard>) => {
+            const todos = entry.value.todos;
+            const counts = todos.reduce(
+              (acc, todo) => {
+                acc[todo.status] += 1;
+                return acc;
+              },
+              { pending: 0, in_progress: 0, completed: 0 },
+            );
+
+            return (
+              <div key={entry.key} className="rounded-md border bg-card p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">{entry.value.agentId}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Updated {formatDate(entry.updatedAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <span>{counts.pending} pending</span>
+                    <span>{counts.in_progress} active</span>
+                    <span>{counts.completed} done</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {todos.map((todo) => (
+                    <div
+                      key={todo.id}
+                      className="flex items-start justify-between gap-2 rounded-sm border border-border/60 px-2 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs leading-tight">{todo.content}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {todo.id}
+                        </p>
+                      </div>
+                      <MirroredTodoStatusBadge status={todo.status} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TaskCard({
   task,
   onStatusChange,
@@ -530,6 +685,18 @@ function RoomDetailView({
       toast.success(`Room ${newStatus}`);
     } catch {
       toast.error('Failed to update room status');
+    }
+  };
+
+  const handleSharedSessionIdSave = async (value: string) => {
+    try {
+      await updateRoom.mutateAsync({
+        roomId,
+        data: { shared_session_id: value },
+      });
+      toast.success('Shared session attached');
+    } catch {
+      toast.error('Failed to save shared session id');
     }
   };
 
@@ -627,7 +794,16 @@ function RoomDetailView({
         {activeTab === 'messages' ? (
           <MessageFeed roomId={roomId} />
         ) : (
-          <TaskBoard roomId={roomId} />
+          <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
+            <MirroredTodoBoards
+              sharedSessionId={room.shared_session_id}
+              onSaveSessionId={handleSharedSessionIdSave}
+              isSavingSessionId={updateRoom.isPending}
+            />
+            <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
+              <TaskBoard roomId={roomId} />
+            </div>
+          </div>
         )}
       </div>
     </div>

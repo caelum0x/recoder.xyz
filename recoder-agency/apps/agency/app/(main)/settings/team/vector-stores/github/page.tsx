@@ -33,7 +33,9 @@ export default async function GitHubVectorStorePage() {
 	) {
 		return (
 			<div className="flex flex-col gap-[24px]">
-				<GitHubAuthRequiredCard />
+				<GitHubAuthRequiredCard
+					invalidCredential={githubIdentityState.status === "invalid-credential"}
+				/>
 				<OfficialRepositorySection repositories={officialRepositoryIndexes} />
 			</div>
 		);

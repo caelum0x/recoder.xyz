@@ -15,6 +15,7 @@ export interface CollaborationRoom {
   /** v2 values: active|paused|completed|archived. Legacy: resolved (maps to completed) */
   status: 'active' | 'paused' | 'completed' | 'archived' | 'resolved';
   objective: string | null;
+  shared_session_id?: string | null;
   /** @deprecated room_type not in v2 schema */
   room_type?: string;
   created_at: string;
@@ -59,6 +60,7 @@ export interface CreateRoomData {
   room_type?: string;
   agent_ids?: string[];
   objective?: string;
+  shared_session_id?: string;
 }
 
 export interface UpdateRoomData {
@@ -67,6 +69,7 @@ export interface UpdateRoomData {
   agent_ids?: string[];
   status?: 'active' | 'paused' | 'completed' | 'archived' | string;
   objective?: string;
+  shared_session_id?: string;
 }
 
 export interface PostMessageData {

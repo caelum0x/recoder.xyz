@@ -1,8 +1,16 @@
 import { AlertCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import {
+	connectGitHubIdentity,
+	reconnectGitHubIdentity,
+} from "../../account/actions";
 import { Button } from "../../components/button";
 
-export function GitHubAuthRequiredCard() {
+export function GitHubAuthRequiredCard({
+	invalidCredential = false,
+}: {
+	invalidCredential?: boolean;
+}) {
 	return (
 		<Card className="rounded-[8px] bg-transparent p-6 border-0">
 			<div className="flex flex-col items-center justify-center py-8">
@@ -11,14 +19,16 @@ export function GitHubAuthRequiredCard() {
 				</h4>
 				<p className="text-link-muted text-[14px] leading-[20.4px] font-sans text-center mb-4">
 					Vector Stores index GitHub repositories for use as knowledge sources in
-					your workflows. To get started, install the GitHub App on your
-					repositories from the Integrations page.
+					your workflows. Connect your GitHub account first, then install the
+					GitHub App on the repositories you want to use.
 				</p>
-				<Button asChild variant="primary">
-					<a href="/settings/team/integrations">
-						Open Integrations
-					</a>
-				</Button>
+				<form
+					action={invalidCredential ? reconnectGitHubIdentity : connectGitHubIdentity}
+				>
+					<Button variant="primary" type="submit">
+						{invalidCredential ? "Reconnect GitHub" : "Connect GitHub"}
+					</Button>
+				</form>
 			</div>
 		</Card>
 	);

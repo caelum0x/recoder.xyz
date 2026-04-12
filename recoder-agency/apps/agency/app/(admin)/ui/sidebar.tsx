@@ -7,12 +7,10 @@ import {
 	LayoutDashboardIcon,
 	LayoutTemplateIcon,
 	PackageIcon,
-	SettingsIcon,
 	ShieldAlertIcon,
 	TrendingUpIcon,
 	UsersIcon,
 	WalletIcon,
-	WorkflowIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -68,16 +66,6 @@ const links = [
 		label: "Delivery Ops",
 		href: "/delivery-ops",
 		icon: ShieldAlertIcon,
-	},
-	{
-		label: "Workflows",
-		href: "/workspaces",
-		icon: WorkflowIcon,
-	},
-	{
-		label: "Settings",
-		href: "/settings",
-		icon: SettingsIcon,
 	},
 ];
 

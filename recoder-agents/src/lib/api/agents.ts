@@ -374,6 +374,9 @@ export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
     );
 
     if (response.error) {
+      if (response.error.status === 404) {
+        return [];
+      }
       const error: ApiError = Object.assign(new Error(`Error getting agent runs: HTTP ${response.error.status}: ${response.error.message}`), {
         status: response.error.status,
       });

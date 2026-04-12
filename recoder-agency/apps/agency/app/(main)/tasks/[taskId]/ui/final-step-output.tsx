@@ -14,6 +14,10 @@ export function FinalStepOutput({
 	const outputCount = outputs.length;
 	const defaultTabValue = outputs.at(0)?.generation.id;
 	const singleOutput = outputCount === 1 ? outputs[0] : undefined;
+	const isTerminal =
+		finalStep.taskStatus === "completed" ||
+		finalStep.taskStatus === "failed" ||
+		finalStep.taskStatus === "cancelled";
 
 	return (
 		<div className="mt-8">
@@ -23,6 +27,11 @@ export function FinalStepOutput({
 				</span>
 			</div>
 			{finalStep.finishedStepItemsCount === 0 ? (
+				isTerminal ? (
+					<p className="text-[13px] text-text-muted/70 italic">
+						No results yet.
+					</p>
+				) : (
 				<p className="text-[13px] text-text-muted/70 italic">
 					<span
 						className="bg-[length:200%_100%] bg-clip-text bg-gradient-to-r from-text-muted/70 via-text-muted/35 to-text-muted/70 text-transparent animate-shimmer"
@@ -34,6 +43,7 @@ export function FinalStepOutput({
 						Running...
 					</span>
 				</p>
+				)
 			) : singleOutput ? (
 				<div className="overflow-hidden rounded-t-xl rounded-b-none bg-blue-muted/5 px-4 py-3">
 					<div className="flex items-center justify-between mb-2 w-full gap-3">

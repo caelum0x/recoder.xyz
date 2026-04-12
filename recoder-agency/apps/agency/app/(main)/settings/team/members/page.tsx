@@ -179,7 +179,7 @@ export default async function TeamMembersPage() {
 				<PageTitle>Members</PageTitle>
 				<div className="flex items-center gap-3">
 					<DocsLink
-						href="https://agency.recoder.xyz/docs/settings/team/members"
+						href="https://docs.recoder.xyz"
 						target="_blank"
 						rel="noopener noreferrer"
 					>

@@ -437,6 +437,17 @@ export const getThread = async (threadId: string): Promise<Thread> => {
     });
 
     if (response.error) {
+      if (response.error.status === 404) {
+        const fallbackResponse = await getThreadsPaginated(undefined, 1, 100);
+        const fallbackThread = fallbackResponse.threads.find(
+          (thread) => thread.thread_id === threadId,
+        );
+
+        if (fallbackThread) {
+          return fallbackThread;
+        }
+      }
+
       const error: ApiError = Object.assign(
         new Error(response.error.message || 'Failed to fetch thread'),
         { status: response.error.status }
@@ -577,6 +588,9 @@ export const getMessages = async (threadId: string): Promise<Message[]> => {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
+      if (response.status === 404) {
+        return [];
+      }
       const error: ApiError = Object.assign(
         new Error(`Error getting messages: ${errorText}`),
         { status: response.status }

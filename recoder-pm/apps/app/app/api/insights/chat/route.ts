@@ -1,4 +1,5 @@
 import { withOrganizationSystemPrompt } from "@repo/backend/ai-prompts";
+import { decryptApiKey } from "@repo/backend/ai-keys";
 import { currentOrganizationId, currentUser } from "@repo/backend/auth/utils";
 import { contentToText } from "@repo/editor/lib/tiptap";
 import { log } from "@repo/observability/log";
@@ -50,6 +51,11 @@ type ChatMessage = {
   tool_calls?: OpenRouterToolCall[];
   tool_call_id?: string;
   name?: string;
+};
+
+type OpenRouterConfig = {
+  apiKey: string;
+  model: string;
 };
 
 // ── Content helpers ─────────────────────────────────────────────────────────
@@ -105,12 +111,14 @@ function extractText(msg: Record<string, unknown>): string {
 
 // ── Shared request helpers ──────────────────────────────────────────────────
 
-const openRouterHeaders = {
-  Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-  "Content-Type": "application/json",
-  "HTTP-Referer": "https://pm.recoder.xyz",
-  "X-Title": "Recoder PM Copilot",
-};
+function buildOpenRouterHeaders(apiKey: string) {
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    "HTTP-Referer": "https://pm.recoder.xyz",
+    "X-Title": "Recoder PM Copilot",
+  };
+}
 
 const STREAM_HEADERS = {
   "Content-Type": "text/event-stream",
@@ -138,10 +146,13 @@ function openRouterTimeoutResponse(): Response {
   );
 }
 
-function fetchOpenRouter(body: Record<string, unknown>): Promise<Response> {
+function fetchOpenRouter(
+  body: Record<string, unknown>,
+  apiKey: string
+): Promise<Response> {
   return fetch(OPENROUTER_URL, {
     method: "POST",
-    headers: openRouterHeaders,
+    headers: buildOpenRouterHeaders(apiKey),
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
   });
@@ -149,11 +160,12 @@ function fetchOpenRouter(body: Record<string, unknown>): Promise<Response> {
 
 async function fetchOpenRouterWithTimeoutHandling(
   body: Record<string, unknown>,
+  apiKey: string,
   timeoutLog: Record<string, unknown>,
   timeoutMessage: string
 ): Promise<Response> {
   try {
-    return await fetchOpenRouter(body);
+    return await fetchOpenRouter(body, apiKey);
   } catch (error) {
     if (isTimeoutError(error)) {
       log.warn(timeoutMessage, {
@@ -448,6 +460,42 @@ async function fetchWorkspaceContext(
   return { contextString, orgName };
 }
 
+async function resolveOpenRouterConfig(
+  organizationId: string
+): Promise<OpenRouterConfig | null> {
+  const organization = await database.organization.findUnique({
+    where: { id: organizationId },
+    select: {
+      aiProvider: true,
+      aiModel: true,
+      aiProviderKeys: {
+        where: { isActive: true, provider: "openrouter" },
+        select: {
+          encryptedKey: true,
+        },
+        take: 1,
+      },
+    },
+  });
+
+  const keyRecord = organization?.aiProviderKeys.at(0);
+  const organizationApiKey = keyRecord
+    ? decryptApiKey(keyRecord.encryptedKey)
+    : null;
+  const apiKey = organizationApiKey ?? OPENROUTER_API_KEY ?? null;
+
+  if (!apiKey) {
+    return null;
+  }
+
+  const model =
+    organization?.aiProvider === "openrouter" && organization.aiModel
+      ? organization.aiModel
+      : OPENROUTER_MODEL;
+
+  return { apiKey, model };
+}
+
 // ── Tool-call loop ──────────────────────────────────────────────────────────
 
 /**
@@ -458,17 +506,19 @@ async function fetchWorkspaceContext(
 async function runToolCallLoop(
   apiMessages: ChatMessage[],
   organizationId: string,
-  actor: CopilotActor
+  actor: CopilotActor,
+  openRouterConfig: OpenRouterConfig
 ): Promise<Response> {
   for (let round = 1; round <= MAX_TOOL_ROUNDS; round += 1) {
     const response = await fetchOpenRouterWithTimeoutHandling(
       {
-        model: OPENROUTER_MODEL,
+        model: openRouterConfig.model,
         messages: apiMessages,
         tools: toolDefinitions,
         tool_choice: "auto",
         stream: false,
       },
+      openRouterConfig.apiKey,
       { organizationId, round },
       "OpenRouter non-stream request timed out"
     );
@@ -539,7 +589,11 @@ async function runToolCallLoop(
   }
 
   // Exhausted round limit — final streaming call without tools
-  return await finalStreamingCall(apiMessages, organizationId);
+  return await finalStreamingCall(
+    apiMessages,
+    organizationId,
+    openRouterConfig
+  );
 }
 
 function parseToolArgs(toolCall: OpenRouterToolCall): Record<string, unknown> {
@@ -556,7 +610,8 @@ function parseToolArgs(toolCall: OpenRouterToolCall): Record<string, unknown> {
 
 async function finalStreamingCall(
   apiMessages: ChatMessage[],
-  organizationId: string
+  organizationId: string,
+  openRouterConfig: OpenRouterConfig
 ): Promise<Response> {
   log.warn("Copilot hit max tool rounds", {
     rounds: MAX_TOOL_ROUNDS,
@@ -565,10 +620,11 @@ async function finalStreamingCall(
 
   const response = await fetchOpenRouterWithTimeoutHandling(
     {
-      model: OPENROUTER_MODEL,
+      model: openRouterConfig.model,
       messages: apiMessages,
       stream: true,
     },
+    openRouterConfig.apiKey,
     { organizationId },
     "OpenRouter final stream request timed out"
   );
@@ -627,6 +683,17 @@ export const POST = async (req: Request) => {
 
   try {
     const { contextString } = await fetchWorkspaceContext(organizationId);
+    const openRouterConfig = await resolveOpenRouterConfig(organizationId);
+
+    if (!openRouterConfig) {
+      log.error("Insights chat OpenRouter credentials are not configured", {
+        organizationId,
+      });
+      return Response.json(
+        { error: "AI service not configured" },
+        { status: 503 }
+      );
+    }
 
     const systemPrompt = await withOrganizationSystemPrompt(
       organizationId,
@@ -638,7 +705,12 @@ export const POST = async (req: Request) => {
       ...chatMessages,
     ];
 
-    return await runToolCallLoop(apiMessages, organizationId, actor);
+    return await runToolCallLoop(
+      apiMessages,
+      organizationId,
+      actor,
+      openRouterConfig
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     log.error("Insights chat error", {
@@ -686,13 +758,6 @@ async function validateRequest(
 
   if (!(messages && Array.isArray(messages)) || messages.length === 0) {
     return new Response("Messages required", { status: 400 });
-  }
-  if (!OPENROUTER_API_KEY) {
-    log.error("OPENROUTER_API_KEY is not set");
-    return Response.json(
-      { error: "AI service not configured" },
-      { status: 503 }
-    );
   }
 
   const chatMessages: Array<{ role: string; content: string }> = messages

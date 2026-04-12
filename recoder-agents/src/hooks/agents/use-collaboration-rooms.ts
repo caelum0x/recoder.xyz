@@ -16,6 +16,7 @@ import {
   type CreateTaskData,
   type UpdateTaskData,
 } from '@/lib/api/collaboration-rooms';
+import { listMirroredTodoBoards, type ScratchpadEntry, type MirroredTodoBoard } from '@/lib/api/a2a-scratchpad';
 
 // ============================================================================
 // Room Hooks
@@ -135,5 +136,15 @@ export function useUpdateTask() {
     onSuccess: (_data, { roomId }) => {
       qc.invalidateQueries({ queryKey: ['collaboration-tasks', roomId] });
     },
+  });
+}
+
+export function useMirroredTodoBoards(sharedSessionId?: string) {
+  return useQuery<ScratchpadEntry<MirroredTodoBoard>[]>({
+    queryKey: ['collaboration-mirrored-todo-boards', sharedSessionId],
+    queryFn: () => listMirroredTodoBoards(sharedSessionId!),
+    enabled: !!sharedSessionId,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
   });
 }

@@ -470,13 +470,21 @@ export const GanttSidebarItem: FC<GanttSidebarItemProps> = ({
   className,
 }) => {
   const gantt = useContext(GanttContext);
+  const [currentDate, setCurrentDate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    setCurrentDate(new Date());
+  }, []);
+
   const tempEndAt =
     feature.endAt && isSameDay(feature.startAt, feature.endAt)
       ? addDays(feature.endAt, 1)
       : feature.endAt;
   const duration = tempEndAt
     ? formatDistance(feature.startAt, tempEndAt)
-    : `${formatDistance(feature.startAt, new Date())} so far`;
+    : currentDate
+      ? `${formatDistance(feature.startAt, currentDate)} so far`
+      : "In progress";
 
   const handleClick: MouseEventHandler<HTMLDivElement> = (event) => {
     if (event.target === event.currentTarget) {
