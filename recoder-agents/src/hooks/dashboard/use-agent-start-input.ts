@@ -75,7 +75,7 @@ export interface UseAgentStartInputReturn {
   // Submit handler
   handleSubmit: (
     message: string,
-    options?: { model_name?: string; enable_thinking?: boolean; enable_context_manager?: boolean }
+    options?: { model_name?: string; enable_thinking?: boolean; enable_context_manager?: boolean; mode?: string }
   ) => void;
   
   // Router prefetch helpers
@@ -235,7 +235,7 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
   // Submit handler - unified logic for both hero and dashboard
   const handleSubmit = useLeadingDebouncedCallback(async (
     message: string,
-    options?: { model_name?: string; enable_thinking?: boolean; enable_context_manager?: boolean }
+    options?: { model_name?: string; enable_thinking?: boolean; enable_context_manager?: boolean; mode?: string }
   ) => {
     const pendingFiles = chatInputRef.current?.getPendingFiles() || [];
     const uploadedFiles = chatInputRef.current?.getUploadedFiles() || [];
@@ -276,6 +276,7 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
       files: pendingFiles.length > 0 ? pendingFiles : undefined,
       modelName: options?.model_name,
       agentId: selectedAgentId || undefined,
+      mode: options?.mode,
     });
 
     if (!result) {
@@ -352,4 +353,3 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
     prefetchTimeoutRef,
   };
 }
-
