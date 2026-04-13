@@ -18,6 +18,29 @@ Last updated: 2026-04-13 (later)
 
 ## ONE GOAL: Make all platforms work end to end
 
+### Product Direction
+
+- **PM** should become the product-management equivalent of Cursor: an AI-native workspace for PMs, with copilots and deep context over product data.
+- **Agency** should become the agency equivalent of Cursor: an AI operating environment for agencies to run delivery, triggers, task execution, and workspace-based collaboration.
+- **Web** should use **OpenCode** and/or **Pi agents** as backend coding services behind a chat-style product surface, similar to ChatGPT/Claude UX, so users can build projects like `lovable.dev`, `bolt.new`, and `rork`.
+- **Agents** is effectively a forked/extended Suna-style system for broader autonomous work: code, docs, slides, research, and other agentic workflows.
+- **Recoder Code** is the terminal-IDE / Claude Code style surface.
+- **A2A / MCP / SDK** is the coordination layer that lets external and internal AIs work together across terminals and products, including team-style collaboration between tools like Codex and Claude Code.
+- **zrok** is part of the live connection/link and agent communication story.
+
+### Current Infra Constraint
+
+- **Live host responsiveness is now a platform-level blocker.**
+- PM and Agents deploy/reverification on Hetzner are still hanging under host load.
+- Web live redeploy/recheck is still pending for the same reason.
+
+### Active Repo Scope
+
+- **Core product / platform:** [`app`](/Users/arhansubasi/recoder.xyz/app), [`backend`](/Users/arhansubasi/recoder.xyz/backend), [`docker-backend`](/Users/arhansubasi/recoder.xyz/docker-backend), [`shared`](/Users/arhansubasi/recoder.xyz/shared), [`packages`](/Users/arhansubasi/recoder.xyz/packages)
+- **Primary product surfaces:** [`recoder-web`](/Users/arhansubasi/recoder.xyz/recoder-web), [`recoder-pm`](/Users/arhansubasi/recoder.xyz/recoder-pm), [`recoder-agency`](/Users/arhansubasi/recoder.xyz/recoder-agency), [`recoder-agents`](/Users/arhansubasi/recoder.xyz/recoder-agents), [`packages/recoder-code`](/Users/arhansubasi/recoder.xyz/packages/recoder-code)
+- **Infra / runtime / communication layers:** [`nginx`](/Users/arhansubasi/recoder.xyz/nginx), [`mcp`](/Users/arhansubasi/recoder.xyz/mcp), [`opencode`](/Users/arhansubasi/recoder.xyz/opencode), [`openclaw`](/Users/arhansubasi/recoder.xyz/openclaw)
+- **Parity / extracted / tooling surfaces:** [`claw-code-parity`](/Users/arhansubasi/recoder.xyz/claw-code-parity), [`extracted-from-openclaw`](/Users/arhansubasi/recoder.xyz/extracted-from-openclaw), [`oh-my-codex`](/Users/arhansubasi/recoder.xyz/oh-my-codex), [`oh-my-openagent`](/Users/arhansubasi/recoder.xyz/oh-my-openagent)
+
 ### Latest production errors (2026-04-09)
 
 - **Web OpenCode requests fail after session startup** — chat prompt execution returns `500` with `OpenCode sandbox request failed` because `opencode POST /session/ses_28c16e36affePTC0Nl490jl0US/message returned empty JSON body (status 200)`. bd: `recoder-il9`
