@@ -24,7 +24,6 @@ const RecoderModesPanel = lazy(() =>
 export default function MilanoPage() {
   const isMobile = useIsMobile();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [inputValue, setInputValue] = useState('');
   const chatInputRef = useRef<ChatInputHandles>(null);
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -138,8 +137,6 @@ export default function MilanoPage() {
                       placeholder="Descrivi il tuo compito..."
                       loading={isSubmitting}
                       disabled={isSubmitting}
-                      value={inputValue}
-                      onChange={setInputValue}
                       isLoggedIn={!!user}
                       selectedAgentId={selectedAgentId}
                       onAgentSelect={setSelectedAgent}
@@ -158,7 +155,7 @@ export default function MilanoPage() {
                     <RecoderModesPanel
                       selectedMode={selectedMode}
                       onModeSelect={setSelectedMode}
-                      onSelectPrompt={setInputValue}
+                      onSelectPrompt={(prompt) => chatInputRef.current?.setValue(prompt)}
                       isMobile={isMobile}
                       selectedCharts={selectedCharts}
                       onChartsChange={setSelectedCharts}
