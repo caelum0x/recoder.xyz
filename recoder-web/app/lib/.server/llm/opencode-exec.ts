@@ -159,6 +159,22 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;
 }
 
+function normalizeOpencodeModel(model: string | undefined): string {
+  const trimmed = model?.trim();
+  if (!trimmed) {
+    return DEFAULT_OPENCODE_MODEL;
+  }
+
+  // UI profile sentinels like `openrouter/free` are not real OpenCode model
+  // identifiers and cause the backend service to stall or error. Fall back to
+  // a known-good OpenCode default instead of forwarding the sentinel.
+  if (trimmed === 'openrouter/free') {
+    return DEFAULT_OPENCODE_MODEL;
+  }
+
+  return trimmed;
+}
+
 function buildEnvAssignments(keys: ProviderKeys): string[] {
   const assignments: string[] = [];
 
@@ -191,7 +207,7 @@ export function buildOpencodeCommand(options: ProviderKeys & {
     parts.push('--session', shellQuote(options.sessionId));
   }
 
-  parts.push('--model', shellQuote(options.model || DEFAULT_OPENCODE_MODEL));
+  parts.push('--model', shellQuote(normalizeOpencodeModel(options.model)));
   parts.push(shellQuote(options.prompt));
 
   return parts.join(' ');
@@ -405,7 +421,7 @@ export async function executeOpencodeChat(options: ExecuteOpencodeChatOptions): 
       signal: abortController.signal,
       body: JSON.stringify({
         prompt,
-        model: options.model,
+        model: normalizeOpencodeModel(options.model),
         sessionId: existingSessionId,
         providerKeys,
       }),
