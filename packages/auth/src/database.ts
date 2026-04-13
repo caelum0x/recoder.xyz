@@ -1,7 +1,7 @@
 import { PrismaClient } from "../prisma/auth-client";
 
 const globalForAuthPrisma = globalThis as unknown as {
-  authPrisma: PrismaClient;
+  authPrisma?: PrismaClient;
 };
 
 /**
@@ -17,9 +17,11 @@ function createAuthDatabase(): PrismaClient {
     datasourceUrl: process.env.AUTH_DATABASE_URL,
   });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForAuthPrisma.authPrisma = client;
-  }
+  // Reuse a single Prisma auth client for the whole process in every
+  // environment. Production PM/Agency host runtimes were creating
+  // additional auth clients under module re-evaluation, which can exhaust
+  // PostgreSQL connections during session/profile lookups.
+  globalForAuthPrisma.authPrisma = client;
 
   return client;
 }
