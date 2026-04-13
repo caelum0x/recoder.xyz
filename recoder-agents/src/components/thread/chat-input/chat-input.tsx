@@ -79,6 +79,7 @@ interface IsolatedTextareaProps {
   isAgentRunning: boolean;
   isUploading: boolean;
   valueRef: React.MutableRefObject<string>;
+  onValueChange?: (value: string) => void;
   onHasContentChange: (hasContent: boolean) => void;
   onMenuTriggerChange: (state: MenuTriggerState) => void;
 }
@@ -95,6 +96,7 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   isAgentRunning,
   isUploading,
   valueRef,
+  onValueChange,
   onHasContentChange,
   onMenuTriggerChange,
 }, ref) {
@@ -149,6 +151,7 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     setValue(newValue);
+    onValueChange?.(newValue);
 
     // Detect slash command trigger: "/" at the start of input
     const slashMatch = newValue.match(/^\/(\S*)$/);
@@ -161,7 +164,7 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
       mentionVisible: !!mentionMatch,
       mentionQuery: mentionMatch ? mentionMatch[1] : '',
     });
-  }, [onMenuTriggerChange]);
+  }, [onMenuTriggerChange, onValueChange]);
 
   // Detect if we're on a mobile device - only after mount to prevent hydration mismatch
   // Used only for keyboard behavior, not for styling (styling uses CSS media queries)
@@ -198,24 +201,32 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
     if (textarea) {
       (textarea as any).clearValue = () => {
         setValue('');
+        onValueChange?.('');
         onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
       };
       (textarea as any).appendValue = (text: string) => {
-        setValue(prev => prev ? `${prev} ${text}` : text);
+        setValue(prev => {
+          const nextValue = prev ? `${prev} ${text}` : text;
+          onValueChange?.(nextValue);
+          return nextValue;
+        });
       };
       (textarea as any).setFullValue = (text: string) => {
         setValue(text);
+        onValueChange?.(text);
         onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
       };
       (textarea as any).replaceLastMention = (mentionQuery: string, replacement: string) => {
         setValue(prev => {
           const mentionPattern = new RegExp(`@${mentionQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
-          return prev.replace(mentionPattern, replacement);
+          const nextValue = prev.replace(mentionPattern, replacement);
+          onValueChange?.(nextValue);
+          return nextValue;
         });
         onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
       };
     }
-  }, [onMenuTriggerChange]);
+  }, [onMenuTriggerChange, onValueChange]);
 
   return (
     <div className="flex flex-col gap-1 px-2">
@@ -784,6 +795,7 @@ export interface ChatInputProps {
     options?: {
       model_name?: string;
       agent_id?: string;
+      mode?: string;
     },
   ) => void;
   placeholder?: string;
@@ -1363,7 +1375,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       });
 
       // Keep files visible with loading spinner - they'll be cleared when agent starts running
-    }, [loading, disabled, isAgentRunning, isUploading, onStopAgent, generateDataOptionsMarkdown, generateSlidesTemplateMarkdown, getActualModelId, selectedModel, onSubmit, selectedAgentId]);
+    }, [loading, disabled, isAgentRunning, isUploading, onStopAgent, generateDataOptionsMarkdown, generateSlidesTemplateMarkdown, getActualModelId, selectedModel, selectedMode, onSubmit, selectedAgentId]);
 
     // Handle paste for image files and code block auto-detection
     const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -1505,11 +1517,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
     // Stable callback for hasContent changes - only called when empty/non-empty state changes
     const handleHasContentChange = useCallback((newHasContent: boolean) => {
       setHasContent(newHasContent);
-      // Notify parent in controlled mode
-      if (isControlled && controlledOnChange) {
-        controlledOnChange(valueRef.current);
-      }
-    }, [isControlled, controlledOnChange]);
+    }, []);
 
     // Isolated textarea that manages its own state - prevents parent re-renders on typing
     const renderTextArea = useMemo(() => (
@@ -1525,6 +1533,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
         isAgentRunning={isAgentRunning}
         isUploading={isUploading}
         valueRef={valueRef}
+        onValueChange={controlledOnChange}
         onHasContentChange={handleHasContentChange}
         onMenuTriggerChange={handleMenuTriggerChange}
       />
