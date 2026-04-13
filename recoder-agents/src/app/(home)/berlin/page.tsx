@@ -74,7 +74,7 @@ export default function BerlinPage() {
 
   const handleChatInputSubmit = useLeadingDebouncedCallback(async (
     message: string,
-    options?: { model_name?: string; enable_thinking?: boolean }
+    options?: { model_name?: string; enable_thinking?: boolean; mode?: string }
   ) => {
     const pendingFiles = chatInputRef.current?.getPendingFiles() || [];
     
@@ -91,6 +91,7 @@ export default function BerlinPage() {
       files: pendingFiles.length > 0 ? pendingFiles : undefined,
       modelName: options?.model_name,
       agentId: selectedAgentId || undefined,
+      mode: options?.mode,
     });
 
     if (!result) {

@@ -93,11 +93,11 @@ Launch-prep tracking ticket: `recoder-l7a`
 
 | Platform | URL | Status |
 |----------|-----|--------|
-| **agents** | agents.recoder.xyz | **Verified for current launch path** — core `/v1` APIs are back after restoring the missing host PM2 backend on `:8000`, the original `recoder-ea7` thread/message/agent-run endpoints now return `200`, and authenticated live coding smoke now completes with `0` `5xx`s. Deep Coding mode still needs separate follow-up verification. |
-| **web** | web.recoder.xyz | **Degraded** — container startup works, but production chat requests can fail with OpenCode empty-body `500`s and preview URLs can still return `503` after the container is marked ready. |
+| **agents** | agents.recoder.xyz | **Verified for standard coding flow** — core `/v1` APIs are back after restoring the missing host PM2 backend on `:8000`, the original `recoder-ea7` thread/message/agent-run endpoints now return `200`, and authenticated live coding smoke now completes with `0` `5xx`s. Deep Coding mode still needs redeploy plus a browser recheck after the home-page mode passthrough fix. |
+| **web** | web.recoder.xyz | **Degraded** — live browser verification now reaches `web.recoder.xyz`, sends a prompt, receives HTTP `200` from `/api/chat`, and shows a preview surface, but the assistant response still reports `opencode POST /session/.../message returned empty JSON body (status 200)`, so the core Web coding path is still not clean in production. |
 | **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). Shared task board UI is now implemented in Agents collaboration rooms via mirrored `todo-board:*` scratchpad state, pending deploy verification. |
 | **Docs** | docs.recoder.xyz | **Live** — Astro/Starlight site with A2A docs, API reference, getting-started, BYOK, MCP tools, self-hosting guides. nginx routing added to port 3008. |
-| **PM** | pm.recoder.xyz | **Degraded** — authenticated `/api/auth/session` is fixed again and direct authenticated `/insights` requests now return `200`, but browser verification still hits missing `/_next/static/chunks/*.js` assets returning `500`, so PM is now blocked on build finalization rather than auth/session or React `#418`. |
+| **PM** | pm.recoder.xyz | **Partially verified** — authenticated `/api/auth/session` is fixed again, direct `/insights` requests return `200`, and a fresh PM browser smoke now loads `/insights` cleanly with no chunk errors after rebuilding `.next` from scratch. The remaining PM blocker is the copilot API path, which still returns `503 /api/insights/chat`. |
 | **Agency** | agency.recoder.xyz | **Verified for current launch path** — authenticated dashboard/workspaces/playground/tasks/settings now load with HTTP `200`, and the full authenticated smoke records `0` `5xx` network errors after the shared DB password was corrected. |
 | **recoder.xyz** | recoder.xyz | **Auth working** — Better Auth, Google/GitHub OAuth, email sign-in all functional. Email delivery needs Postfix (being set up). |
 
@@ -156,10 +156,10 @@ Fix chain:
 
 **pm.recoder.xyz:**
 - [x] Fix `Cannot find module '@logtail/next'` — pnpm install restored broken symlink
-- [ ] Verify copilot read+write works after restart — `scripts/e2e-pm-authenticated.mjs` now supports passing shared session-data via `RECODER_SESSION_DATA`, but browser verification is still blocked by `/insights` loading with missing `/_next/static/chunks/*.js` assets returning `500`
+- [ ] Verify copilot read+write works after restart — `scripts/e2e-pm-authenticated.mjs` now supports passing shared session-data via `RECODER_SESSION_DATA`, `/insights` itself now loads cleanly again, but the live authenticated copilot smoke still returns `503 /api/insights/chat`
 - [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
 - [ ] Production bundle regression — original report was `ad36cc6263efb746.js` throwing `Unexpected token 'export'`; direct asset fetch now returns valid JS, an authenticated `/insights` bundle sweep finds no loaded Next chunk with a top-level raw `export`, Turbopack root is pinned to the repo root in code to prevent host-level lockfile mis-resolution, and the PM app-switcher no longer imports `@recoder/ecosystem-config` at runtime. Still open pending deploy + live recheck (`recoder-mtq`)
-- [x] Production React crash — FIXED IN CODE and no longer reproduced in live auth/session checks, but PM still is not fully launch-ready because `/insights` now fails later in the browser on missing client chunks from the compile-only build (`recoder-lyz`)
+- [x] Production React crash — FIXED IN CODE and no longer reproduced in live browser verification; `/insights` now loads cleanly after a fresh PM `.next` rebuild on Hetzner (`recoder-lyz`)
 - [x] Insights chat unavailable — FIXED IN CODE: `/api/insights/chat` now resolves OpenRouter credentials/model from org BYOK state before falling back to server env; PM app compile build passes, and the authenticated smoke script can now exercise the Insights copilot path directly. Current production still returns `503` until deploy verification (`recoder-01e`)
 
 **agency.recoder.xyz:**
@@ -176,10 +176,9 @@ Fix chain:
 
 ## Current Blockers (Priority Order)
 
-1. **PM `/insights` build finalization** — authenticated `/api/auth/session` is fixed again, but browser verification still hits missing `/_next/static/chunks/*.js` assets returning `500`, so PM is not yet end-to-end healthy
-2. **PM copilot verification** — `/api/insights/chat` still needs a clean authenticated browser verification pass after the chunk/build issue is resolved
-3. **Web production verification** — Web fixes are deployed in code history, but the current status file still needs a fresh post-recovery prompt → file creation → preview production rerun
-4. **Deep Coding mode verification** — standard Agents coding flow is green, but Deep Coding mode still needs a post-fix browser verification pass
+1. **PM copilot verification** — `/api/insights/chat` still returns `503` in the live authenticated browser smoke
+2. **Web production verification** — a real prompt run still reproduces the OpenCode empty-body failure in the assistant response even though `/api/chat` returns `200` and a preview surface appears
+3. **Deep Coding mode verification** — standard Agents coding flow is green, but Deep Coding still needs redeploy plus a browser verification pass after the home-page mode passthrough fix
 5. ~~**PM crash loop**~~ — FIXED (pnpm install + pm2 restart)
 6. ~~**Pi agent not deployed**~~ — DEPLOYED (Pi SDK verified in docker-backend container)
 7. ~~**recoder-web with Pi routing**~~ — DEPLOYED (pi-exec.ts + api.chat.ts routing live)
@@ -223,7 +222,7 @@ Fix chain:
 - recoder-frontend Docker image rebuilt with error display fix (image b177716a22bd)
 - recoder-backend restarted with Gemini-safe message cleaning (llm.py)
 - Security incident fully remediated (XMRig miner, CVE-2025-66478)
-- Latest live verification: Agency authenticated smoke is clean, Agents standard coding flow is clean on rerun, and PM auth/session is fixed but `/insights` still serves missing browser chunks
+- Latest live verification: Agency authenticated smoke is clean, Agents standard coding flow is clean on rerun, PM `/insights` is clean after a fresh host rebuild, PM copilot still returns `503`, and Web still reports the OpenCode empty-body failure during a real prompt run
 
 ## Pi Integration Strategy
 
