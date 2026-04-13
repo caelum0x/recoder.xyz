@@ -104,6 +104,8 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const prevHasContent = useRef(false);
   const [mounted, setMounted] = useState(false);
+  const isControlled = onValueChange !== undefined;
+  const displayValue = isControlled ? initialValue : value;
   
   // Use the forwarded ref or internal ref
   useImperativeHandle(ref, () => internalRef.current!, []);
@@ -115,23 +117,17 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   
   // Keep parent's valueRef in sync
   useEffect(() => {
-    valueRef.current = value;
-  }, [value, valueRef]);
-
-  // In controlled mode, keep the internal textarea state aligned with the
-  // parent value without re-triggering onChange.
-  useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
+    valueRef.current = displayValue;
+  }, [displayValue, valueRef]);
   
   // Notify parent when hasContent changes (but not on every keystroke)
   useEffect(() => {
-    const hasContent = value.trim().length > 0;
+    const hasContent = displayValue.trim().length > 0;
     if (hasContent !== prevHasContent.current) {
       prevHasContent.current = hasContent;
       onHasContentChange(hasContent);
     }
-  }, [value, onHasContentChange]);
+  }, [displayValue, onHasContentChange]);
 
   // Auto-resize textarea
   const adjustHeight = useCallback(() => {
@@ -146,7 +142,7 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
 
   useEffect(() => {
     adjustHeight();
-  }, [value, adjustHeight]);
+  }, [displayValue, adjustHeight]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -156,7 +152,9 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
-    setValue(newValue);
+    if (!isControlled) {
+      setValue(newValue);
+    }
     onValueChange?.(newValue);
 
     // Detect slash command trigger: "/" at the start of input
@@ -170,7 +168,7 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
       mentionVisible: !!mentionMatch,
       mentionQuery: mentionMatch ? mentionMatch[1] : '',
     });
-  }, [onMenuTriggerChange, onValueChange]);
+  }, [isControlled, onMenuTriggerChange, onValueChange]);
 
   // Detect if we're on a mobile device - only after mount to prevent hydration mismatch
   // Used only for keyboard behavior, not for styling (styling uses CSS media queries)
@@ -189,7 +187,7 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
     
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      const hasContent = value.trim().length > 0;
+      const hasContent = displayValue.trim().length > 0;
       if (
         (hasContent || hasFiles) &&
         !loading &&
@@ -199,46 +197,52 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
         onSubmit();
       }
     }
-  }, [value, hasFiles, loading, disabled, isAgentRunning, isUploading, onSubmit, isMobile]);
+  }, [displayValue, hasFiles, loading, disabled, isAgentRunning, isUploading, onSubmit, isMobile]);
 
   // Expose methods to clear/set value from parent
   useEffect(() => {
     const textarea = internalRef.current;
     if (textarea) {
       (textarea as any).clearValue = () => {
-        setValue('');
+        if (!isControlled) {
+          setValue('');
+        }
         onValueChange?.('');
         onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
       };
       (textarea as any).appendValue = (text: string) => {
-        setValue(prev => {
-          const nextValue = prev ? `${prev} ${text}` : text;
-          onValueChange?.(nextValue);
-          return nextValue;
-        });
+        const base = isControlled ? initialValue : value;
+        const nextValue = base ? `${base} ${text}` : text;
+        if (!isControlled) {
+          setValue(nextValue);
+        }
+        onValueChange?.(nextValue);
       };
       (textarea as any).setFullValue = (text: string) => {
-        setValue(text);
+        if (!isControlled) {
+          setValue(text);
+        }
         onValueChange?.(text);
         onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
       };
       (textarea as any).replaceLastMention = (mentionQuery: string, replacement: string) => {
-        setValue(prev => {
-          const mentionPattern = new RegExp(`@${mentionQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
-          const nextValue = prev.replace(mentionPattern, replacement);
-          onValueChange?.(nextValue);
-          return nextValue;
-        });
+        const mentionPattern = new RegExp(`@${mentionQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+        const base = isControlled ? initialValue : value;
+        const nextValue = base.replace(mentionPattern, replacement);
+        if (!isControlled) {
+          setValue(nextValue);
+        }
+        onValueChange?.(nextValue);
         onMenuTriggerChange({ slashVisible: false, slashQuery: '', mentionVisible: false, mentionQuery: '' });
       };
     }
-  }, [onMenuTriggerChange, onValueChange]);
+  }, [initialValue, isControlled, onMenuTriggerChange, onValueChange, value]);
 
   return (
     <div className="flex flex-col gap-1 px-2">
       <Textarea
         ref={internalRef}
-        value={value}
+        value={displayValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         onPaste={onPaste}
@@ -946,6 +950,8 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
     // Recoder Agent Modes feature flag
     const ENABLE_RECODER_AGENT_MODES = false;
     const [recoderAgentModes, setRecoderAgentModes] = useState<'adaptive' | 'autonomous' | 'chat'>('adaptive');
+    const storeSelectedMode = useRecoderModesStore((state) => state.selectedMode);
+    const effectiveSelectedMode = selectedMode ?? storeSelectedMode;
 
     // Read mode-specific state directly from Zustand for markdown generation
     const selectedCharts = useRecoderModesStore((state) => state.selectedCharts);
@@ -1191,11 +1197,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
     // Reset mode dismissing state when selectedMode changes
     useEffect(() => {
       setIsModeDismissing(false);
-    }, [selectedMode]);
+    }, [effectiveSelectedMode]);
 
     // Generate Markdown for selected data options
     const generateDataOptionsMarkdown = useCallback(() => {
-      if (selectedMode !== 'data' || (selectedCharts.length === 0 && !selectedOutputFormat)) {
+      if (effectiveSelectedMode !== 'data' || (selectedCharts.length === 0 && !selectedOutputFormat)) {
         return '';
       }
 
@@ -1213,16 +1219,16 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       }
 
       return markdown;
-    }, [selectedMode, selectedCharts, selectedOutputFormat]);
+    }, [effectiveSelectedMode, selectedCharts, selectedOutputFormat]);
 
     // Generate Markdown for selected slides template
     const generateSlidesTemplateMarkdown = useCallback(() => {
-      if (selectedMode !== 'slides' || !selectedTemplate) {
+      if (effectiveSelectedMode !== 'slides' || !selectedTemplate) {
         return '';
       }
       
       return `\n\n----\n\n**Presentation Template:** ${selectedTemplate}`;
-    }, [selectedMode, selectedTemplate]);
+    }, [effectiveSelectedMode, selectedTemplate]);
 
     // Handle mode deselection with animation - also clears the input value
     const handleModeDeselect = useCallback(() => {
@@ -1377,11 +1383,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       onSubmit(message, {
         agent_id: selectedAgentId,
         model_name: baseModelName && baseModelName.trim() ? baseModelName.trim() : undefined,
-        mode: selectedMode || undefined,
+        mode: effectiveSelectedMode || undefined,
       });
 
       // Keep files visible with loading spinner - they'll be cleared when agent starts running
-    }, [loading, disabled, isAgentRunning, isUploading, onStopAgent, generateDataOptionsMarkdown, generateSlidesTemplateMarkdown, getActualModelId, selectedModel, selectedMode, onSubmit, selectedAgentId]);
+    }, [loading, disabled, isAgentRunning, isUploading, onStopAgent, generateDataOptionsMarkdown, generateSlidesTemplateMarkdown, getActualModelId, selectedModel, effectiveSelectedMode, onSubmit, selectedAgentId]);
 
     // Handle paste for image files and code block auto-detection
     const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {

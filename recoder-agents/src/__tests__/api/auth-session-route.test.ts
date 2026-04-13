@@ -82,6 +82,39 @@ describe('GET /api/auth/session', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
+  it('returns the session_data cookie user without calling the auth service', async () => {
+    globalThis.fetch = vi.fn();
+
+    const { GET } = await import('@/app/api/auth/session/route');
+    const cookiePayload = Buffer.from(JSON.stringify({
+      session: {
+        user: {
+          id: 'cookie-user-123',
+          email: 'cookie@example.com',
+          name: 'Cookie User',
+          imageUrl: 'https://example.com/cookie.png',
+        },
+      },
+    })).toString('base64url');
+
+    const request = new NextRequest('http://localhost/api/auth/session', {
+      headers: { cookie: `_Secure-recoder.session_data=${cookiePayload}` },
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.user).toEqual({
+      id: 'cookie-user-123',
+      email: 'cookie@example.com',
+      emailVerified: true,
+      name: 'Cookie User',
+      image: 'https://example.com/cookie.png',
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it('returns null user when upstream returns non-ok response', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: 'Unauthorized' }), {

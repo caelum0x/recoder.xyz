@@ -82,6 +82,26 @@ describe('v1 proxy route', () => {
     expect(headers.get('authorization')).toBe('Bearer cookie-session-token');
   });
 
+  it('does not proxy through NEXT_PUBLIC_BACKEND_URL when backend server envs are unset', async () => {
+    process.env.NEXT_PUBLIC_BACKEND_URL = 'https://wrong-public.recoder.xyz/v1';
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const { GET } = await import('@/app/v1/[...path]/route');
+    const request = new NextRequest('http://localhost/v1/system/status');
+
+    await GET(request, {
+      params: Promise.resolve({ path: ['system', 'status'] }),
+    });
+
+    const [url] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('https://api.recoder.xyz/v1/system/status');
+  });
+
   it('forwards POST bodies without buffering them into JSON', async () => {
     process.env.BACKEND_INTERNAL_URL = 'http://backend.internal:8000/v1';
     globalThis.fetch = vi.fn().mockResolvedValue(
