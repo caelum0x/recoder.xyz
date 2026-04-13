@@ -642,6 +642,7 @@ services:
       - SERVER_AUTH_SET_IF_NOT_EXISTS=true
       - SERVER_AUTH_COOKIE_DOMAIN=localhost
       - SERVER_AUTH_COOKIE_INSECURE=true
+      - SERVER_AUTH_COOKIE_SECRETS=${HATCHET_COOKIE_SECRETS:-}
       - SERVER_ENCRYPTION_MASTER_KEYSET=${HATCHET_MASTER_ENCRYPTION_KEY:-}
       - SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET=${HATCHET_JWT_SECRET:-}
       - SERVER_TASKQUEUE_KIND=postgres
@@ -670,6 +671,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
       - SERVER_AUTH_SET_IF_NOT_EXISTS=true
+      - SERVER_AUTH_COOKIE_SECRETS=${HATCHET_COOKIE_SECRETS:-}
     depends_on:
       hatchet-engine:
         condition: service_healthy
