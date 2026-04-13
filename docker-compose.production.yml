@@ -651,7 +651,7 @@ services:
           memory: 256M
 
   grafana:
-    image: grafana/grafana:11.4-alpine
+    image: grafana/grafana:latest
     container_name: recoder-grafana
     <<: *restart-policy
     environment:
