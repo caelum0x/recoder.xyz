@@ -99,6 +99,33 @@ function readProjectId(body: Record<string, unknown>): string | undefined {
   return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
 }
 
+const OPENCODE_AGENT_NAMES = new Set(['build', 'explore', 'general', 'plan']);
+
+function toPromptInputModel(model: unknown) {
+  if (typeof model !== 'string') {
+    return {};
+  }
+
+  const trimmed = model.trim();
+  if (!trimmed) {
+    return {};
+  }
+
+  if (OPENCODE_AGENT_NAMES.has(trimmed)) {
+    return { agent: trimmed };
+  }
+
+  const slashIndex = trimmed.indexOf('/');
+  if (slashIndex > 0 && slashIndex < trimmed.length - 1) {
+    return {
+      providerID: trimmed.slice(0, slashIndex),
+      modelID: trimmed.slice(slashIndex + 1),
+    };
+  }
+
+  return {};
+}
+
 export const opencodeConnectorRouter = Router();
 
 opencodeConnectorRouter.use(parseJsonTextBody);
@@ -182,7 +209,7 @@ opencodeConnectorRouter.post('/execute', async (req: Request, res: Response) => 
 
           const result = await promptProject(projectId, {
             content: prompt,
-            agent: typeof body.model === 'string' ? body.model : undefined,
+            ...toPromptInputModel(body.model),
           });
 
           const textParts = result.parts

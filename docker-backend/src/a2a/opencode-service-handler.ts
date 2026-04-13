@@ -18,6 +18,7 @@ import {
   setProviderKey,
   getProjectDiff,
   type MessageWithParts,
+  type PromptInput,
 } from './opencode-service-adapter';
 import { createLogger } from '../logger';
 
@@ -51,6 +52,33 @@ export interface OpencodeServiceHandlerResult {
   raw: MessageWithParts;
   /** Files synced to Daytona sandbox after opencode wrote them. */
   syncedFiles?: string[];
+}
+
+const OPENCODE_AGENT_NAMES = new Set(['build', 'explore', 'general', 'plan']);
+
+function toPromptInputModel(model: string | undefined): Partial<Pick<PromptInput, 'agent' | 'providerID' | 'modelID'>> {
+  if (!model) {
+    return {};
+  }
+
+  const trimmed = model.trim();
+  if (!trimmed) {
+    return {};
+  }
+
+  if (OPENCODE_AGENT_NAMES.has(trimmed)) {
+    return { agent: trimmed };
+  }
+
+  const slashIndex = trimmed.indexOf('/');
+  if (slashIndex > 0 && slashIndex < trimmed.length - 1) {
+    return {
+      providerID: trimmed.slice(0, slashIndex),
+      modelID: trimmed.slice(slashIndex + 1),
+    };
+  }
+
+  return {};
 }
 
 /**
@@ -195,7 +223,7 @@ export async function handleOpencodeServicePrompt(
     input.projectId,
     {
       content: input.prompt,
-      agent: input.model,
+      ...toPromptInputModel(input.model),
     },
     { directory: input.directory },
   );
