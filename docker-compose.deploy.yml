@@ -674,11 +674,15 @@ services:
       - SERVER_AUTH_SET_IF_NOT_EXISTS=true
       - SERVER_AUTH_COOKIE_DOMAIN=localhost
       - SERVER_AUTH_COOKIE_SECRETS=${HATCHET_COOKIE_SECRETS:-}
+      - SERVER_MSGQUEUE_KIND=postgres
+      - SERVER_ENCRYPTION_MASTER_KEYSET=${HATCHET_MASTER_ENCRYPTION_KEY:-}
+      - SERVER_ENCRYPTION_JWT_PRIVATE_KEYSET=${HATCHET_JWT_SECRET:-}
+      - SERVER_ENCRYPTION_JWT_PUBLIC_KEYSET=${HATCHET_JWT_PUBLIC_KEYSET:-}
     depends_on:
       hatchet-engine:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/live || exit 1"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:8080/api/live || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

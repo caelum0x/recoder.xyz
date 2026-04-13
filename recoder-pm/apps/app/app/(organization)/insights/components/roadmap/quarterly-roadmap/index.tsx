@@ -3,7 +3,7 @@ import type { GanttFeature } from "@repo/design-system/components/kibo-ui/gantt"
 import { StackCard } from "@repo/design-system/components/stack-card";
 import { endOfQuarter, startOfQuarter } from "date-fns";
 import { database } from "@/lib/database";
-import { QuarterlyRoadmapGantt } from "./gantt";
+import { QuarterlyRoadmapClientGantt } from "./client-gantt";
 
 export const QuarterlyRoadmap = async () => {
   const today = new Date();
@@ -88,7 +88,7 @@ export const QuarterlyRoadmap = async () => {
 
   return (
     <StackCard className="p-0" title="Quarterly Roadmap">
-      <QuarterlyRoadmapGantt groups={groups} members={members} />
+      <QuarterlyRoadmapClientGantt groups={groups} members={members} />
     </StackCard>
   );
 };
