@@ -207,14 +207,17 @@ ssh_cmd "cd ${REMOTE_DIR} && git tag -f \"pre-deploy-\$(date +%Y%m%d-%H%M%S)\" |
 
 rsync -az --timeout=120 --progress \
   --exclude='node_modules' --exclude='.git' \
+  --exclude='/.beads' --exclude='/.playwright-mcp' \
   --exclude='/.env*' \
   --exclude='**/.env*' \
+  --exclude='/*.png' \
   --exclude='.next' --exclude='.turbo' --exclude='coverage' \
   --exclude='.aitimemachine' --exclude='.claude' --exclude='.codex' \
   --exclude='*.log' --exclude='logs' \
   --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc' \
   --exclude='.cache' --exclude='.parcel-cache' --exclude='.swc' \
   --exclude='*.mp4' --exclude='*.mov' --exclude='*.zip' --exclude='*.tar.gz' \
+  --exclude='docker-backend/data' --exclude='docker-backend/data/***' \
   --exclude='apps/mobile' \
   --include='packages/*/dist/***' --include='shared/dist/***' \
   --exclude='recoder-web/dist' \
@@ -227,6 +230,11 @@ echo "=== Phase 3: Write .env and upload remote build script ==="
 ssh_cmd bash -s <<ENDSSH
 set -euo pipefail
 cd "${REMOTE_DIR}"
+
+# Keep deploy-only/local runtime artifacts out of the tracked server checkout.
+git restore --source=HEAD --worktree -- docker-backend/data >/dev/null 2>&1 || true
+rm -rf .playwright-mcp
+find . -maxdepth 1 -type f -name '*.png' -delete
 
 # Write the deploy .env with shared secrets
 cat > .env <<'INNEREOF'
