@@ -80,9 +80,8 @@ module.exports = {
     {
       name: 'recoder-pm',
       cwd: '/root/recoder.xyz/recoder-pm/apps/app',
-      script: 'node_modules/.bin/next',
-      args: 'start',
-      interpreter: 'none',
+      script: './start-pm2.sh',
+      interpreter: '/bin/bash',
       max_memory_restart: '1500M',
       restart_delay: 3000,
       kill_timeout: 5000,
@@ -96,6 +95,7 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3004,
         HOSTNAME: '0.0.0.0',
+        REDIS_URL: 'redis://127.0.0.1:6379',
         // SearXNG self-hosted search — PM2 processes run on host, SearXNG bound to 127.0.0.1:8888
         SEARXNG_URL: 'http://127.0.0.1:8888'
       }
