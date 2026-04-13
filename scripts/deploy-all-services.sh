@@ -116,7 +116,13 @@ echo "=== Phase 1: Generate secrets (if not already set) ==="
 
 remote_env_value() {
   local key="$1"
-  ssh $SSH_OPTS "${SERVER}" "if [ -f '${REMOTE_DIR}/.env' ]; then sed -n \"s/^${key}=//p\" '${REMOTE_DIR}/.env' | tail -n1; fi" 2>/dev/null || true
+  local raw
+  raw="$(ssh $SSH_OPTS "${SERVER}" "if [ -f '${REMOTE_DIR}/.env' ]; then sed -n \"s/^${key}=//p\" '${REMOTE_DIR}/.env' | tail -n1; fi" 2>/dev/null || true)"
+  raw="${raw%\"}"
+  raw="${raw#\"}"
+  raw="${raw%\'}"
+  raw="${raw#\'}"
+  printf '%s' "$raw"
 }
 
 if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
@@ -133,6 +139,9 @@ if [ -z "${REDIS_PASSWORD:-}" ]; then
 fi
 if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
   HATCHET_COOKIE_SECRETS="$(remote_env_value HATCHET_COOKIE_SECRETS)"
+fi
+if [[ -n "${HATCHET_COOKIE_SECRETS:-}" && "${HATCHET_COOKIE_SECRETS}" == *,* && "${HATCHET_COOKIE_SECRETS}" != *" "* ]]; then
+  HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS//,/ }"
 fi
 
 if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
@@ -155,7 +164,7 @@ if [ -z "${REDIS_PASSWORD:-}" ]; then
   echo "Generated REDIS_PASSWORD"
 fi
 if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
-  HATCHET_COOKIE_SECRETS="$(openssl rand -hex 32),$(openssl rand -hex 32)"
+  HATCHET_COOKIE_SECRETS="$(openssl rand -hex 32) $(openssl rand -hex 32)"
   echo "Generated HATCHET_COOKIE_SECRETS"
 fi
 
@@ -211,7 +220,7 @@ REDIS_PASSWORD=${REDIS_PASSWORD}
 RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
 RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
-HATCHET_COOKIE_SECRETS=${HATCHET_COOKIE_SECRETS}
+HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS}"
 INNEREOF
 chmod 600 .env
 
