@@ -156,7 +156,7 @@ Fix chain:
 
 **pm.recoder.xyz:**
 - [x] Fix `Cannot find module '@logtail/next'` — pnpm install restored broken symlink
-- [ ] Verify copilot read+write works after restart — `scripts/e2e-pm-authenticated.mjs` now supports passing shared session-data via `RECODER_SESSION_DATA`, `/insights` itself now loads cleanly again, but the live authenticated copilot smoke still returns `503 /api/insights/chat`
+- [ ] Verify copilot read+write works after restart — `scripts/e2e-pm-authenticated.mjs` now supports passing shared session-data via `RECODER_SESSION_DATA`, `/insights` itself now loads cleanly again, but the live authenticated copilot smoke still fails on `/api/insights/chat`. Current host trace shows two concrete blockers: the authenticated PM org has no org-level `organization_ai_provider_key` rows / no `aiProvider` or `aiModel` configured, and the PM host build can intermittently miss `.next/server/app-paths-manifest.json` for API-route handling.
 - [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
 - [ ] Production bundle regression — original report was `ad36cc6263efb746.js` throwing `Unexpected token 'export'`; direct asset fetch now returns valid JS, an authenticated `/insights` bundle sweep finds no loaded Next chunk with a top-level raw `export`, Turbopack root is pinned to the repo root in code to prevent host-level lockfile mis-resolution, and the PM app-switcher no longer imports `@recoder/ecosystem-config` at runtime. Still open pending deploy + live recheck (`recoder-mtq`)
 - [x] Production React crash — FIXED IN CODE and no longer reproduced in live browser verification; `/insights` now loads cleanly after a fresh PM `.next` rebuild on Hetzner (`recoder-lyz`)
@@ -176,7 +176,7 @@ Fix chain:
 
 ## Current Blockers (Priority Order)
 
-1. **PM copilot verification** — `/api/insights/chat` still returns `503` in the live authenticated browser smoke
+1. **PM copilot verification** — `/api/insights/chat` is still not healthy; live smoke returns `503`, direct host/API trace can degrade to `500`, the current PM org has no org-level OpenRouter key/config rows, and the PM host build is intermittently incomplete for API routes
 2. **Web production verification** — a real prompt run still reproduces the OpenCode empty-body failure in the assistant response even though `/api/chat` returns `200` and a preview surface appears
 3. **Deep Coding mode verification** — standard Agents coding flow is green, but Deep Coding still needs redeploy plus a browser verification pass after the home-page mode passthrough fix
 5. ~~**PM crash loop**~~ — FIXED (pnpm install + pm2 restart)
@@ -222,7 +222,7 @@ Fix chain:
 - recoder-frontend Docker image rebuilt with error display fix (image b177716a22bd)
 - recoder-backend restarted with Gemini-safe message cleaning (llm.py)
 - Security incident fully remediated (XMRig miner, CVE-2025-66478)
-- Latest live verification: Agency authenticated smoke is clean, Agents standard coding flow is clean on rerun, PM `/insights` is clean after a fresh host rebuild, PM copilot still returns `503`, and Web still reports the OpenCode empty-body failure during a real prompt run
+- Latest live verification: Agency authenticated smoke is clean, Agents standard coding flow is clean on rerun, PM `/insights` is clean after a fresh host rebuild, PM copilot still fails and is now narrowed to missing org AI config plus intermittent incomplete API-route build artifacts, and Web still reports the OpenCode empty-body failure during a real prompt run
 
 ## Pi Integration Strategy
 
