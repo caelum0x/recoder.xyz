@@ -142,6 +142,7 @@ generate_hatchet_keysets() {
 
   HATCHET_MASTER_ENCRYPTION_KEY="$(tr -d '\r\n' < "${key_dir}/master.key")"
   HATCHET_JWT_SECRET="$(tr -d '\r\n' < "${key_dir}/private_ec256.key")"
+  HATCHET_JWT_PUBLIC_KEYSET="$(tr -d '\r\n' < "${key_dir}/public_ec256.key")"
 
   rm -rf "${key_dir}"
 }
@@ -167,12 +168,16 @@ fi
 if [ -z "${HATCHET_JWT_SECRET:-}" ]; then
   HATCHET_JWT_SECRET="$(remote_env_value HATCHET_JWT_SECRET)"
 fi
+if [ -z "${HATCHET_JWT_PUBLIC_KEYSET:-}" ]; then
+  HATCHET_JWT_PUBLIC_KEYSET="$(remote_env_value HATCHET_JWT_PUBLIC_KEYSET)"
+fi
 if [[ -n "${HATCHET_COOKIE_SECRETS:-}" && "${HATCHET_COOKIE_SECRETS}" == *,* && "${HATCHET_COOKIE_SECRETS}" != *" "* ]]; then
   HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS//,/ }"
 fi
 if looks_like_legacy_hatchet_secret "${HATCHET_MASTER_ENCRYPTION_KEY:-}" || looks_like_legacy_hatchet_secret "${HATCHET_JWT_SECRET:-}"; then
   HATCHET_MASTER_ENCRYPTION_KEY=""
   HATCHET_JWT_SECRET=""
+  HATCHET_JWT_PUBLIC_KEYSET=""
 fi
 
 if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
@@ -198,14 +203,14 @@ if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
   HATCHET_COOKIE_SECRETS="$(openssl rand -hex 32) $(openssl rand -hex 32)"
   echo "Generated HATCHET_COOKIE_SECRETS"
 fi
-if [ -z "${HATCHET_MASTER_ENCRYPTION_KEY:-}" ] || [ -z "${HATCHET_JWT_SECRET:-}" ]; then
+if [ -z "${HATCHET_MASTER_ENCRYPTION_KEY:-}" ] || [ -z "${HATCHET_JWT_SECRET:-}" ] || [ -z "${HATCHET_JWT_PUBLIC_KEYSET:-}" ]; then
   generate_hatchet_keysets
   echo "Generated Hatchet encryption keysets"
 fi
 
 echo "=== Phase 1b: Validate generated secrets ==="
 missing_vars=0
-for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD HATCHET_COOKIE_SECRETS HATCHET_MASTER_ENCRYPTION_KEY HATCHET_JWT_SECRET; do
+for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD HATCHET_COOKIE_SECRETS HATCHET_MASTER_ENCRYPTION_KEY HATCHET_JWT_SECRET HATCHET_JWT_PUBLIC_KEYSET; do
   eval val="\${${var_name}:-}"
   if [ -z "$val" ]; then
     echo "FATAL: ${var_name} is empty after generation phase"
@@ -266,6 +271,7 @@ OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS}"
 HATCHET_MASTER_ENCRYPTION_KEY=${HATCHET_MASTER_ENCRYPTION_KEY}
 HATCHET_JWT_SECRET=${HATCHET_JWT_SECRET}
+HATCHET_JWT_PUBLIC_KEYSET=${HATCHET_JWT_PUBLIC_KEYSET}
 INNEREOF
 chmod 600 .env
 
