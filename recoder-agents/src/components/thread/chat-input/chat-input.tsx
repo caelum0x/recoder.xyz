@@ -117,6 +117,12 @@ const IsolatedTextarea = memo(forwardRef<HTMLTextAreaElement, IsolatedTextareaPr
   useEffect(() => {
     valueRef.current = value;
   }, [value, valueRef]);
+
+  // In controlled mode, keep the internal textarea state aligned with the
+  // parent value without re-triggering onChange.
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
   
   // Notify parent when hasContent changes (but not on every keystroke)
   useEffect(() => {
@@ -1149,12 +1155,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
     }, []);
 
     useEffect(() => {
-      if (controlledValue !== undefined && controlledValue !== valueRef.current) {
-        const textarea = textareaRef.current as any;
-        if (textarea?.clearValue) {
-          textarea.clearValue();
-          if (controlledValue) textarea.appendValue(controlledValue);
-        }
+      if (controlledValue !== undefined) {
         valueRef.current = controlledValue;
       }
     }, [controlledValue]);
@@ -1543,7 +1544,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
         onHasContentChange={handleHasContentChange}
         onMenuTriggerChange={handleMenuTriggerChange}
       />
-    ), [animatedPlaceholder, disabled, isDraggingOver, handleTextareaSubmit, handlePaste, hasFiles, loading, isAgentRunning, isUploading, handleHasContentChange, handleMenuTriggerChange]);
+    ), [animatedPlaceholder, controlledValue, controlledOnChange, disabled, isDraggingOver, handleTextareaSubmit, handlePaste, hasFiles, loading, isAgentRunning, isUploading, handleHasContentChange, handleMenuTriggerChange]);
 
     // Stable callbacks for opening dialogs - don't need to be in deps
     const handleOpenRegistry = useCallback((slug: string | null) => {
