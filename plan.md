@@ -29,6 +29,7 @@ Last updated: 2026-04-13 (later)
 - **zrok** is part of the live connection/link and agent communication story.
 - **SearXNG** is part of the self-hosted search stack on the server.
 - **Lightpanda browser** is part of the server-side browser / automation capability stack.
+- **Pi agents** are also available on the server as part of the coding/runtime service layer.
 
 ### Current Infra Constraint
 
@@ -41,7 +42,7 @@ Last updated: 2026-04-13 (later)
 - **Core product / platform:** [`app`](/Users/arhansubasi/recoder.xyz/app), [`backend`](/Users/arhansubasi/recoder.xyz/backend), [`docker-backend`](/Users/arhansubasi/recoder.xyz/docker-backend), [`shared`](/Users/arhansubasi/recoder.xyz/shared), [`packages`](/Users/arhansubasi/recoder.xyz/packages)
 - **Primary product surfaces:** [`recoder-web`](/Users/arhansubasi/recoder.xyz/recoder-web), [`recoder-pm`](/Users/arhansubasi/recoder.xyz/recoder-pm), [`recoder-agency`](/Users/arhansubasi/recoder.xyz/recoder-agency), [`recoder-agents`](/Users/arhansubasi/recoder.xyz/recoder-agents), [`packages/recoder-code`](/Users/arhansubasi/recoder.xyz/packages/recoder-code)
 - **Infra / runtime / communication layers:** [`nginx`](/Users/arhansubasi/recoder.xyz/nginx), [`mcp`](/Users/arhansubasi/recoder.xyz/mcp), [`opencode`](/Users/arhansubasi/recoder.xyz/opencode), [`openclaw`](/Users/arhansubasi/recoder.xyz/openclaw)
-- **Server-side capabilities also in use:** self-hosted **SearXNG** search and **Lightpanda** browser automation/runtime on the Hetzner server
+- **Server-side capabilities also in use:** self-hosted **SearXNG** search, **Lightpanda** browser automation/runtime, and **Pi agents** on the Hetzner server
 - **Parity / extracted / tooling surfaces:** [`claw-code-parity`](/Users/arhansubasi/recoder.xyz/claw-code-parity), [`extracted-from-openclaw`](/Users/arhansubasi/recoder.xyz/extracted-from-openclaw), [`oh-my-codex`](/Users/arhansubasi/recoder.xyz/oh-my-codex), [`oh-my-openagent`](/Users/arhansubasi/recoder.xyz/oh-my-openagent)
 
 ### Latest production errors (2026-04-09)
