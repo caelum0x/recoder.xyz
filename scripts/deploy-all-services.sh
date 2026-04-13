@@ -125,6 +125,27 @@ remote_env_value() {
   printf '%s' "$raw"
 }
 
+looks_like_legacy_hatchet_secret() {
+  local value="${1:-}"
+  [[ -n "$value" && "$value" =~ ^[0-9a-fA-F]{64}$ ]]
+}
+
+generate_hatchet_keysets() {
+  local key_dir
+  key_dir="$(mktemp -d)"
+
+  docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "${key_dir}:/hatchet/keys" \
+    ghcr.io/hatchet-dev/hatchet/hatchet-admin:latest \
+    /hatchet/hatchet-admin keyset create-local-keys --key-dir /hatchet/keys >/dev/null
+
+  HATCHET_MASTER_ENCRYPTION_KEY="$(tr -d '\r\n' < "${key_dir}/master.key")"
+  HATCHET_JWT_SECRET="$(tr -d '\r\n' < "${key_dir}/private_ec256.key")"
+
+  rm -rf "${key_dir}"
+}
+
 if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
   RECODER_A2A_SHARED_SECRET="$(remote_env_value RECODER_A2A_SHARED_SECRET)"
 fi
@@ -148,6 +169,10 @@ if [ -z "${HATCHET_JWT_SECRET:-}" ]; then
 fi
 if [[ -n "${HATCHET_COOKIE_SECRETS:-}" && "${HATCHET_COOKIE_SECRETS}" == *,* && "${HATCHET_COOKIE_SECRETS}" != *" "* ]]; then
   HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS//,/ }"
+fi
+if looks_like_legacy_hatchet_secret "${HATCHET_MASTER_ENCRYPTION_KEY:-}" || looks_like_legacy_hatchet_secret "${HATCHET_JWT_SECRET:-}"; then
+  HATCHET_MASTER_ENCRYPTION_KEY=""
+  HATCHET_JWT_SECRET=""
 fi
 
 if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
@@ -173,13 +198,9 @@ if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
   HATCHET_COOKIE_SECRETS="$(openssl rand -hex 32) $(openssl rand -hex 32)"
   echo "Generated HATCHET_COOKIE_SECRETS"
 fi
-if [ -z "${HATCHET_MASTER_ENCRYPTION_KEY:-}" ]; then
-  HATCHET_MASTER_ENCRYPTION_KEY=$(openssl rand -hex 32)
-  echo "Generated HATCHET_MASTER_ENCRYPTION_KEY"
-fi
-if [ -z "${HATCHET_JWT_SECRET:-}" ]; then
-  HATCHET_JWT_SECRET=$(openssl rand -hex 32)
-  echo "Generated HATCHET_JWT_SECRET"
+if [ -z "${HATCHET_MASTER_ENCRYPTION_KEY:-}" ] || [ -z "${HATCHET_JWT_SECRET:-}" ]; then
+  generate_hatchet_keysets
+  echo "Generated Hatchet encryption keysets"
 fi
 
 echo "=== Phase 1b: Validate generated secrets ==="
