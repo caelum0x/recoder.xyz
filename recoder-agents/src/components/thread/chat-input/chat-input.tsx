@@ -1156,6 +1156,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
           if (controlledValue) textarea.appendValue(controlledValue);
         }
         valueRef.current = controlledValue;
+      }
+    }, [controlledValue]);
+
+    useEffect(() => {
+      if (controlledValue !== undefined) {
         setHasContent(controlledValue.trim().length > 0);
       }
     }, [controlledValue]);
@@ -1523,6 +1528,7 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
     const renderTextArea = useMemo(() => (
       <IsolatedTextarea
         ref={textareaRef}
+        initialValue={controlledValue ?? ''}
         placeholder={animatedPlaceholder}
         disabled={disabled}
         isDraggingOver={isDraggingOver}
