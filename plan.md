@@ -71,7 +71,8 @@ Launch-prep tracking ticket: `recoder-l7a`
 **Day 6 — launch hardening**
 - [ ] Run auth, billing, onboarding, and error-state smoke tests across recoder.xyz, Web, Agents, PM, and Agency
   - Public smoke (`scripts/e2e-platform-check.mjs`) now passes on entry surfaces for PM, Agency, Agents, Web, and recoder.xyz with no top-level 5xx failures
-  - 2026-04-13 authenticated PM smoke now reaches `/insights` with HTTP `200` and no longer reproduces live `React #418`; remaining PM issues are narrower: background `503` prefetches on linked `/features` and `/releases` routes, and the copilot launcher still does not appear in the smoke path
+  - 2026-04-13 authenticated PM smoke now reaches `/insights` with HTTP `200` and no longer reproduces live `React #418`
+  - Later 2026-04-13 authenticated PM smoke (`scripts/e2e-pm-authenticated.mjs`) still loads `/insights` with HTTP `200`, but the concrete live failure recorded in that run is `500 /api/auth/session` plus a generic Server Components production console error; PM follow-up should prioritize the auth-session path and then re-check background prefetch noise and copilot launcher visibility
   - 2026-04-13 Agents `/v1` API outage is mitigated: the missing host PM2 backend on `127.0.0.1:8000` was restored and direct authenticated probes to `/v1/system/status`, `/v1/agents`, `/v1/threads`, `/v1/teams`, `/v1/accounts`, and `/v1/agent-runs/active` now return `200`
   - 2026-04-13 authenticated live coding smoke (`scripts/e2e-agents-coding.mjs`) successfully loaded `https://agents.recoder.xyz/`, submitted a coding prompt, received agent response content, and recorded `0` `5xx` requests during that run
   - Remaining Agents follow-up: Deep Coding mode still needs post-fix verification after a local submit-path patch so the selected mode is always included in the chat-input submit callback
@@ -96,7 +97,7 @@ Launch-prep tracking ticket: `recoder-l7a`
 | **web** | web.recoder.xyz | **Degraded** — container startup works, but production chat requests can fail with OpenCode empty-body `500`s and preview URLs can still return `503` after the container is marked ready. |
 | **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). Shared task board UI is now implemented in Agents collaboration rooms via mirrored `todo-board:*` scratchpad state, pending deploy verification. |
 | **Docs** | docs.recoder.xyz | **Live** — Astro/Starlight site with A2A docs, API reference, getting-started, BYOK, MCP tools, self-hosting guides. nginx routing added to port 3008. |
-| **PM** | pm.recoder.xyz | **Degraded** — host runtime is back and authenticated `/insights` now returns HTTP `200` without reproducing live `React #418`, but PM still has unresolved background `503` prefetches and the copilot launcher is not appearing in the smoke path, so deploy verification is not complete. |
+| **PM** | pm.recoder.xyz | **Degraded** — host runtime is back and authenticated `/insights` now returns HTTP `200` without reproducing live `React #418`, but PM still has an authenticated `500 /api/auth/session` failure in live smoke, plus unresolved background prefetch noise and missing copilot launcher visibility, so deploy verification is not complete. |
 | **Agency** | agency.recoder.xyz | **Degraded** — host runtime is back and authenticated dashboard/workspaces/playground/settings now return HTTP `200`, but `/tasks` and related RSC requests still return `503`, so deploy verification is not complete. |
 | **recoder.xyz** | recoder.xyz | **Auth working** — Better Auth, Google/GitHub OAuth, email sign-in all functional. Email delivery needs Postfix (being set up). |
 
