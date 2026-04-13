@@ -93,12 +93,12 @@ Launch-prep tracking ticket: `recoder-l7a`
 
 | Platform | URL | Status |
 |----------|-----|--------|
-| **agents** | agents.recoder.xyz | **Partially verified** — core `/v1` APIs are back after restoring the missing host PM2 backend on `:8000`, and an authenticated live coding smoke successfully submitted a prompt and received agent output with `0` `5xx`s. Deep Coding mode still needs post-fix verification after a local submit-path patch. |
+| **agents** | agents.recoder.xyz | **Verified for current launch path** — core `/v1` APIs are back after restoring the missing host PM2 backend on `:8000`, the original `recoder-ea7` thread/message/agent-run endpoints now return `200`, and authenticated live coding smoke now completes with `0` `5xx`s. Deep Coding mode still needs separate follow-up verification. |
 | **web** | web.recoder.xyz | **Degraded** — container startup works, but production chat requests can fail with OpenCode empty-body `500`s and preview URLs can still return `503` after the container is marked ready. |
 | **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). Shared task board UI is now implemented in Agents collaboration rooms via mirrored `todo-board:*` scratchpad state, pending deploy verification. |
 | **Docs** | docs.recoder.xyz | **Live** — Astro/Starlight site with A2A docs, API reference, getting-started, BYOK, MCP tools, self-hosting guides. nginx routing added to port 3008. |
-| **PM** | pm.recoder.xyz | **Degraded** — host runtime is back and authenticated `/insights` now returns HTTP `200` without reproducing live `React #418`, but PM still has an authenticated `500 /api/auth/session` failure in live smoke, plus unresolved background prefetch noise and missing copilot launcher visibility, so deploy verification is not complete. |
-| **Agency** | agency.recoder.xyz | **Degraded** — host runtime is back and authenticated dashboard/workspaces/playground/settings now return HTTP `200`, but `/tasks` and related RSC requests still return `503`, so deploy verification is not complete. |
+| **PM** | pm.recoder.xyz | **Degraded** — authenticated `/api/auth/session` is fixed again and direct authenticated `/insights` requests now return `200`, but browser verification still hits missing `/_next/static/chunks/*.js` assets returning `500`, so PM is now blocked on build finalization rather than auth/session or React `#418`. |
+| **Agency** | agency.recoder.xyz | **Verified for current launch path** — authenticated dashboard/workspaces/playground/tasks/settings now load with HTTP `200`, and the full authenticated smoke records `0` `5xx` network errors after the shared DB password was corrected. |
 | **recoder.xyz** | recoder.xyz | **Auth working** — Better Auth, Google/GitHub OAuth, email sign-in all functional. Email delivery needs Postfix (being set up). |
 
 ### What each platform needs to be "working end to end"
@@ -132,8 +132,8 @@ Fix chain:
 - [x] System prompt updated: agent now knows to run npm install + vite dev + expose_port for React projects
 - [x] E2E test: React landing page → **PASS**. Agent creates package.json, vite.config.js, index.html, src/main.jsx, src/App.jsx + runs npm install (10min in sandbox). Root cause was Daytona DB disk full (/dev/sdb 50GB), not server RAM. Freed 34GB, restarted Daytona. Memory optimization (lazy litellm) saved ~350MB per worker.
 - [x] Production page-level regressions — FIXED IN CODE: app health gating only trips on confirmed down status, and `/v1` proxy routes now bypass app auth at the matcher boundary; deploy verification still pending (`recoder-kax`)
-- [x] Production thread detail regressions — FIXED IN CODE: direct thread lookup now falls back to paginated thread lists, missing message/run collections resolve to empty instead of hard-failing the view, and thread detail queries no longer retry terminal `404`s; focused recoder-agents tests pass, deploy verification still pending (`recoder-ea7`)
-- [x] Live updates / toolkit assets degraded — FIXED IN CODE: same-origin `/v1` proxy routes bypass app auth middleware so tokenized stream and Composio icon requests reach the backend proxy; deploy verification still pending (`recoder-dat`)
+- [x] Production thread detail regressions — FIXED AND LIVE-VERIFIED: the original `recoder-ea7` thread detail, messages, and agent-runs endpoints now return `200`, and the authenticated coding smoke completes cleanly after the backend/PM2 recovery.
+- [x] Live updates / toolkit assets degraded — FIXED AND LIVE-VERIFIED: same-origin `/v1` proxy routes now reach the backend correctly, and authenticated coding smoke no longer records `5xx` failures on the rerun (`recoder-dat`)
 
 **web.recoder.xyz — must support continuous development:**
 - [x] OpenCode coding loop works (message → agent thinks → files created in sandbox)
@@ -156,10 +156,10 @@ Fix chain:
 
 **pm.recoder.xyz:**
 - [x] Fix `Cannot find module '@logtail/next'` — pnpm install restored broken symlink
-- [ ] Verify copilot read+write works after restart — authenticated browser smoke test now exists in `scripts/e2e-pm-authenticated.mjs` via `PM_E2E_COPILOT_PROMPT`, and current live production still returns `503` from `/api/insights/chat` until deploy
+- [ ] Verify copilot read+write works after restart — `scripts/e2e-pm-authenticated.mjs` now supports passing shared session-data via `RECODER_SESSION_DATA`, but browser verification is still blocked by `/insights` loading with missing `/_next/static/chunks/*.js` assets returning `500`
 - [x] Auth unified — `.recoder.xyz` session cookie works across all subdomains (verified: recoder.xyz, agents, agency, PM, web all return 200 with same session)
 - [ ] Production bundle regression — original report was `ad36cc6263efb746.js` throwing `Unexpected token 'export'`; direct asset fetch now returns valid JS, an authenticated `/insights` bundle sweep finds no loaded Next chunk with a top-level raw `export`, Turbopack root is pinned to the repo root in code to prevent host-level lockfile mis-resolution, and the PM app-switcher no longer imports `@recoder/ecosystem-config` at runtime. Still open pending deploy + live recheck (`recoder-mtq`)
-- [x] Production React crash — FIXED IN CODE: removed PM app hydration-risk text mismatches in breadcrumbs/home greeting, gated unstable provider/chart surfaces, fixed the roadmap Gantt sidebar's time-relative duration text, and made shared chart tooltip number formatting deterministic so `/insights` has fewer locale-sensitive text hydration surfaces; PM app compile build passes, deploy verification still pending (`recoder-lyz`)
+- [x] Production React crash — FIXED IN CODE and no longer reproduced in live auth/session checks, but PM still is not fully launch-ready because `/insights` now fails later in the browser on missing client chunks from the compile-only build (`recoder-lyz`)
 - [x] Insights chat unavailable — FIXED IN CODE: `/api/insights/chat` now resolves OpenRouter credentials/model from org BYOK state before falling back to server env; PM app compile build passes, and the authenticated smoke script can now exercise the Insights copilot path directly. Current production still returns `503` until deploy verification (`recoder-01e`)
 
 **agency.recoder.xyz:**
@@ -172,15 +172,14 @@ Fix chain:
 - [x] GitHub Trigger flow — FIXED IN CODE: team GitHub integration/vector-store entry points now use direct GitHub connect/reconnect actions instead of dead-end account-auth links; deploy verification still pending (`recoder-138`)
 - [x] Task detail page regression — FIXED IN CODE: task detail now prefers task name and stored aggregate counts instead of rendering false placeholder state; terminal tasks with no outputs no longer display `Running...`; deploy verification still pending (`recoder-9a3`)
 - [x] `Workflows` and `Settings` launch-hostile stubs — FIXED IN CODE: misleading admin sidebar links were removed and `/settings` redirects to `/settings/team`; deploy verification still pending (`recoder-bm4`)
-- [x] Authenticated app-route smoke — FIXED IN CODE: `/tasks` now degrades when individual Giselle task fetches fail, `/settings/team/integrations` catches GitHub integration exceptions, and `/workspaces` tolerates enrichment failures; deploy verification still pending (`recoder-5ig`)
+- [x] Authenticated app-route smoke — FIXED AND LIVE-VERIFIED: `/dashboard`, `/workspaces`, `/playground`, `/tasks`, and `/settings/team` now all return `200`, and the full authenticated smoke records `0` `5xx` network errors (`recoder-5ig`)
 
 ## Current Blockers (Priority Order)
 
-1. **Web production regressions** — OpenCode prompt execution can fail with empty-body `500`s and preview URLs can still return `503` after the container is marked ready
-2. **Agents production regressions** — app pages are returning `503`, thread/message/run APIs return `404`, and live stream/toolkit endpoints are failing in production
-3. **Agency production regressions** — GitHub Trigger onboarding is broken, task detail route `/tasks/tsk-YpZhaKz77m7hXtUR` renders placeholder UI, and `Workflows` / `Settings` look stubbed
-4. **Agency authenticated route stability** — launch-hardening smoke showed `/tasks` and related RSC fetches returning `503` in production, but a code-side hardening patch is now in place pending deploy verification (`recoder-5ig`)
-5. **PM production regressions** — production bundle throws `Unexpected token 'export'`, React runtime crashes with minified error `#418`, and `/api/insights/chat` returns `503 AI service not configured`
+1. **PM `/insights` build finalization** — authenticated `/api/auth/session` is fixed again, but browser verification still hits missing `/_next/static/chunks/*.js` assets returning `500`, so PM is not yet end-to-end healthy
+2. **PM copilot verification** — `/api/insights/chat` still needs a clean authenticated browser verification pass after the chunk/build issue is resolved
+3. **Web production verification** — Web fixes are deployed in code history, but the current status file still needs a fresh post-recovery prompt → file creation → preview production rerun
+4. **Deep Coding mode verification** — standard Agents coding flow is green, but Deep Coding mode still needs a post-fix browser verification pass
 5. ~~**PM crash loop**~~ — FIXED (pnpm install + pm2 restart)
 6. ~~**Pi agent not deployed**~~ — DEPLOYED (Pi SDK verified in docker-backend container)
 7. ~~**recoder-web with Pi routing**~~ — DEPLOYED (pi-exec.ts + api.chat.ts routing live)
@@ -216,6 +215,7 @@ Fix chain:
 
 - Core deploy surface is up: `recoder-app`, `recoder-web`, `recoder-frontend`, `recoder-docker-backend`, and `openclaw-gateway` are healthy on Hetzner
 - PM and Agency host runtimes are restored via PM2 on `127.0.0.1:3004` and `127.0.0.1:3007`, so nginx no longer returns edge `502` for those apps
+- The shared `recoder` Postgres password was corrected again on Hetzner, which cleared the live PM auth-session failure and the Agency `/tasks` auth/runtime failures
 - Agents host backend is restored via PM2 on `127.0.0.1:8000`, so nginx `/v1` proxy targets no longer fail at the edge
 - `recoder-hatchet-api` is configured for postgres-backed queue mode in [`docker-compose.deploy.yml`](/Users/arhansubasi/recoder.xyz/docker-compose.deploy.yml:666), with Hatchet encryption keysets wired and a live API healthcheck on `/api/live`; the older RabbitMQ-specific blocker note is obsolete and should no longer be treated as current truth
 - PostgreSQL 17 recovered from stuck recovery mode
@@ -223,7 +223,7 @@ Fix chain:
 - recoder-frontend Docker image rebuilt with error display fix (image b177716a22bd)
 - recoder-backend restarted with Gemini-safe message cleaning (llm.py)
 - Security incident fully remediated (XMRig miner, CVE-2025-66478)
-- E2E verified: 18 PASS, 0 FAIL across all 5 platforms
+- Latest live verification: Agency authenticated smoke is clean, Agents standard coding flow is clean on rerun, and PM auth/session is fixed but `/insights` still serves missing browser chunks
 
 ## Pi Integration Strategy
 

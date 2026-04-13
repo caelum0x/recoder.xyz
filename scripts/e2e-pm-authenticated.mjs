@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 
 const PM_URL = process.env.PM_URL || "https://pm.recoder.xyz/insights";
 const SESSION_TOKEN = process.env.RECODER_SESSION_TOKEN;
+const SESSION_DATA = process.env.RECODER_SESSION_DATA;
 const TIMEOUT = Number(process.env.PM_E2E_TIMEOUT_MS || "30000");
 const SCREENSHOT_PATH =
   process.env.PM_E2E_SCREENSHOT || "pm-authenticated-e2e.png";
@@ -35,6 +36,20 @@ await context.addCookies([
     sameSite: "Lax",
   },
 ]);
+
+if (SESSION_DATA) {
+  await context.addCookies([
+    {
+      name: "_Secure-recoder.session_data",
+      value: SESSION_DATA,
+      domain: ".recoder.xyz",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+    },
+  ]);
+}
 
 const page = await context.newPage();
 const consoleErrors = [];
