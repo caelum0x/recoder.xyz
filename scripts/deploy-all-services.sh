@@ -140,6 +140,12 @@ fi
 if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
   HATCHET_COOKIE_SECRETS="$(remote_env_value HATCHET_COOKIE_SECRETS)"
 fi
+if [ -z "${HATCHET_MASTER_ENCRYPTION_KEY:-}" ]; then
+  HATCHET_MASTER_ENCRYPTION_KEY="$(remote_env_value HATCHET_MASTER_ENCRYPTION_KEY)"
+fi
+if [ -z "${HATCHET_JWT_SECRET:-}" ]; then
+  HATCHET_JWT_SECRET="$(remote_env_value HATCHET_JWT_SECRET)"
+fi
 if [[ -n "${HATCHET_COOKIE_SECRETS:-}" && "${HATCHET_COOKIE_SECRETS}" == *,* && "${HATCHET_COOKIE_SECRETS}" != *" "* ]]; then
   HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS//,/ }"
 fi
@@ -167,10 +173,18 @@ if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
   HATCHET_COOKIE_SECRETS="$(openssl rand -hex 32) $(openssl rand -hex 32)"
   echo "Generated HATCHET_COOKIE_SECRETS"
 fi
+if [ -z "${HATCHET_MASTER_ENCRYPTION_KEY:-}" ]; then
+  HATCHET_MASTER_ENCRYPTION_KEY=$(openssl rand -hex 32)
+  echo "Generated HATCHET_MASTER_ENCRYPTION_KEY"
+fi
+if [ -z "${HATCHET_JWT_SECRET:-}" ]; then
+  HATCHET_JWT_SECRET=$(openssl rand -hex 32)
+  echo "Generated HATCHET_JWT_SECRET"
+fi
 
 echo "=== Phase 1b: Validate generated secrets ==="
 missing_vars=0
-for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD HATCHET_COOKIE_SECRETS; do
+for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD HATCHET_COOKIE_SECRETS HATCHET_MASTER_ENCRYPTION_KEY HATCHET_JWT_SECRET; do
   eval val="\${${var_name}:-}"
   if [ -z "$val" ]; then
     echo "FATAL: ${var_name} is empty after generation phase"
@@ -181,7 +195,7 @@ if [ "$missing_vars" -eq 1 ]; then
   echo "Cannot proceed — secret generation failed."
   exit 1
 fi
-echo "All 4 secrets validated."
+echo "All Hatchet and platform secrets validated."
 
 echo "=== Phase 2: Sync code to server ==="
 
@@ -221,6 +235,8 @@ RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
 RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS}"
+HATCHET_MASTER_ENCRYPTION_KEY=${HATCHET_MASTER_ENCRYPTION_KEY}
+HATCHET_JWT_SECRET=${HATCHET_JWT_SECRET}
 INNEREOF
 chmod 600 .env
 
