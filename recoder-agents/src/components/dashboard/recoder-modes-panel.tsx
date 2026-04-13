@@ -1168,9 +1168,15 @@ export function RecoderModesPanel({
               <motion.button
                 key={mode.id}
                 onClick={() => {
-                  setModalMode(mode.id);
-                  setIsModalOpen(true);
-                  // Don't select the mode yet - only select when user makes a choice in the modal
+                  onModeSelect(mode.id);
+                  storeSetSelectedMode(mode.id);
+                  if (mode.id !== 'deep-coding') {
+                    setModalMode(mode.id);
+                    setIsModalOpen(true);
+                  } else {
+                    setModalMode(null);
+                    setIsModalOpen(false);
+                  }
                 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -1950,6 +1956,10 @@ export function RecoderModesPanel({
 
       {/* Mode Selection Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => {
+        if (!open && modalMode) {
+          onModeSelect(modalMode);
+          storeSetSelectedMode(modalMode);
+        }
         setIsModalOpen(open);
         if (!open) {
           setModalMode(null);
