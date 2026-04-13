@@ -19,7 +19,7 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 PRISMA_DST="prisma/auth-client"
-PRISMA_REL="../../../packages/backend/prisma/auth-client"
+PRISMA_REL="../../../../packages/auth/prisma/auth-client"
 
 mkdir -p "$(dirname "$PRISMA_DST")"
 rm -f "$PRISMA_DST"

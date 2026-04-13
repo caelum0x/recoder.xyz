@@ -15,17 +15,22 @@ import { toUser } from "./index";
  * Returns the User with user_metadata compatibility layer, or null.
  */
 export const getSessionUser = async (): Promise<User | null> => {
-  const cookieStore = await cookies();
-  const session = await verifySession(
-    (name) => cookieStore.get(name)?.value ?? null
-  );
+  try {
+    const cookieStore = await cookies();
+    const session = await verifySession(
+      (name) => cookieStore.get(name)?.value ?? null
+    );
 
-  if (!session) {
+    if (!session) {
+      return null;
+    }
+
+    const profile = await ensureProfile(session.user);
+    return toUser(session.user, profile);
+  } catch (error) {
+    console.error("Failed to resolve PM session user:", error);
     return null;
   }
-
-  const profile = await ensureProfile(session.user);
-  return toUser(session.user, profile);
 };
 
 const ensureProfile = async (
