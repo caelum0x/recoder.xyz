@@ -131,6 +131,9 @@ fi
 if [ -z "${REDIS_PASSWORD:-}" ]; then
   REDIS_PASSWORD="$(remote_env_value REDIS_PASSWORD)"
 fi
+if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
+  HATCHET_COOKIE_SECRETS="$(remote_env_value HATCHET_COOKIE_SECRETS)"
+fi
 
 if [ -z "${RECODER_A2A_SHARED_SECRET:-}" ]; then
   RECODER_A2A_SHARED_SECRET=$(openssl rand -hex 32)
@@ -151,10 +154,14 @@ if [ -z "${REDIS_PASSWORD:-}" ]; then
   REDIS_PASSWORD=$(openssl rand -hex 24)
   echo "Generated REDIS_PASSWORD"
 fi
+if [ -z "${HATCHET_COOKIE_SECRETS:-}" ]; then
+  HATCHET_COOKIE_SECRETS="$(openssl rand -hex 32),$(openssl rand -hex 32)"
+  echo "Generated HATCHET_COOKIE_SECRETS"
+fi
 
 echo "=== Phase 1b: Validate generated secrets ==="
 missing_vars=0
-for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD; do
+for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD HATCHET_COOKIE_SECRETS; do
   eval val="\${${var_name}:-}"
   if [ -z "$val" ]; then
     echo "FATAL: ${var_name} is empty after generation phase"
@@ -204,6 +211,7 @@ REDIS_PASSWORD=${REDIS_PASSWORD}
 RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
 RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+HATCHET_COOKIE_SECRETS=${HATCHET_COOKIE_SECRETS}
 INNEREOF
 chmod 600 .env
 
