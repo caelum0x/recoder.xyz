@@ -1,6 +1,7 @@
+import { RecoderPmRole } from "@repo/backend/auth";
 import { withOrganizationSystemPrompt } from "@repo/backend/ai-prompts";
 import { decryptApiKey } from "@repo/backend/ai-keys";
-import { currentOrganizationId, currentUser } from "@repo/backend/auth/utils";
+import { currentUser } from "@repo/backend/auth/utils";
 import { contentToText } from "@repo/editor/lib/tiptap";
 import { log } from "@repo/observability/log";
 import { database } from "@/lib/database";
@@ -57,6 +58,115 @@ type OpenRouterConfig = {
   apiKey: string;
   model: string;
 };
+
+type SessionCookieUser = {
+  id: string;
+  email: string;
+  hasOwnApiKey?: boolean;
+  openRouterApiKey?: string | null;
+  user_metadata?: {
+    organization_id?: string | null;
+    organization_role?: string | null;
+    [key: string]: unknown;
+  };
+};
+
+const SESSION_DATA_COOKIE_NAMES = [
+  "_Secure-recoder.session_data",
+  "__Secure-recoder.session_data",
+  "recoder.session_data",
+] as const;
+
+function parseCookieHeader(header: string | null): Record<string, string> {
+  if (!header) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const index = part.indexOf("=");
+        if (index === -1) {
+          return [part, ""];
+        }
+        return [part.slice(0, index), part.slice(index + 1)];
+      })
+  );
+}
+
+function parseSessionDataCookie(rawValue: string | null | undefined) {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const decoded = Buffer.from(rawValue, "base64url").toString("utf8");
+    const parsed = JSON.parse(decoded) as {
+      session?: { user?: SessionCookieUser };
+    };
+
+    return parsed.session?.user ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getSessionCookieUser(req: Request): SessionCookieUser | null {
+  const cookies = parseCookieHeader(req.headers.get("cookie"));
+
+  for (const name of SESSION_DATA_COOKIE_NAMES) {
+    const user = parseSessionDataCookie(cookies[name]);
+    if (user) {
+      return user;
+    }
+  }
+
+  return null;
+}
+
+async function resolveActorFromCookie(
+  cookieUser: SessionCookieUser | null
+): Promise<{
+  actor: CopilotActor;
+  organizationId: string | null;
+} | null> {
+  if (!cookieUser?.id) {
+    return null;
+  }
+
+  const profile = await database.authUser.findUnique({
+    where: { id: cookieUser.id },
+    select: {
+      id: true,
+      organizationId: true,
+      organizationRole: true,
+    },
+  });
+
+  const organizationId =
+    profile?.organizationId ??
+    (typeof cookieUser.user_metadata?.organization_id === "string"
+      ? cookieUser.user_metadata.organization_id
+      : null);
+  const organizationRole =
+    profile?.organizationRole ??
+    (typeof cookieUser.user_metadata?.organization_role === "string"
+      ? cookieUser.user_metadata.organization_role
+      : RecoderPmRole.Member);
+
+  return {
+    actor: {
+      id: profile?.id ?? cookieUser.id,
+      user_metadata: {
+        organization_role: organizationRole,
+      },
+    },
+    organizationId,
+  };
+}
 
 // ── Content helpers ─────────────────────────────────────────────────────────
 
@@ -461,7 +571,8 @@ async function fetchWorkspaceContext(
 }
 
 async function resolveOpenRouterConfig(
-  organizationId: string
+  organizationId: string,
+  cookieUser?: SessionCookieUser | null
 ): Promise<OpenRouterConfig | null> {
   const organization = await database.organization.findUnique({
     where: { id: organizationId },
@@ -482,7 +593,11 @@ async function resolveOpenRouterConfig(
   const organizationApiKey = keyRecord
     ? decryptApiKey(keyRecord.encryptedKey)
     : null;
-  const apiKey = organizationApiKey ?? OPENROUTER_API_KEY ?? null;
+  const userApiKey =
+    cookieUser?.hasOwnApiKey && typeof cookieUser.openRouterApiKey === "string"
+      ? cookieUser.openRouterApiKey
+      : null;
+  const apiKey = organizationApiKey ?? userApiKey ?? OPENROUTER_API_KEY ?? null;
 
   if (!apiKey) {
     return null;
@@ -679,11 +794,14 @@ export const POST = async (req: Request) => {
     return validated;
   }
 
-  const { chatMessages, organizationId, actor } = validated;
+  const { chatMessages, organizationId, actor, cookieUser } = validated;
 
   try {
     const { contextString } = await fetchWorkspaceContext(organizationId);
-    const openRouterConfig = await resolveOpenRouterConfig(organizationId);
+    const openRouterConfig = await resolveOpenRouterConfig(
+      organizationId,
+      cookieUser
+    );
 
     if (!openRouterConfig) {
       log.error("Insights chat OpenRouter credentials are not configured", {
@@ -731,6 +849,7 @@ type ValidatedRequest = {
   chatMessages: Array<{ role: string; content: string }>;
   organizationId: string;
   actor: CopilotActor;
+  cookieUser: SessionCookieUser | null;
 };
 
 async function validateRequest(
@@ -743,16 +862,29 @@ async function validateRequest(
     return new Response("Invalid JSON body", { status: 400 });
   }
 
-  const { messages, organizationId } = body;
+  const cookieUser = getSessionCookieUser(req);
+  const user = await currentUser();
+  const fallbackActor = !user ? await resolveActorFromCookie(cookieUser) : null;
+  const resolvedOrganizationId =
+    typeof body.organizationId === "string" && body.organizationId.trim()
+      ? body.organizationId.trim()
+      : user?.organizationId ??
+        fallbackActor?.organizationId ??
+        null;
 
-  if (!organizationId) {
+  if (!resolvedOrganizationId) {
     return new Response("Organization ID required", { status: 400 });
   }
 
+  const { messages } = body;
+  const cookieUser = getSessionCookieUser(req);
+
   // Verify the authenticated user belongs to this organization
-  const user = await currentUser();
-  const userOrgId = await currentOrganizationId();
-  if (!(user && userOrgId) || userOrgId !== organizationId) {
+  const actor = user ?? fallbackActor?.actor ?? null;
+  const actorOrganizationId =
+    user?.organizationId ?? fallbackActor?.organizationId ?? null;
+
+  if (!actor || !actorOrganizationId || actorOrganizationId !== resolvedOrganizationId) {
     return new Response("Unauthorized", { status: 403 });
   }
 
@@ -774,5 +906,10 @@ async function validateRequest(
     return new Response("No message content", { status: 400 });
   }
 
-  return { chatMessages, organizationId, actor: user };
+  return {
+    chatMessages,
+    organizationId: resolvedOrganizationId,
+    actor,
+    cookieUser,
+  };
 }

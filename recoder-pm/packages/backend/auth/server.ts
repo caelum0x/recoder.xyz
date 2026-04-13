@@ -10,6 +10,44 @@ import { database } from "../database";
 import type { AuthProfile, User } from "./index";
 import { toUser } from "./index";
 
+type SessionCookieUser = {
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  name?: string | null;
+  image?: string | null;
+  createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
+};
+
+const SESSION_DATA_COOKIE_NAMES = [
+  "_Secure-recoder.session_data",
+  "__Secure-recoder.session_data",
+  "recoder.session_data",
+] as const;
+
+function parseSessionDataCookie(rawValue: string | null | undefined) {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const decoded = Buffer.from(rawValue, "base64url").toString("utf8");
+    const parsed = JSON.parse(decoded) as {
+      session?: { user?: SessionCookieUser };
+    };
+
+    return parsed.session?.user ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function parseDateOrFallback(value: string | Date | null | undefined) {
+  const parsed = value ? new Date(value) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
+}
+
 /**
  * Get the current authenticated user from the session cookie.
  * Returns the User with user_metadata compatibility layer, or null.
@@ -17,6 +55,31 @@ import { toUser } from "./index";
 export const getSessionUser = async (): Promise<User | null> => {
   try {
     const cookieStore = await cookies();
+    const cookieUser = SESSION_DATA_COOKIE_NAMES
+      .map((name) => parseSessionDataCookie(cookieStore.get(name)?.value))
+      .find(Boolean);
+
+    if (cookieUser) {
+      const profile = await database.authUser.findUnique({
+        where: { id: cookieUser.id },
+      });
+
+      if (profile) {
+        return toUser(
+          {
+            id: cookieUser.id,
+            email: cookieUser.email,
+            emailVerified: cookieUser.emailVerified,
+            name: cookieUser.name ?? cookieUser.email.split("@")[0],
+            image: cookieUser.image ?? null,
+            createdAt: parseDateOrFallback(cookieUser.createdAt),
+            updatedAt: parseDateOrFallback(cookieUser.updatedAt),
+          },
+          profile
+        );
+      }
+    }
+
     const session = await verifySession(
       (name) => cookieStore.get(name)?.value ?? null
     );
