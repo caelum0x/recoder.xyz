@@ -1,6 +1,6 @@
 # Recoder Platform — Current Status
 
-Last updated: 2026-04-12
+Last updated: 2026-04-13
 
 ### web.recoder.xyz coding status (latest)
 
@@ -71,9 +71,9 @@ Launch-prep tracking ticket: `recoder-l7a`
 **Day 6 — launch hardening**
 - [ ] Run auth, billing, onboarding, and error-state smoke tests across recoder.xyz, Web, Agents, PM, and Agency
   - Public smoke (`scripts/e2e-platform-check.mjs`) now passes on entry surfaces for PM, Agency, Agents, Web, and recoder.xyz with no top-level 5xx failures
-  - Authenticated PM smoke still reproduces `/insights` React `#418` and `503 /api/insights/chat`
-  - Authenticated Agents smoke still shows live `500` failures on `/v1/threads`, `/v1/system/status`, and `/v1/agents`
-  - Authenticated Agency smoke reaches dashboard/workspaces/playground/settings, but `/tasks` still returns `503`; a code-side hardening patch is now in place pending deploy verification (`recoder-5ig`)
+  - 2026-04-13 authenticated PM smoke now fails earlier at the edge: `/insights` returns HTTP `502`, so `recoder-lyz`, `recoder-01e`, and `recoder-mtq` remain unverified live
+  - 2026-04-13 authenticated Agents smoke still lands on home, but send-flow verification is blocked by stacked live warning/error toasts including HTTP `502`; deploy verification for `recoder-kax`, `recoder-dat`, and `recoder-ea7` is still not clean
+  - 2026-04-13 authenticated Agency smoke now returns HTTP `502` on `/`, `/workspaces`, `/playground`, `/tasks`, and `/settings/team`; `recoder-5ig` remains open in practice
 - [ ] Confirm production navigation only exposes working routes and working CTAs
 - [ ] Verify support/contact/legal/docs links and basic analytics/error reporting
   - Fixed in code: PM auth pages now link to public `recoder.xyz/legal/*` instead of protected `pm.recoder.xyz/legal/*`
@@ -90,12 +90,12 @@ Launch-prep tracking ticket: `recoder-l7a`
 
 | Platform | URL | Status |
 |----------|-----|--------|
-| **agents** | agents.recoder.xyz | **Degraded** — core coding path previously worked E2E. The page-level `503` regressions, stream/toolkit proxy failures, and thread-detail collection fallbacks are fixed in code pending deploy verification, but current production remains degraded until those deploys are verified. |
+| **agents** | agents.recoder.xyz | **Degraded** — auth/home currently load after deploy recovery, but authenticated send-flow verification is still blocked by live error toasts and backend failures, so `recoder-kax`, `recoder-dat`, and `recoder-ea7` are not verified closed in production yet. |
 | **web** | web.recoder.xyz | **Degraded** — container startup works, but production chat requests can fail with OpenCode empty-body `500`s and preview URLs can still return `503` after the container is marked ready. |
 | **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). Shared task board UI is now implemented in Agents collaboration rooms via mirrored `todo-board:*` scratchpad state, pending deploy verification. |
 | **Docs** | docs.recoder.xyz | **Live** — Astro/Starlight site with A2A docs, API reference, getting-started, BYOK, MCP tools, self-hosting guides. nginx routing added to port 3008. |
-| **PM** | pm.recoder.xyz | **Degraded** — auth is up. `/api/insights/chat` is fixed in code and build-verified, the `React #418` fix set now includes route-specific roadmap Gantt cleanup plus deterministic chart tooltip formatting, and the bundle fix set now includes Turbopack root pinning plus removal of the PM client runtime dependency on `@recoder/ecosystem-config`; production still needs deploy verification and `recoder-mtq` remains open until the original parse-failure path is rechecked live. |
-| **Agency** | agency.recoder.xyz | **Degraded** — core dashboard/workspaces load, but GitHub Trigger is broken, task detail pages can render dead placeholders, and `Workflows`/`Settings` appear to be non-functional stub UIs. |
+| **PM** | pm.recoder.xyz | **Degraded** — authenticated `/insights` is currently returning HTTP `502` at the edge, so the PM deploy verification pass is still blocked and `recoder-mtq`, `recoder-lyz`, and `recoder-01e` all remain open in practice. |
+| **Agency** | agency.recoder.xyz | **Degraded** — authenticated `/`, `/workspaces`, `/playground`, `/tasks`, and `/settings/team` are currently returning HTTP `502`, so Agency deploy verification remains blocked despite the local code fixes. |
 | **recoder.xyz** | recoder.xyz | **Auth working** — Better Auth, Google/GitHub OAuth, email sign-in all functional. Email delivery needs Postfix (being set up). |
 
 ### What each platform needs to be "working end to end"
@@ -211,8 +211,9 @@ Fix chain:
 
 ## What's Live & Working
 
-- All 5 platforms return HTTP 200: agents, web, PM, Agency, recoder.xyz
-- All Docker services healthy, all PM2 services online
+- Core deploy surface is up: `recoder-app`, `recoder-web`, `recoder-frontend`, `recoder-docker-backend`, and `openclaw-gateway` are healthy on Hetzner
+- PM and Agency authenticated production routes are currently returning HTTP `502`
+- `recoder-hatchet-api` remains unhealthy after deploy recovery because it still expects a RabbitMQ-backed message queue URL
 - PostgreSQL 17 recovered from stuck recovery mode
 - Redis AOF write error fixed (stop-writes-on-bgsave-error + BGREWRITEAOF)
 - recoder-frontend Docker image rebuilt with error display fix (image b177716a22bd)
