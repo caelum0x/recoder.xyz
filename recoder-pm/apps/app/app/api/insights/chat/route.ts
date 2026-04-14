@@ -597,7 +597,7 @@ async function resolveOpenRouterConfig(
     cookieUser?.hasOwnApiKey && typeof cookieUser.openRouterApiKey === "string"
       ? cookieUser.openRouterApiKey
       : null;
-  const apiKey = organizationApiKey ?? userApiKey ?? OPENROUTER_API_KEY ?? null;
+  const apiKey = organizationApiKey ?? OPENROUTER_API_KEY ?? userApiKey ?? null;
 
   if (!apiKey) {
     return null;
@@ -877,7 +877,6 @@ async function validateRequest(
   }
 
   const { messages } = body;
-  const cookieUser = getSessionCookieUser(req);
 
   // Verify the authenticated user belongs to this organization
   const actor = user ?? fallbackActor?.actor ?? null;

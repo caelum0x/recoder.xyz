@@ -17,6 +17,8 @@ import { FeaturesEmptyState } from "@/app/(organization)/features/components/fea
 import { FeaturesList } from "@/app/(organization)/features/components/features-list";
 import { database } from "@/lib/database";
 
+export const dynamic = "force-dynamic";
+
 type FeatureProductPageProperties = {
   readonly params: Promise<{
     readonly product: string;

@@ -17,6 +17,8 @@ import { getFeatures } from "@/actions/feature/list";
 import { FeaturesList } from "@/app/(organization)/features/components/features-list";
 import { database } from "@/lib/database";
 
+export const dynamic = "force-dynamic";
+
 type FeatureSeachPageProperties = {
   readonly searchParams?: Promise<{
     [key: string]: string | string[] | undefined;

@@ -18,6 +18,8 @@ import { ReleaseSettingsDropdown } from "./components/release-settings-dropdown"
 import { ReleaseStatePicker } from "./components/release-state-picker";
 import { ReleaseTitle } from "./components/release-title";
 
+export const dynamic = "force-dynamic";
+
 type ReleasePageProps = {
   params: Promise<{
     release: string;
