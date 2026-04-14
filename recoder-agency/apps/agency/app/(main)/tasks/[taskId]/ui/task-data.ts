@@ -230,15 +230,19 @@ export async function getTaskData(taskId: TaskId): Promise<UITask> {
 
 	// Determine status text based on current step states (priority: Running > Preparing > Completed)
 	const title =
-		runningStepNumber !== null
-			? `Running Step ${runningStepNumber}`
-			: preparingStepsCount > 0
-				? `Preparing ${preparingStepsCount} Step${
-						preparingStepsCount !== 1 ? "s" : ""
-					}`
-				: `Completed ${completedStepsCount} Step${
-						completedStepsCount !== 1 ? "s" : ""
-					}`;
+		totalStepsCount === 0
+			? task.status === "inProgress"
+				? "Preparing task"
+				: "Task timeline unavailable"
+			: runningStepNumber !== null
+				? `Running Step ${runningStepNumber}`
+				: preparingStepsCount > 0
+					? `Preparing ${preparingStepsCount} Step${
+							preparingStepsCount !== 1 ? "s" : ""
+						}`
+					: `Completed ${completedStepsCount} Step${
+							completedStepsCount !== 1 ? "s" : ""
+						}`;
 
 	const steps: UIStep[] = task.sequences.map((sequence, sequenceIndex) => ({
 		id: sequence.id,
@@ -338,10 +342,14 @@ export async function getTaskData(taskId: TaskId): Promise<UITask> {
 		getAppByTaskId(taskId),
 		getTaskInput(taskId),
 	]);
+	const resolvedTitle =
+		task.name.trim() ||
+		(workspace.name && workspace.name !== "Untitled" ? workspace.name : "") ||
+		"Task";
 
 	return {
 		status: task.status,
-		title: workspace.name || task.name || "Untitled",
+		title: resolvedTitle,
 		description: app.description ?? "",
 		workspaceId: task.workspaceId,
 		input,
