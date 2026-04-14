@@ -48,7 +48,7 @@ Last updated: 2026-04-13 (later)
 ### Latest production errors (2026-04-09)
 
 - **Web OpenCode requests fail after session startup** — FIXED AND LIVE-VERIFIED on 2026-04-14: authenticated browser verification on `web.recoder.xyz` now loads successfully, `POST /api/chat` returns `200`, zero `5xx` responses are recorded, and the old OpenCode empty-body failure is no longer shown in the UI. bd: `recoder-il9` (closed)
-- **Web preview still returns 503 after container is marked ready** — `preview/project-1775766138575` fails with HTTP `503` even after container creation, ready state, and preview enable flow complete. bd: `recoder-m8s`
+- **Web preview still returns 503 after container is marked ready** — FIXED AND LIVE-VERIFIED on 2026-04-14: preview iframe is visible on `web.recoder.xyz`, repeated docker preview health probes return `200`, and zero `5xx` responses are recorded during the browser recheck. bd: `recoder-m8s` (closed)
 - **Agents app pages return 503s in production** — `/activity`, `/runs`, `/pipelines`, `/schedules`, `/monitoring/incidents`, and `/agents/leaderboard` fail on RSC requests with HTTP `503`. Fixed in code pending deploy/production verification. bd: `recoder-kax`
 - **Agents thread detail APIs return 404s** — `/v1/threads/8889b7d8-b097-4383-a03d-469e76b11eaa`, `/messages?order=asc&optimized=true`, and `/v1/thread/.../agent-runs` return `404`, so thread state and run history cannot load. Fixed in code pending deploy/production verification; the fix set now includes shared API fallback from direct thread lookup to paginated thread lists and disables repeated query retries on terminal `404`s. bd: `recoder-ea7`
 - **Agents live stream / toolkit assets fail** — `stream?token=...` returns `503` and `/v1/composio/toolkits/icons/batch` returns `503`. Fixed in code pending deploy/production verification. bd: `recoder-dat`
@@ -78,7 +78,7 @@ Launch-prep tracking ticket: `recoder-l7a`
 **Day 2 — fix Web blockers**
 - [x] Fix `recoder-il9` — OpenCode `/session/:id/message` empty-body failure
 - [x] Fix `recoder-m8s` — preview `503` after container ready
-- [ ] Verify prompt -> file creation -> preview on production after deploy
+- [x] Verify prompt -> file creation -> preview on production after deploy
 
 **Day 3 — fix Agents blockers**
 - [x] Fix `recoder-kax` — `503` RSC/app page failures
@@ -102,7 +102,7 @@ Launch-prep tracking ticket: `recoder-l7a`
   - 2026-04-14 authenticated PM copilot smoke no longer records failing responses after the runtime `OPENROUTER_API_KEY` fix
   - 2026-04-13 Agents `/v1` API outage is mitigated: the missing host PM2 backend on `127.0.0.1:8000` was restored and direct authenticated probes to `/v1/system/status`, `/v1/agents`, `/v1/threads`, `/v1/teams`, `/v1/accounts`, and `/v1/agent-runs/active` now return `200`
   - 2026-04-13 authenticated live coding smoke (`scripts/e2e-agents-coding.mjs`) successfully loaded `https://agents.recoder.xyz/`, submitted a coding prompt, received agent response content, and recorded `0` `5xx` requests during that run
-  - Remaining Agents follow-up: Deep Coding mode still needs post-fix verification after a local submit-path patch so the selected mode is always included in the chat-input submit callback
+  - 2026-04-14 Deep Coding home-path stress runs now repeatedly capture `/v1/agent/start` with `mode` present and `HTTP 200` on `agents.recoder.xyz`
   - 2026-04-13 authenticated Agency smoke now reaches `/dashboard`, `/workspaces`, `/playground`, and `/settings/team` with HTTP `200` after host PM2 recovery, but `/tasks` and related RSC fetches still return live `503`; `recoder-5ig` remains open in practice
 - [ ] Confirm production navigation only exposes working routes and working CTAs
 - [ ] Verify support/contact/legal/docs links and basic analytics/error reporting
@@ -120,8 +120,8 @@ Launch-prep tracking ticket: `recoder-l7a`
 
 | Platform | URL | Status |
 |----------|-----|--------|
-| **agents** | agents.recoder.xyz | **Verified for standard coding flow; Deep Coding request path verified** — core `/v1` APIs are back, the original `recoder-ea7` thread/message/agent-run endpoints return `200`, and a live Deep Coding home smoke now captures `/v1/agent/start` with `mode` present and receives `HTTP 200`. Broader multi-run Deep Coding stability still needs more runtime hardening. |
-| **web** | web.recoder.xyz | **Live coding path verified** — authenticated browser verification on 2026-04-14 loads `web.recoder.xyz`, sends a prompt, receives `HTTP 200` from `/api/chat`, records zero `5xx` responses, and no longer shows the old OpenCode empty-body failure. |
+| **agents** | agents.recoder.xyz | **Live verified for coding and Deep Coding** — core `/v1` APIs are back, the original `recoder-ea7` thread/message/agent-run endpoints return `200`, and repeated Deep Coding home-path runs now capture `/v1/agent/start` with `mode` present and `HTTP 200`. |
+| **web** | web.recoder.xyz | **Live coding and preview verified** — authenticated browser verification on 2026-04-14 loads `web.recoder.xyz`, sends a prompt, receives `HTTP 200` from `/api/chat`, records zero `5xx` responses, and the preview iframe/health path is also clean on recheck. |
 | **A2A** | docker.recoder.xyz/api/a2a | Bridge works (6 agents online). **Docs live** at docs.recoder.xyz/a2a/ (overview, mcp-tools, task-schema, websocket). Shared task board UI is now implemented in Agents collaboration rooms via mirrored `todo-board:*` scratchpad state, pending deploy verification. |
 | **Docs** | docs.recoder.xyz | **Live** — Astro/Starlight site with A2A docs, API reference, getting-started, BYOK, MCP tools, self-hosting guides. nginx routing added to port 3008. |
 | **PM** | pm.recoder.xyz | **Live verified** — authenticated `/insights` now returns `200`, loads with title `Insights`, and PM copilot smoke completes without failing responses after the host webpack rebuild and runtime OpenRouter env fix. |
@@ -203,9 +203,8 @@ Fix chain:
 
 ## Current Blockers (Priority Order)
 
-1. **Deep Coding runtime stability** — the live home-path Deep Coding request now includes `mode` and receives `HTTP 200`, but broader multi-run runtime-routing stability still needs more verification before `recoder-y4q` can close
-2. **Web preview-specific recheck** — the main Web coding path is now live-verified, but preview-specific regression `recoder-m8s` should still be rechecked explicitly on the rebuilt path
-3. **Launch hardening follow-through** — auth/billing/onboarding/error-state sweeps and remaining navigation/link audits still need a fresh pass now that Web and PM recovered
+1. **Launch hardening follow-through** — auth, billing, onboarding, error-state sweeps, and remaining navigation/link audits still need a fresh pass now that Web, PM, and Agents are recovered
+2. **End-to-end release sweep** — rerun the exact launch flows across all product surfaces and close or defer the remaining non-launch tickets in `bd`
 5. ~~**PM crash loop**~~ — FIXED (pnpm install + pm2 restart)
 6. ~~**Pi agent not deployed**~~ — DEPLOYED (Pi SDK verified in docker-backend container)
 7. ~~**recoder-web with Pi routing**~~ — DEPLOYED (pi-exec.ts + api.chat.ts routing live)
@@ -226,7 +225,7 @@ Fix chain:
 | Category | Tickets | Status |
 |----------|---------|--------|
 | Core Coding Loop | recoder-96g, recoder-i3v, recoder-sti, recoder-w0b | **96g VERIFIED**. **i3v**: agent start 200. **sti VERIFIED**: WS upgrade 101 on /terminal/ and /watch/. **w0b DONE**: auto-stop 2h. |
-| Deep Coding Runtime | recoder-lma, recoder-y4q | **lma deployed + UI verified**. y4q depends on lma |
+| Deep Coding Runtime | recoder-lma, ~~recoder-y4q~~ | **lma deployed + UI verified**. **y4q CLOSED** after repeated live Deep Coding home-path runs captured `mode` and `HTTP 200` on `/v1/agent/start`. |
 | Agents/Canvas | recoder-xnh, recoder-e5a, recoder-8i9 | **e5a CLOSED**. **8i9 FIXED**. xnh needs manual board test |
 | Product Verification | recoder-kcq, ~~recoder-74p~~, recoder-ijs | **74p DROPPED** (no longer needed). **ijs**: build noise only (duplicate Prisma target), not runtime |
 | Infra/Host | recoder-025, recoder-0xz, recoder-d0k | **025**: server has read-only deploy key, 10 unpushed commits — push from local. **d0k DONE**: zrok stopped (6 containers, 242MB freed). 0xz: rsync is the deploy path |
@@ -249,7 +248,7 @@ Fix chain:
 - recoder-frontend Docker image rebuilt with error display fix (image b177716a22bd)
 - recoder-backend restarted with Gemini-safe message cleaning (llm.py)
 - Security incident fully remediated (XMRig miner, CVE-2025-66478)
-- Latest live verification: Agency authenticated smoke is clean, Agents standard coding flow is clean and Deep Coding home smoke now captures `/v1/agent/start` with `mode` and `HTTP 200`, PM `/insights` and copilot are clean again after the host webpack rebuild plus OpenRouter runtime env fix, and Web no longer reproduces the old OpenCode empty-body failure during a real prompt run
+- Latest live verification: Agency authenticated smoke is clean, Agents standard coding flow is clean and repeated Deep Coding home-path runs now capture `/v1/agent/start` with `mode` and `HTTP 200`, PM `/insights` and copilot are clean again after the host webpack rebuild plus OpenRouter runtime env fix, and Web no longer reproduces the old OpenCode empty-body failure and now also has a clean preview-path recheck
 
 ## Pi Integration Strategy
 
