@@ -19,6 +19,10 @@ export function FinalStepOutput({
 		finalStep.taskStatus === "failed" ||
 		finalStep.taskStatus === "cancelled";
 
+	if (isTerminal && outputCount === 0) {
+		return null;
+	}
+
 	return (
 		<div className="mt-8">
 			<div className="flex items-center justify-between text-text-muted text-[13px] font-semibold mb-2 w-full">
