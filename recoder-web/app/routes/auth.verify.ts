@@ -1,4 +1,5 @@
-import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { json, redirect, type LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { WEB_SESSION_DATA_COOKIE_NAMES } from '~/lib/auth/session.server';
 import { createScopedLogger } from '~/utils/logger';
 
 const SESSION_COOKIE_NAMES = [
@@ -9,6 +10,7 @@ const SESSION_COOKIE_NAMES = [
   'recoder_session_token',
 ];
 const logger = createScopedLogger('auth.verify');
+const WEB_SESSION_BRIDGE_MAX_AGE_SECONDS = 60 * 60 * 12;
 
 function normalizeSessionToken(rawToken: string): string {
   let token = rawToken.trim().replace(/^["']|["']$/g, '');
@@ -56,6 +58,57 @@ async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   );
   const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
   return bytesToHex(new Uint8Array(signature));
+}
+
+type VerifiedUser = {
+  id: string;
+  email: string;
+  name?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
+  subscriptionPlan?: string;
+  subscriptionStatus?: string;
+};
+
+function encodeSessionDataCookie(user: VerifiedUser): string {
+  return Buffer.from(JSON.stringify({ session: { user } }), 'utf8').toString('base64url');
+}
+
+function buildWebSessionBridgeCookie(requestUrl: URL, user: VerifiedUser): string {
+  const secure = requestUrl.protocol === 'https:';
+  const cookieName = secure
+    ? WEB_SESSION_DATA_COOKIE_NAMES[0]
+    : WEB_SESSION_DATA_COOKIE_NAMES[1];
+  const value = encodeSessionDataCookie(user);
+  const attributes = [
+    `${cookieName}=${value}`,
+    'Path=/',
+    `Max-Age=${WEB_SESSION_BRIDGE_MAX_AGE_SECONDS}`,
+    'HttpOnly',
+    'SameSite=Lax',
+  ];
+
+  if (secure) {
+    attributes.push('Secure');
+  }
+
+  return attributes.join('; ');
+}
+
+function resolveRedirectTarget(requestUrl: URL, rawTarget: string | null): string | null {
+  if (!rawTarget?.trim()) {
+    return null;
+  }
+
+  try {
+    const targetUrl = new URL(rawTarget, requestUrl.origin);
+    if (targetUrl.origin !== requestUrl.origin) {
+      return null;
+    }
+    return targetUrl.toString();
+  } catch {
+    return null;
+  }
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -125,14 +178,26 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       );
     }
 
-    const userData = await verifyResponse.json();
+    const userData = await verifyResponse.json() as VerifiedUser;
+    const cookie = buildWebSessionBridgeCookie(url, userData);
+    const redirectTarget = resolveRedirectTarget(url, url.searchParams.get('redirect'));
 
-    // DO NOT set session cookies here. The cross-subdomain cookie set by
-    // recoder.xyz (Domain=.recoder.xyz, SameSite=None) already reaches
-    // web.recoder.xyz. Setting a web.recoder.xyz-scoped cookie without
-    // the signature suffix would OVERRIDE the correct cookie and break
-    // session verification.
-    return json({ success: true, user: userData });
+    if (redirectTarget) {
+      return redirect(redirectTarget, {
+        headers: {
+          'Set-Cookie': cookie,
+        },
+      });
+    }
+
+    return json(
+      { success: true, user: userData },
+      {
+        headers: {
+          'Set-Cookie': cookie,
+        },
+      },
+    );
   } catch (error) {
     logger.error('Token verification error', error);
     return json({ error: 'Verification failed' }, { status: 500 });

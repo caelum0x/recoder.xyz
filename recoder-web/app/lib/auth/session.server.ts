@@ -38,6 +38,31 @@ interface SessionApiResponse {
   };
 }
 
+type SessionCookieUser = {
+  id: string;
+  email: string;
+  name?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
+  subscriptionPlan?: string;
+  subscriptionStatus?: string;
+};
+
+export const WEB_SESSION_DATA_COOKIE_NAMES = [
+  '__Secure-recoder.web_session_data',
+  'recoder.web_session_data',
+] as const;
+
+const SESSION_DATA_COOKIE_NAMES = [
+  ...WEB_SESSION_DATA_COOKIE_NAMES,
+  '_Secure-recoder.session_data',
+  '__Secure-recoder.session_data',
+  'recoder.session_data',
+  '_Secure-better-auth.session_data',
+  '__Secure-better-auth.session_data',
+  'better-auth.session_data',
+] as const;
+
 /**
  * Internal URL for server-to-server session verification.
  *
@@ -95,6 +120,29 @@ function extractSessionToken(cookieHeader: string): string | null {
   return null;
 }
 
+function extractCookieValue(cookieHeader: string, cookieName: string): string | null {
+  const regex = new RegExp(`(?:^|;\\s*)${cookieName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]*)`);
+  const match = cookieHeader.match(regex);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
+function parseSessionDataCookie(rawValue: string | null | undefined): SessionCookieUser | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const decoded = Buffer.from(rawValue, 'base64url').toString('utf8');
+    const parsed = JSON.parse(decoded) as {
+      session?: { user?: SessionCookieUser };
+    };
+
+    return parsed.session?.user ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifySession(request: Request): Promise<Session | null> {
   try {
     const cookieHeader = request.headers.get('Cookie');
@@ -102,6 +150,26 @@ export async function verifySession(request: Request): Promise<Session | null> {
     if (!cookieHeader) {
       logger.info('[Auth] No cookies found in request');
       return null;
+    }
+
+    const cookieUser = SESSION_DATA_COOKIE_NAMES
+      .map((name) => parseSessionDataCookie(extractCookieValue(cookieHeader, name)))
+      .find(Boolean);
+
+    if (cookieUser) {
+      logger.info('[Auth] Session resolved from session_data cookie for user:', cookieUser.email);
+      return {
+        user: {
+          id: cookieUser.id,
+          email: cookieUser.email,
+          name: cookieUser.name ?? null,
+          image: cookieUser.image ?? cookieUser.imageUrl ?? null,
+          subscriptionPlan: cookieUser.subscriptionPlan ?? 'free',
+          subscriptionStatus: cookieUser.subscriptionStatus ?? 'active',
+        },
+        sessionId: '',
+        expiresAt: new Date(),
+      };
     }
 
     // Extract session token from cookie to pass as Bearer token.
