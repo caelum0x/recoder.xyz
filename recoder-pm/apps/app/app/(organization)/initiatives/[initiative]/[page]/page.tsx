@@ -11,6 +11,8 @@ import { InitiativeCanvasDropdown } from "../components/initiative-canvas-dropdo
 import { InitiativePageEditor } from "../components/initiative-page-editor";
 import { InitiativePageTitle } from "../components/initiative-page-title";
 
+export const dynamic = "force-dynamic";
+
 type InitiativeProperties = {
   readonly params: Promise<{
     readonly initiative: string;

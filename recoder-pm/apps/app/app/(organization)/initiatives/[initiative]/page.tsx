@@ -18,6 +18,8 @@ import { InitiativeSidebar } from "./components/initiative-sidebar";
 import { InitiativeTitle } from "./components/initiative-title";
 import { InitiativeUpdatesCard } from "./components/initiative-updates-card";
 
+export const dynamic = "force-dynamic";
+
 type InitiativeProperties = {
   readonly params: Promise<{
     readonly initiative: string;
