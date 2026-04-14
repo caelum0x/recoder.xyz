@@ -36,6 +36,41 @@ describe('verifySession', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it('accepts a host-scoped web session bridge cookie without upstream fetch', async () => {
+    const bridgeValue = Buffer.from(JSON.stringify({
+      session: {
+        user: {
+          id: 'bridge-user',
+          email: 'bridge@example.com',
+          name: 'Bridge User',
+          image: null,
+          subscriptionPlan: 'pro',
+          subscriptionStatus: 'active',
+        },
+      },
+    }), 'utf8').toString('base64url');
+
+    const result = await verifySession(
+      makeRequest({
+        Cookie: `__Secure-recoder.web_session_data=${bridgeValue}`,
+      }),
+    );
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      user: {
+        id: 'bridge-user',
+        email: 'bridge@example.com',
+        name: 'Bridge User',
+        image: null,
+        subscriptionPlan: 'pro',
+        subscriptionStatus: 'active',
+      },
+      sessionId: '',
+      expiresAt: expect.any(Date),
+    });
+  });
+
   it('falls back to the public main site when the internal URL fetch fails', async () => {
     mockFetch
       .mockRejectedValueOnce(new TypeError('fetch failed'))
