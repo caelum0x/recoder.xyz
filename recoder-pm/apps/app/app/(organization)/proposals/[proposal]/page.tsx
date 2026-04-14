@@ -5,6 +5,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { database } from "@/lib/database";
 
+export const dynamic = "force-dynamic";
+
 type ImpactPrediction = {
   userImpact?: string;
   businessImpact?: string;

@@ -7,6 +7,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { database } from "@/lib/database";
 
+export const dynamic = "force-dynamic";
+
 type InterviewAnalysis = {
   summary?: string;
   themes?: string[];
