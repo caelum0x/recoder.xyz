@@ -9,6 +9,111 @@ const docker = new Docker();
 // ── Expo public hostname (set by server.ts at startup) ──────────────
 let expoPublicHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
 
+function getDaytonaProxyHost(): string {
+  const raw = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
+  return raw.includes(':') ? raw.split(':')[0] : raw;
+}
+
+function getDaytonaProxyPort(): number {
+  const raw = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
+  if (raw.includes(':')) {
+    const parsed = parseInt(raw.split(':')[1], 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return parseInt(process.env.DAYTONA_PROXY_PORT || '4000', 10);
+}
+
+type DaytonaPreviewAccess = {
+  url: string;
+  token?: string;
+  host: string;
+};
+
+function getDaytonaPreviewHost(url: string, sandboxId: string, port: number): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return `${port}-${sandboxId}.sandbox.recoder.xyz`;
+  }
+}
+
+async function getDaytonaPreviewAccess(sandboxId: string, port: number): Promise<DaytonaPreviewAccess> {
+  const dc = getDaytonaClient();
+  try {
+    const preview = await dc.getPortPreviewUrl(sandboxId, port);
+    const url = preview?.url || dc.getPreviewUrl(sandboxId, port);
+    return {
+      url,
+      token: preview?.token,
+      host: getDaytonaPreviewHost(url, sandboxId, port),
+    };
+  } catch {
+    const url = dc.getPreviewUrl(sandboxId, port);
+    return {
+      url,
+      host: getDaytonaPreviewHost(url, sandboxId, port),
+    };
+  }
+}
+
+function buildDaytonaPreviewHeaders(preview: DaytonaPreviewAccess): Record<string, string> {
+  const headers: Record<string, string> = {
+    Host: preview.host,
+    'X-Daytona-Skip-Preview-Warning': 'true',
+    'X-Daytona-Disable-CORS': 'true',
+    'X-Forwarded-Host': preview.host,
+  };
+
+  if (preview.token) {
+    headers['X-Daytona-Preview-Token'] = preview.token;
+  }
+
+  return headers;
+}
+
+function looksLikeDirectoryListing(body: string, contentType: string): boolean {
+  if (!contentType.includes('text/html')) {
+    return false;
+  }
+
+  const normalized = body.toLowerCase();
+  return (
+    normalized.includes('<title>index of /') ||
+    normalized.includes('<h1>index of /') ||
+    normalized.includes('<title>directory listing for /') ||
+    normalized.includes('<h1>directory listing for /') ||
+    normalized.includes('<pre><a href="../">../</a>') ||
+    normalized.includes('package.json</a>') ||
+    normalized.includes('node_modules/</a>') ||
+    normalized.includes('src/</a>') ||
+    normalized.includes('public/</a>')
+  );
+}
+
+function getDaytonaCandidatePorts(framework: string): number[] {
+  const normalized = framework.toLowerCase();
+
+  if (normalized === 'expo') {
+    return [8081];
+  }
+
+  if (
+    normalized === 'node-server' ||
+    normalized === 'python' ||
+    normalized === 'flask' ||
+    normalized === 'django' ||
+    normalized === 'fastapi' ||
+    normalized === 'go' ||
+    normalized === 'rust' ||
+    normalized === 'java' ||
+    normalized === 'java-spring'
+  ) {
+    return [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 3000, 3001, 4173, 4174, 8080];
+  }
+
+  return [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 3000, 3001, 4173, 4174];
+}
+
 /**
  * Set the public hostname used for Expo's REACT_NATIVE_PACKAGER_HOSTNAME.
  * Called from server.ts after detecting the external IP.
@@ -45,7 +150,9 @@ export class DevServerManager {
     options?: { daytona?: boolean; daytonaPreviewUrl?: string }
   ): Promise<{ ready: boolean; port?: number; logs?: string }> {
     const isDaytona = options?.daytona === true;
-    const command = this.getStartCommand(framework);
+    const command = isDaytona
+      ? this.getDaytonaStartCommand(framework)
+      : this.getStartCommand(framework);
 
     console.log(`[DevServer] Starting ${framework} for project ${projectId} (${isDaytona ? 'Daytona' : 'Docker'})`);
 
@@ -97,8 +204,8 @@ export class DevServerManager {
 
     // Wait for server to be ready
     let healthCheck: { ready: boolean; port?: number };
-    if (isDaytona && options?.daytonaPreviewUrl) {
-      healthCheck = await this.waitForDaytonaReady(options.daytonaPreviewUrl, 30000);
+    if (isDaytona) {
+      healthCheck = await this.waitForDaytonaReady(containerId, framework, 30000);
     } else {
       healthCheck = await this.waitForReady(ports, 30000);
     }
@@ -323,7 +430,7 @@ export class DevServerManager {
       // Node.js frameworks — use npm (bun not available in Daytona sandbox)
       vite: 'npm run dev -- --host 0.0.0.0',
       next: 'npm run dev -- --hostname 0.0.0.0',
-      react: 'npm start',
+      react: 'HOST=0.0.0.0 PORT=3000 /usr/local/nvm/versions/node/v22.14.0/bin/node /usr/local/nvm/versions/node/v22.14.0/lib/node_modules/npm/bin/npm-cli.js start',
       vue: 'npm run serve',
       bun: 'npm run dev',
       static: 'python3 -m http.server 5173 --bind 0.0.0.0 2>/dev/null || python -m http.server 5173 --bind 0.0.0.0 2>/dev/null || npx serve -l 5173',
@@ -351,6 +458,23 @@ export class DevServerManager {
       java: 'mvn exec:java',
     };
     return commands[framework] || 'npm run dev -- --host 0.0.0.0';
+  }
+
+  private getDaytonaStartCommand(framework: string): string {
+    const npm = '/usr/local/nvm/versions/node/v22.14.0/bin/npm';
+    const commands: Record<string, string> = {
+      vite: `${npm} run dev -- --host 0.0.0.0 --port 5173`,
+      next: `${npm} run dev -- --hostname 0.0.0.0`,
+      react: 'HOST=0.0.0.0 PORT=3000 /usr/local/nvm/versions/node/v22.14.0/bin/node /usr/local/nvm/versions/node/v22.14.0/lib/node_modules/npm/bin/npm-cli.js start',
+      vue: `${npm} run serve`,
+      bun: `${npm} run dev`,
+      svelte: `${npm} run dev -- --host 0.0.0.0`,
+      sveltekit: `${npm} run dev -- --host 0.0.0.0`,
+      nuxt: `${npm} run dev`,
+      expo: `REACT_NATIVE_PACKAGER_HOSTNAME=${expoPublicHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --host 0.0.0.0 --port 8081`,
+    };
+
+    return commands[framework] || `${npm} run dev -- --host 0.0.0.0`;
   }
 
   /**
@@ -425,36 +549,70 @@ export class DevServerManager {
     return result.output;
   }
 
-  private async waitForDaytonaReady(previewUrl: string, maxWaitMs: number = 30000): Promise<{ ready: boolean; port?: number }> {
+  private async probeDaytonaPort(sandboxId: string, port: number): Promise<boolean> {
+    const proxyHost = getDaytonaProxyHost();
+    const proxyPort = getDaytonaProxyPort();
+    const preview = await getDaytonaPreviewAccess(sandboxId, port);
+
+    return await new Promise<boolean>((resolve) => {
+      const req = http.request({
+        hostname: proxyHost,
+        port: proxyPort,
+        path: '/',
+        method: 'GET',
+        headers: {
+          Accept: 'text/html,*/*',
+          ...buildDaytonaPreviewHeaders(preview),
+        },
+        timeout: 4000,
+      }, (resp) => {
+        const status = resp.statusCode || 0;
+        const contentType = String(resp.headers['content-type'] || '');
+        let body = '';
+
+        resp.setEncoding('utf8');
+        resp.on('data', (chunk: string) => {
+          if (body.length < 8192) {
+            body += chunk.slice(0, 8192 - body.length);
+          }
+        });
+        resp.on('end', () => {
+          if (!(status >= 200 && status < 400)) {
+            resolve(false);
+            return;
+          }
+
+          resolve(!looksLikeDirectoryListing(body, contentType));
+        });
+      });
+
+      req.on('error', () => resolve(false));
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
+      req.end();
+    });
+  }
+
+  private async waitForDaytonaReady(
+    sandboxId: string,
+    framework: string,
+    maxWaitMs: number = 30000,
+  ): Promise<{ ready: boolean; port?: number }> {
     const startTime = Date.now();
     const checkInterval = 2000;
 
-    // Extract sandboxId from previewUrl pattern: https://{port}-{sandboxId}.sandbox.recoder.xyz
-    const urlMatch = previewUrl.match(/^https?:\/\/\d+-([^.]+)\./);
-    const sandboxId = urlMatch?.[1];
-    if (!sandboxId) {
-      console.log(`[DevServer] Cannot extract sandboxId from preview URL: ${previewUrl}`);
-      return { ready: false };
-    }
-
     console.log(`[DevServer] Waiting for Daytona preview ready (sandbox: ${sandboxId.slice(0, 12)})`);
+    const portsToCheck = getDaytonaCandidatePorts(framework);
 
     while (Date.now() - startTime < maxWaitMs) {
       try {
-        // Use internal curl inside the sandbox to check if dev server is responding
-        // This avoids the OIDC redirect that happens via the external daytona-proxy
-        const dc = getDaytonaClient();
-        const curlResult = await dc.execCommand(
-          sandboxId,
-          'for p in 5173 5174 5175 5176 5177 5178 5179 5180 3000 3001 4173 4174 8080 8081; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "PORT$p" && exit 0; done; echo "NOTREADY"',
-          { timeoutSecs: 8 },
-        );
-        const output = curlResult.output.trim();
-        const portMatch = output.match(/PORT(\d+)/);
-        if (portMatch) {
-          const port = parseInt(portMatch[1], 10);
+        for (const port of portsToCheck) {
+          if (await this.probeDaytonaPort(sandboxId, port)) {
           console.log(`[DevServer] Daytona dev server responding on port ${port}`);
           return { ready: true, port };
+        }
         }
       } catch {}
 
