@@ -20,6 +20,32 @@ interface UserProfile {
 // Store for user profile
 export const userProfileStore = atom<UserProfile | null>(null);
 
+function normalizeUserProfile(value: unknown): UserProfile | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const source = value as Partial<UserProfile> & { user?: unknown };
+  const candidate = source.user && typeof source.user === 'object'
+    ? source.user as Partial<UserProfile>
+    : source;
+
+  const id = typeof candidate.id === 'string' ? candidate.id : '';
+  const email = typeof candidate.email === 'string' ? candidate.email : '';
+
+  if (!id && !email) {
+    return null;
+  }
+
+  return {
+    id,
+    email,
+    name: typeof candidate.name === 'string' ? candidate.name : undefined,
+    image: typeof candidate.image === 'string' ? candidate.image : undefined,
+    subscription: typeof candidate.subscription === 'string' ? candidate.subscription : undefined,
+  };
+}
+
 export function UserMenu() {
   const userProfile = useStore(userProfileStore);
   const [showMenu, setShowMenu] = useState(false);
@@ -37,7 +63,7 @@ export function UserMenu() {
       const data = await response.json() as { success?: boolean; user?: UserProfile };
 
       if (data.success && data.user) {
-        userProfileStore.set(data.user);
+        userProfileStore.set(normalizeUserProfile(data.user));
       } else {
         userProfileStore.set(null);
       }
@@ -85,8 +111,13 @@ export function UserMenu() {
   }
 
   const getInitials = (name?: string) => {
-    if (!name) return userProfile?.email.charAt(0).toUpperCase();
-    return name
+    const safeName = typeof name === 'string' ? name.trim() : '';
+    const safeEmail = typeof userProfile?.email === 'string' ? userProfile.email.trim() : '';
+
+    if (!safeName) {
+      return safeEmail ? safeEmail.charAt(0).toUpperCase() : '?';
+    }
+    return safeName
       .split(' ')
       .map((n) => n[0])
       .join('')

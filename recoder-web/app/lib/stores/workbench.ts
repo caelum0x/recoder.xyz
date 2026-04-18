@@ -88,22 +88,64 @@ export async function ensureContainerExists(
       skipRetry: true,
     } as const;
 
+    const createViaWebRoute = async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CONTAINER_CREATE_TIMEOUT_MS);
+
+      try {
+        const response = await fetch('/api/create-sandbox', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            projectId,
+            framework: options?.framework,
+            templateId: options?.templateId,
+            skipInit: true,
+          }),
+          signal: controller.signal,
+        });
+
+        const payload = await response.json().catch(() => null) as {
+          success?: boolean;
+          error?: string;
+          details?: string;
+        } | null;
+
+        if (!response.ok || payload?.success === false) {
+          const error = new Error(
+            payload?.details || payload?.error || `Container creation failed with status ${response.status}`,
+          ) as Error & { statusCode?: number };
+          error.statusCode = response.status;
+          throw error;
+        }
+
+        return true;
+      } catch (error: any) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          const timeoutError = new Error(`Container creation timed out after ${CONTAINER_CREATE_TIMEOUT_MS}ms`) as Error & {
+            statusCode?: number;
+          };
+          timeoutError.statusCode = 408;
+          throw timeoutError;
+        }
+
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
     try {
-      const userId = getCurrentUserId();
       logger.info('🐳 [ensureContainerExists] Creating container for', projectId,
         options?.framework ? `(framework: ${options.framework})` : '',
         options?.templateId ? `(template: ${options.templateId})` : '');
 
-      const body: Record<string, unknown> = { projectId, userId };
-      if (options?.framework) {
-        body.framework = options.framework;
-      }
-      if (options?.templateId) {
-        body.templateId = options.templateId;
-      }
-
-      // Container creation can take 30-120s (Docker pull, pool acquire, env setup).
-      await dockerPost<{ success: boolean }>('/api/container', body, containerCreateRequestOptions);
+      // Go through the same-origin route so server-side session verification owns
+      // the create path instead of relying on browser-readable auth state.
+      await createViaWebRoute();
 
       clearContainerCreateFailure(projectId);
       logger.info('✅ [ensureContainerExists] Container ready for', projectId);
@@ -138,11 +180,7 @@ export async function ensureContainerExists(
           }
 
           // Retry container creation
-          const retryBody: Record<string, unknown> = { projectId, userId: getCurrentUserId() };
-          if (options?.framework) retryBody.framework = options.framework;
-          if (options?.templateId) retryBody.templateId = options.templateId;
-
-          await dockerPost<{ success: boolean }>('/api/container', retryBody, containerCreateRequestOptions);
+          await createViaWebRoute();
           clearContainerCreateFailure(projectId);
           logger.info('✅ [ensureContainerExists] Container created after eviction for', projectId);
           return true;

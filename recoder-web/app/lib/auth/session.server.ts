@@ -48,6 +48,31 @@ type SessionCookieUser = {
   subscriptionStatus?: string;
 };
 
+function normalizeSessionCookieUser(value: unknown): SessionCookieUser | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const direct = value as Partial<SessionCookieUser> & { user?: unknown };
+  const candidate = direct.user && typeof direct.user === 'object'
+    ? direct.user as Partial<SessionCookieUser>
+    : direct;
+
+  if (typeof candidate.id !== 'string' || typeof candidate.email !== 'string') {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    email: candidate.email,
+    name: candidate.name ?? null,
+    image: candidate.image ?? null,
+    imageUrl: candidate.imageUrl ?? null,
+    subscriptionPlan: candidate.subscriptionPlan,
+    subscriptionStatus: candidate.subscriptionStatus,
+  };
+}
+
 export const WEB_SESSION_DATA_COOKIE_NAMES = [
   '__Secure-recoder.web_session_data',
   'recoder.web_session_data',
@@ -62,6 +87,23 @@ const SESSION_DATA_COOKIE_NAMES = [
   '__Secure-better-auth.session_data',
   'better-auth.session_data',
 ] as const;
+
+function base64UrlDecode(value: string): string {
+  if (typeof Buffer !== 'undefined' && typeof Buffer.from === 'function') {
+    return Buffer.from(value, 'base64url').toString('utf8');
+  }
+
+  const base64 = value
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(value.length / 4) * 4, '=');
+
+  return decodeURIComponent(
+    Array.from(atob(base64))
+      .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+      .join(''),
+  );
+}
 
 /**
  * Internal URL for server-to-server session verification.
@@ -132,12 +174,12 @@ function parseSessionDataCookie(rawValue: string | null | undefined): SessionCoo
   }
 
   try {
-    const decoded = Buffer.from(rawValue, 'base64url').toString('utf8');
+    const decoded = base64UrlDecode(rawValue);
     const parsed = JSON.parse(decoded) as {
       session?: { user?: SessionCookieUser };
     };
 
-    return parsed.session?.user ?? null;
+    return normalizeSessionCookieUser(parsed.session?.user);
   } catch {
     return null;
   }

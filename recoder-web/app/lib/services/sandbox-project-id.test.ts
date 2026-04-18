@@ -1,10 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearStoredSandboxProjectId,
+  getStoredSandboxProjectId,
   isLikelySandboxProjectId,
+  persistStoredSandboxProjectId,
+  ROOT_SANDBOX_PROJECT_STORAGE_KEY,
   resolveSandboxProjectId,
 } from './sandbox-project-id';
 
 describe('sandbox-project-id', () => {
+  beforeEach(() => {
+    const sessionStorage = (() => {
+      const values = new Map<string, string>();
+      return {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          values.set(key, value);
+        },
+        removeItem: (key: string) => {
+          values.delete(key);
+        },
+      };
+    })();
+
+    vi.stubGlobal('window', { sessionStorage });
+  });
+
   it('accepts project-style and uuid project identifiers', () => {
     expect(isLikelySandboxProjectId('project-1774919650071')).toBe(true);
     expect(isLikelySandboxProjectId('9f84a9c3-7180-4f77-8c73-82ef2f7cbb1c')).toBe(true);
@@ -31,5 +52,16 @@ describe('sandbox-project-id', () => {
       chatId: 'hello-world',
       now: () => 42,
     })).toBe('project-42');
+  });
+
+  it('persists and clears the root sandbox project id in session storage', () => {
+    clearStoredSandboxProjectId(ROOT_SANDBOX_PROJECT_STORAGE_KEY);
+    expect(getStoredSandboxProjectId(ROOT_SANDBOX_PROJECT_STORAGE_KEY)).toBeNull();
+
+    persistStoredSandboxProjectId('project-99', ROOT_SANDBOX_PROJECT_STORAGE_KEY);
+    expect(getStoredSandboxProjectId(ROOT_SANDBOX_PROJECT_STORAGE_KEY)).toBe('project-99');
+
+    clearStoredSandboxProjectId(ROOT_SANDBOX_PROJECT_STORAGE_KEY);
+    expect(getStoredSandboxProjectId(ROOT_SANDBOX_PROJECT_STORAGE_KEY)).toBeNull();
   });
 });

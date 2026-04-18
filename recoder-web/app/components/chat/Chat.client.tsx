@@ -27,7 +27,12 @@ import { cubicEasingFn } from '~/utils/easings';
 import { createScopedLogger, renderLogger } from '~/utils/logger';
 import { showSmartError } from '~/lib/errors/toast-error';
 import { projectContextCache } from '~/lib/services/project-context-cache';
-import { resolveSandboxProjectId } from '~/lib/services/sandbox-project-id';
+import {
+  clearStoredSandboxProjectId,
+  getStoredSandboxProjectId,
+  persistStoredSandboxProjectId,
+  resolveSandboxProjectId,
+} from '~/lib/services/sandbox-project-id';
 import { BaseChat } from './BaseChat';
 import { CloneUrlModal } from './CloneUrlModal';
 import { commandPaletteOpen } from '~/lib/stores/command-palette';
@@ -217,6 +222,7 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   // are chat identifiers, not valid Docker project ids.
   const [projectIdForDocker] = useState(() => resolveSandboxProjectId({
     preferredProjectId: projectId,
+    storedProjectId: !projectId && !chatId ? getStoredSandboxProjectId() : undefined,
     chatId,
   }));
 
@@ -224,6 +230,12 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
   // Pass framework/templateId so the backend can configure the container appropriately
   // (e.g., Expo projects need different dev server setup)
   useEffect(() => {
+    if (!projectId && !chatId) {
+      persistStoredSandboxProjectId(projectIdForDocker);
+    } else {
+      clearStoredSandboxProjectId();
+    }
+
     // Build container creation options from project metadata
     const containerOptions: { framework?: string; templateId?: string } = {};
     if (projectFramework) {
