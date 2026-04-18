@@ -70,8 +70,32 @@ type VerifiedUser = {
   subscriptionStatus?: string;
 };
 
+type VerifyTokenResponse =
+  | VerifiedUser
+  | {
+      success?: boolean;
+      user?: VerifiedUser | null;
+    };
+
+function base64UrlEncode(value: string): string {
+  if (typeof Buffer !== 'undefined' && typeof Buffer.from === 'function') {
+    return Buffer.from(value, 'utf8').toString('base64url');
+  }
+
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
 function encodeSessionDataCookie(user: VerifiedUser): string {
-  return Buffer.from(JSON.stringify({ session: { user } }), 'utf8').toString('base64url');
+  return base64UrlEncode(JSON.stringify({ session: { user } }));
 }
 
 function buildWebSessionBridgeCookie(requestUrl: URL, user: VerifiedUser): string {
@@ -95,14 +119,39 @@ function buildWebSessionBridgeCookie(requestUrl: URL, user: VerifiedUser): strin
   return attributes.join('; ');
 }
 
-function resolveRedirectTarget(requestUrl: URL, rawTarget: string | null): string | null {
+function getPublicOrigin(
+  request: Request,
+  requestUrl: URL,
+  env?: Record<string, string>,
+): string {
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+    || request.headers.get('host')?.split(',')[0]?.trim();
+
+  if (forwardedProto && forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const configuredPublicUrl =
+    env?.RECODER_WEB_URL
+    || process.env.RECODER_WEB_URL
+    || process.env.MAIN_SITE_URL;
+
+  if (configuredPublicUrl?.trim()) {
+    return configuredPublicUrl.replace(/\/+$/, '');
+  }
+
+  return requestUrl.origin;
+}
+
+function resolveRedirectTarget(publicOrigin: string, rawTarget: string | null): string | null {
   if (!rawTarget?.trim()) {
     return null;
   }
 
   try {
-    const targetUrl = new URL(rawTarget, requestUrl.origin);
-    if (targetUrl.origin !== requestUrl.origin) {
+    const targetUrl = new URL(rawTarget, publicOrigin);
+    if (targetUrl.origin !== publicOrigin) {
       return null;
     }
     return targetUrl.toString();
@@ -111,9 +160,35 @@ function resolveRedirectTarget(requestUrl: URL, rawTarget: string | null): strin
   }
 }
 
+function normalizeVerifiedUser(payload: VerifyTokenResponse | null): VerifiedUser | null {
+  const candidate = payload && typeof payload === 'object' && 'user' in payload
+    ? payload.user
+    : payload;
+
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+
+  const user = candidate as Partial<VerifiedUser>;
+  if (typeof user.id !== 'string' || typeof user.email !== 'string') {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    image: user.image ?? null,
+    imageUrl: user.imageUrl ?? null,
+    subscriptionPlan: user.subscriptionPlan,
+    subscriptionStatus: user.subscriptionStatus,
+  };
+}
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const env = (context as unknown as { cloudflare?: { env?: Record<string, string> } } | undefined)?.cloudflare?.env;
   const url = new URL(request.url);
+  const publicOrigin = getPublicOrigin(request, url, env);
   const authHeader = request.headers.get('Authorization') || '';
   const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
   const tokenFromQuery = url.searchParams.get('token') || '';
@@ -178,26 +253,22 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       );
     }
 
-    const userData = await verifyResponse.json() as VerifiedUser;
-    const cookie = buildWebSessionBridgeCookie(url, userData);
-    const redirectTarget = resolveRedirectTarget(url, url.searchParams.get('redirect'));
-
-    if (redirectTarget) {
-      return redirect(redirectTarget, {
-        headers: {
-          'Set-Cookie': cookie,
-        },
-      });
+    const verifyPayload = await verifyResponse.json().catch(() => null) as VerifyTokenResponse | null;
+    const userData = normalizeVerifiedUser(verifyPayload);
+    if (!userData) {
+      logger.error('verify-token returned an unexpected payload', verifyPayload);
+      return json({ error: 'Invalid verification payload' }, { status: 502 });
     }
 
-    return json(
-      { success: true, user: userData },
-      {
-        headers: {
-          'Set-Cookie': cookie,
-        },
+    const cookie = buildWebSessionBridgeCookie(url, userData);
+    const redirectTarget = resolveRedirectTarget(publicOrigin, url.searchParams.get('redirect'))
+      || new URL('/', publicOrigin).toString();
+
+    return redirect(redirectTarget, {
+      headers: {
+        'Set-Cookie': cookie,
       },
-    );
+    });
   } catch (error) {
     logger.error('Token verification error', error);
     return json({ error: 'Verification failed' }, { status: 500 });

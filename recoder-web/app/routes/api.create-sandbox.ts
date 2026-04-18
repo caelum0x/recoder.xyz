@@ -306,11 +306,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     const body = await request.json() as {
       projectId?: string;
+      framework?: string;
+      templateId?: string;
       template?: string;
       skipInit?: boolean;
     };
 
-    const { projectId, skipInit = false } = body;
+    const { projectId, framework, templateId, skipInit = false } = body;
 
     if (!projectId) {
       return json<CreateSandboxResponse>(
@@ -333,7 +335,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         `${dockerUrl}/api/container`,
         {
           method: 'POST',
-          body: JSON.stringify({ projectId }),
+          body: JSON.stringify({ projectId, framework, templateId }),
         },
         dockerHeaders,
       );
@@ -416,7 +418,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
       provider: 'docker',
       message: containerResponse.reused
         ? 'Sandbox ready (reused existing container)'
-        : 'Sandbox created and Vite React app initialized',
+        : skipInit
+          ? 'Sandbox created'
+          : 'Sandbox created and Vite React app initialized',
     });
   } catch (error) {
     logger.error('Error creating sandbox:', error);
