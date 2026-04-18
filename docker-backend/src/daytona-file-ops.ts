@@ -15,6 +15,25 @@ import { createLogger } from './logger.js';
 const logger = createLogger('daytona-file-ops');
 const DAYTONA_DEV_SERVER_PORTS = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 3000, 3001, 4173, 4174, 8080, 8081] as const;
 
+function looksLikeDirectoryListing(body: string, contentType: string): boolean {
+  if (!contentType.includes('text/html')) {
+    return false;
+  }
+
+  const normalized = body.toLowerCase();
+  return (
+    normalized.includes('<title>index of /') ||
+    normalized.includes('<h1>index of /') ||
+    normalized.includes('<title>directory listing for /') ||
+    normalized.includes('<h1>directory listing for /') ||
+    normalized.includes('<pre><a href="../">../</a>') ||
+    normalized.includes('package.json</a>') ||
+    normalized.includes('node_modules/</a>') ||
+    normalized.includes('src/</a>') ||
+    normalized.includes('public/</a>')
+  );
+}
+
 // ── Container entry type shared with server.ts ──
 
 export interface ContainerEntry {
@@ -299,10 +318,8 @@ export async function daytonaExecBackground(
 ): Promise<void> {
   await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
-  // Don't escape $ — it breaks $PATH which npm/node need.
   // Only escape backticks to prevent command injection.
   const safeCmd = command.replace(/`/g, '\\`');
-  const safeCwd = cwd.replace(/'/g, "'\\''");
 
   if (!options?.skipCleanup) {
     try {
@@ -312,10 +329,18 @@ export async function daytonaExecBackground(
     }
   }
 
-  // Use nohup + setsid + disown to keep process alive after exec returns.
-  // Write PID to file so we can track it later.
-  const script = `cd '${safeCwd}' && BROWSER=none nohup setsid ${safeCmd} > /tmp/dev.log 2>&1 & echo $! > /tmp/dev.pid`;
-  await dc.execCommand(sandboxId, script, { timeoutSecs: 10 });
+  // Keep this script short enough that DaytonaClient.execCommand can inline it
+  // via `sh -c` instead of falling back to the long base64 temp-script path.
+  // The manual sandbox repro shows plain `nohup sh -lc ... &` works reliably.
+  const wrappedCmd = JSON.stringify(safeCmd);
+  const script = [
+    `NODE_BIN=/usr/local/nvm/versions/node/v22.14.0/bin/node`,
+    `[ -x "$NODE_BIN" ] || NODE_BIN="$(command -v node 2>/dev/null || true)"`,
+    `[ -n "$NODE_BIN" ] && export PATH="$(dirname "$NODE_BIN"):$PATH"`,
+    `: > /tmp/dev.log`,
+    `BROWSER=none nohup sh -lc ${wrappedCmd} >/tmp/dev.log 2>&1 & echo $! >/tmp/dev.pid`,
+  ].join(' && ');
+  await dc.execCommand(sandboxId, script, { cwd, timeoutSecs: 10 });
 }
 
 // ── Workspace state ──
@@ -361,7 +386,9 @@ export async function daytonaGetWorkspaceState(
       const timeout = setTimeout(() => controller.abort(), 3000);
       const resp = await fetch(previewUrl, { signal: controller.signal, redirect: 'follow' });
       clearTimeout(timeout);
-      devServerRunning = resp.status < 500;
+      const contentType = resp.headers.get('content-type') || '';
+      const body = await resp.text();
+      devServerRunning = resp.status >= 200 && resp.status < 400 && !looksLikeDirectoryListing(body, contentType);
     } catch {
       // not running
     }
