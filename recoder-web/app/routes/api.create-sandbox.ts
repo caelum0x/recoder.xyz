@@ -249,18 +249,18 @@ interface ContainerResponse {
   reused: boolean;
   fromPool?: boolean;
   port: number;
-  ptyPort: number;
+  ptyPort?: number;
   daytona?: boolean;
-  ports: {
+  ports?: {
     preview: number;
     vite: number;
     other: number;
     pty: number;
   };
-  urls: {
-    preview: string;
-    vite: string;
-    pty: string;
+  urls?: {
+    preview?: string;
+    vite?: string;
+    pty?: string;
   };
 }
 
@@ -389,7 +389,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // For Docker, use the same-origin proxy URL.
     let previewUrl: string;
     let viteUrl: string;
-    if (containerResponse.daytona && containerResponse.urls.preview) {
+    if (containerResponse.daytona && containerResponse.urls?.preview) {
       // Daytona: direct URL from daytona-proxy e.g. https://5173-{sandboxId}.sandbox.recoder.xyz
       previewUrl = containerResponse.urls.preview;
       viteUrl = previewUrl;
@@ -410,11 +410,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
       previewUrl,
       viteUrl,
       ptyUrl,
-      ports: {
-        preview: containerResponse.ports.preview,
-        vite: containerResponse.ports.vite,
-        pty: containerResponse.ports.pty,
-      },
+      ports: containerResponse.ports
+        ? {
+            preview: containerResponse.ports.preview,
+            vite: containerResponse.ports.vite,
+            pty: containerResponse.ports.pty,
+          }
+        : undefined,
       provider: 'docker',
       message: containerResponse.reused
         ? 'Sandbox ready (reused existing container)'
