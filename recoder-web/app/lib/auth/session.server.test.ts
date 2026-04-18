@@ -71,6 +71,42 @@ describe('verifySession', () => {
     });
   });
 
+  it('accepts a previously malformed bridge cookie with nested user payload', async () => {
+    const bridgeValue = Buffer.from(JSON.stringify({
+      session: {
+        user: {
+          success: true,
+          user: {
+            id: 'bridge-user-2',
+            email: 'bridge2@example.com',
+            name: 'Bridge User 2',
+            image: null,
+          },
+        },
+      },
+    }), 'utf8').toString('base64url');
+
+    const result = await verifySession(
+      makeRequest({
+        Cookie: `__Secure-recoder.web_session_data=${bridgeValue}`,
+      }),
+    );
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      user: {
+        id: 'bridge-user-2',
+        email: 'bridge2@example.com',
+        name: 'Bridge User 2',
+        image: null,
+        subscriptionPlan: 'free',
+        subscriptionStatus: 'active',
+      },
+      sessionId: '',
+      expiresAt: expect.any(Date),
+    });
+  });
+
   it('falls back to the public main site when the internal URL fetch fails', async () => {
     mockFetch
       .mockRejectedValueOnce(new TypeError('fetch failed'))
