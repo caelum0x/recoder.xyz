@@ -50,24 +50,24 @@ export function useThreadData(
   const foundRunningAgentRef = useRef(false);
   const hasInitiallyScrolled = useRef<boolean>(false);
   const lastDetectedRunIdRef = useRef<string | null>(null);
+  const [allowThreadLookup, setAllowThreadLookup] = useState(!waitingForAgent);
   
   const retryCountRef = useRef(0);
 
-  const threadQuery = useThreadQuery(threadId, waitingForAgent ? {
-    retry: (failureCount, error: any) => {
-      const errorStr = error?.message?.toLowerCase() || '';
-      const is404 = error?.status === 404 || errorStr.includes('404') || errorStr.includes('not found');
-      if (is404) {
-        return failureCount < 20;
-      }
-      return failureCount < 1;
-    },
-    retryDelay: (attemptIndex, error: any) => {
-      const errorStr = error?.message?.toLowerCase() || '';
-      const is404 = error?.status === 404 || errorStr.includes('404') || errorStr.includes('not found');
-      return is404 ? 1000 : 1000;
-    },
-  } : undefined);
+  const threadQuery = useThreadQuery(threadId, {
+    enabled: !!threadId && allowThreadLookup,
+    ...(waitingForAgent ? {
+      retry: (failureCount, error: any) => {
+        const errorStr = error?.message?.toLowerCase() || '';
+        const is404 = error?.status === 404 || errorStr.includes('404') || errorStr.includes('not found');
+        if (is404) {
+          return failureCount < 20;
+        }
+        return failureCount < 1;
+      },
+      retryDelay: () => 1000,
+    } : {}),
+  });
   const threadReady = !!threadQuery.data;
   const messagesQuery = useMessagesQuery(threadId, {
     enabled: !!threadId && (!waitingForAgent || threadReady),
@@ -103,6 +103,7 @@ export function useThreadData(
     initialLoadCompleted.current = false;
     hasInitiallyScrolled.current = false;
     retryCountRef.current = 0;
+    setAllowThreadLookup(!waitingForAgent);
     setMessages([]);
     setAgentRunId(null);
     setAgentStatus('idle');
@@ -125,6 +126,7 @@ export function useThreadData(
           foundRunningAgentRef.current = true;
           lastDetectedRunIdRef.current = storedAgentRunId;
           hasInitializedFromPreconnect.current = true;
+          setAllowThreadLookup(true);
           
           setAgentRunId(storedAgentRunId);
           setAgentStatus('running');
@@ -145,6 +147,7 @@ export function useThreadData(
           foundRunningAgentRef.current = true;
           lastDetectedRunIdRef.current = preconnectAgentRunId;
           hasInitializedFromPreconnect.current = true;
+          setAllowThreadLookup(true);
           
           setAgentRunId(preconnectAgentRunId);
           setAgentStatus('running');
@@ -166,6 +169,9 @@ export function useThreadData(
     const pollInterval = setInterval(() => {
       pollCount++;
       if (checkForAgentRunId() || pollCount >= maxPolls) {
+        if (pollCount >= maxPolls) {
+          setAllowThreadLookup(true);
+        }
         clearInterval(pollInterval);
       }
     }, 50);
