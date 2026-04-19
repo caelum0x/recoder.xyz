@@ -135,14 +135,15 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const storeInitializeFromAgents = useInitializeFromAgents();
   const storeGetCurrentAgent = useGetCurrentAgent();
   const storeIsRecoderAgentFn = useIsRecoderAgentFn();
-  
-  const agentsQuery = useAgents({}, { enabled: isAuthenticated && !isShared });
 
   const selectedAgentId = isShared ? undefined : storeSelectedAgentId;
   const setSelectedAgent = isShared ? (() => { }) : storeSetSelectedAgent;
   const initializeFromAgents = isShared ? (() => { }) : storeInitializeFromAgents;
   const getCurrentAgent = isShared ? (() => undefined) : storeGetCurrentAgent;
   const isRecoderAgent = isShared ? false : storeIsRecoderAgentFn;
+  const shouldLoadAgents = isAuthenticated && !isShared && Boolean(configuredAgentId || selectedAgentId || derivedAgentId);
+  
+  const agentsQuery = useAgents({}, { enabled: shouldLoadAgents });
 
   // Memoize agents array to prevent unnecessary recalculations
   const agents = useMemo(() => {
@@ -326,7 +327,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   }
   
   useEffect(() => {
-    if (isNewThread && !hasDataLoaded.current && agentRunId) {
+    if (isNewThread && !hasDataLoaded.current && threadQuery.data?.project_id) {
       hasDataLoaded.current = true;
       localStorage.removeItem('pending_thread_intent');
       if (typeof window !== 'undefined') {
@@ -337,7 +338,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         }
       }
     }
-  }, [isNewThread, agentRunId]);
+  }, [isNewThread, threadQuery.data?.project_id]);
   
   const effectivePanelOpen = isSidePanelOpen;
 

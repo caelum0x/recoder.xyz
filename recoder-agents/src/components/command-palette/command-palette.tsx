@@ -86,8 +86,8 @@ export function CommandPalette() {
   const router = useRouter();
 
   const { data: agents } = useAgents({}, { enabled: open });
-  const { data: history } = useCommandHistory();
-  const { data: pins } = useCommandPins();
+  const { data: history } = useCommandHistory(undefined, { enabled: open });
+  const { data: pins } = useCommandPins({ enabled: open });
   const recordCommand = useRecordCommand();
   const pinCommandMut = usePinCommand();
   const unpinMut = useUnpinCommand();

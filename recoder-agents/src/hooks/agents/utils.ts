@@ -191,7 +191,14 @@ export const getAgents = async (params: AgentsParams = {}): Promise<AgentsRespon
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      throw Object.assign(
+        new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`),
+        {
+          status: response.status,
+          code: errorData?.code || errorData?.error_code,
+          details: errorData,
+        },
+      );
     }
 
     const result = await response.json();

@@ -488,28 +488,33 @@ export class ChatHistoryDB {
     // Check if session exists
     let session = await this.getSessionByUrlId(data.urlId);
 
-    // 🔒 CRITICAL FIX: Merge file snapshots instead of overwriting
-    // This prevents losing files when save is triggered during streaming
+    const shouldStoreInlineSnapshot = !data.projectId;
+
+    // For project-backed sessions, the canonical source of truth is the
+    // snapshot-backed project API. Keep chat-history metadata lightweight.
     let mergedFileSnapshot: Record<string, string> = {};
-    
-    if (session?.metadata?.fileSnapshot) {
-      // Start with existing files
-      mergedFileSnapshot = { ...session.metadata.fileSnapshot };
-    }
-    
-    if (data.fileSnapshot) {
-      // Merge new files - update existing and add new ones
-      for (const [path, content] of Object.entries(data.fileSnapshot)) {
-        // Only update if new content is non-empty
-        if (content && content.length > 0) {
-          mergedFileSnapshot[path] = content;
+
+    if (shouldStoreInlineSnapshot) {
+      if (session?.metadata?.fileSnapshot) {
+        mergedFileSnapshot = { ...session.metadata.fileSnapshot };
+      }
+
+      if (data.fileSnapshot) {
+        for (const [path, content] of Object.entries(data.fileSnapshot)) {
+          if (content && content.length > 0) {
+            mergedFileSnapshot[path] = content;
+          }
         }
       }
     }
 
     // Calculate merged file snapshot stats
-    const fileCount = Object.keys(mergedFileSnapshot).length;
-    const totalFileSize = Object.values(mergedFileSnapshot).reduce((sum, content) => sum + content.length, 0);
+    const fileCount = shouldStoreInlineSnapshot
+      ? Object.keys(mergedFileSnapshot).length
+      : Object.keys(data.fileSnapshot || {}).length;
+    const totalFileSize = shouldStoreInlineSnapshot
+      ? Object.values(mergedFileSnapshot).reduce((sum, content) => sum + content.length, 0)
+      : Object.values(data.fileSnapshot || {}).reduce((sum, content) => sum + content.length, 0);
 
     logger.info('💾 [saveChat] File snapshot merge:', {
       existingFiles: session?.metadata?.fileCount || 0,
@@ -523,6 +528,7 @@ export class ChatHistoryDB {
       fileSnapshot: mergedFileSnapshot,
       fileCount,
       totalFileSize,
+      usesProjectSnapshot: Boolean(data.projectId),
       source: data.source || session?.metadata?.source || 'web',
       cliVersion: data.cliVersion ?? session?.metadata?.cliVersion,
       sandboxProjectId: data.projectId || session?.metadata?.sandboxProjectId,
