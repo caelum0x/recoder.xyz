@@ -192,9 +192,7 @@ export async function bootstrapDaytonaPreview(
   return { ready: false };
 }
 
-export async function bootstrapDaytonaPreview(
-  projectId: string,
-  entry: { id: string; port?: number; daytonaPreviewUrl?: string },
+,
 ): Promise<{ ready: boolean; port?: number; previewUrl?: string }> {
   const wakeResult = await ensureDaytonaSandboxRunning(entry.id);
   if (!wakeResult.running) {
