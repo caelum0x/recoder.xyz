@@ -331,14 +331,14 @@ export async function daytonaExecBackground(
 
   // Keep this script short enough that DaytonaClient.execCommand can inline it
   // via `sh -c` instead of falling back to the long base64 temp-script path.
-  // The manual sandbox repro shows plain `nohup sh -lc ... &` works reliably.
-  const wrappedCmd = JSON.stringify(safeCmd);
+  // The known-good manual sandbox repro uses a direct `nohup <command> &`
+  // launch, so avoid the extra nested `sh -lc` layer here.
   const script = [
     `NODE_BIN=/usr/local/nvm/versions/node/v22.14.0/bin/node`,
     `[ -x "$NODE_BIN" ] || NODE_BIN="$(command -v node 2>/dev/null || true)"`,
     `[ -n "$NODE_BIN" ] && export PATH="$(dirname "$NODE_BIN"):$PATH"`,
     `: > /tmp/dev.log`,
-    `BROWSER=none nohup sh -lc ${wrappedCmd} >/tmp/dev.log 2>&1 & echo $! >/tmp/dev.pid`,
+    `BROWSER=none nohup ${safeCmd} >/tmp/dev.log 2>&1 & echo $! >/tmp/dev.pid`,
   ].join(' && ');
   await dc.execCommand(sandboxId, script, { cwd, timeoutSecs: 10 });
 }
