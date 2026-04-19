@@ -461,11 +461,13 @@ export class DevServerManager {
   }
 
   private getDaytonaStartCommand(framework: string): string {
-    const npm = '/usr/local/nvm/versions/node/v22.14.0/bin/npm';
+    const nodeBin = '/usr/local/nvm/versions/node/v22.14.0/bin/node';
+    const npmCli = '/usr/local/nvm/versions/node/v22.14.0/lib/node_modules/npm/bin/npm-cli.js';
+    const npm = `env PATH=/usr/local/nvm/versions/node/v22.14.0/bin:$PATH ${nodeBin} ${npmCli}`;
     const commands: Record<string, string> = {
       vite: `${npm} run dev -- --host 0.0.0.0 --port 5173`,
       next: `${npm} run dev -- --hostname 0.0.0.0`,
-      react: 'HOST=0.0.0.0 PORT=3000 /usr/local/nvm/versions/node/v22.14.0/bin/node /usr/local/nvm/versions/node/v22.14.0/lib/node_modules/npm/bin/npm-cli.js start',
+      react: `env PATH=/usr/local/nvm/versions/node/v22.14.0/bin:$PATH HOST=0.0.0.0 PORT=3000 ${nodeBin} ${npmCli} start`,
       vue: `${npm} run serve`,
       bun: `${npm} run dev`,
       svelte: `${npm} run dev -- --host 0.0.0.0`,
