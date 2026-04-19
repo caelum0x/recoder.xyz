@@ -48,6 +48,16 @@ export interface ActivityFeedResponse {
   has_more: boolean;
 }
 
+type ActivityFeedApiResponse =
+  | ActivityFeedResponse
+  | {
+      items?: ActivityEvent[];
+      total?: number;
+      limit?: number;
+      offset?: number;
+      has_more?: boolean;
+    };
+
 export interface RecordActivityBody {
   event_type: string;
   resource_type: string;
@@ -101,12 +111,38 @@ export const getActivityFeed = async (
   if (filters?.limit) params.set('limit', String(filters.limit));
   if (filters?.offset) params.set('offset', String(filters.offset));
   const query = params.toString() ? `?${params}` : '';
-  const response = await backendApi.get<ActivityFeedResponse>(
+  const response = await backendApi.get<ActivityFeedApiResponse>(
     `/activity/feed${query}`,
     { showErrors: true }
   );
   if (response.error) throw new Error(response.error.message);
-  return response.data!;
+
+  const payload = response.data ?? {};
+  const events = Array.isArray((payload as ActivityFeedResponse).events)
+    ? (payload as ActivityFeedResponse).events
+    : Array.isArray((payload as { items?: ActivityEvent[] }).items)
+      ? (payload as { items?: ActivityEvent[] }).items!
+      : [];
+
+  return {
+    events,
+    total:
+      typeof payload.total === 'number'
+        ? payload.total
+        : events.length,
+    limit:
+      typeof payload.limit === 'number'
+        ? payload.limit
+        : filters?.limit ?? events.length,
+    offset:
+      typeof payload.offset === 'number'
+        ? payload.offset
+        : filters?.offset ?? 0,
+    has_more:
+      typeof payload.has_more === 'boolean'
+        ? payload.has_more
+        : false,
+  };
 };
 
 export const markActivityRead = async (
