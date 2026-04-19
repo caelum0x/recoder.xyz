@@ -192,7 +192,7 @@ async function relayPreviewRequest(req, res, next, options = {}) {
         });
       });
       proxyReq.on('error', reject);
-      proxyReq.setTimeout(30000, () => proxyReq.destroy(new Error('preview upstream timeout')));
+      proxyReq.setTimeout(65000, () => proxyReq.destroy(new Error('preview upstream timeout')));
       if (body) {
         proxyReq.write(body);
       }
