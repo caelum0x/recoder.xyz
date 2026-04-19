@@ -339,13 +339,16 @@ export async function daytonaExecBackground(
     `[ -n "$NODE_BIN" ] && export PATH="$(dirname "$NODE_BIN"):$PATH"`,
     `cd '${safeCwd}'`,
     `: > /tmp/dev.log`,
-    `echo $$ >/tmp/dev.pid`,
-    `exec env BROWSER=none ${command} >/tmp/dev.log 2>&1`,
+    `env BROWSER=none ${command} >/tmp/dev.log 2>&1 &`,
+    `CHILD_PID=$!`,
+    `echo "$CHILD_PID" >/tmp/dev.pid`,
+    `sleep 3`,
   ].join(' && ');
   await dc.execInSession(
     sandboxId,
     sessionId,
     `sh -lc ${JSON.stringify(script)}`,
+    { runAsync: false, suppressInputEcho: true },
   );
 }
 

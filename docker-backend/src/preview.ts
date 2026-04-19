@@ -37,6 +37,57 @@ const DAYTONA_PORT_CANDIDATES = [
   { port: 8081, type: 'Expo (8081)' },
 ];
 
+type DaytonaPreviewAccess = {
+  url: string;
+  token?: string;
+  host: string;
+};
+
+function getDaytonaPreviewHost(url: string, sandboxId: string, port: number): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return `${port}-${sandboxId}.sandbox.recoder.xyz`;
+  }
+}
+
+async function getDaytonaPreviewAccess(
+  entry: { id: string },
+  port: number,
+): Promise<DaytonaPreviewAccess> {
+  const dc = getDaytonaClient();
+  try {
+    const preview = await dc.getPortPreviewUrl(entry.id, port);
+    const url = preview?.url || dc.getPreviewUrl(entry.id, port);
+    return {
+      url,
+      token: preview?.token,
+      host: getDaytonaPreviewHost(url, entry.id, port),
+    };
+  } catch {
+    const url = dc.getPreviewUrl(entry.id, port);
+    return {
+      url,
+      host: getDaytonaPreviewHost(url, entry.id, port),
+    };
+  }
+}
+
+function buildDaytonaPreviewHeaders(preview: DaytonaPreviewAccess): Record<string, string> {
+  const headers: Record<string, string> = {
+    Host: preview.host,
+    'X-Daytona-Skip-Preview-Warning': 'true',
+    'X-Daytona-Disable-CORS': 'true',
+    'X-Forwarded-Host': preview.host,
+  };
+
+  if (preview.token) {
+    headers['X-Daytona-Preview-Token'] = preview.token;
+  }
+
+  return headers;
+}
+
 type WsExpressApp = Express & {
   ws: (route: string, handler: (ws: WebSocket, req: Request) => void | Promise<void>) => void;
 };
@@ -98,34 +149,34 @@ async function detectFramework(containerId: string, isDaytona?: boolean): Promis
   return 'vite';
 }
 
-async function ensureDependencies(containerId: string, projectId: string, isDaytona?: boolean): Promise<void> {
+async function ensureDependencies(containerId: string, projectId: string, isDaytona?: boolean): Promise<boolean> {
   const now = Date.now();
   const lastInstall = autoInstallAttempts.get(projectId) || 0;
   if (now - lastInstall < AUTO_INSTALL_COOLDOWN_MS) {
-    return;
+    return true;
   }
 
   if (isDaytona) {
     const dc = getDaytonaClient();
-    let pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
-    if (!pkgResult.output.trim()) {
-      for (let attempt = 0; attempt < 4; attempt++) {
+    let packageJsonExists = (await dc.execCommand(containerId, 'test -f /home/daytona/package.json', { timeoutSecs: 10 })).exitCode === 0;
+    if (!packageJsonExists) {
+      for (let attempt = 0; attempt < 20; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 500));
-        pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
-        if (pkgResult.output.trim()) {
+        packageJsonExists = (await dc.execCommand(containerId, 'test -f /home/daytona/package.json', { timeoutSecs: 10 })).exitCode === 0;
+        if (packageJsonExists) {
           break;
         }
       }
     }
 
-    if (!pkgResult.output.trim()) {
+    if (!packageJsonExists) {
       console.log(`⚠️ [Preview] package.json not found yet for ${projectId} (Daytona), skipping install`);
-      return;
+      return false;
     }
 
-    const nmResult = await dc.execCommand(containerId, 'test -d /home/daytona/node_modules && echo "yes" || echo "no"', { timeoutSecs: 10 });
-    if (nmResult.output.includes('yes')) {
-      return;
+    const nodeModulesExists = (await dc.execCommand(containerId, 'test -d /home/daytona/node_modules', { timeoutSecs: 10 })).exitCode === 0;
+    if (nodeModulesExists) {
+      return true;
     }
 
     autoInstallAttempts.set(projectId, now);
@@ -135,13 +186,13 @@ async function ensureDependencies(containerId: string, projectId: string, isDayt
       'cd /home/daytona && npm install --legacy-peer-deps --no-audit --no-fund',
       { timeoutSecs: 120 }
     );
-    return;
+    return true;
   }
 
   const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
   if (!pkgRaw) {
     console.log(`⚠️ [Preview] package.json not found yet for ${projectId}, skipping install`);
-    return;
+    return false;
   }
 
   const hasNodeModules = await execInContainer(containerId, 'test -d /workspace/node_modules && echo "yes" || echo "no"');
@@ -155,6 +206,7 @@ async function ensureDependencies(containerId: string, projectId: string, isDayt
     containerId,
     'cd /workspace && npm install --legacy-peer-deps --no-audit --no-fund'
   );
+  return true;
 }
 
 export async function bootstrapDaytonaPreview(
@@ -175,40 +227,10 @@ export async function bootstrapDaytonaPreview(
     return { ready: true, port: readyPort, previewUrl: preview.url };
   }
 
-  await ensureDependencies(entry.id, projectId, true);
-  console.log(`[Bootstrap] Starting Daytona dev server for ${projectId} (${framework})`);
-  const result = await devServerManager.start(entry.id, projectId, framework, [5173, 3000, 3001, 3004, 3005, 3002], {
-    daytona: true,
-    daytonaPreviewUrl: entry.daytonaPreviewUrl,
-  });
-
-  if (result.ready && result.port) {
-    entry.port = result.port;
-    const preview = await getDaytonaPreviewAccess(entry, result.port);
-    entry.daytonaPreviewUrl = preview.url;
-    return { ready: true, port: result.port, previewUrl: preview.url };
-  }
-
-  return { ready: false };
-}
-
-,
-): Promise<{ ready: boolean; port?: number; previewUrl?: string }> {
-  const wakeResult = await ensureDaytonaSandboxRunning(entry.id);
-  if (!wakeResult.running) {
+  const dependenciesReady = await ensureDependencies(entry.id, projectId, true);
+  if (!dependenciesReady) {
     return { ready: false };
   }
-
-  const framework = await detectFramework(entry.id, true).catch(() => 'vite');
-  const readyPort = await findReadyDaytonaPort(entry, framework);
-  if (readyPort !== null) {
-    entry.port = readyPort;
-    const preview = await getDaytonaPreviewAccess(entry, readyPort);
-    entry.daytonaPreviewUrl = preview.url;
-    return { ready: true, port: readyPort, previewUrl: preview.url };
-  }
-
-  await ensureDependencies(entry.id, projectId, true);
   console.log(`[Bootstrap] Starting Daytona dev server for ${projectId} (${framework})`);
   const result = await devServerManager.start(entry.id, projectId, framework, [5173, 3000, 3001, 3004, 3005, 3002], {
     daytona: true,
@@ -224,6 +246,7 @@ export async function bootstrapDaytonaPreview(
 
   return { ready: false };
 }
+
 
 function getDaytonaProxyHost(): string {
   const raw = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
@@ -261,7 +284,7 @@ export function buildDockerPreviewUpstreamHeaders(
 async function probeDaytonaPort(entry: { id: string }, port: number, path: string = '/'): Promise<boolean> {
   const proxyHost = getDaytonaProxyHost();
   const proxyPort = getDaytonaProxyPort();
-  const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
+  const preview = await getDaytonaPreviewAccess(entry, port);
 
   return await new Promise<boolean>((resolve) => {
     const req = http.request({
@@ -270,8 +293,8 @@ async function probeDaytonaPort(entry: { id: string }, port: number, path: strin
       path,
       method: 'GET',
       headers: {
-        Host: sandboxHost,
         Accept: '*/*',
+        ...buildDaytonaPreviewHeaders(preview),
       },
       timeout: 4000,
     }, (resp) => {
@@ -628,9 +651,9 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
 
       const proxyHost = getDaytonaProxyHost();
       const proxyPort = getDaytonaProxyPort();
-      const sandboxHost = `${targetPort}-${entry.id}.sandbox.recoder.xyz`;
+      const preview = await getDaytonaPreviewAccess(entry, targetPort);
       upstreamUrl = `ws://${proxyHost}:${proxyPort}${upstreamPath}`;
-      upstreamHeaders = { Host: sandboxHost };
+      upstreamHeaders = buildDaytonaPreviewHeaders(preview);
     } else {
       const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
       let targetPort = 0;
@@ -1034,11 +1057,11 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       // Use Node http.request instead of fetch — fetch may silently override Host header
       const proxyHost = getDaytonaProxyHost();
       const proxyPort = getDaytonaProxyPort();
-      const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
+      const preview = await getDaytonaPreviewAccess(entry, port);
       const querySuffix = getQuerySuffix(req);
       const normalizedSubPath = (subPath || '').replace(/^\/+/, '');
       const requestPath = normalizedSubPath ? `/${normalizedSubPath}${querySuffix}` : `/${querySuffix}`;
-      console.log(`[SandboxPreview] Proxying: ${proxyHost}:${proxyPort}${requestPath} Host: ${sandboxHost}`);
+      console.log(`[SandboxPreview] Proxying: ${proxyHost}:${proxyPort}${requestPath} Host: ${preview.host}`);
 
       const http = await import('http');
       const proxyResult = await new Promise<{ status: number; headers: Record<string, string>; body: Buffer }>((resolve, reject) => {
@@ -1048,8 +1071,8 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
           path: requestPath,
           method: req.method,
           headers: {
-            'Host': sandboxHost,
             'Accept': req.headers.accept || '*/*',
+            ...buildDaytonaPreviewHeaders(preview),
           },
         }, (proxyRes) => {
           const chunks: Buffer[] = [];
