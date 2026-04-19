@@ -11,7 +11,7 @@ import {
 } from "@recoder-internal/ui/dialog";
 import { Select } from "@recoder-internal/ui/select";
 import { useToasts } from "@recoder-internal/ui/toast";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TeamRole } from "@/db";
 import { AvatarImage } from "@/services/accounts/components/user-button/avatar-image";
 import { Button } from "../components/button";
@@ -41,6 +41,7 @@ export function TeamMemberListItem({
 	const [error, setError] = useState("");
 	const [open, setOpen] = useState(false);
 	const [role, setRole] = useState(initialRole);
+	const [mounted, setMounted] = useState(false);
 	const user = userId;
 	const currentUser = currentUserId;
 	const isCurrentUser = user === currentUser;
@@ -61,6 +62,10 @@ export function TeamMemberListItem({
 
 	const hasMenu = selectOptions.length > 0;
 	const selectValue = canEditRole ? role : undefined;
+
+	useEffect(() => {
+		setMounted(true);
+	}, []);
 
 	const handleRoleChange = (value: string) => {
 		const nextRole = value as TeamRole;
@@ -142,8 +147,11 @@ export function TeamMemberListItem({
 						<div className="text-inverse text-[14px] leading-[20.4px]">
 							{displayName || "No display name"}
 						</div>
-						<div className="text-text/60 text-[12px] leading-[16px]">
-							{email || "No email"}
+						<div
+							className="text-text/60 text-[12px] leading-[16px]"
+							suppressHydrationWarning
+						>
+							{mounted ? email || "No email" : ""}
 						</div>
 					</div>
 				</div>

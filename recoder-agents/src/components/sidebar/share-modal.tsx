@@ -179,7 +179,9 @@ function SharePopoverContent({
   const [activeTab, setActiveTab] = useState("share")
 
   const updateThreadMutation = useUpdateThreadMutation()
-  const { data: threadData, isLoading, refetch } = useThreadQuery(threadId || "")
+  const { data: threadData, isLoading, refetch } = useThreadQuery(threadId || "", {
+    enabled: isOpen && !!threadId,
+  })
   const exportPdf = useExportPdf()
   const exportDocx = useExportDocx()
 
