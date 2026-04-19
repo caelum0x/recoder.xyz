@@ -739,11 +739,18 @@ export class DaytonaClient {
     sandboxId: string,
     sessionId: string,
     command: string,
+    options?: { runAsync?: boolean; suppressInputEcho?: boolean },
   ): Promise<{ cmdId: string }> {
+    const payload = {
+      command,
+      runAsync: options?.runAsync ?? true,
+      ...(options?.suppressInputEcho ? { suppressInputEcho: true } : {}),
+    };
+
     try {
       const result = await this.toolboxRequest<{ cmdId?: string; id?: string; commandId?: string }>(
         'POST', sandboxId, `/process/session/${sessionId}/exec`,
-        { command },
+        payload,
       );
       return { cmdId: result?.cmdId || result?.id || result?.commandId || '' };
     } catch (err: any) {
@@ -755,7 +762,7 @@ export class DaytonaClient {
           await this.createSession(sandboxId, sessionId);
           const retry = await this.toolboxRequest<{ cmdId?: string; id?: string; commandId?: string }>(
             'POST', sandboxId, `/process/session/${sessionId}/exec`,
-            { command },
+            payload,
           );
           return { cmdId: retry?.cmdId || retry?.id || retry?.commandId || '' };
         } catch (retryErr: any) {
