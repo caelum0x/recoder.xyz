@@ -62,9 +62,9 @@ export async function getCommandHistory(limit?: number, commandType?: CommandTyp
 
   const response = await backendApi.get<CommandHistoryEntry[]>(
     `/commands/history${qs ? `?${qs}` : ''}`,
-    { showErrors: true },
+    { showErrors: false },
   );
-  if (response.error) throw new Error(response.error.message);
+  if (response.error) return [];
   return response.data!;
 }
 
@@ -88,8 +88,8 @@ export async function pinCommand(payload: PinCommandPayload): Promise<CommandPin
 }
 
 export async function getCommandPins(): Promise<CommandPin[]> {
-  const response = await backendApi.get<CommandPin[]>('/commands/pins', { showErrors: true });
-  if (response.error) throw new Error(response.error.message);
+  const response = await backendApi.get<CommandPin[]>('/commands/pins', { showErrors: false });
+  if (response.error) return [];
   return response.data!;
 }
 
