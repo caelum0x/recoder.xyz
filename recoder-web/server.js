@@ -216,7 +216,16 @@ async function relayPreviewRequest(req, res, next, options = {}) {
       }
     }
 
-    res.status(upstreamRes.statusCode);
+    const isPreviewHtml =
+      upstreamPath.startsWith('/preview/') ||
+      upstreamPath.startsWith('/api/sandbox-preview/');
+    const normalizedStatus =
+      isPreviewHtml &&
+      [400, 503].includes(upstreamRes.statusCode)
+        ? 200
+        : upstreamRes.statusCode;
+
+    res.status(normalizedStatus);
     Object.entries(upstreamRes.headers).forEach(([key, rawValue]) => {
       const lowerKey = key.toLowerCase();
       if ([
