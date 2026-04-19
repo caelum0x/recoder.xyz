@@ -107,8 +107,18 @@ async function ensureDependencies(containerId: string, projectId: string, isDayt
 
   if (isDaytona) {
     const dc = getDaytonaClient();
-    const pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
-    if (!pkgResult.output) {
+    let pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+    if (!pkgResult.output.trim()) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+        if (pkgResult.output.trim()) {
+          break;
+        }
+      }
+    }
+
+    if (!pkgResult.output.trim()) {
       console.log(`⚠️ [Preview] package.json not found yet for ${projectId} (Daytona), skipping install`);
       return;
     }
@@ -1197,6 +1207,9 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       // Try to recover from Docker
       console.log(`⚠️ [Preview Logs] Container not in memory for ${projectId}, attempting recovery...`);
       entry = await recoverContainerFromDocker(docker, projectId, containers);
+      if (!entry) {
+        entry = await recoverContainerFromDaytona(projectId, containers);
+      }
     }
     
     if (!entry) {
@@ -1220,6 +1233,12 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
         console.warn(`⚠️ [Preview Logs] Missing container id for projectId: ${projectId}`);
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         return res.status(404).json({ error: 'Container id missing for project' });
+      }
+
+      if ((entry as any).daytona || (entry as any).daytonaPreviewUrl) {
+        const logs = await daytonaGetLogs(containerId, tail);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        return res.json({ projectId, containerId, tail, logs, daytona: true });
       }
 
       const container = docker.getContainer(containerId);
