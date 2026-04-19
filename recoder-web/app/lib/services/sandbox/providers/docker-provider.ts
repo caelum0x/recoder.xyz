@@ -22,20 +22,13 @@ import type {
 import { SandboxError, SandboxErrorType, SandboxStatus } from '../types';
 import { tryCatch, createSandboxLogger } from '../utils';
 import { CONTAINER_TIMEOUTS } from '../config';
-import { withDockerCredentials } from '~/lib/services/docker-api';
+import { DOCKER_URL, withDockerCredentials } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('DockerProviderService');
 
 // Docker backend URL from environment
 const getDockerUrl = (): string => {
-  let url = 'https://docker.recoder.xyz';
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DOCKER_BACKEND_URL) {
-    url = import.meta.env.VITE_DOCKER_BACKEND_URL;
-  }
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && url.includes('localhost')) {
-    url = 'https://docker.recoder.xyz';
-  }
-  return url;
+  return DOCKER_URL;
 };
 
 /**

@@ -21,7 +21,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { map } from 'nanostores';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { appendDockerAuthQuery, dockerGet } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('AutoErrorFix');
 
@@ -592,13 +592,7 @@ export function useAutoErrorFix(options: UseAutoErrorFixOptions = {}) {
       wsRef.current = null;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    let dockerHost = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
-    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && dockerHost.includes('localhost')) {
-      dockerHost = 'https://docker.recoder.xyz';
-    }
-    const host = dockerHost.replace(/^https?:\/\//, '');
-    const wsUrl = `${protocol}//${host}/build-errors/${projectId}`;
+    const wsUrl = `${DOCKER_URL.replace(/^http/, 'ws')}/build-errors/${projectId}`;
 
     try {
       const ws = new WebSocket(appendDockerAuthQuery(wsUrl));

@@ -32,11 +32,22 @@ import {
 import { createScopedLogger, DEBUG, createTimer } from '~/utils/logger';
 
 const logger = createScopedLogger('DockerAPI');
-let DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
-// Runtime override: if build baked in localhost but we're running in production, use production URL
-if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && DOCKER_URL.includes('localhost')) {
-  DOCKER_URL = 'https://docker.recoder.xyz';
+function resolveDockerBaseUrl(): string {
+  const configuredUrl = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
+
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `${window.location.origin}/api/docker`;
+    }
+
+    return configuredUrl;
+  }
+
+  return configuredUrl;
 }
+
+let DOCKER_URL = resolveDockerBaseUrl();
 const CONTAINER_CREATE_TIMEOUT_MS = Number(import.meta.env.VITE_CONTAINER_CREATE_TIMEOUT_MS || 120000);
 const ANONYMOUS_ID_STORAGE_KEY = 'recoder_anonymous_id';
 const ANONYMOUS_ID_COOKIE_NAME = 'recoder_anonymous_id';
@@ -213,7 +224,11 @@ function getSessionToken(): string | null {
   //
   // The docker-backend will allow anonymous access in migration mode (REQUIRE_AUTH=false)
   // Log a warning in development to help debug
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+  const usingSameOriginProxy =
+    typeof window !== 'undefined' &&
+    DOCKER_URL === `${window.location.origin}/api/docker`;
+
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && !usingSameOriginProxy) {
     // Only log once per session to avoid spam
     const logKey = 'token_warning_logged';
     if (!sessionStorage.getItem(logKey)) {

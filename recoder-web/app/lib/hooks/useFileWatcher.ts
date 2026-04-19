@@ -16,17 +16,12 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '@nanostores/react';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { appendDockerAuthQuery } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery, DOCKER_URL } from '~/lib/services/docker-api';
 import { updateFileWatcherStatus } from '~/lib/stores/connection';
 import { FileEventDeduper, type FileChange } from './file-watcher-dedup';
 import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('FileWatcher');
-
-let DOCKER_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
-if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && DOCKER_URL.includes('localhost')) {
-  DOCKER_URL = 'https://docker.recoder.xyz';
-}
 
 // Reconnection configuration
 const INITIAL_RECONNECT_DELAY = 2000;  // Start at 2 seconds (slower to avoid spam)
