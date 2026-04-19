@@ -3,6 +3,8 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import { createRequestHandler } from '@remix-run/express';
 import express from 'express';
+import http from 'http';
+import https from 'https';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +33,7 @@ if (process.env.NODE_ENV === 'production') {
 const BUILD_DIR = join(__dirnameLocal, 'build');
 const app = express();
 const publicBaseUrl = process.env.RECODER_WEB_URL || process.env.MAIN_SITE_URL || 'https://web.recoder.xyz';
+const DOCKER_PUBLIC_URL = process.env.DOCKER_PUBLIC_URL || 'https://docker.recoder.xyz';
 
 // Docker backend URL for preview proxy (internal, not via nginx for /preview/ routes)
 const DOCKER_BACKEND_URL = process.env.DOCKER_BACKEND_URL
@@ -109,9 +112,154 @@ const previewProxy = createProxyMiddleware({
   },
 });
 
-app.use('/preview', previewProxy);
+const dockerApiProxy = createProxyMiddleware({
+  target: DOCKER_BACKEND_URL,
+  changeOrigin: true,
+  ws: true,
+  pathRewrite: (path) => path.replace(/^\/api\/docker/, '') || '/',
+  onProxyReq: (proxyReq) => {
+    proxyReq.setTimeout(30000, () => proxyReq.destroy(new Error('docker api upstream timeout')));
+  },
+  onError: (err, req, res) => {
+    console.error('[Docker API Proxy] Error:', err.message);
+    if (res && typeof res.writeHead === 'function' && typeof res.end === 'function' && !res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Docker API proxy unavailable' }));
+      return;
+    }
+    if (res && typeof res.destroy === 'function') {
+      res.destroy();
+    }
+  },
+});
+
+async function relayPreviewRequest(req, res, next, options = {}) {
+  if (req.headers.upgrade && String(req.headers.upgrade).toLowerCase() === 'websocket') {
+    return next();
+  }
+
+  try {
+    const upstreamPath = options.upstreamPath || req.originalUrl;
+    const upstreamUrl = new URL(upstreamPath, DOCKER_BACKEND_URL);
+    const forwardedHeaders = new Headers();
+
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (value == null) continue;
+      const lowerKey = key.toLowerCase();
+      if ([
+        'host',
+        'connection',
+        'content-length',
+        'transfer-encoding',
+        'accept-encoding',
+      ].includes(lowerKey)) {
+        continue;
+      }
+
+      if (Array.isArray(value)) {
+        for (const item of value) forwardedHeaders.append(key, item);
+      } else {
+        forwardedHeaders.set(key, value);
+      }
+    }
+
+    let body;
+    if (!['GET', 'HEAD'].includes(req.method)) {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      body = Buffer.concat(chunks);
+    }
+
+    const transport = upstreamUrl.protocol === 'https:' ? https : http;
+    const upstreamRes = await new Promise((resolve, reject) => {
+      const proxyReq = transport.request({
+        protocol: upstreamUrl.protocol,
+        hostname: upstreamUrl.hostname,
+        port: upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? 443 : 80),
+        path: `${upstreamUrl.pathname}${upstreamUrl.search}`,
+        method: req.method,
+        headers: Object.fromEntries(forwardedHeaders.entries()),
+        insecureHTTPParser: true,
+      }, (proxyRes) => {
+        const chunks = [];
+        proxyRes.on('data', (chunk) => chunks.push(chunk));
+        proxyRes.on('end', () => {
+          resolve({
+            statusCode: proxyRes.statusCode || 502,
+            headers: proxyRes.headers,
+            body: Buffer.concat(chunks),
+          });
+        });
+      });
+      proxyReq.on('error', reject);
+      proxyReq.setTimeout(30000, () => proxyReq.destroy(new Error('preview upstream timeout')));
+      if (body) {
+        proxyReq.write(body);
+      }
+      proxyReq.end();
+    });
+
+    let responseBuffer = upstreamRes.body;
+    const contentType = String(upstreamRes.headers['content-type'] || '');
+    if (contentType.includes('text/html')) {
+      const projectMatch = req.originalUrl.match(/^\/(?:preview|api\/sandbox-preview)\/([^/?#]+)/);
+      const projectId = projectMatch?.[1];
+      if (projectId) {
+        const absoluteBase = `${DOCKER_PUBLIC_URL}/api/sandbox-preview/${projectId}/`;
+        const html = responseBuffer
+          .toString('utf8')
+          .replace(
+            new RegExp(`<base href=["']/?api/sandbox-preview/${projectId}/["']`, 'i'),
+            `<base href="${absoluteBase}"`,
+          );
+        responseBuffer = Buffer.from(html, 'utf8');
+      }
+    }
+
+    res.status(upstreamRes.statusCode);
+    Object.entries(upstreamRes.headers).forEach(([key, rawValue]) => {
+      const lowerKey = key.toLowerCase();
+      if ([
+        'content-length',
+        'transfer-encoding',
+        'x-frame-options',
+        'cross-origin-embedder-policy',
+        'cross-origin-opener-policy',
+        'content-security-policy',
+      ].includes(lowerKey)) {
+        return;
+      }
+      if (rawValue == null) return;
+      res.setHeader(key, rawValue);
+    });
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    res.setHeader('Content-Length', String(responseBuffer.length));
+    res.setHeader('cross-origin-resource-policy', 'same-origin');
+    return res.end(responseBuffer);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+app.use('/preview', (req, res, next) =>
+  relayPreviewRequest(req, res, next, {
+    upstreamPath: req.originalUrl.replace(/^\/preview\//, '/api/sandbox-preview/'),
+  }),
+  previewProxy,
+);
+
+app.use('/api/sandbox-preview', (req, res, next) =>
+  relayPreviewRequest(req, res, next),
+);
+
+app.use('/api/docker', dockerApiProxy);
 
 console.log(`📺 Preview proxy: /preview/* -> ${DOCKER_BACKEND_URL}/preview/*`);
+console.log(`🐳 Docker API proxy: /api/docker/* -> ${DOCKER_BACKEND_URL}/*`);
 
 // Serve static files with smart caching
 // Files with content hashes (e.g., /assets/index-abc123.js) get long cache
@@ -202,6 +350,10 @@ const server = app.listen(port, '0.0.0.0', () => {
 server.on('upgrade', (req, socket, head) => {
   if (req.url?.startsWith('/preview/') && typeof previewProxy.upgrade === 'function') {
     previewProxy.upgrade(req, socket, head);
+    return;
+  }
+  if (req.url?.startsWith('/api/docker/') && typeof dockerApiProxy.upgrade === 'function') {
+    dockerApiProxy.upgrade(req, socket, head);
   }
 });
 
