@@ -15,6 +15,7 @@
  */
 
 import { createScopedLogger } from '~/utils/logger';
+import { DOCKER_URL as DOCKER_BACKEND_URL } from './docker-api';
 
 const logger = createScopedLogger('ContextCacheService');
 
@@ -60,10 +61,6 @@ interface CacheResult {
 // Configuration
 // ============================================================================
 
-let DOCKER_BACKEND_URL = import.meta.env.VITE_DOCKER_BACKEND_URL || 'https://docker.recoder.xyz';
-if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && DOCKER_BACKEND_URL.includes('localhost')) {
-  DOCKER_BACKEND_URL = 'https://docker.recoder.xyz';
-}
 const LOCAL_HASH_CACHE_KEY = 'recoder:context-hashes';
 
 // ============================================================================

@@ -4,7 +4,7 @@
 
 import { WebContainer } from '@webcontainer/api';
 import { WORK_DIR_NAME } from '~/utils/constants';
-import { appendDockerAuthQuery, getSessionToken, withDockerCredentials } from '~/lib/services/docker-api';
+import { appendDockerAuthQuery, DOCKER_URL, getSessionToken, withDockerCredentials } from '~/lib/services/docker-api';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('RuntimeIndex');
 
@@ -22,13 +22,7 @@ export const runtimeContext: RuntimeContext = {
   mode: (import.meta.env.VITE_RUNTIME_MODE as RuntimeMode) || 'webcontainer',
   ready: false,
   projectId: null,
-  dockerUrl: (() => {
-    let url = import.meta.env.VITE_DOCKER_BACKEND_URL || null;
-    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && url?.includes('localhost')) {
-      url = 'https://docker.recoder.xyz';
-    }
-    return url;
-  })(),
+  dockerUrl: DOCKER_URL || null,
 };
 
 // WebContainer instance (for webcontainer mode)
