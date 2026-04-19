@@ -29,11 +29,16 @@ export function useRecordCommand() {
   });
 }
 
-export function useCommandHistory(type?: CommandType) {
+interface CommandPaletteQueryOptions {
+  enabled?: boolean;
+}
+
+export function useCommandHistory(type?: CommandType, options?: CommandPaletteQueryOptions) {
   return useQuery({
     queryKey: commandPaletteKeys.history(type),
     queryFn: () => getCommandHistory(20, type),
     staleTime: 30_000,
+    enabled: options?.enabled ?? true,
   });
 }
 
@@ -56,11 +61,12 @@ export function usePinCommand() {
   });
 }
 
-export function useCommandPins() {
+export function useCommandPins(options?: CommandPaletteQueryOptions) {
   return useQuery({
     queryKey: commandPaletteKeys.pins(),
     queryFn: () => getCommandPins(),
     staleTime: 60_000,
+    enabled: options?.enabled ?? true,
   });
 }
 

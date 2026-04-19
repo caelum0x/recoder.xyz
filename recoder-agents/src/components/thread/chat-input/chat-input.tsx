@@ -1082,14 +1082,17 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const { data: agentsResponse, isLoading: isLoadingAgents } = useAgents({}, { enabled: isLoggedIn });
+    const shouldLoadAgents = isLoggedIn && (!onAgentSelect || selectedAgentId !== undefined);
+    const { data: agentsResponse, isLoading: isLoadingAgents } = useAgents({}, { enabled: shouldLoadAgents });
     const agents = Array.isArray(agentsResponse?.agents) ? agentsResponse.agents : [];
 
     // Check if selected agent is Recoder based on agent data
     // While loading, default to Recoder (assume Recoder is the default agent)
     const selectedAgent = agents.find(agent => agent.agent_id === selectedAgentId);
     const recoderAgent = agents.find(agent => agent.metadata?.is_recoder_default === true || agent.metadata?.is_suna_default === true);
-    const isRecoderAgent = isLoadingAgents 
+    const isRecoderAgent = !shouldLoadAgents
+        ? selectedAgentId === undefined
+        : isLoadingAgents 
         ? true // Show Recoder modes while loading
         : (selectedAgent?.metadata?.is_recoder_default || selectedAgent?.metadata?.is_suna_default || (!selectedAgentId && recoderAgent !== undefined) || false);
 

@@ -5,6 +5,52 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('ProjectsApi');
 
+function getHubApiBaseUrl(context?: LoaderFunctionArgs['context'] | ActionFunctionArgs['context']): string {
+  const env = context.cloudflare?.env as Record<string, string | undefined> | undefined;
+  return (
+    env?.MAIN_SITE_URL ||
+    env?.APP_URL ||
+    process.env.MAIN_SITE_URL ||
+    process.env.APP_URL ||
+    'https://recoder.xyz'
+  ).replace(/\/$/, '');
+}
+
+type HubProjectListItem = {
+  id: string;
+  urlId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  fileCount?: number;
+  directories?: string[];
+  fileSnapshot?: Record<string, string>;
+};
+
+function mapHubProjectToLegacyShape(project: HubProjectListItem, userId: string) {
+  return {
+    id: project.id,
+    name: project.title || project.description || 'Untitled Project',
+    type: 'web',
+    description: project.description || '',
+    status: 'active',
+    config: {},
+    framework: undefined,
+    language: undefined,
+    isPrivate: true,
+    metadata: {
+      source: 'project_snapshots',
+      urlId: project.urlId || null,
+      directories: project.directories || [],
+      fileCount: project.fileCount ?? Object.keys(project.fileSnapshot || {}).length,
+    },
+    userId,
+    createdAt: project.createdAt ? new Date(project.createdAt) : new Date(0),
+    updatedAt: project.updatedAt ? new Date(project.updatedAt) : new Date(),
+  };
+}
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const url = new URL(request.url);
@@ -21,6 +67,37 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     if (!userId) {
       return json({ projects: [], error: null }); // Return empty for no user
+    }
+
+    const cookie = request.headers.get('Cookie');
+    if (cookie) {
+      try {
+        const hubUrl = new URL('/api/projects', getHubApiBaseUrl(context));
+        hubUrl.searchParams.set('limit', '100');
+
+        const response = await fetch(hubUrl.toString(), {
+          headers: {
+            Cookie: cookie,
+            Accept: 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const payload = await response.json() as { success?: boolean; data?: HubProjectListItem[] };
+          const projects = Array.isArray(payload.data)
+            ? payload.data.map((project) => mapHubProjectToLegacyShape(project, userId))
+            : [];
+          return json({ projects, error: null });
+        }
+
+        logger.warn('Hub project list request failed, falling back to legacy DB', {
+          status: response.status,
+        });
+      } catch (error) {
+        logger.warn('Hub project list request threw, falling back to legacy DB', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     // Try Redis cache first

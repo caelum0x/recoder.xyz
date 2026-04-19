@@ -19,7 +19,7 @@ Keep the public Recoder surfaces working end to end:
 | --- | --- | --- |
 | Hub | `recoder.xyz` | Auth and Launch Web IDE bridge working. |
 | Web IDE | `web.recoder.xyz` | Launch, coding, preview, and follow-up edit working in production with clean latest browser pass. |
-| Agents | `agents.recoder.xyz` | Main authenticated paths working; residual duplicated thread/agent-runs `404` calls and Board interaction warning remain. |
+| Agents | `agents.recoder.xyz` | Main authenticated paths working; local startup-race cleanup is ahead of prod. Live sweep still shows duplicated thread/agent-runs `404` calls plus intermittent `/v1/commands/history` and `/v1/agents` `503`s. |
 | PM | `pm.recoder.xyz` | Authenticated PM surface verified clean again. |
 | Agency | `agency.recoder.xyz` | Authenticated launch/workspaces/playground/tasks/settings verified; one React console warning remains. |
 | Docker Backend | `docker.recoder.xyz` | Running and backing Web IDE production flow. |
@@ -118,9 +118,12 @@ Backend/runtime-verified:
 
 Remaining non-blocking but real issues:
 
-- duplicated legacy `404` calls for some thread detail / agent-runs routes
+- duplicated legacy `404` calls for some thread detail / agent-runs routes in live prod (local fix prepared)
 - Board/Canvas interaction still has an overlay-click issue in authenticated browser automation
 - chat response rendering speed/visibility still needs one cleaner pass
+- intermittent startup `503`s on:
+  - `/v1/commands/history`
+  - `/v1/agents`
 
 ### 2. Agency cleanup
 
@@ -130,11 +133,15 @@ Remaining non-blocking issue:
 
 ### 3. Persistence cleanup
 
-Still unfinished:
+In progress:
 
-- `recoder-app` snapshot route rollout / verification
-- removing remaining persistence drift between Web/app/chat/project state
-- keeping one clear source of truth for project files and metadata
+- `recoder-web` project reads now prefer the snapshot-backed hub APIs
+- `recoder-web` chat restore now prefers canonical project snapshots over stale chat-history snapshots when a project exists
+- `recoder-web` chat-history saves now best-effort mirror `fileSnapshot` writes to the hub project snapshot API
+- still unfinished:
+  - final live verification of the new snapshot-backed read/write path
+  - removing the remaining chat-history/fileSnapshot coupling in Web restore/save flows
+  - keeping one clear source of truth for project files and metadata end to end
 
 ## Desired Architecture
 

@@ -618,6 +618,24 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
 
     if (data && data.length > 0) {
       const chat = data[0];
+      let fileSnapshot = chat.fileSnapshot;
+
+      if (chat.projectId) {
+        try {
+          const projectResponse = await fetch(`/api/projects/${encodeURIComponent(chat.projectId)}`);
+          if (projectResponse.ok) {
+            const projectPayload = await projectResponse.json() as {
+              project?: { fileSnapshot?: Record<string, string> };
+            };
+            const projectSnapshot = projectPayload.project?.fileSnapshot;
+            if (projectSnapshot && Object.keys(projectSnapshot).length > 0) {
+              fileSnapshot = projectSnapshot;
+            }
+          }
+        } catch (projectError) {
+          logger.warn('⚠️ [loadChatFromDatabase] Failed to load canonical project snapshot, falling back to chat snapshot:', projectError);
+        }
+      }
 
       // Return chat data with fileSnapshot
       // Workbench restoration will happen in useEffect after component mounts
@@ -628,7 +646,7 @@ async function loadChatFromDatabase(mixedId: string): Promise<ChatHistoryItem | 
         projectId: chat.projectId,
         messages: chat.messages || [],
         timestamp: chat.timestamp,
-        fileSnapshot: chat.fileSnapshot, // Pass fileSnapshot through
+        fileSnapshot, // Prefer canonical project snapshot when available
       };
     }
 
@@ -787,7 +805,7 @@ async function runNpmInstallWithCoordination(projectId: string): Promise<boolean
 
       if (!isValid) {
         logger.info('🧹 [runInstallWithCoordination] Cleaning invalid node_modules...');
-        await dockerPost(`/api/exec/${projectId}`, { command: 'rm -rf node_modules package-lock.json bun.lockb' });
+        await dockerPost(`/api/exec/${projectId}`, { command: 'rm -rf node_modules' });
       }
 
       // 🚀 OPTIMIZATION: Use bun for faster installs - --force handles peer deps
@@ -968,11 +986,7 @@ async function restoreFilesToDocker(
       const filesToRestore = Object.entries(fileSnapshot).filter(([path]) => {
         const lowerPath = path.toLowerCase();
         return !lowerPath.includes('node_modules') && 
-               !lowerPath.includes('.git/') &&
-               !lowerPath.includes('package-lock.json') &&
-               !lowerPath.includes('yarn.lock') &&
-               !lowerPath.includes('pnpm-lock.yaml') &&
-               !lowerPath.includes('bun.lockb');
+               !lowerPath.includes('.git/');
       });
     
       // 🚀 OPTIMIZATION: Collect all unique directories first
@@ -1041,6 +1055,39 @@ async function restoreFilesToDocker(
 
   fileRestorationPromises.set(projectId, restorePromise);
   return restorePromise;
+}
+
+async function captureSandboxFileSnapshot(projectId: string): Promise<Record<string, string>> {
+  try {
+    const response = await fetch(
+      `/api/get-sandbox-files?projectId=${encodeURIComponent(projectId)}&includeContent=true&maxDepth=12&maxFileSize=256`,
+      { credentials: 'include' },
+    );
+
+    if (!response.ok) {
+      return {};
+    }
+
+    const payload = await response.json() as {
+      success?: boolean;
+      files?: Array<{ relativePath?: string; content?: string }>;
+    };
+
+    if (!payload?.success || !Array.isArray(payload.files)) {
+      return {};
+    }
+
+    const snapshot: Record<string, string> = {};
+    for (const file of payload.files) {
+      if (file.relativePath && typeof file.content === 'string' && file.content.length > 0) {
+        snapshot[file.relativePath] = file.content;
+      }
+    }
+
+    return snapshot;
+  } catch {
+    return {};
+  }
 }
 
 export function useChatHistory() {
@@ -1415,9 +1462,12 @@ export function useChatHistory() {
 
       // Get workbench files snapshot - capture ALL file content
       const workbenchFiles = workbenchStore.files.get();
-      const fileSnapshot: Record<string, string> = {};
+      let fileSnapshot: Record<string, string> = {};
       let fileCount = 0;
       let totalSize = 0;
+      const persistedProjectId = isLikelySandboxProjectId(currentProjectId)
+        ? currentProjectId
+        : undefined;
 
       for (const [path, file] of Object.entries(workbenchFiles)) {
         if (file?.type === 'file' && file.content) {
@@ -1428,11 +1478,21 @@ export function useChatHistory() {
         }
       }
 
+      if (fileCount === 0 && persistedProjectId) {
+        const sandboxSnapshot = await captureSandboxFileSnapshot(persistedProjectId);
+        if (Object.keys(sandboxSnapshot).length > 0) {
+          fileSnapshot = sandboxSnapshot;
+          fileCount = Object.keys(fileSnapshot).length;
+          totalSize = Object.values(fileSnapshot).reduce((sum, content) => sum + content.length, 0);
+          logger.info('📂 [useChatHistory] Captured sandbox snapshot fallback before save:', {
+            projectId: persistedProjectId,
+            fileCount,
+          });
+        }
+      }
+
       // Don't modify the messages - save them as-is
       const enhancedMessages = messages;
-      const persistedProjectId = isLikelySandboxProjectId(currentProjectId)
-        ? currentProjectId
-        : undefined;
 
       // Try database first with file snapshot
       // Always mark chats from recoder-web as 'web' source

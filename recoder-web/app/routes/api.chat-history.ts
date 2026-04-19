@@ -9,6 +9,65 @@ import { createScopedLogger } from '~/utils/logger';
 
 const logger = createScopedLogger('ChatHistory');
 
+function getHubApiBaseUrl(context: ActionFunctionArgs['context'] | LoaderFunctionArgs['context']): string {
+  const env = resolveEnv(context as any);
+  return (
+    env.MAIN_SITE_URL ||
+    env.APP_URL ||
+    'https://recoder.xyz'
+  ).replace(/\/$/, '');
+}
+
+async function mirrorProjectSnapshotToHub(options: {
+  context: ActionFunctionArgs['context'];
+  request: Request;
+  projectId?: string;
+  fileSnapshot?: Record<string, string>;
+  title?: string;
+  description?: string;
+  source?: string;
+}) {
+  const { context, request, projectId, fileSnapshot, title, description, source } = options;
+  if (!projectId || !fileSnapshot || Object.keys(fileSnapshot).length === 0) {
+    return;
+  }
+
+  const cookie = request.headers.get('Cookie');
+  if (!cookie) {
+    return;
+  }
+
+  try {
+    const hubUrl = new URL(`/api/projects/${encodeURIComponent(projectId)}`, getHubApiBaseUrl(context));
+    const response = await fetch(hubUrl.toString(), {
+      method: 'PATCH',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        files: fileSnapshot,
+        title: title || undefined,
+        description: description || undefined,
+        source: source || 'web',
+      }),
+    });
+
+    if (!response.ok) {
+      logger.warn('Project snapshot mirror request failed', {
+        projectId,
+        status: response.status,
+      });
+    }
+  } catch (error) {
+    logger.warn('Project snapshot mirror request threw', {
+      projectId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // CRITICAL: Access real Node.js env vars at runtime, not build time.
 // Vite's node-polyfills plugin replaces ALL `process` references with a shim
 // that has empty env. We use a dynamic property access on globalThis to bypass.
@@ -284,6 +343,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     logger.info('✅ [api.chat-history.action] Save successful:', {
       sessionId: session.id,
       urlId: session.urlId,
+    });
+
+    await mirrorProjectSnapshotToHub({
+      context,
+      request,
+      projectId,
+      fileSnapshot,
+      title,
+      description,
+      source,
     });
 
     return json({
