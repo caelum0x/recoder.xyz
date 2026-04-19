@@ -190,7 +190,7 @@ export class PreviewsStore {
   async #pollForDevServer() {
     if (!this.#projectId || !DOCKER_URL) return;
 
-    const maxAttempts = 30; // 30 attempts * 2s = 60s max
+    const maxAttempts = 30; // initial fast polling window (~60s)
     let attempts = 0;
 
     logger.info(`🔄 [PreviewsStore] Starting dev server health polling for ${this.#projectId}`);
@@ -233,13 +233,15 @@ export class PreviewsStore {
         // Ignore errors, keep polling
       }
 
-      // Keep polling if not at max attempts
       if (attempts < maxAttempts) {
         setTimeout(checkHealth, 2000);
-      } else {
-        logger.warn('⚠️ [PreviewsStore] Dev server health check timed out after 30 attempts');
-        this.#enablePreview(); // Allow manual refresh
+        return;
       }
+
+      logger.warn('⚠️ [PreviewsStore] Dev server health check timed out after 30 attempts, continuing background polling');
+      // Do not force-mount the preview iframe with a non-ready URL.
+      // Keep polling at a slower cadence until the backend reports a responding port.
+      setTimeout(checkHealth, 5000);
     };
 
     setTimeout(checkHealth, 2000);
