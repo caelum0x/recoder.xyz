@@ -13,7 +13,7 @@ import {
 } from "@recoder-internal/ui/dialog";
 import { useToasts } from "@recoder-internal/ui/toast";
 import { Copy, Ellipsis, RefreshCw, Trash2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -44,10 +44,16 @@ export function InvitationListItem({
 	const [error, setError] = useState("");
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [dropdownOpen, setDropdownOpen] = useState(false);
+	const [currentTime, setCurrentTime] = useState<number | null>(null);
 	const [isResendPending, startResendTransition] = useTransition();
 	const [isRevokePending, startRevokeTransition] = useTransition();
 
-	const expired = expiredAt.getTime() < Date.now();
+	useEffect(() => {
+		setCurrentTime(Date.now());
+	}, []);
+
+	const expired =
+		currentTime !== null && expiredAt.getTime() < currentTime;
 
 	const handleCopy = async () => {
 		try {
@@ -104,8 +110,11 @@ export function InvitationListItem({
 						</div>
 					</div>
 					<div className="flex flex-col gap-y-1 font-medium">
-						<div className="text-inverse/50 text-[14px] leading-[20.4px] flex items-center">
-							{email}
+						<div
+							className="text-inverse/50 text-[14px] leading-[20.4px] flex items-center"
+							suppressHydrationWarning
+						>
+							{currentTime !== null ? email : ""}
 							<span className="ml-2 text-text-muted text-[12px] leading-[16px]">
 								(Invitation pending)
 							</span>
