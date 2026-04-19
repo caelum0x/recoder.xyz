@@ -157,6 +157,76 @@ async function ensureDependencies(containerId: string, projectId: string, isDayt
   );
 }
 
+export async function bootstrapDaytonaPreview(
+  projectId: string,
+  entry: { id: string; port?: number; daytonaPreviewUrl?: string },
+): Promise<{ ready: boolean; port?: number; previewUrl?: string }> {
+  const wakeResult = await ensureDaytonaSandboxRunning(entry.id);
+  if (!wakeResult.running) {
+    return { ready: false };
+  }
+
+  const framework = await detectFramework(entry.id, true).catch(() => 'vite');
+  const readyPort = await findReadyDaytonaPort(entry, framework);
+  if (readyPort !== null) {
+    entry.port = readyPort;
+    const preview = await getDaytonaPreviewAccess(entry, readyPort);
+    entry.daytonaPreviewUrl = preview.url;
+    return { ready: true, port: readyPort, previewUrl: preview.url };
+  }
+
+  await ensureDependencies(entry.id, projectId, true);
+  console.log(`[Bootstrap] Starting Daytona dev server for ${projectId} (${framework})`);
+  const result = await devServerManager.start(entry.id, projectId, framework, [5173, 3000, 3001, 3004, 3005, 3002], {
+    daytona: true,
+    daytonaPreviewUrl: entry.daytonaPreviewUrl,
+  });
+
+  if (result.ready && result.port) {
+    entry.port = result.port;
+    const preview = await getDaytonaPreviewAccess(entry, result.port);
+    entry.daytonaPreviewUrl = preview.url;
+    return { ready: true, port: result.port, previewUrl: preview.url };
+  }
+
+  return { ready: false };
+}
+
+export async function bootstrapDaytonaPreview(
+  projectId: string,
+  entry: { id: string; port?: number; daytonaPreviewUrl?: string },
+): Promise<{ ready: boolean; port?: number; previewUrl?: string }> {
+  const wakeResult = await ensureDaytonaSandboxRunning(entry.id);
+  if (!wakeResult.running) {
+    return { ready: false };
+  }
+
+  const framework = await detectFramework(entry.id, true).catch(() => 'vite');
+  const readyPort = await findReadyDaytonaPort(entry, framework);
+  if (readyPort !== null) {
+    entry.port = readyPort;
+    const preview = await getDaytonaPreviewAccess(entry, readyPort);
+    entry.daytonaPreviewUrl = preview.url;
+    return { ready: true, port: readyPort, previewUrl: preview.url };
+  }
+
+  await ensureDependencies(entry.id, projectId, true);
+  console.log(`[Bootstrap] Starting Daytona dev server for ${projectId} (${framework})`);
+  const result = await devServerManager.start(entry.id, projectId, framework, [5173, 3000, 3001, 3004, 3005, 3002], {
+    daytona: true,
+    daytonaPreviewUrl: entry.daytonaPreviewUrl,
+  });
+
+  if (result.ready && result.port) {
+    entry.port = result.port;
+    const preview = await getDaytonaPreviewAccess(entry, result.port);
+    entry.daytonaPreviewUrl = preview.url;
+    return { ready: true, port: result.port, previewUrl: preview.url };
+  }
+
+  return { ready: false };
+}
+
 function getDaytonaProxyHost(): string {
   const raw = process.env.DAYTONA_PROXY_HOST || 'host.docker.internal:4000';
   return raw.includes(':') ? raw.split(':')[0] : raw;
@@ -711,27 +781,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
         return handleSandboxPreview(req, res, containers, subPath, `/preview/${projectId}`);
       }
 
-      // Dev server not running — try to auto-start
-      console.log(`[Preview] Daytona dev server not ready for ${projectId}, attempting auto-start...`);
-      const now = Date.now();
-      const lastAttempt = autoStartAttempts.get(projectId) || 0;
-      if (now - lastAttempt > AUTO_START_COOLDOWN_MS && !devServerManager.isRunning(projectId)) {
-        autoStartAttempts.set(projectId, now);
-        try {
-          await ensureDependencies(entry.id, projectId, true);
-          const framework = await detectFramework(entry.id, true);
-          console.log(`[Preview] Auto-starting Daytona dev server for ${projectId} (${framework})`);
-          const ports = [5173, 3000, 3001, 3004, 3005, 3002]; // Vite (5173) first, then standard ports
-          await devServerManager.start(entry.id, projectId, framework, ports, {
-            daytona: true,
-            daytonaPreviewUrl: daytonaUrl,
-          });
-        } catch (err) {
-          console.warn(`[Preview] Daytona auto-start failed for ${projectId}:`, err);
-        }
-      }
-
-      // Show building page — auto-refreshes until server is ready
+      // Preview is readiness-only. Daytona bootstrap happens on write/start paths.
       const errorInfo = devServerManager.getErrorInfo(projectId);
       return res.status(503).send(friendlyPreviewPage(
         projectId,
@@ -969,7 +1019,18 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       return res.status(404).send('<h1>Sandbox not found</h1><p>The preview container is not running.</p>');
     }
     try {
-      const port = entry.port || 5173;
+      const framework = await detectFramework(entry.id, true).catch(() => 'vite');
+      const readyPort = await findReadyDaytonaPort(entry, framework);
+      if (readyPort === null) {
+        return res.status(503).send(friendlyPreviewPage(
+          projectId,
+          'The preview server is starting. This page will auto-refresh when ready.',
+          { showLogs: true, canRetry: true },
+        ));
+      }
+
+      entry.port = readyPort;
+      const port = readyPort;
       // Use internal Daytona proxy (port 4000) for sandbox preview — avoids going through public internet
       // The Daytona proxy handles {port}-{sandboxId} routing internally, same as *.sandbox.recoder.xyz
       // Use Node http.request instead of fetch — fetch may silently override Host header

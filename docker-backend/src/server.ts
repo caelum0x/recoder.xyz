@@ -123,6 +123,7 @@ import { getDaytonaClient, isDaytonaConfigured } from './daytona-client.js';
 import {
   type ContainerEntry,
   isDaytonaSandbox,
+  buildDaytonaDevServerSessionId,
   daytonaWriteFile,
   daytonaWriteFiles,
   daytonaReadFile,
@@ -152,6 +153,7 @@ import {
 } from './auth-utils.js';
 import { recoverContainerFromDocker } from './container-recovery.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
+import { bootstrapDaytonaPreview } from './preview';
 // Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
 const getVercelDeploy = () => import('./deployment/vercel.js');
 const getNetlifyDeploy = () => import('./deployment/netlify.js');
@@ -2775,6 +2777,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           userId,
           daytona: true,
           daytonaPreviewUrl: previewUrl,
+          daytonaDevSessionId: buildDaytonaDevServerSessionId(projectId),
         });
         daytonaSandboxIds.add(sandbox.id);
         registerDaytonaId(sandbox.id);
@@ -3652,6 +3655,22 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
 
     // Notify auto-restore that user made file changes (gives more retry attempts)
     devServerManager.onFileChange(projectId);
+
+    if (isDaytonaSandbox(entry) && sanitizedFiles.length > 0) {
+      try {
+        const bootstrap = await bootstrapDaytonaPreview(projectId, entry as any);
+        if (bootstrap.ready && bootstrap.port) {
+          entry.port = bootstrap.port;
+          entry.backgroundDev = true;
+          if (bootstrap.previewUrl) {
+            (entry as any).daytonaPreviewUrl = bootstrap.previewUrl;
+          }
+          persistContainers();
+        }
+      } catch (bootstrapErr: any) {
+        logger.warn({ projectId, err: bootstrapErr?.message || bootstrapErr }, 'daytona preview bootstrap skipped after batch write');
+      }
+    }
 
     // Record successful batch write
     metricsCollector.recordFileOperation({
