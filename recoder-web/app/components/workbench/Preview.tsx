@@ -784,19 +784,6 @@ export const Preview = memo(() => {
   }, [scheduleCoalescedRefresh]);
   // ---------- End file-change coalesced refresh ----------
 
-  // Listen for dev-server-ready event from workbench (container already had running server)
-  useEffect(() => {
-    const handleDevServerReady = () => {
-      // If we already have a preview URL, force refresh to pick up the running server
-      if (iframeUrl && iframeRef.current) {
-        forceRefreshPreview();
-      }
-    };
-
-    window.addEventListener('recoder:dev-server-ready', handleDevServerReady);
-    return () => window.removeEventListener('recoder:dev-server-ready', handleDevServerReady);
-  }, [iframeUrl, forceRefreshPreview]);
-
   useEffect(() => {
     if (!activePreview) {
       setUrl('');
