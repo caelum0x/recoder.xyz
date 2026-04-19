@@ -2,11 +2,8 @@ import "./styles.css";
 import { AnalyticsProvider } from "@repo/analytics";
 import { DesignSystemProvider } from "@repo/design-system/components/provider";
 import type { Metadata } from "next";
-import Image from "next/image";
 import localFont from "next/font/local";
 import { type ReactNode, Suspense } from "react";
-import { AppSwitcher } from "@/components/app-switcher";
-import { MountedOnly } from "@/components/mounted-only";
 import { QueryProvider } from "@/providers/query-provider";
 import { Identify } from "./components/identify";
 import { Pageview } from "./components/pageview";
@@ -54,6 +51,8 @@ const siteUrl = env.RECODER_PM_API_URL;
 const title = "Recoder PM — Cursor for Product Managers";
 const description = "AI-first product management. Automated feedback analysis, intelligent feature prioritization, insight synthesis, and roadmap planning. The way PMs should work.";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title,
@@ -100,14 +99,6 @@ const RootLayout = ({ children }: RootLayoutProperties) => (
     suppressHydrationWarning
   >
     <body className="min-h-screen bg-backdrop" suppressHydrationWarning>
-      <div className="fixed left-4 top-4 z-[9999] flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/80 px-1.5 py-1 backdrop-blur-sm">
-        <a href="/" aria-label="Recoder Home">
-          <Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
-        </a>
-        <MountedOnly>
-          <AppSwitcher />
-        </MountedOnly>
-      </div>
       <AnalyticsProvider>
         <Suspense fallback={null}>
           <Pageview />
