@@ -200,8 +200,21 @@ function log(test, status, detail) {
   // TEST 6: Navigate to Canvas/Board mode
   // ───────────────────────────────────────────────
   console.log("\n--- Test 6: Canvas/Board ---");
-  // Check if there's a Board/Canvas mode button
-  const boardBtn = page.locator('button:has-text("Board"), button:has-text("Canvas"), a:has-text("Board"), [data-mode="canvas"]').first();
+  // Dismiss any blocking overlay/modal before looking for mode controls
+  await page.keyboard.press("Escape").catch(() => {});
+  const modalClose = page
+    .locator('button[aria-label="Close"], button:has-text("Close"), [data-slot="dialog-close"]')
+    .first();
+  if (await modalClose.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await modalClose.click().catch(() => {});
+  }
+
+  // Check if there's a dedicated Board/Canvas mode control.
+  // Avoid matching "Leaderboard" by using exact accessible-name patterns.
+  const boardBtn = page
+    .locator('button, a, [data-mode="canvas"]')
+    .filter({ hasText: /^(Board|Canvas)$/i })
+    .first();
   const hasBoard = await boardBtn.isVisible({ timeout: 5000 }).catch(() => false);
 
   if (hasBoard) {

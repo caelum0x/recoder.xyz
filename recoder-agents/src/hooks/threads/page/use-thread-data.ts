@@ -53,8 +53,24 @@ export function useThreadData(
   
   const retryCountRef = useRef(0);
 
-  const threadQuery = useThreadQuery(threadId);
+  const threadQuery = useThreadQuery(threadId, waitingForAgent ? {
+    retry: (failureCount, error: any) => {
+      const errorStr = error?.message?.toLowerCase() || '';
+      const is404 = error?.status === 404 || errorStr.includes('404') || errorStr.includes('not found');
+      if (is404) {
+        return failureCount < 20;
+      }
+      return failureCount < 1;
+    },
+    retryDelay: (attemptIndex, error: any) => {
+      const errorStr = error?.message?.toLowerCase() || '';
+      const is404 = error?.status === 404 || errorStr.includes('404') || errorStr.includes('not found');
+      return is404 ? 1000 : 1000;
+    },
+  } : undefined);
+  const threadReady = !!threadQuery.data;
   const messagesQuery = useMessagesQuery(threadId, {
+    enabled: !!threadId && (!waitingForAgent || threadReady),
     refetchInterval: false,
     staleTime: 5000,
   });
@@ -71,7 +87,7 @@ export function useThreadData(
   const shouldPollAgentRuns = waitingForAgent && !foundRunningAgentRef.current && !agentRunId;
   
   const agentRunsQuery = useAgentRunsQuery(threadId, { 
-    enabled: !isShared,
+    enabled: !isShared && !!threadId && (!waitingForAgent || threadReady),
     refetchInterval: shouldPollAgentRuns ? 2000 : false,
     staleTime: 1000,
   });
