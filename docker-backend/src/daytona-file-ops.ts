@@ -47,6 +47,8 @@ export interface ContainerEntry {
   daytona?: boolean;
   /** Preview URL for Daytona sandboxes (e.g. https://3000-<id>.sandbox.recoder.xyz) */
   daytonaPreviewUrl?: string;
+  /** Named Daytona session used for the dev server process */
+  daytonaDevSessionId?: string;
 }
 
 /**
@@ -318,8 +320,8 @@ export async function daytonaExecBackground(
 ): Promise<void> {
   await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
-  // Only escape backticks to prevent command injection.
-  const safeCmd = command.replace(/`/g, '\\`');
+  const sessionId = buildDaytonaDevServerSessionId(options?.projectId || sandboxId);
+  const safeCwd = cwd.replace(/'/g, "'\\''");
 
   if (!options?.skipCleanup) {
     try {
@@ -329,18 +331,22 @@ export async function daytonaExecBackground(
     }
   }
 
-  // Keep this script short enough that DaytonaClient.execCommand can inline it
-  // via `sh -c` instead of falling back to the long base64 temp-script path.
-  // The known-good manual sandbox repro uses a direct `nohup <command> &`
-  // launch, so avoid the extra nested `sh -lc` layer here.
+  await dc.createSession(sandboxId, sessionId);
+
   const script = [
     `NODE_BIN=/usr/local/nvm/versions/node/v22.14.0/bin/node`,
     `[ -x "$NODE_BIN" ] || NODE_BIN="$(command -v node 2>/dev/null || true)"`,
     `[ -n "$NODE_BIN" ] && export PATH="$(dirname "$NODE_BIN"):$PATH"`,
+    `cd '${safeCwd}'`,
     `: > /tmp/dev.log`,
-    `BROWSER=none nohup ${safeCmd} >/tmp/dev.log 2>&1 & echo $! >/tmp/dev.pid`,
+    `echo $$ >/tmp/dev.pid`,
+    `exec env BROWSER=none ${command} >/tmp/dev.log 2>&1`,
   ].join(' && ');
-  await dc.execCommand(sandboxId, script, { cwd, timeoutSecs: 10 });
+  await dc.execInSession(
+    sandboxId,
+    sessionId,
+    `sh -lc ${JSON.stringify(script)}`,
+  );
 }
 
 // ── Workspace state ──
