@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Image from "next/image";
 import "./globals.css";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -80,13 +79,6 @@ export default function RootLayout({
 			</head>
 			<body>
 				<a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-1/2 focus:-translate-x-1/2 focus:z-[10000] focus:px-4 focus:py-2 focus:bg-orange-500 focus:text-white focus:rounded-lg">Skip to main content</a>
-				<a
-					href="/"
-					aria-label="Recoder Home"
-					className="fixed left-4 top-4 z-[9999] rounded-lg border border-white/10 bg-black/30 p-1 backdrop-blur-sm"
-				>
-					<Image src="/logo.png" alt="Recoder logo" width={36} height={36} />
-				</a>
 				<main id="main-content">
 				<ThemeProvider
 					attribute="class"

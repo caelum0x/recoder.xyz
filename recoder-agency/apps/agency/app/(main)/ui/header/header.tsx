@@ -2,27 +2,17 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { RecoderLogo } from "@/components/recoder-logo";
 import { AccountMenu, getCurrentUser } from "./account-menu";
-import { AppSwitcher } from "./app-switcher";
 import { MobileMenu } from "./mobile-menu";
-import { NotificationBell } from "./notification-bell";
-import { SubscriptionBadge } from "./subscription-badge";
 import { getTeamContext, TeamSwitcher } from "./team-switcher";
-import { getUpgradeButtonContext, UpgradeButton } from "./upgrade-button";
 
 export function Header() {
 	return (
 		<header className="h-16 shrink-0 border-b border-border flex items-center justify-between px-4 md:px-6 bg-background">
-			{/* Left side: Logo + App Switcher + Team Selection */}
+			{/* Left side: Logo + Team Selection */}
 			<div className="flex items-center gap-2">
 				<Link href="/" aria-label="Go to home" className="group">
 					<RecoderLogo size={24} />
 				</Link>
-				<span className="hidden md:inline-flex">
-					<AppSwitcher />
-				</span>
-				<span className="hidden md:inline text-inverse/20 text-[18px] font-[250] leading-none ml-[4px]">
-					/
-				</span>
 
 				<span className="hidden md:inline-flex">
 					<Suspense
@@ -37,17 +27,6 @@ export function Header() {
 
 			{/* Right side: Desktop nav (hidden on mobile) */}
 			<div className="hidden md:flex items-center gap-4">
-				<SubscriptionBadge />
-				<NotificationBell />
-				<Suspense
-					fallback={
-						<div className="w-16 h-6 bg-inverse/20 animate-pulse rounded-md" />
-					}
-				>
-					<UpgradeButton
-						getUpgradeButtonContextPromise={getUpgradeButtonContext()}
-					/>
-				</Suspense>
 				<a
 					href="https://docs.recoder.xyz"
 					className="text-link-muted hover:text-accent text-sm transition-colors"
@@ -67,15 +46,6 @@ export function Header() {
 
 			{/* Mobile menu toggle + drawer (visible only on mobile) */}
 			<MobileMenu>
-				<Suspense
-					fallback={
-						<div className="w-16 h-6 bg-inverse/20 animate-pulse rounded-md" />
-					}
-				>
-					<UpgradeButton
-						getUpgradeButtonContextPromise={getUpgradeButtonContext()}
-					/>
-				</Suspense>
 				<Suspense
 					fallback={
 						<div className="w-8 h-8 bg-inverse/20 animate-pulse rounded-full" />
