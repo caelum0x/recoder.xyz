@@ -22,6 +22,8 @@ type OrganizationLayoutProperties = {
   readonly children: ReactNode;
 };
 
+export const dynamic = "force-dynamic";
+
 const OrganizationLayout = async ({
   children,
 }: OrganizationLayoutProperties) => {
