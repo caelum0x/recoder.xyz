@@ -353,7 +353,10 @@ server.on('upgrade', (req, socket, head) => {
     return;
   }
   if (req.url?.startsWith('/api/docker/') && typeof dockerApiProxy.upgrade === 'function') {
+    const originalUrl = req.url;
+    req.url = req.url.replace(/^\/api\/docker/, '') || '/';
     dockerApiProxy.upgrade(req, socket, head);
+    req.url = originalUrl;
   }
 });
 
