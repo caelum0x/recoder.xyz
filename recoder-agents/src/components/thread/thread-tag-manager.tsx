@@ -107,8 +107,11 @@ interface TagSelectorPopoverProps {
 }
 
 export function TagSelectorPopover({ threadId, children }: TagSelectorPopoverProps) {
+  const [open, setOpen] = useState(false);
   const { data: allTags = [] } = useThreadTags();
-  const { data: threadTags = [] } = useThreadTagAssignments(threadId);
+  const { data: threadTags = [] } = useThreadTagAssignments(threadId, {
+    enabled: open,
+  });
   const assignMutation = useAssignTag();
   const removeMutation = useRemoveTag();
   const createMutation = useCreateTag();
@@ -160,7 +163,7 @@ export function TagSelectorPopover({ threadId, children }: TagSelectorPopoverPro
   };
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
         <div className="p-2 border-b">

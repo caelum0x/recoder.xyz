@@ -148,7 +148,9 @@ export function ArchivedThreadsSection() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const { data: archivedData, isLoading } = useArchivedThreads();
+  const { data: archivedData, isLoading } = useArchivedThreads(50, 0, {
+    enabled: isOpen,
+  });
   const unarchiveMutation = useBulkUnarchiveThreads();
   const deleteMutation = useBulkDeleteThreads();
 
