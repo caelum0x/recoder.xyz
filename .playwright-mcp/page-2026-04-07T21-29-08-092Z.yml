@@ -1,0 +1,89 @@
+- generic [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e9]:
+        - link "Recoder" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img "Recoder" [ref=e13]
+        - navigation [ref=e14]:
+          - link "Home" [ref=e15] [cursor=pointer]:
+            - /url: /
+        - link "Dashboard" [ref=e17] [cursor=pointer]:
+          - /url: /dashboard
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - paragraph [ref=e24]:
+            - generic [ref=e25]: What's cooking?
+            - generic [ref=e26]:
+              - generic [ref=e27]:
+                - generic [ref=e28]: W
+                - generic [ref=e29]: h
+                - generic [ref=e30]: a
+                - generic [ref=e31]: t
+                - generic [ref=e32]: "'"
+                - generic [ref=e33]: s
+              - generic [ref=e34]:
+                - generic [ref=e35]: c
+                - generic [ref=e36]: o
+                - generic [ref=e37]: o
+                - generic [ref=e38]: k
+                - generic [ref=e39]: i
+                - generic [ref=e40]: "n"
+                - generic [ref=e41]: g
+                - generic [ref=e42]: "?"
+          - paragraph [ref=e43]: Choose a mode to get started with templates and examples
+          - generic [ref=e47]:
+            - button "Slides" [ref=e48] [cursor=pointer]:
+              - img [ref=e50]
+              - generic [ref=e53]: Slides
+            - button "Data" [ref=e54] [cursor=pointer]:
+              - img [ref=e56]
+              - generic [ref=e58]: Data
+            - button "Docs" [ref=e59] [cursor=pointer]:
+              - img [ref=e61]
+              - generic [ref=e64]: Docs
+            - button "Canvas" [ref=e65] [cursor=pointer]:
+              - img [ref=e67]
+              - generic [ref=e73]: Canvas
+            - button "Video" [ref=e74] [cursor=pointer]:
+              - img [ref=e76]
+              - generic [ref=e79]: Video
+            - button "Research" [ref=e80] [cursor=pointer]:
+              - img [ref=e82]
+              - generic [ref=e85]: Research
+            - button "Deep Coding" [ref=e86] [cursor=pointer]:
+              - img [ref=e88]
+              - generic [ref=e90]: Deep Coding
+            - button "Image" [ref=e91] [cursor=pointer]:
+              - img [ref=e93]
+              - generic [ref=e97]: Image
+        - generic [ref=e104]:
+          - generic [ref=e106]:
+            - button "Analyze codebase" [ref=e107] [cursor=pointer]
+            - button "Write tests" [ref=e108] [cursor=pointer]
+            - button "Create workflow" [ref=e109] [cursor=pointer]
+            - button "Search knowledge" [ref=e110] [cursor=pointer]
+            - button "Debug issue" [ref=e111] [cursor=pointer]
+            - button "Code review" [ref=e112] [cursor=pointer]
+          - generic [ref=e113]:
+            - textbox "Describe what you need help with..." [active] [ref=e130]
+            - generic [ref=e116]:
+              - generic [ref=e117]:
+                - button [ref=e119] [cursor=pointer]:
+                  - img
+                - button "trello salesforce" [ref=e144] [cursor=pointer]:
+                  - generic [ref=e135]:
+                    - img "trello" [ref=e145]
+                    - img "salesforce" [ref=e146]
+              - generic [ref=e125]:
+                - button [ref=e126] [cursor=pointer]:
+                  - img
+                - button [ref=e127] [cursor=pointer]:
+                  - img
+                - generic [ref=e128]:
+                  - button [disabled]:
+                    - img
+  - region "Notifications alt+T"
+  - alert [ref=e129]

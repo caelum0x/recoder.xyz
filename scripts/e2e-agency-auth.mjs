@@ -50,7 +50,7 @@ function log(status, detail) {
 
   page.on("pageerror", (err) => consoleErrors.push(err.message));
   page.on("console", (msg) => {
-    if (msg.type() === "error") consoleErrors.push(msg.text());
+    if (msg.type() === "error") consoleErrors.push({ url: page.url(), text: msg.text() });
   });
   page.on("response", (resp) => {
     const url = resp.url();
@@ -193,11 +193,11 @@ function log(status, detail) {
 
   console.log("\n--- Console errors ---");
   const realErrors = consoleErrors.filter(
-    e => !e.includes("ERR_BLOCKED") && !e.includes("SES") && !e.includes("extension") && !e.includes("favicon")
+    e => !e.text.includes("ERR_BLOCKED") && !e.text.includes("SES") && !e.text.includes("extension") && !e.text.includes("favicon")
   );
   if (realErrors.length > 0) {
     for (const e of realErrors.slice(0, 5)) {
-      console.log(`  ${e.substring(0, 200)}`);
+      console.log(`  [${e.url}] ${e.text.substring(0, 200)}`);
     }
     log("WARN", `${realErrors.length} console errors`);
   } else {

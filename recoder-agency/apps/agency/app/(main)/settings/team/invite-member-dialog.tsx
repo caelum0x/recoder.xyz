@@ -42,7 +42,7 @@ export function InviteMemberDialog({
 	const [errors, setErrors] = useState<
 		{ message: string; emails?: string[] }[]
 	>([]);
-	const [dialogKey, setDialogKey] = useState(Date.now()); // Key for forced re-rendering
+	const [dialogKey, setDialogKey] = useState(0); // Key for forced re-rendering
 
 	// Reset state when dialog state changes
 	useEffect(() => {

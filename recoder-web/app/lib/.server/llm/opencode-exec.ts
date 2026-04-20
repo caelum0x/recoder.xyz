@@ -61,13 +61,17 @@ function getSessionKey(projectId: string, chatId?: string): string {
 }
 
 function getStoredSessionId(projectId: string, chatId?: string): string | undefined {
+  if (!chatId?.trim()) {
+    return undefined;
+  }
+
   pruneExpiredSessions();
   const stored = sessionIdsByChat.get(getSessionKey(projectId, chatId));
   return stored?.sessionId;
 }
 
 function storeSessionId(projectId: string, chatId: string | undefined, sessionId: string): void {
-  if (!sessionId.trim()) {
+  if (!sessionId.trim() || !chatId?.trim()) {
     return;
   }
 

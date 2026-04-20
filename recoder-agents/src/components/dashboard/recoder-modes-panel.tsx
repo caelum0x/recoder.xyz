@@ -1167,6 +1167,8 @@ export function RecoderModesPanel({
             return (
               <motion.button
                 key={mode.id}
+                data-mode={mode.id}
+                aria-label={mode.label}
                 onClick={() => {
                   onModeSelect(mode.id);
                   storeSetSelectedMode(mode.id);
@@ -1390,8 +1392,18 @@ export function RecoderModesPanel({
                 return (
                   <Card
                     key={item.id}
+                    data-canvas-action={item.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={item.name}
                     className="flex flex-col items-center gap-3 cursor-pointer group p-4 bg-transparent hover:bg-muted transition-all duration-200 border border-border rounded-xl overflow-hidden shadow-none"
                     onClick={() => handlePromptSelect(prompt)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handlePromptSelect(prompt);
+                      }
+                    }}
                   >
                     <div className="w-12 h-12 rounded-2xl bg-muted/50 group-hover:bg-primary/10 border border-border/50 group-hover:border-primary/30 group-hover:scale-105 transition-all duration-200 flex items-center justify-center text-muted-foreground group-hover:text-primary">
                       {getOptionIcon((item as { icon?: string }).icon || '')}
@@ -1800,8 +1812,18 @@ export function RecoderModesPanel({
                 return (
                   <Card
                     key={item.id}
+                    data-canvas-action={item.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={item.name}
                     className="flex flex-col items-center gap-2 cursor-pointer group p-2 bg-transparent hover:bg-transparent transition-all duration-200 border border-border hover:border-border rounded-xl overflow-hidden shadow-none"
                     onClick={() => handlePromptSelect(prompt)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handlePromptSelect(prompt);
+                      }
+                    }}
                   >
                     <div className="w-full aspect-square rounded-lg border border-transparent group-hover:scale-105 transition-all duration-200 flex items-center justify-center overflow-hidden relative">
                       {item.image ? (

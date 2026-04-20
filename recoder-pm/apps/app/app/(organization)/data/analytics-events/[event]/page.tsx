@@ -14,6 +14,7 @@ const providerLabels: Record<string, string> = {
   POSTHOG: "PostHog",
 };
 
+export const dynamic = "force-dynamic";
 type AnalyticsEventPageProps = {
   readonly params: Promise<{ event: string }>;
 };

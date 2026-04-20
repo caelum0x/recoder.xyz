@@ -204,13 +204,18 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
       >
         <div
           className={classNames(
-            'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 w-[var(--workbench-inner-width)] mr-4 z-0 transition-[left,width] duration-200 bolt-ease-cubic-bezier',
+            'fixed top-[calc(var(--header-height)+1.5rem)] bottom-6 z-0 transition-[left,right,width] duration-200 bolt-ease-cubic-bezier',
             {
-              'left-[var(--workbench-left)]': showWorkbench && !isFullscreen,
-              'left-[100%]': !showWorkbench,
               'left-0 right-0 top-0 bottom-0 w-full mr-0 z-50': isFullscreen,
             },
           )}
+          style={
+            isFullscreen
+              ? undefined
+              : showWorkbench
+                ? { left: 'var(--workbench-left)', right: '1rem' }
+                : { left: '100%', right: '-1rem' }
+          }
         >
           <div className="absolute inset-0 px-6">
             <div className="h-full flex flex-col bg-recoder-elements-background-depth-2 border border-recoder-elements-borderColor shadow-sm rounded-lg overflow-hidden">
@@ -255,35 +260,32 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
                 />
               </div>
               <div className="relative flex-1 overflow-hidden">
-                <View
-                  initial={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                  animate={{ x: selectedView === 'code' ? 0 : '-100%' }}
-                >
-                  <div className="relative h-full">
-                    <EditorPanel
-                      editorDocument={currentDocument}
-                      isStreaming={isStreaming}
-                      selectedFile={selectedFile}
-                      files={files}
-                      unsavedFiles={unsavedFiles}
-                      onFileSelect={onFileSelect}
-                      onEditorScroll={onEditorScroll}
-                      onEditorChange={onEditorChange}
-                      onFileSave={onFileSave}
-                      onFileReset={onFileReset}
-                    />
-                    {/* Compact action progress indicator - floats at bottom-right of editor */}
-                    <div className="absolute bottom-2 right-3 z-10">
-                      <CompactActionStatus />
+                {selectedView === 'code' ? (
+                  <div className="absolute inset-0 z-10">
+                    <div className="relative h-full">
+                      <EditorPanel
+                        editorDocument={currentDocument}
+                        isStreaming={isStreaming}
+                        selectedFile={selectedFile}
+                        files={files}
+                        unsavedFiles={unsavedFiles}
+                        onFileSelect={onFileSelect}
+                        onEditorScroll={onEditorScroll}
+                        onEditorChange={onEditorChange}
+                        onFileSave={onFileSave}
+                        onFileReset={onFileReset}
+                      />
+                      {/* Compact action progress indicator - floats at bottom-right of editor */}
+                      <div className="absolute bottom-2 right-3 z-10">
+                        <CompactActionStatus />
+                      </div>
                     </div>
                   </div>
-                </View>
-                <View
-                  initial={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                  animate={{ x: selectedView === 'preview' ? 0 : '100%' }}
-                >
-                  <Preview />
-                </View>
+                ) : (
+                  <div className="absolute inset-0 z-10">
+                    <Preview />
+                  </div>
+                )}
 
                 {/* Agent Panel overlay */}
                 {isAgentActive && (
@@ -341,11 +343,3 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
 interface ViewProps extends HTMLMotionProps<'div'> {
   children: React.JSX.Element;
 }
-
-const View = memo(({ children, ...props }: ViewProps) => {
-  return (
-    <motion.div className="absolute inset-0" transition={viewTransition} {...props}>
-      {children}
-    </motion.div>
-  );
-});

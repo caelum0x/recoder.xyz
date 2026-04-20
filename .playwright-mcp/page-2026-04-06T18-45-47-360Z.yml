@@ -1,0 +1,226 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - navigation [ref=e5]:
+        - link "Recoder Home" [ref=e6] [cursor=pointer]:
+          - /url: https://recoder.xyz
+          - img "Recoder" [ref=e7]
+        - link "Web" [ref=e9] [cursor=pointer]:
+          - /url: https://web.recoder.xyz
+        - link "Agency" [ref=e10] [cursor=pointer]:
+          - /url: https://agency.recoder.xyz
+        - link "PM" [ref=e11] [cursor=pointer]:
+          - /url: https://pm.recoder.xyz
+        - link "Agents" [ref=e12] [cursor=pointer]:
+          - /url: https://agents.recoder.xyz
+      - main [ref=e15]:
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - generic [ref=e19]:
+              - button "Open menu" [ref=e20]:
+                - img [ref=e21]
+              - button "Recoder" [ref=e22] [cursor=pointer]:
+                - generic [ref=e23]: Recoder
+                - img [ref=e24]
+            - generic [ref=e26]:
+              - button "Customize" [ref=e27] [cursor=pointer]:
+                - img
+                - text: Customize
+              - button "Basic 999,999 Credits" [ref=e28] [cursor=pointer]:
+                - img "Basic" [ref=e30]
+                - generic [ref=e31]:
+                  - generic [ref=e32]: 999,999
+                  - generic [ref=e33]: Credits
+                - img [ref=e35]
+            - generic [ref=e36]:
+              - generic [ref=e38]:
+                - generic [ref=e40]:
+                  - generic [ref=e43]:
+                    - img [ref=e44]
+                    - generic [ref=e47]: Agents
+                  - generic [ref=e52]:
+                    - img [ref=e53]
+                    - generic [ref=e55]: Threads (7d)
+                  - generic [ref=e60]:
+                    - img [ref=e61]
+                    - generic [ref=e65]: Workflows
+                  - generic [ref=e70]:
+                    - img [ref=e71]
+                    - generic [ref=e73]: Runs Today
+                - generic [ref=e77]:
+                  - link "New Agent" [ref=e78] [cursor=pointer]:
+                    - /url: /agents
+                    - img [ref=e79]
+                    - text: New Agent
+                  - link "New Thread" [ref=e80] [cursor=pointer]:
+                    - /url: /
+                    - img [ref=e81]
+                    - text: New Thread
+                  - link "View Workflows" [ref=e83] [cursor=pointer]:
+                    - /url: /agents
+                    - img [ref=e84]
+                    - text: View Workflows
+                  - link "Analytics" [ref=e88] [cursor=pointer]:
+                    - /url: /agents/config
+                    - img [ref=e89]
+                    - text: Analytics
+                - generic [ref=e93]:
+                  - button "All" [ref=e94]
+                  - button "Agents" [ref=e95]
+                  - button "Agency" [ref=e96]
+                  - button "PM" [ref=e97]
+                - generic [ref=e119]:
+                  - img [ref=e120]
+                  - generic [ref=e122]: Activity
+                - heading "Recent Activity" [level=3] [ref=e134]:
+                  - img [ref=e135]
+                  - text: Recent Activity
+                - generic [ref=e147]:
+                  - paragraph [ref=e149]:
+                    - generic [ref=e150]: Guess who's back, back again
+                    - generic [ref=e151]:
+                      - generic [ref=e152]:
+                        - generic [ref=e153]: G
+                        - generic [ref=e154]: u
+                        - generic [ref=e155]: e
+                        - generic [ref=e156]: s
+                        - generic [ref=e157]: s
+                      - generic [ref=e158]:
+                        - generic [ref=e159]: w
+                        - generic [ref=e160]: h
+                        - generic [ref=e161]: o
+                        - generic [ref=e162]: "'"
+                        - generic [ref=e163]: s
+                      - generic [ref=e164]:
+                        - generic [ref=e165]: b
+                        - generic [ref=e166]: a
+                        - generic [ref=e167]: c
+                        - generic [ref=e168]: k
+                        - generic [ref=e169]: ","
+                      - generic [ref=e170]:
+                        - generic [ref=e171]: b
+                        - generic [ref=e172]: a
+                        - generic [ref=e173]: c
+                        - generic [ref=e174]: k
+                      - generic [ref=e175]:
+                        - generic [ref=e176]: a
+                        - generic [ref=e177]: g
+                        - generic [ref=e178]: a
+                        - generic [ref=e179]: i
+                        - generic [ref=e180]: "n"
+                  - paragraph [ref=e181]: Choose a mode to get started with templates and examples
+                  - generic [ref=e185]:
+                    - button "Slides" [ref=e186] [cursor=pointer]:
+                      - img [ref=e188]
+                      - generic [ref=e191]: Slides
+                    - button "Data" [ref=e192] [cursor=pointer]:
+                      - img [ref=e194]
+                      - generic [ref=e196]: Data
+                    - button "Docs" [ref=e197] [cursor=pointer]:
+                      - img [ref=e199]
+                      - generic [ref=e202]: Docs
+                    - button "Canvas" [ref=e203] [cursor=pointer]:
+                      - img [ref=e205]
+                      - generic [ref=e211]: Canvas
+                    - button "Video" [ref=e212] [cursor=pointer]:
+                      - img [ref=e214]
+                      - generic [ref=e217]: Video
+                    - button "Research" [ref=e218] [cursor=pointer]:
+                      - img [ref=e220]
+                      - generic [ref=e223]: Research
+                    - button "Deep Coding" [ref=e224] [cursor=pointer]:
+                      - img [ref=e226]
+                      - generic [ref=e228]: Deep Coding
+                    - button "Image" [ref=e229] [cursor=pointer]:
+                      - img [ref=e231]
+                      - generic [ref=e235]: Image
+              - generic [ref=e242]:
+                - generic [ref=e244]:
+                  - button "Analyze codebase" [ref=e245] [cursor=pointer]
+                  - button "Write tests" [ref=e246] [cursor=pointer]
+                  - button "Create workflow" [ref=e247] [cursor=pointer]
+                  - button "Search knowledge" [ref=e248] [cursor=pointer]
+                  - button "Debug issue" [ref=e249] [cursor=pointer]
+                  - button "Code review" [ref=e250] [cursor=pointer]
+                - generic [ref=e251]:
+                  - textbox "Descri" [ref=e253]
+                  - generic [ref=e254]:
+                    - generic [ref=e255]:
+                      - button [ref=e257] [cursor=pointer]:
+                        - img
+                      - button "googledrive gmail" [ref=e259] [cursor=pointer]:
+                        - generic [ref=e260]:
+                          - img "googledrive" [ref=e261]
+                          - img "gmail" [ref=e262]
+                    - generic [ref=e263]:
+                      - button "Config menu" [ref=e264] [cursor=pointer]:
+                        - generic [ref=e265]:
+                          - img "Recoder" [ref=e267]
+                          - generic [ref=e268]: Recoder
+                          - img
+                      - button [ref=e269] [cursor=pointer]:
+                        - img
+                      - generic [ref=e270]:
+                        - button [disabled]:
+                          - img
+          - generic [ref=e272]:
+            - generic [ref=e273]:
+              - generic [ref=e274]:
+                - img [ref=e275]
+                - heading "Dashboard" [level=2] [ref=e280]
+              - generic [ref=e281]:
+                - button "Customize" [ref=e282] [cursor=pointer]:
+                  - img
+                  - text: Customize
+                - button "Layouts" [ref=e283] [cursor=pointer]:
+                  - img
+                  - text: Layouts
+                - button "New Layout" [ref=e284] [cursor=pointer]:
+                  - img
+                  - text: New Layout
+            - generic [ref=e285]:
+              - generic [ref=e287]:
+                - generic [ref=e289]:
+                  - img [ref=e290]
+                  - text: Stats Card
+                - paragraph [ref=e293]: Key metric statistics
+              - generic [ref=e295]:
+                - generic [ref=e297]:
+                  - img [ref=e298]
+                  - text: Health Status
+                - paragraph [ref=e302]: System health overview
+              - generic [ref=e304]:
+                - generic [ref=e306]:
+                  - img [ref=e307]
+                  - text: Quick Actions
+                - paragraph [ref=e310]: Common shortcuts
+              - generic [ref=e312]:
+                - generic [ref=e314]:
+                  - img [ref=e315]
+                  - text: Agent Status
+                - paragraph [ref=e318]: Active agent run statuses
+              - generic [ref=e320]:
+                - generic [ref=e322]:
+                  - img [ref=e323]
+                  - text: Recent Threads
+                - paragraph [ref=e326]: Latest conversation threads
+              - generic [ref=e328]:
+                - generic [ref=e330]:
+                  - img [ref=e331]
+                  - text: Activity Feed
+                - paragraph [ref=e336]: Recent platform activity
+  - region "Notifications alt+T":
+    - list:
+      - listitem [ref=e337]:
+        - img [ref=e339]
+        - generic [ref=e341]:
+          - generic [ref=e342]: Connection lost. Check your internet.
+          - generic [ref=e343]: Please check your internet connection and try again.
+      - listitem [ref=e344]:
+        - img [ref=e346]
+        - generic [ref=e348]:
+          - generic [ref=e349]: Connection lost. Check your internet.
+          - generic [ref=e350]: Please check your internet connection and try again.
+  - alert [ref=e351]

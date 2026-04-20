@@ -26,8 +26,12 @@ const APP_COLORS: Record<string, string> = {
   web: "#22c55e",
 };
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function timeAgo(now: number | null, dateStr: string): string {
+  if (now === null) {
+    return "";
+  }
+
+  const diff = now - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -39,6 +43,7 @@ function timeAgo(dateStr: string): string {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { data, refetch } = usePlatformApi<NotificationsResponse>(
     "/api/platform/notifications?limit=20",
@@ -46,13 +51,21 @@ export function NotificationBell() {
   );
 
   useEffect(() => {
+    setCurrentTime(Date.now());
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+
     function handleClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   const markRead = useCallback(
@@ -205,7 +218,7 @@ export function NotificationBell() {
                       {n.title}
                     </span>
                     <span style={{ marginLeft: "auto", fontSize: "11px", color: "#666", flexShrink: 0 }}>
-                      {timeAgo(n.createdAt)}
+                      {timeAgo(currentTime, n.createdAt)}
                     </span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#aaa", marginLeft: "14px" }}>

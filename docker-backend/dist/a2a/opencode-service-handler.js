@@ -20,6 +20,27 @@ exports.handleOpencodeServicePrompt = handleOpencodeServicePrompt;
 const opencode_service_adapter_1 = require("./opencode-service-adapter");
 const logger_1 = require("../logger");
 const logger = (0, logger_1.createLogger)('opencode-service-handler');
+const OPENCODE_AGENT_NAMES = new Set(['build', 'explore', 'general', 'plan']);
+function toPromptInputModel(model) {
+    if (!model) {
+        return {};
+    }
+    const trimmed = model.trim();
+    if (!trimmed) {
+        return {};
+    }
+    if (OPENCODE_AGENT_NAMES.has(trimmed)) {
+        return { agent: trimmed };
+    }
+    const slashIndex = trimmed.indexOf('/');
+    if (slashIndex > 0 && slashIndex < trimmed.length - 1) {
+        return {
+            providerID: trimmed.slice(0, slashIndex),
+            modelID: trimmed.slice(slashIndex + 1),
+        };
+    }
+    return {};
+}
 /**
  * Forward BYOK provider keys to the opencode service.
  * Each key is best-effort — failures are logged but don't block the prompt.
@@ -59,6 +80,7 @@ function extractResponseText(result) {
  */
 function extractModifiedFilePaths(result) {
     const paths = new Set();
+    const textPathPattern = /(?:\/workspace\/|\/home\/daytona\/)([^\s"'`),:;]+)|`((?:\/workspace\/|\/home\/daytona\/)[^`]+)`/g;
     for (const part of result.parts) {
         const record = part;
         // tool-call parts contain the tool name and arguments
@@ -76,6 +98,22 @@ function extractModifiedFilePaths(result) {
             const filePath = String(record.path || record.file || '');
             if (filePath)
                 paths.add(filePath);
+        }
+        // Some opencode responses only mention created/edited files in text or
+        // reasoning parts instead of structured tool-call metadata or diff output.
+        // Extract absolute workspace paths from those messages so we can still
+        // sync the changed files back into the sandbox.
+        if (record.type === 'text' || record.type === 'reasoning' || record.type === 'tool-result') {
+            const content = String(record.text || record.content || '');
+            if (!content)
+                continue;
+            let match;
+            while ((match = textPathPattern.exec(content)) !== null) {
+                const filePath = match[0].replace(/`/g, '');
+                if (filePath)
+                    paths.add(filePath);
+            }
+            textPathPattern.lastIndex = 0;
         }
     }
     return [...paths];
@@ -139,7 +177,7 @@ async function handleOpencodeServicePrompt(input) {
     await forwardProviderKeys(input.providerKeys);
     const result = await (0, opencode_service_adapter_1.promptProject)(input.projectId, {
         content: input.prompt,
-        agent: input.model,
+        ...toPromptInputModel(input.model),
     }, { directory: input.directory });
     // Sync files from opencode /workspace → Daytona sandbox
     const syncedFiles = await syncFilesToSandbox(input, result);

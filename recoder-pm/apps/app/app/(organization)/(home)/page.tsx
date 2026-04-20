@@ -13,6 +13,7 @@ const Greeting = dynamic(
   }
 );
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Home",
   description: "The homepage for your organization.",

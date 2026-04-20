@@ -106,6 +106,27 @@ function readProjectId(body) {
     const candidate = body.projectId ?? body.project_id;
     return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
 }
+const OPENCODE_AGENT_NAMES = new Set(['build', 'explore', 'general', 'plan']);
+function toPromptInputModel(model) {
+    if (typeof model !== 'string') {
+        return {};
+    }
+    const trimmed = model.trim();
+    if (!trimmed) {
+        return {};
+    }
+    if (OPENCODE_AGENT_NAMES.has(trimmed)) {
+        return { agent: trimmed };
+    }
+    const slashIndex = trimmed.indexOf('/');
+    if (slashIndex > 0 && slashIndex < trimmed.length - 1) {
+        return {
+            providerID: trimmed.slice(0, slashIndex),
+            modelID: trimmed.slice(slashIndex + 1),
+        };
+    }
+    return {};
+}
 exports.opencodeConnectorRouter = (0, express_1.Router)();
 exports.opencodeConnectorRouter.use(task_lifecycle_middleware_1.parseJsonTextBody);
 exports.opencodeConnectorRouter.post('/execute', async (req, res) => {
@@ -178,7 +199,7 @@ exports.opencodeConnectorRouter.post('/execute', async (req, res) => {
                     }
                     const result = await promptProject(projectId, {
                         content: prompt,
-                        agent: typeof body.model === 'string' ? body.model : undefined,
+                        ...toPromptInputModel(body.model),
                     });
                     const textParts = result.parts
                         .filter((p) => p.type === 'text' || p.type === 'tool-result')

@@ -16,6 +16,7 @@ export const metadata: Metadata = createMetadata({
     "Monitor ingestion freshness across analytics, support, and session recordings.",
 });
 
+export const dynamic = "force-dynamic";
 const analyticsStatus = (status?: string | null) =>
   status === "ERROR" ? "destructive" : "secondary";
 

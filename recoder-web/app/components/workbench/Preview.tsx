@@ -813,18 +813,16 @@ export const Preview = memo(() => {
       return;
     }
 
-    // Only load the iframe when the preview is marked as ready (dev server responding)
-    // or when the preview URL has changed (allows loading the friendly "starting" page)
+    // Mount the iframe as soon as we have a valid preview URL.
+    // In production we've observed cases where backend preview health is 200
+    // but the `ready` flag lags behind, which leaves the Preview pane blank.
+    setIframeUrl(baseUrl);
+    setPreviewError(null);
+
     if (activePreview.ready) {
-      setIframeUrl(baseUrl);
-      setPreviewError(null);
       logger.info('✅ [Preview] Preview ready, loading iframe:', baseUrl);
     } else {
-      // Dev server not ready yet — don't load iframe (avoids "Failed to fetch" errors)
-      // The iframe will load once activePreview.ready flips to true
-      setIframeUrl(undefined);
-      setPreviewError(null);
-      logger.info('🔄 [Preview] Preview not ready yet, waiting for dev server:', baseUrl);
+      logger.info('🔄 [Preview] Preview URL available before ready flag, loading iframe:', baseUrl);
     }
   }, [activePreview]);
 

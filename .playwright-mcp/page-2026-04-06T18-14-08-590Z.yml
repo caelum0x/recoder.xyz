@@ -1,0 +1,266 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - navigation [ref=e5]:
+        - link "Recoder Home" [ref=e6] [cursor=pointer]:
+          - /url: https://recoder.xyz
+          - img "Recoder" [ref=e7]
+        - link "Web" [ref=e9] [cursor=pointer]:
+          - /url: https://web.recoder.xyz
+        - link "Agency" [ref=e10] [cursor=pointer]:
+          - /url: https://agency.recoder.xyz
+        - link "PM" [ref=e11] [cursor=pointer]:
+          - /url: https://pm.recoder.xyz
+        - link "Agents" [ref=e12] [cursor=pointer]:
+          - /url: https://agents.recoder.xyz
+      - generic [ref=e14]:
+        - generic [ref=e17]:
+          - generic [ref=e19]:
+            - generic [ref=e20]:
+              - link "Recoder" [ref=e21] [cursor=pointer]:
+                - /url: /dashboard
+                - img "Recoder" [ref=e22]
+              - button "Expand sidebar" [ref=e23] [cursor=pointer]:
+                - img [ref=e24]
+            - generic:
+              - button:
+                - img
+              - button:
+                - img
+          - generic [ref=e27]:
+            - generic [ref=e28]:
+              - generic [ref=e29]:
+                - link [ref=e30] [cursor=pointer]:
+                  - /url: /dashboard
+                  - img
+                - link [ref=e31] [cursor=pointer]:
+                  - /url: /files
+                  - img
+              - generic [ref=e32]:
+                - button [ref=e33] [cursor=pointer]:
+                  - img
+                - button [ref=e34] [cursor=pointer]:
+                  - img
+                - button [ref=e35] [cursor=pointer]:
+                  - img
+            - generic:
+              - generic:
+                - generic:
+                  - link "New Chat ⌘ J":
+                    - /url: /dashboard
+                    - generic:
+                      - img
+                      - text: New Chat
+                    - generic:
+                      - generic:
+                        - generic: ⌘
+                        - generic: J
+                - generic:
+                  - link "Files":
+                    - /url: /files
+                    - generic:
+                      - img
+                      - text: Files
+                - generic:
+                  - button "Chats":
+                    - img
+                    - generic: Chats
+                  - button "Workers":
+                    - img
+                    - generic: Workers
+                  - button "Spaces":
+                    - img
+                    - generic: Spaces
+                  - button "Triggers":
+                    - img
+                    - generic: Triggers
+              - generic:
+                - generic:
+                  - link "Shared":
+                    - /url: /shared
+                    - img
+                    - text: Shared
+                  - link "Favorites":
+                    - /url: /favorites
+                    - img
+                    - text: Favorites
+                  - link "Marketplace":
+                    - /url: /marketplace
+                    - img
+                    - text: Marketplace
+                  - link "Templates":
+                    - /url: /agents/templates
+                    - img
+                    - text: Templates
+                  - link "Prompts":
+                    - /url: /prompts
+                    - img
+                    - text: Prompts
+                  - link "Activity":
+                    - /url: /activity
+                    - img
+                    - text: Activity
+                  - link "Runs":
+                    - /url: /runs
+                    - img
+                    - text: Runs
+                  - link "Monitoring":
+                    - /url: /monitoring
+                    - img
+                    - text: Monitoring
+                  - link "Incidents":
+                    - /url: /monitoring/incidents
+                    - img
+                    - text: Incidents
+                  - link "Schedules":
+                    - /url: /schedules
+                    - img
+                    - text: Schedules
+                  - link "Pipelines":
+                    - /url: /pipelines
+                    - img
+                    - text: Pipelines
+                  - link "Leaderboard":
+                    - /url: /agents/leaderboard
+                    - img
+                    - text: Leaderboard
+                  - link "A/B Tests":
+                    - /url: /agents/ab-tests
+                    - img
+                    - text: A/B Tests
+                  - link "Reports":
+                    - /url: /reports
+                    - img
+                    - text: Reports
+                  - link "Developers":
+                    - /url: /developers
+                    - img
+                    - text: Developers
+          - list [ref=e38]:
+            - listitem [ref=e39]:
+              - button "arhan subaşı" [ref=e40] [cursor=pointer]:
+                - img "arhan subaşı" [ref=e42]
+          - button "Toggle Sidebar" [ref=e43]
+        - main [ref=e44]:
+          - generic [ref=e207]:
+            - button "Skip onboarding" [ref=e208]:
+              - text: Skip
+              - img [ref=e209]
+            - generic [ref=e213]:
+              - generic [ref=e215]: "1"
+              - generic [ref=e218]: "2"
+              - generic [ref=e221]: "3"
+              - generic [ref=e224]: "4"
+              - generic [ref=e227]: "5"
+            - generic [ref=e232]:
+              - generic [ref=e235]:
+                - img [ref=e237]
+                - generic [ref=e239]:
+                  - paragraph [ref=e240]: Welcome Message from Marko
+                  - paragraph [ref=e241]: CEO & Founder
+              - generic [ref=e242]:
+                - generic [ref=e243]:
+                  - heading "Welcome to Your AI Workforce" [level=1] [ref=e244]
+                  - paragraph [ref=e245]: I'm Marko, and I'm excited to help you build a team of AI agents that will supercharge your productivity and help you achieve your goals faster than ever.
+                - paragraph [ref=e247]: Let's get started with a quick setup to personalize your AI workforce
+            - button "Continue" [ref=e250] [cursor=pointer]:
+              - text: Continue
+              - img
+  - region "Notifications alt+T":
+    - list:
+      - listitem [ref=e251]:
+        - img [ref=e253]
+        - generic [ref=e255]:
+          - generic [ref=e256]: Multiple errors occurred
+          - generic [ref=e257]: Please wait a moment and try again.
+      - listitem [ref=e258]:
+        - img [ref=e260]
+        - generic [ref=e262]:
+          - generic [ref=e263]: Multiple errors occurred
+          - generic [ref=e264]: Please wait a moment and try again.
+      - listitem [ref=e265]:
+        - img [ref=e267]
+        - generic [ref=e269]:
+          - generic [ref=e270]: Multiple errors occurred
+          - generic [ref=e271]: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Multiple errors occurred
+          - generic: Please wait a moment and try again.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: "HTTP 503:"
+          - generic: Something went wrong on our end. Our team has been notified.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: "HTTP 503:"
+          - generic: Something went wrong on our end. Our team has been notified.
+      - listitem:
+        - generic:
+          - img
+        - generic:
+          - generic: Connection lost. Check your internet.
+          - generic: Please check your internet connection and try again.
+  - alert [ref=e272]

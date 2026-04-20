@@ -1,7 +1,7 @@
 import http from 'http';
 import type { AddressInfo } from 'net';
 import { describe, expect, it } from 'vitest';
-import { buildDockerPreviewUpstreamHeaders, checkPort } from '../preview';
+import { buildDockerPreviewUpstreamHeaders, checkPort, looksLikePreviewBuildError } from '../preview';
 
 async function withHttpServer(statusCode: number, run: (port: number) => Promise<void>): Promise<void> {
   const server = http.createServer((_req, res) => {
@@ -51,5 +51,21 @@ describe('checkPort', () => {
     await withHttpServer(503, async (port) => {
       await expect(checkPort(port)).resolves.toBe(false);
     });
+  });
+});
+
+describe('looksLikePreviewBuildError', () => {
+  it('detects CRA html-webpack-plugin error pages as broken previews', () => {
+    const body = `<!doctype html><html><body>Html Webpack Plugin:
+    <pre>Error: Child compilation failed:
+    Module not found: Error: Can't resolve '/home/daytona/node_modules/html-webpack-plugin/lib/loader.js'</pre></body></html>`;
+
+    expect(looksLikePreviewBuildError(body, 'text/html; charset=utf-8')).toBe(true);
+  });
+
+  it('ignores healthy html pages', () => {
+    const body = '<!doctype html><html><body><div id="root"></div></body></html>';
+
+    expect(looksLikePreviewBuildError(body, 'text/html')).toBe(false);
   });
 });

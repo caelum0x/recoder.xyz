@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
 export function LocalDateTime({
 	date,
 	format = {
@@ -15,7 +17,19 @@ export function LocalDateTime({
 	date: Date;
 	format?: Intl.DateTimeFormatOptions;
 }) {
-	const formattedDate = new Intl.DateTimeFormat("en-US", format).format(date);
+	const [mounted, setMounted] = useState(false);
+
+	useEffect(() => {
+		setMounted(true);
+	}, []);
+
+	const formattedDate = useMemo(() => {
+		if (!mounted) {
+			return "";
+		}
+
+		return new Intl.DateTimeFormat("en-US", format).format(date);
+	}, [date, format, mounted]);
 
 	return <time dateTime={date.toISOString()}>{formattedDate}</time>;
 }

@@ -312,12 +312,43 @@ export class ProjectsDB {
       const result = await this.sql`
         SELECT * FROM chat_sessions
         WHERE "projectId" = ${projectId}
+           OR metadata->>'sandboxProjectId' = ${projectId}
         ORDER BY "updatedAt" DESC
       ` as unknown as unknown[];
 
       return result;
     } catch (error: unknown) {
       logger.error('❌ [ProjectsDB.getProjectChats] Database error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get chat messages for a session
+   */
+  async getChatMessages(sessionId: string): Promise<Array<{
+    id: string;
+    role: string;
+    content: string;
+    metadata?: Record<string, unknown>;
+    createdAt?: string;
+  }>> {
+    try {
+      const result = await this.sql`
+        SELECT * FROM chat_messages
+        WHERE "sessionId" = ${sessionId}
+        ORDER BY "createdAt" ASC
+      ` as unknown as Array<{
+        id: string;
+        role: string;
+        content: string;
+        metadata?: Record<string, unknown>;
+        createdAt?: string;
+      }>;
+
+      return result;
+    } catch (error: unknown) {
+      logger.error('❌ [ProjectsDB.getChatMessages] Database error:', error);
       return [];
     }
   }

@@ -9,6 +9,8 @@ export const metadata: Metadata = createMetadata({
   description: "Please wait while we process your request.",
 });
 
+export const dynamic = "force-dynamic";
+
 type GitHubCallbackPageProperties = {
   readonly searchParams: Promise<Record<string, string>>;
 };

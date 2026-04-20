@@ -21,6 +21,8 @@ const title = "Time to upgrade";
 const description =
   "Thanks for trying Recoder PM! You've reached the limit of users on the free plan.";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = createMetadata({
   title,
   description,

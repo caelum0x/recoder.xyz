@@ -23,6 +23,7 @@ import {
   useUpdateIncident,
 } from '@/hooks/monitoring/use-incidents';
 import { useAgents } from '@/hooks/agents/use-agents';
+import { useAuth } from '@/components/AuthProvider';
 import type { Incident, IncidentFilters } from '@/lib/api/incidents';
 
 // ============================================================================
@@ -149,7 +150,11 @@ function FilterBar({
   setFilters: (f: IncidentFilters) => void;
   onNewIncident: () => void;
 }) {
-  const { data: agentsData } = useAgents({ limit: 100, sort_by: 'name', sort_order: 'asc' });
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const { data: agentsData } = useAgents(
+    { limit: 100, sort_by: 'name', sort_order: 'asc' },
+    { enabled: !!user && !isAuthLoading }
+  );
   const agents = agentsData?.agents ?? [];
 
   return (
@@ -226,7 +231,11 @@ function NewIncidentDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const { data: agentsData } = useAgents({ limit: 100, sort_by: 'name', sort_order: 'asc' });
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const { data: agentsData } = useAgents(
+    { limit: 100, sort_by: 'name', sort_order: 'asc' },
+    { enabled: open && !!user && !isAuthLoading }
+  );
   const agents = agentsData?.agents ?? [];
   const createMutation = useCreateIncident();
 

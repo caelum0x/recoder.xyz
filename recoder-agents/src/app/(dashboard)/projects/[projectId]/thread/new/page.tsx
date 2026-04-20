@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ThreadComponent } from '@/components/thread/ThreadComponent';
 import { createThreadInProject } from '@/lib/api/threads';
@@ -16,36 +16,40 @@ export default function NewThreadPage({
 
   // Generate a stable temporary ID for display
   const tempThreadId = useMemo(() => crypto.randomUUID(), []);
-
-  // Pre-created thread ID (stored but not used until submit)
-  const preCreatedThreadId = useRef<string | null>(null);
-  const creationStarted = useRef(false);
+  const [resolvedThreadId, setResolvedThreadId] = useState<string | null>(null);
 
   // Pre-create thread on mount (in background, don't affect UI)
   useEffect(() => {
-    if (creationStarted.current) return;
-    creationStarted.current = true;
+    let isMounted = true;
 
     async function preCreateThread() {
       try {
         const result = await createThreadInProject(projectId);
-        preCreatedThreadId.current = result.thread_id;
+
+        if (!isMounted) {
+          return;
+        }
+
+        setResolvedThreadId(result.thread_id);
+        router.replace(`/projects/${projectId}/thread/${result.thread_id}?new=true`);
       } catch (error) {
         console.error('[NewThreadPage] Failed to pre-create thread:', error);
       }
     }
 
     preCreateThread();
-  }, [projectId]);
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId, router]);
 
   // Always show the empty state UI with tempThreadId
-  // The real thread ID is used behind the scenes when submitting
+  // until the real thread is created and adopted.
   return (
     <ThreadComponent
       projectId={projectId}
-      threadId={tempThreadId}
+      threadId={resolvedThreadId || tempThreadId}
       isNew
-      preCreatedThreadId={preCreatedThreadId}
     />
   );
 }

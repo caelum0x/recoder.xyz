@@ -12,6 +12,7 @@ export const metadata: Metadata = createMetadata({
   description: "Track AI background jobs for your organization.",
 });
 
+export const dynamic = "force-dynamic";
 const formatJobType = (type: string) =>
   type
     .toLowerCase()

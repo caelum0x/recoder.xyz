@@ -14,6 +14,7 @@ export const metadata: Metadata = createMetadata({
   description: "General settings for your organization.",
 });
 
+export const dynamic = "force-dynamic";
 const GeneralSettings = async () => {
   const organizationId = await currentOrganizationId();
 

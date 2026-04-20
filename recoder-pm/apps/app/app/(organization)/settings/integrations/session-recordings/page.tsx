@@ -13,6 +13,7 @@ export const metadata: Metadata = createMetadata({
     "Connect FullStory or Hotjar to ingest session recording insights.",
 });
 
+export const dynamic = "force-dynamic";
 const SessionRecordingsSettingsPage = async () => {
   const organizationId = await currentOrganizationId();
 

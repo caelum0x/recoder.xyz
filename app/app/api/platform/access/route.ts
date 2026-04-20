@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
 import { logger } from '@/lib/logger';
+import { findFallbackSessionByToken } from '@/lib/session-fallback';
 
 interface PlatformAccessRequest {
   platform: 'web' | 'frontend' | 'studio' | 'pm' | 'agency' | 'cli' | 'extension';
@@ -18,10 +19,71 @@ const PLATFORM_URLS: Record<string, string> = {
   extension: '/extension',
 };
 
+const SESSION_COOKIE_CANDIDATES = [
+  '__Secure-recoder.session_token',
+  'recoder.session_token',
+  '__Secure-session_token',
+  'session_token',
+  'recoder_session_token',
+] as const;
+
+function extractSessionToken(cookieHeader: string): string {
+  if (!cookieHeader) return '';
+
+  for (const cookieName of SESSION_COOKIE_CANDIDATES) {
+    const escaped = cookieName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`));
+    if (match?.[1]) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
+      }
+    }
+  }
+
+  return '';
+}
+
+function buildBridgeUrl(platform: PlatformAccessRequest['platform'], sessionToken: string, redirectUrl: string): string {
+  const accessUrl = PLATFORM_URLS[platform];
+
+  if (platform !== 'web') {
+    return redirectUrl;
+  }
+
+  const bridgeUrl = new URL('/auth/verify', accessUrl);
+  bridgeUrl.searchParams.set('token', sessionToken);
+  bridgeUrl.searchParams.set('redirect', redirectUrl);
+  return bridgeUrl.toString();
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Get session from Better-auth
-    const session = await auth.api.getSession({ headers: request.headers });
+    const cookies = request.headers.get('cookie') || '';
+    const sessionToken = extractSessionToken(cookies);
+
+    let session = await auth.api.getSession({ headers: request.headers });
+
+    if (!session?.user && sessionToken) {
+      const fallbackSession = await findFallbackSessionByToken(sessionToken).catch((error) => {
+        logger.warn('Platform access DB fallback failed', {
+          route: 'api/platform/access',
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      });
+
+      if (fallbackSession?.user) {
+        session = {
+          user: fallbackSession.user,
+          session: {
+            id: fallbackSession.sessionId,
+            expiresAt: fallbackSession.expiresAt.toISOString(),
+          },
+        } as Awaited<ReturnType<typeof auth.api.getSession>>;
+      }
+    }
 
     if (!session) {
       return NextResponse.json(
@@ -40,11 +102,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the session token from cookies (using correct prefix)
-    const cookies = request.headers.get('cookie') || '';
-    const tokenMatch = cookies.match(/recoder\.session_token=([^;]+)/);
-    const sessionToken = tokenMatch ? tokenMatch[1] : '';
-
     if (!sessionToken) {
       return NextResponse.json(
         { error: 'No session token found' },
@@ -52,13 +109,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const redirectUrl = body.redirect || PLATFORM_URLS[platform];
+
     // Return platform access info with Better-auth session token
     return NextResponse.json({
       success: true,
       platform: platform,
       accessUrl: PLATFORM_URLS[platform],
       token: sessionToken,
-      redirectUrl: body.redirect || PLATFORM_URLS[platform],
+      redirectUrl,
+      bridgeUrl: buildBridgeUrl(platform, sessionToken, redirectUrl),
       message: `Access granted to Recoder ${platform.toUpperCase()}`,
       user: {
         id: session.user.id,

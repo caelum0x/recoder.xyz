@@ -179,26 +179,44 @@ export async function executePiChat(options: ExecutePiChatOptions): Promise<Read
 
   logger.info({ projectId: options.projectId }, 'Sending prompt to Pi agent');
 
-  const upstream = await fetch(`${dockerUrl}/api/pi/${encodeURIComponent(options.projectId)}`, {
-    method: 'POST',
-    headers: { ...headers, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt,
-      model: options.model,
-      providerKeys,
-    }),
-    signal: AbortSignal.timeout(300_000), // 5 min for complex coding tasks
-  });
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => abortController.abort(), 300_000);
+
+  let upstream: Response;
+
+  try {
+    upstream = await fetch(`${dockerUrl}/api/pi/${encodeURIComponent(options.projectId)}`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        model: options.model,
+        providerKeys,
+      }),
+      signal: abortController.signal,
+    });
+  } catch (fetchError) {
+    const message = fetchError instanceof Error ? fetchError.message : String(fetchError);
+    logger.error(`Pi exec fetch failed: ${message}`);
+    throw new Error(message);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!upstream.ok) {
     const details = await upstream.text().catch(() => '');
     logger.error('Pi exec failed', { status: upstream.status, details: details.slice(0, 200) });
-
-    // Return null to signal caller should fall back to normal chat
-    return createTextStream(`Pi agent request failed (${upstream.status}). ${details.slice(0, 200) || 'Try again.'}`);
+    throw new Error(`Pi agent request failed (${upstream.status}). ${details.slice(0, 200) || 'Try again.'}`);
   }
 
-  const result = await upstream.json() as PiExecResponse;
+  let result: PiExecResponse;
+  try {
+    result = await upstream.json() as PiExecResponse;
+  } catch (parseError) {
+    const message = parseError instanceof Error ? parseError.message : String(parseError);
+    logger.error(`Pi exec JSON parse failed: ${message}`);
+    throw new Error(`Pi response parse failed: ${message}`);
+  }
 
   if (!result.success || result.error) {
     return createTextStream(result.error || result.text || 'Pi agent execution failed.');

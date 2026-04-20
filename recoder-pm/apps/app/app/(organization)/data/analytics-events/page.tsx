@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/empty-state";
 import { database } from "@/lib/database";
 
 const providers = ["MIXPANEL", "AMPLITUDE", "POSTHOG"];
+export const dynamic = "force-dynamic";
 const providerLabels: Record<string, string> = {
   MIXPANEL: "Mixpanel",
   AMPLITUDE: "Amplitude",

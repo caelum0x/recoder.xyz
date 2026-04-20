@@ -8,6 +8,8 @@ export const metadata: Metadata = createMetadata({
   description: "See a calendar view of your organization’s features.",
 });
 
+export const dynamic = "force-dynamic";
+
 const Roadmap = async () => {
   const features = await database.feature.findMany({
     where: {

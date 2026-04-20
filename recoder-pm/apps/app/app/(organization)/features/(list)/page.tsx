@@ -22,6 +22,7 @@ export const metadata: Metadata = createMetadata({
   description: "Create and manage features for your product.",
 });
 
+export const dynamic = "force-dynamic";
 const FeaturesIndex = async () => {
   const [user, organizationId, members] = await Promise.all([
     currentUser(),

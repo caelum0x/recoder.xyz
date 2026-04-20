@@ -149,6 +149,8 @@ export function useThreadToolCalls(
           ? matchingToolCall.arguments
           : matchingToolCall.arguments ? JSON.stringify(matchingToolCall.arguments) : undefined;
 
+        const successValue: unknown = toolResult?.success;
+
         pairs.push({
           toolCall: {
             tool_call_id: matchingToolCall.tool_call_id,
@@ -159,7 +161,15 @@ export function useThreadToolCalls(
           },
           toolResult: {
             // Coerce success to proper boolean — handles string "true", number 1, etc.
-            success: toolResult?.success === true || toolResult?.success === 'true' || toolResult?.success === 'True' || toolResult?.success === 1 || (toolResult?.success !== false && toolResult?.success !== 'false' && toolResult?.success !== 0 && toolResult?.error == null),
+            success:
+              successValue === true ||
+              successValue === 'true' ||
+              successValue === 'True' ||
+              successValue === 1 ||
+              (successValue !== false &&
+                successValue !== 'false' &&
+                successValue !== 0 &&
+                toolResult?.error == null),
             output: toolResult?.output,
             error: toolResult?.error || null,
           },

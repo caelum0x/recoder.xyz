@@ -31,6 +31,21 @@ const daytona_client_js_1 = require("./daytona-client.js");
 const logger_js_1 = require("./logger.js");
 const logger = (0, logger_js_1.createLogger)('daytona-file-ops');
 const DAYTONA_DEV_SERVER_PORTS = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 3000, 3001, 4173, 4174, 8080, 8081];
+function looksLikeDirectoryListing(body, contentType) {
+    if (!contentType.includes('text/html')) {
+        return false;
+    }
+    const normalized = body.toLowerCase();
+    return (normalized.includes('<title>index of /') ||
+        normalized.includes('<h1>index of /') ||
+        normalized.includes('<title>directory listing for /') ||
+        normalized.includes('<h1>directory listing for /') ||
+        normalized.includes('<pre><a href="../">../</a>') ||
+        normalized.includes('package.json</a>') ||
+        normalized.includes('node_modules/</a>') ||
+        normalized.includes('src/</a>') ||
+        normalized.includes('public/</a>'));
+}
 /**
  * Check whether a container entry represents a Daytona sandbox.
  */
@@ -266,7 +281,14 @@ async function daytonaExecBackground(sandboxId, command, cwd = '/home/daytona', 
     }
     // Use nohup + setsid + disown to keep process alive after exec returns.
     // Write PID to file so we can track it later.
-    const script = `cd '${safeCwd}' && BROWSER=none nohup setsid ${safeCmd} > /tmp/dev.log 2>&1 & echo $! > /tmp/dev.pid`;
+    const wrappedCmd = JSON.stringify(safeCmd);
+    const script = [
+        `cd '${safeCwd}'`,
+        `NODE_BIN="$(command -v node 2>/dev/null || true)"`,
+        `if [ -z "$NODE_BIN" ]; then for candidate in /usr/local/nvm/versions/node/*/bin/node /usr/local/bin/node /usr/bin/node; do if [ -x "$candidate" ]; then NODE_BIN="$candidate"; break; fi; done; fi`,
+        `if [ -n "$NODE_BIN" ]; then export PATH="$(dirname "$NODE_BIN"):$PATH"; fi`,
+        `BROWSER=none nohup setsid sh -lc ${wrappedCmd} > /tmp/dev.log 2>&1 & echo $! > /tmp/dev.pid`,
+    ].join(' && ');
     await dc.execCommand(sandboxId, script, { timeoutSecs: 10 });
 }
 // ── Workspace state ──
@@ -299,7 +321,9 @@ async function daytonaGetWorkspaceState(sandboxId, previewUrl) {
             const timeout = setTimeout(() => controller.abort(), 3000);
             const resp = await fetch(previewUrl, { signal: controller.signal, redirect: 'follow' });
             clearTimeout(timeout);
-            devServerRunning = resp.status < 500;
+            const contentType = resp.headers.get('content-type') || '';
+            const body = await resp.text();
+            devServerRunning = resp.status >= 200 && resp.status < 400 && !looksLikeDirectoryListing(body, contentType);
         }
         catch {
             // not running

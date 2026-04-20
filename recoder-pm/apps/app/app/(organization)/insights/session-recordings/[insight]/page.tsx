@@ -16,6 +16,7 @@ const typeLabels: Record<string, string> = {
   ABANDON: "Abandons",
 };
 
+export const dynamic = "force-dynamic";
 const sourceLabels: Record<string, string> = {
   FULLSTORY: "FullStory",
   HOTJAR: "Hotjar",

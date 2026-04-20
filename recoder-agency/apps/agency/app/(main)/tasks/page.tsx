@@ -138,7 +138,7 @@ export default async function TaskListPage({
 				inputSummary: null,
 				origin: {
 					type: "app",
-					appName: dbTask.app.workspace.name ?? "Untitled",
+					appName: dbTask.app.workspace?.name ?? "Untitled",
 				},
 			} satisfies UITaskListRow;
 		}),
@@ -163,7 +163,7 @@ export default async function TaskListPage({
 						}
 					: {
 							type: "app",
-							appName: dbTask.app.workspace.name ?? "Untitled",
+							appName: dbTask.app.workspace?.name ?? "Untitled",
 						},
 		} satisfies UITaskListRow;
 	});

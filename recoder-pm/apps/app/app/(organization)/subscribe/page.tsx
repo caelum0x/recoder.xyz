@@ -21,6 +21,7 @@ export const metadata: Metadata = createMetadata({
     "Choose a plan that works for you. All plans include a 14-day free trial.",
 });
 
+export const dynamic = "force-dynamic";
 const Subscribe = async () => {
   const [user, organizationId] = await Promise.all([
     currentUser(),
