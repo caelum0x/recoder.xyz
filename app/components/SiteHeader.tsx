@@ -1,18 +1,17 @@
 'use client';
 
+import React from 'react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { useSession } from '@/lib/session-provider';
-import { AppSwitcher } from '@/components/AppSwitcher';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
+import { getServiceUrlClient } from '@/lib/config/platforms';
 
 const NAV_LINKS = [
-  { href: '/agents', label: 'Agents' },
-  { href: '/plan', label: 'Plan' },
-  { href: '/platform', label: 'Platform' },
-  { href: '/docs', label: 'Docs' },
+  { href: getServiceUrlClient('agents'), label: 'Agents', external: true },
+  { href: '/dashboard', label: 'Dashboard', external: false },
 ];
 
 interface SiteHeaderProps {
@@ -35,7 +34,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
   // Strip locale prefix for matching (e.g. /en/agents -> /agents)
   const cleanPath = pathname?.replace(/^\/[a-z]{2}(?=\/|$)/, '') || '/';
 
-  const isActive = (href: string) => cleanPath === href || cleanPath.startsWith(href + '/');
+  const isActive = (href: string) => href.startsWith('/') && (cleanPath === href || cleanPath.startsWith(href + '/'));
 
   return (
     <>
@@ -59,6 +58,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
               <Link
                 key={link.href}
                 href={link.href}
+                {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className={`text-sm transition-colors ${
                   isActive(link.href)
                     ? 'text-white font-medium'
@@ -71,16 +71,6 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
 
             {(session?.user || hasCookie) ? (
               <>
-                <Link
-                  href="/dashboard"
-                  className={`text-sm transition-colors ${
-                    isActive('/dashboard')
-                      ? 'text-white font-medium'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Dashboard
-                </Link>
                 <LaunchWebIDEButton className="px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2" />
                 <Link
                   href="/auth/signout"
@@ -106,7 +96,6 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
               </>
             )}
 
-            <AppSwitcher />
           </nav>
 
           {/* Mobile menu button */}
@@ -131,6 +120,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
                 <Link
                   key={link.href}
                   href={link.href}
+                  {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   onClick={() => setMobileOpen(false)}
                   className={`block py-2 text-sm transition-colors ${
                     isActive(link.href)
@@ -145,13 +135,6 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
               <div className="border-t border-white/10 pt-3 space-y-3">
                 {(session?.user || hasCookie) ? (
                   <>
-                    <Link
-                      href="/dashboard"
-                      onClick={() => setMobileOpen(false)}
-                      className="block py-2 text-sm text-gray-400 hover:text-white transition-colors"
-                    >
-                      Dashboard
-                    </Link>
                     <LaunchWebIDEButton className="w-full px-4 py-2.5 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center justify-center space-x-2" />
                     <Link
                       href="/auth/signout"
