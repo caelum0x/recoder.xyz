@@ -168,9 +168,7 @@ export function useOptimisticAgentStart(
       if (modeStarter) {
         queryParams.set('modeStarter', modeStarter);
       }
-      router.push(`/projects/${projectId}/thread/${threadId}?${queryParams.toString()}`);
-
-      optimisticAgentStart({
+      void optimisticAgentStart({
         thread_id: threadId,
         project_id: projectId,
         prompt: message,
@@ -252,6 +250,10 @@ export function useOptimisticAgentStart(
         
         toast.error('Failed to start conversation');
       });
+
+      // Fire the optimistic backend request before navigation so the pending-thread
+      // cache is more likely to exist by the time the new thread page starts polling.
+      router.push(`/projects/${projectId}/thread/${threadId}?${queryParams.toString()}`);
 
       return { threadId, projectId, success: true };
     } catch (error: any) {

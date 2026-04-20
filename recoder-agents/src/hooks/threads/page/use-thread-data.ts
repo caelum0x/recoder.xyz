@@ -61,7 +61,7 @@ export function useThreadData(
         const errorStr = error?.message?.toLowerCase() || '';
         const is404 = error?.status === 404 || errorStr.includes('404') || errorStr.includes('not found');
         if (is404) {
-          return failureCount < 20;
+          return false;
         }
         return failureCount < 1;
       },
@@ -84,10 +84,10 @@ export function useThreadData(
     staleTime: 10000,
   });
   
-  const shouldPollAgentRuns = waitingForAgent && !foundRunningAgentRef.current && !agentRunId;
+  const shouldPollAgentRuns = !waitingForAgent && !foundRunningAgentRef.current && !agentRunId;
   
   const agentRunsQuery = useAgentRunsQuery(threadId, { 
-    enabled: !isShared && !!threadId && (!waitingForAgent || threadReady),
+    enabled: !isShared && !!threadId && !waitingForAgent && threadReady,
     refetchInterval: shouldPollAgentRuns ? 2000 : false,
     staleTime: 1000,
   });
