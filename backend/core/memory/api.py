@@ -366,8 +366,8 @@ async def get_thread_memory_settings(
         return ThreadMemorySettingsResponse(thread_id=thread_id, memory_enabled=memory_enabled)
 
     except Exception as e:
-        logger.error(f"Error getting thread memory settings for thread {thread_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get thread memory settings: {str(e)}")
+        logger.warning(f"Error getting thread memory settings for thread {thread_id}, defaulting to enabled: {str(e)}")
+        return ThreadMemorySettingsResponse(thread_id=thread_id, memory_enabled=True)
 
 @router.put("/thread/{thread_id}/settings", response_model=ThreadMemorySettingsResponse)
 async def update_thread_memory_settings(
