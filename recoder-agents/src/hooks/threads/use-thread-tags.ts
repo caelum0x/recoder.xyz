@@ -29,11 +29,14 @@ export function useThreadTags() {
   });
 }
 
-export function useThreadTagAssignments(threadId: string) {
+export function useThreadTagAssignments(
+  threadId: string,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: tagKeys.thread(threadId),
     queryFn: () => getThreadTags(threadId),
-    enabled: !!threadId,
+    enabled: !!threadId && (options?.enabled !== false),
     staleTime: 30_000,
     retry: false,
   });

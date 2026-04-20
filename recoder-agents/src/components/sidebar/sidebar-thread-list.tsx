@@ -191,7 +191,10 @@ const ThreadItemCard: React.FC<ThreadItemCardProps> = ({
           {/* Name + Tag dots */}
           <div className="flex items-center flex-1 min-w-0">
             <span className="truncate">{projectGroup.projectName}</span>
-            <ThreadTagDots threadId={thread.threadId} />
+            <ThreadTagDots
+              threadId={thread.threadId}
+              enabled={isActive || isHoveringCard}
+            />
           </div>
           
           {/* Date & Menu */}
@@ -1418,4 +1421,3 @@ export function SidebarThreadList({ mode }: SidebarThreadListProps) {
     </div>
   );
 }
-

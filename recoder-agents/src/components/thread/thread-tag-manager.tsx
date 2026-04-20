@@ -67,8 +67,14 @@ const TAG_COLORS = [
 // Tag dot pills for displaying assigned tags inline
 // ---------------------------------------------------------------------------
 
-export function ThreadTagDots({ threadId }: { threadId: string }) {
-  const { data: tags } = useThreadTagAssignments(threadId);
+export function ThreadTagDots({
+  threadId,
+  enabled = true,
+}: {
+  threadId: string;
+  enabled?: boolean;
+}) {
+  const { data: tags } = useThreadTagAssignments(threadId, { enabled });
 
   if (!tags || tags.length === 0) return null;
 
