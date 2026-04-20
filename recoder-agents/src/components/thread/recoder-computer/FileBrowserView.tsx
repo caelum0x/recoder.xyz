@@ -706,6 +706,7 @@ export function FileBrowserView({
   const { data: sandboxStatusData, isAutoStarting } = useSandboxStatusWithAutoStart(projectId);
   const sandboxStatus = sandboxStatusData?.status;
   const isSandboxReady = sandboxStatus ? isSandboxUsable(sandboxStatus) : false;
+  const effectiveSandboxId = sandboxId || sandboxStatusData?.sandbox_id || '';
 
   // Use React Query for directory listing - only fetch when sandbox is LIVE
   const {
@@ -714,8 +715,8 @@ export function FileBrowserView({
     error: filesError,
     refetch: refetchFiles,
     failureCount: dirRetryAttempt,
-  } = useDirectoryQuery(sandboxId || '', currentPath, {
-    enabled: !!sandboxId && sandboxId.trim() !== '' && !!currentPath && isSandboxReady,
+  } = useDirectoryQuery(effectiveSandboxId, currentPath, {
+    enabled: !!effectiveSandboxId && effectiveSandboxId.trim() !== '' && !!currentPath && isSandboxReady,
     staleTime: 0,
   });
 
@@ -758,7 +759,7 @@ export function FileBrowserView({
   const [revertInProgress, setRevertInProgress] = useState(false);
 
   // Check computer status - use unified status for accurate state
-  const hasSandbox = !!(project?.sandbox?.id || sandboxId);
+  const hasSandbox = !!(project?.sandbox?.id || effectiveSandboxId);
   // Use sandbox status for accurate "started" check instead of just URL existence
   const isComputerStarted = isSandboxReady;
 
@@ -893,7 +894,7 @@ export function FileBrowserView({
       visited.add(dirPath);
 
       try {
-        const files = await listSandboxFiles(sandboxId, dirPath);
+        const files = await listSandboxFiles(effectiveSandboxId, dirPath);
 
         for (const file of files) {
           if (file.is_dir) {
@@ -911,7 +912,7 @@ export function FileBrowserView({
     await exploreDirectory(startPath);
 
     return { files: allFiles, totalSize };
-  }, [sandboxId, currentPath]);
+  }, [effectiveSandboxId, currentPath]);
 
   // Function to download all files as a zip from current directory
   const handleDownloadFolder = useCallback(async () => {
@@ -953,15 +954,15 @@ export function FileBrowserView({
 
         try {
           const contentType = FileCache.getContentTypeFromPath(file.path);
-          const cacheKey = `${sandboxId}:${file.path}:${contentType}`;
+          const cacheKey = `${effectiveSandboxId}:${file.path}:${contentType}`;
           let content = FileCache.get(cacheKey);
 
           if (!content) {
-            if (!sandboxId || sandboxId.trim() === '') {
+            if (!effectiveSandboxId || effectiveSandboxId.trim() === '') {
               continue;
             }
             const response = await fetch(
-              `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
+              `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
               {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
               }
@@ -991,11 +992,11 @@ export function FileBrowserView({
                 const blobContent = await blobResponse.blob();
                 zip.file(relativePath, blobContent);
               } catch (blobError) {
-                if (!sandboxId || sandboxId.trim() === '') {
+                if (!effectiveSandboxId || effectiveSandboxId.trim() === '') {
                   continue;
                 }
                 const fallbackResponse = await fetch(
-                  `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
+                  `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
                   { headers: { 'Authorization': `Bearer ${accessToken}` } }
                 );
                 if (fallbackResponse.ok) {
@@ -1050,7 +1051,7 @@ export function FileBrowserView({
       setIsDownloadingAll(false);
       setDownloadProgress(null);
     }
-  }, [sandboxId, accessToken, isDownloadingAll, discoverAllFiles, isDownloadRestricted, openUpgradeModal, currentPath]);
+  }, [effectiveSandboxId, accessToken, isDownloadingAll, discoverAllFiles, isDownloadRestricted, openUpgradeModal, currentPath]);
 
   // Handle individual file download
   const handleDownloadFile = useCallback(async (filePath: string) => {
@@ -1058,7 +1059,7 @@ export function FileBrowserView({
       openUpgradeModal();
       return;
     }
-    if (!accessToken || !sandboxId) {
+    if (!accessToken || !effectiveSandboxId) {
       toast.error('Cannot download file');
       return;
     }
@@ -1069,7 +1070,7 @@ export function FileBrowserView({
       toast.loading(`Downloading ${fileName}...`, { id: 'download-file' });
       
       const response = await fetch(
-        `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
+        `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
         {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         }
@@ -1094,7 +1095,7 @@ export function FileBrowserView({
       console.error('Download failed:', error);
       toast.error(`Failed to download ${fileName}`, { id: 'download-file' });
     }
-  }, [sandboxId, accessToken, isDownloadRestricted, openUpgradeModal]);
+  }, [effectiveSandboxId, accessToken, isDownloadRestricted, openUpgradeModal]);
 
   // Handle file upload
   const handleUpload = useCallback(() => {
@@ -1121,14 +1122,14 @@ export function FileBrowserView({
 
         const token = await requireSessionAccessToken();
 
-        if (!sandboxId || sandboxId.trim() === '') {
+        if (!effectiveSandboxId || effectiveSandboxId.trim() === '') {
           toast.error('Computer is not started yet. Please wait for it to be ready.');
           setIsUploading(false);
           return;
         }
 
         const response = await fetch(
-          `${getApiUrl()}/sandboxes/${sandboxId}/files`,
+          `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files`,
           {
             method: 'POST',
             headers: {
@@ -1163,7 +1164,7 @@ export function FileBrowserView({
         if (event.target) event.target.value = '';
       }
     },
-    [sandboxId, refetchFiles],
+    [effectiveSandboxId, refetchFiles],
   );
 
   // Get file icon - supports 'default', 'large', 'header', 'small', and 'medium' variants
@@ -1303,12 +1304,12 @@ export function FileBrowserView({
 
   // Load workspace version history
   const loadWorkspaceHistory = useCallback(async (force: boolean = false) => {
-    if (!sandboxId) return;
+    if (!effectiveSandboxId) return;
     if (workspaceVersions.length > 0 && !force) return; // already loaded
     setIsLoadingVersions(true);
     try {
       // Fetch git log for entire workspace (no specific path)
-      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/history?path=/workspace&limit=100`;
+      const url = `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/history?path=/workspace&limit=100`;
       const headers: Record<string, string> = {};
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
@@ -1336,15 +1337,15 @@ export function FileBrowserView({
     } finally {
       setIsLoadingVersions(false);
     }
-  }, [sandboxId, accessToken, workspaceVersions.length, selectedVersion, selectedVersionDate, setSelectedVersion]);
+  }, [effectiveSandboxId, accessToken, workspaceVersions.length, selectedVersion, selectedVersionDate, setSelectedVersion]);
 
   // Auto-load workspace history if we have a selected version but no date
   useEffect(() => {
-    if (selectedVersion && !selectedVersionDate && sandboxId && workspaceVersions.length === 0) {
+    if (selectedVersion && !selectedVersionDate && effectiveSandboxId && workspaceVersions.length === 0) {
       
       loadWorkspaceHistory(true);
     }
-  }, [selectedVersion, selectedVersionDate, sandboxId, workspaceVersions.length, loadWorkspaceHistory]);
+  }, [selectedVersion, selectedVersionDate, effectiveSandboxId, workspaceVersions.length, loadWorkspaceHistory]);
 
   // Load files at selected version
   const loadFilesAtVersion = useCallback(async (commit: string | null, showToast: boolean = true) => {
@@ -1362,7 +1363,7 @@ export function FileBrowserView({
     // Load files at that commit using the new /files/tree endpoint
     setIsLoadingVersionFiles(true);
     try {
-      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/tree?path=${encodeURIComponent(currentPath)}&commit=${encodeURIComponent(commit)}`;
+      const url = `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/tree?path=${encodeURIComponent(currentPath)}&commit=${encodeURIComponent(commit)}`;
       const headers: Record<string, string> = {};
       if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
@@ -1386,7 +1387,7 @@ export function FileBrowserView({
     } finally {
       setIsLoadingVersionFiles(false);
     }
-  }, [sandboxId, currentPath, accessToken, workspaceVersions, refetchFiles, setSelectedVersion, clearSelectedVersion]);
+  }, [effectiveSandboxId, currentPath, accessToken, workspaceVersions, refetchFiles, setSelectedVersion, clearSelectedVersion]);
 
   // Reload version files when currentPath changes while viewing a version
   useEffect(() => {
@@ -1398,12 +1399,12 @@ export function FileBrowserView({
 
   // Open revert modal and fetch commit info
   const openRevertModal = useCallback(async (commit: string) => {
-    if (!commit || !sandboxId) return;
+    if (!commit || !effectiveSandboxId) return;
     setRevertModalOpen(true);
     setRevertLoadingInfo(true);
     setRevertCommitInfo(null);
     try {
-      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}`;
+      const url = `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}`;
       const res = await fetch(url, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
       if (!res.ok) {
         const text = await res.text();
@@ -1418,17 +1419,17 @@ export function FileBrowserView({
     } finally {
       setRevertLoadingInfo(false);
     }
-  }, [sandboxId, accessToken]);
+  }, [effectiveSandboxId, accessToken]);
 
   // Perform revert (always entire commit for workspace history)
   const performRevert = useCallback(async () => {
-    if (!revertCommitInfo || !sandboxId) return;
+    if (!revertCommitInfo || !effectiveSandboxId) return;
     setRevertInProgress(true);
     try {
       // Always revert entire commit (no paths specified)
       const body: any = { commit: revertCommitInfo.commit };
 
-      const res = await fetch(`${getApiUrl()}/sandboxes/${sandboxId}/files/revert`, {
+      const res = await fetch(`${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/revert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1465,7 +1466,7 @@ export function FileBrowserView({
     } finally {
       setRevertInProgress(false);
     }
-  }, [revertCommitInfo, sandboxId, accessToken, refetchFiles, clearSelectedVersion]);
+  }, [revertCommitInfo, effectiveSandboxId, accessToken, refetchFiles, clearSelectedVersion]);
 
   // Files view header actions
   const filesHeaderActions = (
