@@ -176,12 +176,18 @@ This estate includes:
 2. Finish snapshot/persistence cleanup
 3. Verify A2A / control-plane health after Web and Agents cleanup
 
+## Runtime Checklist
+
+For post-deploy verification of the remaining Agents startup issues, use:
+
+- `docs/agents-startup-runtime-checklist.md`
+
 ## Current Blockers By Owner Surface
 
 - `app` + `recoder-web`: live Web auth proof still depends on a fresh valid bridge/session token; authenticated `/api/projects` proof is blocked on session freshness, not missing route code
 - `app` + `recoder-web`: snapshot migration is incomplete; hub snapshots are preferred, but legacy `projects` and chat-history `fileSnapshot` coupling still exists
-- `backend` + `recoder-agents`: residual startup/race noise remains around duplicated thread detail / agent-runs `404`s plus one dashboard RSC `503`
-- `recoder-agents`: Board/Canvas authenticated entry path still needs a cleaner pass; chat response visibility/render timing still needs verification after the latest branch-side mitigations
+- `backend` + `recoder-agents`: remaining startup instability is now a deployment/runtime verification problem more than a local frontend-gating problem; latest production sweeps still show duplicated thread detail / agent-runs `404`s, intermittent thread-scoped `503`s, and inconsistent behavior across runs
+- `recoder-agents`: Board/Canvas authenticated entry path still needs a cleaner deployed verification pass; chat response visibility/render timing still needs post-deploy verification after the latest branch-side mitigations
 - A2A/control plane: worker flows depend on Redis stream config, shared-secret alignment, internal service URLs, and orchestration policy from `.env.a2a.workers`
 - host ops: disk remains tight and previously stopped services still need cleanup/restart planning
 
@@ -201,3 +207,4 @@ Launch is complete when:
 - Production evidence wins over old notes.
 - Keep this file short and current.
 - Use `bd` for detailed task tracking, not this file.
+- The latest branch-side startup mitigations need deployment before production sweeps can prove whether `recoder-6l4` and `recoder-q6u` are actually fixed.
