@@ -210,10 +210,6 @@ export function useOptimisticAgentStart(
           queryClient.invalidateQueries({ queryKey: ['threads'], refetchType: 'all' }),
           queryClient.invalidateQueries({ queryKey: ['projects'], refetchType: 'all' }),
           queryClient.invalidateQueries({ queryKey: ['active-agent-runs'] }),
-          // Also invalidate the thread-specific queries
-          queryClient.invalidateQueries({ queryKey: ['thread', threadId] }),
-          queryClient.invalidateQueries({ queryKey: ['thread', threadId, 'agent-runs'] }),
-          queryClient.invalidateQueries({ queryKey: ['thread', threadId, 'messages'] }),
           queryClient.invalidateQueries({ queryKey: ['project', projectId] }),
         ]);
         // Reset starting state
