@@ -507,6 +507,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const retryAttemptedRef = useRef(false);
   useEffect(() => {
     if (retryAttemptedRef.current) return;
+    if (agentRunId) return;
     const is404 = threadQuery.error?.message?.toLowerCase()?.includes('404') || 
                   threadQuery.error?.message?.toLowerCase()?.includes('not found');
     
@@ -557,10 +558,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           setAgentStatus('running');
         }
         
-        // Invalidate queries to pick up the new data
-        queryClient.invalidateQueries({ queryKey: ['thread', threadId] });
-        queryClient.invalidateQueries({ queryKey: ['thread', threadId, 'agent-runs'] });
-        queryClient.invalidateQueries({ queryKey: ['thread', threadId, 'messages'] });
         queryClient.invalidateQueries({ queryKey: ['project', projectId] });
         queryClient.invalidateQueries({ queryKey: ['threads', 'list'] });
       }).catch((error) => {
@@ -573,7 +570,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     } catch (e) {
       console.error('[ThreadComponent] Error checking pending intent:', e);
     }
-  }, [threadQuery.error, isNewThread, threadId, projectId, queryClient, setAgentRunId, setAgentStatus, router]);
+  }, [agentRunId, threadQuery.error, isNewThread, threadId, projectId, queryClient, setAgentRunId, setAgentStatus, router]);
 
   useEffect(() => {
     const handleSandboxActive = (event: Event) => {
