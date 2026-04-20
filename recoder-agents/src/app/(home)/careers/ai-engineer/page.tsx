@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { SimpleFooter } from '@/components/home/simple-footer';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, MapPin } from 'lucide-react';
@@ -229,4 +231,3 @@ export default function AIEngineerPage() {
     </main>
   );
 }
-
