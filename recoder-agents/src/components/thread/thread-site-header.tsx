@@ -123,7 +123,11 @@ export function SiteHeader({
                 </TooltipContent>
               </Tooltip>
             ) : threadId && projectId ? (
-              <SharePopover threadId={threadId} projectId={projectId}>
+              <SharePopover
+                threadId={threadId}
+                projectId={projectId}
+                isPendingThread={isPendingThread}
+              >
                 <Button
                   variant="ghost"
                   size="sm"
