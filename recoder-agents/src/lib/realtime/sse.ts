@@ -81,6 +81,9 @@ const endpointCooldowns = new Map<string, number>();
  */
 function calculateBackoff(attempt: number, baseMs: number, maxMs: number): number {
   const exponentialDelay = Math.min(baseMs * Math.pow(BACKOFF_MULTIPLIER, attempt), maxMs);
+  if (baseMs >= maxMs) {
+    return exponentialDelay;
+  }
   // Add jitter: +-25% of the delay to prevent thundering herd
   const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
   return Math.max(0, exponentialDelay + jitter);

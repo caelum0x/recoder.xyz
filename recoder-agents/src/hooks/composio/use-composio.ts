@@ -70,7 +70,7 @@ export const useComposioToolkitIcon = (toolkitSlug: string, options?: { enabled?
     },
     enabled: options?.enabled !== undefined ? options.enabled : !!toolkitSlug,
     staleTime: 60 * 60 * 1000,
-    retry: 2,
+    retry: false,
   });
 };
 
@@ -111,8 +111,13 @@ export const usePrefetchComposioIcons = () => {
           }
         });
       }
-    } catch (error) {
-      
+    } catch {
+      uncachedSlugs.forEach(slug => {
+        queryClient.setQueryData(
+          ['composio', 'toolkit-icon', slug],
+          { success: false, icon_url: undefined }
+        );
+      });
     }
   }, [queryClient]);
 
