@@ -71,7 +71,7 @@ export function useThreadData(
   const threadReady = !!threadQuery.data;
   const isPendingThread = Boolean((threadQuery.data as any)?._pending);
   const messagesQuery = useMessagesQuery(threadId, {
-    enabled: !!threadId && (!waitingForAgent || threadReady),
+    enabled: !!threadId && (!waitingForAgent || threadReady) && !isPendingThread,
     refetchInterval: false,
     staleTime: 5000,
   });

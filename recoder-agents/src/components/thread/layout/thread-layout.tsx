@@ -19,6 +19,7 @@ interface ThreadLayoutProps {
   threadId: string;
   projectName: string;
   projectId: string;
+  isPendingThread?: boolean;
   project: Project | null;
   sandboxId: string | null;
   isSidePanelOpen: boolean;
@@ -57,6 +58,7 @@ export const ThreadLayout = memo(function ThreadLayout({
   threadId,
   projectName,
   projectId,
+  isPendingThread = false,
   project,
   sandboxId,
   isSidePanelOpen,
@@ -252,6 +254,7 @@ export const ThreadLayout = memo(function ThreadLayout({
           threadId={threadId}
           projectName={projectName}
           projectId={projectId}
+          isPendingThread={isPendingThread}
           onViewFiles={handleFileClick}
           onToggleSidePanel={onToggleSidePanel}
           isSidePanelOpen={isSidePanelOpen}
@@ -318,6 +321,7 @@ export const ThreadLayout = memo(function ThreadLayout({
             threadId={threadId}
             projectName={projectName}
             projectId={projectId}
+            isPendingThread={isPendingThread}
             onViewFiles={handleFileClick}
             onToggleSidePanel={onToggleSidePanel}
             isSidePanelOpen={isSidePanelOpen}

@@ -253,6 +253,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   } = useThreadData(threadId, projectId, isShared, {
     waitingForAgent: isNewThread && !hasDataLoaded.current,
   });
+  const isPendingThread = Boolean((threadQuery.data as any)?._pending);
   
   const threadStatus = threadQuery.data?.status;
   const threadInitializationError = threadQuery.data?.initialization_error;
@@ -326,7 +327,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   }
   
   useEffect(() => {
-    if (isNewThread && !hasDataLoaded.current && threadQuery.data?.project_id) {
+    if (isNewThread && !hasDataLoaded.current && threadQuery.data?.project_id && !isPendingThread) {
       hasDataLoaded.current = true;
       localStorage.removeItem('pending_thread_intent');
       if (typeof window !== 'undefined') {
@@ -337,7 +338,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         }
       }
     }
-  }, [isNewThread, threadQuery.data?.project_id]);
+  }, [isNewThread, isPendingThread, threadQuery.data?.project_id]);
   
   const effectivePanelOpen = isSidePanelOpen;
 
@@ -1886,6 +1887,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         threadId={threadId}
         projectName={projectName}
         projectId={project?.id || ''}
+        isPendingThread={false}
         project={project}
         sandboxId={sandboxId}
         isSidePanelOpen={false}
@@ -1920,6 +1922,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         threadId={threadId}
         projectName={projectName}
         projectId={project?.id || ''}
+        isPendingThread={isPendingThread}
         project={project}
         sandboxId={sandboxId}
         isSidePanelOpen={isSidePanelOpen}
@@ -1951,6 +1954,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           threadId={threadId}
           projectName={displayProjectName}
           projectId={project?.id || projectId}
+          isPendingThread={isPendingThread}
           project={showOptimisticUI ? null : project}
           sandboxId={showOptimisticUI ? null : sandboxId}
           isSidePanelOpen={effectivePanelOpen || !!modeStarter}
@@ -2125,6 +2129,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         threadId={threadId}
         projectName={displayProjectName}
         projectId={project?.id || projectId}
+        isPendingThread={isPendingThread}
         project={showOptimisticUI ? null : project}
         sandboxId={showOptimisticUI ? null : sandboxId}
         isSidePanelOpen={effectivePanelOpen || !!modeStarter}
