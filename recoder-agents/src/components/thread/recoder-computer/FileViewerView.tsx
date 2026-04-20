@@ -152,6 +152,7 @@ export function FileViewerView({
   const { data: sandboxStatusData, isAutoStarting } = useSandboxStatusWithAutoStart(projectId);
   const sandboxStatus = sandboxStatusData?.status;
   const isSandboxReady = sandboxStatus ? isSandboxUsable(sandboxStatus) : false;
+  const effectiveSandboxId = sandboxId || sandboxStatusData?.sandbox_id || '';
 
   // Recoder Computer Store
   const {
@@ -198,7 +199,7 @@ export function FileViewerView({
 
   // Reset all local file state when sandboxId changes (thread switch)
   useEffect(() => {
-    if (prevSandboxIdRef.current !== null && prevSandboxIdRef.current !== sandboxId) {
+    if (prevSandboxIdRef.current !== null && prevSandboxIdRef.current !== effectiveSandboxId) {
       // SandboxId changed - reset all file content state
       
       setRawContent(null);
@@ -207,8 +208,8 @@ export function FileViewerView({
       setContentError(null);
       setMdEditorControls(null);
     }
-    prevSandboxIdRef.current = sandboxId;
-  }, [sandboxId]);
+    prevSandboxIdRef.current = effectiveSandboxId;
+  }, [effectiveSandboxId]);
 
   // File version history state
   const [fileVersions, setFileVersions] = useState<Array<{ commit: string; author_name: string; author_email: string; date: string; message: string }>>([]);
@@ -236,10 +237,10 @@ export function FileViewerView({
     failureCount: fileRetryAttempt,
     refetch: refetchFile,
   } = useFileContentQuery(
-    sandboxId,
+    effectiveSandboxId,
     filePath,
     {
-      enabled: !!filePath && !!sandboxId && !selectedVersion && isSandboxReady, // Disable when viewing a specific version or sandbox not ready
+      enabled: !!filePath && !!effectiveSandboxId && !selectedVersion && isSandboxReady, // Disable when viewing a specific version or sandbox not ready
       staleTime: 5 * 60 * 1000,
     }
   );
@@ -374,12 +375,12 @@ export function FileViewerView({
 
   // Load file version history on demand (when dropdown opens or when needed for selected version)
   const loadVersionHistory = useCallback(async (force: boolean = false) => {
-    if (!sandboxId || !filePath) return;
+    if (!effectiveSandboxId || !filePath) return;
     if (fileVersions.length > 0 && !force) return; // already loaded
     setIsLoadingVersions(true);
     try {
       const token = await getSessionAccessToken();
-      const data = await fetchFileHistory(sandboxId, filePath, token ?? undefined, 200);
+      const data = await fetchFileHistory(effectiveSandboxId, filePath, token ?? undefined, 200);
       setFileVersions(data.versions || []);
 
       // If there's a selected version, update the date in the global store
@@ -397,18 +398,18 @@ export function FileViewerView({
     } finally {
       setIsLoadingVersions(false);
     }
-  }, [sandboxId, filePath, fileVersions.length, selectedVersion, selectedVersionDate, setGlobalSelectedVersion]);
+  }, [effectiveSandboxId, filePath, fileVersions.length, selectedVersion, selectedVersionDate, setGlobalSelectedVersion]);
 
   // Auto-load version history if we have a selected version but no date
   useEffect(() => {
-    if (selectedVersion && !selectedVersionDate && sandboxId && filePath && fileVersions.length === 0) {
+    if (selectedVersion && !selectedVersionDate && effectiveSandboxId && filePath && fileVersions.length === 0) {
       
       loadVersionHistory(true);
     }
-  }, [selectedVersion, selectedVersionDate, sandboxId, filePath, fileVersions.length, loadVersionHistory]);
+  }, [selectedVersion, selectedVersionDate, effectiveSandboxId, filePath, fileVersions.length, loadVersionHistory]);
 
   const loadFileByVersion = useCallback(async (commit: string) => {
-    if (!commit || !sandboxId || !filePath) return;
+    if (!commit || !effectiveSandboxId || !filePath) return;
 
     const versionDate = fileVersions.find(v => v.commit === commit)?.date;
     setGlobalSelectedVersion(commit, versionDate);
@@ -418,13 +419,13 @@ export function FileViewerView({
       // Normalize path for cache operations and clear legacy cache for this file
       const normalizedPath = normalizeWorkspacePath(filePath);
       ['text', 'blob', 'json'].forEach(contentType => {
-        const cacheKey = `${sandboxId}:${normalizedPath}:${contentType}`;
+        const cacheKey = `${effectiveSandboxId}:${normalizedPath}:${contentType}`;
         FileCache.delete(cacheKey);
         
       });
 
       const token = await getSessionAccessToken();
-      const blob = await fetchFileByHash(sandboxId, filePath, commit, token ?? undefined);
+      const blob = await fetchFileByHash(effectiveSandboxId, filePath, commit, token ?? undefined);
 
       
 
@@ -460,16 +461,16 @@ export function FileViewerView({
     } finally {
       setIsLoadingVersionContent(false);
     }
-  }, [filePath, sandboxId, fileVersions, setGlobalSelectedVersion]);
+  }, [filePath, effectiveSandboxId, fileVersions, setGlobalSelectedVersion]);
 
   // Open revert modal and fetch commit info (files changed)
   const openRevertModal = useCallback(async (commit: string) => {
-    if (!commit || !sandboxId) return;
+    if (!commit || !effectiveSandboxId) return;
     setRevertModalOpen(true);
     setRevertLoadingInfo(true);
     setRevertCommitInfo(null);
     try {
-      const url = `${getApiUrl()}/sandboxes/${sandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}${filePath ? `&path=${encodeURIComponent(filePath)}` : ''}`;
+      const url = `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/commit-info?commit=${encodeURIComponent(commit)}${filePath ? `&path=${encodeURIComponent(filePath)}` : ''}`;
       const token = await getSessionAccessToken();
       const res = await fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -498,12 +499,12 @@ export function FileViewerView({
     } finally {
       setRevertLoadingInfo(false);
     }
-  }, [sandboxId, filePath]);
+  }, [effectiveSandboxId, filePath]);
 
   // NOTE: file-selection toggle removed — modal is read-only list with single-file or entire-commit mode
 
   const performRevert = useCallback(async () => {
-    if (!revertCommitInfo || !sandboxId) return;
+    if (!revertCommitInfo || !effectiveSandboxId) return;
     setRevertInProgress(true);
     try {
       const body: any = { commit: revertCommitInfo.commit };
@@ -513,7 +514,7 @@ export function FileViewerView({
       }
 
       const token = await getSessionAccessToken();
-      const res = await fetch(`${getApiUrl()}/sandboxes/${sandboxId}/files/revert`, {
+      const res = await fetch(`${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/revert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -549,14 +550,14 @@ export function FileViewerView({
 
       // Clear legacy FileCache
       ['text', 'blob', 'json'].forEach(contentType => {
-        const cacheKey = `${sandboxId}:${normalizedPath}:${contentType}`;
+        const cacheKey = `${effectiveSandboxId}:${normalizedPath}:${contentType}`;
         FileCache.delete(cacheKey);
       });
 
       // Invalidate React Query cache
       ['text', 'blob', 'json'].forEach(contentType => {
         queryClient.invalidateQueries({
-          queryKey: fileQueryKeys.content(sandboxId, normalizedPath, contentType),
+          queryKey: fileQueryKeys.content(effectiveSandboxId, normalizedPath, contentType),
         });
       });
 
@@ -571,14 +572,14 @@ export function FileViewerView({
     } finally {
       setRevertInProgress(false);
     }
-  }, [revertCommitInfo, revertMode, revertCurrentRelativePath, sandboxId, filePath, refetchFile, queryClient, clearUnsavedContent, clearGlobalSelectedVersion]);
+  }, [revertCommitInfo, revertMode, revertCurrentRelativePath, effectiveSandboxId, filePath, refetchFile, queryClient, clearUnsavedContent, clearGlobalSelectedVersion]);
 
   // Track the last loaded version+path combo to prevent re-loading
   const lastLoadedRef = useRef<{ version: string | null, path: string | null }>({ version: null, path: null });
 
   // Effect to auto-load file at selected version when opened from file browser or when switching files
   useEffect(() => {
-    if (selectedVersion && filePath && sandboxId) {
+    if (selectedVersion && filePath && effectiveSandboxId) {
       // Only load if version+path combo has changed
       if (lastLoadedRef.current.version !== selectedVersion || lastLoadedRef.current.path !== filePath) {
         
@@ -595,7 +596,7 @@ export function FileViewerView({
       // Reset tracking when returning to current
       lastLoadedRef.current = { version: null, path: null };
     }
-  }, [selectedVersion, filePath, sandboxId, loadFileByVersion]);
+  }, [selectedVersion, filePath, effectiveSandboxId, loadFileByVersion]);
 
   // Effect to handle cached file content updates
   useEffect(() => {
@@ -703,14 +704,14 @@ export function FileViewerView({
 
   // Handle file save
   const handleSaveFile = useCallback(async (newContent: string) => {
-    if (!filePath || !sandboxId) {
+    if (!filePath || !effectiveSandboxId) {
       throw new Error('Missing file path or sandbox ID');
     }
 
     try {
       const token = await requireSessionAccessToken();
       const response = await fetch(
-        `${getApiUrl()}/sandboxes/${sandboxId}/files`,
+        `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files`,
         {
           method: 'PUT',
           headers: {
@@ -738,13 +739,13 @@ export function FileViewerView({
       // Invalidate React Query cache for all content types
       ['text', 'blob', 'json'].forEach(contentType => {
         queryClient.invalidateQueries({
-          queryKey: fileQueryKeys.content(sandboxId, normalizedPath, contentType),
+          queryKey: fileQueryKeys.content(effectiveSandboxId, normalizedPath, contentType),
         });
       });
 
       // Also invalidate legacy FileCache
       const contentType = FileCache.getContentTypeFromPath(normalizedPath);
-      const cacheKey = `${sandboxId}:${normalizedPath}:${contentType}`;
+      const cacheKey = `${effectiveSandboxId}:${normalizedPath}:${contentType}`;
       FileCache.delete(cacheKey);
 
       // Refetch file to ensure fresh data
@@ -760,7 +761,7 @@ export function FileViewerView({
       toast.error(`Failed to save: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
-  }, [filePath, sandboxId, clearUnsavedContent, queryClient, refetchFile]);
+  }, [filePath, effectiveSandboxId, clearUnsavedContent, queryClient, refetchFile]);
 
   // Handle file download
   const handleDownload = async () => {
@@ -780,13 +781,13 @@ export function FileViewerView({
 
         if (typeof rawContent === 'string') {
           if (rawContent.startsWith('blob:')) {
-            if (!sandboxId || sandboxId.trim() === '') {
+            if (!effectiveSandboxId || effectiveSandboxId.trim() === '') {
               toast.error('Computer is not started yet.');
               return;
             }
             const token = await getSessionAccessToken();
             const response = await fetch(
-              `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
+              `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
               { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }
             );
 
@@ -809,13 +810,13 @@ export function FileViewerView({
         return;
       }
 
-      if (!sandboxId || sandboxId.trim() === '') {
+      if (!effectiveSandboxId || effectiveSandboxId.trim() === '') {
         toast.error('Computer is not started yet.');
         return;
       }
       const token = await getSessionAccessToken();
       const response = await fetch(
-        `${getApiUrl()}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
+        `${getApiUrl()}/sandboxes/${effectiveSandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
         { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }
       );
 
@@ -1149,7 +1150,7 @@ export function FileViewerView({
                           const normalizedPath = normalizeWorkspacePath(filePath);
 
                           ['text', 'blob', 'json'].forEach(contentType => {
-                            const cacheKey = `${sandboxId}:${normalizedPath}:${contentType}`;
+                            const cacheKey = `${effectiveSandboxId}:${normalizedPath}:${contentType}`;
                             FileCache.delete(cacheKey);
                           });
 
@@ -1256,7 +1257,7 @@ export function FileViewerView({
             const normalizedPath = normalizeWorkspacePath(filePath);
 
             ['text', 'blob', 'json'].forEach(contentType => {
-              const cacheKey = `${sandboxId}:${normalizedPath}:${contentType}`;
+              const cacheKey = `${effectiveSandboxId}:${normalizedPath}:${contentType}`;
               FileCache.delete(cacheKey);
             });
 
@@ -1322,7 +1323,7 @@ export function FileViewerView({
                     // Trigger refetch by clearing cache
                     const normalizedPath = normalizeWorkspacePath(filePath);
                     const contentType = FileCache.getContentTypeFromPath(normalizedPath);
-                    const cacheKey = `${sandboxId}:${normalizedPath}:${contentType}`;
+                    const cacheKey = `${effectiveSandboxId}:${normalizedPath}:${contentType}`;
                     FileCache.delete(cacheKey);
                     refetchFile();
                   }}
