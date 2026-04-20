@@ -1,6 +1,6 @@
 # Recoder Platform Status
 
-Last updated: 2026-04-20
+Last updated: 2026-04-21
 
 ## Goal
 
@@ -17,9 +17,9 @@ Keep the public Recoder surfaces working end to end:
 
 | Platform | URL | Current State |
 | --- | --- | --- |
-| Hub | `recoder.xyz` | Auth and Launch Web IDE bridge working. |
+| Hub | `recoder.xyz` | Auth and Launch Web IDE bridge working. Header simplified to `Agents` + `Dashboard`; dashboard onboarding redirect loop removed; main-site auth UI is OAuth-first. |
 | Web IDE | `web.recoder.xyz` | Launch, coding, preview, and follow-up edit working in production with clean latest browser pass. |
-| Agents | `agents.recoder.xyz` | Main authenticated paths working. Latest live sweep still shows duplicated thread/agent-runs `404` calls, no visible chat response within 10s after successful start, and one dashboard RSC `503`; branch has additional mitigations ahead of prod. |
+| Agents | `agents.recoder.xyz` | Main authenticated paths working. Shared ecosystem nav removed from agents shell; top-right notification/customize controls removed; `Plan` entry removed from user menu; generated-file Files pane fallback fix deployed. Remaining runtime/API instability still exists. |
 | PM | `pm.recoder.xyz` | Authenticated PM surface verified clean again. |
 | Agency | `agency.recoder.xyz` | Authenticated launch/workspaces/playground/tasks/settings verified clean in the latest sweep. |
 | Docker Backend | `docker.recoder.xyz` | Running and backing Web IDE production flow. |
@@ -45,6 +45,17 @@ Keep the public Recoder surfaces working end to end:
 - PM runtime/build issues fixed enough for authenticated use
 - Agents activity/auth paths restored
 - host/backend service drift corrected enough for public product use
+- Agents shared ecosystem nav removed
+- Agents top-right notification/customize controls removed
+- Agents user-menu `Plan` entry removed
+- Agents Files pane now uses discovered sandbox IDs when thread/project hydration lags
+
+### Hub / Main App
+
+- `recoder.xyz` header simplified to `Agents` + `Dashboard`
+- dashboard onboarding redirect loop removed
+- main-site sign-in/sign-up UI simplified to OAuth-first flows
+- manual verify-email / resend-email UI removed from the primary auth flow
 
 ## Verified Live
 
@@ -104,12 +115,23 @@ Backend/runtime-verified:
   - agent start `200`
   - zero `/v1/*` 5xx responses
 - remaining Agents warnings:
-  - no visible chat response within 10s on the tested message
   - duplicated `404` traffic still appears for:
     - `/v1/thread/:id/agent-runs`
     - `/v1/threads/:id`
-  - one dashboard RSC request still returned `503`
+  - intermittent `502` traffic still appears for:
+    - `/v1/agents/active-runs`
+    - `/v1/agent-runs/active`
+    - `/api/auth/session-token`
+    - `/v1/threads?page=...`
+    - `/v1/bookmarks?...`
+    - `/v1/ratings?...`
+  - one dashboard RSC `503` was seen in production sweeps
   - Board/Canvas entry path still needs a cleaner authenticated check
+  - Gemini / OpenRouter LiteLLM payload failure remains unresolved:
+    - `litellm.BadRequestError`
+    - Google provider says request must include at least one `parts` field
+    - tracked in `bd` as `recoder-5hg`
+  - chat response visibility/render timing still needs post-deploy verification on fresh authenticated runs
 
 ## Estate Scope
 
@@ -172,7 +194,7 @@ This estate includes:
 
 ## Priority Order
 
-1. Clean up Agents residual authenticated route/UI warnings
+1. Clean up Agents residual authenticated route/UI warnings and runtime/API instability
 2. Finish snapshot/persistence cleanup
 3. Verify A2A / control-plane health after Web and Agents cleanup
 
@@ -188,6 +210,7 @@ For post-deploy verification of the remaining Agents startup issues, use:
 - `app` + `recoder-web`: snapshot migration is incomplete; hub snapshots are preferred, but legacy `projects` and chat-history `fileSnapshot` coupling still exists
 - `backend` + `recoder-agents`: remaining startup instability is now a deployment/runtime verification problem more than a local frontend-gating problem; latest production sweeps still show duplicated thread detail / agent-runs `404`s, intermittent thread-scoped `503`s, and inconsistent behavior across runs
 - `recoder-agents`: Board/Canvas authenticated entry path still needs a cleaner deployed verification pass; chat response visibility/render timing still needs post-deploy verification after the latest branch-side mitigations
+- `backend` + `recoder-agents`: Gemini/OpenRouter request formatting/provider routing bug still causes Google `INVALID_ARGUMENT` / missing `parts` failures (`recoder-5hg`)
 - A2A/control plane: worker flows depend on Redis stream config, shared-secret alignment, internal service URLs, and orchestration policy from `.env.a2a.workers`
 - host ops: disk remains tight and previously stopped services still need cleanup/restart planning
 
@@ -207,4 +230,11 @@ Launch is complete when:
 - Production evidence wins over old notes.
 - Keep this file short and current.
 - Use `bd` for detailed task tracking, not this file.
-- The latest branch-side startup mitigations need deployment before production sweeps can prove whether `recoder-6l4` and `recoder-q6u` are actually fixed.
+- `app/` request is mostly done, but the full multi-surface request is not fully complete.
+- `recoder.xyz` nav/auth simplification is deployed.
+- `recoder-agents` shell/files fixes are deployed.
+- Remaining work is primarily `recoder-agents` runtime/API cleanup:
+  - Gemini/OpenRouter payload bug
+  - thread/agent-runs `404`
+  - active-runs/session-token `502` when reproducible
+- `net::ERR_BLOCKED_BY_ADBLOCKER` is not considered a product bug.
