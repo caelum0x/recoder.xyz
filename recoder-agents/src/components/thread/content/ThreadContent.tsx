@@ -1229,7 +1229,14 @@ const AssistantGroupRow = memo(function AssistantGroupRow({
             {playbackStreamingContent}
             {streamingToolCallContent}
             {showLoader && (
-              <div className="mt-1.5">
+              <div
+                className="mt-1.5 rounded-lg border border-border/60 bg-card/70 px-3 py-2 assistant-loading-state"
+                data-role="assistant"
+                data-type="assistant-loading"
+              >
+                <div className="mb-1 text-xs font-medium text-foreground/80">
+                  Starting worker...
+                </div>
                 <AgentLoader />
               </div>
             )}
