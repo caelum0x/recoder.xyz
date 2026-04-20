@@ -33,6 +33,7 @@ const HEARTBEAT_INTERVAL = 60000;
 const DEBOUNCE_DELAY = 500;
 
 const DISABLE_PRESENCE = process.env.NEXT_PUBLIC_DISABLE_PRESENCE === 'true';
+const ENABLE_PRESENCE_STREAM = process.env.NEXT_PUBLIC_ENABLE_PRESENCE_STREAM === 'true';
 
 function generateSessionId(): string {
   // Use crypto.randomUUID if available, otherwise fallback to a custom implementation
@@ -219,7 +220,7 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
     async (threadIdOverride?: string | null) => {
       try {
         stopPresenceStream();
-        if (DISABLE_PRESENCE || !user) {
+        if (DISABLE_PRESENCE || !ENABLE_PRESENCE_STREAM || !user) {
           return;
         }
 

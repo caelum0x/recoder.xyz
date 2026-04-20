@@ -36,6 +36,7 @@ import {
   usePinCommand,
   useUnpinCommand,
 } from '@/hooks/use-command-palette';
+import { useAuth } from '@/components/AuthProvider';
 import type { CommandType } from '@/lib/api/command-palette';
 import { cn } from '@/lib/utils';
 
@@ -84,10 +85,12 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const commandPaletteReady = open && !isAuthLoading && !!user;
 
-  const { data: agents } = useAgents({}, { enabled: open });
-  const { data: history } = useCommandHistory(undefined, { enabled: open });
-  const { data: pins } = useCommandPins({ enabled: open });
+  const { data: agents } = useAgents({}, { enabled: commandPaletteReady });
+  const { data: history } = useCommandHistory(undefined, { enabled: commandPaletteReady });
+  const { data: pins } = useCommandPins({ enabled: commandPaletteReady });
   const recordCommand = useRecordCommand();
   const pinCommandMut = usePinCommand();
   const unpinMut = useUnpinCommand();

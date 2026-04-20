@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
 import { backendApi } from '@/lib/api-client';
 import { connectTokenizedSSE, type TokenizedSSEConnection } from '@/lib/realtime/sse';
 import { resolveBrowserBackendApiUrl } from '@/lib/runtime-urls';
@@ -20,6 +21,9 @@ export {
   isSandboxFailed,
   getSandboxStatusLabel,
 } from '@recoder/shared/types/sandbox';
+
+const ENABLE_SANDBOX_STATUS_STREAM =
+  process.env.NEXT_PUBLIC_ENABLE_SANDBOX_STATUS_STREAM === 'true';
 
 // ============================================================================
 // Legacy SandboxDetails (kept for backwards compatibility)
@@ -89,13 +93,15 @@ export function useSandboxDetails(projectId: string | undefined, options?: { ena
  * - Combines Daytona state with in-container health checks
  */
 export function useSandboxStatus(projectId: string | undefined, options?: { enabled?: boolean }) {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const sseRef = useRef<TokenizedSSEConnection | null>(null);
-  const isEnabled = !!projectId && (options?.enabled !== false);
+  const isEnabled = !!projectId && !isAuthLoading && (options?.enabled !== false);
+  const shouldStream = isEnabled && !!user;
 
   // SSE connection — pushes status updates into the React Query cache
   useEffect(() => {
-    if (!isEnabled || !projectId) return;
+    if (!ENABLE_SANDBOX_STATUS_STREAM || !shouldStream || !projectId) return;
 
     const baseUrl = resolveBrowserBackendApiUrl();
     if (!baseUrl) return;
@@ -124,7 +130,7 @@ export function useSandboxStatus(projectId: string | undefined, options?: { enab
       connection.close();
       sseRef.current = null;
     };
-  }, [projectId, isEnabled, queryClient]);
+  }, [projectId, queryClient, shouldStream]);
 
   // HTTP GET as initial load + fallback when SSE hasn't delivered yet
   return useQuery<SandboxState | null>({
@@ -138,6 +144,10 @@ export function useSandboxStatus(projectId: string | undefined, options?: { enab
       );
 
       if (!response.success || !response.data) {
+        const status = (response.error as any)?.status;
+        if (status === 404 || status === 503) {
+          return null;
+        }
         throw new Error(response.error?.message || 'Failed to fetch sandbox status');
       }
 

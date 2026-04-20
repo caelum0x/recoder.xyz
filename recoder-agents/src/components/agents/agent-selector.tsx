@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { useAgents } from '@/hooks/agents/use-agents';
+import { useAuth } from '@/components/AuthProvider';
 import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 import { cn } from '@/lib/utils';
 import { AgentAvatar } from '@/components/thread/content/agent-avatar';
@@ -36,6 +37,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
   showCreateOption = true,
   variant = 'default'
 }) => {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
@@ -60,7 +62,11 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     search: debouncedSearchQuery || undefined,
   }), [currentPage, debouncedSearchQuery]);
 
-  const { data: agentsResponse, isLoading, isFetching } = useAgents(agentsParams);
+  const shouldLoadAgents = isOpen && !disabled && !!user && !isAuthLoading;
+  const { data: agentsResponse, isLoading, isFetching } = useAgents(
+    agentsParams,
+    { enabled: shouldLoadAgents }
+  );
 
   // Update agents list when data changes
   useEffect(() => {
