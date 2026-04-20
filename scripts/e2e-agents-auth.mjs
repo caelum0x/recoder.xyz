@@ -46,6 +46,8 @@ function log(test, status, detail) {
   const serverErrors = [];
   const consoleErrors = [];
   const apiCalls = [];
+  let createdThreadId = null;
+  let createdProjectId = null;
 
   page.on("pageerror", (err) => consoleErrors.push(err.message));
   page.on("console", (msg) => {
@@ -121,6 +123,10 @@ function log(test, status, detail) {
       if (agentResp.status() >= 400) {
         const body = await agentResp.text().catch(() => "");
         console.log(`  Response: ${body.substring(0, 300)}`);
+      } else {
+        const payload = await agentResp.json().catch(() => null);
+        createdThreadId = payload?.thread_id || payload?.threadId || createdThreadId;
+        createdProjectId = payload?.project_id || payload?.projectId || createdProjectId;
       }
     } else {
       log("AgentStart", "WARN", "No agent start POST captured in 15s");
@@ -145,6 +151,24 @@ function log(test, status, detail) {
     }
   } else {
     log("ChatInput", "WARN", "No chat input found on home page");
+  }
+
+  if (!createdThreadId || !createdProjectId) {
+    const latestThread = await page.evaluate(async () => {
+      try {
+        const r = await fetch("/v1/threads?limit=1", { credentials: "include" });
+        const body = await r.json().catch(() => null);
+        const thread = body?.threads?.[0] || body?.[0] || null;
+        return {
+          threadId: thread?.thread_id || null,
+          projectId: thread?.project_id || null,
+        };
+      } catch {
+        return { threadId: null, projectId: null };
+      }
+    });
+    createdThreadId = createdThreadId || latestThread.threadId;
+    createdProjectId = createdProjectId || latestThread.projectId;
   }
 
   // ───────────────────────────────────────────────
@@ -242,11 +266,24 @@ function log(test, status, detail) {
       await page.screenshot({ path: "agents-auth-board.png", fullPage: true });
     }
   } else {
-    log("Board", "WARN", "No Board/Canvas button visible on current page");
-    // Try direct navigation
+    if (createdProjectId && createdThreadId) {
+      const directCanvasUrl = `https://agents.recoder.xyz/projects/${createdProjectId}/thread/${createdThreadId}?modeStarter=canvas`;
+      await page.goto(directCanvasUrl, { waitUntil: "commit", timeout: 30000 });
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+      await page.screenshot({ path: "agents-auth-board.png", fullPage: true });
+
+      const hasCanvasStarter = await page.locator('text=Create Board, text=Choose a whiteboard, diagram, or flow to start with, [data-canvas-action]').first()
+        .isVisible({ timeout: 5000 }).catch(() => false);
+      log("Board", hasCanvasStarter ? "PASS" : "WARN",
+        hasCanvasStarter
+          ? `Canvas starter loaded via direct authenticated thread route: ${directCanvasUrl}`
+          : "No Board/Canvas button visible and direct thread route did not show canvas starter");
+    } else {
+      log("Board", "WARN", "No Board/Canvas button visible and no thread/project ID available for direct route check");
+    }
+    // Legacy fallback
     await page.goto("https://agents.recoder.xyz/?mode=canvas", { waitUntil: "commit", timeout: 30000 });
     await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
-    await page.screenshot({ path: "agents-auth-board.png", fullPage: true });
   }
 
   // ───────────────────────────────────────────────
