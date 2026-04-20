@@ -158,7 +158,7 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
     sort_by: 'name',
     sort_order: 'asc'
   }, {
-    enabled: !!user, // Only fetch agents when authenticated
+    enabled: !!user && !isAuthLoading, // Only fetch agents when authenticated and auth has settled
   });
   
   const agents = Array.isArray(agentsResponse?.agents) ? agentsResponse.agents : [];
