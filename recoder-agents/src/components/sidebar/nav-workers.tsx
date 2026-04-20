@@ -14,6 +14,7 @@ import { useIsMobile } from '@/hooks/utils';
 import { usePricingModalStore } from '@/stores/pricing-modal-store';
 import { useAccountState, accountStateSelectors } from '@/hooks/billing';
 import { isLocalMode } from '@/lib/config';
+import { useAuth } from '@/components/AuthProvider';
 import { Sparkles } from 'lucide-react';
 
 export function NavWorkers() {
@@ -24,6 +25,7 @@ export function NavWorkers() {
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
   const { openPricingModal } = usePricingModalStore();
   const { data: accountState } = useAccountState();
+  const { user, isLoading: isAuthLoading } = useAuth();
   
   const tierKey = accountStateSelectors.tierKey(accountState);
   const isFreeTier = tierKey && (
@@ -31,7 +33,11 @@ export function NavWorkers() {
     tierKey === 'none'
   ) && !isLocalMode();
 
-  const { data: agentsResponse, isLoading, error: agentsError, refetch } = useAgents({ limit: 50 });
+  const shouldLoadAgents = !isAuthLoading && !!user;
+  const { data: agentsResponse, isLoading, error: agentsError, refetch } = useAgents(
+    { limit: 50 },
+    { enabled: shouldLoadAgents }
+  );
   const agents = useMemo(() => {
     return Array.isArray(agentsResponse?.agents) ? agentsResponse.agents : [];
   }, [agentsResponse]);
