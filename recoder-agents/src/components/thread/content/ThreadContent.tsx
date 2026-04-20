@@ -1830,7 +1830,14 @@ export const ThreadContent: React.FC<ThreadContentProps> = memo(
 
           {showNewGroupLoader && (
             <div ref={latestMessageRef} className="w-full rounded mt-6">
-              <div className="flex flex-col gap-2">
+              <div
+                className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card/70 px-3 py-2 assistant-loading-state"
+                data-role="assistant"
+                data-type="assistant-loading"
+              >
+                <div className="text-xs font-medium text-foreground/80">
+                  Starting worker...
+                </div>
                 {/* Smooth transition between loader and reasoning section */}
                 <AnimatePresence mode="wait" initial={false}>
                   {streamingReasoningContent && streamingReasoningContent.trim().length > 0 ? (
