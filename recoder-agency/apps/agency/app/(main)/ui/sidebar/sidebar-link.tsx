@@ -59,6 +59,7 @@ export function SidebarLink({
 	return (
 		<Link
 			href={href}
+			prefetch={false}
 			className={clsx(
 				"text-sm flex items-center gap-2 h-[34px] rounded-lg px-1 ml-6",
 				isActive ? "text-accent" : "text-link-muted hover:text-accent",

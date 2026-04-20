@@ -192,8 +192,19 @@ function log(status, detail) {
   }
 
   console.log("\n--- Console errors ---");
-  const realErrors = consoleErrors.filter(
-    e => !e.text.includes("ERR_BLOCKED") && !e.text.includes("SES") && !e.text.includes("extension") && !e.text.includes("favicon")
+  const normalizedConsoleErrors = consoleErrors
+    .map((entry) =>
+      typeof entry === "string"
+        ? { url: page.url(), text: entry }
+        : entry,
+    )
+    .filter((entry) => entry && typeof entry.text === "string");
+  const realErrors = normalizedConsoleErrors.filter(
+    (e) =>
+      !e.text.includes("ERR_BLOCKED") &&
+      !e.text.includes("SES") &&
+      !e.text.includes("extension") &&
+      !e.text.includes("favicon"),
   );
   if (realErrors.length > 0) {
     for (const e of realErrors.slice(0, 5)) {

@@ -11,7 +11,7 @@ import {
 } from "@/services/teams/plan-features/team-members";
 import { Card } from "../../components/card";
 import { getCurrentUserRole, getTeamMembers } from "../actions";
-import { listInvitations } from "../invitation";
+import { listActiveInvitations, listInvitations } from "../invitation";
 import { InviteMemberDialog } from "../invite-member-dialog";
 import { TeamMembersList } from "../team-members-list";
 
@@ -128,7 +128,10 @@ export default async function TeamMembersPage() {
 	const { success: hasMembers, data: members } = await getTeamMembers();
 	const canManageMembers =
 		currentUserRole === "admin" && canManageTeamMembers(team.plan);
-	const invitations = await listInvitations();
+	const [invitations, activeInvitations] = await Promise.all([
+		listInvitations(),
+		listActiveInvitations(),
+	]);
 
 	if (!hasMembers || !members) {
 		return (
@@ -160,10 +163,6 @@ export default async function TeamMembersPage() {
 
 	const memberQuota = getTeamMemberQuota(team.plan);
 	const planLabel = getPlanLabel(team.plan);
-	const now = Date.now();
-	const activeInvitations = invitations.filter(
-		(invitation) => invitation.expiredAt.getTime() > now,
-	);
 	const pendingInvitationCount = activeInvitations.length;
 	const totalSeatsUsed = members.length + pendingInvitationCount;
 	const seatsRemaining = Math.max(memberQuota.maxMembers - totalSeatsUsed, 0);
