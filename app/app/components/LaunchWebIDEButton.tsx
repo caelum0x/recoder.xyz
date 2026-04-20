@@ -35,9 +35,31 @@ export function LaunchWebIDEButton({
       return;
     }
 
-    // Platform has server-side AI keys configured — no user API key needed.
-    // Launch directly.
-    window.location.href = getRecoderWebUrlClient();
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/platform/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          platform: 'web',
+          redirect: webIdeUrl,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json() as { bridgeUrl?: string; redirectUrl?: string };
+        window.location.href = data.bridgeUrl || data.redirectUrl || webIdeUrl;
+        return;
+      }
+    } catch {
+      // Fall back to the direct URL below.
+    } finally {
+      setLoading(false);
+    }
+
+    window.location.href = webIdeUrl;
   };
 
   return (

@@ -1,4 +1,5 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, json } from '@remix-run/cloudflare';
+import crypto from 'node:crypto';
 import { ProjectsDB } from '~/lib/.server/db/projects-db';
 import { loadStarterFiles } from '~/lib/.server/llm/starter-loader';
 import { createScopedLogger } from '~/utils/logger';
@@ -14,6 +15,45 @@ function getHubApiBaseUrl(context?: LoaderFunctionArgs['context'] | ActionFuncti
     process.env.APP_URL ||
     'https://recoder.xyz'
   ).replace(/\/$/, '');
+}
+
+function sha256(input: string): string {
+  return crypto.createHash('sha256').update(input).digest('hex');
+}
+
+function buildInternalServiceHeaders(input: {
+  method: string;
+  pathname: string;
+  body: string;
+  serviceKey: string;
+  userId?: string | null;
+}): Headers {
+  const timestamp = String(Date.now());
+  const nonce = crypto.randomUUID();
+  const payload = [
+    timestamp,
+    nonce,
+    input.method.toUpperCase(),
+    input.pathname,
+    sha256(input.body),
+  ].join('.');
+
+  const signature = crypto
+    .createHmac('sha256', input.serviceKey)
+    .update(payload)
+    .digest('hex');
+
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    'x-internal-service-key': input.serviceKey,
+    'x-internal-timestamp': timestamp,
+    'x-internal-nonce': nonce,
+    'x-internal-signature': signature,
+  });
+  if (input.userId) {
+    headers.set('x-user-id', input.userId);
+  }
+  return headers;
 }
 
 type HubProjectDetail = {
@@ -146,15 +186,29 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       return json({ error: 'Project ID required' }, { status: 400 });
     }
 
-    const cookie = request.headers.get('Cookie');
-    if (cookie) {
+    const env = context.cloudflare?.env;
+    const internalServiceKey =
+      env?.INTERNAL_SERVICE_KEY ||
+      process.env.INTERNAL_SERVICE_KEY ||
+      '';
+    const hubBaseUrl =
+      env?.MAIN_SITE_INTERNAL_URL ||
+      process.env.MAIN_SITE_INTERNAL_URL ||
+      getHubApiBaseUrl(context);
+
+    if (internalServiceKey && userId) {
       try {
-        const hubUrl = new URL(`/api/projects/${encodeURIComponent(projectId)}`, getHubApiBaseUrl(context));
+        const pathname = `/api/projects/${encodeURIComponent(projectId)}`;
+        const hubUrl = new URL(pathname, hubBaseUrl);
+        const headers = buildInternalServiceHeaders({
+          method: 'GET',
+          pathname,
+          body: '',
+          serviceKey: internalServiceKey,
+          userId,
+        });
         const response = await fetch(hubUrl.toString(), {
-          headers: {
-            Cookie: cookie,
-            Accept: 'application/json',
-          },
+          headers,
         });
 
         if (response.ok) {
@@ -182,7 +236,6 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       }
     }
 
-    const env = context.cloudflare?.env;
     const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {

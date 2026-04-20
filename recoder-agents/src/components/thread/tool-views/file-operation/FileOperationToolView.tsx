@@ -977,7 +977,7 @@ export function FileOperationToolView({
 
     // For DOCX files — render with DocxPreview component
     if (isDocx) {
-      const sandboxId = project?.sandbox?.id || project?.sandbox?.sandbox_id;
+      const sandboxId = project?.sandbox?.id;
       const sandboxUrl = project?.sandbox?.sandbox_url;
       const downloadUrl = sandboxUrl && processedFilePath
         ? `${sandboxUrl}/${processedFilePath.replace(/^\/?(workspace\/)?/, '')}`

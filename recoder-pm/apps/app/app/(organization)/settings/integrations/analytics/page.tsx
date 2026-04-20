@@ -13,6 +13,7 @@ export const metadata: Metadata = createMetadata({
     "Connect Mixpanel, Amplitude, or PostHog to ingest product usage data.",
 });
 
+export const dynamic = "force-dynamic";
 const AnalyticsIntegrationSettings = async () => {
   const organizationId = await currentOrganizationId();
 

@@ -379,6 +379,7 @@ async def start_agent_run(
     emit_timing: bool = False,
     mode: Optional[str] = None,
     files_data: Optional[List[Tuple[str, bytes, str, Optional[str]]]] = None,
+    session_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     from core.agents.config import load_agent_config_fast
     from core.agents.pipeline.slot_manager import (
@@ -585,6 +586,7 @@ async def start_agent_run(
         memory_enabled=memory_enabled,
         is_new_thread=is_new_thread,
         mode=mode,
+        session_token=session_token,
         cancellation_event=cancellation_event,
         skip_limits_check=skip_limits_check,
     ))
@@ -607,6 +609,7 @@ async def _execute_deep_coding_run(
     model_name: str,
     account_id: str,
     cancellation_event: asyncio.Event,
+    session_token: Optional[str] = None,
 ) -> None:
     """Route a deep-coding mode run through docker-backend's Pi or OpenCode service."""
     import httpx
@@ -619,10 +622,14 @@ async def _execute_deep_coding_run(
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
+            headers = {}
+            if session_token:
+                headers["Authorization"] = f"Bearer {session_token}"
+
             resp = await client.post(url, json={
                 "prompt": prompt,
                 "model": model_name,
-            })
+            }, headers=headers)
 
             if resp.status_code != 200:
                 # Pi failed — fall back to OpenCode
@@ -631,7 +638,7 @@ async def _execute_deep_coding_run(
                 resp = await client.post(opencode_url, json={
                     "prompt": prompt,
                     "model": model_name,
-                })
+                }, headers=headers)
                 if resp.status_code != 200:
                     error_text = resp.text[:500]
                     logger.error(f"[DEEP_CODING] Both Pi and OpenCode failed: {resp.status_code} {error_text}")
@@ -687,6 +694,7 @@ async def _background_setup_and_execute(
     memory_enabled: Optional[bool],
     is_new_thread: bool,
     mode: Optional[str],
+    session_token: Optional[str],
     cancellation_event: asyncio.Event,
     skip_limits_check: bool = False,
 ):
@@ -818,6 +826,7 @@ async def _background_setup_and_execute(
                         model_name=effective_model,
                         account_id=account_id,
                         cancellation_event=cancellation_event,
+                        session_token=session_token,
                     ),
                     timeout=run_timeout_seconds,
                 )
@@ -956,6 +965,18 @@ async def unified_agent_start(
     account_id = user_id
     is_optimistic = optimistic and optimistic.lower() == 'true'
 
+    auth_header = request.headers.get("Authorization", "")
+    session_token = None
+    if auth_header.startswith("Bearer "):
+        session_token = auth_header.split(" ", 1)[1].strip() or None
+    if not session_token:
+        session_token = (
+            request.cookies.get("recoder.session_token")
+            or request.cookies.get("__Secure-recoder.session_token")
+            or request.cookies.get("better-auth.session_token")
+            or request.cookies.get("__Secure-better-auth.session_token")
+        )
+
     if is_optimistic:
         if not thread_id or not project_id:
             raise HTTPException(status_code=400, detail="thread_id and project_id required for optimistic mode")
@@ -1025,6 +1046,7 @@ async def unified_agent_start(
             emit_timing=emit_timing,
             mode=mode,
             files_data=files_data if files_data else None,
+            session_token=session_token,
         )
         
         response = {

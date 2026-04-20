@@ -257,7 +257,7 @@ const nextConfig: NextConfig = {
 };
 
 // Wrap with Sentry only if DSN is configured (no-op otherwise)
-const configWithAnalyzer = withBundleAnalyzer(nextConfig);
+const configWithAnalyzer = withBundleAnalyzer(nextConfig as any);
 
 export default process.env.NEXT_PUBLIC_SENTRY_DSN
   ? withSentryConfig(configWithAnalyzer, {
@@ -282,10 +282,5 @@ export default process.env.NEXT_PUBLIC_SENTRY_DSN
       // Using /monitoring-sentry to avoid conflict with the /monitoring dashboard route
       tunnelRoute: '/monitoring-sentry',
 
-      // Hides source maps from generated client bundles
-      hideSourceMaps: true,
-
-      // Prevents Sentry webpack plugin from widening the build target
-      transpileClientSDK: false,
     })
   : configWithAnalyzer;

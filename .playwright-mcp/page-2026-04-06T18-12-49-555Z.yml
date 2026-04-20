@@ -1,0 +1,84 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e9]:
+        - link "Recoder" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img "Recoder" [ref=e13]
+        - navigation [ref=e14]:
+          - link "Home" [ref=e15] [cursor=pointer]:
+            - /url: /
+        - link "Get started" [ref=e17] [cursor=pointer]:
+          - /url: /auth
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - paragraph [ref=e24]:
+            - generic [ref=e25]: Ready when you are!
+            - generic [ref=e26]:
+              - generic [ref=e27]:
+                - generic [ref=e28]: R
+                - generic [ref=e29]: e
+                - generic [ref=e30]: a
+                - generic [ref=e31]: d
+                - generic [ref=e32]: "y"
+              - generic [ref=e33]:
+                - generic [ref=e34]: w
+                - generic [ref=e35]: h
+                - generic [ref=e36]: e
+                - generic [ref=e37]: "n"
+              - generic [ref=e38]:
+                - generic [ref=e39]: "y"
+                - generic [ref=e40]: o
+                - generic [ref=e41]: u
+              - generic [ref=e42]:
+                - generic [ref=e43]: a
+                - generic [ref=e44]: r
+                - generic [ref=e45]: e
+                - generic [ref=e46]: "!"
+          - paragraph [ref=e47]: Choose a mode to get started with templates and examples
+          - generic [ref=e51]:
+            - button "Slides" [ref=e52] [cursor=pointer]:
+              - img [ref=e54]
+              - generic [ref=e57]: Slides
+            - button "Data" [ref=e58] [cursor=pointer]:
+              - img [ref=e60]
+              - generic [ref=e62]: Data
+            - button "Docs" [ref=e63] [cursor=pointer]:
+              - img [ref=e65]
+              - generic [ref=e68]: Docs
+            - button "Canvas" [ref=e69] [cursor=pointer]:
+              - img [ref=e71]
+              - generic [ref=e77]: Canvas
+            - button "Video" [ref=e78] [cursor=pointer]:
+              - img [ref=e80]
+              - generic [ref=e83]: Video
+            - button "Research" [ref=e84] [cursor=pointer]:
+              - img [ref=e86]
+              - generic [ref=e89]: Research
+            - button "Deep Coding" [ref=e90] [cursor=pointer]:
+              - img [ref=e92]
+              - generic [ref=e94]: Deep Coding
+            - button "Image" [ref=e95] [cursor=pointer]:
+              - img [ref=e97]
+              - generic [ref=e101]: Image
+        - generic [ref=e108]:
+          - generic [ref=e110]:
+            - button "Analyze codebase" [ref=e111] [cursor=pointer]
+            - button "Write tests" [ref=e112] [cursor=pointer]
+            - button "Create workflow" [ref=e113] [cursor=pointer]
+            - button "Search knowledge" [ref=e114] [cursor=pointer]
+            - button "Debug issue" [ref=e115] [cursor=pointer]
+            - button "Code review" [ref=e116] [cursor=pointer]
+          - generic [ref=e117]:
+            - textbox "De" [ref=e119]
+            - generic [ref=e120]:
+              - generic [ref=e122]:
+                - button [disabled]:
+                  - img
+              - generic [ref=e124]:
+                - button [disabled]:
+                  - img
+  - region "Notifications alt+T"
+  - alert [ref=e125]

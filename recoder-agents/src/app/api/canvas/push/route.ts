@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { pushCanvasUpdate } from '../subscribe/[threadId]/route';
+import { pushCanvasUpdate } from '../_subscribers';
 
 export const dynamic = 'force-dynamic';
 

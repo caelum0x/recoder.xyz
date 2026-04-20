@@ -36,6 +36,7 @@ import {
   useCreateThreadFromTemplate,
 } from '@/hooks/threads/use-thread-templates';
 import { useAgents } from '@/hooks/agents/use-agents';
+import { useAuth } from '@/components/AuthProvider';
 import { toast } from '@/lib/toast';
 
 const CATEGORIES = ['general', 'coding', 'research', 'writing', 'analysis'] as const;
@@ -48,6 +49,7 @@ interface InitialMessage {
 }
 
 export default function ThreadTemplatesPage() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newName, setNewName] = useState('');
@@ -62,7 +64,10 @@ export default function ThreadTemplatesPage() {
   const createTemplate = useCreateThreadTemplate();
   const deleteTemplate = useDeleteThreadTemplate();
   const createFromTemplate = useCreateThreadFromTemplate();
-  const { data: agentsData } = useAgents({ limit: 50 });
+  const { data: agentsData } = useAgents(
+    { limit: 50 },
+    { enabled: !!user && !isAuthLoading }
+  );
 
   const agents = agentsData?.agents ?? agentsData ?? [];
 

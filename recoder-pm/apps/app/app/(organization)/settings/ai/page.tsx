@@ -15,6 +15,7 @@ export const metadata: Metadata = createMetadata({
   description: "AI settings for your organization.",
 });
 
+export const dynamic = "force-dynamic";
 const AiSettings = async () => {
   const organizationId = await currentOrganizationId();
 

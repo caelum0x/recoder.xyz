@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/empty-state";
 import { database } from "@/lib/database";
 
 const sources = ["ZENDESK", "INTERCOM", "EMAIL"];
+export const dynamic = "force-dynamic";
 const sourceLabels: Record<string, string> = {
   ZENDESK: "Zendesk",
   INTERCOM: "Intercom",

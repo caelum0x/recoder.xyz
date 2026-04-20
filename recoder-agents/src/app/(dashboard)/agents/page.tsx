@@ -44,7 +44,7 @@ interface PublishDialogData {
 }
 
 export default function AgentsPage() {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -158,7 +158,11 @@ export default function AgentsPage() {
     sort_order: templatesSortOrder
   }), [templatesPage, templatesPageSize, templatesSearchQuery, templatesSortBy, templatesSortOrder]);
 
-  const { data: agentsResponse, isLoading: agentsLoading, error: agentsError, refetch: loadAgents } = useAgents(agentsQueryParams);
+  const agentsReady = !!user && !isAuthLoading;
+  const { data: agentsResponse, isLoading: agentsLoading, error: agentsError, refetch: loadAgents } = useAgents(
+    agentsQueryParams,
+    { enabled: agentsReady }
+  );
   const { data: marketplaceTemplates, isLoading: marketplaceLoading } = useMarketplaceTemplates(marketplaceQueryParams);
 
   const templatesAgentsQueryParams = useMemo(() => ({
@@ -171,7 +175,10 @@ export default function AgentsPage() {
     content_type: "templates"
   }), [templatesPage, templatesPageSize, templatesSearchQuery, templatesSortBy, templatesSortOrder]);
   
-  const { data: templatesResponse, isLoading: templatesLoading, error: templatesError } = useAgents(templatesAgentsQueryParams);
+  const { data: templatesResponse, isLoading: templatesLoading, error: templatesError } = useAgents(
+    templatesAgentsQueryParams,
+    { enabled: agentsReady }
+  );
   const myTemplates = templatesResponse?.agents;
   const templatesPagination = templatesResponse?.pagination;
   

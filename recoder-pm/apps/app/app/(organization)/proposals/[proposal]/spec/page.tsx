@@ -10,6 +10,7 @@ export const metadata: Metadata = createMetadata({
   description: "Export a structured spec for coding agents.",
 });
 
+export const dynamic = "force-dynamic";
 const SpecExportPage = async ({
   params,
 }: {

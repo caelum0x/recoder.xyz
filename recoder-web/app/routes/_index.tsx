@@ -14,22 +14,15 @@ export const meta: MetaFunction = () => {
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const mainSiteUrl = process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000';
-  
-  // Check for Better Auth session cookie (shared via crossSubDomainCookies)
-  const cookies = request.headers.get('Cookie') || '';
-  
-  // Better Auth uses "recoder.session_token" as cookie name with prefix "recoder"
-  // Check for various possible cookie formats
-  const hasSessionToken = cookies.includes('recoder.session_token') || 
-                          cookies.includes('recoder.session') ||
-                          cookies.includes('session_token');
-  
-  logger.info('Auth cookie present on index request:', hasSessionToken);
+  const { verifySession } = await import('~/lib/auth/session.server');
+  const session = await verifySession(request).catch(() => null);
+
+  logger.info('Index session present:', Boolean(session?.user));
 
   // Skip auth check in local development for docker-backend testing
   const isDevelopment = process.env.NODE_ENV !== 'production';
 
-  if (!hasSessionToken && !isDevelopment) {
+  if (!session?.user && !isDevelopment) {
     return redirect(`${mainSiteUrl}/auth/signin?redirect=${encodeURIComponent(url.toString())}`);
   }
   

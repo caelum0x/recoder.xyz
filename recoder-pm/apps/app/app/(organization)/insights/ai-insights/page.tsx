@@ -18,6 +18,7 @@ const typeLabels: Record<string, string> = {
   MIXED: "Mixed",
 };
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = createMetadata({
   title: "AI Insights",
   description:

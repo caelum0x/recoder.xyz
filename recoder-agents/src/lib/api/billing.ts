@@ -495,7 +495,7 @@ export const billingApi = {
         },
       };
     }
-    return parseBillingAccountState(response.data) as AccountState;
+    return parseBillingAccountState(undefined) as AccountState;
   },
 
   async deductTokenUsage(usage: TokenUsage) {

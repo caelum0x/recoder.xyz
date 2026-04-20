@@ -16,6 +16,7 @@ import { AddFeedbackButton } from "./components/add-feedback-button";
 import { OnboardingOptions } from "./components/onboarding-options";
 
 const title = "Welcome";
+export const dynamic = "force-dynamic";
 const description =
   "Welcome to Recoder PM! Let's get you set up so you can start collecting feedback, creating features and building your roadmap.";
 

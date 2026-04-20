@@ -93,7 +93,9 @@ function log(test, status, detail) {
 
     // Find and click submit
     const submitBtn = page.locator('button[type="submit"], button[aria-label*="send"], button[aria-label*="Submit"]').first();
-    const canSubmit = await submitBtn.isVisible({ timeout: 3000 }).catch(() => false);
+    const canSubmit =
+      (await submitBtn.isVisible({ timeout: 3000 }).catch(() => false)) &&
+      (await submitBtn.isEnabled().catch(() => false));
 
     if (!canSubmit) {
       // Try pressing Enter

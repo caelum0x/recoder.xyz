@@ -1,6 +1,6 @@
 # Recoder Platform Status
 
-Last updated: 2026-04-19
+Last updated: 2026-04-20
 
 ## Goal
 
@@ -112,44 +112,63 @@ Backend/runtime-verified:
     - `/v1/threads/:id/messages`
   - Board/Canvas route test still hits an overlay-intercepted click path
 
-## Remaining Blockers
+## Estate Scope
 
-### 1. Agents cleanup
+This estate includes:
 
-Remaining non-blocking but real issues:
+- product/runtime surfaces: `app`, `backend`, `docker-backend`, `recoder-web`, `recoder-agents`, `recoder-pm`, `recoder-agency`, `packages`, `shared`
+- orchestration/tooling surfaces: `mcp`, `oh-my-codex`, `oh-my-openagent`, `packages/recoder-code`, `packages/recoder-cli-router`, `packages/recoder-a2a`, `recoder-skill`, `skills`, `tools`
+- runtime-integrated coding engines and related upstream code: `opencode`, Pi agents, Hermes agents, and the adapters that run them inside Daytona or service-backed coding flows
+- reference/parity/imported surfaces that still matter for extraction or migration work: `openclaw`, `extracted-from-openclaw`, `claw-code-parity`, `homebrew-recoder`, `tasks`
+- control-plane env surfaces: `.env.a2a.workers`, `.env.a2a.workers.example`, `.env.desktop-release.example`
 
-- duplicated legacy `404` calls for some thread detail / agent-runs routes in live prod (local fix prepared)
-- Board/Canvas interaction still has an overlay-click issue in authenticated browser automation
-- chat response rendering speed/visibility still needs one cleaner pass
-- intermittent startup `503`s on:
-  - `/v1/commands/history`
-  - `/v1/agents`
+## Canonical Systems
 
-### 2. Agency cleanup
+- `app`: auth, Launch Web IDE bridge, internal service auth, snapshot-backed project persistence
+- `docker-backend`: sandbox lifecycle, exec, file ops, preview, runtime auth/ownership checks
+- `recoder-web`: browser IDE product surface
+- `backend`: legacy `/v1` API backing `recoder-agents`
+- `recoder-agents`: agents frontend
+- `recoder-pm`: PM product subtree
+- `recoder-agency`: Agency product subtree
+- `packages`: shared package source of truth
+- `shared`: cross-app types/contracts
 
-Remaining non-blocking issue:
+## Adapter Layers
 
-- one React console warning (`Minified React error #418`) during authenticated sweep
+- `mcp`: thin MCP/A2A bridge surface
+- `packages/recoder-a2a`: published A2A/MCP connector
+- `packages/recoder-cli-router`: CLI provider router
+- `packages/recoder-code`: separate CLI workspace tied to coding-agent workflows
+- `skills`, `recoder-skill`: skill-definition and delivery surfaces
+- `tools`: ops/interoperability utilities, especially A2A tooling
+- `homebrew-recoder`: packaging/distribution adapter
+- `oh-my-codex`: Codex orchestration layer
+- `oh-my-openagent`: OpenCode plugin/orchestration layer
 
-### 3. Persistence cleanup
+## Runtime-Integrated Coding Engines
 
-In progress:
+- `opencode` is part of the Web coding-engine layer when used to power Recoder Web or Agents coding flows
+- Pi agents and Hermes agents are part of the same coding-engine layer when mounted in Daytona sandboxes or exposed as backend services
+- these engines are not just references; they are part of the live coding path when used for Loveable/Bolt-style generation, editing, and follow-up coding loops
 
-- `recoder-web` project reads now prefer the snapshot-backed hub APIs
-- `recoder-web` chat restore now prefers canonical project snapshots over stale chat-history snapshots when a project exists
-- `recoder-web` chat-history saves now best-effort mirror `fileSnapshot` writes to the hub project snapshot API
-- still unfinished:
-  - final live verification of the new snapshot-backed read/write path
-  - removing the remaining chat-history/fileSnapshot coupling in Web restore/save flows
-  - keeping one clear source of truth for project files and metadata end to end
+## Reference / Imported Systems
+
+- `openclaw`: upstream or parallel codebase
+- `extracted-from-openclaw`: extracted reference modules for reuse/porting
+- `claw-code-parity`: parity/rewrite research workspace
+- `tasks`: local task/reference surface
 
 ## Desired Architecture
 
-- Browser talks only to `recoder-web`
-- `recoder-web` talks only to `docker-backend`
+- browser-facing auth starts at `app`
+- Web browser talks only to `recoder-web`
+- `recoder-web` talks to `docker-backend` plus approved coding-engine services/adapters
+- coding engines such as `opencode`, Pi, and Hermes run inside Daytona sandboxes or as controlled backend services
 - `docker-backend` uses Daytona only for sandbox lifecycle, exec, file ops, and preview
 - no browser-critical dependency on direct `docker.recoder.xyz`
 - sandboxes are disposable execution state, not persistence
+- `app` remains the authority for session verification and canonical project snapshots
 - new React projects default to Vite
 
 ## Priority Order
@@ -157,6 +176,17 @@ In progress:
 1. Clean up Agents residual authenticated route/UI warnings
 2. Clean up Agency residual console warning
 3. Finish snapshot/persistence cleanup
+
+## Current Blockers By Owner Surface
+
+- `app` + `recoder-web`: live Web auth proof still depends on a fresh valid bridge/session token; authenticated `/api/projects` proof is blocked on session freshness, not missing route code
+- `app` + `recoder-web`: snapshot migration is incomplete; hub snapshots are preferred, but legacy `projects` and chat-history `fileSnapshot` coupling still exists
+- `docker-backend`: local `src/preview.ts` merge conflict still needs resolution before preview-related cleanup is truly closed
+- `backend` + `recoder-agents`: residual startup/race noise remains around duplicated thread detail / agent-runs `404`s and intermittent `/v1/commands/history` and `/v1/agents` `503`s
+- `recoder-agents`: Board/Canvas flow still has an overlay-intercepted click path; chat response visibility/render timing still needs one cleaner pass
+- `recoder-agency`: one remaining React console warning (`Minified React error #418`) during authenticated sweep
+- A2A/control plane: worker flows depend on Redis stream config, shared-secret alignment, internal service URLs, and orchestration policy from `.env.a2a.workers`
+- host ops: disk remains tight and previously stopped services still need cleanup/restart planning
 
 ## Launch Criteria
 

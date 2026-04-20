@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -42,6 +42,65 @@ function SignInForm() {
   const isRecoderSubdomain = /^https:\/\/[a-z-]+\.recoder\.xyz(\/|$)/.test(rawReturn);
   const returnUrl = isRelative || isRecoderSubdomain ? rawReturn : '/dashboard';
 
+  const resolveReturnUrl = async (targetUrl: string) => {
+    if (!targetUrl.startsWith('https://web.recoder.xyz')) {
+      return targetUrl;
+    }
+
+    try {
+      const response = await fetch('/api/platform/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          platform: 'web',
+          redirect: targetUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        return targetUrl;
+      }
+
+      const data = await response.json() as { bridgeUrl?: string };
+      return data.bridgeUrl || targetUrl;
+    } catch {
+      return targetUrl;
+    }
+  };
+
+  useEffect(() => {
+    if (!returnUrl.startsWith('https://web.recoder.xyz')) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/auth/session', {
+          credentials: 'include',
+        });
+        const data = await response.json() as { user?: { id: string } | null };
+
+        if (!data.user || cancelled) {
+          return;
+        }
+
+        const target = await resolveReturnUrl(returnUrl);
+        if (!cancelled) {
+          window.location.href = target;
+        }
+      } catch {
+        // Keep the user on the sign-in page if session detection fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [returnUrl]);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -54,11 +113,11 @@ function SignInForm() {
       }, {
         onSuccess: () => {
           setSuccess(true);
-          setTimeout(() => {
+          setTimeout(async () => {
             // Use window.location.href for cross-subdomain redirects (e.g. https://web.recoder.xyz)
             // router.push() only works for same-origin relative paths
             if (returnUrl.startsWith('http')) {
-              window.location.href = returnUrl;
+              window.location.href = await resolveReturnUrl(returnUrl);
             } else {
               router.push(returnUrl);
             }

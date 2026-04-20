@@ -84,6 +84,19 @@ export interface DaytonaFileInfo {
   permissions?: string;
 }
 
+export interface PortPreviewUrl {
+  sandboxId: string;
+  url: string;
+  token: string;
+}
+
+export interface SignedPortPreviewUrl {
+  sandboxId: string;
+  port: number;
+  token: string;
+  url: string;
+}
+
 export interface DaytonaClientConfig {
   /** Base URL of the Daytona API (e.g. http://localhost:3900/api) */
   baseUrl?: string;
@@ -208,15 +221,19 @@ export class DaytonaClient {
     timeoutMs?: number,
   ): Promise<T> {
     const toolboxBase = await this.getToolboxProxyUrl();
-    // Path format: /{sandboxId}{path} (e.g. /{id}/files, /{id}/process/execute)
-    const url = `${toolboxBase}/${sandboxId}${path}`;
+    // Path format on this Daytona deployment:
+    // /api/toolbox/{sandboxId}/toolbox/{operation}
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    const url = `${toolboxBase}/${sandboxId}/toolbox${normalizedPath}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs || this.timeoutMs);
 
     try {
       const response = await fetch(url, {
         method,
-        // Use Daytona API key (main API at port 3900)
+        // This deployment exposes sandbox exec/toolbox under the main Daytona
+        // API surface (/api/toolbox/...), so it requires the main Daytona API
+        // bearer token rather than the old proxy-specific secret.
         headers: this.headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
@@ -251,12 +268,13 @@ export class DaytonaClient {
       return this._toolboxProxyUrl;
     }
 
-    // Daytona toolbox proxy path: /toolbox/{sandboxId}/{operation}
+    // Daytona toolbox path on this deployment is exposed under the main API:
+    //   http://host.docker.internal:3900/api/toolbox/{sandboxId}/toolbox/{operation}
     // From inside Docker, use host.docker.internal to reach the host.
     const isDocker = require('fs').existsSync('/.dockerenv');
     this._toolboxProxyUrl = isDocker
-      ? 'http://host.docker.internal:3900/toolbox'
-      : `${this.baseUrl.replace(/\/api$/, '')}/toolbox`;
+      ? 'http://host.docker.internal:3900/api/toolbox'
+      : `${this.baseUrl}/toolbox`;
     logger.info({ toolboxProxyUrl: this._toolboxProxyUrl }, 'Using Daytona API toolbox URL');
     return this._toolboxProxyUrl;
   }
@@ -443,15 +461,7 @@ export class DaytonaClient {
    * Falls back to exec-based download if the native endpoint fails.
    */
   async downloadFile(sandboxId: string, filePath: string): Promise<string> {
-    try {
-      return await this.downloadFileNative(sandboxId, filePath);
-    } catch (nativeErr) {
-      logger.warn(
-        { sandboxId: sandboxId.slice(0, 12), filePath, error: (nativeErr as Error).message },
-        'Native filesystem download failed, falling back to exec-based download',
-      );
-      return this.downloadFileExec(sandboxId, filePath);
-    }
+    return this.downloadFileExec(sandboxId, filePath);
   }
 
   /**
@@ -459,21 +469,7 @@ export class DaytonaClient {
    * Falls back to exec-based listing if the native endpoint fails.
    */
   async listFiles(sandboxId: string, dirPath: string): Promise<DaytonaFileInfo[]> {
-    try {
-      return await this.listFilesNative(sandboxId, dirPath);
-    } catch (nativeErr) {
-      logger.warn(
-        { sandboxId: sandboxId.slice(0, 12), dirPath, error: (nativeErr as Error).message },
-        'Native filesystem list failed, falling back to legacy /files/ endpoint',
-      );
-      // Fallback to the old /files/ endpoint
-      const encodedPath = encodeURIComponent(dirPath);
-      return this.toolboxRequest<DaytonaFileInfo[]>(
-        'GET',
-        sandboxId,
-        `/files/?path=${encodedPath}`,
-      );
-    }
+    return this.listFilesExec(sandboxId, dirPath);
   }
 
   /**
@@ -481,15 +477,7 @@ export class DaytonaClient {
    * Falls back to exec-based delete if the native endpoint fails.
    */
   async deleteFile(sandboxId: string, filePath: string): Promise<void> {
-    try {
-      await this.deleteFileNative(sandboxId, filePath);
-    } catch (nativeErr) {
-      logger.warn(
-        { sandboxId: sandboxId.slice(0, 12), filePath, error: (nativeErr as Error).message },
-        'Native filesystem delete failed, falling back to exec-based delete',
-      );
-      await this.deleteFileExec(sandboxId, filePath);
-    }
+    await this.deleteFileExec(sandboxId, filePath);
   }
 
   // ── Native Toolbox Filesystem Methods ──
@@ -522,14 +510,14 @@ export class DaytonaClient {
   async downloadFileNative(sandboxId: string, filePath: string): Promise<string> {
     const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
     const toolboxBase = await this.getToolboxProxyUrl();
-    const url = `${toolboxBase}/${sandboxId}/toolbox/filesystem/download?path=${encodeURIComponent(absPath)}`;
+    const url = `${toolboxBase}/${sandboxId}/filesystem/download?path=${encodeURIComponent(absPath)}`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const response = await fetch(url, {
         method: 'GET',
-        headers: this.headers,
+        headers: this.toolboxHeaders,
         signal: controller.signal,
       });
 
@@ -632,7 +620,8 @@ export class DaytonaClient {
    * into a temp file first, then decode in a separate call.
    */
   private async uploadFileExec(sandboxId: string, filePath: string, content: string): Promise<void> {
-    const safePath = filePath.replace(/'/g, "'\\''");
+    const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+    const safePath = absPath.replace(/'/g, "'\\''");
     const b64Content = Buffer.from(content, 'utf-8').toString('base64');
 
     // Helper: call Daytona API directly (no double-encoding via execCommand)
@@ -650,7 +639,7 @@ export class DaytonaClient {
     };
 
     // Create parent directory
-    const dir = filePath.substring(0, filePath.lastIndexOf('/'));
+    const dir = absPath.substring(0, absPath.lastIndexOf('/'));
     if (dir) {
       await rawExec(`mkdir -p '${dir.replace(/'/g, "'\\''")}'`, 10);
     }
@@ -660,7 +649,7 @@ export class DaytonaClient {
     if (b64Content.length <= SINGLE_LIMIT) {
       const r = await rawExec(`printf '%s' '${b64Content}' | base64 -d > '${safePath}'`);
       if (r.exitCode !== 0) {
-        throw new Error(`File write to ${filePath} failed (exit ${r.exitCode}): ${r.output}`);
+        throw new Error(`File write to ${absPath} failed (exit ${r.exitCode}): ${r.output}`);
       }
       return;
     }
@@ -674,14 +663,14 @@ export class DaytonaClient {
       const op = i === 0 ? '>' : '>>';
       const r = await rawExec(`printf '%s' '${chunk}' ${op} '${tmpFile}'`);
       if (r.exitCode !== 0) {
-        throw new Error(`File write chunk failed at offset ${i} for ${filePath}: ${r.output}`);
+        throw new Error(`File write chunk failed at offset ${i} for ${absPath}: ${r.output}`);
       }
     }
 
     // Decode and move to target
     const r = await rawExec(`base64 -d < '${tmpFile}' > '${safePath}' && rm -f '${tmpFile}'`);
     if (r.exitCode !== 0) {
-      throw new Error(`File decode failed for ${filePath} (exit ${r.exitCode}): ${r.output}`);
+      throw new Error(`File decode failed for ${absPath} (exit ${r.exitCode}): ${r.output}`);
     }
   }
 
@@ -690,13 +679,44 @@ export class DaytonaClient {
    * Kept as fallback for when native filesystem API is unavailable.
    */
   private async downloadFileExec(sandboxId: string, filePath: string): Promise<string> {
-    const result = await this.execCommand(sandboxId, `cat '${filePath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 30 });
+    const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+    const result = await this.execCommand(sandboxId, `cat '${absPath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 30 });
 
     if (result.exitCode !== 0) {
-      throw new Error(`File read from ${filePath} failed (exit ${result.exitCode}): ${result.output}`);
+      throw new Error(`File read from ${absPath} failed (exit ${result.exitCode}): ${result.output}`);
     }
 
     return result.output;
+  }
+
+  /**
+   * List files in a sandbox directory using exec + find.
+   * Kept as fallback for when native filesystem API is unavailable.
+   */
+  private async listFilesExec(sandboxId: string, dirPath: string): Promise<DaytonaFileInfo[]> {
+    const absPath = dirPath.startsWith('/') ? dirPath : `/home/daytona/${dirPath}`;
+    const escaped = absPath.replace(/'/g, "'\\''");
+    const cmd = [
+      `if [ ! -d '${escaped}' ]; then exit 0; fi`,
+      `find '${escaped}' -maxdepth 1 -mindepth 1 -printf '%f\\t%y\\n' 2>/dev/null || true`,
+    ].join('; ');
+
+    const result = await this.execCommand(sandboxId, cmd, { timeoutSecs: 20 });
+    if (result.exitCode !== 0) {
+      throw new Error(`File list for ${dirPath} failed (exit ${result.exitCode}): ${result.output}`);
+    }
+
+    return result.output
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [name, type] = line.split('\t');
+        return {
+          name,
+          isDir: type === 'd',
+        } satisfies DaytonaFileInfo;
+      });
   }
 
   /**
@@ -704,10 +724,11 @@ export class DaytonaClient {
    * Kept as fallback for when native filesystem API is unavailable.
    */
   private async deleteFileExec(sandboxId: string, filePath: string): Promise<void> {
-    const result = await this.execCommand(sandboxId, `rm -f '${filePath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
+    const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+    const result = await this.execCommand(sandboxId, `rm -f '${absPath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
 
     if (result.exitCode !== 0) {
-      throw new Error(`File delete of ${filePath} failed (exit ${result.exitCode}): ${result.output}`);
+      throw new Error(`File delete of ${absPath} failed (exit ${result.exitCode}): ${result.output}`);
     }
   }
 
@@ -923,8 +944,37 @@ export class DaytonaClient {
   // ── Preview URLs ──
 
   /**
-   * Get the preview URL for a port exposed by a sandbox.
-   * Uses the configured DNS pattern: https://{port}-{sandboxId}.sandbox.recoder.xyz
+   * Get the authenticated preview URL and token for a sandbox port.
+   * GET /sandbox/:sandboxId/ports/:port/preview-url
+   */
+  async getPortPreviewUrl(sandboxId: string, port: number): Promise<PortPreviewUrl> {
+    return this.request<PortPreviewUrl>(
+      'GET',
+      `/sandbox/${encodeURIComponent(sandboxId)}/ports/${port}/preview-url`,
+    );
+  }
+
+  /**
+   * Get a signed preview URL for a sandbox port.
+   * GET /sandbox/:sandboxId/ports/:port/signed-preview-url
+   */
+  async getSignedPortPreviewUrl(
+    sandboxId: string,
+    port: number,
+    expiresInSeconds?: number,
+  ): Promise<SignedPortPreviewUrl> {
+    const expiresParam = typeof expiresInSeconds === 'number'
+      ? `?expiresInSeconds=${encodeURIComponent(String(expiresInSeconds))}`
+      : '';
+    return this.request<SignedPortPreviewUrl>(
+      'GET',
+      `/sandbox/${encodeURIComponent(sandboxId)}/ports/${port}/signed-preview-url${expiresParam}`,
+    );
+  }
+
+  /**
+   * Build the raw preview URL pattern for a sandbox port.
+   * Prefer getPortPreviewUrl() when you need the official Daytona auth token.
    */
   getPreviewUrl(sandboxId: string, port: number): string {
     return `https://${port}-${sandboxId}.sandbox.recoder.xyz`;

@@ -15,6 +15,8 @@ import { CreateOrganizationForm } from "./components/form";
 const title = "Create Organization";
 const description = "Create an organization to get started.";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = createMetadata({ title, description });
 
 const SetupPage = async () => {

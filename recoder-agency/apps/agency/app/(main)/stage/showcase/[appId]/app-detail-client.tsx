@@ -3,7 +3,7 @@
 import { StatusBadge } from "@recoder-internal/ui/status-badge";
 import { Play, Star } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GlassButton } from "@/components/ui/glass-button";
 import { AvatarImage } from "@/services/accounts/components/user-button/avatar-image";
 import { RunModal } from "./components/run-modal";
@@ -52,6 +52,26 @@ interface AppDetailClientProps {
 export function AppDetailClient({ appDetails }: AppDetailClientProps) {
 	const [isFavorite, setIsFavorite] = useState(appDetails.isFavorite);
 	const [isRunModalOpen, setIsRunModalOpen] = useState(false);
+	const [currentTime, setCurrentTime] = useState<number | null>(null);
+
+	useEffect(() => {
+		setCurrentTime(Date.now());
+		const intervalId = window.setInterval(() => {
+			setCurrentTime(Date.now());
+		}, 60_000);
+
+		return () => {
+			window.clearInterval(intervalId);
+		};
+	}, []);
+
+	const relativeTimeFormatter = useMemo(
+		() =>
+			new Intl.RelativeTimeFormat("en", {
+				numeric: "auto",
+			}),
+		[],
+	);
 
 	const toggleFavorite = async () => {
 		const newState = !isFavorite;
@@ -67,6 +87,17 @@ export function AppDetailClient({ appDetails }: AppDetailClientProps) {
 
 	const handleRunClick = () => {
 		setIsRunModalOpen(true);
+	};
+
+	const formatExecutionRelativeDay = (createdAt: Date) => {
+		if (currentTime === null) {
+			return "";
+		}
+
+		return relativeTimeFormatter.format(
+			Math.floor((createdAt.getTime() - currentTime) / (1000 * 60 * 60 * 24)),
+			"day",
+		);
 	};
 
 	return (
@@ -234,15 +265,7 @@ export function AppDetailClient({ appDetails }: AppDetailClientProps) {
 												</StatusBadge>
 												<div>
 													<div className="text-xs text-text-60">
-														{new Intl.RelativeTimeFormat("en", {
-															numeric: "auto",
-														}).format(
-															Math.floor(
-																(execution.createdAt.getTime() - Date.now()) /
-																	(1000 * 60 * 60 * 24),
-															),
-															"day",
-														)}
+														{formatExecutionRelativeDay(execution.createdAt)}
 													</div>
 												</div>
 											</div>

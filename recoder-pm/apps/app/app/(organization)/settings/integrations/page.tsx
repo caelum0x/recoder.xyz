@@ -10,6 +10,8 @@ import { database } from "@/lib/database";
 const title = "Integrations";
 const description = "Connect your favorite tools to Recoder PM.";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = createMetadata({
   title,
   description,

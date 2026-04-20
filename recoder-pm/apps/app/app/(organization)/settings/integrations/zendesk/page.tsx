@@ -12,6 +12,7 @@ export const metadata: Metadata = createMetadata({
   description: "Configure your Zendesk integration settings.",
 });
 
+export const dynamic = "force-dynamic";
 const ZendeskSettings = async () => {
   const organizationId = await currentOrganizationId();
 

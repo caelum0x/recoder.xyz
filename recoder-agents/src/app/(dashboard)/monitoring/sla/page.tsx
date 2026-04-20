@@ -31,6 +31,7 @@ import {
   useSlaDashboard,
 } from '@/hooks/monitoring/use-sla-monitoring';
 import { useAgents } from '@/hooks/agents/use-agents';
+import { useAuth } from '@/components/AuthProvider';
 import { toast } from '@/lib/toast';
 import type { SlaDefinition, CreateSlaData, SlaMeasurement } from '@/lib/api/sla-monitoring';
 
@@ -446,13 +447,17 @@ function RecentBreachesTable() {
 // ============================================================================
 
 export default function SlaMonitoringPage() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [isNewDialogOpen, setIsNewDialogOpen] = useState(false);
   const [selectedSlaId, setSelectedSlaId] = useState<string | null>(null);
   const [filterAgent, setFilterAgent] = useState<string>('');
   const [filterMetric, setFilterMetric] = useState<string>('');
 
   const { data: slas, isLoading: slasLoading } = useSlaDefinitions();
-  const { data: agentsData } = useAgents({ limit: 100 });
+  const { data: agentsData } = useAgents(
+    { limit: 100 },
+    { enabled: !!user && !isAuthLoading }
+  );
   const measureSla = useMeasureSla();
 
   const agents = useMemo(() => {

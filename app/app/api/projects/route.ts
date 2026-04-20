@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureAppUserFromAuthUser, requireAuth } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
-
-const RECODER_WEB_URL =
-  process.env.RECODER_WEB_URL ||
-  (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173');
+import { listProjectSnapshotsWithLegacyFallback } from '@/lib/project-snapshots';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +13,6 @@ export async function GET(request: NextRequest) {
     );
     let effectiveUserId: string | null = null;
     let fallbackUserId: string | null = null;
-
     if (hasInternalHeaders) {
       const authResult = verifyInternalServiceRequest(request, { rawBody: '' });
       if (!authResult.ok) {
@@ -53,98 +49,38 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get('limit') || '50';
+    const numericLimit = Number.parseInt(limit, 10) || 50;
 
-    // Fetch projects from recoder-web API
-    const url = new URL(`${RECODER_WEB_URL}/api/chat-history`);
-    url.searchParams.set('userId', effectiveUserId);
-    url.searchParams.set('limit', limit);
-
-    let response = await fetch(url.toString(), {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    let data: any = null;
-    const shouldRetryByStatus =
-      (response.status === 400 || response.status === 404 || response.status === 422) && !!fallbackUserId;
-
-    if (response.ok) {
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
-      }
-    }
-
-    const shouldRetryByEmptyData = Boolean(
-      fallbackUserId
-      && response.ok
-      && data
-      && data.success
-      && Array.isArray(data.data)
-      && data.data.length === 0
+    const directSnapshots = await listProjectSnapshotsWithLegacyFallback(
+      effectiveUserId,
+      numericLimit,
+      fallbackUserId ? [fallbackUserId] : [],
     );
-
-    // Retry with app user ID if Better Auth ID has no history on recoder-web side.
-    if (shouldRetryByStatus || shouldRetryByEmptyData) {
-      const retryUrl = new URL(`${RECODER_WEB_URL}/api/chat-history`);
-      retryUrl.searchParams.set('userId', fallbackUserId);
-      retryUrl.searchParams.set('limit', limit);
-      response = await fetch(retryUrl.toString(), {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      data = null;
-      if (response.ok) {
-        try {
-          data = await response.json();
-        } catch {
-          data = null;
-        }
-      }
-    }
-
-    if (!response.ok) {
-      console.error('Failed to fetch projects from recoder-web:', response.status, response.statusText);
+    if (directSnapshots.length > 0) {
       return NextResponse.json({
         success: true,
-        data: [],
-        total: 0,
-        warning: 'Projects backend unavailable'
+        data: directSnapshots.map((project) => ({
+          id: project.projectId,
+          urlId: project.urlId,
+          title: project.title || project.description || 'Untitled Project',
+          description: project.description,
+          timestamp: project.updatedAt,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+          messageCount: 0,
+          fileCount: Object.keys(project.files || {}).length,
+          directories: project.directories,
+          messages: [],
+          fileSnapshot: project.files,
+          webUrl: `/chat/${project.urlId || project.projectId}`,
+        })),
+        total: directSnapshots.length,
       });
     }
-
-    if (!data || !data.success || !Array.isArray(data.data)) {
-      return NextResponse.json({
-        success: true,
-        data: [],
-        total: 0,
-        warning: 'Projects response unavailable'
-      });
-    }
-
-    // Transform data to include calculated fields
-    const projects = data.data.map((project: any) => ({
-      id: project.id,
-      urlId: project.urlId,
-      title: project.title || project.description || 'Untitled Project',
-      description: project.description,
-      timestamp: project.timestamp,
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt,
-      messageCount: project.messageCount || project.messages?.length || 0,
-      fileCount: project.fileCount || Object.keys(project.fileSnapshot || {}).length,
-      messages: project.messages,
-      fileSnapshot: project.fileSnapshot,
-      webUrl: `${RECODER_WEB_URL}/chat/${project.urlId}`,
-    }));
-
     return NextResponse.json({
       success: true,
-      data: projects,
-      total: projects.length,
+      data: [],
+      total: 0,
     });
   } catch (error) {
     console.error('Error fetching projects:', error);

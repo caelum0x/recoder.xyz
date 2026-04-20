@@ -17,6 +17,7 @@ export const metadata: Metadata = createMetadata({
   description: "Product requirements document.",
 });
 
+export const dynamic = "force-dynamic";
 const ProposalPrdPage = async ({
   params,
 }: {

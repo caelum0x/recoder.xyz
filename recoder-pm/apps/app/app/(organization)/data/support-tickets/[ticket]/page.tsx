@@ -14,6 +14,7 @@ const sourceLabels: Record<string, string> = {
   EMAIL: "Email",
 };
 
+export const dynamic = "force-dynamic";
 type SupportTicketPageProps = {
   readonly params: Promise<{ ticket: string }>;
 };

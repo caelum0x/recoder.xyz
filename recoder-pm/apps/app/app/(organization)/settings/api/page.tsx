@@ -25,6 +25,7 @@ export const metadata: Metadata = createMetadata({
   description: "Manage your API keys",
 });
 
+export const dynamic = "force-dynamic";
 const APIPage = async () => {
   const organizationId = await currentOrganizationId();
 

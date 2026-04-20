@@ -39,7 +39,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.looksLikePreviewBuildError = looksLikePreviewBuildError;
 exports.buildDockerPreviewUpstreamHeaders = buildDockerPreviewUpstreamHeaders;
+exports.checkPort = checkPort;
 exports.setupPreviewProxy = setupPreviewProxy;
 const http_proxy_middleware_1 = require("http-proxy-middleware");
 const http_1 = __importDefault(require("http"));
@@ -52,11 +54,16 @@ const daytona_client_js_1 = require("./daytona-client.js");
 const daytona_file_ops_js_1 = require("./daytona-file-ops.js");
 const preview_rewrite_js_1 = require("./preview-rewrite.js");
 const zrok_preview_js_1 = require("./zrok-preview.js");
+const byok_provider_keys_js_1 = require("./public-api/byok-provider-keys.js");
 const docker = new dockerode_1.default();
 const autoStartAttempts = new Map();
 const autoInstallAttempts = new Map();
 const AUTO_START_COOLDOWN_MS = 10000;
 const AUTO_INSTALL_COOLDOWN_MS = 60000;
+const APP_API_URL = process.env.APP_API_URL || 'http://127.0.0.1:3000';
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? '';
+const RECODER_WEB_INTERNAL_URL = process.env.RECODER_WEB_INTERNAL_URL || 'http://recoder-web:5173';
+const DOCKER_PUBLIC_URL = process.env.DOCKER_PUBLIC_URL || 'https://docker.recoder.xyz';
 const DAYTONA_PORT_CANDIDATES = [
     { port: 5173, type: 'Vite (5173)' },
     { port: 5174, type: 'Vite (5174)' },
@@ -73,6 +80,189 @@ const DAYTONA_PORT_CANDIDATES = [
     { port: 8080, type: 'Other (8080)' },
     { port: 8081, type: 'Expo (8081)' },
 ];
+function getDaytonaPortCandidatesForFramework(framework) {
+    const normalized = (framework || '').toLowerCase();
+    if (normalized === 'expo') {
+        return DAYTONA_PORT_CANDIDATES.filter(({ port }) => port === 8081);
+    }
+    if (normalized === 'next' || normalized === 'react') {
+        return DAYTONA_PORT_CANDIDATES.filter(({ port }) => port !== 8081);
+    }
+    if (normalized === 'node-server' ||
+        normalized === 'python' ||
+        normalized === 'flask' ||
+        normalized === 'django' ||
+        normalized === 'fastapi' ||
+        normalized === 'go' ||
+        normalized === 'rust' ||
+        normalized === 'java' ||
+        normalized === 'java-spring') {
+        return DAYTONA_PORT_CANDIDATES;
+    }
+    // Web IDE starters are overwhelmingly Vite/Next-style apps. Exclude the
+    // sandbox's raw 8080/8081 file browser ports by default so we don't treat a
+    // directory listing as a healthy preview.
+    return DAYTONA_PORT_CANDIDATES.filter(({ port }) => port !== 8080 && port !== 8081);
+}
+function looksLikeDirectoryListing(body, contentType) {
+    if (!contentType.includes('text/html')) {
+        return false;
+    }
+    const normalized = body.toLowerCase();
+    return (normalized.includes('<title>index of /') ||
+        normalized.includes('<h1>index of /') ||
+        normalized.includes('<title>directory listing for /') ||
+        normalized.includes('<h1>directory listing for /') ||
+        normalized.includes('<pre><a href="../">../</a>') ||
+        normalized.includes('package.json</a>') ||
+        normalized.includes('node_modules/</a>') ||
+        normalized.includes('src/</a>') ||
+        normalized.includes('public/</a>'));
+}
+function looksLikePreviewBuildError(body, contentType) {
+    if (!contentType.includes('text/html')) {
+        return false;
+    }
+    const normalized = body.toLowerCase();
+    return (normalized.includes('html webpack plugin:') ||
+        normalized.includes('child compilation failed:') ||
+        normalized.includes("module not found: error: can't resolve") ||
+        normalized.includes('cannot find module') ||
+        normalized.includes('failed to compile') ||
+        normalized.includes('uncaught error: module build failed'));
+}
+function normalizeSnapshotPath(path) {
+    if (!path)
+        return null;
+    let normalizedPath = path;
+    if (normalizedPath.startsWith('/home/project/')) {
+        normalizedPath = normalizedPath.replace('/home/project/', '');
+    }
+    else if (normalizedPath.startsWith('/home/project')) {
+        normalizedPath = normalizedPath.replace('/home/project', '');
+    }
+    if (normalizedPath.startsWith('/workspace/')) {
+        normalizedPath = normalizedPath.replace('/workspace/', '');
+    }
+    else if (normalizedPath.startsWith('workspace/')) {
+        normalizedPath = normalizedPath.replace('workspace/', '');
+    }
+    return normalizedPath.replace(/^\/+/, '') || null;
+}
+async function fetchProjectSnapshot(projectId, userId) {
+    if (userId && INTERNAL_SERVICE_KEY) {
+        try {
+            const pathname = `/api/projects/${projectId}`;
+            const headers = (0, byok_provider_keys_js_1.buildInternalServiceHeaders)({
+                method: 'GET',
+                pathname,
+                body: '',
+                serviceKey: INTERNAL_SERVICE_KEY,
+            });
+            headers.set('X-User-Id', userId);
+            const response = await fetch(`${APP_API_URL}${pathname}`, {
+                method: 'GET',
+                headers,
+            });
+            if (response.ok) {
+                const payload = await response.json().catch(() => null);
+                const snapshot = payload?.data?.fileSnapshot || null;
+                if (snapshot && Object.keys(snapshot).length > 0) {
+                    return { files: snapshot, directories: payload?.data?.directories || [] };
+                }
+            }
+        }
+        catch {
+            // Fall through to recoder-web/app legacy lookups below.
+        }
+    }
+    try {
+        const response = await fetch(`${RECODER_WEB_INTERNAL_URL}/api/projects/${projectId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+        if (response.ok) {
+            const payload = await response.json().catch(() => null);
+            const snapshot = payload?.project?.fileSnapshot || null;
+            if (snapshot && Object.keys(snapshot).length > 0) {
+                return { files: snapshot, directories: payload?.project?.directories || [] };
+            }
+        }
+    }
+    catch {
+        // Fall through to main-app proxy lookup below.
+    }
+    if (!userId || !INTERNAL_SERVICE_KEY) {
+        return null;
+    }
+    const pathname = '/api/projects';
+    const requestUrl = `${APP_API_URL}${pathname}?limit=200`;
+    const headers = (0, byok_provider_keys_js_1.buildInternalServiceHeaders)({
+        method: 'GET',
+        pathname,
+        body: '',
+        serviceKey: INTERNAL_SERVICE_KEY,
+    });
+    headers.set('X-User-Id', userId);
+    const response = await fetch(requestUrl, {
+        method: 'GET',
+        headers,
+    });
+    if (!response.ok) {
+        return null;
+    }
+    const payload = await response.json().catch(() => null);
+    if (!payload?.success || !Array.isArray(payload.data)) {
+        return null;
+    }
+    const project = payload.data.find((entry) => entry?.id === projectId || entry?.urlId === projectId);
+    if (!project?.fileSnapshot) {
+        return null;
+    }
+    return { files: project.fileSnapshot, directories: project.directories || [] };
+}
+async function ensureDaytonaWorkspaceHydrated(projectId, entry) {
+    const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    const pkgCheck = await dc.execCommand(entry.id, 'test -f /home/daytona/package.json && echo YES || echo NO', { timeoutSecs: 10 });
+    if (pkgCheck.output.includes('YES')) {
+        return false;
+    }
+    const snapshot = await fetchProjectSnapshot(projectId, entry.userId);
+    if (!snapshot || Object.keys(snapshot.files).length === 0) {
+        return false;
+    }
+    for (const directory of snapshot.directories) {
+        const normalizedDirectory = normalizeSnapshotPath(directory);
+        if (!normalizedDirectory)
+            continue;
+        await dc.execCommand(entry.id, `mkdir -p '/home/daytona/${normalizedDirectory.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
+    }
+    const files = Object.entries(snapshot.files)
+        .filter(([path]) => {
+        const lowerPath = path.toLowerCase();
+        return !lowerPath.includes('node_modules')
+            && !lowerPath.includes('.git/');
+    })
+        .map(([path, content]) => {
+        const normalizedPath = normalizeSnapshotPath(path);
+        return normalizedPath ? { path: normalizedPath, content } : null;
+    })
+        .filter((value) => Boolean(value));
+    if (files.length === 0) {
+        return false;
+    }
+    const { failed } = await (0, daytona_file_ops_js_1.daytonaWriteFiles)(entry.id, files);
+    if (failed.length > 0) {
+        throw new Error(`restored ${files.length - failed.length}/${files.length} files, ${failed.length} failed`);
+    }
+    // Recovery must start from a clean dependency state. Keep lockfiles from the
+    // snapshot so dependency reinstalls stay deterministic.
+    await dc.execCommand(entry.id, "rm -rf /home/daytona/node_modules", { timeoutSecs: 20 });
+    console.log(`[Preview] Rehydrated empty Daytona workspace for ${projectId} from project snapshot (${files.length} files)`);
+    return true;
+}
 async function execInContainer(containerId, cmd) {
     const container = docker.getContainer(containerId);
     const exec = await container.exec({
@@ -124,12 +314,12 @@ async function detectFramework(containerId, isDaytona) {
             return 'vue';
         if (deps.vite || pkg.scripts?.dev?.includes('vite'))
             return 'vite';
+        if (deps.react)
+            return 'react';
         if (deps.servor || deps.serve)
             return 'static';
         if (pkg.scripts?.start && !pkg.scripts?.dev)
             return 'static';
-        if (deps.react)
-            return 'react';
         if (deps.express || deps.fastify || deps.koa)
             return 'node-server';
         const indexHtml = await dc.execCommand(containerId, 'test -f /home/daytona/index.html && echo "yes" || echo "no"', { timeoutSecs: 10 });
@@ -141,6 +331,74 @@ async function detectFramework(containerId, isDaytona) {
         // ignore
     }
     return 'vite';
+}
+function getDaytonaNodeBootstrapCommands() {
+    return [
+        'NODE_BIN="$(command -v node 2>/dev/null || true)"',
+        'if [ -z "$NODE_BIN" ]; then',
+        '  for candidate in /usr/local/nvm/versions/node/*/bin/node /usr/local/bin/node /usr/bin/node; do',
+        '    if [ -x "$candidate" ]; then NODE_BIN="$candidate"; break; fi',
+        '  done',
+        'fi',
+        'if [ -z "$NODE_BIN" ]; then echo missing-node; exit 1; fi',
+        'export PATH="$(dirname "$NODE_BIN"):$PATH"',
+        'NPM_CLI="/usr/local/nvm/versions/node/v22.14.0/lib/node_modules/npm/bin/npm-cli.js"',
+        'cd /home/daytona',
+    ];
+}
+async function runDaytonaCommand(sandboxId, commandParts, options) {
+    const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    return dc.execCommand(sandboxId, commandParts.join('; '), options);
+}
+async function daytonaPathExists(sandboxId, path) {
+    const result = await runDaytonaCommand(sandboxId, [`test -e '${path.replace(/'/g, "'\\''")}' && echo yes || echo no`], { timeoutSecs: 10 });
+    return result.output.includes('yes');
+}
+function buildDaytonaInstallCommand(hasPackageLock) {
+    if (hasPackageLock) {
+        return `"${'$'}NODE_BIN" "${'$'}NPM_CLI" ci --no-audit --no-fund`;
+    }
+    return `"${'$'}NODE_BIN" "${'$'}NPM_CLI" install --legacy-peer-deps --no-audit --no-fund`;
+}
+async function repairDaytonaReactScriptsDependencies(sandboxId, projectId, timeoutSecs = 600) {
+    const hasPackageLock = await daytonaPathExists(sandboxId, '/home/daytona/package-lock.json');
+    console.log(`🩹 [Preview] Forcing deterministic CRA dependency repair for ${projectId} (Daytona)...`);
+    await runDaytonaCommand(sandboxId, [
+        ...getDaytonaNodeBootstrapCommands(),
+        'rm -rf /home/daytona/node_modules',
+        buildDaytonaInstallCommand(hasPackageLock),
+        `"${'$'}NODE_BIN" "${'$'}NPM_CLI" install --no-save --legacy-peer-deps --no-audit --no-fund ajv@^8 ajv-keywords@^5`,
+        'pkill -f "react-scripts start|npm.*start" 2>/dev/null || true',
+    ], { timeoutSecs });
+}
+async function checkReactScriptsIntegrity(sandboxId) {
+    const criticalChecks = [
+        { label: 'react-scripts/package.json', path: '/home/daytona/node_modules/react-scripts/package.json' },
+        { label: 'html-webpack-plugin/lib/loader.js', path: '/home/daytona/node_modules/html-webpack-plugin/lib/loader.js' },
+        { label: 'ajv/dist/compile/codegen', path: '/home/daytona/node_modules/ajv/dist/compile/codegen.js' },
+        { label: 'ajv/dist/compile/codegen', path: '/home/daytona/node_modules/ajv/dist/compile/codegen/index.js' },
+    ];
+    const result = await runDaytonaCommand(sandboxId, [
+        `missing=0`,
+        `if [ -f '/home/daytona/node_modules/ajv/package.json' ] && grep -Eq '"version"[[:space:]]*:[[:space:]]*"6\\.' '/home/daytona/node_modules/ajv/package.json'; then echo 'ajv/dist/compile/codegen'; missing=1; fi`,
+        ...criticalChecks.map(({ label, path }, index) => index === 3
+            ? `if [ ! -f '${path}' ] && [ "$missing_codegen" = "1" ]; then echo '${label}'; missing=1; fi`
+            : index === 2
+                ? `if [ -f '${path}' ]; then missing_codegen=0; else missing_codegen=1; fi`
+                : `if [ ! -f '${path}' ]; then echo '${label}'; missing=1; fi`),
+        'if [ "$missing" -eq 0 ]; then echo ok; else exit 1; fi',
+    ], { timeoutSecs: 20 });
+    const missing = result.exitCode === 0
+        ? []
+        : result.output
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+    return {
+        ok: result.exitCode === 0,
+        missing,
+        output: result.output,
+    };
 }
 async function ensureDependencies(containerId, projectId, isDaytona) {
     const now = Date.now();
@@ -155,13 +413,43 @@ async function ensureDependencies(containerId, projectId, isDaytona) {
             console.log(`⚠️ [Preview] package.json not found yet for ${projectId} (Daytona), skipping install`);
             return;
         }
+        let pkg = null;
+        try {
+            pkg = JSON.parse(pkgResult.output);
+        }
+        catch {
+            pkg = null;
+        }
+        const deps = { ...(pkg?.dependencies || {}), ...(pkg?.devDependencies || {}) };
+        const isReactScriptsProject = Boolean(deps['react-scripts']);
+        const repairReactScriptsDeps = async () => {
+            if (!isReactScriptsProject)
+                return;
+            const integrity = await checkReactScriptsIntegrity(containerId);
+            if (integrity.ok) {
+                return;
+            }
+            console.log(`🩹 [Preview] Repairing incomplete react-scripts deps for ${projectId} (Daytona). Missing: ${integrity.missing.join(', ') || integrity.output || 'unknown'}`);
+            autoInstallAttempts.set(projectId, now);
+            await repairDaytonaReactScriptsDependencies(containerId, projectId, 240);
+            let repairedIntegrity = await checkReactScriptsIntegrity(containerId);
+            if (!repairedIntegrity.ok) {
+                throw new Error(`react-scripts dependency repair failed: ${repairedIntegrity.missing.join(', ') || repairedIntegrity.output || 'unknown missing modules'}`);
+            }
+        };
         const nmResult = await dc.execCommand(containerId, 'test -d /home/daytona/node_modules && echo "yes" || echo "no"', { timeoutSecs: 10 });
         if (nmResult.output.includes('yes')) {
+            await repairReactScriptsDeps();
             return;
         }
         autoInstallAttempts.set(projectId, now);
+        const hasPackageLock = await daytonaPathExists(containerId, '/home/daytona/package-lock.json');
         console.log(`📦 [Preview] Installing dependencies for ${projectId} (Daytona)...`);
-        await dc.execCommand(containerId, 'cd /home/daytona && npm install --legacy-peer-deps --no-audit --no-fund', { timeoutSecs: 120 });
+        await runDaytonaCommand(containerId, [
+            ...getDaytonaNodeBootstrapCommands(),
+            buildDaytonaInstallCommand(hasPackageLock),
+        ], { timeoutSecs: 120 });
+        await repairReactScriptsDeps();
         return;
     }
     const pkgRaw = await execInContainer(containerId, 'cat /workspace/package.json 2>/dev/null || echo ""');
@@ -203,25 +491,86 @@ function buildDockerPreviewUpstreamHeaders(targetPort, baseHeaders = {}) {
         origin: upstreamOrigin,
     };
 }
-async function probeDaytonaPort(entry, port, path = '/') {
+function getDaytonaPreviewHost(url, sandboxId, port) {
+    try {
+        return new URL(url).host;
+    }
+    catch {
+        return `${port}-${sandboxId}.sandbox.recoder.xyz`;
+    }
+}
+async function getDaytonaPreviewAccess(entry, port) {
+    const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    try {
+        const preview = await dc.getPortPreviewUrl(entry.id, port);
+        const url = preview?.url || dc.getPreviewUrl(entry.id, port);
+        return {
+            url,
+            token: preview?.token,
+            host: getDaytonaPreviewHost(url, entry.id, port),
+            port,
+        };
+    }
+    catch {
+        const url = dc.getPreviewUrl(entry.id, port);
+        return {
+            url,
+            host: getDaytonaPreviewHost(url, entry.id, port),
+            port,
+        };
+    }
+}
+function buildDaytonaPreviewHeaders(preview, options = {}) {
+    const headers = {
+        Host: preview.host,
+        Accept: options.accept || '*/*',
+        'X-Daytona-Skip-Preview-Warning': 'true',
+        'X-Daytona-Disable-CORS': 'true',
+        'X-Forwarded-Host': options.forwardedHost || preview.host,
+    };
+    if (preview.token) {
+        headers['X-Daytona-Preview-Token'] = preview.token;
+    }
+    return headers;
+}
+async function probeDaytonaPort(entry, port, path = '/', previewAccess) {
     const proxyHost = getDaytonaProxyHost();
     const proxyPort = getDaytonaProxyPort();
-    const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
+    const preview = previewAccess || await getDaytonaPreviewAccess(entry, port);
     return await new Promise((resolve) => {
         const req = http_1.default.request({
             hostname: proxyHost,
             port: proxyPort,
             path,
             method: 'GET',
-            headers: {
-                Host: sandboxHost,
-                Accept: '*/*',
-            },
+            headers: buildDaytonaPreviewHeaders(preview),
             timeout: 4000,
         }, (resp) => {
             const status = resp.statusCode || 0;
-            resp.resume();
-            resolve(status > 0 && status < 500);
+            const contentType = String(resp.headers['content-type'] || '');
+            let body = '';
+            resp.setEncoding('utf8');
+            resp.on('data', (chunk) => {
+                if (body.length < 8192) {
+                    body += chunk.slice(0, 8192 - body.length);
+                }
+            });
+            resp.on('end', () => {
+                const okStatus = status >= 200 && status < 400;
+                if (!okStatus) {
+                    resolve(false);
+                    return;
+                }
+                if (path === '/' && looksLikeDirectoryListing(body, contentType)) {
+                    resolve(false);
+                    return;
+                }
+                if (path === '/' && looksLikePreviewBuildError(body, contentType)) {
+                    resolve(false);
+                    return;
+                }
+                resolve(true);
+            });
         });
         req.on('error', () => resolve(false));
         req.on('timeout', () => {
@@ -250,9 +599,9 @@ async function detectDaytonaPortFromLogs(entry) {
     }
     return null;
 }
-async function findReadyDaytonaPort(entry) {
+async function findReadyDaytonaPort(entry, framework) {
     const preferredPort = await detectDaytonaPortFromLogs(entry);
-    const candidatePorts = DAYTONA_PORT_CANDIDATES.map(({ port }) => port);
+    const candidatePorts = getDaytonaPortCandidatesForFramework(framework).map(({ port }) => port);
     const portsToTry = preferredPort
         ? [preferredPort, ...candidatePorts.filter((port) => port !== preferredPort)]
         : candidatePorts;
@@ -313,7 +662,7 @@ async function recoverContainerFromDaytona(projectId, containers) {
             // Default to 8080 (common for file servers in agent sandboxes)
             // The preview route's health check will detect the actual port
             const defaultPort = 8080;
-            const previewUrl = dc.getPreviewUrl(match.id, defaultPort);
+            const preview = await getDaytonaPreviewAccess({ id: match.id }, defaultPort);
             const entry = {
                 id: match.id,
                 port: defaultPort,
@@ -321,7 +670,7 @@ async function recoverContainerFromDaytona(projectId, containers) {
                 lastActive: Date.now(),
                 userId: match.labels?.userId,
                 daytona: true,
-                daytonaPreviewUrl: previewUrl,
+                daytonaPreviewUrl: preview.url,
             };
             containers.set(projectId, entry);
             console.log(`🔄 [Preview] Recovered Daytona sandbox for ${projectId}: ${match.id} (state: ${match.state})`);
@@ -413,7 +762,8 @@ const PREVIEW_TARGET_HOST = (() => {
 async function checkPort(port) {
     return new Promise((resolve) => {
         const req = http_1.default.get(`http://${PREVIEW_TARGET_HOST}:${port}`, { timeout: 500 }, (res) => {
-            resolve(res.statusCode !== undefined);
+            const status = res.statusCode || 0;
+            resolve(status > 0 && status < 500);
         });
         req.on('error', () => resolve(false));
         req.on('timeout', () => { req.destroy(); resolve(false); });
@@ -546,9 +896,15 @@ function setupPreviewProxy(app, containers) {
             entry.port = targetPort;
             const proxyHost = getDaytonaProxyHost();
             const proxyPort = getDaytonaProxyPort();
-            const sandboxHost = `${targetPort}-${entry.id}.sandbox.recoder.xyz`;
+            const preview = await getDaytonaPreviewAccess(entry, targetPort);
+            entry.daytonaPreviewUrl = preview.url;
             upstreamUrl = `ws://${proxyHost}:${proxyPort}${upstreamPath}`;
-            upstreamHeaders = { Host: sandboxHost };
+            if (preview.token) {
+                upstreamUrl += `${upstreamUrl.includes('?') ? '&' : '?'}DAYTONA_SANDBOX_AUTH_KEY=${encodeURIComponent(preview.token)}`;
+            }
+            upstreamHeaders = buildDaytonaPreviewHeaders(preview, {
+                forwardedHost: typeof req.headers.host === 'string' ? req.headers.host : undefined,
+            });
         }
         else {
             const basePorts = [entry.port + 1, entry.port, entry.port + 4, entry.port + 5, entry.port + 2];
@@ -618,6 +974,10 @@ function setupPreviewProxy(app, containers) {
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('X-Frame-Options', 'ALLOWALL');
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
         if (!entry) {
             console.warn(`[Preview] Request for unknown project: ${projectId}`);
             // Try Docker first, then Daytona (agent-created sandboxes)
@@ -653,19 +1013,39 @@ function setupPreviewProxy(app, containers) {
             catch (wakeErr) {
                 console.warn(`[Preview] Auto-wake failed for ${entry.id}:`, wakeErr.message);
             }
+            try {
+                await ensureDaytonaWorkspaceHydrated(projectId, entry);
+            }
+            catch (rehydrateErr) {
+                console.warn(`[Preview] Daytona workspace rehydrate failed for ${projectId}:`, rehydrateErr?.message || rehydrateErr);
+            }
             // Quick health check via the internal Daytona proxy.
             // Do not rely on curl existing inside the sandbox.
-            const readyPort = await findReadyDaytonaPort(entry);
+            const detectedFramework = await detectFramework(entry.id, true).catch(() => 'unknown');
+            let reactIntegrityOk = true;
+            if (detectedFramework === 'react') {
+                try {
+                    const integrity = await checkReactScriptsIntegrity(entry.id);
+                    reactIntegrityOk = integrity.ok;
+                    if (!integrity.ok) {
+                        console.warn(`[Preview] CRA integrity check failed for ${projectId}: ${integrity.missing.join(', ') || integrity.output}`);
+                    }
+                }
+                catch (integrityErr) {
+                    reactIntegrityOk = false;
+                    console.warn(`[Preview] CRA integrity check errored for ${projectId}:`, integrityErr?.message || integrityErr);
+                }
+            }
+            const readyPort = reactIntegrityOk ? await findReadyDaytonaPort(entry, detectedFramework) : null;
             const daytonaServerReady = readyPort !== null;
             if (readyPort !== null) {
-                const dc = (0, daytona_client_js_1.getDaytonaClient)();
                 entry.port = readyPort;
-                const daytonaPreviewUrl = dc.getPreviewUrl(entry.id, readyPort);
-                let effectivePreviewUrl = daytonaPreviewUrl;
+                const preview = await getDaytonaPreviewAccess(entry, readyPort);
+                let effectivePreviewUrl = preview.url;
                 try {
                     const zrokUpdated = await (0, zrok_preview_js_1.updateShareTarget)(projectId, readyPort);
                     if (zrokUpdated) {
-                        effectivePreviewUrl = (0, zrok_preview_js_1.getPreviewUrl)(projectId) ?? daytonaPreviewUrl;
+                        effectivePreviewUrl = (0, zrok_preview_js_1.getPreviewUrl)(projectId) ?? preview.url;
                     }
                 }
                 catch (zrokErr) {
@@ -680,7 +1060,7 @@ function setupPreviewProxy(app, containers) {
                 // Proxy inline — no redirect to docker.recoder.xyz (avoids X-Frame-Options cross-origin block)
                 console.log(`[Preview] Daytona preview ready, proxying inline for ${projectId}`);
                 const subPath = getProxySubPath(req);
-                return handleSandboxPreview(req, res, containers, subPath, `/preview/${projectId}`);
+                return handleSandboxPreview(req, res, containers, subPath, `${DOCKER_PUBLIC_URL}/preview/${projectId}`);
             }
             // Dev server not running — try to auto-start
             console.log(`[Preview] Daytona dev server not ready for ${projectId}, attempting auto-start...`);
@@ -690,7 +1070,7 @@ function setupPreviewProxy(app, containers) {
                 autoStartAttempts.set(projectId, now);
                 try {
                     await ensureDependencies(entry.id, projectId, true);
-                    const framework = await detectFramework(entry.id, true);
+                    const framework = detectedFramework;
                     console.log(`[Preview] Auto-starting Daytona dev server for ${projectId} (${framework})`);
                     const ports = [5173, 3000, 3001, 3004, 3005, 3002]; // Vite (5173) first, then standard ports
                     await dev_server_js_1.devServerManager.start(entry.id, projectId, framework, ports, {
@@ -831,7 +1211,7 @@ function setupPreviewProxy(app, containers) {
                                 ? req.url.split('?')[0].replace(/^\/+/, '')
                                 : '';
                             const modifiedBody = (0, preview_rewrite_js_1.rewritePreviewBody)(body, {
-                                proxyPrefix: `/preview/${projectId}`,
+                                proxyPrefix: `${DOCKER_PUBLIC_URL}/preview/${projectId}`,
                                 contentType,
                                 requestPath,
                                 errorCaptureScript: ERROR_CAPTURE_SCRIPT,
@@ -909,17 +1289,43 @@ function setupPreviewProxy(app, containers) {
             return res.status(404).send('<h1>Sandbox not found</h1><p>The preview container is not running.</p>');
         }
         try {
+            if (entry.daytona || entry.daytonaPreviewUrl) {
+                const wakeResult = await (0, daytona_file_ops_js_1.ensureDaytonaSandboxRunning)(entry.id);
+                if (!wakeResult.running) {
+                    return res.status(503).send(friendlyPreviewPage(projectId, `Sandbox is stopped and could not be restarted: ${wakeResult.error || 'unknown error'}`, { canRetry: true }));
+                }
+                const framework = await detectFramework(entry.id, true).catch(() => 'unknown');
+                let readyPort = await findReadyDaytonaPort(entry, framework);
+                if (readyPort === null) {
+                    if (framework === 'react') {
+                        await repairDaytonaReactScriptsDependencies(entry.id, projectId);
+                    }
+                    else {
+                        await ensureDependencies(entry.id, projectId, true);
+                    }
+                    console.log(`[SandboxPreview] Auto-starting Daytona dev server for ${projectId} (${framework})`);
+                    await dev_server_js_1.devServerManager.start(entry.id, projectId, framework, [5173, 3000, 3001, 3004, 3005, 3002], {
+                        daytona: true,
+                        daytonaPreviewUrl: entry.daytonaPreviewUrl,
+                    });
+                    readyPort = await findReadyDaytonaPort(entry, framework);
+                }
+                if (readyPort === null) {
+                    return res.status(503).send(friendlyPreviewPage(projectId, 'The preview server is starting. This page will auto-refresh when ready.', { showLogs: true, canRetry: true }));
+                }
+                entry.port = readyPort;
+            }
             const port = entry.port || 5173;
             // Use internal Daytona proxy (port 4000) for sandbox preview — avoids going through public internet
-            // The Daytona proxy handles {port}-{sandboxId} routing internally, same as *.sandbox.recoder.xyz
-            // Use Node http.request instead of fetch — fetch may silently override Host header
+            // and use Daytona-issued preview tokens instead of derived raw hosts.
             const proxyHost = getDaytonaProxyHost();
             const proxyPort = getDaytonaProxyPort();
-            const sandboxHost = `${port}-${entry.id}.sandbox.recoder.xyz`;
+            const preview = await getDaytonaPreviewAccess(entry, port);
+            entry.daytonaPreviewUrl = preview.url;
             const querySuffix = getQuerySuffix(req);
             const normalizedSubPath = (subPath || '').replace(/^\/+/, '');
             const requestPath = normalizedSubPath ? `/${normalizedSubPath}${querySuffix}` : `/${querySuffix}`;
-            console.log(`[SandboxPreview] Proxying: ${proxyHost}:${proxyPort}${requestPath} Host: ${sandboxHost}`);
+            console.log(`[SandboxPreview] Proxying: ${proxyHost}:${proxyPort}${requestPath} Host: ${preview.host}`);
             const http = await Promise.resolve().then(() => __importStar(require('http')));
             const proxyResult = await new Promise((resolve, reject) => {
                 const proxyReq = http.request({
@@ -927,10 +1333,10 @@ function setupPreviewProxy(app, containers) {
                     port: proxyPort,
                     path: requestPath,
                     method: req.method,
-                    headers: {
-                        'Host': sandboxHost,
-                        'Accept': req.headers.accept || '*/*',
-                    },
+                    headers: buildDaytonaPreviewHeaders(preview, {
+                        accept: req.headers.accept || '*/*',
+                        forwardedHost: typeof req.headers.host === 'string' ? req.headers.host : undefined,
+                    }),
                 }, (proxyRes) => {
                     const chunks = [];
                     proxyRes.on('data', (chunk) => chunks.push(chunk));
@@ -967,6 +1373,10 @@ function setupPreviewProxy(app, containers) {
             }
             if (contentType)
                 res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.setHeader('Surrogate-Control', 'no-store');
             res.setHeader('Content-Length', Buffer.byteLength(responseBody));
             res.removeHeader('X-Frame-Options');
             res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -1043,7 +1453,7 @@ function setupPreviewProxy(app, containers) {
                     });
                     const match = matches[0];
                     if (match) {
-                        const previewUrl = dc.getPreviewUrl(match.id, 5173);
+                        const preview = await getDaytonaPreviewAccess({ id: match.id }, 5173);
                         entry = {
                             id: match.id,
                             port: 5173,
@@ -1051,7 +1461,7 @@ function setupPreviewProxy(app, containers) {
                             lastActive: Date.now(),
                             userId: match.labels?.userId,
                             daytona: true,
-                            daytonaPreviewUrl: previewUrl,
+                            daytonaPreviewUrl: preview.url,
                         };
                         containers.set(projectId, entry);
                     }
@@ -1078,12 +1488,12 @@ function setupPreviewProxy(app, containers) {
         // Probe through the Daytona proxy instead of relying on curl inside the sandbox.
         const daytonaUrl = entry?.daytonaPreviewUrl;
         if (daytonaUrl) {
-            // Extract sandboxId from preview URL pattern: https://{port}-{sandboxId}.sandbox.recoder.xyz
-            const urlMatch = daytonaUrl.match(/^https?:\/\/\d+-([^.]+)\./);
-            const sandboxId = urlMatch?.[1] || entry.id;
-            const portResults = await Promise.all(DAYTONA_PORT_CANDIDATES.map(async ({ port, type }) => {
-                const responding = await probeDaytonaPort(entry, port);
-                return { port, responding, type, url: `https://${port}-${sandboxId}.sandbox.recoder.xyz` };
+            const detectedFramework = await detectFramework(entry.id, true).catch(() => 'unknown');
+            const portCandidates = getDaytonaPortCandidatesForFramework(detectedFramework);
+            const portResults = await Promise.all(portCandidates.map(async ({ port, type }) => {
+                const preview = await getDaytonaPreviewAccess(entry, port);
+                const responding = await probeDaytonaPort(entry, port, '/', preview);
+                return { port, responding, type, url: preview.url };
             }));
             const preferredPort = await detectDaytonaPortFromLogs(entry);
             const respondingResult = (preferredPort !== null

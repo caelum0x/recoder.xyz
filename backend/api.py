@@ -125,6 +125,9 @@ _metrics_logger_task = None
 # When True, health check will return unhealthy to stop receiving traffic
 _is_shutting_down = False
 
+DB_STARTUP_MAX_WAIT_SECONDS = int(os.getenv("DB_STARTUP_MAX_WAIT_SECONDS", "180"))
+DB_STARTUP_RETRY_INTERVAL_SECONDS = float(os.getenv("DB_STARTUP_RETRY_INTERVAL_SECONDS", "3"))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _worker_metrics_task, _memory_watchdog_task, _stream_cleanup_task, _metrics_logger_task, _is_shutting_down
@@ -136,16 +139,39 @@ async def lifespan(app: FastAPI):
         from core.services.db import init_db
         await init_db()
 
-        try:
-            from core.services.db import execute_one
-            await execute_one("SELECT 1", {})
-            logger.info("Database connection verified at startup")
-        except Exception as e:
+        from core.services.db import execute_one
+        startup_deadline = time.monotonic() + DB_STARTUP_MAX_WAIT_SECONDS
+        startup_attempt = 0
+        last_db_error: Exception | None = None
+
+        while time.monotonic() < startup_deadline:
+            startup_attempt += 1
+            try:
+                await execute_one("SELECT 1", {})
+                logger.info(
+                    "Database connection verified at startup",
+                    attempt=startup_attempt,
+                )
+                last_db_error = None
+                break
+            except Exception as e:
+                last_db_error = e
+                remaining = max(0.0, startup_deadline - time.monotonic())
+                logger.warning(
+                    "Database not ready during startup, retrying",
+                    attempt=startup_attempt,
+                    retry_in_seconds=DB_STARTUP_RETRY_INTERVAL_SECONDS,
+                    remaining_seconds=round(remaining, 1),
+                    error=str(e),
+                )
+                await asyncio.sleep(DB_STARTUP_RETRY_INTERVAL_SECONDS)
+
+        if last_db_error is not None:
             logger.error(
-                f"FATAL: Database unreachable at startup — check DATABASE_URL credentials. "
-                f"Error: {e}. Aborting startup to prevent silent degradation."
+                f"FATAL: Database unreachable after startup retries. "
+                f"Waited {DB_STARTUP_MAX_WAIT_SECONDS}s before aborting. Error: {last_db_error}"
             )
-            raise RuntimeError(f"Database connection failed at startup: {e}") from e
+            raise RuntimeError(f"Database connection failed at startup: {last_db_error}") from last_db_error
         
         # Pre-load tool classes and schemas to avoid first-request delay
         from core.utils.tool_discovery import warm_up_tools_cache

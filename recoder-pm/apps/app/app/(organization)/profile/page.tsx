@@ -11,6 +11,7 @@ export const metadata: Metadata = createMetadata({
   description: "Manage your account info.",
 });
 
+export const dynamic = "force-dynamic";
 const Profile = async () => {
   const user = await currentUser();
 

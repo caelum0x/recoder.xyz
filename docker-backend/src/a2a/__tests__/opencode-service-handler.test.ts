@@ -9,18 +9,22 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   promptProject: vi.fn(),
   setProviderKey: vi.fn(async () => true),
+  getProjectDiff: vi.fn(async () => []),
 }));
 
 vi.mock('../opencode-service-adapter', () => ({
   promptProject: mocks.promptProject,
   setProviderKey: mocks.setProviderKey,
+  getProjectDiff: mocks.getProjectDiff,
 }));
 
 describe('opencode-service-handler', () => {
   beforeEach(() => {
     mocks.promptProject.mockReset();
     mocks.setProviderKey.mockReset();
+    mocks.getProjectDiff.mockReset();
     mocks.setProviderKey.mockImplementation(async () => true);
+    mocks.getProjectDiff.mockImplementation(async () => []);
   });
 
   describe('forwardProviderKeys', () => {
@@ -215,7 +219,7 @@ describe('opencode-service-handler', () => {
       expect(keyCallOrder).toBeLessThan(promptCallOrder);
     });
 
-    it('passes model as agent in prompt input', async () => {
+    it('passes provider/model override in prompt input', async () => {
       mocks.promptProject.mockResolvedValueOnce({
         info: { id: 'm', sessionID: 's', role: 'assistant', time: { created: 0 } },
         parts: [],
@@ -232,10 +236,39 @@ describe('opencode-service-handler', () => {
         'proj_1',
         expect.objectContaining({
           content: 'test',
-          agent: 'openrouter/anthropic/claude-sonnet-4.5',
+          providerID: 'openrouter',
+          modelID: 'anthropic/claude-sonnet-4.5',
         }),
         expect.any(Object),
       );
+    });
+
+    it('syncs files discovered from text parts when diff metadata is empty', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          {
+            type: 'text',
+            text: 'Created `/workspace/hello.txt` with content "hello".',
+          },
+        ],
+      });
+      mocks.getProjectDiff.mockResolvedValueOnce([]);
+      const readWorkspaceFile = vi.fn().mockResolvedValue('hello');
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'test',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        writeSandboxFile,
+      });
+
+      expect(readWorkspaceFile).toHaveBeenCalledWith('hello.txt');
+      expect(writeSandboxFile).toHaveBeenCalledWith('sbx_1', 'hello.txt', 'hello');
+      expect(result.syncedFiles).toEqual(['hello.txt']);
     });
 
     it('passes directory option to promptProject', async () => {

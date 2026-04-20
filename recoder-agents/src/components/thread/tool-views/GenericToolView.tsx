@@ -159,7 +159,7 @@ export function GenericToolView({
   const isError = React.useMemo(() => {
     // Coerce success to boolean — handles string "true"/"True", number 1, etc.
     // The backend sends boolean but it can get stringified through JSON/SSE/DB
-    const successValue = toolResult?.success;
+    const successValue: unknown = toolResult?.success;
     if (successValue === true || successValue === 'true' || successValue === 'True' || successValue === 1) return false;
     if (successValue === false || successValue === 'false' || successValue === 'False' || successValue === 0) return true;
     if (toolResult?.error) return true;

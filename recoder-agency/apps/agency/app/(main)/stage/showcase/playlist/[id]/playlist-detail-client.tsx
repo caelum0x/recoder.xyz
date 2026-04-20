@@ -41,6 +41,15 @@ interface PlaylistDetailClientProps {
 
 export function PlaylistDetailClient({ playlist }: PlaylistDetailClientProps) {
 	const router = useRouter();
+	const updatedAtFormatter = useState(
+		() =>
+			new Intl.DateTimeFormat("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+				timeZone: "UTC",
+			}),
+	)[0];
 	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 	const [editForm, setEditForm] = useState({
 		title: playlist.title,
@@ -264,7 +273,7 @@ export function PlaylistDetailClient({ playlist }: PlaylistDetailClientProps) {
 												{app.name || "Untitled"}
 											</p>
 											<p className="text-xs md:text-[12px] font-sans text-text-muted">
-												Edited {app.updatedAt.toLocaleDateString("en-US")}
+												Edited {updatedAtFormatter.format(app.updatedAt)}
 											</p>
 										</div>
 									</div>
