@@ -42,6 +42,7 @@ import {
   usePipelineRunStream,
 } from '@/hooks/agents/use-pipelines';
 import { useAgents } from '@/hooks/agents/use-agents';
+import { useAuth } from '@/components/AuthProvider';
 import { PipelineExecutionView } from '@/components/pipelines/pipeline-execution-view';
 import type { PipelineStep, PipelineRun } from '@/lib/api/pipelines';
 
@@ -210,6 +211,7 @@ function StepRow({
 // ---------------------------------------------------------------------------
 
 export default function PipelineDetailPage() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const params = useParams();
   const router = useRouter();
   const pipelineId = params.pipelineId as string;
@@ -220,7 +222,10 @@ export default function PipelineDetailPage() {
   const executeMutation = useExecutePipeline();
   // Don't fetch runs if the pipeline itself doesn't exist
   const { data: runs } = usePipelineRuns(pipelineNotFound ? '' : pipelineId);
-  const { data: agentsData } = useAgents({ limit: 100, sort_by: 'name', sort_order: 'asc' });
+  const { data: agentsData } = useAgents(
+    { limit: 100, sort_by: 'name', sort_order: 'asc' },
+    { enabled: !!user && !isAuthLoading }
+  );
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

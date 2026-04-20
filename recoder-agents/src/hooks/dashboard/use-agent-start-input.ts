@@ -276,7 +276,7 @@ export function useAgentStartInput(options: UseAgentStartInputOptions = {}): Use
       files: pendingFiles.length > 0 ? pendingFiles : undefined,
       modelName: options?.model_name,
       agentId: selectedAgentId || undefined,
-      mode: options?.mode,
+      mode: options?.mode ?? selectedMode ?? undefined,
     });
 
     if (!result) {

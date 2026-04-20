@@ -52,6 +52,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAccountState } from '@/hooks/billing';
 import { usePricingModalStore } from '@/stores/pricing-modal-store';
 import { isLocalMode } from '@/lib/config';
+import { useAuth } from '@/components/AuthProvider';
 
 import { useAgentVersionData } from '@/hooks/agents';
 import { useUpdateAgent, useAgents } from '@/hooks/agents/use-agents';
@@ -85,10 +86,12 @@ export function AgentConfigurationDialog({
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   const { agent, versionData, isViewingOldVersion, isLoading, error } = useAgentVersionData({ agentId });
+  const shouldLoadAgents = open && !!onAgentChange && !!user && !isAuthLoading;
   const { data: agentsResponse, refetch: refetchAgents } = useAgents({}, { 
-    enabled: !!onAgentChange,
+    enabled: shouldLoadAgents,
     refetchOnWindowFocus: true,
     refetchOnMount: 'always'
   });

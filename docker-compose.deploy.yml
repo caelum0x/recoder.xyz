@@ -33,7 +33,7 @@ services:
       dockerfile: docker-backend/Dockerfile
     container_name: recoder-docker-backend
     restart: unless-stopped
-    command: ["pnpm", "exec", "tsx", "src/server.ts"]
+    command: ["node", "dist/server.js"]
     ports:
       - "3100:3100"
     volumes:
@@ -47,6 +47,7 @@ services:
       - NODE_ENV=production
       - PORT=3100
       - NODE_OPTIONS=--max_old_space_size=1536
+      - COREPACK_HOME=/home/backend/.cache/node/corepack
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - PUBLIC_PROMPT_TASK_QUEUE_BACKEND=redis
       - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}

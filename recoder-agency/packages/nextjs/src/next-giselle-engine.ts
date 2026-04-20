@@ -109,7 +109,7 @@ export function createHttpHandler({
 
 			const a = url.pathname.match(new RegExp(`^${config.basePath}(.+)`));
 
-			const segmentString = a?.at(-1);
+			const segmentString = a && a.length > 0 ? a[a.length - 1] : undefined;
 			if (segmentString == null)
 				throw new Error(`Cannot parse action at ${pathname}`);
 			const segments = segmentString

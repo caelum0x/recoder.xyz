@@ -14,6 +14,7 @@ import { InitiativesEmptyState } from "./components/initiatives-empty-state";
 
 init({ data: emojiData });
 
+export const dynamic = "force-dynamic";
 const title = "Initiatives";
 const description = "Create and manage initiatives for your product.";
 

@@ -43,6 +43,7 @@ import {
   useAbTestSummary,
 } from '@/hooks/agents/use-ab-test-reports';
 import { useAgents } from '@/hooks/agents/use-agents';
+import { useAuth } from '@/components/AuthProvider';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { toast } from '@/lib/toast';
 import type { AbTestReport, ReportFilters } from '@/lib/api/ab-test-reports';
@@ -63,11 +64,12 @@ const WINNER_LABELS: Record<string, string> = {
 // ---- Create Report Dialog ----
 
 function CreateReportDialog() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [open, setOpen] = useState(false);
   const [reportName, setReportName] = useState('');
   const [agentId, setAgentId] = useState<string | undefined>(undefined);
 
-  const { data: agents } = useAgents();
+  const { data: agents } = useAgents({}, { enabled: open && !!user && !isAuthLoading });
   const createReport = useCreateAbTestReport();
 
   const handleCreate = async () => {
@@ -371,6 +373,7 @@ function SummaryCard() {
 // ---- Main Page ----
 
 export default function AbTestReportsPage() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [agentFilter, setAgentFilter] = useState<string | undefined>(undefined);
 
@@ -385,7 +388,7 @@ export default function AbTestReportsPage() {
   const { data: reports, isLoading } = useAbTestReports(
     Object.keys(filters).length > 0 ? filters : undefined,
   );
-  const { data: agents } = useAgents();
+  const { data: agents } = useAgents({}, { enabled: !!user && !isAuthLoading });
 
   return (
     <div className="space-y-6 p-6">

@@ -73,6 +73,16 @@ export function ShowcaseClient({
 }: ShowcaseClientProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
+	const updatedAtFormatter = useMemo(
+		() =>
+			new Intl.DateTimeFormat("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+				timeZone: "UTC",
+			}),
+		[],
+	);
 	const currentTab =
 		(searchParams.get("tab") as "Apps" | "Playlist" | "History") || "Apps";
 
@@ -305,7 +315,7 @@ export function ShowcaseClient({
 														{app.name || "Untitled"}
 													</p>
 													<p className="text-[12px] font-sans text-text-muted">
-														Edited {app.updatedAt.toLocaleDateString("en-US")}
+														Edited {updatedAtFormatter.format(app.updatedAt)}
 													</p>
 												</div>
 											</Link>
@@ -573,7 +583,7 @@ export function ShowcaseClient({
 													</p>
 													<p className="text-[12px] font-sans text-text-muted">
 														Executed{" "}
-														{item.updatedAt.toLocaleDateString("en-US")}
+														{updatedAtFormatter.format(item.updatedAt)}
 													</p>
 												</div>
 											</div>

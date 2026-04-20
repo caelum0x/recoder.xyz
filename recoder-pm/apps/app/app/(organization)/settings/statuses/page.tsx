@@ -14,6 +14,7 @@ export const metadata: Metadata = createMetadata({
   description: "Customize feature statuses for your organization.",
 });
 
+export const dynamic = "force-dynamic";
 const StatusesSettings = async () => {
   const organizationId = await currentOrganizationId();
 

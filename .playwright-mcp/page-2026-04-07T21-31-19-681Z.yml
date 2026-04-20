@@ -1,0 +1,99 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e9]:
+        - link "Recoder" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img "Recoder" [ref=e13]
+        - navigation [ref=e14]:
+          - link "Home" [ref=e15] [cursor=pointer]:
+            - /url: /
+        - link "Dashboard" [ref=e17] [cursor=pointer]:
+          - /url: /dashboard
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - paragraph [ref=e24]:
+            - generic [ref=e25]: What do you want to get done?
+            - generic [ref=e26]:
+              - generic [ref=e27]:
+                - generic [ref=e28]: W
+                - generic [ref=e29]: h
+                - generic [ref=e30]: a
+                - generic [ref=e31]: t
+              - generic [ref=e32]:
+                - generic [ref=e33]: d
+                - generic [ref=e34]: o
+              - generic [ref=e35]:
+                - generic [ref=e36]: "y"
+                - generic [ref=e37]: o
+                - generic [ref=e38]: u
+              - generic [ref=e39]:
+                - generic [ref=e40]: w
+                - generic [ref=e41]: a
+                - generic [ref=e42]: "n"
+                - generic [ref=e43]: t
+              - generic [ref=e44]:
+                - generic [ref=e45]: t
+                - generic [ref=e46]: o
+              - generic [ref=e47]:
+                - generic [ref=e48]: g
+                - generic [ref=e49]: e
+                - generic [ref=e50]: t
+              - generic [ref=e51]:
+                - generic [ref=e52]: d
+                - generic [ref=e53]: o
+                - generic [ref=e54]: "n"
+                - generic [ref=e55]: e
+                - generic [ref=e56]: "?"
+          - paragraph [ref=e57]: Choose a mode to get started with templates and examples
+          - generic [ref=e61]:
+            - button "Slides" [ref=e62] [cursor=pointer]:
+              - img [ref=e64]
+              - generic [ref=e67]: Slides
+            - button "Data" [ref=e68] [cursor=pointer]:
+              - img [ref=e70]
+              - generic [ref=e72]: Data
+            - button "Docs" [ref=e73] [cursor=pointer]:
+              - img [ref=e75]
+              - generic [ref=e78]: Docs
+            - button "Canvas" [ref=e79] [cursor=pointer]:
+              - img [ref=e81]
+              - generic [ref=e87]: Canvas
+            - button "Video" [ref=e88] [cursor=pointer]:
+              - img [ref=e90]
+              - generic [ref=e93]: Video
+            - button "Research" [ref=e94] [cursor=pointer]:
+              - img [ref=e96]
+              - generic [ref=e99]: Research
+            - button "Deep Coding" [ref=e100] [cursor=pointer]:
+              - img [ref=e102]
+              - generic [ref=e104]: Deep Coding
+            - button "Image" [ref=e105] [cursor=pointer]:
+              - img [ref=e107]
+              - generic [ref=e111]: Image
+        - generic [ref=e118]:
+          - generic [ref=e120]:
+            - button "Analyze codebase" [ref=e121] [cursor=pointer]
+            - button "Write tests" [ref=e122] [cursor=pointer]
+            - button "Create workflow" [ref=e123] [cursor=pointer]
+            - button "Search knowledge" [ref=e124] [cursor=pointer]
+            - button "Debug issue" [ref=e125] [cursor=pointer]
+            - button "Code review" [ref=e126] [cursor=pointer]
+          - generic [ref=e127]:
+            - textbox "Desc" [ref=e129]
+            - generic [ref=e130]:
+              - generic [ref=e131]:
+                - button [ref=e133] [cursor=pointer]:
+                  - img
+                - button [ref=e135] [cursor=pointer]:
+                  - img
+              - generic [ref=e136]:
+                - button [ref=e137] [cursor=pointer]:
+                  - img
+                - generic [ref=e138]:
+                  - button [disabled]:
+                    - img
+  - region "Notifications alt+T"
+  - alert [ref=e139]

@@ -114,6 +114,7 @@ interface PiSession {
   sandboxId: string;
   projectId: string;
   createdAt: number;
+  modelKey: string;
 }
 
 /** Map projectId → PiSession */
@@ -133,9 +134,11 @@ export async function getOrCreatePiSession(
     providerKeys?: Record<string, string | undefined>;
   },
 ): Promise<any> {
+  const modelKey = options?.model?.trim() || 'default';
+
   // Check for existing valid session
   const existing = activeSessions.get(projectId);
-  if (existing && existing.sandboxId === sandboxId) {
+  if (existing && existing.sandboxId === sandboxId && existing.modelKey === modelKey) {
     const age = Date.now() - existing.createdAt;
     if (age < SESSION_TTL_MS) {
       return existing.session;
@@ -150,6 +153,8 @@ export async function getOrCreatePiSession(
   // Dynamic import to avoid hard dependency at module load time
   const piModule = await import('@mariozechner/pi-coding-agent');
   const {
+    AuthStorage,
+    ModelRegistry,
     createAgentSession,
     createReadToolDefinition,
     createBashToolDefinition,
@@ -158,6 +163,37 @@ export async function getOrCreatePiSession(
   } = piModule;
 
   const SessionManager = piModule.SessionManager;
+  const authStorage = AuthStorage.inMemory();
+
+  const providerMap: Array<[string, string | undefined]> = [
+    ['openrouter', options?.providerKeys?.openrouter],
+    ['openai', options?.providerKeys?.openai],
+    ['anthropic', options?.providerKeys?.anthropic],
+    ['google', options?.providerKeys?.google],
+  ];
+
+  for (const [provider, key] of providerMap) {
+    if (key?.trim()) {
+      authStorage.set(provider, { type: 'api_key', key: key.trim() });
+    }
+  }
+
+  const modelRegistry = ModelRegistry.create(authStorage);
+
+  let selectedModel = undefined as any;
+  const requestedModel = options?.model?.trim();
+  if (requestedModel) {
+    const slashIndex = requestedModel.indexOf('/');
+    if (slashIndex > 0 && slashIndex < requestedModel.length - 1) {
+      const provider = requestedModel.slice(0, slashIndex);
+      const modelId = requestedModel.slice(slashIndex + 1);
+      selectedModel = modelRegistry.find(provider, modelId);
+    }
+  }
+
+  if (!selectedModel) {
+    selectedModel = modelRegistry.getAvailable()[0];
+  }
 
   const readOps = createDaytonaReadOps(sandboxId);
   const writeOps = createDaytonaWriteOps(sandboxId);
@@ -169,6 +205,9 @@ export async function getOrCreatePiSession(
   // are actually used instead of the default fs implementations.
   const { session } = await createAgentSession({
     cwd: DAYTONA_CWD,
+    authStorage,
+    modelRegistry,
+    model: selectedModel,
     tools: [],  // disable built-in tools
     customTools: [
       createWriteToolDefinition(DAYTONA_CWD, { operations: writeOps }) as any,
@@ -185,6 +224,7 @@ export async function getOrCreatePiSession(
     sandboxId,
     projectId,
     createdAt: Date.now(),
+    modelKey,
   };
 
   activeSessions.set(projectId, piSession);

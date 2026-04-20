@@ -84,10 +84,9 @@ interface ThreadComponentProps {
   configuredAgentId?: string;
   isShared?: boolean;
   isNew?: boolean;
-  preCreatedThreadId?: React.RefObject<string | null>;
 }
 
-export function ThreadComponent({ projectId, threadId, compact = false, configuredAgentId, isShared = false, isNew = false, preCreatedThreadId }: ThreadComponentProps) {
+export function ThreadComponent({ projectId, threadId, compact = false, configuredAgentId, isShared = false, isNew = false }: ThreadComponentProps) {
   const t = useTranslations('dashboard');
   const isMobile = useIsMobile();
   const router = useRouter();
@@ -141,7 +140,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const initializeFromAgents = isShared ? (() => { }) : storeInitializeFromAgents;
   const getCurrentAgent = isShared ? (() => undefined) : storeGetCurrentAgent;
   const isRecoderAgent = isShared ? false : storeIsRecoderAgentFn;
-  const shouldLoadAgents = isAuthenticated && !isShared && Boolean(configuredAgentId || selectedAgentId || derivedAgentId);
+  const shouldLoadAgents = isAuthenticated && !isShared && Boolean(configuredAgentId || selectedAgentId);
   
   const agentsQuery = useAgents({}, { enabled: shouldLoadAgents });
 
@@ -381,7 +380,8 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     checkBillingLimits: async () => false,
   } : threadBilling;
 
-  useProjectRealtime(projectId);
+  const realtimeProjectId = threadQuery.data?.project_id || (!isNewThread ? projectId : undefined);
+  useProjectRealtime(realtimeProjectId);
   useThreadKeyboardShortcuts({
     isSidePanelOpen,
     setIsSidePanelOpen,

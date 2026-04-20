@@ -8,6 +8,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 
 const title = "Email Integration";
+export const dynamic = "force-dynamic";
 const description =
   "Send email to this address to create feedback in Recoder PM.";
 

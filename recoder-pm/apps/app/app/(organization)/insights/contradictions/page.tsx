@@ -19,6 +19,7 @@ const typeLabels: Record<string, string> = {
   INTERVIEW_VS_USAGE: "Interview vs Usage",
 };
 
+export const dynamic = "force-dynamic";
 const statuses = ["all", "active", "acknowledged", "dismissed", "snoozed"];
 const statusLabels: Record<string, string> = {
   all: "All",

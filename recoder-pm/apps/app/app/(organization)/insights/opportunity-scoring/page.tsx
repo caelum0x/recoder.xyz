@@ -12,6 +12,7 @@ export const metadata: Metadata = createMetadata({
     "RICE scores for your features — prioritize by reach, impact, confidence, and effort.",
 });
 
+export const dynamic = "force-dynamic";
 const OpportunityScoringPage = async () => {
   const organizationId = await currentOrganizationId();
 

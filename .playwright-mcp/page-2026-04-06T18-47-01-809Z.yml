@@ -1,0 +1,20 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - navigation [ref=e5]:
+        - link "Recoder Home" [ref=e6] [cursor=pointer]:
+          - /url: https://recoder.xyz
+          - img "Recoder" [ref=e7]
+        - link "Web" [ref=e9] [cursor=pointer]:
+          - /url: https://web.recoder.xyz
+        - link "Agency" [ref=e10] [cursor=pointer]:
+          - /url: https://agency.recoder.xyz
+        - link "PM" [ref=e11] [cursor=pointer]:
+          - /url: https://pm.recoder.xyz
+        - link "Agents" [ref=e12] [cursor=pointer]:
+          - /url: https://agents.recoder.xyz
+      - main [ref=e27]
+  - region "Notifications alt+T"
+  - alert [ref=e29]

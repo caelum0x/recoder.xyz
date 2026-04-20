@@ -29,12 +29,18 @@ RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm insta
 WORKDIR /app/app
 RUN pnpm exec prisma generate
 
+# Regenerate the auth client from its schema so runtime binaryTargets changes in
+# packages/auth/prisma/schema.prisma are reflected in the copied auth-client.
+WORKDIR /app/packages/auth
+RUN pnpm exec prisma generate --schema=prisma/schema.prisma
+
 # @recoder/auth uses a separately generated Prisma client with a custom output
 # path under packages/auth/prisma/auth-client. Some build-time/static generation
 # paths import @recoder/auth before the final runner-stage copy happens, and
 # Prisma then looks relative to the app cwd (/app/app/prisma/auth-client).
 # Mirror the generated client into that build-stage location as well so Next
 # page-data/static generation does not emit non-fatal initialization warnings.
+WORKDIR /app/app
 RUN mkdir -p ./prisma && cp -rf /app/packages/auth/prisma/auth-client ./prisma/auth-client
 
 # Copy source code into the workspace root paths (not nested under /app/app)
@@ -66,7 +72,6 @@ RUN SKIP_ENV_VALIDATION=true \
 
 # Production stage
 FROM node:20-slim AS runner
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 nodejs && \
@@ -93,6 +98,6 @@ ENV HOSTNAME="0.0.0.0"
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -sf http://localhost:3000/api/health -o /dev/null || exit 1
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]

@@ -11,6 +11,7 @@ export const metadata: Metadata = createMetadata({
   description: "Configure your Linear integration settings.",
 });
 
+export const dynamic = "force-dynamic";
 const LinearIntegrationSettings = async () => {
   const organizationId = await currentOrganizationId();
 

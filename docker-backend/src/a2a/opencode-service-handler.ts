@@ -126,6 +126,7 @@ export function extractResponseText(result: MessageWithParts): string {
  */
 function extractModifiedFilePaths(result: MessageWithParts): string[] {
   const paths = new Set<string>();
+  const textPathPattern = /(?:\/workspace\/|\/home\/daytona\/)([^\s"'`),:;]+)|`((?:\/workspace\/|\/home\/daytona\/)[^`]+)`/g;
 
   for (const part of result.parts) {
     const record = part as Record<string, unknown>;
@@ -145,6 +146,22 @@ function extractModifiedFilePaths(result: MessageWithParts): string[] {
     if (record.type === 'file' || record.type === 'patch') {
       const filePath = String(record.path || record.file || '');
       if (filePath) paths.add(filePath);
+    }
+
+    // Some opencode responses only mention created/edited files in text or
+    // reasoning parts instead of structured tool-call metadata or diff output.
+    // Extract absolute workspace paths from those messages so we can still
+    // sync the changed files back into the sandbox.
+    if (record.type === 'text' || record.type === 'reasoning' || record.type === 'tool-result') {
+      const content = String(record.text || record.content || '');
+      if (!content) continue;
+
+      let match: RegExpExecArray | null;
+      while ((match = textPathPattern.exec(content)) !== null) {
+        const filePath = match[0].replace(/`/g, '');
+        if (filePath) paths.add(filePath);
+      }
+      textPathPattern.lastIndex = 0;
     }
   }
 

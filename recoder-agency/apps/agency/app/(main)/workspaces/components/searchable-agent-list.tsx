@@ -33,6 +33,16 @@ export function SearchableAgentList({
 	const [searchQuery, setSearchQuery] = useState("");
 	const [sortOption, setSortOption] = useState<SortOption>("date-desc");
 	const [viewMode, setViewMode] = useState<ViewMode>("grid");
+	const updatedAtFormatter = useMemo(
+		() =>
+			new Intl.DateTimeFormat("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+				timeZone: "UTC",
+			}),
+		[],
+	);
 
 	// Filter agents based on search query
 	const filteredAgents = useMemo(() => {
@@ -119,7 +129,7 @@ export function SearchableAgentList({
 								key={agent.id}
 								href={`/workspaces/${agent.workspaceId}`}
 								title={agent.name || "Untitled"}
-								subtitle={`Edited ${agent.updatedAt.toLocaleDateString()}`}
+								subtitle={`Edited ${updatedAtFormatter.format(agent.updatedAt)}`}
 								creator={
 									agent.metadata.sample
 										? "Recoder Team"

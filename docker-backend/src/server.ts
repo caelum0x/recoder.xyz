@@ -1552,6 +1552,61 @@ async function fetchAIProviderKeys(userId: string): Promise<AIProviderKeys> {
   }
 }
 
+async function syncProjectSnapshotDelta(input: {
+  projectId: string;
+  userId?: string;
+  files?: Record<string, string>;
+  removePaths?: string[];
+  removePathPrefixes?: string[];
+  addDirectories?: string[];
+  removeDirectories?: string[];
+  renamePaths?: Array<{ from: string; to: string }>;
+}): Promise<void> {
+  if (!input.userId || !INTERNAL_SERVICE_KEY) {
+    return;
+  }
+
+  if (
+    (!input.files || Object.keys(input.files).length === 0) &&
+    (!input.removePaths || input.removePaths.length === 0) &&
+    (!input.removePathPrefixes || input.removePathPrefixes.length === 0) &&
+    (!input.addDirectories || input.addDirectories.length === 0) &&
+    (!input.removeDirectories || input.removeDirectories.length === 0) &&
+    (!input.renamePaths || input.renamePaths.length === 0)
+  ) {
+    return;
+  }
+
+  const pathname = `/api/projects/${encodeURIComponent(input.projectId)}`;
+  const body = JSON.stringify({
+    files: input.files || {},
+    removePaths: input.removePaths || [],
+    removePathPrefixes: input.removePathPrefixes || [],
+    addDirectories: input.addDirectories || [],
+    removeDirectories: input.removeDirectories || [],
+    renamePaths: input.renamePaths || [],
+    source: 'docker-backend',
+  });
+  const headers = buildInternalServiceHeaders({
+    method: 'PATCH',
+    pathname,
+    body,
+    serviceKey: INTERNAL_SERVICE_KEY,
+  });
+  headers.set('X-User-Id', input.userId);
+
+  const response = await fetch(`${APP_API_URL}${pathname}`, {
+    method: 'PATCH',
+    headers,
+    body,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`project snapshot sync failed: ${response.status} ${text}`);
+  }
+}
+
 // Create base express app
 const baseApp = express();
 
@@ -3523,6 +3578,17 @@ app.post('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, as
       sizeBytes: Buffer.byteLength(content ?? '', 'utf8'),
     });
 
+    try {
+      await syncProjectSnapshotDelta({
+        projectId,
+        userId: req.userId,
+        files: { [safePath]: content },
+        addDirectories: safePath.includes('/') ? [safePath.substring(0, safePath.lastIndexOf('/'))].filter(Boolean) : [],
+      });
+    } catch (snapshotErr: any) {
+      logger.warn({ projectId, path: safePath, err: snapshotErr?.message || snapshotErr }, 'project snapshot sync skipped after file write');
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     logger.error({ projectId, path: safePath, error: err.message, stack: err.stack?.split('\n')[1]?.trim() }, 'file write failed');
@@ -3692,6 +3758,25 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
         filePath: file.path,
         sizeBytes: Buffer.byteLength(file.content ?? '', 'utf8'),
       });
+    }
+
+    try {
+      await syncProjectSnapshotDelta({
+        projectId,
+        userId: req.userId,
+        files: Object.fromEntries(
+          sanitizedFiles.map((file: { path: string; content: string }) => [file.path, file.content]),
+        ),
+        addDirectories: Array.from(
+          new Set(
+            sanitizedFiles
+              .map((file: { path: string }) => file.path.substring(0, file.path.lastIndexOf('/')))
+              .filter(Boolean),
+          ),
+        ),
+      });
+    } catch (snapshotErr: any) {
+      logger.warn({ projectId, err: snapshotErr?.message || snapshotErr }, 'project snapshot sync skipped after batch write');
     }
 
     res.json({ success: failedFiles.length === 0, count: sanitizedFiles.length, failedFiles });
@@ -3871,6 +3956,17 @@ app.delete('/api/file/:projectId', authenticateRequest, verifyProjectOwnership, 
     // PERFORMANCE: Invalidate cache on delete
     fileCache.invalidate(projectId, safePath);
 
+    try {
+      await syncProjectSnapshotDelta({
+        projectId,
+        userId: req.userId,
+        removePathPrefixes: [safePath],
+        removeDirectories: [safePath],
+      });
+    } catch (snapshotErr: any) {
+      logger.warn({ projectId, path: safePath, err: snapshotErr?.message || snapshotErr }, 'project snapshot sync skipped after delete');
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -3931,6 +4027,17 @@ app.put('/api/file/:projectId/rename', authenticateRequest, verifyProjectOwnersh
       await mvExec.start({});
     }
 
+    try {
+      await syncProjectSnapshotDelta({
+        projectId,
+        userId: req.userId,
+        renamePaths: [{ from: safeOldPath, to: safeNewPath }],
+        addDirectories: safeNewPath.includes('/') ? [safeNewPath.substring(0, safeNewPath.lastIndexOf('/'))].filter(Boolean) : [],
+      });
+    } catch (snapshotErr: any) {
+      logger.warn({ projectId, oldPath: safeOldPath, newPath: safeNewPath, err: snapshotErr?.message || snapshotErr }, 'project snapshot sync skipped after rename');
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -3966,6 +4073,16 @@ app.post('/api/folder/:projectId', authenticateRequest, verifyProjectOwnership, 
         AttachStderr: true,
       });
       await mkdirExec.start({});
+    }
+
+    try {
+      await syncProjectSnapshotDelta({
+        projectId,
+        userId: req.userId,
+        addDirectories: [safePath],
+      });
+    } catch (snapshotErr: any) {
+      logger.warn({ projectId, path: safePath, err: snapshotErr?.message || snapshotErr }, 'project snapshot sync skipped after folder create');
     }
 
     res.json({ success: true });
@@ -17930,7 +18047,7 @@ app.get('/api/daytona/sandbox/:sandboxId/files/read', authenticateRequest, async
 }));
 
 // GET /api/daytona/sandbox/:sandboxId/preview - Get preview URL for a port
-app.get('/api/daytona/sandbox/:sandboxId/preview', authenticateRequest, (req: AuthenticatedRequest, res: express.Response) => {
+app.get('/api/daytona/sandbox/:sandboxId/preview', authenticateRequest, async (req: AuthenticatedRequest, res: express.Response) => {
   if (!isDaytonaConfigured()) {
     return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
   }
@@ -17940,8 +18057,12 @@ app.get('/api/daytona/sandbox/:sandboxId/preview', authenticateRequest, (req: Au
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'port query parameter is required'));
   }
 
-  const url = getDaytonaClient().getPreviewUrl(req.params.sandboxId, port);
-  sendSuccess(res, { url, sandboxId: req.params.sandboxId, port });
+  try {
+    const preview = await getDaytonaClient().getPortPreviewUrl(req.params.sandboxId, port);
+    sendSuccess(res, { ...preview, port });
+  } catch (err: any) {
+    sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to get Daytona preview URL: ${err.message}`));
+  }
 });
 
 startupInfo('routes.daytona-sandbox', isDaytonaConfigured() ? 'registered' : 'registered (not configured - set DAYTONA_API_KEY)');

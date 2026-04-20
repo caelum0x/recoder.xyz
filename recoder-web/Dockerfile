@@ -104,27 +104,26 @@ FROM node:20-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-
-# Copy production artifacts (shared/ and packages/ are bundled by Vite — not needed at runtime)
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/recoder-web/node_modules ./recoder-web/node_modules
-COPY --from=builder /app/recoder-web/package.json ./recoder-web/package.json
-COPY --from=builder /app/recoder-web/server.js ./recoder-web/server.js
-COPY --from=builder /app/recoder-web/build ./recoder-web/build
-
-WORKDIR /app/recoder-web
-
 RUN addgroup --system --gid 1001 webgroup && \
     adduser --system --uid 1001 --ingroup webgroup --home /home/webuser webuser && \
     mkdir -p /home/webuser/.cache/node/corepack && \
-    chown -R webuser:webgroup /app /home/webuser
+    chown -R webuser:webgroup /home/webuser
+
+# Copy production artifacts (shared/ and packages/ are bundled by Vite — not needed at runtime)
+COPY --from=builder --chown=webuser:webgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=webuser:webgroup /app/recoder-web/node_modules ./recoder-web/node_modules
+COPY --from=builder --chown=webuser:webgroup /app/recoder-web/package.json ./recoder-web/package.json
+COPY --from=builder --chown=webuser:webgroup /app/recoder-web/server.js ./recoder-web/server.js
+COPY --from=builder --chown=webuser:webgroup /app/recoder-web/build ./recoder-web/build
+
+WORKDIR /app/recoder-web
+
 USER webuser
 
 EXPOSE 5173
 ENV NODE_OPTIONS="--max-old-space-size=1536"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD curl -sf http://localhost:5173/api/health -o /dev/null || exit 1
+  CMD node -e "fetch('http://localhost:5173/api/health').then(r=>process.exit(r.status<400?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]

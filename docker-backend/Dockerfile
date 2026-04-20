@@ -65,17 +65,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN corepack enable pnpm && corepack prepare pnpm@10.30.3 --activate
 
+# Create the runtime user before copying app files so we can use COPY --chown
+# instead of an expensive recursive chown over /app in a later layer.
+RUN addgroup --system --gid 1001 backend && \
+    adduser --system --uid 1001 --ingroup backend --home /home/backend backend && \
+    mkdir -p /home/backend/.cache/node/corepack && \
+    chown -R backend:backend /home/backend && \
+    groupadd -g 119 hostdocker 2>/dev/null || true && \
+    usermod -aG hostdocker backend 2>/dev/null || true
+
 # Copy only production artifacts from builder
-COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/.npmrc* ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/docker-backend ./docker-backend
-COPY --from=builder /app/shared ./shared
-COPY --from=builder /app/packages ./packages
+COPY --from=builder --chown=backend:backend /app/package.json /app/pnpm-workspace.yaml /app/.npmrc* ./
+COPY --from=builder --chown=backend:backend /app/node_modules ./node_modules
+COPY --from=builder --chown=backend:backend /app/docker-backend ./docker-backend
+COPY --from=builder --chown=backend:backend /app/shared ./shared
+COPY --from=builder --chown=backend:backend /app/packages ./packages
 COPY --from=zrok2 /usr/local/bin/zrok2 /usr/local/bin/zrok2
 
 # Pi coding agent SDK (optional — enables POST /api/pi/:projectId)
 # Copy built pi-mono packages and install their npm dependencies
-COPY pi-mono-dist/ /tmp/pi-mono/
+COPY --chown=backend:backend pi-mono-dist/ /tmp/pi-mono/
+USER backend
 RUN cd /tmp/pi-mono/coding-agent && npm install --omit=dev --ignore-scripts 2>/dev/null; \
     for pkg in coding-agent ai agent tui web-ui; do \
       src="/tmp/pi-mono/$pkg"; \
@@ -87,15 +97,6 @@ RUN cd /tmp/pi-mono/coding-agent && npm install --omit=dev --ignore-scripts 2>/d
     rm -rf /tmp/pi-mono
 
 WORKDIR /app/docker-backend
-
-# Run as non-root with docker group access
-RUN addgroup --system --gid 1001 backend && \
-    adduser --system --uid 1001 --ingroup backend --home /home/backend backend && \
-    mkdir -p /home/backend/.cache/node/corepack && \
-    chown -R backend:backend /app /home/backend && \
-    groupadd -g 119 hostdocker 2>/dev/null || true && \
-    usermod -aG hostdocker backend 2>/dev/null || true
-USER backend
 
 EXPOSE 3100
 ENV NODE_OPTIONS="--max-old-space-size=3072"

@@ -10,6 +10,7 @@ import { database } from "@/lib/database";
 import { CreateInterviewDialog } from "./components/create-interview-dialog";
 
 const title = "Interviews";
+export const dynamic = "force-dynamic";
 const description = "Collect and analyze interview transcripts.";
 
 export const metadata: Metadata = createMetadata({ title, description });

@@ -11,6 +11,7 @@ export const metadata: Metadata = createMetadata({
   description: "Configure your Slack integration settings.",
 });
 
+export const dynamic = "force-dynamic";
 const SlackIntegrationSettings = async () => {
   const organizationId = await currentOrganizationId();
 

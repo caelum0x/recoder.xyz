@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/select';
 import { useAbTests, useCreateAbTest, useUpdateAbTest, useDeleteAbTest } from '@/hooks/agents/use-ab-tests';
 import { useAgents } from '@/hooks/agents/use-agents';
+import { useAuth } from '@/components/AuthProvider';
 import { RecoderLoader } from '@/components/ui/recoder-loader';
 import { toast } from '@/lib/toast';
 import type { AbTest } from '@/lib/api/ab-tests';
@@ -46,6 +47,7 @@ const METRIC_LABELS: Record<string, string> = {
 };
 
 function NewTestDialog() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -54,7 +56,7 @@ function NewTestDialog() {
   const [metric, setMetric] = useState('success_rate');
   const [totalTrials, setTotalTrials] = useState(20);
 
-  const { data: agents } = useAgents();
+  const { data: agents } = useAgents({}, { enabled: open && !!user && !isAuthLoading });
   const createTest = useCreateAbTest();
 
   const handleCreate = async () => {

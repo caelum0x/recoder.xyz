@@ -43,6 +43,10 @@ export async function detectAndPrepareStarter(userMessage: string): Promise<Star
 
   // Auto-swap to WebContainer compatible alternative if available
   let finalStarterId = selectedStarterId;
+  if (selectedStarterId === 'react-ts') {
+    finalStarterId = 'bolt-vite-react-ts';
+    log(`✨ Upgrading starter selection from ${selectedStarterId} to ${finalStarterId} for more reliable preview startup`);
+  }
   if (searchResult.template.webContainerCompatible === false) {
     log(`⚠️  WARNING: ${selectedStarterId} is NOT WebContainer compatible`);
     log(`   → Requires native binaries (e.g., Prisma)`);
@@ -78,7 +82,7 @@ export async function detectAndPrepareStarter(userMessage: string): Promise<Star
 
     return {
       shouldInject: true,
-      starterId: selectedStarterId,
+      starterId: finalStarterId,
       preGeneratedArtifact,
       customizationPrompt,
       loadedFiles,

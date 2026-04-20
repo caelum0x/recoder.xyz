@@ -10,6 +10,7 @@ import { CreateReleaseButton } from "./components/create-release-button";
 import { ReleaseItem } from "./components/release-item";
 
 const title = "Releases";
+export const dynamic = "force-dynamic";
 const description = "Create and manage software versions";
 
 export const metadata: Metadata = createMetadata({

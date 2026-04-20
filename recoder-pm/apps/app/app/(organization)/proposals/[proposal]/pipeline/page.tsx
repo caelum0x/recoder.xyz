@@ -11,6 +11,7 @@ export const metadata: Metadata = createMetadata({
   description: "Run the spec-to-code pipeline for this proposal.",
 });
 
+export const dynamic = "force-dynamic";
 const PipelinePage = async ({
   params,
 }: {

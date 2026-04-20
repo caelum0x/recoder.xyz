@@ -133,9 +133,10 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
  * Get or create a Pi coding agent session for a project's Daytona sandbox.
  */
 async function getOrCreatePiSession(projectId, sandboxId, options) {
+    const modelKey = options?.model?.trim() || 'default';
     // Check for existing valid session
     const existing = activeSessions.get(projectId);
-    if (existing && existing.sandboxId === sandboxId) {
+    if (existing && existing.sandboxId === sandboxId && existing.modelKey === modelKey) {
         const age = Date.now() - existing.createdAt;
         if (age < SESSION_TTL_MS) {
             return existing.session;
@@ -150,8 +151,34 @@ async function getOrCreatePiSession(projectId, sandboxId, options) {
     logger.info({ projectId, sandboxId }, 'Creating Pi coding agent session');
     // Dynamic import to avoid hard dependency at module load time
     const piModule = await Promise.resolve().then(() => __importStar(require('@mariozechner/pi-coding-agent')));
-    const { createAgentSession, createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition, } = piModule;
+    const { AuthStorage, ModelRegistry, createAgentSession, createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition, } = piModule;
     const SessionManager = piModule.SessionManager;
+    const authStorage = AuthStorage.inMemory();
+    const providerMap = [
+        ['openrouter', options?.providerKeys?.openrouter],
+        ['openai', options?.providerKeys?.openai],
+        ['anthropic', options?.providerKeys?.anthropic],
+        ['google', options?.providerKeys?.google],
+    ];
+    for (const [provider, key] of providerMap) {
+        if (key?.trim()) {
+            authStorage.set(provider, { type: 'api_key', key: key.trim() });
+        }
+    }
+    const modelRegistry = ModelRegistry.create(authStorage);
+    let selectedModel = undefined;
+    const requestedModel = options?.model?.trim();
+    if (requestedModel) {
+        const slashIndex = requestedModel.indexOf('/');
+        if (slashIndex > 0 && slashIndex < requestedModel.length - 1) {
+            const provider = requestedModel.slice(0, slashIndex);
+            const modelId = requestedModel.slice(slashIndex + 1);
+            selectedModel = modelRegistry.find(provider, modelId);
+        }
+    }
+    if (!selectedModel) {
+        selectedModel = modelRegistry.getAvailable()[0];
+    }
     const readOps = createDaytonaReadOps(sandboxId);
     const writeOps = createDaytonaWriteOps(sandboxId);
     const editOps = createDaytonaEditOps(sandboxId);
@@ -161,6 +188,9 @@ async function getOrCreatePiSession(projectId, sandboxId, options) {
     // are actually used instead of the default fs implementations.
     const { session } = await createAgentSession({
         cwd: DAYTONA_CWD,
+        authStorage,
+        modelRegistry,
+        model: selectedModel,
         tools: [], // disable built-in tools
         customTools: [
             createWriteToolDefinition(DAYTONA_CWD, { operations: writeOps }),
@@ -176,6 +206,7 @@ async function getOrCreatePiSession(projectId, sandboxId, options) {
         sandboxId,
         projectId,
         createdAt: Date.now(),
+        modelKey,
     };
     activeSessions.set(projectId, piSession);
     logger.info({ projectId, sandboxId }, 'Pi session created');

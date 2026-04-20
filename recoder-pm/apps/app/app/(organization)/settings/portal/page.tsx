@@ -18,6 +18,7 @@ export const metadata: Metadata = createMetadata({
   description: "Manage your portal",
 });
 
+export const dynamic = "force-dynamic";
 const Portal = async () => {
   const user = await currentUser();
 

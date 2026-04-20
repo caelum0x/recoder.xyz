@@ -4,6 +4,7 @@ import { AppIcon } from "@recoder-internal/ui/app-icon";
 import clsx from "clsx/lite";
 import { Copy, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useMemo } from "react";
 
 interface WorkflowCardProps {
 	id: string;
@@ -18,6 +19,17 @@ export function WorkflowCard({
 	updatedAt,
 	isFeatured = false,
 }: WorkflowCardProps) {
+	const updatedLabel = useMemo(
+		() =>
+			new Intl.DateTimeFormat("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+				timeZone: "UTC",
+			}).format(updatedAt),
+		[updatedAt],
+	);
+
 	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
 		const card = e.currentTarget;
 		const rect = card.getBoundingClientRect();
@@ -86,7 +98,7 @@ export function WorkflowCard({
 						</h3>
 						<div className="flex items-center justify-between mt-1">
 							<span className="max-w-[200px] truncate font-sans text-xs text-text/80">
-								Edited <span>{updatedAt.toLocaleDateString()}</span>
+								Edited <span>{updatedLabel}</span>
 							</span>
 						</div>
 					</div>

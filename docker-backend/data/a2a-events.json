@@ -34,5 +34,637 @@
       "agentId": "recoder_agency",
       "status": "healthy"
     }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:51:05.485Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:51:05.486Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T15:51:05.486Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:51:05.486Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:51:05.493Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:51:05.493Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:51:05.493Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "order-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 1
+    }
+  },
+  {
+    "id": "order-2",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 2
+    }
+  },
+  {
+    "id": "order-3",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 3
+    }
+  },
+  {
+    "id": "order-4",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 4
+    }
+  },
+  {
+    "id": "order-5",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 5
+    }
+  },
+  {
+    "id": "order-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 6
+    }
+  },
+  {
+    "id": "order-7",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 7
+    }
+  },
+  {
+    "id": "order-8",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 8
+    }
+  },
+  {
+    "id": "order-9",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 9
+    }
+  },
+  {
+    "id": "order-10",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 10
+    }
+  },
+  {
+    "id": "order-11",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 11
+    }
+  },
+  {
+    "id": "order-12",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 12
+    }
+  },
+  {
+    "id": "order-13",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 13
+    }
+  },
+  {
+    "id": "order-14",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 14
+    }
+  },
+  {
+    "id": "order-15",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 15
+    }
+  },
+  {
+    "id": "order-16",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 16
+    }
+  },
+  {
+    "id": "order-17",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 17
+    }
+  },
+  {
+    "id": "order-18",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 18
+    }
+  },
+  {
+    "id": "order-19",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 19
+    }
+  },
+  {
+    "id": "order-20",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 20
+    }
+  },
+  {
+    "id": "order-21",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 21
+    }
+  },
+  {
+    "id": "order-22",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 22
+    }
+  },
+  {
+    "id": "order-23",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 23
+    }
+  },
+  {
+    "id": "order-24",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 24
+    }
+  },
+  {
+    "id": "order-25",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 25
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "order-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.768Z",
+    "data": {
+      "seq": 1
+    }
+  },
+  {
+    "id": "order-2",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.768Z",
+    "data": {
+      "seq": 2
+    }
+  },
+  {
+    "id": "order-3",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.768Z",
+    "data": {
+      "seq": 3
+    }
+  },
+  {
+    "id": "order-4",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 4
+    }
+  },
+  {
+    "id": "order-5",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 5
+    }
+  },
+  {
+    "id": "order-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 6
+    }
+  },
+  {
+    "id": "order-7",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 7
+    }
+  },
+  {
+    "id": "order-8",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 8
+    }
+  },
+  {
+    "id": "order-9",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 9
+    }
+  },
+  {
+    "id": "order-10",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 10
+    }
+  },
+  {
+    "id": "order-11",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 11
+    }
+  },
+  {
+    "id": "order-12",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 12
+    }
+  },
+  {
+    "id": "order-13",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 13
+    }
+  },
+  {
+    "id": "order-14",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 14
+    }
+  },
+  {
+    "id": "order-15",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 15
+    }
+  },
+  {
+    "id": "order-16",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 16
+    }
+  },
+  {
+    "id": "order-17",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 17
+    }
+  },
+  {
+    "id": "order-18",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 18
+    }
+  },
+  {
+    "id": "order-19",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 19
+    }
+  },
+  {
+    "id": "order-20",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 20
+    }
+  },
+  {
+    "id": "order-21",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 21
+    }
+  },
+  {
+    "id": "order-22",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 22
+    }
+  },
+  {
+    "id": "order-23",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 23
+    }
+  },
+  {
+    "id": "order-24",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 24
+    }
+  },
+  {
+    "id": "order-25",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 25
+    }
+  },
+  {
+    "id": "reconnect-1",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:05:42.628Z",
+    "data": {
+      "index": 1
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:05:43.139Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:05:43.212Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:05:43.212Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-7"
+    }
   }
 ]

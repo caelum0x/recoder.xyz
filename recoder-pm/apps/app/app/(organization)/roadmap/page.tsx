@@ -14,6 +14,7 @@ import {
   type RoadmapEditorProperties,
 } from "./components/roadmap-editor";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = createMetadata({
   title: "Gantt",
   description: "See a gantt chart of your organization’s features.",

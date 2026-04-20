@@ -8,6 +8,7 @@ import { database } from "@/lib/database";
 import { GenerateProposalsButton } from "./components/generate-proposals-button";
 
 const title = "Proposals";
+export const dynamic = "force-dynamic";
 const description = "AI-generated product change proposals.";
 
 export const metadata: Metadata = createMetadata({ title, description });

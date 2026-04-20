@@ -9,6 +9,8 @@ import {
 import type { Messages } from '~/lib/types/chat';
 import type { ChatMode } from '~/lib/stores/chat-mode';
 import { createScopedLogger } from '~/utils/logger';
+import { executeOpencodeChat } from '~/lib/.server/llm/opencode-exec';
+import { getSessionCookie, getUserApiKey } from '~/lib/.server/llm/user-api-key';
 
 const logger = createScopedLogger('Chat');
 
@@ -21,6 +23,53 @@ function chatDebug(message: string, meta?: unknown) {
     return;
   }
   logger.debug(`[chat] ${message}`);
+}
+
+function toPlainTextContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (!part || typeof part !== 'object') return '';
+        const record = part as Record<string, unknown>;
+        if (typeof record.text === 'string') return record.text;
+        if (typeof record.content === 'string') return record.content;
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  return '';
+}
+
+function buildDirectPiPrompt(systemPrompt: string, messages: Messages): string {
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
+  const lastUserText = toPlainTextContent(lastUserMessage?.content).trim();
+  const conversationContext = messages
+    .slice(-6)
+    .map((message) => {
+      const text = toPlainTextContent(message.content).trim();
+      return text ? `${message.role.toUpperCase()}: ${text}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  return [
+    'You are the Recoder coding agent working directly inside the user sandbox.',
+    'Apply file changes directly in the sandbox and return a concise summary.',
+    '',
+    '--- System context ---',
+    systemPrompt,
+    '',
+    '--- Conversation ---',
+    conversationContext,
+    '',
+    '--- Current request ---',
+    lastUserText || '(no specific request)',
+  ].join('\n');
 }
 
 export async function action(args: ActionFunctionArgs) {
@@ -639,6 +688,54 @@ IMPORTANT:
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
     let systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
 
+    if (
+      requestBody.projectId &&
+      starterInjection.shouldInject &&
+      starterInjection.loadedFiles &&
+      !requestBody.projectContext?.trim()
+    ) {
+      try {
+        const workspaceStateResponse = await fetch(
+          `${dockerUrl}/api/workspace-state/${encodeURIComponent(requestBody.projectId)}`,
+          {
+            method: 'GET',
+            headers: dockerHeaders,
+          },
+        );
+
+        const workspaceState = workspaceStateResponse.ok
+          ? await workspaceStateResponse.json() as { hasFiles?: boolean; hasPackageJson?: boolean }
+          : { hasFiles: false, hasPackageJson: false };
+
+        if (!workspaceState.hasFiles || !workspaceState.hasPackageJson) {
+          const starterFiles = Object.entries(starterInjection.loadedFiles.files).map(([path, content]) => ({
+            path,
+            content,
+          }));
+
+          const seedResponse = await fetch(
+            `${dockerUrl}/api/files/${encodeURIComponent(requestBody.projectId)}/batch`,
+            {
+              method: 'POST',
+              headers: dockerHeaders,
+              body: JSON.stringify({ files: starterFiles }),
+            },
+          );
+
+          if (!seedResponse.ok) {
+            const details = await seedResponse.text().catch(() => '');
+            logger.warn(`Starter seed failed for ${requestBody.projectId}: ${seedResponse.status} ${details.slice(0, 300)}`);
+          } else {
+            logger.info(`Starter seeded into ${requestBody.projectId}: ${starterFiles.length} files`);
+          }
+        }
+      } catch (starterSeedError) {
+        logger.warn(
+          `Starter seed threw for ${requestBody.projectId}: ${starterSeedError instanceof Error ? starterSeedError.message : String(starterSeedError)}`,
+        );
+      }
+    }
+
     // Auto-fix action allowlist: when the user message is an auto-fix retry
     // (starts with [AUTO-FIX]), the project scaffold already exists and the
     // LLM's job is to mutate existing files, not to reset / reimport / clone.
@@ -646,21 +743,62 @@ IMPORTANT:
     // `cloneGitHub` when it can't diagnose the error, which blows away the
     // project and makes recovery impossible. Strip those action types from
     // the available actions for auto-fix turns only.
-    // ── Default: route ALL chat through Pi coding agent ──
-    // Pi has direct Daytona sandbox access (read/write/edit/bash) via custom
-    // tool operations. No XML action parsing, no file sync bridge.
-    // Falls back to OpenCode, then to normal chat LLM if Pi is unavailable.
+    // ── Default project chat: prefer Pi, then OpenCode ──
+    // Pi is the more reliable live path for project creation/editing right now.
+    // Keep OpenCode as a fallback when Pi is unavailable.
     if (requestBody.projectId) {
       try {
-        const { executePiChat } = await import('~/lib/.server/llm/pi-exec');
-        const piStream = await executePiChat({
-          context,
-          request,
-          projectId: requestBody.projectId,
-          chatId: requestBody.chatId,
-          model,
-          systemPrompt,
-          messages,
+        const sessionCookie = getSessionCookie(request);
+        const [openrouter, openai, anthropic, google] = await Promise.all([
+          getUserApiKey(sessionCookie, 'openrouter'),
+          getUserApiKey(sessionCookie, 'openai'),
+          getUserApiKey(sessionCookie, 'anthropic'),
+          getUserApiKey(sessionCookie, 'google'),
+        ]);
+
+        const providerKeys = { openrouter, openai, anthropic, google };
+        const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
+        if (!hasKeys) {
+          throw new Error('No BYOK provider keys available for Pi');
+        }
+
+        const piPrompt = buildDirectPiPrompt(systemPrompt, messages);
+        const piResponse = await fetch(`${dockerUrl}/api/pi/${encodeURIComponent(requestBody.projectId)}`, {
+          method: 'POST',
+          headers: createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            prompt: piPrompt,
+            model,
+            providerKeys,
+          }),
+        });
+
+        if (!piResponse.ok) {
+          const details = await piResponse.text().catch(() => '');
+          throw new Error(`Pi request failed (${piResponse.status}): ${details.slice(0, 200)}`);
+        }
+
+        const piResult = await piResponse.json() as {
+          success?: boolean;
+          text?: string;
+          error?: string;
+          filesChanged?: string[];
+        };
+
+        if (piResult.success === false || piResult.error) {
+          throw new Error(piResult.error || piResult.text || 'Pi execution failed');
+        }
+
+        let piText = piResult.text || 'Done.';
+        if (piResult.filesChanged?.length) {
+          piText += `\n\n**Files changed:** ${piResult.filesChanged.join(', ')}`;
+        }
+
+        const piStream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(piText));
+            controller.close();
+          },
         });
 
         stream.switchSource(piStream);
@@ -673,10 +811,10 @@ IMPORTANT:
         });
       } catch (piError) {
         // Pi unavailable — try OpenCode, then fall through to normal chat
-        logger.warn('Pi agent unavailable, trying OpenCode fallback', { error: String(piError) });
+        const message = piError instanceof Error ? piError.message : String(piError);
+        logger.warn(`Pi unavailable, trying OpenCode fallback: ${message}`);
 
         try {
-          const { executeOpencodeChat } = await import('~/lib/.server/llm/opencode-exec');
           const opencodeStream = await executeOpencodeChat({
             context,
             request,

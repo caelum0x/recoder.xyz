@@ -6,6 +6,8 @@ import { SignupForm } from "./components/form";
 const title = "Sign up";
 const description = "Sign up to your account.";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = createMetadata({ title, description });
 
 const SignUpPage = async () => {

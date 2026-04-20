@@ -12,6 +12,7 @@ export const metadata: Metadata = createMetadata({
   description: "Create a widget for websites and apps.",
 });
 
+export const dynamic = "force-dynamic";
 const Widget = async () => {
   const [user, organizationId] = await Promise.all([
     currentUser(),
