@@ -14,10 +14,15 @@ export const archivedThreadKeys = {
   list: (limit: number, offset: number) => ['archived-threads', 'list', limit, offset] as const,
 };
 
-export function useArchivedThreads(limit: number = 50, offset: number = 0) {
+export function useArchivedThreads(
+  limit: number = 50,
+  offset: number = 0,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: archivedThreadKeys.list(limit, offset),
     queryFn: (): Promise<ArchivedThreadsResponse> => getArchivedThreads(limit, offset),
+    enabled: options?.enabled !== false,
     staleTime: 30_000,
   });
 }

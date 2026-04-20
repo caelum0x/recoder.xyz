@@ -22,11 +22,14 @@ export const collaboratorKeys = {
 // Queries
 // ---------------------------------------------------------------------------
 
-export function useThreadCollaborators(threadId: string) {
+export function useThreadCollaborators(
+  threadId: string,
+  options?: { enabled?: boolean }
+) {
   return useQuery<Collaborator[]>({
     queryKey: collaboratorKeys.thread(threadId),
     queryFn: () => getThreadCollaborators(threadId),
-    enabled: !!threadId,
+    enabled: !!threadId && (options?.enabled !== false),
     staleTime: 30_000,
   });
 }

@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 interface SharePopoverProps {
   threadId?: string
   projectId?: string
+  isPendingThread?: boolean
   children?: React.ReactNode
   side?: "top" | "right" | "bottom" | "left"
   align?: "start" | "center" | "end"
@@ -49,10 +50,18 @@ const LinkedInIcon = () => (
 )
 
 // Team tab content component
-function TeamTabContent({ threadId }: { threadId?: string }) {
+function TeamTabContent({
+  threadId,
+  enabled = true,
+}: {
+  threadId?: string
+  enabled?: boolean
+}) {
   const [email, setEmail] = useState("")
   const [role, setRole] = useState<'viewer' | 'editor'>('viewer')
-  const { data: collaborators, isLoading } = useThreadCollaborators(threadId || "")
+  const { data: collaborators, isLoading } = useThreadCollaborators(threadId || "", {
+    enabled,
+  })
   const shareThread = useShareThread()
   const removeCollaborator = useRemoveCollaborator()
 
@@ -170,17 +179,19 @@ function TeamTabContent({ threadId }: { threadId?: string }) {
 // Shared content component
 function SharePopoverContent({
   threadId,
-  isOpen
+  isOpen,
+  isPendingThread = false,
 }: {
   threadId?: string
   isOpen: boolean
+  isPendingThread?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState("share")
 
   const updateThreadMutation = useUpdateThreadMutation()
   const { data: threadData, isLoading, refetch } = useThreadQuery(threadId || "", {
-    enabled: isOpen && !!threadId,
+    enabled: isOpen && !!threadId && !isPendingThread,
   })
   const exportPdf = useExportPdf()
   const exportDocx = useExportDocx()
@@ -393,7 +404,10 @@ function SharePopoverContent({
       </TabsContent>
 
       <TabsContent value="team" className="mt-0">
-        <TeamTabContent threadId={threadId} />
+        <TeamTabContent
+          threadId={threadId}
+          enabled={isOpen && activeTab === "team" && !isPendingThread}
+        />
       </TabsContent>
     </Tabs>
   )
@@ -402,6 +416,7 @@ function SharePopoverContent({
 export function SharePopover({ 
   threadId, 
   projectId, 
+  isPendingThread = false,
   children,
   side = "bottom",
   align = "end",
@@ -430,7 +445,11 @@ export function SharePopover({
         className="w-[280px] p-0 overflow-hidden"
         sideOffset={8}
       >
-        <SharePopoverContent threadId={threadId} isOpen={isOpen} />
+        <SharePopoverContent
+          threadId={threadId}
+          isOpen={isOpen}
+          isPendingThread={isPendingThread}
+        />
       </PopoverContent>
     </Popover>
   )
