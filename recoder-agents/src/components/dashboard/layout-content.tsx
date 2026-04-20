@@ -19,7 +19,7 @@ import { useIsMobile } from '@/hooks/utils';
 import { AppProviders } from '@/components/layout/app-providers';
 import { backendApi } from '@/lib/api-client';
 import { AnnouncementDialog } from '../announcements/announcement-dialog';
-import { NovuInboxProvider } from '../notifications/novu-inbox-provider';
+import { DashboardShellNav } from './dashboard-shell-nav';
 
 // Lazy load heavy components that aren't needed for initial render
 const FloatingMobileMenuButton = lazy(() => 
@@ -60,10 +60,6 @@ const MobileAppInterstitial = lazy(() =>
 
 const TechnicalIssueBanner = lazy(() =>
   import('@/components/announcements/technical-issue-banner').then(mod => ({ default: mod.TechnicalIssueBanner }))
-);
-
-const PlatformNav = lazy(() =>
-  import('@recoder/ui/platform-nav').then(mod => ({ default: mod.PlatformNav }))
 );
 
 const MaintenanceCountdownBanner = lazy(() =>
@@ -227,12 +223,8 @@ export default function DashboardLayoutContent({
 
   return (
     <div className="flex flex-col h-screen">
-    {/* Unified platform navigation bar */}
-    <Suspense fallback={null}>
-      <PlatformNav currentApp="agents" />
-    </Suspense>
+    <DashboardShellNav />
     <div className="flex-1 overflow-hidden flex flex-col">
-    <NovuInboxProvider>
     <AppProviders
       showSidebar={true}
       sidebarSiblings={
@@ -299,7 +291,6 @@ export default function DashboardLayoutContent({
         </Suspense>
       </div>
     </AppProviders>
-    </NovuInboxProvider>
     </div>
     </div>
   );

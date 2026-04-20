@@ -379,7 +379,7 @@ export function NavUserWithTeams({
                   className="gap-2 p-2"
                 >
                   <Zap className="h-4 w-4" />
-                  <span>Plan</span>
+                  <span>Upgrade</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/knowledge" className="gap-2 p-2" data-tour="knowledge-link">
@@ -470,14 +470,6 @@ export function NavUserWithTeams({
                         <Link href="/admin/analytics" className="gap-2 p-2">
                           <BarChart3 className="h-4 w-4" />
                           <span>Analytics</span>
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                    {user.isAdmin && (
-                      <DropdownMenuItem asChild>
-                        <Link href="/admin/notifications" className="gap-2 p-2">
-                          <Bell className="h-4 w-4" />
-                          <span>Notifications</span>
                         </Link>
                       </DropdownMenuItem>
                     )}

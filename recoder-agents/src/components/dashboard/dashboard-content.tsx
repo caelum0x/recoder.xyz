@@ -15,14 +15,12 @@ import { cn } from '@/lib/utils';
 import { trackPurchase, getStoredCheckoutData, clearCheckoutData } from '@/lib/analytics/gtm';
 import { getCheckoutSession } from '@/lib/api/billing';
 import { useTranslations } from 'next-intl';
-import { NotificationDropdown } from '../notifications/notification-dropdown';
 import { useAgentStartInput } from '@/hooks/dashboard';
 import { ChatInput } from '@/components/thread/chat-input/chat-input';
 import { DynamicGreeting } from '@/components/ui/dynamic-greeting';
 import { Menu } from 'lucide-react';
 import { DashboardTour } from '@/components/onboarding/tours/dashboard-tour';
 import { useDashboardWidgets } from '@/stores/dashboard-widgets-store';
-import { DashboardCustomizer } from './dashboard-customizer';
 
 // Lazy load heavy components that aren't immediately visible
 const UpgradeCelebration = lazy(() => 
@@ -368,13 +366,11 @@ export function DashboardContent() {
           </Suspense>
         </div>
 
-        {/* Right side - Notifications & Credits - ABSOLUTE positioned */}
+        {/* Right side - Credits - ABSOLUTE positioned */}
         <div className={cn(
           "absolute flex items-center gap-1 right-3 sm:right-4 transition-[top] duration-200 z-10",
           isWelcomeBannerVisible ? "top-12" : "top-1.5"
         )}>
-          <DashboardCustomizer />
-          <NotificationDropdown />
           <Suspense fallback={<div className="h-9 w-16 bg-muted/30 rounded animate-pulse" />}>
             <CreditsDisplay />
           </Suspense>
