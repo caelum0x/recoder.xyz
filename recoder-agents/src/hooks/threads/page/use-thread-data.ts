@@ -69,6 +69,7 @@ export function useThreadData(
     } : {}),
   });
   const threadReady = !!threadQuery.data;
+  const isPendingThread = Boolean((threadQuery.data as any)?._pending);
   const messagesQuery = useMessagesQuery(threadId, {
     enabled: !!threadId && (!waitingForAgent || threadReady),
     refetchInterval: false,
@@ -78,7 +79,7 @@ export function useThreadData(
   const effectiveProjectId = threadQuery.data?.project_id || projectId || '';
   const hasThreadData = !!threadQuery.data;
   const projectQuery = useProjectQuery(effectiveProjectId, {
-    enabled: hasThreadData && !!effectiveProjectId,
+    enabled: hasThreadData && !!effectiveProjectId && !isPendingThread,
     refetchOnWindowFocus: true,
     refetchInterval: 30000,
     staleTime: 10000,
@@ -92,7 +93,15 @@ export function useThreadData(
     staleTime: 1000,
   });
 
-  const project = projectQuery.data || null;
+  const pendingProject = isPendingThread
+    ? ({
+        id: threadQuery.data?.project_id || projectId,
+        name: (threadQuery.data as any)?.project?.name || 'New Project',
+        description: (threadQuery.data as any)?.project?.description || '',
+        sandbox: (threadQuery.data as any)?.project?.sandbox || null,
+      } as Project)
+    : null;
+  const project = projectQuery.data || pendingProject;
   const sandboxId = project?.sandbox?.id || (typeof project?.sandbox === 'string' ? project.sandbox : null);
   const projectName = project?.name || '';
 
