@@ -208,6 +208,21 @@ export async function listInvitations(): Promise<Invitation[]> {
 	return result;
 }
 
+export async function listActiveInvitations(): Promise<Invitation[]> {
+	const currentTeam = await fetchCurrentTeam();
+	const result = await db
+		.select()
+		.from(invitations)
+		.where(
+			and(
+				eq(invitations.teamDbId, currentTeam.dbId),
+				isNull(invitations.revokedAt),
+				sql`${invitations.expiredAt} > now()`,
+			),
+		);
+	return result;
+}
+
 export async function revokeInvitation(token: string): Promise<void> {
 	await db
 		.update(invitations)

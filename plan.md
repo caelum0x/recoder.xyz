@@ -19,9 +19,9 @@ Keep the public Recoder surfaces working end to end:
 | --- | --- | --- |
 | Hub | `recoder.xyz` | Auth and Launch Web IDE bridge working. |
 | Web IDE | `web.recoder.xyz` | Launch, coding, preview, and follow-up edit working in production with clean latest browser pass. |
-| Agents | `agents.recoder.xyz` | Main authenticated paths working; local startup-race cleanup is ahead of prod. Live sweep still shows duplicated thread/agent-runs `404` calls plus intermittent `/v1/commands/history` and `/v1/agents` `503`s. |
+| Agents | `agents.recoder.xyz` | Main authenticated paths working. Latest live sweep still shows duplicated thread/agent-runs `404` calls, no visible chat response within 10s after successful start, and one dashboard RSC `503`; branch has additional mitigations ahead of prod. |
 | PM | `pm.recoder.xyz` | Authenticated PM surface verified clean again. |
-| Agency | `agency.recoder.xyz` | Authenticated launch/workspaces/playground/tasks/settings verified; one React console warning remains. |
+| Agency | `agency.recoder.xyz` | Authenticated launch/workspaces/playground/tasks/settings verified clean in the latest sweep. |
 | Docker Backend | `docker.recoder.xyz` | Running and backing Web IDE production flow. |
 | API Backend | `api.recoder.xyz` | Running. |
 | Docs | `docs.recoder.xyz` | Live. |
@@ -90,8 +90,7 @@ Backend/runtime-verified:
   - tasks `200`
   - settings/team `200`
   - zero 5xx responses
-- one residual warning remains:
-  - minified React error `#418` in browser console
+- no console errors reproduced in latest authenticated sweep
 
 ### Agents
 
@@ -103,14 +102,14 @@ Backend/runtime-verified:
   - `/v1/system/status` `200`
   - `/v1/agents` `200`
   - agent start `200`
-  - zero 5xx responses
+  - zero `/v1/*` 5xx responses
 - remaining Agents warnings:
   - no visible chat response within 10s on the tested message
   - duplicated `404` traffic still appears for:
     - `/v1/thread/:id/agent-runs`
     - `/v1/threads/:id`
-    - `/v1/threads/:id/messages`
-  - Board/Canvas route test still hits an overlay-intercepted click path
+  - one dashboard RSC request still returned `503`
+  - Board/Canvas entry path still needs a cleaner authenticated check
 
 ## Estate Scope
 
@@ -174,17 +173,15 @@ This estate includes:
 ## Priority Order
 
 1. Clean up Agents residual authenticated route/UI warnings
-2. Clean up Agency residual console warning
-3. Finish snapshot/persistence cleanup
+2. Finish snapshot/persistence cleanup
+3. Verify A2A / control-plane health after Web and Agents cleanup
 
 ## Current Blockers By Owner Surface
 
 - `app` + `recoder-web`: live Web auth proof still depends on a fresh valid bridge/session token; authenticated `/api/projects` proof is blocked on session freshness, not missing route code
 - `app` + `recoder-web`: snapshot migration is incomplete; hub snapshots are preferred, but legacy `projects` and chat-history `fileSnapshot` coupling still exists
-- `docker-backend`: local `src/preview.ts` merge conflict still needs resolution before preview-related cleanup is truly closed
-- `backend` + `recoder-agents`: residual startup/race noise remains around duplicated thread detail / agent-runs `404`s and intermittent `/v1/commands/history` and `/v1/agents` `503`s
-- `recoder-agents`: Board/Canvas flow still has an overlay-intercepted click path; chat response visibility/render timing still needs one cleaner pass
-- `recoder-agency`: one remaining React console warning (`Minified React error #418`) during authenticated sweep
+- `backend` + `recoder-agents`: residual startup/race noise remains around duplicated thread detail / agent-runs `404`s plus one dashboard RSC `503`
+- `recoder-agents`: Board/Canvas authenticated entry path still needs a cleaner pass; chat response visibility/render timing still needs verification after the latest branch-side mitigations
 - A2A/control plane: worker flows depend on Redis stream config, shared-secret alignment, internal service URLs, and orchestration policy from `.env.a2a.workers`
 - host ops: disk remains tight and previously stopped services still need cleanup/restart planning
 
