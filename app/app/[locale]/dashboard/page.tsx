@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -82,17 +83,6 @@ function DashboardContent() {
     if (!isPending && !session) {
       redirectToSignIn();
       return;
-    }
-    if (session && !isPending) {
-      // Check if user has completed onboarding
-      fetch('/api/onboarding/save')
-        .then(r => r.json())
-        .then((data: { onboardingCompleted?: boolean }) => {
-          if (!data.onboardingCompleted) {
-            router.push('/onboarding/welcome');
-          }
-        })
-        .catch(() => {});
     }
     if (searchParams.get('welcome') === 'true') {
       setShowWelcome(true);
