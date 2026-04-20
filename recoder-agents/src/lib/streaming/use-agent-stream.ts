@@ -108,6 +108,9 @@ export function useAgentStream(
   const handleConnectionErrorRef = useRef<((error: Error) => void) | null>(null);
   const handleConnectionCloseRef = useRef<(() => void) | null>(null);
   const statusRef = useRef(status);
+  const pendingAssistantTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAssistantMessageIdRef = useRef<string | null>(null);
+  const hasVisibleOutputRef = useRef(false);
   
   const pendingChunksRef = useRef<Array<{ content: string; sequence: number }>>([]);
   const rafIdRef = useRef<number | null>(null);
@@ -251,6 +254,61 @@ export function useAgentStream(
     
     optionsRef.current.clearToolTracking?.();
   }, []);
+
+  const clearPendingAssistantMessage = useCallback((removeFromChat: boolean = true) => {
+    if (pendingAssistantTimeoutRef.current) {
+      clearTimeout(pendingAssistantTimeoutRef.current);
+      pendingAssistantTimeoutRef.current = null;
+    }
+
+    const pendingId = pendingAssistantMessageIdRef.current;
+    if (removeFromChat && pendingId) {
+      (setMessagesRef.current as any)((prev: UnifiedMessage[]) =>
+        prev.filter((message) => message.message_id !== pendingId)
+      );
+    }
+
+    pendingAssistantMessageIdRef.current = null;
+  }, []);
+
+  const markVisibleOutput = useCallback(() => {
+    hasVisibleOutputRef.current = true;
+    clearPendingAssistantMessage(true);
+  }, [clearPendingAssistantMessage]);
+
+  const schedulePendingAssistantMessage = useCallback((runId: string) => {
+    clearPendingAssistantMessage(false);
+    hasVisibleOutputRef.current = false;
+
+    pendingAssistantTimeoutRef.current = setTimeout(() => {
+      if (!isMountedRef.current || currentRunIdRef.current !== runId || hasVisibleOutputRef.current) {
+        return;
+      }
+
+      const pendingId = `pending-assistant-${runId}`;
+      pendingAssistantMessageIdRef.current = pendingId;
+
+      (setMessagesRef.current as any)((prev: UnifiedMessage[]) => {
+        if (prev.some((message) => message.message_id === pendingId)) {
+          return prev;
+        }
+
+        return [
+          ...prev,
+          {
+            message_id: pendingId,
+            thread_id: threadIdRef.current,
+            role: 'assistant',
+            type: 'assistant',
+            content: 'Starting worker...',
+            metadata: '{}',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as unknown as UnifiedMessage,
+        ];
+      });
+    }, 1500);
+  }, [clearPendingAssistantMessage]);
   
   const finalizeStream = useCallback((finalStatus: AgentStatus, runId: string | null = agentRunId) => {
     if (!isMountedRef.current) return;
@@ -264,6 +322,7 @@ export function useAgentStream(
       connectionRef.current = null;
     }
 
+    clearPendingAssistantMessage(finalStatus !== 'running' && finalStatus !== 'connecting');
     flushPendingChunks();
 
     setStatus(finalStatus);
@@ -277,7 +336,7 @@ export function useAgentStream(
     currentRunIdRef.current = null;
     
     invalidateQueries();
-  }, [agentRunId, flushPendingChunks, invalidateQueries]);
+  }, [agentRunId, clearPendingAssistantMessage, flushPendingChunks, invalidateQueries]);
   
   const handleBillingError = useCallback((errorMessage: string) => {
     const context = extractBillingErrorContext(errorMessage);
@@ -320,6 +379,7 @@ export function useAgentStream(
         if (processed.content) {
           // First text chunk marks reasoning phase as complete
           setIsReasoningComplete(true);
+          markVisibleOutput();
           addTextChunk(processed.content, processed.message?.sequence ?? Date.now());
           callbacksRef.current.onAssistantChunk?.({ content: processed.content });
         }
@@ -345,6 +405,7 @@ export function useAgentStream(
         break;
       
       case 'tool_result':
+        markVisibleOutput();
         // Update tool call state with reconstructed tool calls (now including tool_result)
         if (processed.toolCalls && processed.message) {
           const updatedMessage = createMessageWithToolCalls(processed.message, processed.toolCalls);
@@ -357,6 +418,7 @@ export function useAgentStream(
         break;
       
       case 'message_complete':
+        markVisibleOutput();
         flushPendingChunks();
         // Don't clear textChunks here - keep content visible until agent run completes
         // This prevents the flash where streaming content disappears before persisted messages load
@@ -450,7 +512,7 @@ export function useAgentStream(
       setStatus('streaming');
       callbacksRef.current.onStatusChange?.('streaming');
     }
-  }, [threadId, addTextChunk, updateToolCall, flushPendingChunks, finalizeStream, handleBillingError]);
+  }, [threadId, addTextChunk, updateToolCall, flushPendingChunks, finalizeStream, handleBillingError, markVisibleOutput]);
   
   handleStreamMessageRef.current = handleStreamMessage;
   
@@ -653,6 +715,7 @@ export function useAgentStream(
     setStatus('connecting');
     callbacksRef.current.onStatusChange?.('connecting');
     callbacksRef.current.onAssistantStart?.();
+    schedulePendingAssistantMessage(runId);
     
     const preconnectService = getStreamPreconnectService();
     const adopted = preconnectService.adopt(runId);
@@ -727,6 +790,7 @@ export function useAgentStream(
     await connection.connect();
   }, [
     resetState,
+    schedulePendingAssistantMessage,
     getAuthToken,
     stableMessageHandler,
     stableErrorHandler,
