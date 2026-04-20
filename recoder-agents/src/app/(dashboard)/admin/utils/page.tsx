@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect } from "react";
 import { Settings, Clock } from "lucide-react";
 import { RecoderLoader } from '@/components/ui/recoder-loader';

@@ -150,6 +150,17 @@ build_app() {
   corepack pnpm --filter "$workspace_filter" run "$build_cmd"
 }
 
+build_auth_workspace() {
+  echo "--- Building @recoder/auth workspace ---"
+  cd "$REMOTE_DIR"
+  export_app_env "$REMOTE_DIR/recoder-agents"
+  AUTH_DATABASE_URL="${AUTH_DATABASE_URL:-postgresql://build:build@localhost:5432/build}" \
+    corepack pnpm --filter @recoder/auth... install --no-frozen-lockfile
+  AUTH_DATABASE_URL="${AUTH_DATABASE_URL:-postgresql://build:build@localhost:5432/build}" \
+    corepack pnpm --filter @recoder/auth run build
+}
+
+build_auth_workspace
 build_app "recoder-agents" "$REMOTE_DIR/recoder-agents" "./recoder-agents"
 build_app "recoder-pm" "$REMOTE_DIR/recoder-pm/apps/app" "./recoder-pm/apps/app"
 build_app "recoder-agency" "$REMOTE_DIR/recoder-agency/apps/agency" "./recoder-agency/apps/agency"
