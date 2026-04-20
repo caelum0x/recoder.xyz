@@ -114,11 +114,14 @@ export function useUpdateMemorySettings() {
   });
 }
 
-export function useThreadMemorySettings(threadId: string | null) {
+export function useThreadMemorySettings(
+  threadId: string | null,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: ['memory', 'thread', threadId, 'settings'],
     queryFn: () => getThreadMemorySettings(threadId!),
-    enabled: !!threadId,
+    enabled: !!threadId && (options?.enabled !== false),
     staleTime: 30000,
     retry: false,
   });

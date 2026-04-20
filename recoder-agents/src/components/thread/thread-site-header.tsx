@@ -22,6 +22,7 @@ interface ThreadSiteHeaderProps {
   threadId?: string;
   projectId?: string;
   projectName: string;
+  isPendingThread?: boolean;
   onViewFiles: () => void;
   onToggleSidePanel: () => void;
   isSidePanelOpen?: boolean;
@@ -36,6 +37,7 @@ export function SiteHeader({
   threadId,
   projectId,
   projectName,
+  isPendingThread = false,
   onViewFiles,
   onToggleSidePanel,
   isSidePanelOpen = false,
@@ -48,7 +50,9 @@ export function SiteHeader({
   const [copied, setCopied] = useState(false);
   const isMobile = useIsMobile() || isMobileView;
   const { setOpen: setSidebarOpen, setOpenMobile } = useSidebar();
-  const { data: threadMemory } = useThreadMemorySettings(threadId ?? null);
+  const { data: threadMemory } = useThreadMemorySettings(threadId ?? null, {
+    enabled: !isPendingThread,
+  });
   const updateThreadMemory = useUpdateThreadMemorySettings();
 
   const copyShareLink = async () => {
