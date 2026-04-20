@@ -1152,27 +1152,34 @@ async def get_agent_runs(thread_id: str, user_id: str = Depends(verify_and_get_u
     from core.agents.repo import get_thread_agent_runs as repo_get_thread_runs
     from core.cache.runtime_cache import get_pending_thread
     from core.threads import repo as threads_repo
-    
-    thread = await threads_repo.get_thread_by_id(thread_id)
-    
-    if not thread:
-        pending = await get_pending_thread(thread_id)
-        if pending:
-            logger.debug(f"Thread {thread_id} is pending, returning pending agent run")
-            return {
-                "agent_runs": [{
-                    "id": pending.get('agent_run_id'),
-                    "status": "running",
-                    "started_at": pending.get('created_at'),
-                    "completed_at": None
-                }] if pending.get('agent_run_id') else [],
-                "_pending": True
-            }
-        raise HTTPException(status_code=404, detail="Thread not found")
-    
-    await verify_and_authorize_thread_access(None, thread_id, user_id)
-    agent_runs = await repo_get_thread_runs(thread_id)
-    return {"agent_runs": agent_runs}
+
+    try:
+        thread = await threads_repo.get_thread_by_id(thread_id)
+
+        if not thread:
+            pending = await get_pending_thread(thread_id)
+            if pending:
+                logger.debug(f"Thread {thread_id} is pending, returning pending agent run")
+                return {
+                    "agent_runs": [{
+                        "id": pending.get('agent_run_id'),
+                        "status": "running",
+                        "started_at": pending.get('created_at'),
+                        "completed_at": None
+                    }] if pending.get('agent_run_id') else [],
+                    "_pending": True
+                }
+            logger.warning(f"Thread {thread_id} not found for agent runs, returning empty list")
+            return {"agent_runs": [], "_missing": True}
+
+        await verify_and_authorize_thread_access(None, thread_id, user_id)
+        agent_runs = await repo_get_thread_runs(thread_id)
+        return {"agent_runs": agent_runs}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Failed to fetch agent runs for thread {thread_id}, returning empty list: {e}")
+        return {"agent_runs": [], "_error": True}
 
 
 @router.get("/agent-run/{agent_run_id}", summary="Get Agent Run", operation_id="get_agent_run")

@@ -807,7 +807,8 @@ async def get_thread_messages(
         if pending:
             logger.debug(f"Thread {thread_id} is pending, returning empty messages")
             return {"messages": [], "_pending": True}
-        raise HTTPException(status_code=404, detail="Thread not found")
+        logger.warning(f"Thread {thread_id} not found for messages, returning empty list")
+        return {"messages": [], "_missing": True}
     
     await verify_and_authorize_thread_access(None, thread_id, user_id)
     try:
@@ -858,8 +859,8 @@ async def get_thread_messages(
         
         return {"messages": all_messages}
     except Exception as e:
-        logger.error(f"Error fetching messages for thread {thread_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch messages: {str(e)}")
+        logger.warning(f"Error fetching messages for thread {thread_id}, returning empty list: {str(e)}")
+        return {"messages": [], "_error": True}
 
 @router.post("/threads/{thread_id}/messages/add", summary="Add Message to Thread", operation_id="add_message_to_thread")
 async def add_message_to_thread(
