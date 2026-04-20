@@ -9,8 +9,6 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { 
-  ArrowLeft, 
-  Terminal,
   CheckCircle,
   XCircle,
   Mail,
@@ -19,10 +17,8 @@ import {
 import { SiteHeader } from '@/components/SiteHeader';
 
 function VerifyEmailContent() {
-  const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'resend'>('verifying');
-  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'info'>('verifying');
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
@@ -30,8 +26,8 @@ function VerifyEmailContent() {
     if (token) {
       verifyEmail(token);
     } else {
-      setStatus('resend');
-      setMessage('No verification token found. Please enter your email to resend.');
+      setStatus('info');
+      setMessage('Email verification is not required from this screen anymore. Sign in with GitHub or Google.');
     }
   }, [token]);
 
@@ -62,34 +58,6 @@ function VerifyEmailContent() {
     } catch (error) {
       setStatus('error');
       setMessage('Network error. Please try again.');
-    }
-  };
-
-  const handleResendEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, resend: true }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setStatus('success');
-        setMessage('Verification email sent! Please check your inbox.');
-      } else {
-        setMessage(data.error || 'Failed to send email. Please try again.');
-      }
-    } catch (error) {
-      setMessage('Network error. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -164,15 +132,9 @@ function VerifyEmailContent() {
                   <p className="text-gray-400">{message}</p>
                 </div>
                 <div className="space-y-3">
-                  <button
-                    onClick={() => setStatus('resend')}
-                    className="block w-full px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium transition-all"
-                  >
-                    Request New Link
-                  </button>
                   <Link 
                     href="/auth/signin"
-                    className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                    className="block w-full px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium transition-all text-center"
                   >
                     Back to Sign In
                   </Link>
@@ -180,8 +142,8 @@ function VerifyEmailContent() {
               </div>
             )}
 
-            {/* Resend State */}
-            {status === 'resend' && (
+            {/* Info State */}
+            {status === 'info' && (
               <div className="space-y-6">
                 <div className="text-center space-y-2">
                   <div className="flex justify-center mb-4">
@@ -191,54 +153,13 @@ function VerifyEmailContent() {
                   </div>
                   <h1 className="text-2xl font-bold">Resend Verification Email</h1>
                   <p className="text-gray-400">
-                    Enter your email address and we'll send you a new verification link.
+                    {message}
                   </p>
                 </div>
 
-                {message && (
-                  <div className="p-4 text-sm text-orange-400 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                    {message}
-                  </div>
-                )}
-
-                <form onSubmit={handleResendEmail} className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                      Email Address
-                    </label>
-                    <input
-                      id="email"
-                      type="email"
-                      placeholder="your@email.com"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Sending...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mail className="w-5 h-5" />
-                        <span>Send Verification Email</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-
                 <div className="text-center text-sm">
-                  <Link href="/auth/signin" className="text-orange-500 hover:text-orange-400 transition-colors">
-                    Back to Sign In
+                  <Link href="/auth/signin" className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all text-white">
+                    Go to Sign In
                   </Link>
                 </div>
               </div>

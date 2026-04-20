@@ -5,136 +5,25 @@
 
 'use client';
 
+import React from 'react';
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Github,
-  Mail,
   Terminal,
   Check,
-  ExternalLink
 } from 'lucide-react';
-import { signUp, signIn } from '@/lib/auth-client';
+import { signIn } from '@/lib/auth-client';
 import { SiteHeader } from '@/components/SiteHeader';
-import { getEmailProviderInfo } from '@/lib/utils/email-provider';
 
 function SignUpForm() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
-  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [emailOnlyMode, setEmailOnlyMode] = useState(false);
-  const [gdprConsent, setGdprConsent] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const rawReturn = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
   const returnUrl = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/dashboard';
-
-  const emailProvider = success ? getEmailProviderInfo(formData.email) : null;
-
-  // Password strength calculation
-  const getPasswordStrength = (pass: string) => {
-    let strength = 0;
-    if (pass.length >= 8) strength++;
-    if (pass.length >= 12) strength++;
-    if (/[a-z]/.test(pass) && /[A-Z]/.test(pass)) strength++;
-    if (/\d/.test(pass)) strength++;
-    if (/[^a-zA-Z\d]/.test(pass)) strength++;
-    return strength;
-  };
-
-  const passwordStrength = getPasswordStrength(formData.password);
-  const strengthLabels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
-  const strengthColors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    if (!gdprConsent) {
-      setError('Please accept the privacy policy to continue');
-      setLoading(false);
-      return;
-    }
-
-    // Email-only mode: send temporary password
-    if (emailOnlyMode) {
-      try {
-        const response = await fetch('/api/auth/signup-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            name: formData.name
-          }),
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          setSuccess(true);
-          setError('');
-        } else {
-          setError(data.error || 'Failed to create account');
-        }
-      } catch (err: any) {
-        setError(err?.message || 'Network error. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    // Password mode: traditional signup
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      setLoading(false);
-      return;
-    }
-
-    if (passwordStrength < 2) {
-      setError('Please choose a stronger password');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      await signUp.email({
-        email: formData.email,
-        password: formData.password,
-        name: formData.name,
-      }, {
-        onSuccess: () => {
-          setSuccess(true);
-          setTimeout(() => {
-            router.push('/onboarding/welcome');
-          }, 1000);
-        },
-        onError: (ctx) => {
-          setError(ctx.error.message || 'Registration failed. Please try again.');
-          setLoading(false);
-        }
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error. Please try again.');
-      setLoading(false);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGitHubSignIn = async () => {
     setLoading(true);
@@ -262,189 +151,20 @@ function SignUpForm() {
                   </div>
                   <div className="relative flex justify-center text-sm">
                     <span className="px-4 bg-black text-gray-400">
-                      Or sign up with email
+                      OAuth only
                     </span>
                   </div>
                 </div>
 
-                {/* Email Form */}
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  {error && (
-                    <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      {error}
-                    </div>
-                  )}
-                  {success && (
-                    <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg space-y-3">
-                      <p>
-                        {emailOnlyMode
-                          ? 'Account created! Check your email for your temporary password.'
-                          : 'Account created successfully! Redirecting...'
-                        }
-                      </p>
-                      {emailProvider && (
-                        <a
-                          href={emailProvider.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-green-300 transition-colors text-sm font-medium"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          Open {emailProvider.name}
-                        </a>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Toggle between password and email-only mode */}
-                  <div className="flex items-center justify-between p-3 bg-orange-500/5 border border-orange-500/20 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="emailOnly"
-                        checked={emailOnlyMode}
-                        onChange={(e) => setEmailOnlyMode(e.target.checked)}
-                        className="w-4 h-4 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
-                      />
-                      <label htmlFor="emailOnly" className="text-sm text-gray-300 cursor-pointer">
-                        Send me a temporary password via email
-                      </label>
-                    </div>
+                {error && (
+                  <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
+                    {error}
                   </div>
+                )}
 
-                  <div className="space-y-2">
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-300">
-                      Full Name
-                    </label>
-                    <input
-                      id="name"
-                      type="text"
-                      placeholder="John Doe"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                      Email
-                    </label>
-                    <input
-                      id="email"
-                      type="email"
-                      placeholder="your@email.com"
-                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                      required
-                    />
-                  </div>
-
-                  {!emailOnlyMode && (
-                    <>
-                      <div className="space-y-2">
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-300">
-                          Password
-                        </label>
-                        <input
-                          id="password"
-                          type="password"
-                          placeholder="••••••••"
-                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                          value={formData.password}
-                          onChange={(e) => setFormData({...formData, password: e.target.value})}
-                          required={!emailOnlyMode}
-                        />
-
-                        {/* Password Strength Indicator */}
-                        {formData.password && (
-                          <div className="space-y-2">
-                            <div className="flex gap-1">
-                              {[...Array(5)].map((_, i) => (
-                                <div
-                                  key={i}
-                                  className={`h-1 flex-1 rounded-full transition-colors ${
-                                    i < passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-700'
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <p className="text-xs text-gray-400">
-                              Strength: <span className={`font-medium ${passwordStrength >= 3 ? 'text-green-500' : 'text-orange-500'}`}>
-                                {strengthLabels[passwordStrength - 1] || 'Very Weak'}
-                              </span>
-                            </p>
-                            <div className="text-xs text-gray-500 space-y-1">
-                              <p className={formData.password.length >= 8 ? 'text-green-500' : ''}>• At least 8 characters</p>
-                              <p className={/[a-z]/.test(formData.password) && /[A-Z]/.test(formData.password) ? 'text-green-500' : ''}>• Mix of uppercase and lowercase</p>
-                              <p className={/\d/.test(formData.password) ? 'text-green-500' : ''}>• At least one number</p>
-                              <p className={/[^a-zA-Z\d]/.test(formData.password) ? 'text-green-500' : ''}>• At least one special character</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300">
-                          Confirm Password
-                        </label>
-                        <input
-                          id="confirmPassword"
-                          type="password"
-                          placeholder="••••••••"
-                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
-                          value={formData.confirmPassword}
-                          onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                          required={!emailOnlyMode}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* GDPR Consent */}
-                  <div className="flex items-start">
-                    <input
-                      id="gdprConsent"
-                      type="checkbox"
-                      checked={gdprConsent}
-                      onChange={(e) => setGdprConsent(e.target.checked)}
-                      className="w-4 h-4 mt-0.5 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
-                    />
-                    <label htmlFor="gdprConsent" className="ml-2 text-xs text-gray-400">
-                      I agree to the{' '}
-                      <Link href="/terms" className="text-orange-500 hover:text-orange-400 underline">
-                        Terms of Service
-                      </Link>,{' '}
-                      <Link href="/privacy" className="text-orange-500 hover:text-orange-400 underline">
-                        Privacy Policy
-                      </Link>{' '}
-                      and{' '}
-                      <Link href="/cookies" className="text-orange-500 hover:text-orange-400 underline">
-                        Cookie Policy
-                      </Link>
-                    </label>
-                  </div>
-
-                  <button
-                    className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
-                    type="submit"
-                    disabled={loading || !gdprConsent}
-                  >
-                    {loading ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Creating Account...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mail className="w-5 h-5" />
-                        <span>Create Account</span>
-                      </>
-                    )}
-                  </button>
-                </form>
+                <div className="p-4 rounded-lg border border-white/10 bg-white/5 text-sm text-gray-400">
+                  Email/password sign-up is disabled on the main site. Use GitHub or Google to create your account.
+                </div>
 
                 <div className="text-center text-sm pt-4 border-t border-white/10">
                   <span className="text-gray-400">Already have an account? </span>
