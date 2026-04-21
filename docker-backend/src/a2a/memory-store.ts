@@ -9,9 +9,9 @@
 
 import crypto from 'node:crypto';
 import { logger } from '../logger.js';
+import { getOpenRouterByokKey } from './byok.js';
 
 const QDRANT_URL = process.env.QDRANT_URL ?? 'http://localhost:6333';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const EMBED_MODEL = 'openai/text-embedding-ada-002';
 const VECTOR_SIZE = 1536;
 
@@ -74,15 +74,16 @@ function collectionFor(userId: string): string {
 
 // ── Embedding ────────────────────────────────────────────────────────────────
 
-async function embed(text: string): Promise<number[]> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OPENROUTER_API_KEY not set — cannot embed memory');
+async function embed(text: string, userId: string): Promise<number[]> {
+  const openRouterKey = await getOpenRouterByokKey(userId);
+  if (!openRouterKey) {
+    throw new Error('No BYOK OpenRouter key available — cannot embed memory');
   }
   const res = await fetch('https://openrouter.ai/api/v1/embeddings', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${openRouterKey}`,
     },
     body: JSON.stringify({ model: EMBED_MODEL, input: text }),
     signal: AbortSignal.timeout(15_000),
@@ -108,7 +109,7 @@ export async function rememberEntry(params: {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
 
-  const vector = await embed(content);
+  const vector = await embed(content, userId);
   const collection = collectionFor(userId);
   await ensureCollection(collection);
 
@@ -141,7 +142,7 @@ export async function recallEntries(params: {
     return []; // Collection doesn't exist yet
   }
 
-  const vector = await embed(query);
+  const vector = await embed(query, userId);
 
   const filter = type
     ? { must: [{ key: 'type', match: { value: type } }] }
