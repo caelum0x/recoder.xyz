@@ -23,7 +23,7 @@ check "recoder-pm" "http://localhost:3004" "307"
 check "recoder-agency" "http://localhost:3007" "307"
 
 # Docker containers
-for container in recoder-web recoder-docker-backend openclaw-gateway; do
+for container in recoder-web recoder-docker-backend; do
   status=$(docker inspect --format='{{.State.Running}}' "$container" 2>/dev/null)
   if [ "$status" != "true" ]; then
     DOWN_SERVICES="$DOWN_SERVICES $container(stopped)"

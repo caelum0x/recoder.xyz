@@ -19,7 +19,6 @@ export const ALLOWED_ORIGINS: readonly string[] = [
   'https://agents.recoder.xyz',
   'https://app.recoder.xyz',
   'https://web.recoder.xyz',
-  'https://studio.recoder.xyz',
   'https://agency.recoder.xyz',
   'https://pm.recoder.xyz',
   'https://docker.recoder.xyz',
@@ -45,4 +44,3 @@ export function getCorsHeadersForOrigin(origin: string | undefined, allowedOrigi
     Vary: 'Origin',
   };
 }
-

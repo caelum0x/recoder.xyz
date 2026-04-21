@@ -29,9 +29,6 @@ check_image "app favicon.ico" "http://localhost:3000/favicon.ico"
 check_image "web icon" "http://localhost:5173/icon.png"
 check_image "web favicon" "http://localhost:5173/favicon.png"
 
-check_image "studio favicon" "http://localhost:3005/favicon.png"
-check_image "studio dark favicon" "http://localhost:3005/favicon-light.png"
-
 if [[ "$FAIL" -gt 0 ]]; then
   echo "Branding smoke failed: ${FAIL} endpoint(s) unhealthy" >&2
   exit 1

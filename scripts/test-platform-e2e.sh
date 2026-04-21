@@ -298,7 +298,6 @@ for pair in \
   "https://web.recoder.xyz:200:302" \
   "https://pm.recoder.xyz:200:307" \
   "https://agency.recoder.xyz:200:307" \
-  "https://openclaw.recoder.xyz:200" \
   "https://api.recoder.xyz/v1/health:200" \
   "https://docker.recoder.xyz/health:200"; do
 
@@ -457,19 +456,6 @@ for tk in gmail slack; do
   code=$(http_status "https://api.recoder.xyz/v1/composio/toolkits/$tk/icon")
   check "Composio $tk icon" "$code" "200"
 done
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SECTION 10: OPENCLAW
-# ══════════════════════════════════════════════════════════════════════════════
-
-section 10 "OPENCLAW"
-
-OC_BODY=$(http_get "https://openclaw.recoder.xyz/")
-if echo "$OC_BODY" | grep -qo 'openclaw-app'; then
-  check "OpenClaw Control UI" "ok" "ok"
-else
-  check "OpenClaw Control UI" "missing" "ok"
-fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 11: UNIFIED MODEL REGISTRY

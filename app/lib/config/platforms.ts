@@ -180,10 +180,7 @@ export function getRecoderChatUrl(): string {
   if (process.env.RECODER_CHAT_URL) {
     return process.env.RECODER_CHAT_URL;
   }
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://chat.recoder.xyz';
-  }
-  return 'http://localhost:3002';
+  return getServiceUrl('agency');
 }
 
 export function getMainSiteUrl(): string {

@@ -139,7 +139,7 @@ case "${1:-}" in
   start)
     kill_existing_workers
     start_worker "recoder-web" "pnpm -C recoder-web a2a:worker" "recoder_web" "${RECODER_WEB_INTERNAL_URL:-http://127.0.0.1:5173}"
-    start_worker "recoder-agency" "pnpm -C recoder-agency/apps/agency a2a:worker" "recoder_agency" "${RECODER_AGENCY_INTERNAL_URL:-http://127.0.0.1:3005}"
+    start_worker "recoder-agency" "pnpm -C recoder-agency/apps/agency a2a:worker" "recoder_agency" "${RECODER_AGENCY_INTERNAL_URL:-http://127.0.0.1:3007}"
     start_worker "recoder-pm-api" "pnpm -C recoder-pm/apps/api a2a:worker" "recoder_pm" "${RECODER_PM_API_INTERNAL_URL:-http://127.0.0.1:3004}"
     start_worker "docker-backend" "pnpm -C docker-backend a2a:worker" "recoder_backend" "${DOCKER_BACKEND_INTERNAL_URL:-http://127.0.0.1:3100}"
     ;;
