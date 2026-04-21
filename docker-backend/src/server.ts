@@ -5068,13 +5068,20 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
       const entry = await getOrRecoverContainer(projectId);
       const sandboxId = entry && isDaytonaSandbox(entry) ? entry.id : undefined;
 
-      // Use request-supplied BYOK keys, or fall back to docker-backend's own keys
+      // BYOK-only for user-triggered coding prompts: never fall back to docker-backend env keys.
       const effectiveProviderKeys = {
-        openrouter: (providerKeys as any)?.openrouter || process.env.OPENROUTER_API_KEY,
-        openai: (providerKeys as any)?.openai || process.env.OPENAI_API_KEY,
-        anthropic: (providerKeys as any)?.anthropic || process.env.ANTHROPIC_API_KEY,
-        google: (providerKeys as any)?.google || process.env.GOOGLE_AI_API_KEY,
+        openrouter: (providerKeys as any)?.openrouter,
+        openai: (providerKeys as any)?.openai,
+        anthropic: (providerKeys as any)?.anthropic,
+        google: (providerKeys as any)?.google,
       };
+
+      if (!Object.values(effectiveProviderKeys).some(Boolean)) {
+        return res.status(400).json({
+          success: false,
+          error: 'BYOK provider keys are required for OpenCode prompts',
+        });
+      }
 
       logger.info({ projectId, promptLen: prompt.length, sandboxId, model }, 'OpenCode service prompt starting');
       let result;
