@@ -54,7 +54,7 @@ export async function submitBrief(formData: FormData) {
 			const { createOpenRouterModel } = await import(
 				"@/lib/agency/openrouter-model"
 			);
-			const model = createOpenRouterModel("openai/gpt-4o-mini");
+			const model = await createOpenRouterModel("openai/gpt-4o-mini");
 			if (model) {
 				await analyzeBrief({
 					projectDbId: inserted.dbId,

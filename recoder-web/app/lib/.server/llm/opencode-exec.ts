@@ -42,12 +42,6 @@ interface ParsedOpencodeOutput {
   rawText: string;
 }
 
-function getEnv(): Record<string, string | undefined> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const g = globalThis as any;
-  return g['process']?.env || {};
-}
-
 function pruneExpiredSessions(now = Date.now()): void {
   for (const [key, value] of sessionIdsByChat.entries()) {
     if (now - value.updatedAt > SESSION_TTL_MS) {
@@ -314,13 +308,11 @@ async function readProviderKeys(request: Request): Promise<ProviderKeys> {
     getUserApiKey(sessionCookie, 'google'),
   ]);
 
-  const env = getEnv();
-
   return {
-    openrouter: openrouter || env.OPENROUTER_API_KEY,
-    openai: openai || env.OPENAI_API_KEY,
-    anthropic: anthropic || env.ANTHROPIC_API_KEY,
-    google: google || env.GEMINI_API_KEY || env.GOOGLE_API_KEY,
+    openrouter: openrouter || undefined,
+    openai: openai || undefined,
+    anthropic: anthropic || undefined,
+    google: google || undefined,
   };
 }
 

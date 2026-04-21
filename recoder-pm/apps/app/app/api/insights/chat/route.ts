@@ -14,7 +14,6 @@ import {
 export const maxDuration = 60;
 
 // OpenRouter config -- read once at module load
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL =
   process.env.OPENROUTER_TEXT_MODEL || "google/gemini-2.0-flash-001";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -597,7 +596,7 @@ async function resolveOpenRouterConfig(
     cookieUser?.hasOwnApiKey && typeof cookieUser.openRouterApiKey === "string"
       ? cookieUser.openRouterApiKey
       : null;
-  const apiKey = organizationApiKey ?? OPENROUTER_API_KEY ?? userApiKey ?? null;
+  const apiKey = organizationApiKey ?? userApiKey ?? null;
 
   if (!apiKey) {
     return null;
