@@ -240,6 +240,117 @@ def _strip_internal_properties(messages: List[Dict[str, Any]]) -> List[Dict[str,
     return cleaned_messages
 
 
+def _normalize_content_parts(content: Any) -> Optional[Any]:
+    """Normalize message content into OpenAI-compatible text/image parts.
+
+    Gemini via LiteLLM/OpenRouter is strict about message parts. Persisted thread
+    history can contain legacy dict payloads, empty arrays, or variant part types
+    like input_text/input_image. Normalize those into standard text/image_url
+    parts so downstream providers always receive usable prompt input.
+    """
+    if content is None:
+        return None
+
+    if isinstance(content, str):
+        return content if content.strip() else None
+
+    if isinstance(content, list):
+        normalized_parts: List[Dict[str, Any]] = []
+        for part in content:
+            if isinstance(part, str):
+                if part.strip():
+                    normalized_parts.append({"type": "text", "text": part})
+                continue
+
+            if not isinstance(part, dict):
+                part_str = str(part).strip()
+                if part_str:
+                    normalized_parts.append({"type": "text", "text": part_str})
+                continue
+
+            part_type = part.get("type")
+
+            if part_type in ("text", "input_text"):
+                text = part.get("text")
+                if text is None:
+                    text = part.get("content")
+                text_str = str(text).strip() if text is not None else ""
+                if text_str:
+                    normalized_parts.append({"type": "text", "text": text_str})
+                continue
+
+            if part_type in ("image_url", "input_image"):
+                image_url = part.get("image_url")
+                if isinstance(image_url, dict):
+                    url = image_url.get("url")
+                else:
+                    url = part.get("url")
+                url_str = str(url).strip() if url is not None else ""
+                if url_str:
+                    normalized_parts.append(
+                        {"type": "image_url", "image_url": {"url": url_str}}
+                    )
+                continue
+
+            fallback_text = part.get("text")
+            if fallback_text is None:
+                fallback_text = part.get("content")
+            fallback_str = str(fallback_text).strip() if fallback_text is not None else ""
+            if fallback_str:
+                normalized_parts.append({"type": "text", "text": fallback_str})
+
+        return normalized_parts or None
+
+    if isinstance(content, dict):
+        text = content.get("text")
+        if text is None:
+            text = content.get("content")
+        if isinstance(text, str) and text.strip():
+            return text
+
+        image_url = content.get("image_url")
+        if isinstance(image_url, dict):
+            url = image_url.get("url")
+            if isinstance(url, str) and url.strip():
+                return [{"type": "image_url", "image_url": {"url": url}}]
+
+        try:
+            serialized = json.dumps(content, ensure_ascii=False)
+        except (TypeError, ValueError):
+            serialized = str(content)
+        return serialized if serialized.strip() else None
+
+    content_str = str(content).strip()
+    return content_str or None
+
+
+def _normalize_message_for_provider(message: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize persisted message history into provider-safe OpenAI chat format."""
+    normalized = dict(message)
+    role = normalized.get("role", "")
+
+    raw_content = normalized.get("content")
+    content = _normalize_content_parts(raw_content)
+    if content is not None:
+        normalized["content"] = content
+    elif not isinstance(raw_content, str):
+        normalized["content"] = None
+
+    # Tool results must always be plain string content for OpenAI-format chat APIs.
+    if role == "tool" or normalized.get("tool_call_id"):
+        raw_content = normalized.get("content")
+        if isinstance(raw_content, (dict, list)):
+            try:
+                raw_content = json.dumps(raw_content, ensure_ascii=False)
+            except (TypeError, ValueError):
+                raw_content = str(raw_content)
+        if raw_content is None or (isinstance(raw_content, str) and not raw_content.strip()):
+            raw_content = "(empty result)"
+        normalized["content"] = raw_content
+
+    return normalized
+
+
 async def make_llm_api_call(
     messages: List[Dict[str, Any]],
     model_name: str,
@@ -269,12 +380,19 @@ async def make_llm_api_call(
     # content and merges consecutive same-role messages.
 
     def _has_content(msg: dict) -> bool:
-        c = msg.get("content")
+        c = _normalize_content_parts(msg.get("content"))
         if c is None or c == "" or c == []:
             return False
         if isinstance(c, list):
             return any(
-                (p.get("text", "").strip() if isinstance(p, dict) else str(p).strip())
+                (
+                    (
+                        p.get("text", "").strip()
+                        or p.get("image_url", {}).get("url", "").strip()
+                    )
+                    if isinstance(p, dict)
+                    else str(p).strip()
+                )
                 for p in c
             )
         if isinstance(c, str):
@@ -283,22 +401,23 @@ async def make_llm_api_call(
 
     def _ensure_content(msg: dict) -> dict:
         """Guarantee every message has a non-null, non-empty content field."""
-        if _has_content(msg):
-            return msg
+        normalized_msg = _normalize_message_for_provider(msg)
+        if _has_content(normalized_msg):
+            return normalized_msg
         role = msg.get("role", "")
         has_tool_calls = bool(msg.get("tool_calls"))
         if has_tool_calls:
             # Assistant with tool_calls but no content — Gemini needs content
-            return {**msg, "content": "I'll use a tool to help with this."}
+            return {**normalized_msg, "content": "I'll use a tool to help with this."}
         if role == "tool" or msg.get("tool_call_id"):
-            return {**msg, "content": "(empty result)"}
+            return {**normalized_msg, "content": "(empty result)"}
         if role == "system":
-            return {**msg, "content": "You are a helpful assistant."}
+            return {**normalized_msg, "content": "You are a helpful assistant."}
         if role == "assistant":
-            return {**msg, "content": " "}
+            return {**normalized_msg, "content": " "}
         if role == "user":
-            return {**msg, "content": " "}
-        return msg
+            return {**normalized_msg, "content": " "}
+        return normalized_msg
 
     # Pass 1: ensure every message has content, drop truly unsalvageable ones
     cleaned_messages = []

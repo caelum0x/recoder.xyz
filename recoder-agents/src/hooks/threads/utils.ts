@@ -1,7 +1,6 @@
-import { backendApi } from "@/lib/api-client";
 import {
+  getThread as getThreadApi,
   getProject,
-  getThreadsPaginated,
   updateProject,
   type Project,
 } from "@/lib/api/threads";
@@ -31,49 +30,7 @@ export type Thread = {
   
 
   export const getThread = async (threadId: string): Promise<Thread> => {
-    const token = await getSessionAccessToken();
-
-    // Build headers with optional auth token
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    // Use backend API endpoint with auth handling
-    const response = await fetch(`${getApiUrl()}/threads/${threadId}`, {
-      headers,
-      credentials: 'include',
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-
-      if (response.status === 404) {
-        try {
-          const threadsResponse = await getThreadsPaginated(undefined, 1, 100);
-          const fallbackThread = threadsResponse.threads.find(
-            (thread) => thread.thread_id === threadId,
-          );
-
-          if (fallbackThread) {
-            return fallbackThread as Thread;
-          }
-        } catch {
-          // Preserve the original 404 if list fallback also fails.
-        }
-      }
-
-      throw new Error(
-        errorText || `Failed to fetch thread: ${response.statusText}`,
-      );
-    }
-
-    const data = await response.json();
-    return data;
+    return (await getThreadApi(threadId)) as Thread;
   };
 
 export const updateThread = async (
