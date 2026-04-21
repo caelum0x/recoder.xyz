@@ -210,7 +210,6 @@ For post-deploy verification of the remaining Agents startup issues, use:
 - `app` + `recoder-web`: snapshot migration is incomplete; hub snapshots are preferred, but legacy `projects` and chat-history `fileSnapshot` coupling still exists
 - `backend` + `recoder-agents`: remaining startup instability is now a deployment/runtime verification problem more than a local frontend-gating problem; latest production sweeps still show duplicated thread detail / agent-runs `404`s, intermittent thread-scoped `503`s, and inconsistent behavior across runs
 - `recoder-agents`: Board/Canvas authenticated entry path still needs a cleaner deployed verification pass; chat response visibility/render timing still needs post-deploy verification after the latest branch-side mitigations
-- `backend` + `recoder-agents`: Gemini/OpenRouter request formatting/provider routing bug still causes Google `INVALID_ARGUMENT` / missing `parts` failures (`recoder-5hg`)
 - A2A/control plane: worker flows depend on Redis stream config, shared-secret alignment, internal service URLs, and orchestration policy from `.env.a2a.workers`
 - host ops: disk remains tight and previously stopped services still need cleanup/restart planning
 
@@ -233,8 +232,6 @@ Launch is complete when:
 - `app/` request is mostly done, but the full multi-surface request is not fully complete.
 - `recoder.xyz` nav/auth simplification is deployed.
 - `recoder-agents` shell/files fixes are deployed.
-- Remaining work is primarily `recoder-agents` runtime/API cleanup:
-  - Gemini/OpenRouter payload bug
-  - thread/agent-runs `404`
-  - active-runs/session-token `502` when reproducible
+- Paid Gemini runtime mapping and the old OpenRouter `parts` failure were fixed and verified in production.
+- Remaining work is broader authenticated/runtime verification plus Web snapshot cleanup, A2A verification, and host ops cleanup.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not considered a product bug.
