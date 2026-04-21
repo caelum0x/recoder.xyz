@@ -1927,7 +1927,7 @@ function triggerAsyncQuoteGeneration(params: {
 			);
 			const model = await createOpenRouterModel("openai/gpt-4o-mini");
 			if (!model) {
-				console.warn("Skipping quote generation: OPENROUTER_API_KEY not set");
+				console.warn("Skipping quote generation: no BYOK OpenRouter key configured");
 				return;
 			}
 			const { generateQuoteFromBrief } = await import(

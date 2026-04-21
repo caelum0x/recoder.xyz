@@ -11,7 +11,7 @@ import {
   escapeIdentifier,
   vectorToSql,
 } from "./database";
-import { createEmbedderFromProfile, getApiKeyForProfile } from "./embedder";
+import { createEmbedderFromProfile } from "./embedder";
 import {
   ConfigurationError,
   DatabaseError,
@@ -93,6 +93,9 @@ export function createPostgresQueryService<
   database: DatabaseConfig;
   tableName: string;
   contextToEmbeddingProfileId: (context: TContext) => EmbeddingProfileId;
+  contextToApiKey?: (
+    context: TContext
+  ) => string | null | undefined | Promise<string | null | undefined>;
   requiredColumnOverrides?: Partial<QueryServiceRequiredColumns>;
   metadataColumnOverrides?: Partial<Record<keyof z.infer<TSchema>, string>>;
   contextToFilter: (
@@ -132,10 +135,12 @@ export function createPostgresQueryService<
         );
       }
 
-      const apiKey = getApiKeyForProfile(profile);
+      const apiKey = config.contextToApiKey
+        ? await config.contextToApiKey(context)
+        : undefined;
       if (!apiKey) {
         throw new ConfigurationError(
-          `No API key found for embedding profile ${profileId}`
+          `No BYOK API key provided for embedding profile ${profileId}`
         );
       }
 

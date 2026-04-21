@@ -22,7 +22,6 @@
 
 const HATCHET_HOST = process.env.HATCHET_CLIENT_HOST ?? 'localhost:7077';
 const HATCHET_TOKEN = process.env.HATCHET_CLIENT_TOKEN ?? '';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const DOCKER_BACKEND_URL = process.env.RECODER_DOCKER_URL ?? 'http://localhost:3100';
 
 // ── Step input/output types ─────────────────────────────────────────────────
@@ -31,6 +30,7 @@ interface LlmStepInput {
   model: string;
   systemPrompt: string;
   userPrompt: string;
+  apiKey?: string;
   temperature?: number;
   maxTokens?: number;
 }
@@ -91,11 +91,15 @@ interface TriggerStepOutput {
 // ── Step implementations ──────────────────────────────────────────────────────
 
 async function executeLlmStep(input: LlmStepInput): Promise<LlmStepOutput> {
+  if (!input.apiKey) {
+    throw new Error('No BYOK OpenRouter API key provided for workflow LLM step');
+  }
+
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${input.apiKey}`,
     },
     body: JSON.stringify({
       model: input.model || 'anthropic/claude-sonnet-4-20250514',
@@ -248,6 +252,7 @@ export async function executeWorkflowSteps(
               (step.config.userPrompt as string) ?? '',
               context,
             ),
+            apiKey: step.config.apiKey as string | undefined,
             temperature: step.config.temperature as number | undefined,
             maxTokens: step.config.maxTokens as number | undefined,
           });

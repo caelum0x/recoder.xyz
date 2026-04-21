@@ -1,4 +1,4 @@
-import { getTranscriptionModel } from "@repo/backend/ai";
+import { getOrganizationTranscriptionModel } from "@repo/backend/ai";
 import { database } from "@repo/backend/database";
 import type { Feedback } from "@repo/backend/prisma/client";
 import { textToContent } from "@repo/editor/lib/tiptap";
@@ -24,7 +24,7 @@ export const POST = async (request: Request): Promise<Response> => {
   }
 
   const transcript = await transcribe({
-    model: getTranscriptionModel(),
+    model: await getOrganizationTranscriptionModel(body.record.organizationId),
     audio: new URL(body.record.videoUrl ?? (body.record.audioUrl as string)),
   });
 

@@ -1,10 +1,12 @@
 import { type ActionFunctionArgs } from '@remix-run/cloudflare';
 import { Octokit } from '@octokit/rest';
+import { getSessionCookie, getUserApiKey } from '~/lib/.server/llm/user-api-key';
 import { createSql } from '~/lib/.server/db/pg-pool';
 import * as z from 'zod/v4';
 import { verifySession } from '~/lib/auth/session.server';
 import { JsonResponse } from '~/lib/http/json-response';
 import {
+  getVectorProvider,
   isVectorModeAvailable,
   ingestDocuments as vectorIngestDocuments,
   queryRag as vectorQueryRag,
@@ -215,6 +217,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return JsonResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
+  const sessionCookie = getSessionCookie(request);
+  const vectorProvider = getVectorProvider();
+  const vectorApiKey = await getUserApiKey(sessionCookie, vectorProvider);
+
   try {
     const rawBody = await request.json();
     const parsed = RagRequestSchema.safeParse(rawBody);
@@ -240,14 +246,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
 
       // Try vector path first
-      if (isVectorModeAvailable()) {
+      if (isVectorModeAvailable(vectorApiKey ?? undefined)) {
         try {
           const ingestDocs = documents.map((doc, i) => ({
             id: doc.id || `doc_${Date.now()}_${i}`,
             content: doc.content,
             metadata: doc.metadata,
           }));
-          const stats = await vectorIngestDocuments(projectId, ingestDocs, replace);
+          const stats = await vectorIngestDocuments(projectId, ingestDocs, replace, {
+            apiKey: vectorApiKey ?? undefined,
+          });
           return JsonResponse.json({
             success: true,
             projectId,
@@ -323,14 +331,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
       });
 
       // Try vector path first
-      if (isVectorModeAvailable()) {
+      if (isVectorModeAvailable(vectorApiKey ?? undefined)) {
         try {
           const ingestDocs = githubDocs.map((doc) => ({
             id: doc.id,
             content: doc.content,
             metadata: doc.metadata,
           }));
-          const stats = await vectorIngestDocuments(parsed.data.projectId, ingestDocs, parsed.data.replace);
+          const stats = await vectorIngestDocuments(
+            parsed.data.projectId,
+            ingestDocs,
+            parsed.data.replace,
+            { apiKey: vectorApiKey ?? undefined },
+          );
           return JsonResponse.json({
             success: true,
             projectId: parsed.data.projectId,
@@ -386,9 +399,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const limit = topK || 5;
 
     // Try vector path first
-    if (isVectorModeAvailable()) {
+    if (isVectorModeAvailable(vectorApiKey ?? undefined)) {
       try {
-        const results = await vectorQueryRag(projectId, query, limit);
+        const results = await vectorQueryRag(projectId, query, limit, {
+          apiKey: vectorApiKey ?? undefined,
+        });
         return JsonResponse.json({
           success: true,
           projectId,

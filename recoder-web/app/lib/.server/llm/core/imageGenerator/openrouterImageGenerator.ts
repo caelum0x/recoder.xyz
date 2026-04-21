@@ -28,11 +28,7 @@ export class OpenRouterImageGenerator {
     baseUrl?: string,
     defaultModel?: ImageGenerationModel,
   ) {
-    this.apiKey =
-      apiKey ||
-      process.env['OPENROUTER_API_KEY'] ||
-      process.env['OPENAI_API_KEY'] ||
-      '';
+    this.apiKey = apiKey || '';
     this.baseUrl =
       baseUrl ||
       process.env['OPENROUTER_IMAGE_BASE_URL'] ||
@@ -43,9 +39,7 @@ export class OpenRouterImageGenerator {
       'dall-e-3';
 
     if (!this.apiKey) {
-      throw new Error(
-        'API key is required. Set OPENROUTER_API_KEY or OPENAI_API_KEY environment variable.',
-      );
+      throw new Error('BYOK API key is required for OpenRouter image generation.');
     }
   }
 

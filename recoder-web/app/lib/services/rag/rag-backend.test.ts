@@ -14,33 +14,26 @@ describe('rag-backend adapter', () => {
 
   it('isVectorModeAvailable returns false when DATABASE_URL is missing', async () => {
     delete process.env.DATABASE_URL;
-    delete process.env.OPENAI_API_KEY;
     const { isVectorModeAvailable } = await import('./rag-backend');
-    expect(isVectorModeAvailable()).toBe(false);
+    expect(isVectorModeAvailable('sk-test-key')).toBe(false);
   });
 
   it('isVectorModeAvailable returns false when embedder key is missing', async () => {
     process.env.DATABASE_URL = 'postgresql://localhost/test';
-    delete process.env.OPENAI_API_KEY;
-    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     const { isVectorModeAvailable } = await import('./rag-backend');
     expect(isVectorModeAvailable()).toBe(false);
   });
 
-  it('isVectorModeAvailable returns true when DATABASE_URL and OPENAI_API_KEY are set', async () => {
+  it('isVectorModeAvailable returns true when DATABASE_URL and a BYOK key are set', async () => {
     process.env.DATABASE_URL = 'postgresql://localhost/test';
-    process.env.OPENAI_API_KEY = 'sk-test-key';
     const { isVectorModeAvailable } = await import('./rag-backend');
-    expect(isVectorModeAvailable()).toBe(true);
+    expect(isVectorModeAvailable('sk-test-key')).toBe(true);
   });
 
-  it('respects RAG_EMBEDDING_PROFILE env var for Google profile', async () => {
-    process.env.DATABASE_URL = 'postgresql://localhost/test';
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AItest';
+  it('exposes the configured embedding provider', async () => {
     process.env.RAG_EMBEDDING_PROFILE = 'google-gemini-embedding-001';
-    delete process.env.OPENAI_API_KEY;
-    const { isVectorModeAvailable } = await import('./rag-backend');
-    expect(isVectorModeAvailable()).toBe(true);
+    const { getVectorProvider } = await import('./rag-backend');
+    expect(getVectorProvider()).toBe('google');
   });
 
   it('ingestDocuments throws when DATABASE_URL is not set', async () => {
@@ -53,7 +46,6 @@ describe('rag-backend adapter', () => {
 
   it('queryRag throws when embedder key is missing', async () => {
     process.env.DATABASE_URL = 'postgresql://localhost/test';
-    delete process.env.OPENAI_API_KEY;
     const { queryRag } = await import('./rag-backend');
     await expect(queryRag('proj1', 'hello')).rejects.toThrow('No embedding API key');
   });
