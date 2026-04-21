@@ -15,7 +15,7 @@ const logger = createScopedLogger('ModelProvider');
 
 export interface ModelProviderConfig {
   openrouterKey?: string;
-  anthropicKey?: string; // Fallback for direct Anthropic access
+  anthropicKey?: string;
 }
 
 /**
@@ -80,18 +80,16 @@ export function getModel(
   modelConfig: ModelConfig,
   providerConfig: ModelProviderConfig
 ): LanguageModel {
-  // Try OpenRouter first (preferred - one API key for all models)
+  // BYOK-only: use the caller-supplied provider key(s), never platform env keys.
   if (providerConfig.openrouterKey) {
     return getOpenRouterModel(modelConfig.id, providerConfig.openrouterKey);
   }
 
-  // Fallback to direct Anthropic if no OpenRouter key
   if (providerConfig.anthropicKey && modelConfig.provider === 'anthropic') {
-    logger.warn('⚠️  Using direct Anthropic (OpenRouter recommended for cost savings)');
     return getAnthropicDirect(modelConfig.id, providerConfig.anthropicKey);
   }
 
-  throw new Error('No API keys configured. Please set OPENROUTER_API_KEY or ANTHROPIC_API_KEY');
+  throw new Error('No BYOK API keys configured for this request.');
 }
 
 /**
@@ -139,18 +137,18 @@ function getAnthropicDirect(modelId: string, apiKey: string): LanguageModel {
  * Get fallback model (free Gemini via OpenRouter)
  */
 export function getFallbackModel(providerConfig: ModelProviderConfig): LanguageModel {
-  logger.info('⚠️  Using fallback model: Gemini 2.0 Flash (free via OpenRouter)');
+  logger.info('⚠️  Using fallback model: Gemini 2.0 Flash');
 
   if (providerConfig.openrouterKey) {
     return getOpenRouterModel('gemini-2.5-flash', providerConfig.openrouterKey);
   }
 
   if (providerConfig.anthropicKey) {
-    logger.warn('⚠️  OpenRouter not configured, using Anthropic Haiku');
+    logger.warn('⚠️  OpenRouter key unavailable, using Anthropic Haiku');
     return getAnthropicDirect('claude-haiku-3.5', providerConfig.anthropicKey);
   }
 
-  throw new Error('No API keys configured for fallback model');
+  throw new Error('No BYOK API keys configured for fallback model');
 }
 
 /**
@@ -177,7 +175,7 @@ export function validateProviderConfig(
     }
   }
 
-  return { valid: false, error: 'No API keys configured (OPENROUTER_API_KEY or ANTHROPIC_API_KEY)' };
+  return { valid: false, error: 'No BYOK API keys configured for the selected model' };
 }
 
 /**
