@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withApiKeyAuth, AuthenticatedRequest } from '@/lib/middleware/api-key-auth';
 import { trackApiKeyUsage } from '@/lib/usage-tracking';
+import { ApiKeyResolverError, resolveApiKey } from '@/lib/api-key-resolver';
 import { z } from 'zod';
 
 const proxyRequestSchema = z.object({
@@ -44,11 +45,13 @@ async function handler(req: AuthenticatedRequest) {
 
     const startTime = Date.now();
 
-    // Make request to OpenRouter using platform's API key
+    const resolvedKey = await resolveApiKey(req.user!.id, 'openrouter');
+
+    // Make request to OpenRouter using the user's BYOK key
     const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${resolvedKey.apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://recoder.xyz',
         'X-Title': 'Recoder AI',
@@ -100,6 +103,13 @@ async function handler(req: AuthenticatedRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof ApiKeyResolverError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.code === 'NO_API_KEY' ? 400 : 403 }
+      );
+    }
+
     console.error('AI proxy error:', error);
 
     // Track failed request

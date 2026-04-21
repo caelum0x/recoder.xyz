@@ -40,11 +40,6 @@ interface ProviderKeys {
   google?: string;
 }
 
-function getEnv(): Record<string, string | undefined> {
-  const g = globalThis as any;
-  return g['process']?.env || {};
-}
-
 function toPlainTextContent(content: unknown): string {
   if (typeof content === 'string') return content;
 
@@ -117,13 +112,11 @@ async function readProviderKeys(request: Request): Promise<ProviderKeys> {
     getUserApiKey(sessionCookie, 'google'),
   ]);
 
-  const env = getEnv();
-
   return {
-    openrouter: openrouter || env.OPENROUTER_API_KEY,
-    openai: openai || env.OPENAI_API_KEY,
-    anthropic: anthropic || env.ANTHROPIC_API_KEY,
-    google: google || env.GEMINI_API_KEY || env.GOOGLE_API_KEY,
+    openrouter: openrouter || undefined,
+    openai: openai || undefined,
+    anthropic: anthropic || undefined,
+    google: google || undefined,
   };
 }
 

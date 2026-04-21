@@ -4,7 +4,7 @@ import { createOpenAI, openai } from "@ai-sdk/openai";
 import { decryptApiKey } from "./ai-keys";
 import { database } from "./database";
 
-const resolveProvider = () => {
+const resolveConfiguredProvider = () => {
   const configured = process.env.AI_PROVIDER?.toLowerCase();
 
   if (configured === "openrouter") {
@@ -19,26 +19,17 @@ const resolveProvider = () => {
     return "openai";
   }
 
-  if (process.env.OPENROUTER_API_KEY) {
-    return "openrouter";
-  }
-
-  return "openai";
+  return "openrouter";
 };
-
-const openrouterClient = createOpenAI({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  baseURL: "https://openrouter.ai/api/v1",
-});
 
 const createOpenAiClient = (apiKey?: string) =>
   createOpenAI({
-    apiKey: apiKey ?? process.env.OPENAI_API_KEY,
+    apiKey,
   });
 
 const createOpenRouterClient = (apiKey?: string) =>
   createOpenAI({
-    apiKey: apiKey ?? process.env.OPENROUTER_API_KEY,
+    apiKey,
     baseURL: "https://openrouter.ai/api/v1",
   });
 
@@ -68,36 +59,17 @@ const getOpenRouterTextModelName = () =>
 
 const getAnthropicTextModelName = () => process.env.ANTHROPIC_TEXT_MODEL;
 
+function ensureApiKey(apiKey: string | null, provider: string): string {
+  if (!apiKey) {
+    throw new Error(`Missing active ${provider} BYOK API key`);
+  }
+  return apiKey;
+}
+
 export const getTextModel = (): any => {
-  const provider = resolveProvider();
-
-  if (provider === "openrouter") {
-    if (!process.env.OPENROUTER_API_KEY) {
-      throw new Error("OPENROUTER_API_KEY is not set");
-    }
-
-    return openrouterClient.chat(getOpenRouterTextModelName());
-  }
-
-  if (provider === "anthropic") {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error("ANTHROPIC_API_KEY is not set");
-    }
-
-    const modelName = getAnthropicTextModelName();
-
-    if (!modelName) {
-      throw new Error("ANTHROPIC_TEXT_MODEL is not set");
-    }
-
-    return anthropic(modelName);
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not set");
-  }
-
-  return createOpenAiClient().chat(getOpenAiTextModelName());
+  throw new Error(
+    "BYOK is required. Use getOrganizationTextModel() with an organization-scoped provider key."
+  );
 };
 
 export const getOrganizationTextModel = async (
@@ -131,7 +103,7 @@ export const getOrganizationTextModel = async (
     organization.aiProvider &&
     ["openrouter", "openai", "anthropic"].includes(organization.aiProvider)
       ? organization.aiProvider
-      : resolveProvider();
+      : (organization.aiProviderKeys[0]?.provider ?? resolveConfiguredProvider());
   const aiModel = organization.aiModel;
   const providerKey = organization.aiProviderKeys.find(
     (key) => key.provider === provider
@@ -139,34 +111,22 @@ export const getOrganizationTextModel = async (
   const apiKey = providerKey ? decryptApiKey(providerKey.encryptedKey) : null;
 
   if (provider === "openrouter") {
-    if (!(apiKey || process.env.OPENROUTER_API_KEY)) {
-      throw new Error("OPENROUTER_API_KEY is not set");
-    }
-
-    const client = createOpenRouterClient(apiKey ?? undefined);
+    const client = createOpenRouterClient(ensureApiKey(apiKey, "openrouter"));
     return client.chat(aiModel ?? getOpenRouterTextModelName());
   }
 
   if (provider === "anthropic") {
-    if (!(apiKey || process.env.ANTHROPIC_API_KEY)) {
-      throw new Error("ANTHROPIC_API_KEY is not set");
-    }
-
     const modelName = aiModel ?? getAnthropicTextModelName();
 
     if (!modelName) {
       throw new Error("ANTHROPIC_TEXT_MODEL is not set");
     }
 
-    const client = await createAnthropicClient(apiKey ?? undefined);
+    const client = await createAnthropicClient(ensureApiKey(apiKey, "anthropic"));
     return client(modelName);
   }
 
-  if (!(apiKey || process.env.OPENAI_API_KEY)) {
-    throw new Error("OPENAI_API_KEY is not set");
-  }
-
-  const client = createOpenAiClient(apiKey ?? undefined);
+  const client = createOpenAiClient(ensureApiKey(apiKey, "openai"));
   return client.chat(aiModel ?? getOpenAiTextModelName());
 };
 

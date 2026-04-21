@@ -40,12 +40,6 @@ interface CodingRuntimePromptResponse {
   parts?: Array<{ type?: string; content?: string; text?: string }>;
 }
 
-function getEnv(): Record<string, string | undefined> {
-  const g = globalThis as Record<string, unknown>;
-  const processLike = g.process as { env?: Record<string, string | undefined> } | undefined;
-  return processLike?.env || {};
-}
-
 function pruneExpiredSessions(now = Date.now()): void {
   for (const [key, value] of runtimeSessionsByChat.entries()) {
     if (now - value.updatedAt > SESSION_TTL_MS) {
@@ -185,28 +179,12 @@ export function inferCodingRuntimeProvider(provider?: string, model?: string): R
 
 async function readProviderApiKey(request: Request, provider: RuntimeApiProvider): Promise<string | undefined> {
   const sessionCookie = getSessionCookie(request);
-  const env = getEnv();
-
   if (!sessionCookie) {
-    return {
-      openrouter: env.OPENROUTER_API_KEY,
-      openai: env.OPENAI_API_KEY,
-      anthropic: env.ANTHROPIC_API_KEY,
-      google: env.GEMINI_API_KEY || env.GOOGLE_API_KEY,
-    }[provider];
+    return undefined;
   }
 
   const apiKey = await getUserApiKey(sessionCookie, provider);
-  if (apiKey) {
-    return apiKey;
-  }
-
-  return {
-    openrouter: env.OPENROUTER_API_KEY,
-    openai: env.OPENAI_API_KEY,
-    anthropic: env.ANTHROPIC_API_KEY,
-    google: env.GEMINI_API_KEY || env.GOOGLE_API_KEY,
-  }[provider];
+  return apiKey || undefined;
 }
 
 function unwrapApiData<T>(payload: unknown): T {

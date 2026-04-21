@@ -56,7 +56,7 @@ export async function streamTextNative(
   usage: { promptTokens: number; completionTokens: number };
   toAIStream: () => ReadableStream<Uint8Array>;
 }> {
-  // Get API key (user BYOK or platform fallback for free models)
+  // Get API key (user BYOK only)
   const { getAPIKeyWithSource } = await import('./api-key');
   const keyResult = await getAPIKeyWithSource(env, options?.request, 'openrouter');
 
@@ -65,7 +65,7 @@ export async function streamTextNative(
   }
 
   const openrouterKey = keyResult.key;
-  const isPlatformKey = keyResult.source === 'platform';
+  const isPlatformKey = false;
 
   // Get configuration
   const config = getLLMConfig(env);

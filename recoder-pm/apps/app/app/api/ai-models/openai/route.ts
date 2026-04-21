@@ -24,13 +24,11 @@ export const GET = async (): Promise<Response> => {
   });
 
   const apiKey =
-    (keyRecord ? decryptApiKey(keyRecord.encryptedKey) : null) ??
-    process.env.OPENAI_API_KEY ??
-    null;
+    (keyRecord ? decryptApiKey(keyRecord.encryptedKey) : null) ?? null;
 
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Missing OpenAI API key." },
+      { error: "Missing organization OpenAI BYOK API key." },
       { status: 400 }
     );
   }

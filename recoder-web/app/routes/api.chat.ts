@@ -285,15 +285,15 @@ async function chatAction({ context, request }: ActionFunctionArgs) {
     return ctx;
   }
 
-  // Verify user authentication — but allow platform key fallback
+  // Verify user authentication — BYOK only
   const { verifySession } = await import('~/lib/auth/session.server');
 
   const session = await verifySession(request);
   const hasCookie = request.headers.get('Cookie')?.includes('recoder.session_token') ||
                     request.headers.get('Cookie')?.includes('session_token');
 
-  if (!session?.user && !hasCookie && !process.env.OPENROUTER_API_KEY) {
-    // No session AND no cookie AND no platform key — truly unauthenticated
+  if (!session?.user && !hasCookie) {
+    // No session and no cookie — truly unauthenticated
     const encoder = new TextEncoder();
     const errorMessage = `🔐 Authentication Required
 

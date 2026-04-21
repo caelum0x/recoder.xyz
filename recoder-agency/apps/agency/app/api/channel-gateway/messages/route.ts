@@ -1779,7 +1779,7 @@ export async function POST(request: Request) {
 				const { createOpenRouterModel } = await import(
 					"@/lib/agency/openrouter-model"
 				);
-				const model = createOpenRouterModel("openai/gpt-4o-mini");
+				const model = await createOpenRouterModel("openai/gpt-4o-mini");
 				if (model) {
 					intent = await detectIntent({
 						message: payload.text,
@@ -1837,7 +1837,7 @@ export async function POST(request: Request) {
 					teamDbId: client.teamDbId,
 					provider: payload.provider as ChannelProvider,
 					conversationHistory: history,
-					model: requireOpenRouterModel("openai/gpt-4o-mini"),
+					model: await requireOpenRouterModel("openai/gpt-4o-mini"),
 				});
 				if (ambDispatcher) {
 					void ambDispatcher.onTaskCompleted(
@@ -1925,7 +1925,7 @@ function triggerAsyncQuoteGeneration(params: {
 			const { createOpenRouterModel } = await import(
 				"@/lib/agency/openrouter-model"
 			);
-			const model = createOpenRouterModel("openai/gpt-4o-mini");
+			const model = await createOpenRouterModel("openai/gpt-4o-mini");
 			if (!model) {
 				console.warn("Skipping quote generation: OPENROUTER_API_KEY not set");
 				return;
