@@ -7,7 +7,7 @@ import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('ProjectsApi');
 
 function getHubApiBaseUrl(context?: LoaderFunctionArgs['context'] | ActionFunctionArgs['context']): string {
-  const env = context.cloudflare?.env as Record<string, string | undefined> | undefined;
+  const env = (context as any)?.cloudflare?.env as Record<string, string | undefined> | undefined;
   return (
     env?.MAIN_SITE_URL ||
     env?.APP_URL ||
@@ -91,13 +91,17 @@ function mapHubProjectToLegacyShape(project: HubProjectListItem, userId: string)
   };
 }
 
+function getEnv(context?: LoaderFunctionArgs['context'] | ActionFunctionArgs['context']) {
+  return ((context as any)?.cloudflare?.env || process.env) as Record<string, string | undefined>;
+}
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const url = new URL(request.url);
     const userId = url.searchParams.get('userId');
 
     // Get DATABASE_URL from context or env
-    const env = context.cloudflare?.env;
+    const env = getEnv(context);
     const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
@@ -111,11 +115,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
     const internalServiceKey =
       env?.INTERNAL_SERVICE_KEY ||
-      process.env.INTERNAL_SERVICE_KEY ||
       '';
     const hubBaseUrl =
       env?.MAIN_SITE_INTERNAL_URL ||
-      process.env.MAIN_SITE_INTERNAL_URL ||
       getHubApiBaseUrl(context);
 
     if (internalServiceKey && userId) {
@@ -143,13 +145,15 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
           return json({ projects, error: null });
         }
 
-        logger.warn('Hub project list request failed, falling back to legacy DB', {
+        logger.warn('Hub project list request failed', {
           status: response.status,
         });
+        return json({ projects: [], error: 'Project snapshots unavailable' }, { status: response.status });
       } catch (error) {
-        logger.warn('Hub project list request threw, falling back to legacy DB', {
+        logger.warn('Hub project list request threw', {
           error: error instanceof Error ? error.message : String(error),
         });
+        return json({ projects: [], error: 'Project snapshots unavailable' }, { status: 502 });
       }
     }
 
@@ -180,7 +184,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   try {
-    const env = context.cloudflare?.env;
+    const env = getEnv(context);
     const databaseUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
 
     if (!databaseUrl) {
