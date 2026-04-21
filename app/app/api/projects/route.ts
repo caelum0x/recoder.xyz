@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureAppUserFromAuthUser, requireAuth } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
-import { listProjectSnapshotsWithLegacyFallback } from '@/lib/project-snapshots';
+import { listProjectSnapshots } from '@/lib/project-snapshots';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,11 +51,8 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit') || '50';
     const numericLimit = Number.parseInt(limit, 10) || 50;
 
-    const directSnapshots = await listProjectSnapshotsWithLegacyFallback(
-      effectiveUserId,
-      numericLimit,
-      fallbackUserId ? [fallbackUserId] : [],
-    );
+    const snapshotOwnerId = fallbackUserId || effectiveUserId;
+    const directSnapshots = await listProjectSnapshots(snapshotOwnerId, numericLimit);
     if (directSnapshots.length > 0) {
       return NextResponse.json({
         success: true,

@@ -5,17 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth-config';
-import { neon } from '@neondatabase/serverless';
 import { logger } from '@/lib/logger';
-
-// Database connection
-function getSQL() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL not configured');
-  }
-  return neon(databaseUrl);
-}
+import { getProjectSnapshot, listProjectSnapshots } from '@/lib/project-snapshots';
 
 /**
  * GET /api/cli/projects
@@ -47,33 +38,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const sql = getSQL();
     const userId = session.user.id;
 
-    // Fetch user's chat sessions with file snapshots
-    const sessions = await sql`
-      SELECT
-        id,
-        url_id,
-        title,
-        description,
-        total_messages,
-        updated_at,
-        metadata
-      FROM chat_sessions
-      WHERE user_id = ${userId}
-      ORDER BY updated_at DESC
-      LIMIT 100
-    `;
-
-    // Transform data for CLI consumption
-    const projects = sessions.map((session: any) => ({
-      chatId: session.url_id,
-      title: session.title || session.description || 'Untitled Project',
-      description: session.description || '',
-      fileCount: session.metadata?.fileCount || 0,
-      lastUpdated: session.updated_at.toISOString(),
-      totalMessages: session.total_messages || 0,
+    const snapshots = await listProjectSnapshots(userId, 100);
+    const projects = snapshots.map((snapshot) => ({
+      chatId: snapshot.urlId || snapshot.projectId,
+      title: snapshot.title || snapshot.description || 'Untitled Project',
+      description: snapshot.description || '',
+      fileCount: Object.keys(snapshot.files).length,
+      lastUpdated: snapshot.updatedAt,
+      totalMessages: 0,
     }));
 
     return NextResponse.json({
@@ -131,43 +105,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sql = getSQL();
     const userId = session.user.id;
 
-    // Fetch specific session with file snapshot
-    const sessions = await sql`
-      SELECT
-        id,
-        url_id,
-        title,
-        description,
-        total_messages,
-        updated_at,
-        metadata
-      FROM chat_sessions
-      WHERE url_id = ${chatId}
-        AND user_id = ${userId}
-      LIMIT 1
-    `;
-
-    if (sessions.length === 0) {
+    const snapshot = await getProjectSnapshot(chatId, userId);
+    if (!snapshot) {
       return NextResponse.json(
         { error: 'Project not found or access denied' },
         { status: 404 }
       );
     }
 
-    const session_data = sessions[0] as { url_id: string; title?: string; description?: string; metadata?: { fileSnapshot?: Record<string, unknown> }; updated_at: Date; total_messages?: number };
-    const fileSnapshot = session_data.metadata?.fileSnapshot || {};
-
     const project = {
-      chatId: session_data.url_id,
-      title: session_data.title || session_data.description || 'Untitled Project',
-      description: session_data.description || '',
-      fileCount: Object.keys(fileSnapshot).length,
-      lastUpdated: session_data.updated_at.toISOString(),
-      totalMessages: session_data.total_messages || 0,
-      files: fileSnapshot,
+      chatId: snapshot.urlId || snapshot.projectId,
+      title: snapshot.title || snapshot.description || 'Untitled Project',
+      description: snapshot.description || '',
+      fileCount: Object.keys(snapshot.files).length,
+      lastUpdated: snapshot.updatedAt,
+      totalMessages: 0,
+      files: snapshot.files,
     };
 
     return NextResponse.json({
