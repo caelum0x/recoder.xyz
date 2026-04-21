@@ -1,6 +1,6 @@
 /**
  * OpenAI Model List API
- * Uses OPENAI_API_KEY to fetch available models.
+ * Uses the user's BYOK OpenAI key to fetch available models.
  */
 
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';

@@ -54,19 +54,12 @@ let _initializedEnvFingerprint = '';
  * Build a stable fingerprint of the env keys so we can detect when the
  * caller provides a different env (e.g. across deploys or hot-reloads).
  */
-function envFingerprint(env: Record<string, string | undefined>): string {
-  const primary = env.OPENROUTER_API_KEY || env.OPEN_ROUTER_API_KEY || '';
-  const extras: string[] = [];
-  for (let i = 2; i <= 5; i++) {
-    const k = env[`OPENROUTER_API_KEY_${i}`];
-    if (k) extras.push(k.slice(-4));
-  }
-  return `${primary.slice(-4)}:${extras.join(',')}`;
+function envFingerprint(_env: Record<string, string | undefined>): string {
+  return 'byok-only';
 }
 
 /**
- * Initialise the key pool from environment variables.
- * Called once per unique env fingerprint.
+ * Initialise the key pool from the caller-provided primary key only.
  */
 function initializeKeys(primaryKey: string, env?: Record<string, string | undefined>): void {
   const fp = env ? envFingerprint(env) : primaryKey.slice(-4);
@@ -78,14 +71,6 @@ function initializeKeys(primaryKey: string, env?: Record<string, string | undefi
 
   // Primary key (the one the caller already resolved — user BYOK or env)
   if (primaryKey) keys.push(primaryKey);
-
-  // Additional rotation keys from env (OPENROUTER_API_KEY_2 .. _5)
-  if (env) {
-    for (let i = 2; i <= 5; i++) {
-      const key = env[`OPENROUTER_API_KEY_${i}`];
-      if (key && !keys.includes(key)) keys.push(key);
-    }
-  }
 
   _keyStates = keys.map(key => ({ key }));
   _currentKeyIndex = 0;

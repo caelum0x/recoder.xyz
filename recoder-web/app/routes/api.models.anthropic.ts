@@ -1,6 +1,6 @@
 /**
  * Anthropic Model List API
- * Uses ANTHROPIC_API_KEY to fetch available models.
+ * Uses the user's BYOK Anthropic key to fetch available models.
  */
 
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';

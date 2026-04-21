@@ -655,6 +655,17 @@ IMPORTANT:
 
     const themePrompt = await loadThemePromptFromDocker(dockerUrl, requestBody.projectId, dockerHeaders);
 
+    const projectSessionCookie = requestBody.projectId ? getSessionCookie(request) : null;
+    const [projectOpenrouterKey, projectOpenaiKey, projectAnthropicKey, projectGoogleKey] =
+      requestBody.projectId
+        ? await Promise.all([
+            getUserApiKey(projectSessionCookie, 'openrouter'),
+            getUserApiKey(projectSessionCookie, 'openai'),
+            getUserApiKey(projectSessionCookie, 'anthropic'),
+            getUserApiKey(projectSessionCookie, 'google'),
+          ])
+        : [null, null, null, null];
+
     await resolvePromptMentionsBestEffort(messages, dockerUrl, dockerHeaders);
     await resolveFileMentionsBestEffort(messages, dockerUrl, requestBody.containerId || requestBody.projectId, dockerHeaders);
 
@@ -662,13 +673,23 @@ IMPORTANT:
     let ragContextPrompt = '';
     if (requestBody.projectId) {
       try {
-        const { isVectorModeAvailable, queryRag } = await import('~/lib/services/rag/rag-backend');
-        if (isVectorModeAvailable()) {
+        const { getVectorProvider, isVectorModeAvailable, queryRag } = await import('~/lib/services/rag/rag-backend');
+        const ragProvider = getVectorProvider();
+        const ragApiKey =
+          ragProvider === 'openai'
+            ? projectOpenaiKey
+            : ragProvider === 'google'
+              ? projectGoogleKey
+              : null;
+
+        if (isVectorModeAvailable(ragApiKey ?? undefined)) {
           const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
           const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
           if (queryText.length > 0) {
             const ragResults = await Promise.race([
-              queryRag(requestBody.projectId, queryText.slice(0, 800), 5),
+              queryRag(requestBody.projectId, queryText.slice(0, 800), 5, {
+                apiKey: ragApiKey ?? undefined,
+              }),
               new Promise<never>((_, reject) => setTimeout(() => reject(new Error('RAG timeout')), 2000)),
             ]);
             if (ragResults.length > 0) {
@@ -748,15 +769,12 @@ IMPORTANT:
     // Keep OpenCode as a fallback when Pi is unavailable.
     if (requestBody.projectId) {
       try {
-        const sessionCookie = getSessionCookie(request);
-        const [openrouter, openai, anthropic, google] = await Promise.all([
-          getUserApiKey(sessionCookie, 'openrouter'),
-          getUserApiKey(sessionCookie, 'openai'),
-          getUserApiKey(sessionCookie, 'anthropic'),
-          getUserApiKey(sessionCookie, 'google'),
-        ]);
-
-        const providerKeys = { openrouter, openai, anthropic, google };
+        const providerKeys = {
+          openrouter: projectOpenrouterKey,
+          openai: projectOpenaiKey,
+          anthropic: projectAnthropicKey,
+          google: projectGoogleKey,
+        };
         const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
         if (!hasKeys) {
           throw new Error('No BYOK provider keys available for Pi');

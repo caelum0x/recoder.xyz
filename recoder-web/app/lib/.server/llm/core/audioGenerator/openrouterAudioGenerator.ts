@@ -26,20 +26,14 @@ export class OpenRouterAudioGenerator {
   private baseUrl: string;
 
   constructor(apiKey?: string, baseUrl?: string) {
-    this.apiKey =
-      apiKey ||
-      process.env['OPENROUTER_API_KEY'] ||
-      process.env['OPENAI_API_KEY'] ||
-      '';
+    this.apiKey = apiKey || '';
     this.baseUrl =
       baseUrl ||
       process.env['OPENROUTER_AUDIO_BASE_URL'] ||
       'https://openrouter.ai/api/v1';
 
     if (!this.apiKey) {
-      throw new Error(
-        'API key is required. Set OPENROUTER_API_KEY or OPENAI_API_KEY environment variable.',
-      );
+      throw new Error('BYOK API key is required for OpenRouter audio operations.');
     }
   }
 

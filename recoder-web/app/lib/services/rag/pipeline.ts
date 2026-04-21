@@ -1,7 +1,7 @@
 import type { ChunkStore, ChunkerFunction, Document, DocumentLoader, EmbedderFunction, EmbeddingCompleteCallback, EmbeddingProfileId, IngestError, IngestProgress, IngestResult } from "./types";
 import { EMBEDDING_PROFILES } from "./types";
 import { createDefaultChunker } from "./line-chunker";
-import { createEmbedderFromProfile, getApiKeyForProfile } from "./embedder";
+import { createEmbedderFromProfile } from "./embedder";
 import { ConfigurationError, OperationError, RagError } from "./errors";
 import { createBatches, retryOperation } from "./utils";
 
@@ -23,6 +23,7 @@ export interface IngestPipelineOptions<
   metadataVersion?: (metadata: TDocMetadata) => string;
   chunker?: ChunkerFunction;
   embeddingProfileId: EmbeddingProfileId;
+  apiKey?: string;
   embeddingComplete?: EmbeddingCompleteCallback;
 
   // Optional settings
@@ -175,10 +176,10 @@ export function createPipeline<
     );
   }
 
-  const apiKey = getApiKeyForProfile(profile);
+  const apiKey = options.apiKey;
   if (!apiKey) {
     throw new ConfigurationError(
-      `No API key found for embedding profile ${options.embeddingProfileId}`
+      `No BYOK API key provided for embedding profile ${options.embeddingProfileId}`
     );
   }
 

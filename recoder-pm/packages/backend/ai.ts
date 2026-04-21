@@ -130,12 +130,29 @@ export const getOrganizationTextModel = async (
   return client.chat(aiModel ?? getOpenAiTextModelName());
 };
 
-export const getTranscriptionModel = (): any => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not set");
+export const getOrganizationTranscriptionModel = async (
+  organizationId?: string | null
+): Promise<any> => {
+  if (!organizationId) {
+    throw new Error("Organization BYOK OpenAI API key is required for transcription");
   }
 
-  return openai.transcription(
+  const organization = await database.organization.findUnique({
+    where: { id: organizationId },
+    select: {
+      aiProviderKeys: {
+        where: { isActive: true, provider: "openai" },
+        select: { encryptedKey: true },
+        take: 1,
+      },
+    },
+  });
+
+  const keyRecord = organization?.aiProviderKeys.at(0);
+  const apiKey = keyRecord ? decryptApiKey(keyRecord.encryptedKey) : null;
+
+  const client = createOpenAiClient(ensureApiKey(apiKey, "openai"));
+  return client.transcription(
     process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1"
   );
 };

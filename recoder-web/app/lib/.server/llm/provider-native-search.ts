@@ -251,22 +251,12 @@ export async function providerNativeSearch(
     return { success: false, results: [], provider, error: 'free-fallback does not support native search' };
   }
 
-  // Resolve API key: user BYOK (via session cookie) → environment variable
+  // Resolve API key: user BYOK only
   let apiKey: string | null = null;
 
   if (request) {
     const sessionCookie = getSessionCookie(request);
     apiKey = await getUserApiKey(sessionCookie, provider);
-  }
-
-  if (!apiKey) {
-    // Fall back to environment variables
-    const envKeys: Record<string, string | undefined> = {
-      anthropic: process.env.ANTHROPIC_API_KEY,
-      openai: process.env.OPENAI_API_KEY,
-      google: process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-    };
-    apiKey = envKeys[provider] || null;
   }
 
   if (!apiKey) {
