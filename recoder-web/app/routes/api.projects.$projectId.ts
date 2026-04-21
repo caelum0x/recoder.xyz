@@ -7,7 +7,7 @@ import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('ProjectDetail');
 
 function getHubApiBaseUrl(context?: LoaderFunctionArgs['context'] | ActionFunctionArgs['context']): string {
-  const env = context.cloudflare?.env as Record<string, string | undefined> | undefined;
+  const env = (context as any)?.cloudflare?.env as Record<string, string | undefined> | undefined;
   return (
     env?.MAIN_SITE_URL ||
     env?.APP_URL ||
@@ -85,6 +85,10 @@ function mapHubProjectToLegacyProject(projectId: string, userId: string | null, 
     createdAt: hubProject.createdAt ? new Date(hubProject.createdAt) : new Date(0),
     updatedAt: hubProject.updatedAt ? new Date(hubProject.updatedAt) : new Date(),
   };
+}
+
+function getEnv(context?: LoaderFunctionArgs['context'] | ActionFunctionArgs['context']) {
+  return ((context as any)?.cloudflare?.env || process.env) as Record<string, string | undefined>;
 }
 
 function inferStarterIdFromMessages(messages: Array<{ role: string; content: string }>): string {
@@ -186,14 +190,12 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
       return json({ error: 'Project ID required' }, { status: 400 });
     }
 
-    const env = context.cloudflare?.env;
+    const env = getEnv(context);
     const internalServiceKey =
       env?.INTERNAL_SERVICE_KEY ||
-      process.env.INTERNAL_SERVICE_KEY ||
       '';
     const hubBaseUrl =
       env?.MAIN_SITE_INTERNAL_URL ||
-      process.env.MAIN_SITE_INTERNAL_URL ||
       getHubApiBaseUrl(context);
 
     if (internalServiceKey && userId) {
@@ -223,16 +225,18 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
             });
           }
         } else {
-          logger.warn('Hub project detail request failed, falling back to legacy DB', {
+          logger.warn('Hub project detail request failed', {
             projectId,
             status: response.status,
           });
+          return json({ error: 'Project snapshots unavailable' }, { status: response.status });
         }
       } catch (error) {
-        logger.warn('Hub project detail request threw, falling back to legacy DB', {
+        logger.warn('Hub project detail request threw', {
           projectId,
           error: error instanceof Error ? error.message : String(error),
         });
+        return json({ error: 'Project snapshots unavailable' }, { status: 502 });
       }
     }
 

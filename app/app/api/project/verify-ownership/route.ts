@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
 import { logger } from '@/lib/logger';
-import { userOwnsProjectSnapshotWithLegacyFallback } from '@/lib/project-snapshots';
+import { userOwnsProjectSnapshot } from '@/lib/project-snapshots';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'userId and projectId are required' }, { status: 400 });
     }
 
-    const isOwner = await userOwnsProjectSnapshotWithLegacyFallback(userId, projectId);
+    const isOwner = await userOwnsProjectSnapshot(userId, projectId);
     return NextResponse.json({ isOwner });
   } catch (error) {
     logger.error('Project ownership verification error', { error: error instanceof Error ? error.message : String(error) });

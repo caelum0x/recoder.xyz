@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
-import { getProjectSnapshotWithLegacyFallback, patchProjectSnapshotFiles } from '@/lib/project-snapshots';
+import { getProjectSnapshot, patchProjectSnapshotFiles } from '@/lib/project-snapshots';
 
 async function resolveEffectiveUserId(request: NextRequest): Promise<{ effectiveUserId: string | null; fallbackUserId: string | null }> {
   const hasInternalHeaders = Boolean(
@@ -57,11 +57,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'projectId is required' }, { status: 400 });
     }
 
-    const directSnapshot = await getProjectSnapshotWithLegacyFallback(
-      projectId,
-      effectiveUserId,
-      fallbackUserId ? [fallbackUserId] : [],
-    );
+    const snapshotOwnerId = fallbackUserId || effectiveUserId;
+    const directSnapshot = await getProjectSnapshot(projectId, snapshotOwnerId);
     if (directSnapshot) {
       return NextResponse.json({
         success: true,
