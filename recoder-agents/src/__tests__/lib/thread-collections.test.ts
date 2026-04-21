@@ -76,7 +76,7 @@ describe('thread collection APIs', () => {
     expect(backendApiGetMock).toHaveBeenNthCalledWith(
       1,
       '/threads/missing-thread',
-      { showErrors: true },
+      { showErrors: false },
     );
     expect(backendApiGetMock).toHaveBeenNthCalledWith(
       2,
@@ -97,5 +97,9 @@ describe('thread collection APIs', () => {
     const agentRuns = await getAgentRuns('missing-thread');
 
     expect(agentRuns).toEqual([]);
+    expect(backendApiGetMock).toHaveBeenCalledWith(
+      '/thread/missing-thread/agent-runs',
+      { showErrors: false, cache: 'no-store' },
+    );
   });
 });

@@ -16,15 +16,19 @@ async function getActiveRuns(): Promise<ActiveRun[]> {
   try {
     const response = await backendApi.get<ActiveRun[]>(
       '/agents/active-runs',
-      { showErrors: true },
+      { showErrors: false },
     );
     if (response.error) {
-      throw new Error(`Error fetching active runs: ${response.error.message}`);
+      return [];
     }
     return response.data!;
   } catch (error) {
-    handleApiError(error, { operation: 'list active runs', resource: 'active runs' });
-    throw error;
+    handleApiError(error, {
+      operation: 'list active runs',
+      resource: 'active runs',
+      silent: true,
+    });
+    return [];
   }
 }
 

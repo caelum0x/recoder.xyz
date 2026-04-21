@@ -433,7 +433,7 @@ export const getThreadsPaginated = async (projectId?: string, page: number = 1, 
 export const getThread = async (threadId: string): Promise<Thread> => {
   try {
     const response = await backendApi.get<Thread>(`/threads/${threadId}`, {
-      showErrors: true,
+      showErrors: false,
     });
 
     if (response.error) {
