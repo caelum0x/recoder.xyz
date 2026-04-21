@@ -10,7 +10,12 @@ export function AdminHeader() {
 	return (
 		<header className="h-[48px] shrink-0 border-b border-border flex items-center justify-between px-4 bg-background">
 			<div className="flex items-center gap-3">
-				<Link href="/dashboard" aria-label="Go to dashboard" className="group">
+				<Link
+					href="/dashboard"
+					prefetch={false}
+					aria-label="Go to dashboard"
+					className="group"
+				>
 					<RecoderLogo size={24} />
 				</Link>
 				<span className="text-text-muted text-sm font-medium">Agency</span>

@@ -41,8 +41,8 @@ PRISMA_DST=".next/standalone/apps/agency/prisma/auth-client"
 PRISMA_REL="../../../node_modules/.pnpm/@recoder+auth@file+..+packages+auth_typescript@5.7.3/node_modules/@recoder/auth/prisma/auth-client"
 if [ -d "$PRISMA_SRC" ]; then
   mkdir -p "$(dirname "$PRISMA_DST")"
-  # Remove any existing (possibly broken) symlink, then create with correct relative path
-  rm -f "$PRISMA_DST"
+  # Remove any existing target (symlink or copied directory), then recreate.
+  rm -rf "$PRISMA_DST"
   ln -s "$PRISMA_REL" "$PRISMA_DST"
 fi
 
