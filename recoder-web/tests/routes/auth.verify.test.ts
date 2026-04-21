@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { loader } from './auth.verify';
+import { loader } from '../../app/routes/auth.verify';
 
 const { mockFetch } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
