@@ -392,7 +392,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
         const projectId = params.projectId as string;
         const workspacePath = params.workspacePath as string | undefined;
         const query = params.query as string | undefined;
-        const openaiApiKey = (params.openaiApiKey as string) || process.env.OPENAI_API_KEY;
+        const openaiApiKey = params.openaiApiKey as string | undefined;
+        if (!openaiApiKey) {
+          return json(
+            { success: false, error: 'BYOK OpenAI API key required for code search' },
+            { status: 400 }
+          );
+        }
         const maxResults = params.maxResults as number | undefined;
         const directoryPrefix = params.directoryPrefix as string | undefined;
         const result = await codeSearch({
