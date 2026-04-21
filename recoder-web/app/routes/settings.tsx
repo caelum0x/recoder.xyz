@@ -1,145 +1,24 @@
-/**
- * Settings Layout Page for Recoder Web
- * Main settings navigation and layout
- */
+import { redirect, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 
-import { Outlet, Link, useLocation } from '@remix-run/react';
-import { useState } from 'react';
-import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
-import { useLoaderData } from '@remix-run/react';
+function getMainSiteUrl(request: Request, env?: Record<string, string>): string {
+  if (env?.MAIN_SITE_URL) {
+    return env.MAIN_SITE_URL;
+  }
 
-function parseBoolean(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+  const url = new URL(request.url);
+
+  if (url.hostname === 'web.recoder.xyz' || url.hostname === 'recoder.xyz') {
+    return 'https://recoder.xyz';
+  }
+
+  return 'http://localhost:3000';
 }
 
-export function loader({ context }: LoaderFunctionArgs) {
+export function loader({ request, context }: LoaderFunctionArgs) {
   const env = (context as unknown as { cloudflare?: { env?: Record<string, string> } } | undefined)?.cloudflare?.env;
-  const nodeEnv = env?.NODE_ENV || process.env.NODE_ENV || 'development';
-  const billingActionsEnabled = parseBoolean(env?.BILLING_ACTIONS_ENABLED || process.env.BILLING_ACTIONS_ENABLED);
-  const billingVisible = nodeEnv !== 'production' || billingActionsEnabled;
-
-  return json({
-    billingVisible,
-  });
+  return redirect(`${getMainSiteUrl(request, env)}/settings/account`);
 }
 
 export default function SettingsLayout() {
-  const { billingVisible } = useLoaderData<typeof loader>();
-  const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-  const settingsSections = [
-    {
-      title: 'Project',
-      items: [
-        { name: 'Project Context', path: '/settings/context', icon: '📝' },
-        { name: 'Custom Tools', path: '/settings/tools', icon: '🛠️' },
-      ],
-    },
-    {
-      title: 'Integrations',
-      items: [
-        { name: 'MCP Servers', path: '/settings/mcp', icon: '🔌' },
-        { name: 'GitHub', path: '/settings/github', icon: '🐙' },
-      ],
-    },
-    {
-      title: 'Preferences',
-      items: [
-        { name: 'Editor', path: '/settings/editor', icon: '⚙️' },
-        { name: 'AI Settings', path: '/settings/ai', icon: '🤖' },
-        { name: 'Terminal', path: '/settings/terminal', icon: '💻' },
-      ],
-    },
-    {
-      title: 'Interface',
-      items: [
-        { name: 'Keyboard Shortcuts', path: '/settings/shortcuts', icon: '⌨️' },
-        { name: 'Appearance', path: '/settings/appearance', icon: '🎨' },
-      ],
-    },
-    {
-      title: 'Account',
-      items: [
-        { name: 'Profile', path: '/settings/profile', icon: '👤' },
-        ...(billingVisible ? [{ name: 'Billing', path: '/settings/billing', icon: '💳' }] : []),
-        { name: 'Security', path: '/settings/security', icon: '🔒' },
-      ],
-    },
-  ];
-
-  return (
-    <div className="h-screen flex bg-recoder-elements-background-depth-1 text-recoder-elements-textPrimary">
-      {/* Settings Sidebar */}
-      <aside
-        className={`${
-          isSidebarOpen ? 'w-64' : 'w-0'
-        } transition-all duration-200 border-r border-recoder-elements-borderColor bg-recoder-elements-background-depth-2 overflow-hidden`}
-      >
-        <div className="p-4 border-b border-recoder-elements-borderColor">
-          <h1 className="text-xl font-bold">Settings</h1>
-          <p className="text-sm text-recoder-elements-textSecondary mt-1">
-            Configure your IDE preferences
-          </p>
-        </div>
-
-        <nav className="p-4 space-y-6">
-          {settingsSections.map((section) => (
-            <div key={section.title}>
-              <h2 className="text-xs font-semibold text-recoder-elements-textSecondary uppercase tracking-wider mb-2">
-                {section.title}
-              </h2>
-              <div className="space-y-1">
-                {section.items.map((item) => {
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-recoder-elements-item-backgroundActive text-recoder-elements-item-contentActive'
-                          : 'hover:bg-recoder-elements-item-backgroundHover text-recoder-elements-textPrimary'
-                      }`}
-                    >
-                      <span className="text-lg">{item.icon}</span>
-                      <span className="text-sm font-medium">{item.name}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <div className="absolute bottom-4 left-4">
-          <Link
-            to="/"
-            className="flex items-center space-x-2 text-sm text-recoder-elements-textSecondary hover:text-recoder-elements-textPrimary transition-colors"
-          >
-            <span>←</span>
-            <span>Back to IDE</span>
-          </Link>
-        </div>
-      </aside>
-
-      {/* Settings Content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-8">
-          <Outlet />
-        </div>
-      </main>
-
-      {/* Toggle Sidebar Button */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="fixed bottom-4 left-4 p-2 bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded-lg hover:bg-recoder-elements-item-backgroundHover transition-colors z-10"
-        title={isSidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-      >
-        {isSidebarOpen ? '◀' : '▶'}
-      </button>
-    </div>
-  );
+  return null;
 }
