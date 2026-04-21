@@ -64,7 +64,7 @@ import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
-import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, agentRegistryRouter, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService, disposeTaskLifecycleService } from './a2a/index.js';
+import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService, disposeTaskLifecycleService } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
 import { memoryRouter } from './a2a/memory.routes.js';
 import { codeSearchRouter } from './a2a/code-search.routes.js';
@@ -15381,7 +15381,6 @@ app.use('/api/a2a', a2aRouter);
 app.use('/api/a2a/tasks', taskLifecycleRouter);
 app.use('/api/a2a/channels', collaborationRouter);
 app.use('/api/a2a', heartbeatRouter);
-app.use('/api/a2a/agents', agentRegistryRouter);
 app.use('/api/a2a/approvals', approvalRouter);
 app.use('/api/a2a/openclaw', openclawAdapterRouter);
 
