@@ -370,7 +370,7 @@ export const getAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
   try {
     const response = await backendApi.get<unknown>(
       `/thread/${threadId}/agent-runs`,
-      { showErrors: true, cache: 'no-store' }
+      { showErrors: false, cache: 'no-store' }
     );
 
     if (response.error) {
