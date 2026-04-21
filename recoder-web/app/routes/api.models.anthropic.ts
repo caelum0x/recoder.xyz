@@ -5,6 +5,7 @@
 
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
+import { getAPIKey } from '~/lib/.server/llm/api-key';
 
 const logger = createScopedLogger('ModelsAnthropic');
 
@@ -12,12 +13,11 @@ type AnthropicModelsResponse = {
   data?: { id?: string }[];
 };
 
-export async function loader({ context }: LoaderFunctionArgs) {
-  const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
-  const apiKey = env.ANTHROPIC_API_KEY;
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  const apiKey = await getAPIKey((context as any)?.cloudflare?.env, request, 'anthropic');
 
   if (!apiKey) {
-    return json({ models: [], error: 'ANTHROPIC_API_KEY is not set' }, { status: 400 });
+    return json({ models: [], error: 'No Anthropic BYOK key configured' }, { status: 400 });
   }
 
   try {

@@ -5,6 +5,7 @@
 
 import { json, type LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { createScopedLogger } from '~/utils/logger';
+import { getAPIKey } from '~/lib/.server/llm/api-key';
 
 const logger = createScopedLogger('ModelsOpenAI');
 
@@ -12,12 +13,11 @@ type OpenAiModelsResponse = {
   data?: { id?: string }[];
 };
 
-export async function loader({ context }: LoaderFunctionArgs) {
-  const env = (context as any)?.cloudflare?.env || process.env as unknown as Env;
-  const apiKey = env.OPENAI_API_KEY;
+export async function loader({ context, request }: LoaderFunctionArgs) {
+  const apiKey = await getAPIKey((context as any)?.cloudflare?.env, request, 'openai');
 
   if (!apiKey) {
-    return json({ models: [], error: 'OPENAI_API_KEY is not set' }, { status: 400 });
+    return json({ models: [], error: 'No OpenAI BYOK key configured' }, { status: 400 });
   }
 
   try {
