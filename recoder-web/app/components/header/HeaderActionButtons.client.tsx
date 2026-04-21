@@ -4,7 +4,6 @@ import { chatStore } from '~/lib/stores/chat';
 import { workbenchStore, type PublishState, type CustomDomainInfo } from '~/lib/stores/workbench';
 import { classNames } from '~/utils/classNames';
 import { GitHubImporter } from '~/components/github/GitHubImporter';
-import { DeployButton } from '~/components/deployment/DeployButton';
 import { SaveToProject } from '~/components/chat/SaveToProject';
 import { clearGitHubSyncCache } from '~/lib/runtime/github-auto-sync';
 import { dockerPost } from '~/lib/services/docker-api';
@@ -174,16 +173,6 @@ Please analyze the project structure, create all files, install dependencies, an
           >
             <div className="i-ph:figma-logo text-sm" />
           </Button>
-        )}
-
-        {/* Deploy Button - Only show when workbench is visible */}
-        {showWorkbench && (
-          <DeployButton />
-        )}
-
-        {/* Go Live Button - Only show when workbench is visible */}
-        {showWorkbench && (
-          <GoLiveButton />
         )}
       </div>
 
