@@ -124,7 +124,6 @@ run_step "4/5 Sensitive key presence audit (no values)" \
     grep -Eq '^=== recoder-app ===' \"\$audit_file\"
     grep -Eq '^=== recoder-docker-backend ===' \"\$audit_file\"
     grep -Eq '^=== recoder-web ===' \"\$audit_file\"
-    grep -Eq '^=== openclaw-gateway ===' \"\$audit_file\"
     grep -Eq '^=== recoder-redis ===' \"\$audit_file\"
     $(typeset -f check_key_group)
     check_key_group \"\$audit_file\" 'database' '(DATABASE_URL|AUTH_DATABASE_URL)=SET'
@@ -132,7 +131,7 @@ run_step "4/5 Sensitive key presence audit (no values)" \
     check_key_group \"\$audit_file\" 'auth/session' '(BETTER_AUTH_SECRET|NEXTAUTH_SECRET|SESSION_SYNC_SECRET)=SET'
     check_key_group \"\$audit_file\" 'internal-service' 'INTERNAL_SERVICE_KEY=SET'
     check_key_group \"\$audit_file\" 'ai-provider' '(OPENAI_API_KEY|ANTHROPIC_API_KEY|OPENROUTER_API_KEY|GOOGLE_API_KEY|GROQ_API_KEY)=SET'
-    check_key_group \"\$audit_file\" 'a2a/gateway' '(RECODER_A2A_SHARED_SECRET|RECODER_A2A_WORKER_TOKEN|OPENCLAW_GATEWAY_TOKEN)=SET'
+    check_key_group \"\$audit_file\" 'a2a/gateway' '(RECODER_A2A_SHARED_SECRET|RECODER_A2A_WORKER_TOKEN)=SET'
   "
 
 if [[ "${RUN_ALERT_TEST_FIRE}" == "true" ]]; then

@@ -13,7 +13,6 @@ AGENTS_URL="${AGENTS_URL:-https://agents.recoder.xyz}"
 WEB_URL="${WEB_URL:-https://web.recoder.xyz}"
 PM_URL="${PM_URL:-https://pm.recoder.xyz}"
 AGENCY_URL="${AGENCY_URL:-https://agency.recoder.xyz}"
-OPENCLAW_URL="${OPENCLAW_URL:-https://openclaw.recoder.xyz}"
 API_URL="${API_URL:-https://api.recoder.xyz}"
 DOCKER_URL="${DOCKER_URL:-https://docker.recoder.xyz}"
 
@@ -183,7 +182,6 @@ section "Service Liveness (frontends)"
 check "recoder.xyz root"            "$RECODER_URL"    200
 check "agents.recoder.xyz root"     "$AGENTS_URL"     200
 check "web.recoder.xyz root"        "$WEB_URL"        302
-check "openclaw.recoder.xyz root"   "$OPENCLAW_URL"   200
 
 # PM and Agency typically redirect (307 to login)
 check "pm.recoder.xyz root"         "$PM_URL"         307

@@ -1668,7 +1668,7 @@ const PUBLIC_DOCKER_BACKEND_WS_URL = PUBLIC_DOCKER_BACKEND_URL
   .replace('http://', 'ws://');
 
 const PUBLIC_OPENCLAW_GATEWAY_URL =
-  process.env.OPENCLAW_GATEWAY_URL || 'https://openclaw.recoder.xyz';
+  process.env.OPENCLAW_GATEWAY_URL || '';
 
 app.use(cors({
   origin: (origin, callback) => {
