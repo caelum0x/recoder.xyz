@@ -9,6 +9,25 @@ from core.services.llm import make_llm_api_call
 from .logger import logger
 
 
+def _fallback_thread_title(prompt: str) -> str:
+    cleaned = prompt.replace("\n", " ").strip()
+    if not cleaned:
+        return "New Chat"
+
+    lowered = cleaned.lower()
+    if "[attached:" in lowered:
+        cleaned = cleaned.split("[Attached:", 1)[0].strip()
+    if not cleaned:
+        return "New Chat"
+
+    words = [word for word in cleaned.replace('"', "").replace("'", "").split() if word]
+    if not words:
+        return "New Chat"
+
+    title = " ".join(words[:6]).strip(" ,.-")
+    return title.title()[:80] or "New Chat"
+
+
 async def generate_and_update_thread_name(thread_id: str, prompt: str):
     """
     Generates a thread name using the same LLM approach as project name generation.
@@ -22,6 +41,8 @@ async def generate_and_update_thread_name(thread_id: str, prompt: str):
     """
     logger.info(f"Starting background task to generate name for thread: {thread_id}")
     
+    generated_name = None
+
     try:
         # Use same model and approach as project name generation
         # Use the platform default model (free tier) instead of hardcoded paid model
@@ -62,8 +83,6 @@ Respond with JSON: {"title": "Your Title"}"""
             response_format={"type": "json_object"},
             stream=False
         )
-
-        generated_name = None
 
         if response and response.get('choices') and response['choices'][0].get('message'):
             raw_content = response['choices'][0]['message'].get('content', '').strip()
@@ -117,9 +136,41 @@ Respond with JSON: {"title": "Your Title"}"""
             else:
                 logger.error(f"Failed to update thread {thread_id} in database.")
         else:
-            logger.warning(f"No generated name, skipping database update for thread {thread_id}.")
+            generated_name = _fallback_thread_title(prompt)
+            logger.warning(f"No generated name, using fallback title '{generated_name}' for thread {thread_id}.")
+
+        logger.info(f"Storing thread {thread_id} with name: '{generated_name}'")
+
+        updated_rows = await execute_mutate(
+            """
+            UPDATE threads
+            SET name = :name
+            WHERE thread_id::text = :thread_id
+            RETURNING thread_id
+            """,
+            {"name": generated_name, "thread_id": thread_id},
+        )
+        if updated_rows:
+            logger.debug(f"Successfully updated thread {thread_id} with name")
+        else:
+            logger.error(f"Failed to update thread {thread_id} in database.")
 
     except Exception as e:
-        logger.error(f"Error in background naming task for thread {thread_id}: {str(e)}\n{traceback.format_exc()}")
+        generated_name = _fallback_thread_title(prompt)
+        logger.warning(f"Thread naming fallback for {thread_id}: {str(e)}")
+        try:
+            updated_rows = await execute_mutate(
+                """
+                UPDATE threads
+                SET name = :name
+                WHERE thread_id::text = :thread_id
+                RETURNING thread_id
+                """,
+                {"name": generated_name, "thread_id": thread_id},
+            )
+            if updated_rows:
+                logger.debug(f"Successfully applied fallback thread title for {thread_id}")
+        except Exception:
+            logger.error(f"Error in background naming task for thread {thread_id}: {str(e)}\n{traceback.format_exc()}")
     finally:
         logger.debug(f"Finished background naming task for thread: {thread_id}")

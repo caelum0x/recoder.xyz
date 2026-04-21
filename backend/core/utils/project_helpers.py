@@ -19,6 +19,25 @@ PROJECT_CATEGORIES = [
 ]
 
 
+def _fallback_project_title(prompt: str) -> str:
+    cleaned = prompt.replace("\n", " ").strip()
+    if not cleaned:
+        return "New Project"
+
+    lowered = cleaned.lower()
+    if "[attached:" in lowered:
+        cleaned = cleaned.split("[Attached:", 1)[0].strip()
+    if not cleaned:
+        return "New Project"
+
+    words = [word for word in cleaned.replace('"', "").replace("'", "").split() if word]
+    if not words:
+        return "New Project"
+
+    title = " ".join(words[:4]).strip(" ,.-")
+    return title.title()[:60] or "New Project"
+
+
 async def generate_and_update_project_name(project_id: str, prompt: str):
     """
     Generates a project name and icon using an LLM and updates the database.
@@ -31,6 +50,9 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
     """
     logger.info(f"Starting background task to generate name and icon for project: {project_id}")
     
+    generated_name = None
+    selected_icon = "message-circle"
+
     try:
         from core.ai_models import FREE_MODEL_ID
         model_name = FREE_MODEL_ID
@@ -62,9 +84,6 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
             stream=False
         )
 
-        generated_name = None
-        selected_icon = None
-        
         if response and response.get('choices') and response['choices'][0].get('message'):
             raw_content = response['choices'][0]['message'].get('content', '').strip()
             try:
@@ -91,7 +110,6 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
                 cleaned_content = raw_content.strip('\'" \n\t{}')
                 if cleaned_content:
                     generated_name = cleaned_content[:50]
-                selected_icon = "message-circle"
         else:
             logger.warning(f"Failed to get valid response from LLM for project {project_id} naming. Response: {response}")
 
@@ -132,9 +150,56 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
             else:
                 logger.error(f"Failed to update project {project_id} in database.")
         else:
-            logger.warning(f"No generated name, skipping database update for project {project_id}.")
+            generated_name = _fallback_project_title(prompt)
+            logger.warning(f"No generated name, using fallback title '{generated_name}' for project {project_id}.")
+
+        update_data = {"name": generated_name, "icon_name": selected_icon}
+        logger.info(f"Storing project {project_id} with title: '{generated_name}', icon: '{selected_icon}'")
+
+        updated_rows = await execute_mutate(
+            """
+            UPDATE projects
+            SET
+                name = :name,
+                icon_name = COALESCE(:icon_name, icon_name)
+            WHERE project_id::text = :project_id
+            RETURNING project_id
+            """,
+            {
+                "name": update_data["name"],
+                "icon_name": update_data.get("icon_name"),
+                "project_id": project_id,
+            },
+        )
+        if updated_rows:
+            logger.debug(f"Successfully updated project {project_id} with title and icon")
+        else:
+            logger.error(f"Failed to update project {project_id} in database.")
 
     except Exception as e:
-        logger.error(f"Error in background naming task for project {project_id}: {str(e)}\n{traceback.format_exc()}")
+        generated_name = _fallback_project_title(prompt)
+        logger.warning(
+            f"Project naming fallback for {project_id}: {str(e)}"
+        )
+        try:
+            updated_rows = await execute_mutate(
+                """
+                UPDATE projects
+                SET
+                    name = :name,
+                    icon_name = COALESCE(:icon_name, icon_name)
+                WHERE project_id::text = :project_id
+                RETURNING project_id
+                """,
+                {
+                    "name": generated_name,
+                    "icon_name": selected_icon,
+                    "project_id": project_id,
+                },
+            )
+            if updated_rows:
+                logger.debug(f"Successfully applied fallback title/icon for project {project_id}")
+        except Exception:
+            logger.error(f"Error in background naming task for project {project_id}: {str(e)}\n{traceback.format_exc()}")
     finally:
         logger.debug(f"Finished background naming and icon selection task for project: {project_id}")
