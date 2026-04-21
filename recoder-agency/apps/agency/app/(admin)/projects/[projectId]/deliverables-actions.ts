@@ -303,9 +303,12 @@ export async function generateDeliverableContentWithAI(
 		throw new Error("Deliverable not found");
 	}
 
-	const apiKey = process.env.OPENROUTER_API_KEY;
+	const { getUserOpenRouterApiKeyForAgency } = await import(
+		"@/lib/agency/openrouter-model"
+	);
+	const apiKey = await getUserOpenRouterApiKeyForAgency();
 	if (!apiKey) {
-		throw new Error("No AI API key configured");
+		throw new Error("No BYOK OpenRouter API key configured");
 	}
 
 	const typePrompts: Record<string, string> = {
