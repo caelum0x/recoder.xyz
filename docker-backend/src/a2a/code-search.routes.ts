@@ -41,7 +41,7 @@ router.post('/search', async (req: AuthedRequest, res: Response) => {
   }
 
   try {
-    const results = await searchCode({ projectId, query, limit });
+    const results = await searchCode({ projectId, query, limit, userId: req.userId });
     ok(res, results);
   } catch (e) {
     logger.warn({ e }, '[code-search.routes] search failed');
@@ -63,7 +63,7 @@ router.post('/index', async (req: AuthedRequest, res: Response) => {
   }
 
   try {
-    await indexFile({ projectId, filePath, content, debounce });
+    await indexFile({ projectId, filePath, content, debounce, userId: req.userId });
     ok(res, { queued: debounce, filePath });
   } catch (e) {
     logger.warn({ e }, '[code-search.routes] index failed');
