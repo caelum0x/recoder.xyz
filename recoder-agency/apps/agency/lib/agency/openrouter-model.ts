@@ -15,7 +15,7 @@ function getMainAppUrl(): string {
 	);
 }
 
-async function getUserOpenRouterApiKey(): Promise<string | null> {
+export async function getUserOpenRouterApiKeyForAgency(): Promise<string | null> {
 	const cookieStore = await cookies();
 	const cookieHeader = cookieStore
 		.getAll()
@@ -64,7 +64,7 @@ async function getUserOpenRouterApiKey(): Promise<string | null> {
  * @returns AI SDK model instance, or null if the user has no BYOK OpenRouter key
  */
 export async function createOpenRouterModel(modelId: string = DEFAULT_MODEL_ID) {
-	const apiKey = await getUserOpenRouterApiKey();
+	const apiKey = await getUserOpenRouterApiKeyForAgency();
 	if (!apiKey) {
 		return null;
 	}
