@@ -791,12 +791,14 @@ export default async function TemplatesPage() {
 							<div className="mt-4 flex gap-2">
 								<Link
 									href={`/workspaces/${template.id}`}
+									prefetch={false}
 									className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs text-text hover:bg-bg-hover transition-colors"
 								>
 									Edit
 								</Link>
 								<Link
 									href={`/projects?new=1&template=${template.id}`}
+									prefetch={false}
 									className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs text-white hover:bg-primary/90 transition-colors"
 								>
 									Use Template

@@ -219,6 +219,7 @@ export default async function ProjectsPage({
 				</div>
 				<Link
 					href="/projects?new=1"
+					prefetch={false}
 					className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
 				>
 					<PlusIcon className="size-4" />
