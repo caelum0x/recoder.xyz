@@ -26,7 +26,6 @@ cat > "${OUTPUT_FILE}" <<EOF
   "connectors": [
     { "id": "a2a_interop", "tier": "tier1", "status": "${A2A_STATUS}" },
     { "id": "redis_streams", "tier": "tier1", "status": "${A2A_STATUS}" },
-    { "id": "openclaw_gateway", "tier": "tier2", "status": "DEPLOYED" },
     { "id": "recoder_agents", "tier": "tier2", "status": "DEPLOYED" }
   ],
   "support_gate_inputs": {
@@ -34,7 +33,7 @@ cat > "${OUTPUT_FILE}" <<EOF
     "no_skip_closeout_precondition": true,
     "a2a_smoke_test": "${A2A_STATUS}",
     "redis_persistence": "${A2A_STATUS}",
-    "services_deployed": ["docker-backend", "recoder-web", "recoder-agents", "openclaw-gateway"]
+    "services_deployed": ["docker-backend", "recoder-web", "recoder-agents"]
   }
 }
 EOF

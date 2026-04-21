@@ -18,13 +18,12 @@
 #                  -> docker-backend   (3100)  api.recoder.xyz (container orchestration)
 #                  -> recoder-web      (5173)  web.recoder.xyz (Remix IDE)
 #                  -> recoder-agents   (3001)  app.recoder.xyz (Next.js agents dashboard)
-#                  -> openclaw-gateway (18789) REMOVED 2026-03-28
 #
 # All internal ports are NOT exposed to the host. Nginx is the sole ingress.
 #
 # Required env vars in .env.production:
 #   REDIS_PASSWORD, POSTGRES_PASSWORD, RECODER_A2A_SHARED_SECRET,
-#   RECODER_A2A_WORKER_TOKEN, OPENCLAW_GATEWAY_TOKEN
+#   RECODER_A2A_WORKER_TOKEN
 #
 # Optional env vars:
 #   POSTGRES_USER (default: recoder), WORKERS (default: 16),

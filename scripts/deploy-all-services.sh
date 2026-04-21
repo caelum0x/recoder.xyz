@@ -153,9 +153,6 @@ fi
 if [ -z "${RECODER_A2A_WORKER_TOKEN:-}" ]; then
   RECODER_A2A_WORKER_TOKEN="$(remote_env_value RECODER_A2A_WORKER_TOKEN)"
 fi
-if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
-  OPENCLAW_GATEWAY_TOKEN="$(remote_env_value OPENCLAW_GATEWAY_TOKEN)"
-fi
 if [ -z "${REDIS_PASSWORD:-}" ]; then
   REDIS_PASSWORD="$(remote_env_value REDIS_PASSWORD)"
 fi
@@ -190,11 +187,6 @@ if [ -z "${RECODER_A2A_WORKER_TOKEN:-}" ]; then
   echo "Generated RECODER_A2A_WORKER_TOKEN"
 fi
 
-if [ -z "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
-  OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
-  echo "Generated OPENCLAW_GATEWAY_TOKEN"
-fi
-
 if [ -z "${REDIS_PASSWORD:-}" ]; then
   REDIS_PASSWORD=$(openssl rand -hex 24)
   echo "Generated REDIS_PASSWORD"
@@ -210,7 +202,7 @@ fi
 
 echo "=== Phase 1b: Validate generated secrets ==="
 missing_vars=0
-for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN OPENCLAW_GATEWAY_TOKEN REDIS_PASSWORD HATCHET_COOKIE_SECRETS HATCHET_MASTER_ENCRYPTION_KEY HATCHET_JWT_SECRET HATCHET_JWT_PUBLIC_KEYSET; do
+for var_name in RECODER_A2A_SHARED_SECRET RECODER_A2A_WORKER_TOKEN REDIS_PASSWORD HATCHET_COOKIE_SECRETS HATCHET_MASTER_ENCRYPTION_KEY HATCHET_JWT_SECRET HATCHET_JWT_PUBLIC_KEYSET; do
   eval val="\${${var_name}:-}"
   if [ -z "$val" ]; then
     echo "FATAL: ${var_name} is empty after generation phase"
@@ -267,7 +259,6 @@ cat > .env <<'INNEREOF'
 REDIS_PASSWORD=${REDIS_PASSWORD}
 RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
 RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
-OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 HATCHET_COOKIE_SECRETS="${HATCHET_COOKIE_SECRETS}"
 HATCHET_MASTER_ENCRYPTION_KEY=${HATCHET_MASTER_ENCRYPTION_KEY}
 HATCHET_JWT_SECRET=${HATCHET_JWT_SECRET}
@@ -347,7 +338,6 @@ CONTAINER_NAMES=(
   recoder-docker-backend
   recoder-web
   recoder-frontend
-  openclaw-gateway
   recoder-app
 )
 NETWORK_NAME="recoder-network"
@@ -450,10 +440,6 @@ docker build \
   .
 echo "[$(date -u)] recoder-frontend built"
 
-echo "--- Building openclaw-gateway ---"
-docker build -f openclaw/Dockerfile -t recoderxyz-openclaw-gateway:latest ./openclaw
-echo "[$(date -u)] openclaw-gateway built"
-
 echo "--- Starting all services ---"
 # Re-run explicit cleanup right before startup to avoid stale-name conflicts.
 cleanup_named_containers
@@ -467,7 +453,7 @@ echo "--- Waiting for services to start ---"
 sleep 10
 
 echo "--- Waiting for service health ---"
-for service in redis docker-backend recoder-web recoder-frontend openclaw-gateway recoder-app; do
+for service in redis docker-backend recoder-web recoder-frontend recoder-app; do
   for i in $(seq 1 30); do
     CID=$(docker compose -f docker-compose.deploy.yml ps -q "$service" 2>/dev/null || true)
     if [ -n "$CID" ]; then
@@ -566,9 +552,6 @@ check_service "docker-backend(:3100)" curl -sf http://localhost:3100/health
 check_service "recoder-web(:5173)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173
 check_service "recoder-app(:3000)" curl -sf http://localhost:3000/api/health
 check_service "recoder-frontend(:3001)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001
-check_service "openclaw-gateway(:18789)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:18789/health
-check_service "recoder-studio(:3005)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3005/login
-
 echo -n "A2A runtime: "
 curl -sf http://localhost:5173/api/a2a/runtime | head -c 200
 echo ""
@@ -593,34 +576,7 @@ if [ -n "$FAILED_SERVICES" ]; then
 fi
 ENDSSH
 
-echo "=== Phase 6: Ensure recoder-studio is running ==="
-
-ssh_retry 3 10 bash -s <<'ENDSSH'
-set -euo pipefail
-cd /root/recoder.xyz/recoder-studio
-
-# Ensure only one studio process is bound to 3005 and start if missing.
-if ss -ltnp 2>/dev/null | grep -q ':3005 '; then
-  echo "recoder-studio listener already present on :3005"
-else
-  echo "Starting recoder-studio on :3005..."
-  nohup env PORT=3005 pnpm start > /var/log/recoder-studio.log 2>&1 &
-fi
-
-for i in $(seq 1 30); do
-  if curl -sf -o /dev/null http://localhost:3005/login; then
-    echo "recoder-studio health check passed"
-    exit 0
-  fi
-  sleep 2
-done
-
-echo "ERROR: recoder-studio failed health check on :3005"
-tail -n 80 /var/log/recoder-studio.log || true
-exit 1
-ENDSSH
-
-echo "=== Phase 7: Start A2A workers ==="
+echo "=== Phase 6: Start A2A workers ==="
 
 ssh_retry 3 10 bash -s <<'ENDSSH'
 set -euo pipefail
@@ -637,7 +593,7 @@ else
 fi
 ENDSSH
 
-echo "=== Phase 7b: Install A2A watchdog cron ==="
+echo "=== Phase 6b: Install A2A watchdog cron ==="
 
 ssh_retry 3 10 bash -s <<'ENDSSH'
 set -euo pipefail
@@ -652,7 +608,7 @@ else
 fi
 ENDSSH
 
-echo "=== Phase 8: A2A production smoke test ==="
+echo "=== Phase 7: A2A production smoke test ==="
 
 ssh_retry 3 10 bash -s <<'ENDSSH'
 set -euo pipefail
@@ -672,10 +628,7 @@ echo "Services:"
 echo "  docker-backend:    http://77.42.23.19:3100"
 echo "  recoder-web:       http://77.42.23.19:5173"
 echo "  recoder-frontend:  http://77.42.23.19:3001"
-echo "  recoder-studio:    http://77.42.23.19:3005"
-echo "  openclaw-gateway:  http://77.42.23.19:18789"
 echo ""
 echo "A2A Secrets (save these):"
 echo "  RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}"
 echo "  RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}"
-echo "  OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}"
