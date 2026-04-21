@@ -31,9 +31,11 @@ export class PreviewsStore {
   #availablePreviews = new Map<number, PreviewInfo>();
   #webcontainer: Promise<WebContainer>;
   #heartbeatInterval?: NodeJS.Timeout;
+  #devServerPollTimeout?: NodeJS.Timeout;
   #useDocker: boolean = false;
   #projectId: string | null = null;
   #initPromise: Promise<void>;
+  #isPollingDevServer: boolean = false;
   // PERFORMANCE: Track subscription cleanup to prevent memory leaks
   #containerReadyUnsubscribe?: () => void;
 
@@ -188,10 +190,11 @@ export class PreviewsStore {
   }
 
   async #pollForDevServer() {
-    if (!this.#projectId || !DOCKER_URL) return;
+    if (!this.#projectId || !DOCKER_URL || this.#isPollingDevServer) return;
 
-    const maxAttempts = 30; // initial fast polling window (~60s)
+    const maxAttempts = 12; // short startup window (~24s), then stop until user explicitly retries
     let attempts = 0;
+    this.#isPollingDevServer = true;
 
     logger.info(`🔄 [PreviewsStore] Starting dev server health polling for ${this.#projectId}`);
 
@@ -208,8 +211,6 @@ export class PreviewsStore {
           { timeout: 10000, skipRetry: true }
         );
 
-        logger.info(`🔍 [PreviewsStore] Health check attempt ${attempts}:`, data);
-
         // For Daytona sandboxes, use same-origin proxy instead of *.sandbox.recoder.xyz
         // (sandbox subdomain DNS may not resolve for all users)
         if (data?.daytona && data.previewUrl) {
@@ -218,6 +219,8 @@ export class PreviewsStore {
             logger.info(`✅ [PreviewsStore] Daytona dev server responding on port ${respondingPort.port}`);
             // Use same-origin proxy URL which avoids DNS issues
             this.#enablePreview();
+            this.#isPollingDevServer = false;
+            this.#devServerPollTimeout = undefined;
             return; // Stop polling
           }
         } else {
@@ -225,26 +228,26 @@ export class PreviewsStore {
           if (respondingPort) {
             logger.info(`✅ [PreviewsStore] Dev server responding on port ${respondingPort.port}`);
             this.#enablePreview();
+            this.#isPollingDevServer = false;
+            this.#devServerPollTimeout = undefined;
             return; // Stop polling
           }
         }
       } catch (e) {
-        logger.info(`⚠️ [PreviewsStore] Health check attempt ${attempts} failed:`, e);
-        // Ignore errors, keep polling
+        // Ignore transient errors during the bounded startup window
       }
 
       if (attempts < maxAttempts) {
-        setTimeout(checkHealth, 2000);
+        this.#devServerPollTimeout = setTimeout(checkHealth, 2000);
         return;
       }
 
-      logger.warn('⚠️ [PreviewsStore] Dev server health check timed out after 30 attempts, continuing background polling');
-      // Do not force-mount the preview iframe with a non-ready URL.
-      // Keep polling at a slower cadence until the backend reports a responding port.
-      setTimeout(checkHealth, 5000);
+      logger.warn(`⚠️ [PreviewsStore] Dev server health check timed out after ${maxAttempts} attempts, stopping background polling`);
+      this.#isPollingDevServer = false;
+      this.#devServerPollTimeout = undefined;
     };
 
-    setTimeout(checkHealth, 2000);
+    this.#devServerPollTimeout = setTimeout(checkHealth, 2000);
   }
 
   async #initWebContainerPreview() {
@@ -321,6 +324,11 @@ export class PreviewsStore {
       clearInterval(this.#heartbeatInterval);
       this.#heartbeatInterval = undefined;
     }
+    if (this.#devServerPollTimeout) {
+      clearTimeout(this.#devServerPollTimeout);
+      this.#devServerPollTimeout = undefined;
+    }
+    this.#isPollingDevServer = false;
     // Clean up containerReady subscription if still active
     if (this.#containerReadyUnsubscribe) {
       this.#containerReadyUnsubscribe();
