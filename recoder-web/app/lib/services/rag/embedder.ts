@@ -246,16 +246,23 @@ export function createEmbedderFromProfile(
 }
 
 /**
- * Get API key for an embedding profile from environment variables
+ * Get API key for an embedding profile from an explicit provider-key map.
  */
-export function getApiKeyForProfile(profile: EmbeddingProfile): string | undefined {
+export function getApiKeyForProfile(
+  profile: EmbeddingProfile,
+  providerKeys?: Partial<Record<EmbeddingProfile["provider"], string>>
+): string | undefined {
+  if (!providerKeys) {
+    return undefined;
+  }
+
   switch (profile.provider) {
     case "openai":
-      return process.env.OPENAI_API_KEY;
+      return providerKeys.openai;
     case "google":
-      return process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+      return providerKeys.google;
     case "cohere":
-      return process.env.COHERE_API_KEY;
+      return providerKeys.cohere;
     default:
       return undefined;
   }

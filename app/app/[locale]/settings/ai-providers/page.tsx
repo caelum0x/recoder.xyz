@@ -509,13 +509,13 @@ export default function AIProvidersPage() {
                 <div className="font-medium text-white mb-1">OpenAI Codex</div>
                 <p className="text-xs text-gray-400">AI coding assistant from OpenAI</p>
                 <code className="text-xs text-orange-400">codex</code>
-                <span className="text-xs text-gray-500 ml-2">Uses: OPENAI_API_KEY</span>
+                <span className="text-xs text-gray-500 ml-2">Uses your BYOK OpenAI key</span>
               </div>
               <div className="p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="font-medium text-white mb-1">Google Gemini CLI</div>
                 <p className="text-xs text-gray-400">Google&apos;s AI assistant for terminal</p>
                 <code className="text-xs text-orange-400">gemini</code>
-                <span className="text-xs text-gray-500 ml-2">Uses: GEMINI_API_KEY</span>
+                <span className="text-xs text-gray-500 ml-2">Uses your BYOK Google key</span>
               </div>
               <div className="p-3 rounded-lg bg-white/5 border border-white/10">
                 <div className="font-medium text-white mb-1">Claude Code</div>

@@ -28,11 +28,7 @@ export class OpenRouterPDFProcessor {
     baseUrl?: string,
     defaultModel?: PDFProcessingModel,
   ) {
-    this.apiKey =
-      apiKey ||
-      process.env['OPENROUTER_API_KEY'] ||
-      process.env['OPENAI_API_KEY'] ||
-      '';
+    this.apiKey = apiKey || '';
     this.baseUrl =
       baseUrl ||
       process.env['OPENROUTER_BASE_URL'] ||
@@ -40,9 +36,7 @@ export class OpenRouterPDFProcessor {
     this.defaultModel = defaultModel || 'gpt-4o';
 
     if (!this.apiKey) {
-      throw new Error(
-        'API key is required. Set OPENROUTER_API_KEY or OPENAI_API_KEY environment variable.',
-      );
+      throw new Error('BYOK API key is required for OpenRouter PDF processing.');
     }
   }
 

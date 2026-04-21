@@ -5,7 +5,7 @@ import { log } from "@repo/observability/log";
 import { polar } from "@repo/payments";
 import { generateObject, experimental_transcribe as transcribe } from "ai";
 import { z } from "zod/v3";
-import { getOrganizationTextModel, getTranscriptionModel } from "../ai";
+import { getOrganizationTextModel, getOrganizationTranscriptionModel } from "../ai";
 import {
   createAiJob,
   markAiJobFailed,
@@ -188,7 +188,7 @@ const handleFeedbackCreate = async (
 
   if ((feedback.videoUrl || feedback.audioUrl) && !feedback.transcribedAt) {
     const transcript = await transcribe({
-      model: getTranscriptionModel(),
+      model: await getOrganizationTranscriptionModel(feedback.organizationId),
       audio: new URL(feedback.videoUrl ?? (feedback.audioUrl as string)),
     });
 
@@ -384,7 +384,7 @@ const handleInterviewCreate = async (
 
   if (!transcriptText.trim() && interview.audioUrl) {
     const transcript = await transcribe({
-      model: getTranscriptionModel(),
+      model: await getOrganizationTranscriptionModel(interview.organizationId),
       audio: new URL(interview.audioUrl),
     });
 

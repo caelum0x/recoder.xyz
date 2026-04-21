@@ -79,7 +79,7 @@ export async function createOpenRouterModel(modelId: string = DEFAULT_MODEL_ID) 
 
 /**
  * Create an AI SDK model instance routed through OpenRouter.
- * Throws if OPENROUTER_API_KEY is not configured.
+ * Throws if the current user has no BYOK OpenRouter key configured.
  *
  * @param modelId - OpenRouter model ID (default: "openai/gpt-4o-mini")
  * @returns AI SDK model instance

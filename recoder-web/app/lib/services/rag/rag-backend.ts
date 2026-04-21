@@ -6,12 +6,12 @@
  * Otherwise callers fall back to the existing lexical path.
  */
 
-import type { EmbeddingProfileId } from './types';
+import type { EmbeddingProfileId, EmbeddingProfile } from './types';
 import { EMBEDDING_PROFILES } from './types';
 import { PoolManager, type NeonClient } from './database';
 import { createPostgresChunkStore } from './chunk-store';
 import { createPostgresQueryService } from './query-service';
-import { createEmbedderFromProfile, getApiKeyForProfile } from './embedder';
+import { createEmbedderFromProfile } from './embedder';
 import { createDefaultChunker } from './line-chunker';
 import * as z from 'zod/v4';
 
@@ -35,10 +35,12 @@ function getDatabaseUrl(): string | undefined {
   return process.env.DATABASE_URL;
 }
 
-function getEmbedderApiKey(profileId: EmbeddingProfileId): string | undefined {
-  const profile = EMBEDDING_PROFILES[profileId];
-  if (!profile) return undefined;
-  return getApiKeyForProfile(profile);
+function getEmbeddingProfile(profileId: EmbeddingProfileId = getProfileId()): EmbeddingProfile {
+  return EMBEDDING_PROFILES[profileId];
+}
+
+function resolveProfileId(profileId?: EmbeddingProfileId): EmbeddingProfileId {
+  return profileId ?? getProfileId();
 }
 
 // ---------------------------------------------------------------------------
@@ -99,11 +101,13 @@ async function ensureSchema(client: NeonClient): Promise<void> {
 /**
  * Returns true when both a DATABASE_URL and an embedding API key are available.
  */
-export function isVectorModeAvailable(): boolean {
+export function getVectorProvider(profileId?: EmbeddingProfileId): EmbeddingProfile['provider'] {
+  return getEmbeddingProfile(resolveProfileId(profileId)).provider;
+}
+
+export function isVectorModeAvailable(apiKey?: string): boolean {
   const dbUrl = getDatabaseUrl();
   if (!dbUrl) return false;
-  const profileId = getProfileId();
-  const apiKey = getEmbedderApiKey(profileId);
   return Boolean(apiKey);
 }
 
@@ -118,6 +122,11 @@ export interface IngestStats {
   chunksAdded: number;
 }
 
+export interface RagRuntimeOptions {
+  apiKey?: string;
+  profileId?: EmbeddingProfileId;
+}
+
 /**
  * Ingest documents into the vector store for a given project.
  * Throws if vector mode is not available.
@@ -126,12 +135,13 @@ export async function ingestDocuments(
   projectId: string,
   documents: IngestDocument[],
   replace?: boolean,
+  options?: RagRuntimeOptions,
 ): Promise<IngestStats> {
   const dbUrl = getDatabaseUrl();
   if (!dbUrl) throw new Error('DATABASE_URL not set');
 
-  const profileId = getProfileId();
-  const apiKey = getEmbedderApiKey(profileId);
+  const profileId = resolveProfileId(options?.profileId);
+  const apiKey = options?.apiKey;
   if (!apiKey) throw new Error('No embedding API key available');
 
   const client = PoolManager.getConnection({ connectionString: dbUrl });
@@ -202,12 +212,13 @@ export async function queryRag(
   projectId: string,
   query: string,
   topK = 5,
+  options?: RagRuntimeOptions,
 ): Promise<RagQueryResult[]> {
   const dbUrl = getDatabaseUrl();
   if (!dbUrl) throw new Error('DATABASE_URL not set');
 
-  const profileId = getProfileId();
-  const apiKey = getEmbedderApiKey(profileId);
+  const profileId = resolveProfileId(options?.profileId);
+  const apiKey = options?.apiKey;
   if (!apiKey) throw new Error('No embedding API key available');
 
   const client = PoolManager.getConnection({ connectionString: dbUrl });
