@@ -94,6 +94,18 @@ class PricingPresets:
         cached_read_cost_per_million_tokens=0.014,
     )
 
+    GEMINI_2_5_PRO = ModelPricing(
+        input_cost_per_million_tokens=1.25,
+        output_cost_per_million_tokens=10.0,
+        cached_read_cost_per_million_tokens=0.125,
+    )
+
+    GEMINI_2_5_FLASH = ModelPricing(
+        input_cost_per_million_tokens=0.15,
+        output_cost_per_million_tokens=0.60,
+        cached_read_cost_per_million_tokens=0.015,
+    )
+
 
 FREE_MODEL_ID = "recoder/power"
 PREMIUM_MODEL_ID = "recoder/power"
@@ -727,6 +739,56 @@ class ModelFactory:
             enabled=True,
         )
 
+    @staticmethod
+    def create_google_gemini_2_5_pro() -> Model:
+        return Model(
+            id="google/gemini-2.5-pro",
+            name="Gemini 2.5 Pro",
+            litellm_model_id="openrouter/google/gemini-2.5-pro",
+            provider=ModelProvider.OPENROUTER,
+            aliases=[
+                "gemini-2.5-pro",
+                "openrouter/google/gemini-2.5-pro",
+            ],
+            context_window=2_097_152,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+                ModelCapability.PROMPT_CACHING,
+            ],
+            pricing=PricingPresets.GEMINI_2_5_PRO,
+            tier_availability=["paid"],
+            priority=85,
+            recommended=False,
+            enabled=True,
+        )
+
+    @staticmethod
+    def create_google_gemini_2_5_flash() -> Model:
+        return Model(
+            id="google/gemini-2.5-flash",
+            name="Gemini 2.5 Flash",
+            litellm_model_id="openrouter/google/gemini-2.5-flash",
+            provider=ModelProvider.OPENROUTER,
+            aliases=[
+                "gemini-2.5-flash",
+                "openrouter/google/gemini-2.5-flash",
+            ],
+            context_window=1_048_576,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+                ModelCapability.PROMPT_CACHING,
+            ],
+            pricing=PricingPresets.GEMINI_2_5_FLASH,
+            tier_availability=["paid"],
+            priority=84,
+            recommended=False,
+            enabled=True,
+        )
+
 # ── Unified model catalog for /v1/models API ──────────────────────────
 
 UNIFIED_PREMIUM_MODELS = [
@@ -799,6 +861,8 @@ class ModelRegistry:
         self.register(ModelFactory.create_haiku_3_5())
         self.register(ModelFactory.create_deepseek_v3())
         self.register(ModelFactory.create_openrouter_free())
+        self.register(ModelFactory.create_google_gemini_2_5_pro())
+        self.register(ModelFactory.create_google_gemini_2_5_flash())
 
         if config.ENV_MODE != EnvMode.PRODUCTION:
             self.register(ModelFactory.create_test_model())
@@ -814,6 +878,8 @@ class ModelRegistry:
         self._litellm_id_to_pricing["openrouter/moonshotai/kimi-k2.5"] = PricingPresets.KIMI_K2_5
         self._litellm_id_to_pricing["bedrock/anthropic.claude-3-5-haiku-20241022-v1:0"] = PricingPresets.HAIKU_3_5
         self._litellm_id_to_pricing["openrouter/deepseek/deepseek-chat-v3-0324"] = PricingPresets.DEEPSEEK_V3
+        self._litellm_id_to_pricing["openrouter/google/gemini-2.5-pro"] = PricingPresets.GEMINI_2_5_PRO
+        self._litellm_id_to_pricing["openrouter/google/gemini-2.5-flash"] = PricingPresets.GEMINI_2_5_FLASH
     
     def register(self, model: Model) -> None:
         self._models[model.id] = model
