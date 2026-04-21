@@ -614,6 +614,7 @@ export default async function AdminDashboardPage({
 					</div>
 					<Link
 						href="/delivery-ops"
+						prefetch={false}
 						className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-text hover:bg-bg-hover transition-colors"
 					>
 						<BarChart3Icon className="size-3.5" />
@@ -970,6 +971,7 @@ export default async function AdminDashboardPage({
 									<Link
 										key={windowOption.key}
 										href={`/dashboard?fallbackWindow=${windowOption.key}`}
+										prefetch={false}
 										className={`rounded px-2 py-1 text-[11px] transition-colors ${
 											active
 												? "bg-bg-hover text-text font-medium"
@@ -1246,6 +1248,7 @@ export default async function AdminDashboardPage({
 			{/* Budget Health */}
 			<Link
 				href="/budget"
+				prefetch={false}
 				className="rounded-xl border border-border bg-background p-4 hover:bg-bg-hover transition-colors block"
 			>
 				<h2 className="text-sm font-medium text-text-muted mb-3">
@@ -1279,6 +1282,7 @@ export default async function AdminDashboardPage({
 			{/* Margin Health */}
 			<Link
 				href="/margin"
+				prefetch={false}
 				className="rounded-xl border border-border bg-background p-4 hover:bg-bg-hover transition-colors block"
 			>
 				<div className="flex items-center gap-2 mb-3">
@@ -1331,6 +1335,7 @@ export default async function AdminDashboardPage({
 			<div className="flex gap-3">
 				<Link
 					href="/projects?new=1"
+					prefetch={false}
 					className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
 				>
 					<PlusIcon className="size-4" />
@@ -1338,6 +1343,7 @@ export default async function AdminDashboardPage({
 				</Link>
 				<Link
 					href="/clients?new=1"
+					prefetch={false}
 					className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
 				>
 					<PlusIcon className="size-4" />
