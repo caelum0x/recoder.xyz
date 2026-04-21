@@ -321,9 +321,12 @@ export async function generateLineItemsWithAI(quoteId: string) {
 		: "";
 
 	// Call OpenRouter API
-	const apiKey = process.env.OPENROUTER_API_KEY;
+	const { getUserOpenRouterApiKeyForAgency } = await import(
+		"@/lib/agency/openrouter-model"
+	);
+	const apiKey = await getUserOpenRouterApiKeyForAgency();
 	if (!apiKey) {
-		throw new Error("No AI API key configured. Set OPENROUTER_API_KEY.");
+		throw new Error("No BYOK OpenRouter API key configured.");
 	}
 
 	const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {

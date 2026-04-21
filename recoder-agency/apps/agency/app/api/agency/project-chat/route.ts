@@ -129,11 +129,14 @@ export async function POST(req: Request) {
 			: "## No quote linked",
 	].join("\n");
 
-	const apiKey = process.env.OPENROUTER_API_KEY;
+	const { getUserOpenRouterApiKeyForAgency } = await import(
+		"@/lib/agency/openrouter-model"
+	);
+	const apiKey = await getUserOpenRouterApiKeyForAgency();
 	if (!apiKey) {
 		return NextResponse.json(
-			{ error: "No AI API key configured" },
-			{ status: 500 },
+			{ error: "No BYOK OpenRouter API key configured" },
+			{ status: 400 },
 		);
 	}
 
