@@ -320,7 +320,7 @@ export async function daytonaExecBackground(
 ): Promise<void> {
   await ensureRunningBeforeOp(sandboxId);
   const dc = getDaytonaClient();
-  const sessionId = buildDaytonaDevServerSessionId(options?.projectId || sandboxId);
+  const safeCmd = command.replace(/`/g, '\\`');
   const safeCwd = cwd.replace(/'/g, "'\\''");
 
   if (!options?.skipCleanup) {
@@ -331,25 +331,15 @@ export async function daytonaExecBackground(
     }
   }
 
-  await dc.createSession(sandboxId, sessionId);
-
   const script = [
-    `NODE_BIN=/usr/local/nvm/versions/node/v22.14.0/bin/node`,
-    `[ -x "$NODE_BIN" ] || NODE_BIN="$(command -v node 2>/dev/null || true)"`,
-    `[ -n "$NODE_BIN" ] && export PATH="$(dirname "$NODE_BIN"):$PATH"`,
     `cd '${safeCwd}'`,
     `: > /tmp/dev.log`,
-    `env BROWSER=none ${command} >/tmp/dev.log 2>&1 &`,
+    `BROWSER=none nohup sh -lc ${JSON.stringify(safeCmd)} >/tmp/dev.log 2>&1 < /dev/null &`,
     `CHILD_PID=$!`,
     `echo "$CHILD_PID" >/tmp/dev.pid`,
-    `sleep 3`,
+    `sleep 2`,
   ].join(' && ');
-  await dc.execInSession(
-    sandboxId,
-    sessionId,
-    `sh -lc ${JSON.stringify(script)}`,
-    { runAsync: false, suppressInputEcho: true },
-  );
+  await dc.execCommand(sandboxId, script, { timeoutSecs: 10 });
 }
 
 // ── Workspace state ──
