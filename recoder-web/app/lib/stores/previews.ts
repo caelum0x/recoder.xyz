@@ -6,10 +6,7 @@ import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('PreviewsStore');
 
 /**
- * Compute the same-origin preview base URL.
- * In production, the Express server proxies /preview/* to the docker-backend,
- * so we use the current origin (e.g. https://web.recoder.xyz) instead of DOCKER_URL.
- * This eliminates cross-origin iframe issues (CSP frame-src, X-Frame-Options, COEP).
+ * Compute the same-origin preview base URL for non-Daytona runtimes.
  */
 function getPreviewOrigin(): string {
   if (typeof window !== 'undefined') {
@@ -98,12 +95,13 @@ export class PreviewsStore {
 
     logger.info(`📺 [PreviewsStore] Initializing Docker preview for ${this.#projectId}`);
 
-    // Don't set ready: true immediately - wait for containerReady
-    // Use same-origin URL so the iframe avoids cross-origin CSP / X-Frame-Options blocks
+    // Don't set ready: true immediately - wait for containerReady.
+    // Keep the URL blank until we have a confirmed responding port so the UI
+    // does not eagerly load a broken proxy path during startup.
     const previewInfo: PreviewInfo = {
       port: 3000,
       ready: false, // ✅ Not ready until containerReady is true
-      baseUrl: `${getPreviewOrigin()}/preview/${this.#projectId}`,
+      baseUrl: '',
       projectId: this.#projectId,
     };
     this.#availablePreviews.set(3000, previewInfo);
@@ -211,14 +209,14 @@ export class PreviewsStore {
           { timeout: 10000, skipRetry: true }
         );
 
-        // For Daytona sandboxes, use same-origin proxy instead of *.sandbox.recoder.xyz
-        // (sandbox subdomain DNS may not resolve for all users)
+        // Daytona sandboxes should use their direct preview URL once healthy.
+        // This avoids the fragile multi-hop preview proxy/HMR path through
+        // web -> recoder-web -> docker-backend -> Daytona -> Vite.
         if (data?.daytona && data.previewUrl) {
           const respondingPort = data.ports?.find((p) => p.responding);
           if (respondingPort) {
             logger.info(`✅ [PreviewsStore] Daytona dev server responding on port ${respondingPort.port}`);
-            // Use same-origin proxy URL which avoids DNS issues
-            this.#enablePreview();
+            this.#enablePreviewWithUrl(data.previewUrl, respondingPort.port);
             this.#isPollingDevServer = false;
             this.#devServerPollTimeout = undefined;
             return; // Stop polling

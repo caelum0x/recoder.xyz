@@ -202,3 +202,84 @@ your current setup:
   (browser) web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ <--[WebSocket (failing)]--> web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ (server)
 Check out your Vite / network configuration and https://vite.dev/config/server-options.html#server-hmr .
 (anonymous) @ client:512
+Bu siteye ulaşılamıyor
+wss://web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/?token=VCkt1q1zoQFn adresindeki web sayfası, geçici olarak kullanılamıyor veya kalıcı olarak yeni bir web adresine taşınmış olabilir.
+
+ERR_UNKNOWN_URL_SCHEME
+we’re doing wrong is architectural, not “Vite is uniquely impossible.”
+
+  bolt.new, Lovable, and similar tools usually avoid this exact failure by doing one of these:
+
+  - give each sandbox its own direct preview origin
+  - put exactly one reverse proxy in front of the dev server
+  - avoid rewriting Vite HTML/module/HMR traffic in multiple layers
+  - disable HMR in embedded preview and just hard-reload the iframe
+
+  We are doing the opposite.
+
+  What’s wrong in our stack:
+
+  - too many hops
+      - browser -> web.recoder.xyz
+      - web -> recoder-web
+      - recoder-web -> docker-backend
+      - docker-backend -> Daytona
+      - Daytona -> Vite dev server
+  - two preview paths instead of one
+      - /preview/:id
+      - /api/sandbox-preview/:id/*
+  - mixed responsibilities
+      - nginx, recoder-web, and docker-backend all touched preview behavior
+      - headers, base href, websocket upgrade, and caching were all modified in more than one place
+  - health checks were fake-good
+      - “5173 responds” was treated as “live preview works”
+      - that is not enough for Vite
+  - env drift
+      - recoder-web was still pointed at Neon through env files
+      - production compose and live env were not the same truth
+  - Daytona runner hygiene was poor
+      - inner Docker inode exhaustion broke installs
+      - preview looked like “timeout” but the real issue was runtime exhaustion
+
+  Why this breaks specifically with Vite:
+
+  - Vite dev mode is not just static files on a port
+  - it relies on:
+      - transformed import URLs
+      - @vite/client
+      - @react-refresh
+      - working websocket upgrade
+      - consistent host/origin/path assumptions
+  - once you rewrite HTML and proxy assets/ws through multiple layers, small mismatches cause white pages
+
+  Bluntly: other projects keep preview simple. We made it too clever.
+
+  The clean fix is:
+
+  1. choose one preview architecture
+  2. stop rewriting Vite traffic in multiple places
+  3. either:
+      - use direct sandbox origin with proper wildcard/domain routing, or
+      - proxy everything through exactly one gateway
+  4. if embedded preview is required, disable HMR and use iframe reloads instead of proxying Vite dev websockets
+
+  Best practical direction:
+
+  - short term:
+      - make preview “no-HMR iframe reload only”
+      - one path only
+      - no @vite/client, no @react-refresh, no websocket dependence
+  - long term:
+      - move to direct sandbox preview domains or a single-purpose preview gateway
+
+  So yes:
+
+  - URLs were wrong
+  - websocket handling was wrong
+  - CORS/header handling was wrong
+  - Vite is exposing the weakness
+  - Daytona is not the main problem
+  - our proxy design is the main problem
+
+  If you want, I can stop trying to preserve Vite HMR and implement the simpler “preview without HMR, hard refresh on file changes” path
+  first.
