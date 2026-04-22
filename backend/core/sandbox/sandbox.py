@@ -357,6 +357,10 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
         # ),
         auto_stop_interval=1800,    # 30 min — aggressive to stay within 15GB RAM (server runs 40+ containers)
         auto_archive_interval=3600,  # 1 hour after stop
+        # Explicitly request sandbox disk so new app-task sandboxes do not rely on
+        # opaque Daytona defaults. We have seen real coding runs hit 100% overlay
+        # disk/inodes, especially after heavier React scaffolds.
+        resources=Resources(disk=20),
     )
     
     # Create the sandbox
