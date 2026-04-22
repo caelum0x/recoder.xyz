@@ -214,6 +214,10 @@ async function relayPreviewRequest(req, res, next, options = {}) {
             new RegExp(`<base href=["']/?api/sandbox-preview/${projectId}/["']`, 'i'),
             `<base href="${sameOriginBase}"`,
           )
+          .replace(
+            /<script\s+type="module">import\s+\{\s*injectIntoGlobalHook\s*\}\s+from\s+"[^"]*\/@react-refresh";[\s\S]*?window\.\$RefreshSig\$ = \(\) => \(type\) => type;<\/script>\s*/i,
+            '<script>window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => (type) => type;</script>\n',
+          )
           // Vite HMR websocket setup is unreliable through the sandbox preview proxy.
           // The preview still renders fine without the client bootstrap, and Recoder
           // already knows how to refresh the iframe when files change.
@@ -233,6 +237,10 @@ async function relayPreviewRequest(req, res, next, options = {}) {
         .replace(
           /import\s+\{\s*createHotContext\s+as\s+__vite__createHotContext\s*\}\s+from\s+"[^"]*\/@vite\/client";\s*import\.meta\.hot\s*=\s*__vite__createHotContext\([^)]*\);\s*/g,
           '',
+        )
+        .replace(
+          /import\s+\*\s+as\s+RefreshRuntime\s+from\s+"[^"]*\/@react-refresh";\s*/g,
+          'const RefreshRuntime={getRefreshReg:()=>()=>{},createSignatureFunctionForTransform:()=>()=>{},__hmr_import:()=>Promise.resolve({}),registerExportsForReactRefresh:()=>{},validateRefreshBoundaryAndEnqueueUpdate:()=>null};',
         )
         .replace(/import\.meta\.hot/g, 'undefined');
       responseBuffer = Buffer.from(js, 'utf8');
