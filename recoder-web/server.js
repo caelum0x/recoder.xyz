@@ -265,6 +265,12 @@ async function relayPreviewRequest(req, res, next, options = {}) {
         'cross-origin-embedder-policy',
         'cross-origin-opener-policy',
         'content-security-policy',
+        'access-control-allow-origin',
+        'access-control-allow-credentials',
+        'access-control-allow-methods',
+        'access-control-allow-headers',
+        'access-control-expose-headers',
+        'access-control-max-age',
       ].includes(lowerKey)) {
         return;
       }
