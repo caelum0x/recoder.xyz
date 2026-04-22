@@ -224,6 +224,19 @@ async function relayPreviewRequest(req, res, next, options = {}) {
         responseBuffer = Buffer.from(html, 'utf8');
       }
     }
+    if (contentType.includes('text/javascript')) {
+      const js = responseBuffer
+        .toString('utf8')
+        // Strip Vite HMR bootstrap from transformed sandbox modules.
+        // The preview still renders fine without HMR, and Recoder can refresh
+        // the iframe explicitly on file changes.
+        .replace(
+          /import\s+\{\s*createHotContext\s+as\s+__vite__createHotContext\s*\}\s+from\s+"[^"]*\/@vite\/client";\s*import\.meta\.hot\s*=\s*__vite__createHotContext\([^)]*\);\s*/g,
+          '',
+        )
+        .replace(/import\.meta\.hot/g, 'undefined');
+      responseBuffer = Buffer.from(js, 'utf8');
+    }
 
     const isPreviewHtml =
       upstreamPath.startsWith('/preview/') ||
