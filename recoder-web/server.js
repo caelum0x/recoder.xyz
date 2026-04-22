@@ -213,6 +213,13 @@ async function relayPreviewRequest(req, res, next, options = {}) {
           .replace(
             new RegExp(`<base href=["']/?api/sandbox-preview/${projectId}/["']`, 'i'),
             `<base href="${sameOriginBase}"`,
+          )
+          // Vite HMR websocket setup is unreliable through the sandbox preview proxy.
+          // The preview still renders fine without the client bootstrap, and Recoder
+          // already knows how to refresh the iframe when files change.
+          .replace(
+            /<script\s+type="module"\s+src="[^"]*\/@vite\/client"><\/script>\s*/i,
+            '',
           );
         responseBuffer = Buffer.from(html, 'utf8');
       }
