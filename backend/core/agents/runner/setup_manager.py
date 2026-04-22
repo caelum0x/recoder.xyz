@@ -195,8 +195,6 @@ async def create_new_thread_records(
 ) -> None:
     from core.threads import repo as threads_repo
     from core.cache.runtime_cache import delete_pending_thread, increment_thread_count_cache
-    from core.utils.project_helpers import generate_and_update_project_name
-    from core.utils.thread_name_generator import generate_and_update_thread_name
     
     placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt
     
@@ -222,10 +220,11 @@ async def create_new_thread_records(
     )
     
     await delete_pending_thread(thread_id)
-    
-    asyncio.create_task(generate_and_update_project_name(project_id=project_id, prompt=prompt))
-    if prompt:
-        asyncio.create_task(generate_and_update_thread_name(thread_id=thread_id, prompt=prompt))
+
+    # Intentionally defer project/thread naming until after the main coding run
+    # completes. Real app tasks already consume multiple LLM turns and tool calls;
+    # firing extra naming/icon LLM requests at startup competes for provider rate
+    # limits and makes partial-run failures more likely.
     asyncio.create_task(increment_thread_count_cache(account_id))
 
 
