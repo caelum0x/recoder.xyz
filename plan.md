@@ -1,6 +1,6 @@
 # Recoder Platform Status
 
-Last updated: 2026-04-21
+Last updated: 2026-04-22
 
 ## Goal
 
@@ -18,7 +18,7 @@ Keep the live Recoder surfaces working end to end:
 | Platform | URL | Current State |
 | --- | --- | --- |
 | Hub | `recoder.xyz` | Working. Header simplified to `Agents` + `Dashboard`; dashboard onboarding loop removed; auth UI simplified to OAuth-first flows. |
-| Web IDE | `web.recoder.xyz` | Working in production for launch, first turn create, follow-up edit, preview, and snapshot-backed project persistence. |
+| Web IDE | `web.recoder.xyz` | Partially working. Broken local settings/publish UI removed; auth works; project creation and sandbox bring-up recovered; preview asset delivery still broken by cross-origin sandbox asset routing/CORS; end-to-end coding still not fully verified. |
 | Agents | `agents.recoder.xyz` | Main authenticated paths working. Shared ecosystem nav removed; top-right notification/customize controls removed; `Plan` removed from user menu; file pane hydration fallback fixed. |
 | PM | `pm.recoder.xyz` | Authenticated PM surface verified working on key routes. |
 | Agency | `agency.recoder.xyz` | Authenticated dashboard/projects/settings flows verified. One intermittent RSC prefetch issue remains open. |
@@ -39,10 +39,13 @@ Keep the live Recoder surfaces working end to end:
 ### Web IDE
 
 - auth bridge fixed
-- same-origin sandbox create fixed
-- preview path fixed
+- broken local `Settings` surface removed
+- broken local `Deploy` / `Go Live` entrypoints removed
+- preview health polling bounded so it stops background thrash after the startup window
 - Web snapshot persistence cleaned up so `app` is the canonical snapshot authority
 - legacy `chat-history` / project-state hot-path fallback removed
+- project creation recovered by moving `recoder-web` off Neon-backed runtime DB config and back to host Postgres
+- Daytona runner inode exhaustion identified and cleaned up so fresh sandboxes can install dependencies again
 
 ### Agents
 
@@ -76,9 +79,22 @@ Verified in production:
 
 - `recoder.xyz` -> `Launch Web IDE`
 - `web.recoder.xyz` loads
-- first prompt works
-- follow-up edit works
-- preview works
+- authenticated profile and quota endpoints work
+- authenticated project creation works again
+- sandbox creation works again
+- Daytona-backed sandbox preview health reports `5173` responding
+
+Still broken:
+
+- `recoder-2hzs`
+  - `web.recoder.xyz/preview/:projectId` rewrites preview HTML `<base href>` to `docker.recoder.xyz/api/sandbox-preview/...`
+  - browser then fetches Vite assets cross-origin
+  - `docker.recoder.xyz/api/sandbox-preview/*` currently emits duplicate `Access-Control-Allow-Origin` headers
+  - result: white/blank preview page even when `5173` is actually responding
+
+- end-to-end coding remains incomplete
+  - the sandbox, install path, and preview port can be made healthy
+  - full AI edit/write verification is still in progress
 
 ### PM
 
@@ -133,6 +149,18 @@ Verified live:
 
 ### Current Real Follow-Up
 
+- `recoder-ylcl`
+  - umbrella `recoder-web` runtime cleanup
+  - broken UI entrypoints fixed, but end-to-end coding verification still open
+
+- `recoder-933l`
+  - `recoder-web` project creation/runtime DB mismatch
+  - host Postgres path recovered, but repo/prod env cleanup must stay aligned so Neon does not reappear
+
+- `recoder-2hzs`
+  - cross-origin sandbox preview asset loading / duplicate CORS headers
+  - current source of the white blank preview page
+
 - `recoder-zdp`
   - intermittent authenticated agency RSC prefetch `503`s
   - direct route loads are fine; issue appears intermittent and likely proxy/prefetch related
@@ -147,11 +175,13 @@ Verified live:
 Launch is complete when:
 
 - `recoder.xyz` auth + Web bridge work
-- `web.recoder.xyz` supports create, follow-up edit, and preview in production
+- `web.recoder.xyz` supports create, follow-up edit, and same-origin preview rendering in production
 - `agents.recoder.xyz` key authenticated routes work
 - `pm.recoder.xyz` key authenticated routes work
 - `agency.recoder.xyz` key authenticated routes work
 - A2A-dependent flows stay healthy after the latest env/runtime fixes
+- `recoder-2hzs` is resolved
+- `recoder-ylcl` is resolved
 - `recoder-zdp` is resolved or explicitly accepted as non-blocking
 
 ## Notes
