@@ -223,7 +223,8 @@ class LLMExecutor:
 
         # Build list of models to try: primary + fallbacks for free models
         models_to_try = [llm_model]
-        if ":free" in llm_model:
+        is_free_model = ":free" in llm_model
+        if is_free_model:
             models_to_try.extend(
                 m for m in self.FREE_MODEL_FALLBACKS if m != llm_model
             )
@@ -266,7 +267,11 @@ class LLMExecutor:
 
         # All models exhausted
         logger.error(f"❌ All models rate-limited. Last error: {last_error}")
-        return {"type": "status", "status": "error", "message": f"All free models are currently rate-limited. Please try again in a few minutes or add your own API key in Settings."}
+        if is_free_model:
+            message = "All free models are currently rate-limited. Please try again in a few minutes or add your own API key in Settings."
+        else:
+            message = f"The selected model ({llm_model}) is temporarily rate-limited. Please retry shortly or choose another model."
+        return {"type": "status", "status": "error", "message": message}
     
     @staticmethod
     def update_generation_tracking(
