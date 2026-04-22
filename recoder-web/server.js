@@ -150,9 +150,7 @@ async function maybeRedirectToDaytonaPreview(req, res) {
     const data = await response.json().catch(() => null);
     const previewUrl = typeof data?.previewUrl === 'string' ? data.previewUrl : '';
     const isDaytona = data?.daytona === true;
-    const hasHealthyPort = Array.isArray(data?.ports) && data.ports.some((port) => port?.responding);
-
-    if (isDaytona && previewUrl && hasHealthyPort) {
+    if (isDaytona && previewUrl) {
       res.redirect(302, previewUrl);
       return true;
     }
