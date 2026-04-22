@@ -190,3 +190,15 @@ Launch is complete when:
 - Keep this file short and current.
 - Use `bd` for detailed tracking, not this file.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not treated as a product bug.
+Failed to load resource: the server responded with a status of 400 ()
+chrome-extension://j…ntent_reporter.js:1 Uncaught SyntaxError: Unexpected token 'export'
+client:536 WebSocket connection to 'wss://web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/?token=VCkt1q1zoQFn' failed: 
+setupWebSocket @ client:536
+client:536 WebSocket connection to 'wss://web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/?token=VCkt1q1zoQFn' failed: 
+setupWebSocket @ client:536
+client:512 [vite] failed to connect to websocket.
+your current setup:
+  (browser) web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ <--[HTTP]--> web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ (server)
+  (browser) web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ <--[WebSocket (failing)]--> web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ (server)
+Check out your Vite / network configuration and https://vite.dev/config/server-options.html#server-hmr .
+(anonymous) @ client:512

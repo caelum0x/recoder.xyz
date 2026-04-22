@@ -363,6 +363,13 @@ server.on('upgrade', (req, socket, head) => {
     previewProxy.upgrade(req, socket, head);
     return;
   }
+  if (req.url?.startsWith('/api/sandbox-preview/') && typeof previewProxy.upgrade === 'function') {
+    const originalUrl = req.url;
+    req.url = req.url.replace(/^\/api\/sandbox-preview\//, '/preview/');
+    previewProxy.upgrade(req, socket, head);
+    req.url = originalUrl;
+    return;
+  }
   if (req.url?.startsWith('/api/docker/') && typeof dockerApiProxy.upgrade === 'function') {
     const originalUrl = req.url;
     req.url = req.url.replace(/^\/api\/docker/, '') || '/';
