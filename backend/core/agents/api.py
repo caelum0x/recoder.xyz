@@ -761,6 +761,7 @@ async def _background_setup_and_execute(
                         agent_run_id=agent_run_id,
                         message_content=final_message_content,
                         agent_config=agent_config,
+                        effective_model=effective_model,
                         metadata=metadata,
                         memory_enabled=memory_enabled,
                     )

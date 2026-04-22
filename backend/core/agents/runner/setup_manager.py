@@ -189,6 +189,7 @@ async def create_new_thread_records(
     agent_run_id: str,
     message_content: str,
     agent_config: dict,
+    effective_model: str,
     metadata: Optional[Dict[str, Any]],
     memory_enabled: Optional[bool],
 ) -> None:
@@ -199,6 +200,13 @@ async def create_new_thread_records(
     
     placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt
     
+    run_metadata = {
+        "model_name": effective_model,
+        "actual_user_id": account_id,
+    }
+    if metadata:
+        run_metadata.update(metadata)
+
     await threads_repo.create_thread_with_message_and_run(
         project_id=project_id,
         thread_id=thread_id,
@@ -209,7 +217,7 @@ async def create_new_thread_records(
         message_content=message_content,
         agent_id=agent_config.get("agent_id"),
         agent_version_id=agent_config.get("agent_version_id"),
-        run_metadata=metadata,
+        run_metadata=run_metadata,
         memory_enabled=memory_enabled
     )
     
