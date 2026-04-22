@@ -1,4 +1,5 @@
 import asyncio
+import shlex
 from typing import Optional, Dict, Any
 import time
 from uuid import uuid4
@@ -131,6 +132,81 @@ class SandboxShellTool(SandboxToolsBase):
     def __init__(self, project_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
 
+    @staticmethod
+    def _should_use_direct_session(command: str) -> bool:
+        normalized = command.lower()
+        direct_patterns = (
+            "npm ",
+            "npx ",
+            "pnpm ",
+            "yarn ",
+            "bun ",
+            "vite ",
+            "next ",
+            "react-scripts ",
+            "create-react-app",
+            "create-vite",
+        )
+        return any(pattern in normalized for pattern in direct_patterns)
+
+    @staticmethod
+    def _should_background_command(command: str) -> bool:
+        normalized = command.lower().strip()
+        if any(token in normalized for token in ("nohup ", "tmux ", "screen ", "pm2 ", " 2>&1 &", " &")):
+            return False
+
+        background_patterns = (
+            "npm start",
+            "npm run dev",
+            "npm run start",
+            "pnpm dev",
+            "pnpm start",
+            "yarn dev",
+            "yarn start",
+            "bun dev",
+            "bun start",
+            "react-scripts start",
+            "next dev",
+            "vite",
+        )
+        return any(pattern in normalized for pattern in background_patterns)
+
+    @classmethod
+    def _prepare_command(cls, command: str) -> str:
+        if not cls._should_background_command(command):
+            return command
+
+        quoted_command = shlex.quote(command)
+        return (
+            "if command -v tmux >/dev/null 2>&1; then "
+            "tmux kill-session -t recoder-dev-server >/dev/null 2>&1 || true; "
+            f"tmux new-session -d -s recoder-dev-server \"bash -lc {quoted_command}\"; "
+            "printf 'DEV_SERVER_STARTED tmux:%s\\n' 'recoder-dev-server'; "
+            "else "
+            f"nohup bash -lc {quoted_command} >/tmp/recoder-devserver.log 2>&1 & "
+            "printf 'DEV_SERVER_STARTED pid:%s\\n' \"$!\"; "
+            "fi"
+        )
+
+    @staticmethod
+    def _wrap_command_for_shell(command: str, cwd: str) -> str:
+        quoted_cwd = shlex.quote(cwd)
+        return "\n".join(
+            [
+                'export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"',
+                'for nvm_sh in /usr/local/nvm/nvm.sh /home/daytona/.nvm/nvm.sh "$NVM_DIR/nvm.sh"; do',
+                '  [ -n "$nvm_sh" ] && [ -f "$nvm_sh" ] && . "$nvm_sh" >/dev/null 2>&1 && break || true',
+                "done",
+                'if ! command -v node >/dev/null 2>&1; then',
+                '  for node_dir in /usr/local/nvm/versions/node/*/bin /home/daytona/.nvm/versions/node/*/bin /usr/local/bin /usr/bin; do',
+                '    [ -d "$node_dir" ] && export PATH="$node_dir:$PATH"',
+                "  done",
+                "fi",
+                f"cd {quoted_cwd}",
+                SandboxShellTool._prepare_command(command),
+            ]
+        )
+
     @openapi_schema({
         "type": "function",
         "function": {
@@ -144,7 +220,8 @@ Before executing the command:
 2. Always quote file paths that contain spaces with double quotes
 
 Usage notes:
-- Commands timeout after 300 seconds by default (max 600 seconds / 10 minutes)
+- Commands timeout after 900 seconds by default for long-running workspace setup
+- Maximum timeout is 1800 seconds (30 minutes)
 - Output is truncated if it exceeds 50000 characters
 - For long-running processes, use tmux: `tmux new-session -d -s name 'command'`
 - Chain dependent commands with && (e.g., `git add . && git commit -m "message"`)
@@ -166,8 +243,8 @@ Usage notes:
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": "**OPTIONAL** - Timeout in seconds (max 600). Default: 300 (5 minutes). Increase for longer operations.",
-                        "default": 300
+                        "description": "**OPTIONAL** - Timeout in seconds (max 1800). Default: 900 (15 minutes). Increase for longer setup/install operations.",
+                        "default": 900
                     }
                 },
                 "required": ["command"],
@@ -180,7 +257,7 @@ Usage notes:
         command: str,
         description: Optional[str] = None,
         folder: Optional[str] = None,
-        timeout: int = 300
+        timeout: int = 900
     ) -> ToolResult:
         try:
             # Ensure sandbox is initialized
@@ -191,6 +268,26 @@ Usage notes:
             if folder:
                 folder = folder.strip('/')
                 cwd = f"{self.workspace_path}/{folder}"
+
+            normalized_command = command.lower()
+            if timeout <= 300 and any(
+                pattern in normalized_command for pattern in (
+                    "npm install",
+                    "pnpm install",
+                    "yarn install",
+                    "bun install",
+                    "apt-get install",
+                    "pip install",
+                )
+            ):
+                timeout = 900
+
+            use_direct_session = self._should_use_direct_session(command)
+            wrapped_command = self._wrap_command_for_shell(command, cwd)
+
+            if use_direct_session:
+                logger.info("[SHELL] Using direct session execution for JS workspace command")
+                return await self._fallback_execute(wrapped_command, cwd, timeout, wrapped=True)
             
             # Use PTY for real-time streaming
             tool_output_ctx = get_tool_output_streaming_context()
@@ -251,11 +348,6 @@ Usage notes:
                     pty_size=PtySize(cols=120, rows=40)
                 )
                 
-                # Disable echo to prevent character doubling ("ccd", "lls")
-                # and cd to workspace directory
-                await pty_handle.send_input(f"stty -echo 2>/dev/null; cd {cwd}\n")
-                await asyncio.sleep(0.2)
-                
                 # Add marker to detect completion
                 marker = f"__CMD_DONE_{str(uuid4())[:8]}__"
                 
@@ -264,11 +356,15 @@ Usage notes:
                 # Common heredoc patterns: << EOF, << 'EOF', << "EOF", <<- EOF, <<-'EOF', etc.
                 import re
                 heredoc_pattern = r'<<-?\s*[\'"]?\w+[\'"]?\s*$'
+                pty_command = "\n".join([
+                    "stty -echo 2>/dev/null || true",
+                    wrapped_command,
+                ])
                 if re.search(heredoc_pattern, command, re.MULTILINE):
                     # Command has heredoc - put marker on a separate line
-                    full_command = f"{command}\necho '{marker}' $?\n"
+                    full_command = f"{pty_command}\necho '{marker}' $?\n"
                 else:
-                    full_command = f"{command}; echo '{marker}' $?\n"
+                    full_command = f"{pty_command}\necho '{marker}' $?\n"
                 
                 # Send the command
                 await pty_handle.send_input(full_command)
@@ -348,12 +444,12 @@ Usage notes:
             except Exception as pty_error:
                 logger.warning(f"PTY execution failed, falling back to direct execution: {pty_error}")
                 # Fall back to direct session execution
-                return await self._fallback_execute(command, cwd, timeout)
+                return await self._fallback_execute(wrapped_command, cwd, timeout, wrapped=True)
                 
         except Exception as e:
             return self.fail_response(f"Error executing command: {str(e)}")
 
-    async def _fallback_execute(self, command: str, cwd: str, timeout: int) -> ToolResult:
+    async def _fallback_execute(self, command: str, cwd: str, timeout: int, wrapped: bool = False) -> ToolResult:
         """Fallback execution method using direct session commands."""
         try:
             from daytona_sdk import SessionExecuteRequest
@@ -362,10 +458,12 @@ Usage notes:
             await self.sandbox.process.create_session(session_id)
             
             try:
+                final_command = command if wrapped else self._wrap_command_for_shell(command, cwd)
+                session_cwd = "." if wrapped else cwd
                 req = SessionExecuteRequest(
-                    command=command,
+                    command=final_command,
                     var_async=False,
-                    cwd=cwd
+                    cwd=session_cwd
                 )
                 
                 response = await self.sandbox.process.execute_session_command(
