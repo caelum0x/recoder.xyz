@@ -1178,7 +1178,6 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     res.removeHeader('Cross-Origin-Embedder-Policy');
     res.removeHeader('Cross-Origin-Opener-Policy');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('X-Frame-Options', 'ALLOWALL');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -1636,7 +1635,6 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       res.setHeader('Content-Length', Buffer.byteLength(responseBody));
       res.removeHeader('X-Frame-Options');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.setHeader('Access-Control-Allow-Origin', '*');
       res.send(responseBody);
     } catch (e: any) {
       console.error(`[SandboxPreview] Proxy error for ${projectId}:`, e.message);
