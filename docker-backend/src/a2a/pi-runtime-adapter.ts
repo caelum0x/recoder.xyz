@@ -151,7 +151,7 @@ export async function getOrCreatePiSession(
   logger.info({ projectId, sandboxId }, 'Creating Pi coding agent session');
 
   // Dynamic import to avoid hard dependency at module load time
-  const piModule = await import('@mariozechner/pi-coding-agent');
+  const piModule = await import('@mariozechner/pi-coding-agent/dist/index.js');
   const {
     AuthStorage,
     ModelRegistry,
@@ -308,7 +308,7 @@ export function disposePiSession(projectId: string): void {
  */
 export async function isPiRuntimeAvailable(): Promise<boolean> {
   try {
-    await import('@mariozechner/pi-coding-agent');
+    await import('@mariozechner/pi-coding-agent/dist/index.js');
     return true;
   } catch {
     return false;
