@@ -267,8 +267,6 @@ async function daytonaExec(sandboxId, command, options) {
 async function daytonaExecBackground(sandboxId, command, cwd = '/home/daytona', options) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    // Don't escape $ — it breaks $PATH which npm/node need.
-    // Only escape backticks to prevent command injection.
     const safeCmd = command.replace(/`/g, '\\`');
     const safeCwd = cwd.replace(/'/g, "'\\''");
     if (!options?.skipCleanup) {
@@ -279,15 +277,13 @@ async function daytonaExecBackground(sandboxId, command, cwd = '/home/daytona', 
             // Non-fatal — proceed with starting the new process
         }
     }
-    // Use nohup + setsid + disown to keep process alive after exec returns.
-    // Write PID to file so we can track it later.
-    const wrappedCmd = JSON.stringify(safeCmd);
     const script = [
         `cd '${safeCwd}'`,
-        `NODE_BIN="$(command -v node 2>/dev/null || true)"`,
-        `if [ -z "$NODE_BIN" ]; then for candidate in /usr/local/nvm/versions/node/*/bin/node /usr/local/bin/node /usr/bin/node; do if [ -x "$candidate" ]; then NODE_BIN="$candidate"; break; fi; done; fi`,
-        `if [ -n "$NODE_BIN" ]; then export PATH="$(dirname "$NODE_BIN"):$PATH"; fi`,
-        `BROWSER=none nohup setsid sh -lc ${wrappedCmd} > /tmp/dev.log 2>&1 & echo $! > /tmp/dev.pid`,
+        `: > /tmp/dev.log`,
+        `BROWSER=none nohup sh -lc ${JSON.stringify(safeCmd)} >/tmp/dev.log 2>&1 < /dev/null &`,
+        `CHILD_PID=$!`,
+        `echo "$CHILD_PID" >/tmp/dev.pid`,
+        `sleep 2`,
     ].join(' && ');
     await dc.execCommand(sandboxId, script, { timeoutSecs: 10 });
 }
