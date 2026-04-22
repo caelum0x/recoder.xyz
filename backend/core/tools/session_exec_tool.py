@@ -13,6 +13,7 @@ import httpx
 
 from core.agentpress.tool import ToolResult, openapi_schema, tool_metadata
 from core.sandbox.tool_base import SandboxToolsBase
+from core.sandbox.sandbox import create_session_with_recovery
 from core.agentpress.thread_manager import ThreadManager
 from core.utils.logger import logger
 from core.utils.config import config
@@ -127,12 +128,9 @@ class SandboxSessionExecTool(SandboxToolsBase):
     # ------------------------------------------------------------------ #
 
     async def _create_session(self, session_id: str) -> None:
-        """Create a Daytona process session via REST API."""
-        url = _daytona_url(self.sandbox_id, "process/session")
-        payload = {"sessionId": session_id}
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload, headers=_daytona_headers())
-            resp.raise_for_status()
+        """Create a Daytona process session with ENOSPC recovery."""
+        await self._ensure_sandbox()
+        await create_session_with_recovery(self.sandbox, session_id)
         logger.debug(f"[StatefulSession] Created session {session_id} in sandbox {self.sandbox_id}")
 
     async def _exec_in_session(

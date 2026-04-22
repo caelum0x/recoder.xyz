@@ -77,6 +77,146 @@ async def _ensure_workspace(sandbox: AsyncSandbox):
         logger.warning(f"Could not ensure /workspace: {e}")
 
 
+def _is_daytona_session_enospc(error: Exception) -> bool:
+    error_text = f"{type(error).__name__}: {error}".lower()
+    return (
+        ".daytona/sessions" in error_text
+        and "no space left on device" in error_text
+    )
+
+
+def _is_daytona_session_conflict(error: Exception) -> bool:
+    error_text = f"{type(error).__name__}: {error}".lower()
+    return "session already exists" in error_text or "conflict:" in error_text
+
+
+async def cleanup_daytona_session_dirs(
+    sandbox: AsyncSandbox,
+    older_than_minutes: int | None = 10,
+) -> None:
+    """Best-effort cleanup for leaked Daytona session directories inside a sandbox."""
+    session_root = "/home/daytona/.daytona/sessions"
+    if older_than_minutes is None:
+        cleanup_cmd = (
+            f"mkdir -p {session_root} && "
+            f"find {session_root} -mindepth 1 -maxdepth 1 -type d "
+            "-print -exec rm -rf {} + 2>/dev/null || true"
+        )
+        cleanup_scope = "all"
+    else:
+        cleanup_cmd = (
+            f"mkdir -p {session_root} && "
+            f"find {session_root} -mindepth 1 -maxdepth 1 -type d -mmin +{older_than_minutes} "
+            "-print -exec rm -rf {} + 2>/dev/null || true"
+        )
+        cleanup_scope = f"older than {older_than_minutes}m"
+    try:
+        result = await sandbox.process.exec(cleanup_cmd, timeout=20)
+        cleaned = (result.result or "").strip()
+        if cleaned:
+            logger.warning(
+                f"Cleaned Daytona session dirs ({cleanup_scope}): {cleaned}"
+            )
+    except Exception as cleanup_err:
+        logger.warning(f"Failed to cleanup Daytona session dirs: {cleanup_err}")
+
+
+async def create_session_with_recovery(sandbox: AsyncSandbox, session_id: str) -> None:
+    """Create a Daytona process session, cleaning leaked session dirs and retrying on ENOSPC."""
+    try:
+        await sandbox.process.create_session(session_id)
+        return
+    except Exception as first_err:
+        if _is_daytona_session_conflict(first_err):
+            logger.warning(f"Session {session_id} already exists; treating create as successful")
+            return
+        if not _is_daytona_session_enospc(first_err):
+            raise
+
+        logger.warning(
+            f"Session create hit ENOSPC for {session_id}; cleaning stale Daytona session dirs and retrying"
+        )
+        await cleanup_daytona_session_dirs(sandbox, older_than_minutes=10)
+
+        try:
+            await sandbox.process.create_session(session_id)
+            return
+        except Exception as second_err:
+            if _is_daytona_session_conflict(second_err):
+                logger.warning(
+                    f"Session {session_id} reported conflict after ENOSPC cleanup; treating create as successful"
+                )
+                return
+            if not _is_daytona_session_enospc(second_err):
+                raise
+
+            logger.warning(
+                f"Session create still ENOSPC for {session_id}; retrying after aggressive Daytona session cleanup"
+            )
+            await cleanup_daytona_session_dirs(sandbox, older_than_minutes=None)
+            try:
+                await sandbox.process.create_session(session_id)
+            except Exception as third_err:
+                if _is_daytona_session_conflict(third_err):
+                    logger.warning(
+                        f"Session {session_id} reported conflict after aggressive cleanup; treating create as successful"
+                    )
+                    return
+                raise
+
+
+async def execute_session_command_with_recovery(
+    sandbox: AsyncSandbox,
+    session_id: str,
+    req: SessionExecuteRequest,
+    timeout: int | None = None,
+    recreate_session: bool = False,
+):
+    """Execute a Daytona session command, cleaning leaked session dirs and retrying on ENOSPC."""
+    try:
+        return await sandbox.process.execute_session_command(
+            session_id=session_id,
+            req=req,
+            timeout=timeout,
+        )
+    except Exception as first_err:
+        if not _is_daytona_session_enospc(first_err):
+            raise
+
+        logger.warning(
+            f"Session exec hit ENOSPC for {session_id}; cleaning stale Daytona session dirs and retrying"
+        )
+        await cleanup_daytona_session_dirs(sandbox, older_than_minutes=10)
+
+        try:
+            return await sandbox.process.execute_session_command(
+                session_id=session_id,
+                req=req,
+                timeout=timeout,
+            )
+        except Exception as second_err:
+            if not _is_daytona_session_enospc(second_err):
+                raise
+
+            logger.warning(
+                f"Session exec still ENOSPC for {session_id}; retrying after aggressive Daytona session cleanup"
+            )
+            await cleanup_daytona_session_dirs(sandbox, older_than_minutes=None)
+
+            if recreate_session:
+                try:
+                    await sandbox.process.delete_session(session_id)
+                except Exception as delete_err:
+                    logger.debug(f"Failed deleting session {session_id} before recreate: {delete_err}")
+                await create_session_with_recovery(sandbox, session_id)
+
+            return await sandbox.process.execute_session_command(
+                session_id=session_id,
+                req=req,
+                timeout=timeout,
+            )
+
+
 async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
     """Retrieve a sandbox by ID, check its state, and start it if needed."""
 
@@ -134,7 +274,7 @@ async def start_file_server(sandbox: AsyncSandbox):
     try:
         # Try to create session (may already exist)
         try:
-            await sandbox.process.create_session(session_id)
+            await create_session_with_recovery(sandbox, session_id)
         except Exception:
             pass  # Session may already exist from a previous start
 
