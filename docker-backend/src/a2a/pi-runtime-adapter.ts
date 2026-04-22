@@ -19,12 +19,98 @@ import {
   daytonaExec,
   daytonaCreateFolder,
 } from '../daytona-file-ops.js';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { pathToFileURL } from 'url';
 
 const logger = createLogger('pi-runtime');
 
 // ── Daytona-backed Operations ───────────────────────────────────────
 
 const DAYTONA_CWD = '/home/daytona';
+
+async function loadPiModule() {
+  const candidates = [
+    join(process.cwd(), '..', 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'index.js'),
+    join(process.cwd(), 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'index.js'),
+    join(__dirname, '..', '..', 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'index.js'),
+  ];
+
+  const modulePath = candidates.find((candidate) => existsSync(candidate));
+  if (!modulePath) {
+    throw new Error('Pi runtime dist/index.js not found in node_modules');
+  }
+
+  const dynamicImport = new Function('specifier', 'return import(specifier)');
+  return dynamicImport(pathToFileURL(modulePath).href);
+}
+
+function buildPiExecutionPrompt(userPrompt: string): string {
+  return [
+    'You are a coding agent with direct file and shell tools inside the current Daytona workspace.',
+    'You must make changes by using the available tools, not by returning XML, pseudo-actions, or code snippets.',
+    'Never output <recoderAction>, <recoderArtifact>, markdown code fences, or hypothetical edits.',
+    'Apply the change directly to the workspace files and only return a short plain-text summary after the edits are complete.',
+    '',
+    'User request:',
+    userPrompt,
+  ].join('\n');
+}
+
+async function applyLegacyRecoderFileActions(
+  sandboxId: string,
+  responseText: string,
+): Promise<string[]> {
+  const appliedFiles: string[] = [];
+  const actionRegex = /<recoderAction\s+type="file"\s+filePath="([^"]+)"\s*>([\s\S]*?)<\/recoderAction>/gi;
+  const replaceRegex = /<recoderAction\s+type="str_replace"\s+filePath="([^"]+)"\s+oldString="([^"]*)"\s+newString="([^"]*)"\s*>[\s\S]*?<\/recoderAction>/gi;
+
+  for (const match of responseText.matchAll(actionRegex)) {
+    const filePath = match[1]?.trim();
+    const fileContent = match[2];
+    if (!filePath || fileContent == null) continue;
+
+    const normalizedContent = fileContent.replace(/^\n+|\n+$/g, '');
+    await daytonaWriteFile(sandboxId, filePath, normalizedContent);
+    appliedFiles.push(filePath);
+    logger.warn({ sandboxId, filePath }, 'Applied legacy recoderAction file output via Daytona fallback');
+  }
+
+  for (const match of responseText.matchAll(replaceRegex)) {
+    const filePath = match[1]?.trim();
+    const oldString = match[2] ?? '';
+    const newString = match[3] ?? '';
+    if (!filePath || !oldString) continue;
+
+    const currentContent = await daytonaReadFile(sandboxId, filePath);
+    if (!currentContent.includes(oldString)) continue;
+
+    const updatedContent = currentContent.replace(oldString, newString);
+    await daytonaWriteFile(sandboxId, filePath, updatedContent);
+    appliedFiles.push(filePath);
+    logger.warn({ sandboxId, filePath }, 'Applied legacy recoderAction str_replace output via Daytona fallback');
+  }
+
+  if (appliedFiles.length === 0) {
+    const referencedFiles = Array.from(
+      new Set(Array.from(responseText.matchAll(/filePath="([^"]+)"/g)).map((match) => match[1]?.trim()).filter(Boolean)),
+    ) as string[];
+    const codeBlocks = Array.from(responseText.matchAll(/```(?:[\w-]+)?\n([\s\S]*?)```/g))
+      .map((match) => match[1]?.trim())
+      .filter(Boolean) as string[];
+    const candidateBlock = codeBlocks.reverse().find((block) => {
+      return !block.startsWith('<recoder') && (block.includes('export default') || block.includes('function App'));
+    });
+
+    if (referencedFiles.length === 1 && candidateBlock) {
+      await daytonaWriteFile(sandboxId, referencedFiles[0], candidateBlock);
+      appliedFiles.push(referencedFiles[0]);
+      logger.warn({ sandboxId, filePath: referencedFiles[0] }, 'Applied legacy fenced code fallback via Daytona');
+    }
+  }
+
+  return appliedFiles;
+}
 
 /** ReadOperations backed by Daytona */
 function createDaytonaReadOps(sandboxId: string) {
@@ -150,8 +236,9 @@ export async function getOrCreatePiSession(
 
   logger.info({ projectId, sandboxId }, 'Creating Pi coding agent session');
 
-  // Dynamic import to avoid hard dependency at module load time
-  const piModule = await import('@mariozechner/pi-coding-agent/dist/index.js');
+  // Load the ESM-only Pi package by absolute file URL so CommonJS output
+  // does not collapse this into require(), which breaks on the package exports map.
+  const piModule = await loadPiModule();
   const {
     AuthStorage,
     ModelRegistry,
@@ -272,7 +359,12 @@ export async function promptPiSession(
   });
 
   try {
-    await session.prompt(prompt);
+    await session.prompt(buildPiExecutionPrompt(prompt));
+
+    if (filesChanged.length === 0 && textParts.length > 0) {
+      const legacyWrites = await applyLegacyRecoderFileActions(sandboxId, textParts.join('\n\n'));
+      filesChanged.push(...legacyWrites);
+    }
 
     return {
       success: true,
@@ -308,7 +400,7 @@ export function disposePiSession(projectId: string): void {
  */
 export async function isPiRuntimeAvailable(): Promise<boolean> {
   try {
-    await import('@mariozechner/pi-coding-agent/dist/index.js');
+    await loadPiModule();
     return true;
   } catch {
     return false;
