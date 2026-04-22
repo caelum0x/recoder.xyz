@@ -133,9 +133,43 @@ const dockerApiProxy = createProxyMiddleware({
   },
 });
 
+async function maybeRedirectToDaytonaPreview(req, res) {
+  const match = req.originalUrl.match(/^\/preview\/([^/?#]+)\/?$/);
+  if (!match) return false;
+
+  try {
+    const projectId = match[1];
+    const response = await fetch(`${DOCKER_BACKEND_URL}/api/preview/${projectId}/health`, {
+      headers: {
+        accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) return false;
+
+    const data = await response.json().catch(() => null);
+    const previewUrl = typeof data?.previewUrl === 'string' ? data.previewUrl : '';
+    const isDaytona = data?.daytona === true;
+    const hasHealthyPort = Array.isArray(data?.ports) && data.ports.some((port) => port?.responding);
+
+    if (isDaytona && previewUrl && hasHealthyPort) {
+      res.redirect(302, previewUrl);
+      return true;
+    }
+  } catch (error) {
+    console.warn('[Preview Redirect] Daytona preview redirect skipped:', error?.message || error);
+  }
+
+  return false;
+}
+
 async function relayPreviewRequest(req, res, next, options = {}) {
   if (req.headers.upgrade && String(req.headers.upgrade).toLowerCase() === 'websocket') {
     return next();
+  }
+
+  if (await maybeRedirectToDaytonaPreview(req, res)) {
+    return;
   }
 
   try {
