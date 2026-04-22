@@ -14,7 +14,14 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from daytona_sdk import AsyncSandbox, SessionExecuteRequest
 
-from core.sandbox.sandbox import get_or_start_sandbox, delete_sandbox, create_sandbox, daytona
+from core.sandbox.sandbox import (
+    get_or_start_sandbox,
+    delete_sandbox,
+    create_sandbox,
+    create_session_with_recovery,
+    execute_session_command_with_recovery,
+    daytona,
+)
 from core.sandbox.daytona_file_service import get_file_service
 from core.sandbox.file_content_response import build_file_content_response
 from core.utils.logger import logger
@@ -2506,13 +2513,15 @@ async def execute_terminal_command(
         wrapped_command = f"cd {shlex.quote(cwd)} && {command}"
         
         try:
-            await sandbox.process.create_session(session_id)
-            result = await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
+            await create_session_with_recovery(sandbox, session_id)
+            result = await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(
                     command=f"bash -lc {shlex.quote(wrapped_command)}",
                     var_async=False
-                )
+                ),
+                recreate_session=True,
             )
             
             output = ""

@@ -5,6 +5,7 @@ import time
 from uuid import uuid4
 from core.agentpress.tool import ToolResult, openapi_schema, tool_metadata
 from core.sandbox.tool_base import SandboxToolsBase
+from core.sandbox.sandbox import create_session_with_recovery, execute_session_command_with_recovery
 from core.agentpress.thread_manager import ThreadManager
 from core.utils.tool_output_streaming import stream_tool_output, get_tool_output_streaming_context, get_current_tool_call_id
 from core.utils.logger import logger
@@ -455,7 +456,7 @@ Usage notes:
             from daytona_sdk import SessionExecuteRequest
             
             session_id = f"cmd_{str(uuid4())[:8]}"
-            await self.sandbox.process.create_session(session_id)
+            await create_session_with_recovery(self.sandbox, session_id)
             
             try:
                 final_command = command if wrapped else self._wrap_command_for_shell(command, cwd)
@@ -466,10 +467,12 @@ Usage notes:
                     cwd=session_cwd
                 )
                 
-                response = await self.sandbox.process.execute_session_command(
+                response = await execute_session_command_with_recovery(
+                    self.sandbox,
                     session_id=session_id,
                     req=req,
-                    timeout=timeout
+                    timeout=timeout,
+                    recreate_session=True,
                 )
                 
                 logs = await self.sandbox.process.get_session_command_logs(
@@ -508,7 +511,7 @@ Usage notes:
         
         try:
             await self._ensure_sandbox()
-            await self.sandbox.process.create_session(session_id)
+            await create_session_with_recovery(self.sandbox, session_id)
             
             req = SessionExecuteRequest(
                 command=command,
@@ -516,10 +519,12 @@ Usage notes:
                 cwd=self.workspace_path
             )
             
-            response = await self.sandbox.process.execute_session_command(
+            response = await execute_session_command_with_recovery(
+                self.sandbox,
                 session_id=session_id,
                 req=req,
-                timeout=30
+                timeout=30,
+                recreate_session=True,
             )
             
             logs = await self.sandbox.process.get_session_command_logs(

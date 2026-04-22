@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from core.sandbox.sandbox import create_session_with_recovery, execute_session_command_with_recovery
 from core.tools.sb_shell_tool import SandboxShellTool
 
 
@@ -31,7 +32,7 @@ def test_shell_tool_wraps_command_with_node_bootstrap():
 def test_shell_tool_backgrounds_foreground_dev_server_commands():
     prepared = SandboxShellTool._prepare_command("npm start")
 
-    assert "nohup bash -lc" in prepared
+    assert "tmux new-session -d -s recoder-dev-server" in prepared
     assert "DEV_SERVER_STARTED" in prepared
     assert "npm start" in prepared
 
@@ -65,3 +66,65 @@ async def test_shell_tool_wrapped_fallback_uses_relative_session_cwd(monkeypatch
     assert result.success is True
     assert captured["cwd"] == "."
     assert captured["command"] == "echo hello"
+
+
+@pytest.mark.asyncio
+async def test_create_session_with_recovery_cleans_and_retries_on_enospc():
+    process = SimpleNamespace(
+        create_session=AsyncMock(side_effect=[
+            RuntimeError("mkdir /home/daytona/.daytona/sessions/test: no space left on device"),
+            None,
+        ]),
+        exec=AsyncMock(return_value=SimpleNamespace(result="/home/daytona/.daytona/sessions/old-session")),
+    )
+    sandbox = SimpleNamespace(process=process)
+
+    await create_session_with_recovery(sandbox, "sess-123")
+
+    assert process.create_session.await_count == 2
+    process.exec.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_session_with_recovery_treats_conflict_after_cleanup_as_success():
+    process = SimpleNamespace(
+        create_session=AsyncMock(side_effect=[
+            RuntimeError("mkdir /home/daytona/.daytona/sessions/test: no space left on device"),
+            RuntimeError("conflict: session already exists"),
+        ]),
+        exec=AsyncMock(return_value=SimpleNamespace(result="/home/daytona/.daytona/sessions/old-session")),
+    )
+    sandbox = SimpleNamespace(process=process)
+
+    await create_session_with_recovery(sandbox, "sess-456")
+
+    assert process.create_session.await_count == 2
+    process.exec.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_session_command_with_recovery_recreates_after_enospc():
+    process = SimpleNamespace(
+        execute_session_command=AsyncMock(side_effect=[
+            RuntimeError("failed to create log directory: mkdir /home/daytona/.daytona/sessions/test: no space left on device"),
+            RuntimeError("failed to create log directory: mkdir /home/daytona/.daytona/sessions/test: no space left on device"),
+            SimpleNamespace(cmd_id="cmd-1", exit_code=0),
+        ]),
+        exec=AsyncMock(return_value=SimpleNamespace(result="/home/daytona/.daytona/sessions/old-session")),
+        delete_session=AsyncMock(),
+        create_session=AsyncMock(return_value=None),
+    )
+    sandbox = SimpleNamespace(process=process)
+
+    result = await execute_session_command_with_recovery(
+        sandbox,
+        session_id="sess-789",
+        req=SimpleNamespace(command="echo hi"),
+        timeout=30,
+        recreate_session=True,
+    )
+
+    assert result.exit_code == 0
+    assert process.execute_session_command.await_count == 3
+    process.delete_session.assert_awaited_once()
+    assert process.create_session.await_count == 1

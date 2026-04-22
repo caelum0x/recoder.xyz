@@ -68,6 +68,11 @@ When building a web project (React, Vite, Next.js, etc.):
 4. Wait briefly, then call `expose_port(5173)` to get the preview URL
 5. Share the preview URL with the user
 
+For new React apps from scratch:
+- Prefer Vite or a minimal hand-written React setup.
+- DO NOT use `create-react-app` or `react-scripts` unless the user explicitly asks for them.
+- Avoid heavyweight scaffolds that install very large dependency trees, because they are slow and can exhaust sandbox disk/inode headroom.
+
 For simple HTML pages (no build tools): just create the HTML file — port 8080 serves it automatically with a preview URL.
 - Python packages (python-docx, openpyxl, python-pptx, pandas, matplotlib) are auto-installed when imported via run_code
 
