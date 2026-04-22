@@ -18,7 +18,7 @@ Keep the live Recoder surfaces working end to end:
 | Platform | URL | Current State |
 | --- | --- | --- |
 | Hub | `recoder.xyz` | Working. Header simplified to `Agents` + `Dashboard`; dashboard onboarding loop removed; auth UI simplified to OAuth-first flows. |
-| Web IDE | `web.recoder.xyz` | Working end to end. Broken local settings/publish UI removed; auth works; project creation works; Daytona sandbox bring-up works; preview auto-start recovers dead Vite servers; single-turn and follow-up coding edits were browser-verified against a live project. |
+| Web IDE | `web.recoder.xyz` | Partially healthy. Auth, project creation, sandbox bring-up, preview routing, and browser-verified single/follow-up edits work; real app-task loops are improved but not fully closed. |
 | Agents | `agents.recoder.xyz` | Main authenticated paths working. Shared ecosystem nav removed; top-right notification/customize controls removed; `Plan` removed from user menu; file pane hydration fallback fixed. |
 | PM | `pm.recoder.xyz` | Authenticated PM surface verified working on key routes. |
 | Agency | `agency.recoder.xyz` | Authenticated dashboard/projects/settings flows verified. One intermittent RSC prefetch issue remains open. |
@@ -148,6 +148,20 @@ Verified live:
   - intermittent authenticated agency RSC prefetch `503`s
   - direct route loads are fine; issue appears intermittent and likely proxy/prefetch related
 
+- `recoder-96g`
+  - real app-task coding loop is still not fully complete end to end
+  - new-thread startup, sandbox bring-up, file writes, install/start command handling, and preview routing are improved
+  - later-stage app-task completion still stalls in some live runs
+
+- `recoder-wju3`
+  - Daytona sandbox session/log-dir creation can fail under `/home/daytona/.daytona/sessions`
+  - live terminal-execute verification moved the failure from pure session-create ENOSPC into session-command log-dir ENOSPC
+
+- `recoder-czmt`
+  - heavyweight React scaffolds can exhaust sandbox overlay disk/inodes
+  - live Daytona probe on a real sandbox showed overlay usage at `100%` disk and `100%` inodes after a React app task
+  - prompt/runtime should keep preferring lighter Vite/minimal setups and add stronger runtime guards
+
 - active in-progress agents/backend cleanup tickets remain in `bd`
   - use `bd list --status in_progress` for the live queue
 
@@ -162,6 +176,7 @@ Launch is complete when:
 
 - `recoder.xyz` auth + Web bridge work
 - `web.recoder.xyz` supports create, follow-up edit, and same-origin preview rendering in production
+- `web.recoder.xyz` supports full real app-task loops without sandbox/session/storage exhaustion
 - `agents.recoder.xyz` key authenticated routes work
 - `pm.recoder.xyz` key authenticated routes work
 - `agency.recoder.xyz` key authenticated routes work
@@ -170,6 +185,9 @@ Launch is complete when:
 - `recoder-ylcl` is resolved
 - `recoder-hb6` is resolved
 - `recoder-i3v` is resolved
+- `recoder-96g` is resolved
+- `recoder-wju3` is resolved
+- `recoder-czmt` is resolved or explicitly accepted
 - `recoder-zdp` is resolved or explicitly accepted as non-blocking
 
 ## Notes
@@ -178,68 +196,3 @@ Launch is complete when:
 - Keep this file short and current.
 - Use `bd` for detailed tracking, not this file.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not treated as a product bug.
-
-  - too many hops
-      - browser -> web.recoder.xyz
-      - web -> recoder-web
-      - recoder-web -> docker-backend
-      - docker-backend -> Daytona
-      - Daytona -> Vite dev server
-  - two preview paths instead of one
-      - /preview/:id
-      - /api/sandbox-preview/:id/*
-  - mixed responsibilities
-      - nginx, recoder-web, and docker-backend all touched preview behavior
-      - headers, base href, websocket upgrade, and caching were all modified in more than one place
-  - health checks were fake-good
-      - “5173 responds” was treated as “live preview works”
-      - that is not enough for Vite
-  - env drift
-      - recoder-web was still pointed at Neon through env files
-      - production compose and live env were not the same truth
-  - Daytona runner hygiene was poor
-      - inner Docker inode exhaustion broke installs
-      - preview looked like “timeout” but the real issue was runtime exhaustion
-
-  Why this breaks specifically with Vite:
-
-  - Vite dev mode is not just static files on a port
-  - it relies on:
-      - transformed import URLs
-      - @vite/client
-      - @react-refresh
-      - working websocket upgrade
-      - consistent host/origin/path assumptions
-  - once you rewrite HTML and proxy assets/ws through multiple layers, small mismatches cause white pages
-
-  Bluntly: other projects keep preview simple. We made it too clever.
-
-  The clean fix is:
-
-  1. choose one preview architecture
-  2. stop rewriting Vite traffic in multiple places
-  3. either:
-      - use direct sandbox origin with proper wildcard/domain routing, or
-      - proxy everything through exactly one gateway
-  4. if embedded preview is required, disable HMR and use iframe reloads instead of proxying Vite dev websockets
-
-  Best practical direction:
-
-  - short term:
-      - make preview “no-HMR iframe reload only”
-      - one path only
-      - no @vite/client, no @react-refresh, no websocket dependence
-  - long term:
-      - move to direct sandbox preview domains or a single-purpose preview gateway
-
-  So yes:
-
-  - URLs were wrong
-  - websocket handling was wrong
-  - CORS/header handling was wrong
-  - Vite is exposing the weakness
-  - Daytona is not the main problem
-  - our proxy design is the main problem
-
-  If you want, I can stop trying to preserve Vite HMR and implement the simpler “preview without HMR, hard refresh on file changes” path
-  first.
