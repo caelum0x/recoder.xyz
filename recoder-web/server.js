@@ -205,12 +205,14 @@ async function relayPreviewRequest(req, res, next, options = {}) {
       const projectMatch = req.originalUrl.match(/^\/(?:preview|api\/sandbox-preview)\/([^/?#]+)/);
       const projectId = projectMatch?.[1];
       if (projectId) {
-        const absoluteBase = `${DOCKER_PUBLIC_URL}/api/sandbox-preview/${projectId}/`;
+        const sameOriginBase = req.originalUrl.startsWith('/preview/')
+          ? `/preview/${projectId}/`
+          : `/api/sandbox-preview/${projectId}/`;
         const html = responseBuffer
           .toString('utf8')
           .replace(
             new RegExp(`<base href=["']/?api/sandbox-preview/${projectId}/["']`, 'i'),
-            `<base href="${absoluteBase}"`,
+            `<base href="${sameOriginBase}"`,
           );
         responseBuffer = Buffer.from(html, 'utf8');
       }
