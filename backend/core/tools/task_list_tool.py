@@ -435,6 +435,10 @@ class TaskListTool(SandboxToolsBase):
                         "enum": ["pending", "in_progress", "completed", "cancelled"],
                         "description": "New status. Use 'in_progress' when working on a task, 'completed' when done."
                     },
+                    "activeForm": {
+                        "type": "string",
+                        "description": "Optional present-continuous label from older prompts/tooling. Accepted for compatibility and ignored by storage."
+                    },
                     "section_id": {
                         "type": "string",
                         "description": "Move task(s) to different section"
@@ -446,9 +450,11 @@ class TaskListTool(SandboxToolsBase):
         }
     })
     async def update_tasks(self, task_ids, content: Optional[str] = None,
-                          status: Optional[str] = None, section_id: Optional[str] = None) -> ToolResult:
+                          status: Optional[str] = None, section_id: Optional[str] = None,
+                          activeForm: Optional[str] = None) -> ToolResult:
         """Update one or more tasks"""
         try:
+            _ = activeForm  # Backward-compatible no-op for legacy task prompts/tool calls
             # Parse task_ids
             if task_ids is not None:
                 if isinstance(task_ids, str):
