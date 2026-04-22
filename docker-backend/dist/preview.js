@@ -57,6 +57,7 @@ const zrok_preview_js_1 = require("./zrok-preview.js");
 const byok_provider_keys_js_1 = require("./public-api/byok-provider-keys.js");
 const docker = new dockerode_1.default();
 const autoStartAttempts = new Map();
+const autoStartPromises = new Map();
 const autoInstallAttempts = new Map();
 const AUTO_START_COOLDOWN_MS = 10000;
 const AUTO_INSTALL_COOLDOWN_MS = 60000;
@@ -80,6 +81,23 @@ const DAYTONA_PORT_CANDIDATES = [
     { port: 8080, type: 'Other (8080)' },
     { port: 8081, type: 'Expo (8081)' },
 ];
+async function runAutoStartOnce(projectId, work) {
+    const existing = autoStartPromises.get(projectId);
+    if (existing) {
+        await existing;
+        return;
+    }
+    const pending = (async () => {
+        try {
+            await work();
+        }
+        finally {
+            autoStartPromises.delete(projectId);
+        }
+    })();
+    autoStartPromises.set(projectId, pending);
+    await pending;
+}
 function getDaytonaPortCandidatesForFramework(framework) {
     const normalized = (framework || '').toLowerCase();
     if (normalized === 'expo') {
@@ -1069,13 +1087,15 @@ function setupPreviewProxy(app, containers) {
             if (now - lastAttempt > AUTO_START_COOLDOWN_MS && !dev_server_js_1.devServerManager.isRunning(projectId)) {
                 autoStartAttempts.set(projectId, now);
                 try {
-                    await ensureDependencies(entry.id, projectId, true);
-                    const framework = detectedFramework;
-                    console.log(`[Preview] Auto-starting Daytona dev server for ${projectId} (${framework})`);
-                    const ports = [5173, 3000, 3001, 3004, 3005, 3002]; // Vite (5173) first, then standard ports
-                    await dev_server_js_1.devServerManager.start(entry.id, projectId, framework, ports, {
-                        daytona: true,
-                        daytonaPreviewUrl: daytonaUrl,
+                    await runAutoStartOnce(projectId, async () => {
+                        await ensureDependencies(entry.id, projectId, true);
+                        const framework = detectedFramework;
+                        console.log(`[Preview] Auto-starting Daytona dev server for ${projectId} (${framework})`);
+                        const ports = [5173, 3000, 3001, 3004, 3005, 3002];
+                        await dev_server_js_1.devServerManager.start(entry.id, projectId, framework, ports, {
+                            daytona: true,
+                            daytonaPreviewUrl: daytonaUrl,
+                        });
                     });
                 }
                 catch (err) {
@@ -1107,10 +1127,12 @@ function setupPreviewProxy(app, containers) {
             if (now - lastAttempt > AUTO_START_COOLDOWN_MS && !dev_server_js_1.devServerManager.isRunning(projectId)) {
                 autoStartAttempts.set(projectId, now);
                 try {
-                    await ensureDependencies(entry.id, projectId, false);
-                    const framework = await detectFramework(entry.id, false);
-                    console.log(`[Preview] Auto-starting dev server for ${projectId} (${framework})`);
-                    await dev_server_js_1.devServerManager.start(entry.id, projectId, framework, basePorts);
+                    await runAutoStartOnce(projectId, async () => {
+                        await ensureDependencies(entry.id, projectId, false);
+                        const framework = await detectFramework(entry.id, false);
+                        console.log(`[Preview] Auto-starting dev server for ${projectId} (${framework})`);
+                        await dev_server_js_1.devServerManager.start(entry.id, projectId, framework, basePorts);
+                    });
                 }
                 catch (err) {
                     console.warn(`[Preview] Auto-start failed for ${projectId}:`, err);

@@ -461,22 +461,19 @@ export class DevServerManager {
   }
 
   private getDaytonaStartCommand(framework: string): string {
-    const nodeBin = '/usr/local/nvm/versions/node/v22.14.0/bin/node';
-    const npmCli = '/usr/local/nvm/versions/node/v22.14.0/lib/node_modules/npm/bin/npm-cli.js';
-    const npm = `env PATH=/usr/local/nvm/versions/node/v22.14.0/bin:$PATH ${nodeBin} ${npmCli}`;
     const commands: Record<string, string> = {
-      vite: `${npm} run dev -- --host 0.0.0.0 --port 5173`,
-      next: `${npm} run dev -- --hostname 0.0.0.0`,
-      react: `env PATH=/usr/local/nvm/versions/node/v22.14.0/bin:$PATH HOST=0.0.0.0 PORT=3000 ${nodeBin} ${npmCli} start`,
-      vue: `${npm} run serve`,
-      bun: `${npm} run dev`,
-      svelte: `${npm} run dev -- --host 0.0.0.0`,
-      sveltekit: `${npm} run dev -- --host 0.0.0.0`,
-      nuxt: `${npm} run dev`,
+      vite: `npm run dev -- --host 0.0.0.0 --port 5173`,
+      next: `npm run dev -- --hostname 0.0.0.0`,
+      react: `HOST=0.0.0.0 PORT=3000 npm start`,
+      vue: `npm run serve`,
+      bun: `npm run dev`,
+      svelte: `npm run dev -- --host 0.0.0.0`,
+      sveltekit: `npm run dev -- --host 0.0.0.0`,
+      nuxt: `npm run dev`,
       expo: `REACT_NATIVE_PACKAGER_HOSTNAME=${expoPublicHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 npx expo start --host 0.0.0.0 --port 8081`,
     };
 
-    return commands[framework] || `${npm} run dev -- --host 0.0.0.0`;
+    return commands[framework] || `npm run dev -- --host 0.0.0.0`;
   }
 
   /**

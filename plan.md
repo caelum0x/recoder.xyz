@@ -18,7 +18,7 @@ Keep the live Recoder surfaces working end to end:
 | Platform | URL | Current State |
 | --- | --- | --- |
 | Hub | `recoder.xyz` | Working. Header simplified to `Agents` + `Dashboard`; dashboard onboarding loop removed; auth UI simplified to OAuth-first flows. |
-| Web IDE | `web.recoder.xyz` | Partially working. Broken local settings/publish UI removed; auth works; project creation and sandbox bring-up recovered; preview asset delivery still broken by cross-origin sandbox asset routing/CORS; end-to-end coding still not fully verified. |
+| Web IDE | `web.recoder.xyz` | Working end to end. Broken local settings/publish UI removed; auth works; project creation works; Daytona sandbox bring-up works; preview auto-start recovers dead Vite servers; single-turn and follow-up coding edits were browser-verified against a live project. |
 | Agents | `agents.recoder.xyz` | Main authenticated paths working. Shared ecosystem nav removed; top-right notification/customize controls removed; `Plan` removed from user menu; file pane hydration fallback fixed. |
 | PM | `pm.recoder.xyz` | Authenticated PM surface verified working on key routes. |
 | Agency | `agency.recoder.xyz` | Authenticated dashboard/projects/settings flows verified. One intermittent RSC prefetch issue remains open. |
@@ -46,6 +46,10 @@ Keep the live Recoder surfaces working end to end:
 - legacy `chat-history` / project-state hot-path fallback removed
 - project creation recovered by moving `recoder-web` off Neon-backed runtime DB config and back to host Postgres
 - Daytona runner inode exhaustion identified and cleaned up so fresh sandboxes can install dependencies again
+- preview now redirects to the direct Daytona URL only when a real preview port is up
+- Daytona preview auto-start no longer double-starts the same project
+- Pi Daytona writes now land in the real sandbox even when the model falls back to legacy `recoderAction` text output
+- live browser verification passed for both first-turn and second-turn Web IDE edits on the same project
 
 ### Agents
 
@@ -82,19 +86,10 @@ Verified in production:
 - authenticated profile and quota endpoints work
 - authenticated project creation works again
 - sandbox creation works again
-- Daytona-backed sandbox preview health reports `5173` responding
-
-Still broken:
-
-- `recoder-2hzs`
-  - `web.recoder.xyz/preview/:projectId` rewrites preview HTML `<base href>` to `docker.recoder.xyz/api/sandbox-preview/...`
-  - browser then fetches Vite assets cross-origin
-  - `docker.recoder.xyz/api/sandbox-preview/*` currently emits duplicate `Access-Control-Allow-Origin` headers
-  - result: white/blank preview page even when `5173` is actually responding
-
-- end-to-end coding remains incomplete
-  - the sandbox, install path, and preview port can be made healthy
-  - full AI edit/write verification is still in progress
+- Daytona-backed preview health reports `5173` responding after auto-start
+- live preview renders through the direct Daytona URL
+- first-turn Web IDE edit verified on a live project
+- second-turn follow-up edit verified on the same live project
 
 ### PM
 
@@ -149,21 +144,12 @@ Verified live:
 
 ### Current Real Follow-Up
 
-- `recoder-ylcl`
-  - umbrella `recoder-web` runtime cleanup
-  - broken UI entrypoints fixed, but end-to-end coding verification still open
-
-- `recoder-933l`
-  - `recoder-web` project creation/runtime DB mismatch
-  - host Postgres path recovered, but repo/prod env cleanup must stay aligned so Neon does not reappear
-
-- `recoder-2hzs`
-  - cross-origin sandbox preview asset loading / duplicate CORS headers
-  - current source of the white blank preview page
-
 - `recoder-zdp`
   - intermittent authenticated agency RSC prefetch `503`s
   - direct route loads are fine; issue appears intermittent and likely proxy/prefetch related
+
+- active in-progress agents/backend cleanup tickets remain in `bd`
+  - use `bd list --status in_progress` for the live queue
 
 ### Optional Deeper Verification
 
@@ -182,6 +168,8 @@ Launch is complete when:
 - A2A-dependent flows stay healthy after the latest env/runtime fixes
 - `recoder-2hzs` is resolved
 - `recoder-ylcl` is resolved
+- `recoder-hb6` is resolved
+- `recoder-i3v` is resolved
 - `recoder-zdp` is resolved or explicitly accepted as non-blocking
 
 ## Notes
@@ -190,34 +178,6 @@ Launch is complete when:
 - Keep this file short and current.
 - Use `bd` for detailed tracking, not this file.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not treated as a product bug.
-Failed to load resource: the server responded with a status of 400 ()
-chrome-extension://j…ntent_reporter.js:1 Uncaught SyntaxError: Unexpected token 'export'
-client:536 WebSocket connection to 'wss://web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/?token=VCkt1q1zoQFn' failed: 
-setupWebSocket @ client:536
-client:536 WebSocket connection to 'wss://web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/?token=VCkt1q1zoQFn' failed: 
-setupWebSocket @ client:536
-client:512 [vite] failed to connect to websocket.
-your current setup:
-  (browser) web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ <--[HTTP]--> web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ (server)
-  (browser) web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ <--[WebSocket (failing)]--> web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/ (server)
-Check out your Vite / network configuration and https://vite.dev/config/server-options.html#server-hmr .
-(anonymous) @ client:512
-Bu siteye ulaşılamıyor
-wss://web.recoder.xyz/api/sandbox-preview/e26ca1eb-7c8a-4bb1-a3b7-b1efc23b3128/?token=VCkt1q1zoQFn adresindeki web sayfası, geçici olarak kullanılamıyor veya kalıcı olarak yeni bir web adresine taşınmış olabilir.
-
-ERR_UNKNOWN_URL_SCHEME
-we’re doing wrong is architectural, not “Vite is uniquely impossible.”
-
-  bolt.new, Lovable, and similar tools usually avoid this exact failure by doing one of these:
-
-  - give each sandbox its own direct preview origin
-  - put exactly one reverse proxy in front of the dev server
-  - avoid rewriting Vite HTML/module/HMR traffic in multiple layers
-  - disable HMR in embedded preview and just hard-reload the iframe
-
-  We are doing the opposite.
-
-  What’s wrong in our stack:
 
   - too many hops
       - browser -> web.recoder.xyz

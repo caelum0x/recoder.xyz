@@ -62,13 +62,15 @@ async function applyLegacyRecoderFileActions(
   responseText: string,
 ): Promise<string[]> {
   const appliedFiles: string[] = [];
+  const isPlaceholderPath = (value: string) => value.includes('[') || value.includes(']');
+  const candidateExistingFiles = ['src/App.tsx', 'src/main.tsx', 'src/main.jsx', 'src/App.jsx'];
   const actionRegex = /<recoderAction\s+type="file"\s+filePath="([^"]+)"\s*>([\s\S]*?)<\/recoderAction>/gi;
   const replaceRegex = /<recoderAction\s+type="str_replace"\s+filePath="([^"]+)"\s+oldString="([^"]*)"\s+newString="([^"]*)"\s*>[\s\S]*?<\/recoderAction>/gi;
 
   for (const match of responseText.matchAll(actionRegex)) {
     const filePath = match[1]?.trim();
     const fileContent = match[2];
-    if (!filePath || fileContent == null) continue;
+    if (!filePath || fileContent == null || isPlaceholderPath(filePath)) continue;
 
     const normalizedContent = fileContent.replace(/^\n+|\n+$/g, '');
     await daytonaWriteFile(sandboxId, filePath, normalizedContent);
@@ -80,7 +82,7 @@ async function applyLegacyRecoderFileActions(
     const filePath = match[1]?.trim();
     const oldString = match[2] ?? '';
     const newString = match[3] ?? '';
-    if (!filePath || !oldString) continue;
+    if (!filePath || !oldString || isPlaceholderPath(filePath)) continue;
 
     const currentContent = await daytonaReadFile(sandboxId, filePath);
     if (!currentContent.includes(oldString)) continue;
@@ -102,10 +104,38 @@ async function applyLegacyRecoderFileActions(
       return !block.startsWith('<recoder') && (block.includes('export default') || block.includes('function App'));
     });
 
-    if (referencedFiles.length === 1 && candidateBlock) {
-      await daytonaWriteFile(sandboxId, referencedFiles[0], candidateBlock);
-      appliedFiles.push(referencedFiles[0]);
-      logger.warn({ sandboxId, filePath: referencedFiles[0] }, 'Applied legacy fenced code fallback via Daytona');
+    const validReferencedFiles = referencedFiles.filter((filePath) => !isPlaceholderPath(filePath));
+    let fallbackTarget = validReferencedFiles.length === 1 ? validReferencedFiles[0] : '';
+
+    if (!fallbackTarget && candidateBlock) {
+      for (const candidate of candidateExistingFiles) {
+        try {
+          const existing = await daytonaReadFile(sandboxId, candidate);
+          if (!existing) continue;
+          if (
+            (candidate.endsWith('App.tsx') || candidate.endsWith('App.jsx'))
+            && (candidateBlock.includes('function App') || candidateBlock.includes('export default App'))
+          ) {
+            fallbackTarget = candidate;
+            break;
+          }
+          if (
+            (candidate.endsWith('main.tsx') || candidate.endsWith('main.jsx'))
+            && (candidateBlock.includes('createRoot') || candidateBlock.includes('ReactDOM'))
+          ) {
+            fallbackTarget = candidate;
+            break;
+          }
+        } catch {
+          // candidate file not present in this sandbox
+        }
+      }
+    }
+
+    if (fallbackTarget && candidateBlock) {
+      await daytonaWriteFile(sandboxId, fallbackTarget, candidateBlock);
+      appliedFiles.push(fallbackTarget);
+      logger.warn({ sandboxId, filePath: fallbackTarget }, 'Applied legacy fenced code fallback via Daytona');
     }
   }
 
