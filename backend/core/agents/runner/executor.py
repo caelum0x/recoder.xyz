@@ -191,6 +191,20 @@ async def execute_agent_run(
 
             await send_completion_notification(thread_id, agent_config, complete_tool_called)
 
+            # Defer project/thread naming until the main coding run has completed.
+            # This keeps startup-time LLM demand lower for real app tasks and avoids
+            # competing with the primary execution model while the run is still
+            # creating files, installing deps, and starting previews.
+            if is_new_thread and user_message:
+                try:
+                    from core.utils.project_helpers import generate_and_update_project_name
+                    from core.utils.thread_name_generator import generate_and_update_thread_name
+
+                    asyncio.create_task(generate_and_update_project_name(project_id=project_id, prompt=user_message))
+                    asyncio.create_task(generate_and_update_thread_name(thread_id=thread_id, prompt=user_message))
+                except Exception as naming_err:
+                    logger.warning(f"Deferred naming scheduling failed: {naming_err}")
+
         if stop_state['reason']:
             final_status = "stopped"
 

@@ -226,6 +226,20 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     # Ensure /workspace exists (tools write here, but it doesn't exist in Daytona images)
     await _ensure_workspace(sandbox)
 
+    # Start the lightweight file server synchronously so callers get a usable
+    # workspace immediately. Defer the heavy package/tool warm-up work so
+    # sandbox resolution for real agent runs does not sit behind apt/pip/npm.
+    await start_file_server(sandbox)
+
+    asyncio.create_task(_finish_sandbox_setup(sandbox))
+
+    logger.info("Sandbox environment ready for immediate use; continuing heavy setup in background")
+    return sandbox
+
+
+async def _finish_sandbox_setup(sandbox: AsyncSandbox):
+    """Run non-critical sandbox warm-up steps in background."""
+
     # Install essential system tools (git, curl, wget, imagemagick, ffmpeg)
     try:
         result = await sandbox.process.exec(
@@ -271,12 +285,9 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     except Exception as e:
         logger.warning(f"Could not pre-warm npm cache: {e}")
 
-    # Start file server and computer use services
-    await start_file_server(sandbox)
     await start_computer_use_safe(sandbox)
 
-    logger.info(f"Sandbox environment successfully initialized")
-    return sandbox
+    logger.info(f"Sandbox background setup completed for {sandbox.id}")
 
 
 async def start_computer_use_safe(sandbox: AsyncSandbox):

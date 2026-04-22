@@ -473,35 +473,31 @@ async def start_agent_run(
         )
     
     elif is_new_thread:
-        # NO FILES but NEW THREAD: Start sandbox creation in background (non-blocking)
-        # This ensures sandbox is ready by the time user checks Files tab
-        async def create_sandbox_background(proj_id: str, acc_id: str, db_client):
-            try:
-                # First ensure project exists
-                placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt if prompt else "Untitled"
-                try:
-                    await threads_repo.create_project(proj_id, acc_id, placeholder_name)
-                except Exception:
-                    pass  # May already exist
-                
-                # Then create sandbox
-                sandbox_info = await resolve_sandbox(proj_id, acc_id, db_client, require_started=True)
-                if sandbox_info:
-                    logger.info(f"✅ [BACKGROUND] Created sandbox {sandbox_info.sandbox_id} for project {proj_id}")
-                else:
-                    logger.warning(f"⚠️ [BACKGROUND] Failed to create sandbox for project {proj_id}")
-            except Exception as e:
-                logger.error(f"❌ [BACKGROUND] Error creating sandbox for project {proj_id}: {e}")
-        
-        # Start sandbox creation and give it a head start (up to 10s).
-        # If it finishes in time, the agent's first tool call won't block.
-        # If not, _ensure_sandbox() in the tool base will wait for the rest.
-        sandbox_task = asyncio.create_task(create_sandbox_background(project_id, account_id, None))
+        # NO FILES but NEW THREAD: bring the sandbox up before returning.
+        # Real app tasks need a runnable workspace, not a fire-and-forget sandbox
+        # that may still be creating when the execution loop reaches its first tool.
+        placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt if prompt else "Untitled"
         try:
-            await asyncio.wait_for(asyncio.shield(sandbox_task), timeout=10.0)
-            logger.info(f"[AGENT_START] Sandbox ready before agent dispatch for {project_id}")
+            await threads_repo.create_project(project_id, account_id, placeholder_name)
+        except Exception:
+            pass  # May already exist
+
+        try:
+            sandbox_info = await asyncio.wait_for(
+                resolve_sandbox(project_id, account_id, None, require_started=True),
+                timeout=30.0,
+            )
+            if sandbox_info and sandbox_info.sandbox_id:
+                sandbox_id = sandbox_info.sandbox_id
+                logger.info(f"[AGENT_START] Sandbox ready before agent dispatch for {project_id}: {sandbox_id}")
+            else:
+                raise RuntimeError("Sandbox resolver returned no sandbox")
         except asyncio.TimeoutError:
-            logger.info(f"[AGENT_START] Sandbox still creating after 10s, agent will wait on first tool call for {project_id}")
+            logger.error(f"[AGENT_START] Sandbox creation timed out for {project_id}")
+            raise HTTPException(status_code=503, detail="Sandbox creation timed out. Please retry in a moment.")
+        except Exception as e:
+            logger.error(f"[AGENT_START] Sandbox creation failed for {project_id}: {e}")
+            raise HTTPException(status_code=503, detail=f"Sandbox creation failed: {str(e)[:120]}")
     
     # Clean up stale runs before checking slot availability
     await _cleanup_stale_runs(account_id)
