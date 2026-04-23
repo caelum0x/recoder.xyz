@@ -18,10 +18,10 @@ import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
   title: 'Documentation - Recoder.xyz',
-  description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+  description: 'Documentation for the real Recoder workflow: BYOK setup, activation paths, CLI, browser coding, APIs, and cross-surface usage.',
   openGraph: {
     title: 'Documentation - Recoder.xyz',
-    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+    description: 'BYOK setup, activation paths, CLI, browser coding, APIs, and cross-surface usage.',
     url: 'https://recoder.xyz/docs',
     siteName: 'Recoder.xyz',
     images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Documentation' }],
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Documentation - Recoder.xyz',
-    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, and API reference.',
+    description: 'BYOK setup, activation paths, CLI, browser coding, APIs, and cross-surface usage.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -42,7 +42,7 @@ export default function DocsPage() {
   const docSections = [
     {
       title: 'Getting Started',
-      description: 'Quick setup guides and first steps with Recoder',
+      description: 'Quick setup guides and the actual activation path with Recoder',
       icon: Rocket,
       articles: [
         { title: 'Getting Started Guide', href: '/docs/getting-started', status: 'available' },
@@ -69,6 +69,15 @@ export default function DocsPage() {
         { title: 'OpenRouter Setup', href: '/docs/api-keys/openrouter', status: 'available' },
         { title: 'Anthropic Setup', href: '/docs/api-keys/anthropic', status: 'available' },
         { title: 'OpenAI Setup', href: '/docs/api-keys/openai', status: 'available' }
+      ]
+    },
+    {
+      title: 'Examples & Proof',
+      description: 'Case-study style examples and product workflows',
+      icon: Boxes,
+      articles: [
+        { title: 'Customer Workflows', href: '/customers', status: 'available' },
+        { title: 'Learn Hub', href: '/learn', status: 'available' }
       ]
     },
     {
@@ -106,6 +115,7 @@ export default function DocsPage() {
 
   const quickLinks = [
     { title: 'Getting Started', href: '/docs/getting-started', icon: Rocket, description: 'Set up your account in 5 minutes' },
+    { title: 'Customer Workflows', href: '/customers', icon: FileText, description: 'See how teams use Recoder in practice' },
     { title: 'FAQ', href: '/docs/faq', icon: BookOpen, description: 'Frequently asked questions' },
     { title: 'Install CLI', href: '/cli', icon: Terminal, description: 'Get started with the command line' },
     { title: 'Open Web Platform', href: '/platform/web', icon: Boxes, description: 'Launch the web interface' }
@@ -128,7 +138,7 @@ export default function DocsPage() {
             </span>
           </h1>
           <p className="text-xl text-gray-400 mb-12">
-            Everything you need to build production-ready applications with AI
+            Everything you need to understand the real Recoder workflow from signup to shipped work
           </p>
 
           {/* Quick Links */}
@@ -237,19 +247,17 @@ export default function DocsPage() {
                 </p>
                 <div className="flex flex-col gap-2">
                   <a
-                    href="mailto:recoderxyz@gmail.com"
+                    href="mailto:support@recoder.xyz"
                     className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
                   >
                     Email Us
                   </a>
-                  <a
-                    href="https://twitter.com/recoderxyz"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    href="/contact"
                     className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
                   >
-                    Twitter
-                  </a>
+                    Contact Team
+                  </Link>
                 </div>
               </div>
             </div>
