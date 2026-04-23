@@ -60,6 +60,48 @@ async def test_tool_executor_records_app_task_progress(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_tool_executor_records_preview_pending_log_context(monkeypatch):
+    merged = []
+
+    async def _fake_merge(run_id, metadata):
+        merged.append((run_id, metadata))
+        return True
+
+    monkeypatch.setattr(
+        "core.agents.pipeline.stateless.coordinator.tool_executor.merge_agent_run_metadata",
+        _fake_merge,
+    )
+
+    state = RunState("run-pending", "thread-pending", "project-pending", "account-pending")
+    state.app_task_mode = True
+    message_builder = MessageBuilder(
+        increment_sequence=lambda: 0,
+        get_thread_id=lambda: state.thread_id,
+        get_thread_run_id=lambda: "thread-run-pending",
+        get_agent_id=lambda: None,
+    )
+    executor = ToolExecutor(state, _FakeToolRegistry(), message_builder)
+
+    await executor._record_app_task_progress(
+        "execute_command",
+        '{"command":"npm run dev -- --host 0.0.0.0 --port 5173"}',
+        {
+            "output": "started",
+            "exit_code": 0,
+            "preview_pending": True,
+            "dev_server_log_tail": "VITE ready on http://localhost:5173/",
+            "preview_port": 5173,
+        },
+    )
+
+    assert state.app_task_dev_server_started is True
+    assert state.app_task_preview_pending is True
+    assert state.app_task_preview_port == 5173
+    assert "localhost:5173" in state.app_task_dev_server_log_tail
+    assert merged[-1][1]["preview_pending"] is True
+
+
+@pytest.mark.asyncio
 async def test_tool_executor_should_terminate_on_preview_only_for_app_tasks():
     app_state = RunState("run-2", "thread-2", "project-2", "account-2")
     app_state.app_task_mode = True
@@ -94,6 +136,23 @@ def test_run_state_next_app_task_instruction_tracks_missing_step():
 
     state.record_app_task_progress(preview_verified=True, preview_url="https://preview.example", preview_port=5173)
     assert state.next_app_task_instruction() is None
+
+
+def test_run_state_next_app_task_instruction_includes_log_tail_when_preview_pending():
+    state = RunState("run-4b", "thread-4b", "project-4b", "account-4b")
+    state.app_task_mode = True
+    state.record_app_task_progress(
+        files_written=True,
+        deps_installed=True,
+        dev_server_started=True,
+        preview_pending=True,
+        preview_port=5173,
+        dev_server_log_tail="VITE ready on http://localhost:5173/",
+    )
+
+    instruction = state.next_app_task_instruction()
+    assert "dev server has been started but preview is not verified yet" in instruction
+    assert "localhost:5173" in instruction
 
 
 def test_stateless_coordinator_continues_only_for_incomplete_app_tasks():
