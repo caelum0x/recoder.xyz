@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 from typing import Dict, Any, Optional, AsyncGenerator, List, Tuple
+from core.agents.runner.services import merge_agent_run_metadata
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 
@@ -144,12 +145,20 @@ class ToolExecutor:
         )
         
         if success and output:
+            await self._record_app_task_progress(execution.function_name, execution.arguments, output)
             async for msg in self._handle_deferred_image_context(output, stream_start):
                 yield msg
-        
+
         if is_terminating and success:
             async for msg in self._handle_terminating_tool(execution.tool_call_id, execution.function_name):
                 yield msg
+        elif success and await self._should_terminate_on_preview(output):
+            self._state.complete()
+            self._state.add_status_message(
+                {"status_type": "app_task_preview_verified"},
+                {"thread_run_id": thread_run_id, "agent_should_terminate": True},
+            )
+            yield self._message_builder.build_finish_message("app_task_preview_verified", tools_executed=True)
 
     def yield_tool_started(
         self,
@@ -252,12 +261,21 @@ class ToolExecutor:
             )
 
             if success and output:
+                await self._record_app_task_progress(name, args, output)
                 async for msg in self._handle_deferred_image_context(output, stream_start):
                     yield msg
 
             if is_terminating and success:
                 async for msg in self._handle_terminating_tool(tc_id, name):
                     yield msg
+            elif success and await self._should_terminate_on_preview(output):
+                self._state.complete()
+                self._state.add_status_message(
+                    {"status_type": "app_task_preview_verified"},
+                    {"thread_run_id": thread_run_id, "agent_should_terminate": True},
+                )
+                yield self._message_builder.build_finish_message("app_task_preview_verified", tools_executed=True)
+                return
 
     async def _execute_single_tool(
         self,
@@ -385,3 +403,70 @@ class ToolExecutor:
         yield self._message_builder.build_llm_response_end()
         yield self._message_builder.build_termination_message()
         yield self._message_builder.build_terminating_tool_status(tc_id, name)
+
+    async def _record_app_task_progress(self, tool_name: str, arguments: str, output: Any) -> None:
+        if not getattr(self._state, "app_task_mode", False):
+            return
+
+        metadata: Dict[str, Any] = {"app_task_mode": True}
+        state_update: Dict[str, Any] = {}
+
+        if tool_name == "create_file":
+            metadata["files_written"] = True
+            state_update["files_written"] = True
+
+        if tool_name != "execute_command":
+            if state_update:
+                self._state.record_app_task_progress(**state_update)
+            if len(metadata) > 1:
+                await merge_agent_run_metadata(self._state.run_id, metadata)
+            return
+
+        try:
+            parsed_args = json.loads(arguments) if isinstance(arguments, str) else arguments
+        except Exception:
+            parsed_args = {}
+
+        command = (parsed_args or {}).get("command", "")
+        normalized = command.lower()
+
+        if any(token in normalized for token in ("npm install", "pnpm install", "yarn install", "bun install")):
+            metadata["deps_installed"] = True
+            state_update["deps_installed"] = True
+
+        if isinstance(output, str):
+            try:
+                output = json.loads(output)
+            except Exception:
+                output = {"output": output}
+
+        if isinstance(output, dict):
+            if output.get("preview_url"):
+                metadata["dev_server_started"] = True
+                metadata["preview_port"] = output.get("preview_port")
+                metadata["preview_url"] = output.get("preview_url")
+                metadata["preview_verified"] = True
+                state_update["dev_server_started"] = True
+                state_update["preview_port"] = output.get("preview_port")
+                state_update["preview_url"] = output.get("preview_url")
+                state_update["preview_verified"] = True
+            elif "dev_server_started" in normalized or any(token in normalized for token in ("npm start", "npm run dev", "vite", "react-scripts start", "next dev")):
+                metadata["dev_server_started"] = True
+                state_update["dev_server_started"] = True
+
+        if state_update:
+            self._state.record_app_task_progress(**state_update)
+        if len(metadata) > 1:
+            await merge_agent_run_metadata(self._state.run_id, metadata)
+
+    async def _should_terminate_on_preview(self, output: Any) -> bool:
+        if not getattr(self._state, "app_task_mode", False):
+            return False
+
+        if isinstance(output, str):
+            try:
+                output = json.loads(output)
+            except Exception:
+                return False
+
+        return isinstance(output, dict) and bool(output.get("preview_url"))
