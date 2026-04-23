@@ -42,6 +42,12 @@ def test_shell_tool_candidate_preview_ports_prioritize_expected_ports():
     assert SandboxShellTool._candidate_preview_ports("vite --host 0.0.0.0 --port 4173")[:2] == [4173, 5173]
 
 
+def test_shell_tool_detects_heavy_react_scaffolds():
+    assert SandboxShellTool._is_heavy_react_scaffold_command("npx create-react-app my-app")
+    assert SandboxShellTool._is_heavy_react_scaffold_command("react-scripts start")
+    assert not SandboxShellTool._is_heavy_react_scaffold_command("npx create-vite@latest my-app")
+
+
 @pytest.mark.asyncio
 async def test_shell_tool_attaches_preview_metadata_when_probe_succeeds():
     process = SimpleNamespace(
@@ -119,6 +125,41 @@ async def test_shell_tool_wrapped_fallback_uses_relative_session_cwd(monkeypatch
     assert result.success is True
     assert captured["cwd"] == "."
     assert captured["command"] == "echo hello"
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_blocks_heavy_react_scaffold_before_execution():
+    tool = SandboxShellTool.__new__(SandboxShellTool)
+    tool._ensure_sandbox = AsyncMock()
+    tool._sandbox_info = SimpleNamespace(sandbox=SimpleNamespace(process=SimpleNamespace()))
+    tool.workspace_path = "/workspace"
+
+    result = await SandboxShellTool.execute_command(tool, "npx create-react-app my-app")
+
+    assert result.success is False
+    assert "Blocked heavyweight React scaffold command" in result.output
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_blocks_install_when_filesystem_pressure_is_too_high():
+    tool = SandboxShellTool.__new__(SandboxShellTool)
+    tool._ensure_sandbox = AsyncMock()
+    tool._sandbox_info = SimpleNamespace(sandbox=SimpleNamespace(process=SimpleNamespace()))
+    tool.workspace_path = "/workspace"
+    tool._get_filesystem_pressure = AsyncMock(
+        return_value={
+            "disk_percent": 92,
+            "inode_percent": 91,
+            "disk_line": "overlay 50G 46G 4G 92% /",
+            "inode_line": "overlay 26214400 24000000 2214400 91% /",
+        }
+    )
+
+    result = await SandboxShellTool.execute_command(tool, "npm install")
+
+    assert result.success is False
+    assert "filesystem pressure is too high" in result.output
+    assert "92%" in result.output
 
 
 @pytest.mark.asyncio
