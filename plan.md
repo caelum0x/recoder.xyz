@@ -146,11 +146,6 @@ Verified live:
 
 ### Current Real Follow-Up
 
-- `recoder-wju3`
-  - soak-check Daytona session/disk pressure on live traffic after the leak-reduction deploys
-  - pooled keepalive, git endpoints, git sync, unused REPL sessions, and idle auto-managed session leaks have been reduced and deployed
-  - remaining task is proving `.daytona/sessions` no longer drifts into ENOSPC under continued live usage
-
 - `recoder-czmt`
   - harden scaffold/runtime limits for heavyweight React flows
   - live Daytona probe on a real sandbox showed overlay usage at `100%` disk and `100%` inodes after a React app task
@@ -184,7 +179,6 @@ Launch is complete when:
 - `recoder-hb6` is resolved
 - `recoder-i3v` is resolved
 - `recoder-96g` is resolved
-- `recoder-wju3` is resolved
 - `recoder-czmt` is resolved or explicitly accepted
 - `recoder-zdp` is resolved or explicitly accepted as non-blocking
 
