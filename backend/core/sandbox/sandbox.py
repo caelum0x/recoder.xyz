@@ -254,8 +254,12 @@ async def get_or_start_sandbox(sandbox_id: str) -> AsyncSandbox:
                 logger.error(f"Error starting sandbox: {e}")
                 raise e
         else:
-            # Sandbox already running — still ensure /workspace exists
+            # Sandbox already running — still ensure /workspace exists and that
+            # the lightweight file server is alive. Pooled sandboxes can stay in
+            # STARTED state while the file server process dies, which breaks the
+            # 8080 preview URL for static app tasks.
             await _ensure_workspace(sandbox)
+            await start_file_server(sandbox)
 
         logger.info(f"Sandbox {sandbox_id} is ready")
         return sandbox
