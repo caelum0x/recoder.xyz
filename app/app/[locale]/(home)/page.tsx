@@ -137,52 +137,6 @@ function colorClasses(color: string) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Pricing tiers (summary for landing)                                */
-/* ------------------------------------------------------------------ */
-const PRICING_TIERS = [
-  {
-    name: 'Free',
-    price: '$0',
-    period: 'forever',
-    description: 'Bring your own API key',
-    features: ['6 sessions / day', 'CLI + Web access', 'Free models unlimited', 'Community support'],
-    cta: 'Get Started',
-    href: '/auth/signup',
-    highlighted: false,
-  },
-  {
-    name: 'Weekly',
-    price: '$10',
-    period: 'week',
-    description: 'Short-term projects',
-    features: ['10 sessions / day', 'All AI models included', 'No API key needed', 'Priority support'],
-    cta: 'Subscribe',
-    href: '/pricing',
-    highlighted: false,
-  },
-  {
-    name: 'Monthly',
-    price: '$20',
-    period: 'month',
-    description: 'Best for individuals',
-    features: ['15 sessions / day', 'All AI models included', 'API access', 'Team (5 members)'],
-    cta: 'Subscribe',
-    href: '/pricing',
-    highlighted: true,
-  },
-  {
-    name: 'Pro',
-    price: '$100',
-    period: 'month',
-    description: 'For power users & teams',
-    features: ['20 sessions / day', 'Beta model access', 'Custom AI models', 'Team (10 members)'],
-    cta: 'Subscribe',
-    href: '/pricing',
-    highlighted: false,
-  },
-];
-
-/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 export default function HomePage() {
@@ -530,71 +484,48 @@ export default function HomePage() {
       </section>
 
       {/* ============================================================ */}
-      {/*  PRICING                                                     */}
+      {/*  BYOK VALUE                                                  */}
       {/* ============================================================ */}
       <section className="py-24 px-6 border-t border-white/5">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-16 space-y-4">
-            <h2 className="text-4xl md:text-5xl font-bold">Simple Pricing</h2>
+            <h2 className="text-4xl md:text-5xl font-bold">Start Without Procurement</h2>
             <p className="text-lg text-gray-400 max-w-xl mx-auto">
-              Start free with your own API key, or let us handle everything.
+              Connect your own model keys, get into the product fast, and keep cost control in your hands.
             </p>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {PRICING_TIERS.map((tier) => (
+            {[
+              {
+                title: 'BYOK first',
+                text: 'Bring OpenRouter, Anthropic, OpenAI, or Google keys and start immediately.',
+              },
+              {
+                title: 'No sales gate',
+                text: 'Teams can evaluate the product without waiting on procurement or plan selection.',
+              },
+              {
+                title: 'Real cost control',
+                text: 'Your model spend stays visible at the provider, instead of being hidden behind markup.',
+              },
+              {
+                title: 'Faster activation',
+                text: 'The shortest path is: sign up, add keys, launch agents or Web IDE, and build.',
+              },
+            ].map((item) => (
               <div
-                key={tier.name}
-                className={`relative p-6 rounded-2xl border transition-all ${
-                  tier.highlighted
-                    ? 'border-orange-500/40 bg-gradient-to-b from-orange-500/[0.06] to-transparent shadow-lg shadow-orange-500/5'
-                    : 'border-white/10 bg-white/[0.02]'
-                }`}
+                key={item.title}
+                className="p-6 rounded-2xl border border-white/10 bg-white/[0.02]"
               >
-                {tier.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-orange-500 text-xs font-semibold text-white">
-                    Popular
-                  </div>
-                )}
-
-                <h3 className="text-lg font-bold mb-1">{tier.name}</h3>
-                <p className="text-xs text-gray-500 mb-4">{tier.description}</p>
-
-                <div className="mb-6">
-                  <span className="text-3xl font-bold">{tier.price}</span>
-                  <span className="text-sm text-gray-500 ml-1">/{tier.period}</span>
-                </div>
-
-                <ul className="space-y-2.5 mb-8">
-                  {tier.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-gray-400">
-                      <Check className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  href={tier.href}
-                  className={`block w-full text-center px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                    tier.highlighted
-                      ? 'bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 text-white'
-                      : 'border border-white/15 hover:border-white/30 text-white'
-                  }`}
-                >
-                  {tier.cta}
-                </Link>
+                <h3 className="text-lg font-bold mb-3">{item.title}</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">{item.text}</p>
               </div>
             ))}
           </div>
 
-          <div className="text-center mt-8">
-            <Link
-              href="/pricing"
-              className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-white transition-colors"
-            >
-              View full pricing details <ChevronRight className="w-4 h-4" />
-            </Link>
+          <div className="text-center mt-8 text-sm text-gray-500">
+            No credit card required to start. Add your own keys when you are ready.
           </div>
         </div>
       </section>
