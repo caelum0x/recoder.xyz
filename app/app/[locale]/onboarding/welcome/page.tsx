@@ -20,6 +20,7 @@ import {
   Code2,
   Globe
 } from 'lucide-react';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -50,6 +51,13 @@ export default function WelcomePage() {
       router.push('/auth/signin');
     }
   }, [session, isPending, router]);
+
+  useEffect(() => {
+    if (!loading && !isPending && session) {
+      trackEvent(AnalyticsEvents.ONBOARDING_STARTED, { step: 'welcome', source: 'onboarding' });
+      trackEvent(AnalyticsEvents.ONBOARDING_STEP_VIEWED, { step: 'welcome', source: 'onboarding' });
+    }
+  }, [loading, isPending, session]);
 
   if (loading || isPending) {
     return (
@@ -103,7 +111,7 @@ export default function WelcomePage() {
               Let's get you set up in just a few steps
             </p>
             <p className="text-lg text-gray-500">
-              This will only take 2 minutes. We'll help you configure your account and choose the right plan.
+              This takes only a couple of minutes. We&apos;ll help you connect your provider keys and reach a real first project fast.
             </p>
           </div>
 
@@ -144,17 +152,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">2</span>
                 </div>
                 <div>
-                  <div className="font-medium">Choose your plan</div>
-                  <div className="text-sm text-gray-400">Free, Pro, or Enterprise - you can change anytime</div>
-                </div>
-              </div>
-              <div className="flex items-start space-x-4">
-                <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-sm font-bold">3</span>
-                </div>
-                <div>
-                  <div className="font-medium">Setup your API key (optional)</div>
-                  <div className="text-sm text-gray-400">Free users can use their own OpenRouter API key</div>
+                  <div className="font-medium">Connect your provider</div>
+                  <div className="text-sm text-gray-400">Add OpenRouter, OpenAI, Anthropic, or Google when you are ready</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -162,8 +161,8 @@ export default function WelcomePage() {
                   <Check className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="font-medium">Start building!</div>
-                  <div className="text-sm text-gray-400">Access all platforms and start creating</div>
+                  <div className="font-medium">Start building</div>
+                  <div className="text-sm text-gray-400">Head into the dashboard and choose the surface that fits the job</div>
                 </div>
               </div>
             </div>
@@ -173,12 +172,14 @@ export default function WelcomePage() {
           <div className="flex justify-center space-x-4">
             <Link
               href="/dashboard"
+              onClick={() => trackEvent(AnalyticsEvents.ONBOARDING_SKIPPED, { step: 'welcome', source: 'onboarding' })}
               className="px-6 py-3 border border-white/10 rounded-lg font-medium hover:bg-white/5 transition-all"
             >
               Skip for now
             </Link>
             <Link
               href="/onboarding/setup-profile"
+              onClick={() => trackEvent(AnalyticsEvents.CTA_CLICKED, { ctaLabel: 'Get Started', destination: '/onboarding/setup-profile', location: 'onboarding_welcome', source: 'onboarding' })}
               className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
             >
               <span>Get Started</span>

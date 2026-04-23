@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { signIn } from '@/lib/auth-client';
 import { SiteHeader } from '@/components/SiteHeader';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 function SignInForm() {
   const [loading, setLoading] = useState(false);
@@ -93,6 +94,7 @@ function SignInForm() {
 
   const handleGitHubSignIn = async () => {
     setLoading(true);
+    trackEvent(AnalyticsEvents.LOGIN_STARTED, { method: 'github', source: 'signin_page' });
     try {
       await signIn.social({
         provider: "github",
@@ -106,6 +108,7 @@ function SignInForm() {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    trackEvent(AnalyticsEvents.LOGIN_STARTED, { method: 'google', source: 'signin_page' });
     try {
       await signIn.social({
         provider: "google",

@@ -21,6 +21,7 @@ import { getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { useSession } from '@/lib/session-provider';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 /* ------------------------------------------------------------------ */
 /*  Product definitions                                                */
@@ -146,6 +147,15 @@ export default function HomePage() {
     setTimeout(() => setter(false), 2000);
   };
 
+  const trackCta = (ctaLabel: string, destination: string, location: string) => {
+    trackEvent(AnalyticsEvents.CTA_CLICKED, {
+      ctaLabel,
+      destination,
+      location,
+      source: 'homepage',
+    });
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       <SiteHeader />
@@ -156,6 +166,7 @@ export default function HomePage() {
       <section className="relative pt-24 pb-32 px-6 overflow-hidden">
         {/* Background glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-to-br from-orange-500/8 via-purple-500/8 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 opacity-[0.08] pointer-events-none [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:32px_32px]" />
 
         <div className="relative container mx-auto max-w-5xl text-center space-y-8">
           <h1 className="text-5xl sm:text-6xl md:text-8xl font-bold tracking-tight leading-[1.1]">
@@ -187,12 +198,14 @@ export default function HomePage() {
               <>
                 <Link
                   href="/dashboard"
+                  onClick={() => trackCta('Go to Dashboard', '/dashboard', 'hero')}
                   className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg shadow-orange-500/25"
                 >
                   Go to Dashboard <ArrowRight className="w-5 h-5" />
                 </Link>
                 <Link
                   href="/projects"
+                  onClick={() => trackCta('View Projects', '/projects', 'hero')}
                   className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
                 >
                   View Projects
@@ -202,12 +215,14 @@ export default function HomePage() {
               <>
                 <Link
                   href="/auth/signup"
+                  onClick={() => trackCta('Get Started', '/auth/signup', 'hero')}
                   className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg shadow-orange-500/25"
                 >
                   Get Started <ArrowRight className="w-5 h-5" />
                 </Link>
                 <Link
                   href="/docs/getting-started"
+                  onClick={() => trackCta('Documentation', '/docs/getting-started', 'hero')}
                   className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
                 >
                   Documentation
@@ -219,6 +234,91 @@ export default function HomePage() {
           <p className="text-xs text-gray-600">
             Start with your own keys, invite your team later, and keep provider-level cost visibility.
           </p>
+
+          <div className="mx-auto max-w-5xl pt-10">
+            <div className="grid gap-6 lg:grid-cols-[1.05fr_1.25fr] text-left">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 backdrop-blur-sm">
+                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-400">
+                  Activation path
+                </div>
+                <h2 className="text-2xl md:text-3xl font-bold mb-3">From signup to first shipped output, without tool churn</h2>
+                <p className="text-sm md:text-base text-gray-400 mb-6">
+                  Recoder is designed for a clean first run: sign in, connect a provider, start in the right surface, and keep moving as the work grows.
+                </p>
+                <div className="space-y-4">
+                  {[
+                    ['01', 'Sign in with GitHub or Google', 'No payment gate. Start with your own provider keys.'],
+                    ['02', 'Connect OpenRouter, OpenAI, Anthropic, or Google', 'BYOK keeps model choice and cost control in your hands.'],
+                    ['03', 'Start in Agents, CLI, Web IDE, PM, or Agency', 'Use one system across coding, planning, and delivery.'],
+                  ].map(([step, title, text]) => (
+                    <div key={step} className="flex items-start gap-4 rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-orange-500 to-purple-600 flex items-center justify-center text-sm font-bold">
+                        {step}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white mb-1">{title}</h3>
+                        <p className="text-sm text-gray-400">{text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-4 md:p-6 backdrop-blur-sm shadow-2xl shadow-purple-500/10">
+                <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full bg-red-400/80" />
+                    <span className="h-3 w-3 rounded-full bg-yellow-400/80" />
+                    <span className="h-3 w-3 rounded-full bg-green-400/80" />
+                  </div>
+                  <span className="text-xs text-gray-500">demo workflow</span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr]">
+                  <div className="rounded-2xl border border-purple-500/20 bg-black/50 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-medium text-purple-400">
+                      <Code className="w-4 h-4" />
+                      Web IDE / Agents preview
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-[#0a0a0f] p-4 font-mono text-xs text-gray-300 space-y-2">
+                      <div><span className="text-orange-400">$</span> build a landing page with BYOK onboarding</div>
+                      <div className="text-gray-500">scaffold app → connect provider → preview ready</div>
+                      <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3 text-cyan-300">
+                        Preview URL ready
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 pt-2">
+                        <div className="h-16 rounded-lg bg-orange-500/10 border border-orange-500/20" />
+                        <div className="h-16 rounded-lg bg-purple-500/10 border border-purple-500/20" />
+                        <div className="h-16 rounded-lg bg-cyan-500/10 border border-cyan-500/20" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                      <div className="mb-2 flex items-center gap-2 text-sm text-orange-400">
+                        <Bot className="w-4 h-4" />
+                        Agents
+                      </div>
+                      <p className="text-sm text-gray-400">Multi-turn work, tool execution, preview-ready outputs.</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                      <div className="mb-2 flex items-center gap-2 text-sm text-purple-400">
+                        <Terminal className="w-4 h-4" />
+                        CLI
+                      </div>
+                      <p className="text-sm text-gray-400">Keep your editor, terminal flow, and model choice intact.</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                      <div className="mb-2 flex items-center gap-2 text-sm text-cyan-400">
+                        <LayoutDashboard className="w-4 h-4" />
+                        PM + Agency
+                      </div>
+                      <p className="text-sm text-gray-400">Turn coding momentum into planning and delivery without leaving the system.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -585,12 +685,14 @@ export default function HomePage() {
               <>
                 <Link
                   href="/dashboard"
+                  onClick={() => trackCta('Go to Dashboard', '/dashboard', 'final_cta')}
                   className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg shadow-orange-500/25"
                 >
                   Go to Dashboard <ArrowRight className="w-5 h-5" />
                 </Link>
                 <Link
                   href="/projects"
+                  onClick={() => trackCta('View Projects', '/projects', 'final_cta')}
                   className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
                 >
                   View Projects
@@ -600,12 +702,14 @@ export default function HomePage() {
               <>
                 <Link
                   href="/auth/signup"
+                  onClick={() => trackCta('Get Started Free', '/auth/signup', 'final_cta')}
                   className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg shadow-orange-500/25"
                 >
                   Get Started Free <ArrowRight className="w-5 h-5" />
                 </Link>
                 <Link
                   href="/docs"
+                  onClick={() => trackCta('Read the Docs', '/docs', 'final_cta')}
                   className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
                 >
                   Read the Docs

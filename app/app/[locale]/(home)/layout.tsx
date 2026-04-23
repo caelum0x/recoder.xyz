@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
-import { OrganizationSchema, WebApplicationSchema, FAQPageSchema } from '@/app/components/StructuredData';
+import { OrganizationSchema, WebApplicationSchema, FAQPageSchema, WebSiteSchema } from '@/app/components/StructuredData';
 
 export const metadata: Metadata = {
-  title: 'Recoder — Your AI Agent Platform',
+  title: 'Recoder.xyz | Build with AI and keep control',
   description:
-    'Build, deploy, and orchestrate AI agents across code, projects, clients, and voice. 5 products, 40+ AI models, A2A/MCP ready.',
+    'Use Recoder across agents, browser coding, CLI, PM, and agency workflows with your own provider keys and a cleaner activation path.',
   openGraph: {
-    title: 'Recoder — Your AI Agent Platform',
+    title: 'Recoder.xyz | Build with AI and keep control',
     description:
-      'Build, deploy, and orchestrate AI agents across code, projects, clients, and voice.',
+      'BYOK-first AI development across agents, browser coding, CLI, PM, and agency workflows.',
     url: 'https://recoder.xyz',
     siteName: 'Recoder',
     images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder — Your AI Agent Platform' }],
@@ -16,10 +16,13 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Recoder — Your AI Agent Platform',
+    title: 'Recoder.xyz | Build with AI and keep control',
     description:
-      'Build, deploy, and orchestrate AI agents across code, projects, clients, and voice.',
+      'BYOK-first AI development across agents, browser coding, CLI, PM, and agency workflows.',
     images: ['https://recoder.xyz/og-image.png'],
+  },
+  alternates: {
+    canonical: 'https://recoder.xyz',
   },
 };
 
@@ -31,6 +34,7 @@ export default function HomeLayout({
   return (
     <>
       <OrganizationSchema />
+      <WebSiteSchema />
       <WebApplicationSchema />
       <FAQPageSchema />
       {children}

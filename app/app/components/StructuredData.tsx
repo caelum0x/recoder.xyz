@@ -11,15 +11,31 @@ export function OrganizationSchema() {
     url: 'https://recoder.xyz',
     logo: 'https://recoder.xyz/logo.png',
     sameAs: [
-      'https://github.com/recoder-xyz',
-      'https://twitter.com/recoderxyz',
+      'https://github.com/recoderxyz',
     ],
     contactPoint: {
       '@type': 'ContactPoint',
       email: 'support@recoder.xyz',
       contactType: 'Customer Support',
     },
-    description: 'The only AI coding platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK (Bring Your Own Key).',
+    description: 'BYOK-first AI development platform for agents, CLI, browser coding, PM, and agency workflows.',
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+    />
+  );
+}
+
+export function WebSiteSchema() {
+  const schema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Recoder.xyz',
+    url: 'https://recoder.xyz',
+    description: 'BYOK-first AI development platform for agents, browser coding, CLI, PM, and agency workflows.',
   };
 
   return (
@@ -41,17 +57,11 @@ export function SoftwareApplicationSchema() {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: '100% FREE beta with BYOK (Bring Your Own Key)',
+      description: 'Bring your own provider key and use Recoder across CLI and browser surfaces.',
     },
-    description: 'Terminal-first AI coding tool with 40+ AI models. Seamlessly sync with Web IDE.',
-    softwareVersion: '2.4.4',
+    description: 'Terminal-first AI coding tool with provider flexibility, agent workflows, and browser sync.',
     downloadUrl: 'https://www.npmjs.com/package/recoder-code',
-    screenshot: 'https://recoder.xyz/cli-screenshot.png',
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: '4.8',
-      ratingCount: '100',
-    },
+    screenshot: 'https://recoder.xyz/og-image.png',
   };
 
   return (
@@ -73,11 +83,11 @@ export function WebApplicationSchema() {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: '100% FREE beta with BYOK',
+      description: 'Bring your own provider key and use the browser coding workspace directly.',
     },
-    description: 'Browser-based AI coding IDE with live preview and 40+ AI models.',
+    description: 'Browser-based AI workspace with live preview, coding assistance, and BYOK provider support.',
     url: 'https://web.recoder.xyz',
-    screenshot: 'https://recoder.xyz/web-ide-screenshot.png',
+    screenshot: 'https://recoder.xyz/og-image.png',
   };
 
   return (
@@ -98,7 +108,7 @@ export function FAQPageSchema() {
         name: 'Is Recoder.xyz really free?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Yes! During our FREE BETA, all features are 100% free. Just bring your own API key (BYOK) from OpenRouter, Anthropic, OpenAI, or Groq.',
+          text: 'Recoder is BYOK-first. You connect your own provider keys so you keep model choice and pay providers directly.',
         },
       },
       {
@@ -106,7 +116,7 @@ export function FAQPageSchema() {
         name: 'What is BYOK (Bring Your Own Key)?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'BYOK means you use your own API keys from AI providers. We encrypt them with AES-256-GCM and never see your usage or conversations. You only pay the AI provider directly.',
+          text: 'BYOK means you connect your own provider keys from OpenRouter, Anthropic, OpenAI, Google, or similar vendors. Recoder encrypts stored keys and you pay the provider directly.',
         },
       },
       {
@@ -114,7 +124,7 @@ export function FAQPageSchema() {
         name: 'How does Web ↔ CLI sync work?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Start projects in our Web IDE, then download them locally with "recoder web download <id>". Edit with any editor, then sync back with "recoder web sync". Seamless workflow between browser and terminal.',
+          text: 'Recoder is designed so teams can move between browser and terminal surfaces without changing the overall workflow or provider setup.',
         },
       },
       {
@@ -122,7 +132,7 @@ export function FAQPageSchema() {
         name: 'Which AI models are supported?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'We support 40+ models including Claude 3.5 Sonnet, GPT-4 Turbo, Gemini Pro, Groq LLaMA, and more through OpenRouter, Anthropic, OpenAI, and Groq APIs.',
+          text: 'Recoder supports a broad multi-provider model stack through connected vendors such as OpenRouter, Anthropic, OpenAI, and Google.',
         },
       },
     ],
