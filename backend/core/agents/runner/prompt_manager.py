@@ -214,6 +214,8 @@ Rules:
 - Prefer `update_tasks` over repeated task creation.
 - Once `package.json` exists and install succeeds, the next required action is start + preview verification.
 - A web-app task is NOT complete until a preview URL is available.
+- Preview URLs are browser-facing links: surface them directly to the user.
+- Do not ask the user to attach custom headers for a preview link.
 """
         else:
             preloaded_guides = PromptManager._get_preloaded_tool_guides()
