@@ -14,6 +14,7 @@ from core.sandbox.sandbox import (
     create_session_with_recovery,
     delete_sandbox,
     execute_session_command_with_recovery,
+    get_user_facing_preview_url,
     get_or_start_sandbox,
     daytona,
 )
@@ -157,10 +158,9 @@ class SandboxPoolService:
     
     async def _get_preview_links(self, sandbox):
         try:
+            vnc_url = await get_user_facing_preview_url(sandbox, 6080)
+            website_url = await get_user_facing_preview_url(sandbox, 8080)
             vnc_link = await sandbox.get_preview_link(6080)
-            website_link = await sandbox.get_preview_link(8080)
-            vnc_url = vnc_link.url if hasattr(vnc_link, 'url') else str(vnc_link).split("url='")[1].split("'")[0]
-            website_url = website_link.url if hasattr(website_link, 'url') else str(website_link).split("url='")[1].split("'")[0]
             token = None
             if hasattr(vnc_link, 'token'):
                 token = vnc_link.token

@@ -20,6 +20,7 @@ from core.sandbox.sandbox import (
     create_sandbox,
     create_session_with_recovery,
     execute_session_command_with_recovery,
+    get_user_facing_preview_url,
     daytona,
 )
 from core.sandbox.daytona_file_service import get_file_service
@@ -1043,6 +1044,11 @@ async def get_project_sandbox_status(
         # Generate VNC/sandbox URLs dynamically if not in config
         vnc_preview = config.get('vnc_preview')
         sandbox_url = config.get('sandbox_url')
+        if sandbox and daytona_state.lower() == 'started':
+            if not vnc_preview:
+                vnc_preview = await get_user_facing_preview_url(sandbox, 6080)
+            if not sandbox_url:
+                sandbox_url = await get_user_facing_preview_url(sandbox, 8080)
         if not vnc_preview and sandbox_id and daytona_state.lower() == 'started':
             vnc_preview = f"https://6080-{sandbox_id}.sandbox.recoder.xyz"
         if not sandbox_url and sandbox_id:
@@ -1185,6 +1191,11 @@ async def stream_project_sandbox_status(
 
         vnc_preview = config.get("vnc_preview")
         sandbox_url = config.get("sandbox_url")
+        if sandbox and daytona_state.lower() == "started":
+            if not vnc_preview:
+                vnc_preview = await get_user_facing_preview_url(sandbox, 6080)
+            if not sandbox_url:
+                sandbox_url = await get_user_facing_preview_url(sandbox, 8080)
         if not vnc_preview and sandbox_id and daytona_state.lower() == "started":
             vnc_preview = f"https://6080-{sandbox_id}.sandbox.recoder.xyz"
         if not sandbox_url and sandbox_id:
