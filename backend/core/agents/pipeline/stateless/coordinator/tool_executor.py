@@ -450,6 +450,17 @@ class ToolExecutor:
                 state_update["preview_port"] = output.get("preview_port")
                 state_update["preview_url"] = output.get("preview_url")
                 state_update["preview_verified"] = True
+            elif output.get("preview_pending"):
+                metadata["dev_server_started"] = True
+                metadata["preview_pending"] = True
+                if output.get("preview_port") is not None:
+                    metadata["preview_port"] = output.get("preview_port")
+                if output.get("dev_server_log_tail"):
+                    metadata["dev_server_log_tail"] = output.get("dev_server_log_tail")
+                state_update["dev_server_started"] = True
+                state_update["preview_pending"] = True
+                state_update["preview_port"] = output.get("preview_port")
+                state_update["dev_server_log_tail"] = output.get("dev_server_log_tail")
             elif "dev_server_started" in normalized or any(token in normalized for token in ("npm start", "npm run dev", "vite", "react-scripts start", "next dev")):
                 metadata["dev_server_started"] = True
                 state_update["dev_server_started"] = True
