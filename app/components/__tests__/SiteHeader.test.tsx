@@ -15,23 +15,19 @@ vi.mock('@/lib/config/platforms', () => ({
   getServiceUrlClient: mockGetServiceUrlClient,
 }));
 
-vi.mock('@/app/components/LaunchWebIDEButton', () => ({
-  LaunchWebIDEButton: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <button className={className}>{children}</button>
-  ),
-}));
-
 import { SiteHeader } from '@/components/SiteHeader';
 
 describe('SiteHeader', () => {
-  it('shows only Agents and Dashboard nav tabs', () => {
+  it('shows the public shell nav without pricing noise', () => {
     mockUseSession.mockReturnValue({ data: null });
 
     render(<SiteHeader fixed={false} />);
 
+    expect(screen.getByText('Docs')).toBeDefined();
+    expect(screen.getByText('Security')).toBeDefined();
     expect(screen.getByText('Agents')).toBeDefined();
     expect(screen.getByText('Dashboard')).toBeDefined();
-    expect(screen.queryByText('Plan')).toBeNull();
-    expect(screen.queryByText('Platform')).toBeNull();
+    expect(screen.queryByText('Pricing')).toBeNull();
+    expect(screen.queryByText('Launch Web IDE')).toBeNull();
   });
 });
