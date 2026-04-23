@@ -6,7 +6,7 @@ import pytest
 
 os.environ.setdefault("MCP_CREDENTIAL_ENCRYPTION_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 
-from core.sandbox.sandbox import get_or_start_sandbox
+from core.sandbox.sandbox import get_or_start_sandbox, get_user_facing_preview_url
 
 
 @pytest.mark.asyncio
@@ -46,3 +46,34 @@ async def test_start_file_server_restarts_when_probe_returns_dead_double_zero():
     assert process.exec.await_count == 3
     start_cmd = process.exec.await_args_list[1].args[0]
     assert "python3 -m http.server 8080" in start_cmd
+
+
+@pytest.mark.asyncio
+async def test_get_user_facing_preview_url_prefers_signed_link(monkeypatch):
+    sandbox = SimpleNamespace(id="sb-signed", get_preview_link=AsyncMock())
+    monkeypatch.setattr(
+        "core.sandbox.sandbox.get_signed_preview_url",
+        AsyncMock(return_value="https://8080-signed-token.sandbox.recoder.xyz"),
+    )
+
+    url = await get_user_facing_preview_url(sandbox, 8080)
+
+    assert url == "https://8080-signed-token.sandbox.recoder.xyz"
+    sandbox.get_preview_link.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_user_facing_preview_url_falls_back_to_standard_link(monkeypatch):
+    sandbox = SimpleNamespace(
+        id="sb-fallback",
+        get_preview_link=AsyncMock(return_value=SimpleNamespace(url="https://8080-sb-fallback.sandbox.recoder.xyz")),
+    )
+    monkeypatch.setattr(
+        "core.sandbox.sandbox.get_signed_preview_url",
+        AsyncMock(side_effect=RuntimeError("signed preview unavailable")),
+    )
+
+    url = await get_user_facing_preview_url(sandbox, 8080)
+
+    assert url == "https://8080-sb-fallback.sandbox.recoder.xyz"
+    sandbox.get_preview_link.assert_awaited_once()
