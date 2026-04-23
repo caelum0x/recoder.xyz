@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import {
   Terminal,
-  Globe,
   ArrowRight,
   Copy,
   Check,
@@ -14,10 +13,8 @@ import {
   Bot,
   Briefcase,
   LayoutDashboard,
-  Phone,
   Network,
   ArrowUpRight,
-  ChevronRight,
 } from 'lucide-react';
 import { useState } from 'react';
 import { getServiceUrlClient } from '@/lib/config/platforms';
@@ -163,21 +160,21 @@ export default function HomePage() {
 
         <div className="relative container mx-auto max-w-5xl text-center space-y-8">
           <h1 className="text-5xl sm:text-6xl md:text-8xl font-bold tracking-tight leading-[1.1]">
-            Your AI Agent
+            Build with AI.
             <br />
             <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-cyan-400 bg-clip-text text-transparent">
-              Platform
+              Keep control.
             </span>
           </h1>
 
           <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Build, deploy, and orchestrate AI agents across code, projects,
-            clients, and voice — all from one platform.
+            Recoder gives you agents, a Web IDE, CLI, PM, and agency workflows in one system.
+            Bring your own model keys, move quickly, and avoid procurement drag from day one.
           </p>
 
           {/* Value pills */}
           <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-500">
-            {['5 products', '40+ AI models', 'A2A / MCP ready', 'Open source core'].map((v) => (
+            {['BYOK first', '40+ AI models', 'A2A / MCP ready', 'No credit card to start'].map((v) => (
               <span key={v} className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                 {v}
@@ -218,8 +215,48 @@ export default function HomePage() {
           </div>
 
           <p className="text-xs text-gray-600">
-            No credit card required. Free tier available forever.
+            Start with your own keys, invite your team later, and keep provider-level cost visibility.
           </p>
+        </div>
+      </section>
+
+      {/* ============================================================ */}
+      {/*  HOW IT WORKS                                                */}
+      {/* ============================================================ */}
+      <section className="py-20 px-6 border-t border-white/5">
+        <div className="container mx-auto max-w-5xl">
+          <div className="text-center mb-14 space-y-4">
+            <h2 className="text-3xl md:text-4xl font-bold">The shortest path from signup to shipped work</h2>
+            <p className="text-base md:text-lg text-gray-400 max-w-2xl mx-auto">
+              Recoder is built to get developers and teams into a real workflow quickly, without waiting on pricing approvals or locked-in model access.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                step: '01',
+                title: 'Add your model keys',
+                text: 'Connect OpenRouter, Anthropic, OpenAI, or Google and keep your model choices under your control.',
+              },
+              {
+                step: '02',
+                title: 'Pick the right surface',
+                text: 'Use Agents for multi-turn work, Web IDE for live builds, CLI for terminal flow, and PM or Agency when the work expands.',
+              },
+              {
+                step: '03',
+                title: 'Ship with one system',
+                text: 'Move across products without rethinking your setup every time the work changes from coding to planning to delivery.',
+              },
+            ].map((item) => (
+              <div key={item.step} className="p-6 rounded-2xl border border-white/10 bg-white/[0.02]">
+                <div className="text-sm font-mono text-orange-500 mb-4">{item.step}</div>
+                <h3 className="text-xl font-bold mb-3">{item.title}</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">{item.text}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -229,9 +266,9 @@ export default function HomePage() {
       <section className="py-24 px-6 border-t border-white/5">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-16 space-y-4">
-            <h2 className="text-4xl md:text-5xl font-bold">The Platform</h2>
+            <h2 className="text-4xl md:text-5xl font-bold">One system, five working surfaces</h2>
             <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-              Five purpose-built products that work together — or independently.
+              Start with the surface that matches the job right now, then move between them as the work changes.
             </p>
           </div>
 
@@ -414,12 +451,11 @@ export default function HomePage() {
                 </div>
 
                 <h2 className="text-3xl md:text-4xl font-bold">
-                  Get Started in Seconds
+                  Bring your own keys, keep your workflow
                 </h2>
 
                 <p className="text-gray-400 max-w-xl mx-auto">
-                  Install the CLI, add your API key, and start building with
-                  Claude, GPT-4, Gemini, DeepSeek, and 35+ more models.
+                  Install the CLI, connect your providers, and work across browser and terminal without giving up model choice or cost control.
                 </p>
 
                 <div className="flex items-center gap-3 max-w-md mx-auto p-4 rounded-2xl border border-white/15 bg-black/50">
@@ -469,10 +505,10 @@ export default function HomePage() {
         <div className="container mx-auto max-w-5xl">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: '5', label: 'Products', color: 'text-orange-500' },
+              { value: '5', label: 'Working surfaces', color: 'text-orange-500' },
               { value: '40+', label: 'AI Models', color: 'text-purple-500' },
               { value: '17', label: 'MCP Servers', color: 'text-cyan-400' },
-              { value: '$0', label: 'To Start', color: 'text-green-400' },
+              { value: 'BYOK', label: 'Default model policy', color: 'text-green-400' },
             ].map(({ value, label, color }) => (
               <div key={label} className="text-center space-y-1">
                 <div className={`text-4xl font-bold ${color}`}>{value}</div>
@@ -489,9 +525,9 @@ export default function HomePage() {
       <section className="py-24 px-6 border-t border-white/5">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-16 space-y-4">
-            <h2 className="text-4xl md:text-5xl font-bold">Start Without Procurement</h2>
+            <h2 className="text-4xl md:text-5xl font-bold">Why teams start here</h2>
             <p className="text-lg text-gray-400 max-w-xl mx-auto">
-              Connect your own model keys, get into the product fast, and keep cost control in your hands.
+              The product is designed to remove the usual blockers that slow evaluation and rollout.
             </p>
           </div>
 
@@ -503,7 +539,7 @@ export default function HomePage() {
               },
               {
                 title: 'No sales gate',
-                text: 'Teams can evaluate the product without waiting on procurement or plan selection.',
+                text: 'Developers and operators can start using the product before internal buying processes catch up.',
               },
               {
                 title: 'Real cost control',
@@ -511,7 +547,7 @@ export default function HomePage() {
               },
               {
                 title: 'Faster activation',
-                text: 'The shortest path is: sign up, add keys, launch agents or Web IDE, and build.',
+                text: 'The shortest path is sign up, connect keys, launch the right surface, and start shipping work.',
               },
             ].map((item) => (
               <div
@@ -525,7 +561,7 @@ export default function HomePage() {
           </div>
 
           <div className="text-center mt-8 text-sm text-gray-500">
-            No credit card required to start. Add your own keys when you are ready.
+            Recoder can grow into paid/team motions later. The public site should optimize for activation first.
           </div>
         </div>
       </section>
