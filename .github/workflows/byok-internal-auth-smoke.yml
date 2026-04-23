@@ -17,24 +17,14 @@ on:
         description: "project id override (optional)"
         required: false
         type: string
-  workflow_run:
-    workflows:
-      - "Deploy Production"
-      - "🌐 Web Platform CI/CD"
-    types:
-      - completed
-
 jobs:
   byok-smoke:
     name: BYOK Prompt/Task/Stream Smoke
     runs-on: ubuntu-latest
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     env:
-      RECODER_WEB_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.recoder_web_url || secrets.SMOKE_RECODER_WEB_URL || 'https://web.recoder.xyz' }}
-      MAIN_SITE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.main_site_url || secrets.SMOKE_MAIN_SITE_URL || 'https://recoder.xyz' }}
-      PROJECT_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.project_id || secrets.SMOKE_PROJECT_ID }}
+      RECODER_WEB_URL: ${{ inputs.recoder_web_url || secrets.SMOKE_RECODER_WEB_URL || 'https://web.recoder.xyz' }}
+      MAIN_SITE_URL: ${{ inputs.main_site_url || secrets.SMOKE_MAIN_SITE_URL || 'https://recoder.xyz' }}
+      PROJECT_ID: ${{ inputs.project_id || secrets.SMOKE_PROJECT_ID }}
       PUBLIC_API_KEY: ${{ secrets.SMOKE_PUBLIC_API_KEY }}
       USER_SESSION_TOKEN: ${{ secrets.SMOKE_USER_SESSION_TOKEN }}
       AUTH_VERIFY_TOKEN: ${{ secrets.SMOKE_AUTH_VERIFY_TOKEN || secrets.SMOKE_USER_SESSION_TOKEN }}
