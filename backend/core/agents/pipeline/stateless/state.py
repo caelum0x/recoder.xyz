@@ -86,6 +86,8 @@ class RunState:
         self.app_task_preview_verified: bool = False
         self.app_task_preview_url: Optional[str] = None
         self.app_task_preview_port: Optional[int] = None
+        self.app_task_preview_pending: bool = False
+        self.app_task_dev_server_log_tail: Optional[str] = None
         self.app_task_recovery_continues: int = 0
 
         if agent_config:
@@ -231,8 +233,10 @@ class RunState:
         deps_installed: bool = False,
         dev_server_started: bool = False,
         preview_verified: bool = False,
+        preview_pending: bool = False,
         preview_url: Optional[str] = None,
         preview_port: Optional[int] = None,
+        dev_server_log_tail: Optional[str] = None,
     ) -> None:
         if files_written:
             self.app_task_files_written = True
@@ -242,10 +246,15 @@ class RunState:
             self.app_task_dev_server_started = True
         if preview_verified:
             self.app_task_preview_verified = True
+            self.app_task_preview_pending = False
+        if preview_pending:
+            self.app_task_preview_pending = True
         if preview_url:
             self.app_task_preview_url = preview_url
         if preview_port is not None:
             self.app_task_preview_port = preview_port
+        if dev_server_log_tail:
+            self.app_task_dev_server_log_tail = dev_server_log_tail
 
     def next_app_task_instruction(self) -> Optional[str]:
         if not self.app_task_mode or self.app_task_preview_verified:
@@ -265,6 +274,16 @@ class RunState:
             )
 
         if self.app_task_dev_server_started and not self.app_task_preview_verified:
+            if self.app_task_preview_pending and self.app_task_dev_server_log_tail:
+                log_excerpt = self.app_task_dev_server_log_tail.strip()
+                if len(log_excerpt) > 800:
+                    log_excerpt = log_excerpt[-800:]
+                return (
+                    "[System] App-task mode: the dev server has been started but preview is not verified yet. "
+                    "Do not re-plan or update tasks. Use the current server output below to verify the correct port "
+                    "or fix the startup issue, then finish immediately once a preview URL is available.\n\n"
+                    f"[Recent dev server log]\n{log_excerpt}"
+                )
             return (
                 "[System] App-task mode: the task is not complete until preview is verified. "
                 "Check the running app on common preview ports (5173, 3000, 8080), inspect the "
