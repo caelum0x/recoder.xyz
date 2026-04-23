@@ -37,6 +37,11 @@ def test_shell_tool_backgrounds_foreground_dev_server_commands():
     assert "npm start" in prepared
 
 
+def test_shell_tool_candidate_preview_ports_prioritize_expected_ports():
+    assert SandboxShellTool._candidate_preview_ports("npm start")[:2] == [3000, 5173]
+    assert SandboxShellTool._candidate_preview_ports("vite --host 0.0.0.0 --port 4173")[:2] == [4173, 5173]
+
+
 @pytest.mark.asyncio
 async def test_shell_tool_wrapped_fallback_uses_relative_session_cwd(monkeypatch):
     captured = {}
