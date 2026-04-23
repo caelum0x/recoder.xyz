@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
       message: 'Account created successfully! Check your email for your temporary password and welcome message.',
       email,
       emailSent: emailResult.success,
-      emailProvider: process.env.RESEND_API_KEY ? 'Resend' : (process.env.SMTP_USER ? 'SMTP' : 'Dev'),
+      emailProvider: getEmailProviderStatus().provider,
       // Include temp password in dev mode for testing
       ...(showTestData && {
         _dev: {
@@ -152,3 +152,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+import { getEmailProviderStatus } from '@/lib/email';

@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
-import { resolvePublicAppUrl, sanitizeEmailLink } from '@/lib/email';
+import { getEmailProviderStatus, resolvePublicAppUrl, sanitizeEmailLink } from '@/lib/email';
 
 describe('email URL safety helpers', () => {
   it('falls back to canonical origin for invalid APP URL', () => {
@@ -40,5 +40,43 @@ describe('email URL safety helpers', () => {
       nodeEnv: 'production',
     });
     expect(safe).toBe('https://recoder.xyz/auth/signin');
+  });
+});
+
+describe('email provider selection', () => {
+  it('prefers SMTP in auto mode when SMTP is configured', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'auto',
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_USER: 'mailer@example.com',
+      SMTP_PASSWORD: 'secret',
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('smtp');
+  });
+
+  it('falls back to Resend in auto mode when SMTP is absent', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'auto',
+      RESEND_API_KEY: 're_test',
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('resend');
+  });
+
+  it('uses dev mode when no provider is configured outside production', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'auto',
+      NODE_ENV: 'development',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('dev');
+  });
+
+  it('returns none in production when the requested provider is unavailable', () => {
+    const provider = getEmailProviderStatus({
+      EMAIL_PROVIDER: 'smtp',
+      NODE_ENV: 'production',
+    } as NodeJS.ProcessEnv);
+    expect(provider.provider).toBe('none');
   });
 });
