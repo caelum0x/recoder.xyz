@@ -1,6 +1,6 @@
 # Recoder Platform Status
 
-Last updated: 2026-04-22
+Last updated: 2026-04-23
 
 ## Goal
 
@@ -18,7 +18,7 @@ Keep the live Recoder surfaces working end to end:
 | Platform | URL | Current State |
 | --- | --- | --- |
 | Hub | `recoder.xyz` | Working. Header simplified to `Agents` + `Dashboard`; dashboard onboarding loop removed; auth UI simplified to OAuth-first flows. |
-| Web IDE | `web.recoder.xyz` | Partially healthy. Auth, project creation, sandbox bring-up, preview routing, and browser-verified single/follow-up edits work; real app-task loops are improved but not fully closed. |
+| Web IDE | `web.recoder.xyz` | Working end to end for live app-task coding loops. Auth, project creation, sandbox bring-up, preview routing, first-turn generation, and multi-turn follow-up edits are verified in production. |
 | Agents | `agents.recoder.xyz` | Main authenticated paths working. Shared ecosystem nav removed; top-right notification/customize controls removed; `Plan` removed from user menu; file pane hydration fallback fixed. |
 | PM | `pm.recoder.xyz` | Authenticated PM surface verified working on key routes. |
 | Agency | `agency.recoder.xyz` | Authenticated dashboard/projects/settings flows verified. One intermittent RSC prefetch issue remains open. |
@@ -50,6 +50,7 @@ Keep the live Recoder surfaces working end to end:
 - Daytona preview auto-start no longer double-starts the same project
 - Pi Daytona writes now land in the real sandbox even when the model falls back to legacy `recoderAction` text output
 - live browser verification passed for both first-turn and second-turn Web IDE edits on the same project
+- fresh production app-task run now completes end to end: first turn, follow-up turn, and working preview URL
 
 ### Agents
 
@@ -90,6 +91,7 @@ Verified in production:
 - live preview renders through the direct Daytona URL
 - first-turn Web IDE edit verified on a live project
 - second-turn follow-up edit verified on the same live project
+- fresh live app-task run returned `HTTP 200`, follow-up turn returned `HTTP 200`, and the preview URL served the generated updated page
 
 ### PM
 
@@ -144,25 +146,21 @@ Verified live:
 
 ### Current Real Follow-Up
 
-- `recoder-zdp`
-  - intermittent authenticated agency RSC prefetch `503`s
-  - direct route loads are fine; issue appears intermittent and likely proxy/prefetch related
-
-- `recoder-96g`
-  - real app-task coding loop is still not fully complete end to end
-  - new-thread startup, sandbox bring-up, file writes, install/start command handling, and preview routing are improved
-  - later-stage app-task completion still stalls in some live runs
-
 - `recoder-wju3`
-  - Daytona sandbox session/log-dir creation can fail under `/home/daytona/.daytona/sessions`
-  - live terminal-execute verification moved the failure from pure session-create ENOSPC into session-command log-dir ENOSPC
+  - soak-check Daytona session/disk pressure on live traffic after the leak-reduction deploys
+  - pooled keepalive, git endpoints, git sync, unused REPL sessions, and idle auto-managed session leaks have been reduced and deployed
+  - remaining task is proving `.daytona/sessions` no longer drifts into ENOSPC under continued live usage
 
 - `recoder-czmt`
-  - heavyweight React scaffolds can exhaust sandbox overlay disk/inodes
+  - harden scaffold/runtime limits for heavyweight React flows
   - live Daytona probe on a real sandbox showed overlay usage at `100%` disk and `100%` inodes after a React app task
   - prompt/runtime should keep preferring lighter Vite/minimal setups and add stronger runtime guards
 
-- active in-progress agents/backend cleanup tickets remain in `bd`
+- `recoder-zdp`
+  - finish the separate intermittent authenticated agency RSC prefetch `503` issue
+  - direct route loads are fine; issue appears intermittent and likely proxy/prefetch related
+
+- active in-progress cleanup/detail tickets remain in `bd`
   - use `bd list --status in_progress` for the live queue
 
 ### Optional Deeper Verification
