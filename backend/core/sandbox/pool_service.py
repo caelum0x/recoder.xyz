@@ -9,7 +9,14 @@ from daytona_sdk import SessionExecuteRequest, SandboxState
 
 from core.utils.logger import logger
 from core.sandbox.pool_config import get_pool_config, SandboxPoolConfig
-from core.sandbox.sandbox import create_sandbox, delete_sandbox, get_or_start_sandbox, daytona
+from core.sandbox.sandbox import (
+    create_sandbox,
+    create_session_with_recovery,
+    delete_sandbox,
+    execute_session_command_with_recovery,
+    get_or_start_sandbox,
+    daytona,
+)
 from core.sandbox import pool_repo
 
 
@@ -263,6 +270,8 @@ class SandboxPoolService:
             return 0
     
     async def _ping_sandbox(self, sandbox_id: str) -> bool:
+        session_id = f"keepalive_{uuid.uuid4().hex[:8]}"
+        session_created = False
         try:
             sandbox = await daytona.get(sandbox_id)
             
@@ -270,17 +279,27 @@ class SandboxPoolService:
                 logger.debug(f"[SANDBOX_POOL] Sandbox {sandbox_id} not started ({sandbox.state}), skipping ping")
                 return False
             
-            session_id = f"keepalive_{uuid.uuid4().hex[:8]}"
-            await sandbox.process.create_session(session_id)
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(command=self.KEEPALIVE_COMMAND, var_async=False)
+            await create_session_with_recovery(sandbox, session_id)
+            session_created = True
+            await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(command=self.KEEPALIVE_COMMAND, var_async=False),
+                timeout=15,
+                recreate_session=True,
             )
             
             return True
         except Exception as e:
             logger.warning(f"[SANDBOX_POOL] Ping failed for {sandbox_id}: {e}")
             return False
+        finally:
+            try:
+                sandbox = locals().get("sandbox")
+                if sandbox is not None and session_created:
+                    await sandbox.process.delete_session(session_id)
+            except Exception as cleanup_err:
+                logger.debug(f"[SANDBOX_POOL] Failed to delete keepalive session {session_id}: {cleanup_err}")
     
     async def cleanup_stale_sandboxes(self) -> int:
         try:
