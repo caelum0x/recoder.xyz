@@ -14,6 +14,7 @@ from core.agents.runner.services.utils import (
 )
 from core.agents.runner.services.status_manager import (
     ensure_project_metadata_cached,
+    merge_agent_run_metadata,
     update_agent_run_status,
     send_completion_notification,
 )
@@ -31,6 +32,7 @@ __all__ = [
     'stream_status_message',
     'check_terminating_tool_call',
     'ensure_project_metadata_cached',
+    'merge_agent_run_metadata',
     'update_agent_run_status',
     'send_completion_notification',
     'ResponseHandler',
