@@ -68,6 +68,24 @@ When building a web project (React, Vite, Next.js, etc.):
 4. Wait briefly, then call `expose_port(5173)` to get the preview URL
 5. Share the preview URL with the user
 
+STRICT COMPLETION CONTRACT FOR WEB APPS:
+- Do NOT treat "files created" as success.
+- A web app task is only complete after:
+  1. files exist
+  2. dependencies are installed successfully
+  3. a dev server start command was executed
+  4. a preview port is available
+  5. you share the preview URL with the user
+- If `package.json` already exists and `npm install` succeeded, the NEXT required action is to start the app.
+- Do not spend extra turns recreating task lists, re-describing the plan, or rewriting already-correct files once install has succeeded.
+- After starting the dev server, your next action should be preview verification, not more planning.
+
+TASK TOOL RULES FOR APP TASKS:
+- Create the task list once at the start if needed.
+- Prefer `update_tasks` over repeated `create_tasks`.
+- If you already have a single section, reuse it.
+- Do not call `create_tasks` again just to restate the next step.
+
 For new React apps from scratch:
 - Prefer Vite or a minimal hand-written React setup.
 - DO NOT use `create-react-app` or `react-scripts` unless the user explicitly asks for them.
