@@ -59,7 +59,6 @@ class SandboxCodeInterpreterTool(SandboxToolsBase):
 
     def __init__(self, project_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
-        self._sessions = {}  # Track active REPL sessions
 
     @openapi_schema({
         "type": "function",
@@ -222,33 +221,10 @@ class SandboxCodeInterpreterTool(SandboxToolsBase):
             await self._ensure_sandbox()
 
             timeout = max(1, min(int(timeout) if isinstance(timeout, (int, float, str)) else 30, 300))
-            session_key = f"repl_{language}_{session_name}"
-
             logger.info(f"[CodeInterpreter] REPL '{session_name}' ({language}): {len(code)} chars")
 
-            # Create session if it doesn't exist
-            if session_key not in self._sessions:
-                try:
-                    await self.sandbox.process.create_session(session_key)
-                    self._sessions[session_key] = True
-
-                    # Initialize the REPL interpreter
-                    if language == "python":
-                        from daytona_sdk import SessionExecuteRequest
-                        init_req = SessionExecuteRequest(
-                            command="python3 -i 2>/dev/null",
-                            var_async=True
-                        )
-                        await self.sandbox.process.execute_session_command(
-                            session_id=session_key, req=init_req
-                        )
-                    logger.info(f"[CodeInterpreter] Created REPL session: {session_key}")
-                except Exception as e:
-                    logger.warning(f"[CodeInterpreter] Session create failed: {e}, using exec fallback")
-                    # Fallback to file-based execution with state
-                    return await self._repl_file_fallback(code, session_name, language, timeout)
-
-            # Execute in session via file (most reliable for multiline code)
+            # Use file-based state persistence only. The old Daytona session path was not
+            # actually used for execution and leaked sessions inside the sandbox.
             return await self._repl_file_fallback(code, session_name, language, timeout)
 
         except Exception as e:
