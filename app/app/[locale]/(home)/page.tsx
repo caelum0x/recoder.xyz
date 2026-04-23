@@ -21,7 +21,6 @@ import { getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { useSession } from '@/lib/session-provider';
-import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 
 /* ------------------------------------------------------------------ */
 /*  Product definitions                                                */
@@ -186,14 +185,17 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             {session?.user ? (
               <>
-                <LaunchWebIDEButton className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg shadow-orange-500/25">
-                  Launch Web IDE <ArrowRight className="w-5 h-5 ml-2" />
-                </LaunchWebIDEButton>
                 <Link
                   href="/dashboard"
+                  className="px-8 py-4 text-lg font-semibold bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-xl transition-all transform hover:scale-105 flex items-center gap-2 shadow-lg shadow-orange-500/25"
+                >
+                  Go to Dashboard <ArrowRight className="w-5 h-5" />
+                </Link>
+                <Link
+                  href="/projects"
                   className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
                 >
-                  Dashboard
+                  View Projects
                 </Link>
               </>
             ) : (
@@ -587,9 +589,12 @@ export default function HomePage() {
                 >
                   Go to Dashboard <ArrowRight className="w-5 h-5" />
                 </Link>
-                <LaunchWebIDEButton className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all flex items-center gap-2">
-                  Launch Web IDE <ArrowRight className="w-5 h-5" />
-                </LaunchWebIDEButton>
+                <Link
+                  href="/projects"
+                  className="px-8 py-4 text-lg font-semibold border border-white/20 hover:border-white/40 rounded-xl transition-all"
+                >
+                  View Projects
+                </Link>
               </>
             ) : (
               <>

@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { processScheduledEmails } from '@/lib/services/onboarding-email.service';
+import { getOnboardingEmailOperationsStatus, processScheduledEmails } from '@/lib/services/onboarding-email.service';
 import { logger } from '@/lib/logger';
 
 const CRON_SECRET = process.env.CRON_SECRET || '';
@@ -43,6 +43,14 @@ function isAuthorized(request: NextRequest): boolean {
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (request.nextUrl.searchParams.get('mode') === 'status') {
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      pipeline: await getOnboardingEmailOperationsStatus(),
+    });
   }
 
   try {
