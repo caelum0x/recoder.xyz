@@ -103,7 +103,6 @@ const productPages: SitemapPage[] = [
 const authPages: SitemapPage[] = [
   { path: '/auth/signup',             changeFrequency: 'monthly',  priority: 0.7 },
   { path: '/auth/signin',             changeFrequency: 'monthly',  priority: 0.6 },
-  { path: '/auth/register',           changeFrequency: 'monthly',  priority: 0.6 },
   { path: '/auth/forgot-password',    changeFrequency: 'monthly',  priority: 0.4 },
 ];
 
@@ -137,8 +136,6 @@ const companyPages: SitemapPage[] = [
 // ── Misc pages ────────────────────────────────────────────────────────────
 const miscPages: SitemapPage[] = [
   { path: '/analytics',               changeFrequency: 'daily',    priority: 0.5 },
-  { path: '/plan',                    changeFrequency: 'monthly',  priority: 0.5 },
-  { path: '/verify',                  changeFrequency: 'monthly',  priority: 0.3 },
   { path: '/checkout',                changeFrequency: 'monthly',  priority: 0.4 },
   { path: '/checkout/success',        changeFrequency: 'monthly',  priority: 0.3 },
 ];
