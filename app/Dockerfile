@@ -23,7 +23,7 @@ COPY packages/ ./packages/
 COPY shared/package.json ./shared/
 
 # Install dependencies
-RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm install --filter ./app... --no-frozen-lockfile
+RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm install --filter ./app... --filter @recoder/auth --no-frozen-lockfile
 
 # Generate Prisma client using the app's own schema (Prisma 6.x compatible)
 WORKDIR /app/app
@@ -32,7 +32,7 @@ RUN pnpm exec prisma generate
 # Regenerate the auth client from its schema so runtime binaryTargets changes in
 # packages/auth/prisma/schema.prisma are reflected in the copied auth-client.
 WORKDIR /app
-RUN pnpm dlx prisma@6.19.2 generate --schema=packages/auth/prisma/schema.prisma --no-hints
+RUN pnpm --filter @recoder/auth run build
 
 # @recoder/auth uses a separately generated Prisma client with a custom output
 # path under packages/auth/prisma/auth-client. Some build-time/static generation
