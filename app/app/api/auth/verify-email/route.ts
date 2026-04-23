@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { resolvePublicAppUrl, sendVerificationEmailWithCode } from '@/lib/email';
+import { getEmailProviderStatus, resolvePublicAppUrl, sendVerificationEmailWithCode } from '@/lib/email';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Verification email sent. Please check your inbox.',
       emailSent: emailResult.success,
-      emailProvider: process.env.RESEND_API_KEY ? 'Resend' : (process.env.SMTP_USER ? 'SMTP' : 'Dev'),
+      emailProvider: getEmailProviderStatus().provider,
       // Include verification data in dev mode for testing
       ...(showTestData && {
         _dev: {

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { traceRequest } from '@/lib/tracing-middleware';
 import { detectBillingHealth } from '@/lib/billing-health';
+import { getEmailProviderStatus } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
 
 function sanitizeErrorMessage(value: string): string {
@@ -15,8 +16,7 @@ function sanitizeErrorMessage(value: string): string {
 export async function GET(request: NextRequest) {
   const { traceId, applyTraceId } = traceRequest(request);
 
-  const hasResend = !!process.env.RESEND_API_KEY;
-  const hasSmtp = !!process.env.SMTP_USER;
+  const emailProvider = getEmailProviderStatus();
   const billing = detectBillingHealth(process.env);
   let dbConnected = false;
   let dbError: string | null = null;
@@ -44,8 +44,11 @@ export async function GET(request: NextRequest) {
         health: '/api/health',
       },
       email: {
-        configured: hasResend || hasSmtp,
-        provider: hasResend ? 'resend' : hasSmtp ? 'smtp' : 'none',
+        configured: emailProvider.provider !== 'none',
+        provider: emailProvider.provider,
+        smtpConfigured: emailProvider.hasSmtp,
+        resendConfigured: emailProvider.hasResend,
+        fromEmail: emailProvider.fromEmail,
       },
       database: {
         connected: dbConnected,
