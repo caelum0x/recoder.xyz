@@ -7,6 +7,7 @@ from typing import Optional
 
 from core.agentpress.tool import ToolResult, openapi_schema, tool_metadata
 from core.sandbox.tool_base import SandboxToolsBase
+from core.sandbox.sandbox import create_session_with_recovery, execute_session_command_with_recovery
 from core.agentpress.thread_manager import ThreadManager
 from core.utils.logger import logger
 from daytona_sdk import SessionExecuteRequest
@@ -265,9 +266,15 @@ class SandboxGitTool(SandboxToolsBase):
         session_id = f"session_{uuid.uuid4().hex}"
         try:
             # Create a session and execute the command synchronously
-            await self.sandbox.process.create_session(session_id)
+            await create_session_with_recovery(self.sandbox, session_id)
             request = SessionExecuteRequest(command=f"bash -lc {shlex.quote(cmd)}", var_async=False)
-            await self.sandbox.process.execute_session_command(session_id, request)
+            await execute_session_command_with_recovery(
+                self.sandbox,
+                session_id=session_id,
+                req=request,
+                timeout=30,
+                recreate_session=True,
+            )
         except Exception as e:
             logger.error(f"Error executing shell command in sandbox session: {str(e)}")
             raise
