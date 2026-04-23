@@ -62,6 +62,7 @@ type DaytonaSandboxType = {
     }>;
   };
   getPreviewLink: (port: number) => Promise<{ url?: string; token?: string }>;
+  getSignedPreviewUrl?: (port: number, expiresInSeconds?: number) => Promise<{ url?: string; token?: string }>;
   start: () => Promise<void>;
   delete: () => Promise<void>;
   refreshData: () => Promise<void>;
@@ -636,6 +637,19 @@ export class DaytonaSandbox extends BaseSandbox {
   }
 
   async getPreviewInfo(port: number): Promise<PreviewInfo> {
+    const getSignedPreviewUrl = this.sandbox.getSignedPreviewUrl;
+    if (typeof getSignedPreviewUrl === 'function') {
+      const [signedPreview, signedError] = await tryCatch(async () => {
+        return await getSignedPreviewUrl.call(this.sandbox, port, 86400);
+      });
+
+      if (!signedError && signedPreview?.url) {
+        return {
+          url: signedPreview.url,
+        };
+      }
+    }
+
     const [previewInfo, error] = await tryCatch(async () => {
       return await this.sandbox.getPreviewLink(port);
     });

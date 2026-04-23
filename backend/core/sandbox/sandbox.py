@@ -5,6 +5,7 @@ from core.utils.config import config
 from core.utils.config import Configuration
 import asyncio
 from datetime import datetime, timezone
+import httpx
 
 load_dotenv()
 
@@ -591,6 +592,16 @@ async def list_volumes() -> list:
 
 # ── Preview URLs ──────────────────────────────────────────────────
 
+SIGNED_PREVIEW_EXPIRES_IN_SECONDS = 86400
+
+
+def _extract_preview_url(link) -> str:
+    if hasattr(link, "url") and getattr(link, "url"):
+        return str(link.url)
+    if isinstance(link, dict) and link.get("url"):
+        return str(link["url"])
+    return str(link)
+
 def get_preview_url(sandbox_id: str, port: int = 3000) -> str:
     """Generate a preview URL for a sandbox port.
     Format: https://{port}-{sandboxId}.sandbox.recoder.xyz
@@ -598,11 +609,52 @@ def get_preview_url(sandbox_id: str, port: int = 3000) -> str:
     return f"https://{port}-{sandbox_id}.sandbox.recoder.xyz"
 
 
+async def get_signed_preview_url(
+    sandbox_id: str,
+    port: int,
+    expires_in_seconds: int = SIGNED_PREVIEW_EXPIRES_IN_SECONDS,
+) -> str:
+    """Get a signed preview URL for browser-facing access."""
+    base = (config.DAYTONA_SERVER_URL or "http://localhost:3900/api").rstrip("/")
+    url = (
+        f"{base}/sandbox/{sandbox_id}/ports/{port}/signed-preview-url"
+        f"?expiresInSeconds={expires_in_seconds}"
+    )
+    headers = {"Authorization": f"Bearer {config.DAYTONA_API_KEY}"}
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+    if isinstance(data, dict) and data.get("url"):
+        return str(data["url"])
+
+    raise ValueError(f"Signed preview URL response missing url for sandbox {sandbox_id} port {port}")
+
+
+async def get_user_facing_preview_url(
+    sandbox: AsyncSandbox,
+    port: int = 3000,
+    expires_in_seconds: int = SIGNED_PREVIEW_EXPIRES_IN_SECONDS,
+) -> str:
+    """Prefer signed preview URLs for browser-facing links, fall back gracefully."""
+    try:
+        return await get_signed_preview_url(sandbox.id, port, expires_in_seconds)
+    except Exception as signed_err:
+        logger.debug(f"Signed preview URL failed for {sandbox.id}:{port}: {signed_err}")
+        try:
+            link = await sandbox.get_preview_link(port=port)
+            return _extract_preview_url(link)
+        except Exception:
+            return get_preview_url(sandbox.id, port)
+
+
 async def get_sandbox_preview_link(sandbox: AsyncSandbox, port: int = 3000) -> str:
-    """Get preview link from sandbox object (uses SDK if available, falls back to URL pattern)."""
+    """Get standard preview link for server-side probes and token-based access."""
     try:
         link = await sandbox.get_preview_link(port=port)
-        return link
+        return _extract_preview_url(link)
     except Exception:
         return get_preview_url(sandbox.id, port)
 

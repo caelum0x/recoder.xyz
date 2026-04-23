@@ -53,6 +53,17 @@ describe('appendUrlSearchParam', () => {
       'https://8080-sandbox-123.sandbox.recoder.xyz/presentations/nike/slide_01.html?t=456',
     );
   });
+
+  it('preserves signed preview hostnames when building html preview URLs', () => {
+    const url = constructHtmlPreviewUrl(
+      'https://8080-signed-preview-token.sandbox.recoder.xyz',
+      '/workspace/presentations/nike/slide_01.html',
+    );
+
+    expect(url).toBe(
+      'https://8080-signed-preview-token.sandbox.recoder.xyz/presentations/nike/slide_01.html',
+    );
+  });
 });
 
 describe('buildSandboxPortPreviewUrl', () => {
