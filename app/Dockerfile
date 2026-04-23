@@ -32,7 +32,7 @@ RUN pnpm exec prisma generate
 # Regenerate the auth client from its schema so runtime binaryTargets changes in
 # packages/auth/prisma/schema.prisma are reflected in the copied auth-client.
 WORKDIR /app
-RUN pnpm --filter @recoder/auth run build
+RUN pnpm exec --package=prisma prisma generate --schema=packages/auth/prisma/schema.prisma --no-hints
 
 # @recoder/auth uses a separately generated Prisma client with a custom output
 # path under packages/auth/prisma/auth-client. Some build-time/static generation
