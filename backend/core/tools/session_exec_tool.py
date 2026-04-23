@@ -6,6 +6,7 @@ across calls (like an interactive terminal).
 import asyncio
 import json
 import os
+import time
 from typing import Optional
 from uuid import uuid4
 
@@ -20,6 +21,7 @@ from core.utils.config import config
 
 MAX_OUTPUT_LENGTH = 10_000
 _SESSION_KEY = "__daytona_session_id__"
+AUTO_SESSION_IDLE_TTL_SECONDS = 300
 
 
 def _truncate(text: str, max_len: int = MAX_OUTPUT_LENGTH) -> str:
@@ -122,6 +124,7 @@ class SandboxSessionExecTool(SandboxToolsBase):
         super().__init__(project_id, thread_manager)
         # Per-instance fallback session id (when no explicit session_id given)
         self._auto_session_id: Optional[str] = None
+        self._auto_session_last_used_at: Optional[float] = None
 
     # ------------------------------------------------------------------ #
     #  Internal helpers                                                     #
@@ -189,9 +192,29 @@ class SandboxSessionExecTool(SandboxToolsBase):
 
     async def _ensure_auto_session(self) -> str:
         """Get or create the per-invocation auto-managed session."""
+        now = time.time()
+        if (
+            self._auto_session_id
+            and self._auto_session_last_used_at is not None
+            and (now - self._auto_session_last_used_at) > AUTO_SESSION_IDLE_TTL_SECONDS
+        ):
+            try:
+                await self._delete_session(self._auto_session_id)
+                logger.info(
+                    "[StatefulSession] Expired idle auto session %s after %.0fs",
+                    self._auto_session_id,
+                    now - self._auto_session_last_used_at,
+                )
+            except Exception as exc:
+                logger.debug(f"[StatefulSession] Failed to delete expired auto session: {exc}")
+            finally:
+                self._auto_session_id = None
+                self._auto_session_last_used_at = None
+
         if not self._auto_session_id:
             self._auto_session_id = f"auto-{str(uuid4())[:8]}"
             await self._create_session(self._auto_session_id)
+        self._auto_session_last_used_at = now
         return self._auto_session_id
 
     # ------------------------------------------------------------------ #
@@ -302,6 +325,8 @@ class SandboxSessionExecTool(SandboxToolsBase):
             sid = session_id or await self._ensure_auto_session()
 
             result = await self._exec_in_session(sid, command, timeout)
+            if sid == self._auto_session_id:
+                self._auto_session_last_used_at = time.time()
 
             return self.success_response(
                 {
@@ -368,6 +393,7 @@ class SandboxSessionExecTool(SandboxToolsBase):
 
             if sid == self._auto_session_id:
                 self._auto_session_id = None
+                self._auto_session_last_used_at = None
 
             return self.success_response(
                 {"session_id": sid, "message": f"Session '{sid}' destroyed."}
