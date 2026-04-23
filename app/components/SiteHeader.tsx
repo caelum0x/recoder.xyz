@@ -10,6 +10,9 @@ import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import { getServiceUrlClient } from '@/lib/config/platforms';
 
 const NAV_LINKS = [
+  { href: '/pricing', label: 'Pricing', external: false },
+  { href: '/docs', label: 'Docs', external: false },
+  { href: '/security', label: 'Security', external: false },
   { href: getServiceUrlClient('agents'), label: 'Agents', external: true },
   { href: '/dashboard', label: 'Dashboard', external: false },
 ];

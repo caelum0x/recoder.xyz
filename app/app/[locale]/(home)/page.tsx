@@ -157,7 +157,7 @@ const PRICING_TIERS = [
     description: 'Short-term projects',
     features: ['10 sessions / day', 'All AI models included', 'No API key needed', 'Priority support'],
     cta: 'Subscribe',
-    href: '/plan',
+    href: '/pricing',
     highlighted: false,
   },
   {
@@ -167,7 +167,7 @@ const PRICING_TIERS = [
     description: 'Best for individuals',
     features: ['15 sessions / day', 'All AI models included', 'API access', 'Team (5 members)'],
     cta: 'Subscribe',
-    href: '/plan',
+    href: '/pricing',
     highlighted: true,
   },
   {
@@ -177,7 +177,7 @@ const PRICING_TIERS = [
     description: 'For power users & teams',
     features: ['20 sessions / day', 'Beta model access', 'Custom AI models', 'Team (10 members)'],
     cta: 'Subscribe',
-    href: '/plan',
+    href: '/pricing',
     highlighted: false,
   },
 ];
@@ -590,7 +590,7 @@ export default function HomePage() {
 
           <div className="text-center mt-8">
             <Link
-              href="/plan"
+              href="/pricing"
               className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-white transition-colors"
             >
               View full pricing details <ChevronRight className="w-4 h-4" />
