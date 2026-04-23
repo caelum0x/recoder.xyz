@@ -40,7 +40,6 @@ const homepagePages: SitemapPage[] = [
 const corePages: SitemapPage[] = [
   { path: '/about',                   changeFrequency: 'monthly',  priority: 0.8 },
   { path: '/features',                changeFrequency: 'weekly',   priority: 0.9 },
-  { path: '/pricing',                 changeFrequency: 'weekly',   priority: 0.9 },
   { path: '/enterprise',              changeFrequency: 'weekly',   priority: 0.9 },
   { path: '/testimonials',            changeFrequency: 'monthly',  priority: 0.7 },
   { path: '/case-studies',            changeFrequency: 'monthly',  priority: 0.7 },

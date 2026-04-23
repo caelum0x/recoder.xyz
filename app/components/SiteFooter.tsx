@@ -2,7 +2,6 @@ import Link from 'next/link';
 
 const FOOTER_LINKS = [
   { href: '/agents', label: 'Agents' },
-  { href: '/pricing', label: 'Pricing' },
   { href: '/platform', label: 'Platform' },
   { href: '/docs', label: 'Docs' },
   { href: '/docs/api-reference', label: 'API Reference' },
