@@ -1393,6 +1393,8 @@ CRITICAL RULES:
         - When Using \`npx\`, ALWAYS provide the \`--yes\` flag.
         - When running multiple shell commands, use \`&&\` to run them sequentially.
         - ALWAYS run \`npm install\` first, then \`npm run dev\` to start the dev server for preview.
+        - When a preview URL is available, present it as a direct browser-ready link.
+        - Do NOT tell the user to supply custom preview auth headers.
         - For Python: \`pip install -r requirements.txt && python app.py\`
         - For other languages: install dependencies then run the start command.
 
