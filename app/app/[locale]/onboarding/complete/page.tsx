@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Star
 } from 'lucide-react';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 // ── Recommendation engine ──────────────────────────────────────────
 // Maps the user's role + useCase from setup-profile into a primary
@@ -215,6 +216,12 @@ export default function CompletePage() {
       completeOnboarding(parsed);
     }
   }, [session, isPending, router, completeOnboarding]);
+
+  useEffect(() => {
+    if (!loading && !isPending && session) {
+      trackEvent(AnalyticsEvents.ONBOARDING_COMPLETED, { step: 'complete', source: 'onboarding' });
+    }
+  }, [loading, isPending, session]);
 
   if (loading || isPending) {
     return (

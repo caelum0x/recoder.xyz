@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { signIn } from '@/lib/auth-client';
 import { SiteHeader } from '@/components/SiteHeader';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 function SignUpForm() {
   const [loading, setLoading] = useState(false);
@@ -27,6 +28,7 @@ function SignUpForm() {
 
   const handleGitHubSignIn = async () => {
     setLoading(true);
+    trackEvent(AnalyticsEvents.SIGNUP_STARTED, { method: 'github', source: 'signup_page' });
     try {
       await signIn.social({
         provider: "github",
@@ -40,6 +42,7 @@ function SignUpForm() {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    trackEvent(AnalyticsEvents.SIGNUP_STARTED, { method: 'google', source: 'signup_page' });
     try {
       await signIn.social({
         provider: "google",
