@@ -47,12 +47,12 @@ function AuthErrorContent() {
       case 'Verification':
         return {
           icon: Mail,
-          title: 'Email Verification Required',
-          description: 'Please verify your email address before signing in.',
+          title: 'Check Your Verification Email',
+          description: 'Open the latest verification email we sent you and use that link to finish account verification before signing in.',
           color: 'blue',
           action: {
-            text: 'Resend Verification Email',
-            href: '/auth/verify-email'
+            text: 'Go to Sign In',
+            href: '/auth/signin'
           }
         };
       case 'OAuthSignin':
@@ -80,7 +80,7 @@ function AuthErrorContent() {
         return {
           icon: Mail,
           title: 'Email Sign-In Error',
-          description: 'Unable to send sign-in email. Please try again.',
+          description: 'Email-based sign-in is not available on the main site. Use GitHub or Google instead.',
           color: 'orange'
         };
       case 'CredentialsSignin':
@@ -190,24 +190,14 @@ function AuthErrorContent() {
                   href="/auth/signin"
                   className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
                 >
-                  → Sign in with Email & Password
+                  → Continue with GitHub or Google
                 </Link>
-                {error !== 'OAuthSignin' && error !== 'OAuthCallback' && (
-                  <>
-                    <Link
-                      href="/auth/signin"
-                      className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
-                    >
-                      → Sign in with GitHub
-                    </Link>
-                    <Link
-                      href="/auth/signin"
-                      className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
-                    >
-                      → Sign in with Google
-                    </Link>
-                  </>
-                )}
+                <Link
+                  href="/auth/signup"
+                  className="block text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                >
+                  → Create a new account
+                </Link>
               </div>
             </div>
 
