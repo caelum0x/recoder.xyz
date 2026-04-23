@@ -1753,15 +1753,18 @@ async def read_file_by_hash(
             f"git show {shlex.quote(commit)}:{shlex.quote(rel_path)} > {shlex.quote(tmp_path)}"
         )
 
+        session_id = f"session_{uuid.uuid4().hex}"
         try:
-            session_id = f"session_{uuid.uuid4().hex}"
-            await sandbox.process.create_session(session_id)
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
+            await create_session_with_recovery(sandbox, session_id)
+            await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(
                     command=f"bash -lc {shlex.quote(git_cmd)}",
                     var_async=False
-                )
+                ),
+                timeout=30,
+                recreate_session=True,
             )
         except Exception as git_err:
             logger.error(
@@ -1772,6 +1775,11 @@ async def read_file_by_hash(
                 status_code=404,
                 detail=f"File not found at commit {commit}: {str(git_err)}"
             )
+        finally:
+            try:
+                await sandbox.process.delete_session(session_id)
+            except Exception as cleanup_err:
+                logger.debug(f"Failed to delete git show session {session_id}: {cleanup_err}")
 
         try:
             content = await sandbox.fs.download_file(tmp_path)
@@ -1873,15 +1881,18 @@ async def list_file_history(
                 f"-n {limit_int} > {shlex.quote(tmp_path)}"
             )
 
+        session_id = f"session_{uuid.uuid4().hex}"
         try:
-            session_id = f"session_{uuid.uuid4().hex}"
-            await sandbox.process.create_session(session_id)
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
+            await create_session_with_recovery(sandbox, session_id)
+            await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(
                     command=f"bash -lc {shlex.quote(git_cmd)}",
                     var_async=False
-                )
+                ),
+                timeout=30,
+                recreate_session=True,
             )
         except Exception as git_err:
             logger.error(
@@ -1893,6 +1904,11 @@ async def list_file_history(
                 "path": path,
                 "versions": []
             }
+        finally:
+            try:
+                await sandbox.process.delete_session(session_id)
+            except Exception as cleanup_err:
+                logger.debug(f"Failed to delete git log session {session_id}: {cleanup_err}")
 
         try:
             log_bytes = await sandbox.fs.download_file(tmp_path)
@@ -1993,36 +2009,50 @@ async def get_commit_info(
             f"git diff --name-status HEAD {shlex.quote(commit)} > {shlex.quote(diff_tmp)}"
         )
 
+        session_id = f"session_{uuid.uuid4().hex}"
         try:
-            session_id = f"session_{uuid.uuid4().hex}"
-            await sandbox.process.create_session(session_id)
+            await create_session_with_recovery(sandbox, session_id)
 
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
+            await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(
                     command=f"bash -lc {shlex.quote(git_header_cmd)}",
                     var_async=False,
                 ),
+                timeout=30,
+                recreate_session=True,
             )
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
+            await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(
                     command=f"bash -lc {shlex.quote(git_files_cmd)}",
                     var_async=False,
                 ),
+                timeout=30,
+                recreate_session=True,
             )
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
+            await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(
                     command=f"bash -lc {shlex.quote(git_diff_cmd)}",
                     var_async=False,
                 ),
+                timeout=30,
+                recreate_session=True,
             )
         except Exception as git_err:
             logger.error(
                 f"Error running git commands for commit {commit} in sandbox {sandbox_id}: {str(git_err)}"
             )
             raise HTTPException(status_code=404, detail=f"Commit not found: {str(git_err)}")
+        finally:
+            try:
+                await sandbox.process.delete_session(session_id)
+            except Exception as cleanup_err:
+                logger.debug(f"Failed to delete git commit detail session {session_id}: {cleanup_err}")
 
         # --- parse header ---
         try:
@@ -2232,15 +2262,18 @@ async def list_files_at_commit(
             f"git ls-tree {git_path} > {shlex.quote(tmp_path)}"
         )
 
+        session_id = f"session_{uuid.uuid4().hex}"
         try:
-            session_id = f"session_{uuid.uuid4().hex}"
-            await sandbox.process.create_session(session_id)
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
+            await create_session_with_recovery(sandbox, session_id)
+            await execute_session_command_with_recovery(
+                sandbox,
+                session_id=session_id,
+                req=SessionExecuteRequest(
                     command=f"bash -lc {shlex.quote(git_cmd)}",
                     var_async=False,
                 ),
+                timeout=30,
+                recreate_session=True,
             )
         except Exception as git_err:
             logger.error(
@@ -2249,6 +2282,11 @@ async def list_files_at_commit(
             )
             # Return empty list if path doesn't exist in commit
             return {"files": []}
+        finally:
+            try:
+                await sandbox.process.delete_session(session_id)
+            except Exception as cleanup_err:
+                logger.debug(f"Failed to delete git ls-tree session {session_id}: {cleanup_err}")
 
         try:
             tree_bytes = await sandbox.fs.download_file(tmp_path)
@@ -2346,134 +2384,133 @@ async def revert_commit_or_files(
         sandbox = await get_sandbox_by_id_safely(sandbox_id)
 
         session_id = f"session_{uuid.uuid4().hex}"
-        await sandbox.process.create_session(session_id)
+        await create_session_with_recovery(sandbox, session_id)
 
         # 1) Whole-repo snapshot revert
-        if not paths:
-            # Build a shell script that:
-            # - Ensures clean working tree
-            # - Computes files to delete (tracked now but not in target commit)
-            # - Checks out target snapshot for all tracked files
-            # - Deletes extra tracked files
-            # - Commits if there are changes
-            # Build a descriptive commit message using the target commit's short sha and subject
-            # Compute snapshot_msg inside the shell so it's derived from the repo's commit metadata
+        try:
+            if not paths:
+                # Build a shell script that:
+                # - Ensures clean working tree
+                # - Computes files to delete (tracked now but not in target commit)
+                # - Checks out target snapshot for all tracked files
+                # - Deletes extra tracked files
+                # - Commits if there are changes
+                commands = [
+                    "cd /workspace",
+                    'if [ -n "$(git status --porcelain)" ]; then '
+                    'echo "Working tree not clean"; exit 1; fi',
+                    f"snapshot_msg=$(git show -s --format='Snapshot revert to: %h %s' {shlex.quote(commit)})",
+                    f"TARGET={shlex.quote(commit)}",
+                    'git ls-tree -r --name-only "$TARGET" | sort > /tmp/git_target_files',
+                    "git ls-files | sort > /tmp/git_current_files",
+                    'comm -23 /tmp/git_current_files /tmp/git_target_files > /tmp/git_to_delete || true',
+                    'git checkout "$TARGET" -- .',
+                    'if [ -s /tmp/git_to_delete ]; then '
+                    'xargs -a /tmp/git_to_delete git rm -f --; fi',
+                    'if [ -n "$(git status --porcelain)" ]; then '
+                    'git commit -m "$snapshot_msg"; fi',
+                ]
+
+                full_cmd = " && ".join(commands)
+
+                try:
+                    await execute_session_command_with_recovery(
+                        sandbox,
+                        session_id=session_id,
+                        req=SessionExecuteRequest(
+                            command=f"bash -lc {shlex.quote(full_cmd)}",
+                            var_async=False,
+                        ),
+                        timeout=60,
+                        recreate_session=True,
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Snapshot revert failed for commit {commit} in sandbox {sandbox_id}: {str(e)}"
+                    )
+                    raise HTTPException(
+                        status_code=400, detail=f"Snapshot revert failed: {str(e)}"
+                    )
+
+                return {
+                    "status": "success",
+                    "mode": "snapshot_repo",
+                    "target_commit": commit,
+                    "affected_paths": [],
+                }
+
+            # 2) Per-file snapshot revert
+            safe_paths = [p.lstrip("/") for p in paths]
+            tmp_prefix = f"/tmp/git_revert_{uuid.uuid4().hex}"
+
             commands = [
                 "cd /workspace",
-                # fail if dirty
-                'if [ -n "$(git status --porcelain)" ]; then '
-                'echo "Working tree not clean"; exit 1; fi',
-                f"snapshot_msg=$(git show -s --format='Snapshot revert to: %h %s' {shlex.quote(commit)})",
                 f"TARGET={shlex.quote(commit)}",
-                'git ls-tree -r --name-only "$TARGET" | sort > /tmp/git_target_files',
-                "git ls-files | sort > /tmp/git_current_files",
-                'comm -23 /tmp/git_current_files /tmp/git_target_files > /tmp/git_to_delete || true',
-                'git checkout "$TARGET" -- .',
-                'if [ -s /tmp/git_to_delete ]; then '
-                'xargs -a /tmp/git_to_delete git rm -f --; fi',
-                'if [ -n "$(git status --porcelain)" ]; then '
-                'git commit -m "$snapshot_msg"; fi',
             ]
+
+            for i, rel in enumerate(safe_paths):
+                abs_path = f"/workspace/{rel}"
+                tmp_path = f"{tmp_prefix}_{i}"
+                commands.append(
+                    "if git cat-file -e \"$TARGET\":" + shlex.quote(rel) + " 2>/dev/null; then "
+                    "mkdir -p $(dirname " + shlex.quote(abs_path) + ") || true; "
+                    "git show \"$TARGET\":" + shlex.quote(rel) + " > " + shlex.quote(tmp_path) + " && "
+                    "mv " + shlex.quote(tmp_path) + " " + shlex.quote(abs_path) + "; "
+                    "else "
+                    "if git ls-files --error-unmatch "
+                    + shlex.quote(rel)
+                    + " >/dev/null 2>&1; then "
+                    "git rm -f -- "
+                    + shlex.quote(rel)
+                    + "; "
+                    "fi; "
+                    "fi"
+                )
+
+            files_arg = " ".join(shlex.quote(p) for p in safe_paths)
+            commit_msg = f"Snapshot revert files {', '.join(safe_paths)} to {commit}"
+            commands.append(
+                'if [ -n "$(git status --porcelain)" ]; then '
+                f"git add -- {files_arg} && git commit -m {shlex.quote(commit_msg)}; fi"
+            )
 
             full_cmd = " && ".join(commands)
 
+            logger.info(f"Executing single-file revert for paths {safe_paths} to commit {commit} in sandbox {sandbox_id}")
+            logger.debug(f"Revert command: {full_cmd}")
+
             try:
-                await sandbox.process.execute_session_command(
-                    session_id,
-                    SessionExecuteRequest(
+                await execute_session_command_with_recovery(
+                    sandbox,
+                    session_id=session_id,
+                    req=SessionExecuteRequest(
                         command=f"bash -lc {shlex.quote(full_cmd)}",
                         var_async=False,
                     ),
+                    timeout=60,
+                    recreate_session=True,
                 )
+                logger.info(f"Successfully reverted files {safe_paths} to commit {commit} in sandbox {sandbox_id}")
             except Exception as e:
                 logger.error(
-                    f"Snapshot revert failed for commit {commit} in sandbox {sandbox_id}: {str(e)}"
+                    f"Snapshot revert of files {safe_paths} to commit {commit} in sandbox {sandbox_id} failed: {str(e)}"
                 )
                 raise HTTPException(
-                    status_code=400, detail=f"Snapshot revert failed: {str(e)}"
+                    status_code=400, detail=f"Snapshot file revert failed: {str(e)}"
                 )
 
             return {
                 "status": "success",
-                "mode": "snapshot_repo",
+                "mode": "snapshot_files",
                 "target_commit": commit,
-                "affected_paths": [],  # Empty array means all files affected
+                "reverted_files": safe_paths,
+                "affected_paths": safe_paths,
             }
-
-        # 2) Per-file snapshot revert
-        # For each path:
-        # - If file exists in commit: write blob into /workspace/path
-        # - If file does NOT exist in commit: delete it if currently tracked
-        safe_paths = [p.lstrip("/") for p in paths]
-        tmp_prefix = f"/tmp/git_revert_{uuid.uuid4().hex}"
-
-        commands = [
-            "cd /workspace",
-            f"TARGET={shlex.quote(commit)}",
-        ]
-
-        for i, rel in enumerate(safe_paths):
-            abs_path = f"/workspace/{rel}"
-            tmp_path = f"{tmp_prefix}_{i}"
-
-            # For each file:
-            # 1) Check if it exists in the target commit
-            # 2) If yes: write blob to tmp and move into place
-            # 3) If no: remove it if tracked now
-            # Note: We use bare 'rel' inside double quotes for git commands since it's already safe
-            commands.append(
-                "if git cat-file -e \"$TARGET\":" + shlex.quote(rel) + " 2>/dev/null; then "
-                "mkdir -p $(dirname " + shlex.quote(abs_path) + ") || true; "
-                "git show \"$TARGET\":" + shlex.quote(rel) + " > " + shlex.quote(tmp_path) + " && "
-                "mv " + shlex.quote(tmp_path) + " " + shlex.quote(abs_path) + "; "
-                "else "
-                "if git ls-files --error-unmatch "
-                + shlex.quote(rel)
-                + " >/dev/null 2>&1; then "
-                "git rm -f -- "
-                + shlex.quote(rel)
-                + "; "
-                "fi; "
-                "fi"
-            )
-
-        # Stage and commit if anything changed
-        files_arg = " ".join(shlex.quote(p) for p in safe_paths)
-        commit_msg = f"Snapshot revert files {', '.join(safe_paths)} to {commit}"
-        commands.append(
-            'if [ -n "$(git status --porcelain)" ]; then '
-            f"git add -- {files_arg} && git commit -m {shlex.quote(commit_msg)}; fi"
-        )
-
-        full_cmd = " && ".join(commands)
-
-        logger.info(f"Executing single-file revert for paths {safe_paths} to commit {commit} in sandbox {sandbox_id}")
-        logger.debug(f"Revert command: {full_cmd}")
-
-        try:
-            await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(
-                    command=f"bash -lc {shlex.quote(full_cmd)}",
-                    var_async=False,
-                ),
-            )
-            logger.info(f"Successfully reverted files {safe_paths} to commit {commit} in sandbox {sandbox_id}")
-        except Exception as e:
-            logger.error(
-                f"Snapshot revert of files {safe_paths} to commit {commit} in sandbox {sandbox_id} failed: {str(e)}"
-            )
-            raise HTTPException(
-                status_code=400, detail=f"Snapshot file revert failed: {str(e)}"
-            )
-
-        return {
-            "status": "success",
-            "mode": "snapshot_files",
-            "target_commit": commit,
-            "reverted_files": safe_paths,
-            "affected_paths": safe_paths,  # Frontend expects this field
-        }
+        finally:
+            try:
+                await sandbox.process.delete_session(session_id)
+            except Exception as cleanup_err:
+                logger.debug(f"Failed to delete snapshot revert session {session_id}: {cleanup_err}")
 
     except HTTPException:
         raise
