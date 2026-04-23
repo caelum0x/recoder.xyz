@@ -208,6 +208,52 @@ class SandboxShellTool(SandboxToolsBase):
             ]
         )
 
+    @staticmethod
+    def _candidate_preview_ports(command: str) -> list[int]:
+        import re
+
+        ports: list[int] = []
+        for match in re.finditer(r"(?:--port|-p)\s+(\d{2,5})", command):
+            try:
+                ports.append(int(match.group(1)))
+            except ValueError:
+                pass
+
+        normalized = command.lower()
+        if "vite" in normalized and 5173 not in ports:
+            ports.append(5173)
+        if any(token in normalized for token in ("next", "react-scripts", "npm start", "npm run dev", "npm run start")) and 3000 not in ports:
+            ports.append(3000)
+
+        for fallback in (5173, 3000, 8080):
+            if fallback not in ports:
+                ports.append(fallback)
+        return ports
+
+    async def _maybe_attach_preview_info(self, payload: Dict[str, Any], command: str) -> Dict[str, Any]:
+        if not self._should_background_command(command):
+            return payload
+
+        for port in self._candidate_preview_ports(command):
+            try:
+                for _ in range(5):
+                    probe = await self.sandbox.process.exec(
+                        f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 2 http://localhost:{port}/ || true",
+                        timeout=5,
+                    )
+                    code = (probe.result or "").strip()
+                    if code and code != "000":
+                        preview_link = await self.sandbox.get_preview_link(port)
+                        url = preview_link.url if hasattr(preview_link, "url") else str(preview_link)
+                        payload["preview_port"] = port
+                        payload["preview_url"] = url
+                        return payload
+                    await asyncio.sleep(2)
+            except Exception as preview_err:
+                logger.debug(f"[sb_shell_tool] Preview probe failed for port {port}: {preview_err}")
+
+        return payload
+
     @openapi_schema({
         "type": "function",
         "function": {
@@ -436,11 +482,13 @@ Usage notes:
                         "message": f"Command timed out after {timeout} seconds. For long-running processes, use tmux: `tmux new-session -d -s name 'command'`"
                     })
                 
-                return self.success_response({
+                payload = {
                     "output": final_output.strip(),
                     "cwd": cwd,
                     "exit_code": exit_code
-                })
+                }
+                payload = await self._maybe_attach_preview_info(payload, command)
+                return self.success_response(payload)
                 
             except Exception as pty_error:
                 logger.warning(f"PTY execution failed, falling back to direct execution: {pty_error}")
@@ -482,11 +530,13 @@ Usage notes:
                 
                 logs_output = logs.output if logs and logs.output else ""
                 
-                return self.success_response({
+                payload = {
                     "output": logs_output,
                     "cwd": cwd,
                     "exit_code": response.exit_code
-                })
+                }
+                payload = await self._maybe_attach_preview_info(payload, command)
+                return self.success_response(payload)
             finally:
                 try:
                     await self.sandbox.process.delete_session(session_id)
