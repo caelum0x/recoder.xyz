@@ -175,6 +175,7 @@ lerna-debug.log*
 
 # Local runtime artifacts
 .run/
+.scratch/upstream/
 
 # Local external reference checkouts
 oh-my-openagent/
