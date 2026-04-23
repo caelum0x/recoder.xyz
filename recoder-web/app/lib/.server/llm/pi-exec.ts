@@ -87,6 +87,8 @@ function buildPiPrompt(options: {
     'You have full access to: read files, write files, edit files, run bash commands.',
     'Apply changes directly — do not describe hypothetical edits.',
     'After making changes, verify the build/dev server works if relevant.',
+    'When a preview URL is available, treat it as a browser-ready link and surface it directly to the user.',
+    'Do not ask the user to attach custom auth headers for a preview link.',
     'Return a concise summary of what you did.',
     '',
     '--- System context ---',

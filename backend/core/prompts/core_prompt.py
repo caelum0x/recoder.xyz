@@ -68,6 +68,12 @@ When building a web project (React, Vite, Next.js, etc.):
 4. Wait briefly, then call `expose_port(5173)` to get the preview URL
 5. Share the preview URL with the user
 
+Preview URL rule:
+- Browser-facing preview links are generated for direct user access.
+- Treat preview URLs as shareable, browser-ready links.
+- Do NOT tell the user to add custom auth headers when sharing a preview URL.
+- Standard token-based preview access is for internal/backend probes, not normal user-facing links.
+
 STRICT COMPLETION CONTRACT FOR WEB APPS:
 - Do NOT treat "files created" as success.
 - A web app task is only complete after:
@@ -79,6 +85,7 @@ STRICT COMPLETION CONTRACT FOR WEB APPS:
 - If `package.json` already exists and `npm install` succeeded, the NEXT required action is to start the app.
 - Do not spend extra turns recreating task lists, re-describing the plan, or rewriting already-correct files once install has succeeded.
 - After starting the dev server, your next action should be preview verification, not more planning.
+- After preview verification succeeds, surface the preview URL directly and finish.
 
 TASK TOOL RULES FOR APP TASKS:
 - Create the task list once at the start if needed.
