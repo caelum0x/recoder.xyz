@@ -234,6 +234,9 @@ class SandboxShellTool(SandboxToolsBase):
         if not self._should_background_command(command):
             return payload
 
+        payload["background_process_started"] = True
+        payload["dev_server_log_path"] = "/tmp/recoder-devserver.log"
+
         for port in self._candidate_preview_ports(command):
             try:
                 for _ in range(12):
@@ -247,12 +250,31 @@ class SandboxShellTool(SandboxToolsBase):
                         url = preview_link.url if hasattr(preview_link, "url") else str(preview_link)
                         payload["preview_port"] = port
                         payload["preview_url"] = url
+                        payload["preview_pending"] = False
                         return payload
                     await asyncio.sleep(2)
             except Exception as preview_err:
                 logger.debug(f"[sb_shell_tool] Preview probe failed for port {port}: {preview_err}")
 
+        payload["preview_pending"] = True
+        payload["dev_server_log_tail"] = await self._read_dev_server_log_tail()
         return payload
+
+    async def _read_dev_server_log_tail(self) -> str:
+        probes = (
+            "if command -v tmux >/dev/null 2>&1 && tmux has-session -t recoder-dev-server 2>/dev/null; "
+            "then tmux capture-pane -pt recoder-dev-server -S -80 | tail -n 40; fi",
+            "if [ -f /tmp/recoder-devserver.log ]; then tail -n 40 /tmp/recoder-devserver.log; fi",
+        )
+        for probe in probes:
+            try:
+                result = await self.sandbox.process.exec(probe, timeout=5)
+                output = (result.result or "").strip()
+                if output:
+                    return output
+            except Exception as log_err:
+                logger.debug(f"[sb_shell_tool] Failed to inspect dev server logs: {log_err}")
+        return ""
 
     @openapi_schema({
         "type": "function",

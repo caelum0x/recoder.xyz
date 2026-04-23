@@ -43,6 +43,54 @@ def test_shell_tool_candidate_preview_ports_prioritize_expected_ports():
 
 
 @pytest.mark.asyncio
+async def test_shell_tool_attaches_preview_metadata_when_probe_succeeds():
+    process = SimpleNamespace(
+        exec=AsyncMock(return_value=SimpleNamespace(result="200")),
+    )
+    tool = SandboxShellTool.__new__(SandboxShellTool)
+    tool._sandbox_info = SimpleNamespace(
+        sandbox=SimpleNamespace(
+            process=process,
+            get_preview_link=AsyncMock(return_value=SimpleNamespace(url="https://preview.example")),
+        )
+    )
+    tool._candidate_preview_ports = lambda _command: [3000]
+
+    payload = await tool._maybe_attach_preview_info({}, "npm run dev")
+
+    assert payload["background_process_started"] is True
+    assert payload["preview_port"] == 3000
+    assert payload["preview_url"] == "https://preview.example"
+    assert payload["preview_pending"] is False
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_attaches_log_tail_when_preview_is_pending():
+    process = SimpleNamespace(
+        exec=AsyncMock(side_effect=[
+            *[SimpleNamespace(result="000") for _ in range(12)],
+            SimpleNamespace(result=""),  # tmux probe
+            SimpleNamespace(result="ready on http://localhost:5173"),  # log tail probe
+        ]),
+    )
+    tool = SandboxShellTool.__new__(SandboxShellTool)
+    tool._sandbox_info = SimpleNamespace(
+        sandbox=SimpleNamespace(
+            process=process,
+            get_preview_link=AsyncMock(),
+        )
+    )
+    tool._candidate_preview_ports = lambda _command: [5173]
+
+    payload = await tool._maybe_attach_preview_info({}, "vite --host 0.0.0.0 --port 5173")
+
+    assert payload["background_process_started"] is True
+    assert payload["preview_pending"] is True
+    assert payload["dev_server_log_path"] == "/tmp/recoder-devserver.log"
+    assert "localhost:5173" in payload["dev_server_log_tail"]
+
+
+@pytest.mark.asyncio
 async def test_shell_tool_wrapped_fallback_uses_relative_session_cwd(monkeypatch):
     captured = {}
 
