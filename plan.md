@@ -146,11 +146,6 @@ Verified live:
 
 ### Current Real Follow-Up
 
-- `recoder-czmt`
-  - harden scaffold/runtime limits for heavyweight React flows
-  - live Daytona probe on a real sandbox showed overlay usage at `100%` disk and `100%` inodes after a React app task
-  - prompt/runtime should keep preferring lighter Vite/minimal setups and add stronger runtime guards
-
 - `recoder-zdp`
   - finish the separate intermittent authenticated agency RSC prefetch `503` issue
   - direct route loads are fine; issue appears intermittent and likely proxy/prefetch related
@@ -179,7 +174,6 @@ Launch is complete when:
 - `recoder-hb6` is resolved
 - `recoder-i3v` is resolved
 - `recoder-96g` is resolved
-- `recoder-czmt` is resolved or explicitly accepted
 - `recoder-zdp` is resolved or explicitly accepted as non-blocking
 
 ## Notes
