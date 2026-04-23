@@ -27,11 +27,11 @@ import {
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Security & Compliance - Enterprise-Grade Protection | Recoder.xyz',
-  description: 'Enterprise-grade security for AI-powered development. SOC 2 Type II certified, ISO 27001 compliant, GDPR ready. Features end-to-end AES-256 encryption, multi-factor authentication, SSO integration, and 99.99% uptime guarantee.',
+  title: 'Security & Trust | Recoder.xyz',
+  description: 'Understand how Recoder handles BYOK credentials, encrypted storage, secure transport, and trust-oriented product design for AI workflows.',
   openGraph: {
-    title: 'Security & Compliance - Enterprise-Grade Protection | Recoder.xyz',
-    description: 'SOC 2 Type II, ISO 27001, GDPR compliant. AES-256 encryption, MFA, SSO, and 99.99% uptime for AI development.',
+    title: 'Security & Trust | Recoder.xyz',
+    description: 'BYOK, encrypted key storage, secure transport, and practical security posture for AI-powered development.',
     url: 'https://recoder.xyz/security',
     siteName: 'Recoder.xyz',
     images: [
@@ -46,8 +46,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Security & Compliance - Enterprise-Grade Protection',
-    description: 'SOC 2 Type II, ISO 27001, GDPR compliant. End-to-end encryption and 99.99% uptime.',
+    title: 'Security & Trust | Recoder.xyz',
+    description: 'BYOK, encrypted key storage, secure transport, and practical security posture for AI workflows.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -58,110 +58,98 @@ export const metadata: Metadata = {
 export default function SecurityCenterPage() {
   const securityFeatures = [
     {
-      icon: Shield,
-      title: 'Enterprise-Grade Security',
-      description: 'SOC 2 Type II compliant infrastructure with 99.99% uptime guarantee',
-      features: ['ISO 27001 Certified', 'SOC 2 Type II', 'GDPR Compliant', '24/7 Monitoring']
+      icon: Key,
+      title: 'BYOK Data Boundary',
+      description: 'Recoder is designed so teams can bring their own provider credentials and maintain direct vendor billing relationships.',
+      features: ['Provider choice stays with you', 'No bundled AI lock-in', 'Cost visibility stays upstream', 'Works with multi-provider setups']
     },
     {
       icon: Lock,
-      title: 'End-to-End Encryption',
-      description: 'All data encrypted in transit and at rest using AES-256 encryption',
-      features: ['TLS 1.3 Encryption', 'AES-256 at Rest', 'Zero-Knowledge Architecture', 'Key Rotation']
+      title: 'Encrypted Key Storage',
+      description: 'Stored credentials are encrypted at rest and moved only over HTTPS/TLS-secured transport.',
+      features: ['Encrypted at rest', 'HTTPS/TLS in transit', 'No plaintext key display in normal flows', 'Secret rotation supported operationally']
     },
     {
-      icon: Key,
-      title: 'Identity & Access Management',
-      description: 'Robust authentication and authorization with enterprise SSO support',
-      features: ['Multi-Factor Auth', 'SSO Integration', 'Role-Based Access', 'Session Management']
+      icon: Shield,
+      title: 'Sandboxed Execution',
+      description: 'Code execution paths use isolated runtime boundaries so generated work does not run directly on the public marketing surface.',
+      features: ['Isolated runtimes', 'Scoped execution surfaces', 'Operational cleanup tooling', 'Preview-link controls']
     },
     {
       icon: Database,
-      title: 'Data Protection',
-      description: 'Advanced data governance with automated backups and disaster recovery',
-      features: ['Automated Backups', 'Point-in-Time Recovery', 'Data Residency', 'Retention Policies']
+      title: 'Account and Access Controls',
+      description: 'OAuth-first account flows, session controls, and service-specific routing reduce unnecessary credential exposure.',
+      features: ['GitHub/Google sign-in', 'Scoped redirects', 'Sign-out flows', 'Auth error handling']
     },
     {
       icon: Eye,
-      title: 'Privacy Controls',
-      description: 'Comprehensive privacy controls with user data ownership guarantees',
-      features: ['Data Portability', 'Right to Delete', 'Privacy Dashboard', 'Consent Management']
+      title: 'Audit-Friendly Operations',
+      description: 'Operational logs, health surfaces, and email pipeline diagnostics are exposed so failures are observable instead of silent.',
+      features: ['Health checks', 'Structured logs', 'Email ops visibility', 'Queue status inspection']
     },
     {
       icon: Server,
-      title: 'Infrastructure Security',
-      description: 'Military-grade infrastructure security with advanced threat protection',
-      features: ['DDoS Protection', 'WAF Security', 'Intrusion Detection', 'Vulnerability Scanning']
+      title: 'Practical Security Roadmap',
+      description: 'Recoder emphasizes transparent current posture instead of overstated compliance claims.',
+      features: ['Trust pages kept current', 'Known limitations documented', 'Operational rollout guidance', 'Security improvements shipped incrementally']
     }
   ];
 
   const certifications = [
     {
-      name: 'SOC 2 Type II',
-      description: 'System and Organization Controls audit for security, availability, and confidentiality',
-      status: 'certified',
-      icon: Award,
-      validUntil: '2024-12-31'
-    },
-    {
-      name: 'ISO 27001',
-      description: 'International standard for information security management systems',
-      status: 'certified',
+      name: 'OAuth-first Account Access',
+      description: 'Primary public auth flows use GitHub and Google instead of a sprawling password surface.',
+      status: 'active',
       icon: Shield,
-      validUntil: '2025-06-30'
+      validUntil: 'Current'
     },
     {
-      name: 'GDPR Compliance',
-      description: 'Full compliance with General Data Protection Regulation',
-      status: 'compliant',
+      name: 'Encrypted Credential Storage',
+      description: 'API keys are stored as encrypted secrets rather than raw provider credentials.',
+      status: 'active',
+      icon: Lock,
+      validUntil: 'Current'
+    },
+    {
+      name: 'Secure Transport',
+      description: 'Public site and application surfaces are expected to operate over HTTPS.',
+      status: 'active',
       icon: Globe,
-      validUntil: 'Ongoing'
+      validUntil: 'Current'
     },
     {
-      name: 'HIPAA Ready',
-      description: 'Healthcare industry compliance for sensitive data handling',
-      status: 'ready',
+      name: 'Compliance Roadmap',
+      description: 'Formal certification and enterprise attestations should be treated as roadmap work unless explicitly published.',
+      status: 'planned',
       icon: FileCheck,
-      validUntil: 'On Request'
+      validUntil: 'Roadmap'
     }
   ];
 
   const securityPolicies = [
     {
-      title: 'Security Policy',
-      description: 'Comprehensive security framework and procedures',
-      lastUpdated: '2024-01-15',
-      href: '/security/policy'
-    },
-    {
       title: 'Privacy Policy',
-      description: 'How we collect, use, and protect your personal information',
-      lastUpdated: '2024-01-10',
+      description: 'How Recoder handles account data, provider keys, and product usage information.',
+      lastUpdated: '2026-04-23',
       href: '/privacy'
     },
     {
       title: 'Terms of Service',
-      description: 'Legal terms and conditions for using Recoder services',
-      lastUpdated: '2024-01-05',
+      description: 'Current legal terms for using Recoder and BYOK-powered workflows.',
+      lastUpdated: '2026-04-23',
       href: '/terms'
     },
     {
-      title: 'Data Processing Agreement',
-      description: 'GDPR-compliant data processing terms for enterprise customers',
-      lastUpdated: '2024-01-20',
-      href: '/security/dpa'
+      title: 'Getting Started',
+      description: 'Operational setup path for new users connecting providers and starting work.',
+      lastUpdated: '2026-04-23',
+      href: '/docs/getting-started'
     },
     {
-      title: 'Incident Response Plan',
-      description: 'Our procedures for handling security incidents',
-      lastUpdated: '2023-12-15',
-      href: '/security/incident-response'
-    },
-    {
-      title: 'Penetration Testing Reports',
-      description: 'Regular third-party security assessments and findings',
-      lastUpdated: '2024-01-01',
-      href: '/security/pen-testing'
+      title: 'Contact and Security Reporting',
+      description: 'Reach the team for support questions or responsible disclosure.',
+      lastUpdated: '2026-04-23',
+      href: '/contact'
     }
   ];
 

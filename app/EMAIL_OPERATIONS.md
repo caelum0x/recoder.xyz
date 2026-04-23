@@ -13,10 +13,15 @@ This app is now SMTP-first for transactional mail.
 - Use a dedicated transactional sender such as `Postal` or `docker-mailserver`.
 - Send from `noreply@recoder.xyz`.
 - Configure:
-  - `SPF`
-  - `DKIM`
-  - `DMARC`
-  - reverse DNS / PTR for the sending IP
+- `SPF`
+- `DKIM`
+- `DMARC`
+- reverse DNS / PTR for the sending IP
+
+### Suggested default
+
+- `Postal` if you want a dedicated transactional system with queueing, delivery logs, and sender-domain controls.
+- `docker-mailserver` if you want the lightest self-hosted SMTP setup and can manage mail hygiene directly.
 
 ## Required env
 
@@ -69,6 +74,29 @@ curl -s "http://localhost:3000/api/cron/process-emails?mode=status" \
 curl -s -X POST http://localhost:3000/api/cron/process-emails \
   -H "x-cron-secret: $CRON_SECRET"
 ```
+
+## Deliverability checklist
+
+- Publish SPF for the sender domain.
+- Publish DKIM for the exact sender selector your mail stack uses.
+- Publish a DMARC record, even if starting with `p=none`.
+- Confirm PTR / reverse DNS matches the sending host.
+- Send live tests to:
+  - Gmail
+  - Outlook
+  - Apple Mail / iCloud if available
+- Verify:
+  - inbox placement
+  - no broken links
+  - verification links open the right origin
+  - onboarding cron sends scheduled mail on time
+
+## Ongoing monitoring
+
+- Watch `/api/health` for onboarding queue drift.
+- Watch `/api/admin/test-email` for provider and pipeline status.
+- Review failed scheduled emails and error messages regularly.
+- Treat repeated SMTP soft failures as operational incidents, not copy issues.
 
 ## Scheduling guidance
 

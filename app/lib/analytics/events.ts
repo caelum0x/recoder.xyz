@@ -11,8 +11,12 @@
 // ---------------------------------------------------------------------------
 
 export const AnalyticsEvents = {
+  // ---- Acquisition / marketing ----
+  CTA_CLICKED: 'cta_clicked',
+
   // ---- Auth funnel ----
   SIGNUP_STARTED: 'signup_started',
+  LOGIN_STARTED: 'login_started',
   SIGNUP_COMPLETED: 'signup_completed',
   LOGIN_COMPLETED: 'login_completed',
   LOGIN_FAILED: 'login_failed',
@@ -20,10 +24,14 @@ export const AnalyticsEvents = {
 
   // ---- Onboarding ----
   ONBOARDING_STARTED: 'onboarding_started',
+  ONBOARDING_STEP_VIEWED: 'onboarding_step_viewed',
   ONBOARDING_COMPLETED: 'onboarding_completed',
   ONBOARDING_SKIPPED: 'onboarding_skipped',
+  API_KEY_SAVED: 'api_key_saved',
 
   // ---- Activation (first-time milestones) ----
+  DASHBOARD_VIEWED: 'dashboard_viewed',
+  PROJECTS_VIEWED: 'projects_viewed',
   FIRST_PROJECT_CREATED: 'first_project_created',
   FIRST_AGENT_RUN: 'first_agent_run',
   FIRST_CLI_SESSION: 'first_cli_session',
@@ -64,6 +72,12 @@ export interface BaseEventProperties {
   source?: string;
   /** ISO-8601 timestamp; auto-filled by the tracker when omitted. */
   timestamp?: string;
+}
+
+export interface CTAEventProperties extends BaseEventProperties {
+  location?: string;
+  ctaLabel?: string;
+  destination?: string;
 }
 
 /** Auth funnel properties. */
@@ -119,7 +133,9 @@ export interface PageViewEventProperties extends BaseEventProperties {
 
 export type EventPropertiesMap = {
   // Auth
+  [AnalyticsEvents.CTA_CLICKED]: CTAEventProperties;
   [AnalyticsEvents.SIGNUP_STARTED]: AuthEventProperties;
+  [AnalyticsEvents.LOGIN_STARTED]: AuthEventProperties;
   [AnalyticsEvents.SIGNUP_COMPLETED]: AuthEventProperties;
   [AnalyticsEvents.LOGIN_COMPLETED]: AuthEventProperties;
   [AnalyticsEvents.LOGIN_FAILED]: AuthEventProperties;
@@ -127,10 +143,14 @@ export type EventPropertiesMap = {
 
   // Onboarding
   [AnalyticsEvents.ONBOARDING_STARTED]: OnboardingEventProperties;
+  [AnalyticsEvents.ONBOARDING_STEP_VIEWED]: OnboardingEventProperties;
   [AnalyticsEvents.ONBOARDING_COMPLETED]: OnboardingEventProperties;
   [AnalyticsEvents.ONBOARDING_SKIPPED]: OnboardingEventProperties;
+  [AnalyticsEvents.API_KEY_SAVED]: OnboardingEventProperties;
 
   // Activation
+  [AnalyticsEvents.DASHBOARD_VIEWED]: ActivationEventProperties;
+  [AnalyticsEvents.PROJECTS_VIEWED]: ActivationEventProperties;
   [AnalyticsEvents.FIRST_PROJECT_CREATED]: ActivationEventProperties;
   [AnalyticsEvents.FIRST_AGENT_RUN]: ActivationEventProperties;
   [AnalyticsEvents.FIRST_CLI_SESSION]: ActivationEventProperties;

@@ -27,7 +27,7 @@ export default function GettingStartedPage() {
               </span>
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Start building with AI in under 5 minutes. This guide will walk you through everything you need to know.
+              Start building with AI in under 5 minutes. This guide follows the real BYOK-first path from signup to first project.
             </p>
           </div>
 
@@ -53,7 +53,7 @@ export default function GettingStartedPage() {
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400 mb-2">
                       <CheckCircle className="w-4 h-4 text-green-400" />
-                      <span>No trial period - it's free forever (during beta)</span>
+                      <span>No pricing gate on day one</span>
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <CheckCircle className="w-4 h-4 text-green-400" />
@@ -61,10 +61,10 @@ export default function GettingStartedPage() {
                     </div>
                   </div>
                   <Link
-                    href="/auth/signin"
+                    href="/auth/signup"
                     className="inline-flex items-center space-x-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium transition-all"
                   >
-                    <span>Sign Up Now</span>
+                    <span>Create Account</span>
                     <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>

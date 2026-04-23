@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
 import { ArrowLeft, FolderOpen, Globe, Loader2, RefreshCw } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 interface Project {
   id: string;
@@ -35,6 +36,12 @@ export default function ProjectsPage() {
 
     if (!isPending && session) {
       void loadProjects();
+    }
+  }, [isPending, session]);
+
+  useEffect(() => {
+    if (!isPending && session) {
+      trackEvent(AnalyticsEvents.PROJECTS_VIEWED, { source: 'projects', userId: session.user?.id });
     }
   }, [isPending, session]);
 
@@ -101,6 +108,7 @@ export default function ProjectsPage() {
                 href="https://web.recoder.xyz"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent(AnalyticsEvents.CTA_CLICKED, { ctaLabel: 'Open Web IDE', destination: 'https://web.recoder.xyz', location: 'projects_empty_state', source: 'projects' })}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 transition-colors"
               >
                 <Globe className="w-5 h-5" />

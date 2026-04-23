@@ -14,6 +14,7 @@ import {
   Database, Server, ExternalLink, Activity, AlertCircle, Clock
 } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 const serviceIcons: Record<string, React.ElementType> = {
   app: Globe,
@@ -89,6 +90,12 @@ function DashboardContent() {
       setTimeout(() => setShowWelcome(false), 5000);
     }
   }, [session, isPending, searchParams]);
+
+  useEffect(() => {
+    if (!isPending && session) {
+      trackEvent(AnalyticsEvents.DASHBOARD_VIEWED, { source: 'dashboard', userId: session.user?.id });
+    }
+  }, [isPending, session]);
 
   // Fetch ecosystem health for status dots
   useEffect(() => {
