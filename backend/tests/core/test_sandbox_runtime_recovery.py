@@ -26,3 +26,23 @@ async def test_get_or_start_sandbox_restarts_file_server_for_started_sandbox(mon
 
     assert result is sandbox
     start_file_server.assert_awaited_once_with(sandbox)
+
+
+@pytest.mark.asyncio
+async def test_start_file_server_restarts_when_probe_returns_dead_double_zero():
+    from core.sandbox.sandbox import start_file_server
+
+    process = SimpleNamespace(
+        exec=AsyncMock(side_effect=[
+            SimpleNamespace(result="000000"),
+            SimpleNamespace(result=""),
+            SimpleNamespace(result="200"),
+        ])
+    )
+    sandbox = SimpleNamespace(process=process)
+
+    await start_file_server(sandbox)
+
+    assert process.exec.await_count == 3
+    start_cmd = process.exec.await_args_list[1].args[0]
+    assert "python3 -m http.server 8080" in start_cmd
