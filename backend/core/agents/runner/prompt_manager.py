@@ -29,12 +29,15 @@ class PromptManager:
             from core.prompts.core_prompt import get_core_system_prompt
             system_content = get_core_system_prompt()
 
+        latest_user_message = await PromptManager._fetch_latest_user_message(thread_id)
+        task_mode = PromptManager._classify_task_mode(latest_user_message)
+
         # Note: Tier-based tool filtering removed - tools are now blocked at execution time
         # in tool_executor.py via check_tool_access_for_account(). This allows the agent
         # to see all tools but get a proper upgrade CTA when blocked.
 
         t1 = time.time()
-        system_content = PromptManager._build_base_prompt(system_content, disabled_tools)
+        system_content = PromptManager._build_base_prompt(system_content, disabled_tools, task_mode)
         logger.debug(f"⏱️ [PROMPT TIMING] _build_base_prompt: {(time.time() - t1) * 1000:.1f}ms")
         
         # Start parallel fetch tasks
@@ -99,6 +102,55 @@ class PromptManager:
             return system_message, {"role": "user", "content": "\n\n".join(context_parts)}
         
         return system_message, None
+
+    @staticmethod
+    async def _fetch_latest_user_message(thread_id: str) -> Optional[str]:
+        try:
+            from core.services.db import execute_one
+
+            row = await execute_one(
+                """
+                SELECT content
+                FROM messages
+                WHERE thread_id::text = :thread_id AND type = 'user'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                {"thread_id": thread_id},
+            )
+            if not row:
+                return None
+
+            content = row.get("content")
+            if isinstance(content, dict):
+                return content.get("content") or content.get("text")
+            if isinstance(content, str):
+                return content
+            return None
+        except Exception as e:
+            logger.debug(f"Failed to fetch latest user message for prompt classification: {e}")
+            return None
+
+    @staticmethod
+    def _classify_task_mode(user_message: Optional[str]) -> Optional[str]:
+        if not user_message:
+            return None
+
+        text = user_message.lower()
+        app_indicators = (
+            "react app",
+            "vite app",
+            "next.js",
+            "nextjs",
+            "web app",
+            "build a website",
+            "build an app",
+            "sandbox preview",
+            "runs in the sandbox preview",
+            "start the dev server",
+            "preview url",
+        )
+        return "app_task" if any(token in text for token in app_indicators) else None
     
     @staticmethod
     async def _with_timeout(coro, timeout_s: float, label: str):
@@ -139,16 +191,35 @@ class PromptManager:
         return '\n'.join(filtered)
 
     @staticmethod
-    def _build_base_prompt(system_content: str, disabled_tools: list = None) -> str:
+    def _build_base_prompt(system_content: str, disabled_tools: list = None, task_mode: Optional[str] = None) -> str:
         logger.info("🚀 [DYNAMIC TOOLS] Using dynamic tool loading system (minimal index only)")
         minimal_index = get_minimal_tool_index()
         system_content += "\n\n" + minimal_index
         logger.info(f"📊 [DYNAMIC TOOLS] Core prompt + minimal index: {len(system_content):,} chars")
-        
-        preloaded_guides = PromptManager._get_preloaded_tool_guides()
-        if preloaded_guides:
-            system_content += preloaded_guides
-            logger.info(f"📖 [DYNAMIC TOOLS] Added preloaded tool guides: {len(preloaded_guides):,} chars")
+
+        if task_mode == "app_task":
+            system_content += """
+
+# APP TASK MODE
+This run is a web-app build task. Use a deterministic workflow:
+1. Create or update the required app files
+2. Run dependency install exactly once
+3. Start the dev server in the background
+4. Verify the preview URL/port
+5. Finish
+
+Rules:
+- Do not re-plan after install succeeds.
+- Do not repeatedly call create_tasks to restate the same plan.
+- Prefer `update_tasks` over repeated task creation.
+- Once `package.json` exists and install succeeds, the next required action is start + preview verification.
+- A web-app task is NOT complete until a preview URL is available.
+"""
+        else:
+            preloaded_guides = PromptManager._get_preloaded_tool_guides()
+            if preloaded_guides:
+                system_content += preloaded_guides
+                logger.info(f"📖 [DYNAMIC TOOLS] Added preloaded tool guides: {len(preloaded_guides):,} chars")
         
         return system_content
     
