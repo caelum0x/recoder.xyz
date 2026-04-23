@@ -25,6 +25,40 @@ import { logger } from '@/lib/logger';
 const MAX_ATTEMPTS = 3;
 let scheduledEmailsTableAvailable: boolean | null = null;
 
+const ONBOARDING_EMAIL_TEMPLATES = [
+  { type: 'welcome', label: 'Welcome', timing: 'signup', description: 'Immediate welcome email sent during account creation.' },
+  { type: 'getting_started', label: 'Getting Started', timing: 'day_1', description: 'First-run tips and setup guidance.' },
+  { type: 'feature_deep_dive', label: 'Feature Deep Dive', timing: 'day_3', description: 'Product tour and high-value workflow examples.' },
+  { type: 'engagement', label: 'Engagement', timing: 'day_7', description: 'Re-engagement and activation follow-up.' },
+] as const;
+
+export interface OnboardingEmailOperationsStatus {
+  tableAvailable: boolean;
+  cronSecretConfigured: boolean;
+  maxAttempts: number;
+  counts: {
+    pending: number;
+    dueNow: number;
+    sent: number;
+    failed: number;
+  };
+  nextScheduledAt: Date | null;
+  oldestPendingAt: Date | null;
+  recentFailures: Array<{
+    id: string;
+    email: string;
+    type: string;
+    attempts: number;
+    error: string | null;
+    scheduledAt: Date;
+  }>;
+  templates: typeof ONBOARDING_EMAIL_TEMPLATES;
+}
+
+export function getOnboardingEmailTemplateCatalog() {
+  return ONBOARDING_EMAIL_TEMPLATES;
+}
+
 async function hasScheduledEmailsTable(): Promise<boolean> {
   if (scheduledEmailsTableAvailable !== null) {
     return scheduledEmailsTableAvailable;
@@ -41,6 +75,69 @@ async function hasScheduledEmailsTable(): Promise<boolean> {
     scheduledEmailsTableAvailable = false;
     return false;
   }
+}
+
+export async function getOnboardingEmailOperationsStatus(): Promise<OnboardingEmailOperationsStatus> {
+  const baseStatus: OnboardingEmailOperationsStatus = {
+    tableAvailable: false,
+    cronSecretConfigured: Boolean((process.env.CRON_SECRET || '').trim()),
+    maxAttempts: MAX_ATTEMPTS,
+    counts: {
+      pending: 0,
+      dueNow: 0,
+      sent: 0,
+      failed: 0,
+    },
+    nextScheduledAt: null,
+    oldestPendingAt: null,
+    recentFailures: [],
+    templates: ONBOARDING_EMAIL_TEMPLATES,
+  };
+
+  const canSchedule = await hasScheduledEmailsTable();
+  if (!canSchedule) {
+    return baseStatus;
+  }
+
+  const now = new Date();
+  const [pending, dueNow, sent, failed, nextScheduled, oldestPending, recentFailures] = await prisma.$transaction([
+    prisma.scheduled_emails.count({ where: { status: 'pending' } }),
+    prisma.scheduled_emails.count({ where: { status: 'pending', scheduledAt: { lte: now } } }),
+    prisma.scheduled_emails.count({ where: { status: 'sent' } }),
+    prisma.scheduled_emails.count({ where: { status: 'failed' } }),
+    prisma.scheduled_emails.findFirst({
+      where: { status: 'pending', scheduledAt: { gt: now } },
+      orderBy: { scheduledAt: 'asc' },
+      select: { scheduledAt: true },
+    }),
+    prisma.scheduled_emails.findFirst({
+      where: { status: 'pending' },
+      orderBy: { scheduledAt: 'asc' },
+      select: { scheduledAt: true },
+    }),
+    prisma.scheduled_emails.findMany({
+      where: { status: 'failed' },
+      orderBy: { scheduledAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        email: true,
+        type: true,
+        attempts: true,
+        error: true,
+        scheduledAt: true,
+      },
+    }),
+  ]);
+
+  return {
+    ...baseStatus,
+    tableAvailable: true,
+    counts: { pending, dueNow, sent, failed },
+    nextScheduledAt: nextScheduled?.scheduledAt ?? null,
+    oldestPendingAt: oldestPending?.scheduledAt ?? null,
+    recentFailures,
+  };
 }
 
 /** Email type to sender function mapping */
