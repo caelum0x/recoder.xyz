@@ -312,10 +312,24 @@ MAX_CONCURRENT_SANDBOXES = 4  # Hard limit — 15GB server can't handle more
 async def _evict_oldest_sandbox():
     """Stop the oldest sandbox if we're at the concurrency limit."""
     try:
-        all_sandboxes = await daytona.list()
-        started = [s for s in all_sandboxes if s.state.value == "started"]
+        page = await daytona.list(limit=200)
+        sandboxes = getattr(page, "items", []) or []
+        started = []
+        for sandbox in sandboxes:
+            state = getattr(getattr(sandbox, "state", None), "value", getattr(sandbox, "state", None))
+            if str(state).lower() == "started":
+                started.append(sandbox)
         if len(started) >= MAX_CONCURRENT_SANDBOXES:
-            oldest = min(started, key=lambda s: s.metadata.updated_at if hasattr(s, 'metadata') else '')
+            def sort_key(sandbox):
+                return (
+                    getattr(sandbox, "updated_at", None)
+                    or getattr(sandbox, "updatedAt", None)
+                    or getattr(sandbox, "created_at", None)
+                    or getattr(sandbox, "createdAt", None)
+                    or ""
+                )
+
+            oldest = min(started, key=sort_key)
             logger.info(f"Evicting oldest sandbox {oldest.id} to stay within {MAX_CONCURRENT_SANDBOXES} limit")
             await daytona.stop(oldest)
     except Exception as e:
@@ -350,17 +364,8 @@ async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
             "CHROME_DEBUGGING_HOST": "localhost",
             "CHROME_CDP": ""
         },
-        # resources=Resources(
-        #     cpu=2,
-        #     memory=4,
-        #     disk=5,
-        # ),
         auto_stop_interval=1800,    # 30 min — aggressive to stay within 15GB RAM (server runs 40+ containers)
         auto_archive_interval=3600,  # 1 hour after stop
-        # Explicitly request sandbox disk so new app-task sandboxes do not rely on
-        # opaque Daytona defaults. We have seen real coding runs hit 100% overlay
-        # disk/inodes, especially after heavier React scaffolds.
-        resources=Resources(disk=20),
     )
     
     # Create the sandbox

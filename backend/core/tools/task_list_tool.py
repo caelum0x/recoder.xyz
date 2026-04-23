@@ -380,22 +380,29 @@ class TaskListTool(SandboxToolsBase):
                     return ToolResult(success=False, output="❌ Provide 'sections' array OR 'task_contents' with section info")
                 
                 if not section_id and not section_title:
-                    return ToolResult(success=False, output="❌ Specify 'section_id' or 'section_title' with 'task_contents'")
-                
-                target_section = None
-                
-                if section_id:
-                    if section_id not in section_map:
-                        return ToolResult(success=False, output=f"❌ Section ID '{section_id}' not found")
-                    target_section = section_map[section_id]
-                elif section_title:
-                    title_lower = section_title.lower()
-                    if title_lower in title_map:
-                        target_section = title_map[title_lower]
-                    else:
-                        target_section = Section(title=section_title)
+                    if len(existing_sections) == 1:
+                        target_section = existing_sections[0]
+                    elif len(existing_sections) == 0:
+                        target_section = Section(title="Tasks")
                         existing_sections.append(target_section)
                         created_sections += 1
+                    else:
+                        return ToolResult(success=False, output="❌ Specify 'section_id' or 'section_title' with 'task_contents'")
+                else:
+                    target_section = None
+                
+                    if section_id:
+                        if section_id not in section_map:
+                            return ToolResult(success=False, output=f"❌ Section ID '{section_id}' not found")
+                        target_section = section_map[section_id]
+                    elif section_title:
+                        title_lower = section_title.lower()
+                        if title_lower in title_map:
+                            target_section = title_map[title_lower]
+                        else:
+                            target_section = Section(title=section_title)
+                            existing_sections.append(target_section)
+                            created_sections += 1
                 
                 for content in task_contents:
                     new_task = Task(content=content, section_id=target_section.id)
