@@ -6,10 +6,20 @@
 import nodemailer from 'nodemailer';
 import { logger } from '@/lib/logger';
 
-const RESEND_FROM = process.env.RESEND_FROM || process.env.EMAIL_FROM || 'noreply@recoder.xyz';
-const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || 'noreply@recoder.xyz';
+const DEFAULT_FROM_EMAIL = 'noreply@recoder.xyz';
+const RESEND_FROM = process.env.RESEND_FROM || process.env.EMAIL_FROM || DEFAULT_FROM_EMAIL;
+const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || DEFAULT_FROM_EMAIL;
 const FROM_NAME = 'Recoder.xyz';
 const APP_URL = resolvePublicAppUrl();
+
+export type EmailProviderKind = 'smtp' | 'resend' | 'dev' | 'none';
+
+export interface EmailProviderStatus {
+  provider: EmailProviderKind;
+  hasSmtp: boolean;
+  hasResend: boolean;
+  fromEmail: string;
+}
 
 export function resolvePublicAppUrl(env: NodeJS.ProcessEnv = process.env): string {
   const raw = (
@@ -55,22 +65,72 @@ export function sanitizeEmailLink(url: string, fallbackPath: string, options?: S
   }
 }
 
-// Initialize SMTP transporter
-// Supports: authenticated SMTP (gmail, etc.) or local Postfix (no auth needed)
-const smtpHost = process.env.SMTP_HOST || 'localhost';
-const smtpPort = parseInt(process.env.SMTP_PORT || (smtpHost === 'localhost' ? '25' : '587'));
-const smtpAuth = process.env.SMTP_USER
-  ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
-  : undefined;
+function getSmtpConfig(env: NodeJS.ProcessEnv = process.env) {
+  const explicitSmtpHost = (env.SMTP_HOST || '').trim();
+  const smtpHost = explicitSmtpHost || 'localhost';
+  const smtpPort = parseInt(env.SMTP_PORT || (smtpHost === 'localhost' ? '25' : '587'), 10);
+  const smtpUser = (env.SMTP_USER || '').trim();
+  const smtpPassword = env.SMTP_PASSWORD || '';
+  const hasLocalRelay = explicitSmtpHost === 'localhost' || explicitSmtpHost === '127.0.0.1';
+  const hasAuthenticatedSmtp = !!smtpHost && !!smtpUser && !!smtpPassword;
 
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: false,
-  auth: smtpAuth,
-  // Local Postfix doesn't need TLS
-  ...(smtpHost === 'localhost' ? { tls: { rejectUnauthorized: false } } : {}),
-});
+  return {
+    host: smtpHost,
+    port: smtpPort,
+    user: smtpUser,
+    password: smtpPassword,
+    hasLocalRelay,
+    hasAuthenticatedSmtp,
+    hasSmtp: hasLocalRelay || hasAuthenticatedSmtp,
+    fromEmail: env.SMTP_FROM || env.EMAIL_FROM || DEFAULT_FROM_EMAIL,
+  };
+}
+
+function createSmtpTransport(env: NodeJS.ProcessEnv = process.env) {
+  const smtp = getSmtpConfig(env);
+  const smtpAuth = smtp.user
+    ? { user: smtp.user, pass: smtp.password }
+    : undefined;
+
+  return nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: false,
+    auth: smtpAuth,
+    ...(smtp.hasLocalRelay ? { tls: { rejectUnauthorized: false } } : {}),
+  });
+}
+
+export function getEmailProviderStatus(env: NodeJS.ProcessEnv = process.env): EmailProviderStatus {
+  const preferred = (env.EMAIL_PROVIDER || 'auto').trim().toLowerCase();
+  const hasResend = !!env.RESEND_API_KEY;
+  const smtp = getSmtpConfig(env);
+  const hasSmtp = smtp.hasSmtp;
+  const fromEmail = smtp.fromEmail || RESEND_FROM;
+
+  if (preferred === 'smtp') {
+    return { provider: hasSmtp ? 'smtp' : env.NODE_ENV === 'development' ? 'dev' : 'none', hasSmtp, hasResend, fromEmail };
+  }
+
+  if (preferred === 'resend') {
+    return { provider: hasResend ? 'resend' : env.NODE_ENV === 'development' ? 'dev' : 'none', hasSmtp, hasResend, fromEmail: env.EMAIL_FROM || RESEND_FROM };
+  }
+
+  if (hasSmtp) {
+    return { provider: 'smtp', hasSmtp, hasResend, fromEmail };
+  }
+
+  if (hasResend) {
+    return { provider: 'resend', hasSmtp, hasResend, fromEmail: env.EMAIL_FROM || RESEND_FROM };
+  }
+
+  return {
+    provider: env.NODE_ENV === 'development' ? 'dev' : 'none',
+    hasSmtp,
+    hasResend,
+    fromEmail,
+  };
+}
 
 interface EmailOptions {
   to: string;
@@ -80,19 +140,35 @@ interface EmailOptions {
 }
 
 export async function sendEmail({ to, subject, html, text }: EmailOptions) {
-  // Check if no email service is configured
-  // Allow: Resend API key, SMTP with auth, or local Postfix (SMTP_HOST=localhost, no auth needed)
-  const hasEmailService = process.env.RESEND_API_KEY || process.env.SMTP_USER || smtpHost === 'localhost';
-  if (!hasEmailService) {
-    if (process.env.NODE_ENV === 'development') {
+  const providerStatus = getEmailProviderStatus();
+  if (providerStatus.provider === 'dev') {
       logger.info('[DEV] Email would be sent', { to, subject });
       return { success: true, messageId: 'dev-' + Date.now() };
-    }
+  }
+
+  if (providerStatus.provider === 'none') {
     return { success: false, error: new Error('No email service configured') };
   }
 
-  // Use Resend
-  if (process.env.RESEND_API_KEY) {
+  if (providerStatus.provider === 'smtp') {
+    try {
+      const transporter = createSmtpTransport();
+      const info = await transporter.sendMail({
+        from: `${FROM_NAME} <${SMTP_FROM}>`,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]*>/g, ''),
+      });
+      logger.info('Email sent via SMTP', { to, subject, messageId: info.messageId });
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      logger.error('SMTP error', { error: String(error) });
+      return { success: false, error };
+    }
+  }
+
+  if (providerStatus.provider === 'resend') {
     try {
 
       const response = await fetch('https://api.resend.com/emails', {
@@ -125,21 +201,7 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
     }
   }
 
-  // SMTP fallback
-  try {
-    const info = await transporter.sendMail({
-      from: `${FROM_NAME} <${SMTP_FROM}>`,
-      to,
-      subject,
-      html,
-      text: text || html.replace(/<[^>]*>/g, ''),
-    });
-    logger.info('Email sent via SMTP', { to, subject, messageId: info.messageId });
-    return { success: true, messageId: info.messageId };
-  } catch (error) {
-    logger.error('SMTP error', { error: String(error) });
-    return { success: false, error };
-  }
+  return { success: false, error: new Error(`Unsupported email provider: ${providerStatus.provider}`) };
 }
 
 // Email Templates

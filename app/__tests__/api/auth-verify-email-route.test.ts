@@ -31,6 +31,7 @@ vi.mock('@/lib/auth/verification-store', () => ({
 
 vi.mock('@/lib/email', () => ({
   resolvePublicAppUrl: vi.fn().mockReturnValue('https://recoder.xyz'),
+  getEmailProviderStatus: vi.fn().mockReturnValue({ provider: 'smtp', hasSmtp: true, hasResend: false, fromEmail: 'noreply@recoder.xyz' }),
   sendVerificationEmailWithCode: (...args: unknown[]) => mockSendVerificationEmailWithCode(...args),
 }));
 

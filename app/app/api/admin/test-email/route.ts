@@ -8,11 +8,25 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendTemporaryPasswordEmail } from '@/lib/email';
+import { getEmailProviderStatus, sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendTemporaryPasswordEmail } from '@/lib/email';
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 if (!ADMIN_SECRET) {
   console.warn('[admin] ADMIN_SECRET not configured - admin endpoints disabled');
+}
+
+function getProviderLabel() {
+  const provider = getEmailProviderStatus().provider;
+  switch (provider) {
+    case 'smtp':
+      return 'SMTP';
+    case 'resend':
+      return 'Resend';
+    case 'dev':
+      return 'Dev Mode';
+    default:
+      return 'None';
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -64,14 +78,14 @@ export async function POST(request: NextRequest) {
         success: true,
         message: `Test ${type} email sent to ${email}`,
         messageId: result.messageId,
-        provider: process.env.RESEND_API_KEY ? 'Resend' : (process.env.SMTP_USER ? 'SMTP' : 'Dev Mode'),
+        provider: getProviderLabel(),
       });
     } else {
       console.error(`❌ [Test Email] Failed to send ${type} email:`, result.error);
       return NextResponse.json({
         success: false,
         error: result.error?.message || 'Failed to send email',
-        provider: process.env.RESEND_API_KEY ? 'Resend' : (process.env.SMTP_USER ? 'SMTP' : 'Dev Mode'),
+        provider: getProviderLabel(),
       }, { status: 500 });
     }
 
@@ -95,12 +109,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const providerStatus = getEmailProviderStatus();
   const config = {
-    resendConfigured: !!process.env.RESEND_API_KEY,
-    smtpConfigured: !!process.env.SMTP_USER,
-    fromEmail: process.env.EMAIL_FROM || process.env.SMTP_FROM || 'noreply@recoder.xyz',
+    resendConfigured: providerStatus.hasResend,
+    smtpConfigured: providerStatus.hasSmtp,
+    fromEmail: providerStatus.fromEmail,
     isDev: process.env.NODE_ENV === 'development',
-    activeProvider: process.env.RESEND_API_KEY ? 'Resend' : (process.env.SMTP_USER ? 'SMTP' : 'None (Dev Mode)'),
+    activeProvider: getProviderLabel(),
   };
 
   return NextResponse.json({
