@@ -146,10 +146,6 @@ Verified live:
 
 ### Current Real Follow-Up
 
-- `recoder-zdp`
-  - finish the separate intermittent authenticated agency RSC prefetch `503` issue
-  - direct route loads are fine; issue appears intermittent and likely proxy/prefetch related
-
 - active in-progress cleanup/detail tickets remain in `bd`
   - use `bd list --status in_progress` for the live queue
 
