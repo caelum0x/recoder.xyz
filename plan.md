@@ -51,6 +51,8 @@ Keep the live Recoder surfaces working end to end:
 - Pi Daytona writes now land in the real sandbox even when the model falls back to legacy `recoderAction` text output
 - live browser verification passed for both first-turn and second-turn Web IDE edits on the same project
 - fresh production app-task run now completes end to end: first turn, follow-up turn, and working preview URL
+- browser-facing Daytona preview URLs now prefer signed preview links for fresh project payloads
+- fresh live proof confirmed signed preview host token differs from `sandbox.id`
 
 ### Agents
 
@@ -109,10 +111,7 @@ Authenticated live verification passed for:
 - `/projects`
 - `/settings`
 
-Direct route loads are good. One intermittent prefetch-only issue remains:
-
-- `recoder-zdp`
-  - intermittent `503` on agency RSC prefetch requests like `/clients?_rsc=...`
+Direct route loads are good.
 
 ### Agents
 
@@ -148,6 +147,11 @@ Verified live:
 
 - active in-progress cleanup/detail tickets remain in `bd`
   - use `bd list --status in_progress` for the live queue
+  - current live queue:
+    - `recoder-138`
+    - `recoder-3cs`
+    - `recoder-lje`
+    - `recoder-lma`
 
 ### Optional Deeper Verification
 
@@ -170,7 +174,6 @@ Launch is complete when:
 - `recoder-hb6` is resolved
 - `recoder-i3v` is resolved
 - `recoder-96g` is resolved
-- `recoder-zdp` is resolved or explicitly accepted as non-blocking
 
 ## Notes
 
