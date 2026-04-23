@@ -236,7 +236,7 @@ class SandboxShellTool(SandboxToolsBase):
 
         for port in self._candidate_preview_ports(command):
             try:
-                for _ in range(5):
+                for _ in range(12):
                     probe = await self.sandbox.process.exec(
                         f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 2 http://localhost:{port}/ || true",
                         timeout=5,

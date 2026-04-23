@@ -392,6 +392,28 @@ async def update_agent_run_status(
     return result is not None
 
 
+async def merge_agent_run_metadata(
+    agent_run_id: str,
+    metadata: Dict[str, Any],
+) -> bool:
+    sql = """
+    UPDATE agent_runs
+    SET metadata = COALESCE(metadata, '{}'::jsonb) || :metadata::jsonb
+    WHERE id = :agent_run_id
+    RETURNING id
+    """
+
+    result = await execute_one(
+        sql,
+        {
+            "agent_run_id": agent_run_id,
+            "metadata": metadata or {},
+        },
+        commit=True,
+    )
+    return result is not None
+
+
 async def get_agent_run_with_thread(agent_run_id: str) -> Optional[Dict[str, Any]]:
     sql = """
     SELECT 

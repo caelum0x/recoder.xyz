@@ -79,6 +79,14 @@ class RunState:
         self._cancelled: bool = False
         self._terminated: bool = False
         self._termination_reason: Optional[str] = None
+        self.app_task_mode: bool = False
+        self.app_task_files_written: bool = False
+        self.app_task_deps_installed: bool = False
+        self.app_task_dev_server_started: bool = False
+        self.app_task_preview_verified: bool = False
+        self.app_task_preview_url: Optional[str] = None
+        self.app_task_preview_port: Optional[int] = None
+        self.app_task_recovery_continues: int = 0
 
         if agent_config:
             self.agent_id = agent_config.get('agent_id')
@@ -95,6 +103,18 @@ class RunState:
             stream_key=ctx.stream_key,
             agent_config=ctx.agent_config,
         )
+        if ctx.user_message and isinstance(ctx.user_message, str):
+            text = ctx.user_message.lower()
+            app_indicators = (
+                "react app",
+                "vite app",
+                "web app",
+                "sandbox preview",
+                "runs in the sandbox preview",
+                "preview url",
+                "dev server",
+            )
+            state.app_task_mode = any(token in text for token in app_indicators)
         await state._load_initial_state()
         return state
 
@@ -203,6 +223,55 @@ class RunState:
     def complete(self) -> None:
         self._terminated = True
         self._termination_reason = "completed"
+
+    def record_app_task_progress(
+        self,
+        *,
+        files_written: bool = False,
+        deps_installed: bool = False,
+        dev_server_started: bool = False,
+        preview_verified: bool = False,
+        preview_url: Optional[str] = None,
+        preview_port: Optional[int] = None,
+    ) -> None:
+        if files_written:
+            self.app_task_files_written = True
+        if deps_installed:
+            self.app_task_deps_installed = True
+        if dev_server_started:
+            self.app_task_dev_server_started = True
+        if preview_verified:
+            self.app_task_preview_verified = True
+        if preview_url:
+            self.app_task_preview_url = preview_url
+        if preview_port is not None:
+            self.app_task_preview_port = preview_port
+
+    def next_app_task_instruction(self) -> Optional[str]:
+        if not self.app_task_mode or self.app_task_preview_verified:
+            return None
+
+        if self.app_task_files_written and not self.app_task_deps_installed:
+            return (
+                "[System] App-task mode: continue the deterministic workflow. "
+                "Do not re-plan or update tasks. Run dependency installation now with execute_command."
+            )
+
+        if self.app_task_deps_installed and not self.app_task_dev_server_started:
+            return (
+                "[System] App-task mode: continue the deterministic workflow. "
+                "Do not re-plan or update tasks. Start the dev server now with execute_command, "
+                "run it in the background, bind to 0.0.0.0, and then verify preview availability."
+            )
+
+        if self.app_task_dev_server_started and not self.app_task_preview_verified:
+            return (
+                "[System] App-task mode: the task is not complete until preview is verified. "
+                "Check the running app on common preview ports (5173, 3000, 8080), inspect the "
+                "server output if needed, and finish immediately once a preview URL is available."
+            )
+
+        return None
 
     def _terminate(self, reason: str) -> None:
         self._terminated = True
@@ -585,4 +654,6 @@ class RunState:
             "pending_writes": len(self._pending_writes),
             "duration": self.duration_seconds,
             "active": self.is_active,
+            "app_task_mode": self.app_task_mode,
+            "preview_verified": self.app_task_preview_verified,
         }

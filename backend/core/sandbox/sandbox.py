@@ -4,6 +4,7 @@ from core.utils.logger import logger
 from core.utils.config import config
 from core.utils.config import Configuration
 import asyncio
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -309,6 +310,62 @@ async def start_file_server(sandbox: AsyncSandbox):
 
 MAX_CONCURRENT_SANDBOXES = 4  # Hard limit — 15GB server can't handle more
 
+
+def _coerce_sandbox_timestamp(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
+    return None
+
+
+async def _cleanup_stale_sandboxes_before_create() -> None:
+    """Best-effort janitor to reduce runner pressure before provisioning."""
+    try:
+        page = await daytona.list(limit=200)
+        sandboxes = getattr(page, "items", []) or []
+        now = datetime.now(timezone.utc)
+        stopped = 0
+        archived = 0
+
+        for sandbox in sandboxes:
+            state = getattr(getattr(sandbox, "state", None), "value", getattr(sandbox, "state", None))
+            state = str(state).lower()
+            timestamp = _coerce_sandbox_timestamp(
+                getattr(sandbox, "updated_at", None)
+                or getattr(sandbox, "updatedAt", None)
+                or getattr(sandbox, "created_at", None)
+                or getattr(sandbox, "createdAt", None)
+            )
+            if timestamp is None:
+                continue
+
+            age_seconds = (now - timestamp).total_seconds()
+            if state == "started" and age_seconds > 6 * 3600:
+                await daytona.stop(sandbox)
+                stopped += 1
+                continue
+
+            if state == "stopped" and age_seconds > 2 * 3600:
+                full_sandbox = await daytona.get(sandbox.id)
+                await full_sandbox.archive()
+                archived += 1
+
+        if stopped or archived:
+            logger.info(
+                "Sandbox janitor cleaned stale sandboxes before create: stopped=%s archived=%s",
+                stopped,
+                archived,
+            )
+    except Exception as e:
+        logger.warning(f"Sandbox pre-create janitor failed (non-fatal): {e}")
+
 async def _evict_oldest_sandbox():
     """Stop the oldest sandbox if we're at the concurrency limit."""
     try:
@@ -338,6 +395,7 @@ async def _evict_oldest_sandbox():
 async def create_sandbox(password: str, project_id: str = None) -> AsyncSandbox:
     """Create a new sandbox with all required services configured and running."""
 
+    await _cleanup_stale_sandboxes_before_create()
     await _evict_oldest_sandbox()
     logger.info("Creating new Daytona sandbox environment")
     # logger.debug("Configuring sandbox with snapshot and environment variables")

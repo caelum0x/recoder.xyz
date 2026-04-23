@@ -176,6 +176,22 @@ class StatelessCoordinator(BaseCoordinator):
             if not self._state.is_active:
                 break
 
+            if not should_auto_continue and self._should_continue_incomplete_app_task(last_finish_reason):
+                instruction = self._state.next_app_task_instruction()
+                if instruction:
+                    self._state.app_task_recovery_continues += 1
+                    self._state._messages.append({
+                        "role": "user",
+                        "content": instruction,
+                        "message_id": str(uuid.uuid4()),
+                    })
+                    should_auto_continue = True
+                    logger.info(
+                        "[Coordinator] App-task recovery continue #%s (%s)",
+                        self._state.app_task_recovery_continues,
+                        last_finish_reason or "no_finish_reason",
+                    )
+
             if not should_auto_continue:
                 self._state.complete()
                 should_continue_loop = False
@@ -221,6 +237,26 @@ class StatelessCoordinator(BaseCoordinator):
             if auto_continue_count >= max_steps:
                 self._state._terminate("max_auto_continues")
                 break
+
+    def _should_continue_incomplete_app_task(self, last_finish_reason: str | None) -> bool:
+        if not self._state or not self._state.app_task_mode:
+            return False
+
+        if self._state.app_task_preview_verified:
+            return False
+
+        if last_finish_reason not in (None, "stop", "end_turn"):
+            return False
+
+        if self._state.app_task_recovery_continues >= 3:
+            logger.info("[Coordinator] App-task recovery limit reached, stopping")
+            return False
+
+        return any((
+            self._state.app_task_files_written,
+            self._state.app_task_deps_installed,
+            self._state.app_task_dev_server_started,
+        ))
 
     async def _init_managers(self, ctx: PipelineContext):
         return await ManagerInitializer.init_managers(ctx)

@@ -75,6 +75,24 @@ async def update_agent_run_status(
         return False
 
 
+async def merge_agent_run_metadata(
+    agent_run_id: str,
+    metadata: Dict[str, Any],
+) -> bool:
+    from core.agents import repo as agents_repo
+
+    try:
+        success = await agents_repo.merge_agent_run_metadata(agent_run_id, metadata)
+        if success:
+            logger.debug(f"✅ Merged metadata into agent run {agent_run_id}: {metadata}")
+            return True
+        logger.error(f"Failed to merge agent run metadata: {agent_run_id}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to merge agent run metadata for {agent_run_id}: {e}")
+        return False
+
+
 async def send_completion_notification(
     thread_id: str,
     agent_config: Optional[Dict[str, Any]],
