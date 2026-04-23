@@ -134,6 +134,60 @@ class SandboxShellTool(SandboxToolsBase):
         super().__init__(project_id, thread_manager)
 
     @staticmethod
+    def _is_heavy_react_scaffold_command(command: str) -> bool:
+        normalized = command.lower()
+        heavy_patterns = (
+            "create-react-app",
+            "react-scripts",
+            "npm init react-app",
+            "npx create-react-app",
+            "yarn create react-app",
+            "pnpm create react-app",
+        )
+        return any(pattern in normalized for pattern in heavy_patterns)
+
+    @staticmethod
+    def _is_package_install_command(command: str) -> bool:
+        normalized = command.lower()
+        install_patterns = (
+            "npm install",
+            "pnpm install",
+            "yarn install",
+            "bun install",
+        )
+        return any(pattern in normalized for pattern in install_patterns)
+
+    async def _get_filesystem_pressure(self) -> Dict[str, Any]:
+        try:
+            disk = await self.sandbox.process.exec("df -P / | tail -n 1", timeout=5)
+            inode = await self.sandbox.process.exec("df -Pi / | tail -n 1", timeout=5)
+
+            disk_line = (disk.result or "").strip()
+            inode_line = (inode.result or "").strip()
+            disk_percent = None
+            inode_percent = None
+
+            if disk_line:
+                parts = disk_line.split()
+                if len(parts) >= 5 and parts[4].endswith("%"):
+                    disk_percent = int(parts[4].rstrip("%"))
+
+            if inode_line:
+                parts = inode_line.split()
+                if len(parts) >= 5 and parts[4].endswith("%"):
+                    inode_percent = int(parts[4].rstrip("%"))
+
+            return {
+                "disk_percent": disk_percent,
+                "inode_percent": inode_percent,
+                "disk_line": disk_line,
+                "inode_line": inode_line,
+            }
+        except Exception as exc:
+            logger.debug(f"[sb_shell_tool] Failed to inspect filesystem pressure: {exc}")
+            return {}
+
+    @staticmethod
     def _should_use_direct_session(command: str) -> bool:
         normalized = command.lower()
         direct_patterns = (
@@ -350,6 +404,33 @@ Usage notes:
                 )
             ):
                 timeout = 900
+
+            if self._is_heavy_react_scaffold_command(command):
+                return self.fail_response(
+                    "Blocked heavyweight React scaffold command. "
+                    "Use Vite or a minimal hand-written React setup instead of create-react-app/react-scripts "
+                    "to avoid exhausting sandbox disk and inode headroom."
+                )
+
+            if self._is_package_install_command(command):
+                pressure = await self._get_filesystem_pressure()
+                disk_percent = pressure.get("disk_percent")
+                inode_percent = pressure.get("inode_percent")
+                if (
+                    (disk_percent is not None and disk_percent >= 90)
+                    or (inode_percent is not None and inode_percent >= 90)
+                ):
+                    details = []
+                    if pressure.get("disk_line"):
+                        details.append(f"disk: {pressure['disk_line']}")
+                    if pressure.get("inode_line"):
+                        details.append(f"inodes: {pressure['inode_line']}")
+                    detail_text = " | ".join(details)
+                    return self.fail_response(
+                        "Blocked package install because sandbox filesystem pressure is too high for a safe dependency install. "
+                        "Prefer a lighter scaffold or free sandbox capacity first."
+                        + (f" Current usage: {detail_text}" if detail_text else "")
+                    )
 
             use_direct_session = self._should_use_direct_session(command)
             wrapped_command = self._wrap_command_for_shell(command, cwd)
