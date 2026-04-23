@@ -275,20 +275,16 @@ async def start_file_server(sandbox: AsyncSandbox):
     The server serves files from /home/daytona/ making them accessible via
     https://8080-{sandboxId}.sandbox.recoder.xyz/
     """
-    session_id = "file-server"
     try:
-        # Try to create session (may already exist)
-        try:
-            await create_session_with_recovery(sandbox, session_id)
-        except Exception:
-            pass  # Session may already exist from a previous start
+        probe_cmd = (
+            "code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://localhost:8080/ 2>/dev/null || true); "
+            "printf '%s' \"${code:-000}\""
+        )
 
         # Check if port 8080 is already in use (ss may not exist in slim images)
-        check = await sandbox.process.exec(
-            "curl -s -o /dev/null -w '%{http_code}' --max-time 1 http://localhost:8080/ 2>/dev/null || echo '000'",
-            timeout=5
-        )
-        if check.result and check.result.strip() not in ('', '000'):
+        check = await sandbox.process.exec(probe_cmd, timeout=5)
+        probe_code = (check.result or "").strip()
+        if len(probe_code) == 3 and probe_code.isdigit() and probe_code != "000":
             logger.info("File server already running on port 8080")
             return
 
@@ -300,11 +296,9 @@ async def start_file_server(sandbox: AsyncSandbox):
         # Verify it started
         import asyncio
         await asyncio.sleep(1)
-        verify = await sandbox.process.exec(
-            "curl -s -o /dev/null -w '%{http_code}' --max-time 2 http://localhost:8080/ 2>/dev/null || echo '000'",
-            timeout=5
-        )
-        if verify.result and verify.result.strip() not in ('', '000'):
+        verify = await sandbox.process.exec(probe_cmd, timeout=5)
+        verify_code = (verify.result or "").strip()
+        if len(verify_code) == 3 and verify_code.isdigit() and verify_code != "000":
             logger.info("File server started and verified on port 8080")
         else:
             logger.warning(f"File server may not have started: verify={verify.result}")
