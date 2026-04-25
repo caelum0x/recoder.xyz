@@ -1357,7 +1357,28 @@ async def start_project_sandbox(
         sandbox_id = sandbox_resource.get('external_id')
 
         # Check current state
-        sandbox = await daytona.get(sandbox_id)
+        try:
+            sandbox = await daytona.get(sandbox_id)
+        except Exception as e:
+            logger.warning(f"Sandbox lookup failed for project {project_id} ({sandbox_id}): {str(e)}")
+
+            async def recover_existing_sandbox():
+                try:
+                    await get_or_start_sandbox(sandbox_id)
+                    logger.info(f"Recovered sandbox {sandbox_id} for project {project_id}")
+                except Exception as recovery_error:
+                    logger.error(
+                        f"Failed recovering sandbox {sandbox_id} for project {project_id}: {str(recovery_error)}"
+                    )
+
+            asyncio.create_task(recover_existing_sandbox())
+
+            return {
+                "status": "starting",
+                "sandbox_id": sandbox_id,
+                "message": "Sandbox recovery initiated. Poll /status for updates."
+            }
+
         current_state = sandbox.state.value.lower() if hasattr(sandbox.state, 'value') else str(sandbox.state).lower()
 
         if current_state == 'started':
