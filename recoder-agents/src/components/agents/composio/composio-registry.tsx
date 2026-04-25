@@ -272,7 +272,7 @@ const AppCard = ({ app, profiles, onConnect, onConfigure, isConnectedToAgent, cu
 
       <Button
         variant={isBlocked ? "secondary" : "default"}
-        className={cn("w-full", isBlocked && "bg-white text-black hover:bg-white/90 border-white/20")}
+        className={cn("w-full", isBlocked && "border border-white/20 bg-black text-white hover:bg-zinc-900")}
         disabled={!canConnect && !isBlocked}
       >
         {isBlocked ? (
@@ -763,4 +763,4 @@ export const ComposioRegistry: React.FC<ComposioRegistryProps> = ({
       />
     </div>
   );
-}; 
+};
