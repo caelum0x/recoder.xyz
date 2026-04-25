@@ -3,6 +3,14 @@ import type { PortalFeature } from "@repo/backend/prisma/client";
 import { env } from "@/env";
 import { database } from "@/lib/database";
 
+function toAbsoluteUrl(pathname: string, baseValue: string | undefined, fallback: string): URL {
+  try {
+    return new URL(pathname, baseValue || fallback);
+  } catch {
+    return new URL(pathname, fallback);
+  }
+}
+
 export const getPortalUrl = async (
   portalId?: PortalFeature["id"]
 ): Promise<string> => {
@@ -21,7 +29,11 @@ export const getPortalUrl = async (
     throw new Error("No portal found");
   }
 
-  const portalUrl = new URL(portalId ?? "/", env.RECODER_PM_PORTAL_URL);
+  const portalUrl = toAbsoluteUrl(
+    portalId ?? "/",
+    env.RECODER_PM_PORTAL_URL,
+    "https://pm.recoder.xyz/portal"
+  );
   portalUrl.hostname = [portal.slug, portalUrl.hostname].join(".");
 
   return portalUrl.toString();

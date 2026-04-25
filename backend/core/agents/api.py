@@ -492,13 +492,17 @@ async def start_agent_run(
                     sandbox_id = sandbox_info.sandbox_id
                     logger.info(f"[AGENT_START] Sandbox ready before agent dispatch for {project_id}: {sandbox_id}")
                 else:
-                    raise RuntimeError("Sandbox resolver returned no sandbox")
+                    logger.warning(
+                        f"[AGENT_START] Sandbox resolver returned no sandbox for {project_id}; continuing with background recovery"
+                    )
             except asyncio.TimeoutError:
-                logger.error(f"[AGENT_START] Sandbox creation timed out for {project_id}")
-                raise HTTPException(status_code=503, detail="Sandbox creation timed out. Please retry in a moment.")
+                logger.warning(
+                    f"[AGENT_START] Sandbox creation timed out for {project_id}; continuing with background recovery"
+                )
             except Exception as e:
-                logger.error(f"[AGENT_START] Sandbox creation failed for {project_id}: {e}")
-                raise HTTPException(status_code=503, detail=f"Sandbox creation failed: {str(e)[:120]}")
+                logger.warning(
+                    f"[AGENT_START] Sandbox creation failed for {project_id}: {e}; continuing with background recovery"
+                )
         else:
             logger.info(f"[AGENT_START] Skipping Daytona sandbox prewarm for deep-coding run {project_id}")
     

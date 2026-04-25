@@ -16,6 +16,14 @@ const publicBaseUrl =
   process.env.VERCEL_PROJECT_PRODUCTION_URL ??
   (process.env.NODE_ENV === "production" ? "https://pm.recoder.xyz" : "http://localhost:3000");
 
-export const baseUrl = new URL(publicBaseUrl).toString();
+function toAbsoluteUrl(value: string | undefined, fallback: string): string {
+  try {
+    return new URL(value || fallback).toString();
+  } catch {
+    return new URL(fallback).toString();
+  }
+}
+
+export const baseUrl = toAbsoluteUrl(publicBaseUrl, "https://pm.recoder.xyz");
 
 export const BLOG_POST_PAGE_SIZE = 12;
