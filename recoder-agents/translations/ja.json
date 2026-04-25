@@ -985,7 +985,8 @@
       "docs": "ドキュメント",
       "canvas": "キャンバス",
       "video": "ビデオ",
-      "research": "リサーチ"
+      "research": "リサーチ",
+      "deep-coding": "Deep Coding"
     },
     "styles": {
       "photorealistic": "写実",
@@ -1254,6 +1255,16 @@
         "7": "希少疾患の遺伝子治療における最新の進展を調査",
         "8": "成功したD2Cサブスクリプションボックス企業の価格戦略を研究",
         "9": "AI搭載サイバーセキュリティソリューションの競争環境を調査"
+      },
+      "deep-coding": {
+        "0": "Refactor the auth module to use JWT refresh tokens with automatic rotation",
+        "1": "Fix the failing CI tests in the payment service and ensure all edge cases pass",
+        "2": "Add comprehensive error handling and retry logic to the API client layer",
+        "3": "Migrate the database schema from v2 to v3 with zero-downtime migration scripts",
+        "4": "Debug why the WebSocket connection drops after 30 seconds and implement reconnection",
+        "5": "Add TypeScript strict mode and fix all type errors across the shared packages",
+        "6": "Implement rate limiting middleware with Redis-backed sliding window counters",
+        "7": "Set up a complete test suite with unit, integration, and E2E coverage for the API"
       }
     }
   }

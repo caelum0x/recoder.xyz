@@ -985,7 +985,8 @@
       "docs": "Documentos",
       "canvas": "Tela",
       "video": "Vídeo",
-      "research": "Pesquisa"
+      "research": "Pesquisa",
+      "deep-coding": "Deep Coding"
     },
     "styles": {
       "photorealistic": "Fotorealista",
@@ -1254,6 +1255,16 @@
         "7": "Investigar os últimos desenvolvimentos em terapia genética para doenças raras",
         "8": "Estudar estratégias de preços de empresas bem-sucedidas de caixas de assinatura D2C",
         "9": "Pesquisar o panorama competitivo de soluções de cibersegurança alimentadas por IA"
+      },
+      "deep-coding": {
+        "0": "Refactor the auth module to use JWT refresh tokens with automatic rotation",
+        "1": "Fix the failing CI tests in the payment service and ensure all edge cases pass",
+        "2": "Add comprehensive error handling and retry logic to the API client layer",
+        "3": "Migrate the database schema from v2 to v3 with zero-downtime migration scripts",
+        "4": "Debug why the WebSocket connection drops after 30 seconds and implement reconnection",
+        "5": "Add TypeScript strict mode and fix all type errors across the shared packages",
+        "6": "Implement rate limiting middleware with Redis-backed sliding window counters",
+        "7": "Set up a complete test suite with unit, integration, and E2E coverage for the API"
       }
     }
   }
