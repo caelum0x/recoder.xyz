@@ -247,7 +247,7 @@ export const SplitPane = memo(({
             className={classNames(
               'rounded-full bg-recoder-elements-textTertiary/30 transition-all duration-150',
               isHorizontal ? 'h-8 w-1' : 'w-8 h-1',
-              (isDragging || isHovering) && 'bg-white/80 scale-110'
+              (isDragging || isHovering) && 'bg-orange-400/80 scale-110'
             )}
           />
         )}
