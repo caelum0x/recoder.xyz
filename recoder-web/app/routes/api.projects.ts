@@ -226,6 +226,67 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return json({ error: 'Project name required' }, { status: 400 });
       }
 
+      const internalServiceKey =
+        env?.INTERNAL_SERVICE_KEY ||
+        '';
+      const hubBaseUrl =
+        env?.MAIN_SITE_INTERNAL_URL ||
+        getHubApiBaseUrl(context);
+
+      if (internalServiceKey && userId) {
+        try {
+          const pathname = '/api/projects';
+          const bodyString = JSON.stringify({
+            name,
+            description,
+            type,
+            framework,
+            language,
+            isPrivate,
+            userId,
+            templateId,
+            starterPath,
+          });
+
+          const headers = buildInternalServiceHeaders({
+            method: 'POST',
+            pathname,
+            body: bodyString,
+            serviceKey: internalServiceKey,
+            userId,
+          });
+
+          const response = await fetch(new URL(pathname, hubBaseUrl).toString(), {
+            method: 'POST',
+            headers,
+            body: bodyString,
+          });
+
+          const payload = await response.json().catch(() => null) as {
+            success?: boolean;
+            data?: HubProjectListItem;
+            error?: string;
+          } | null;
+
+          if (!response.ok || !payload?.data) {
+            return json(
+              { error: payload?.error || 'Failed to create project' },
+              { status: response.status || 500 }
+            );
+          }
+
+          return json({
+            success: true,
+            project: mapHubProjectToLegacyShape(payload.data, userId),
+          });
+        } catch (error) {
+          logger.warn('Hub project create request threw', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return json({ error: 'Failed to create project' }, { status: 502 });
+        }
+      }
+
       const project = await projectsDB.createProject({
         name,
         description,
