@@ -55,8 +55,16 @@ const title = "Recoder PM Portal";
 const description =
   "Customer portal for Recoder PM projects, updates, and feedback.";
 
+function toAbsoluteUrl(value: string | undefined, fallback: string): URL {
+  try {
+    return new URL(value || fallback);
+  } catch {
+    return new URL(fallback);
+  }
+}
+
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: toAbsoluteUrl(siteUrl, "https://pm.recoder.xyz/portal"),
   title,
   description,
   applicationName: "Recoder PM Portal",

@@ -1224,7 +1224,7 @@ export const Preview = memo(() => {
                   >
                     <iframe
                       ref={iframeRef}
-                      className="border-none bg-white"
+                      className="border-none bg-recoder-elements-background-depth-3"
                       src={iframeUrl}
                       onLoad={handleIframeLoad}
                       style={{
@@ -1239,7 +1239,7 @@ export const Preview = memo(() => {
               /* ── Iframe (normal mode) ── */
               <iframe
                 ref={iframeRef}
-                className="border-none w-full h-full bg-white"
+                className="border-none w-full h-full bg-recoder-elements-background-depth-3"
                 src={iframeUrl}
                 onLoad={handleIframeLoad}
               />
