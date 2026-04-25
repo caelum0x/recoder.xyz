@@ -9,7 +9,6 @@ import { useSession } from '@/lib/session-provider';
 
 const NAV_LINKS = [
   { href: '/docs', label: 'Docs', external: false },
-  { href: '/security', label: 'Security', external: false },
   { href: '/agents', label: 'Agents', external: false },
   { href: '/dashboard', label: 'Dashboard', external: false },
 ];

@@ -190,7 +190,7 @@ export default function SecurityCenterPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="dark min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white">
       <SiteHeader fixed={false} />
 
       {/* Hero Section */}
@@ -392,7 +392,7 @@ export default function SecurityCenterPage() {
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>
                 </Button>
-                <Button variant="outline" size="lg" className="border-white text-white hover:bg-white hover:text-blue-600" asChild>
+                <Button variant="outline" size="lg" className="border-white/20 bg-black text-white hover:bg-white/10 hover:text-white" asChild>
                   <Link href="/security/incident-report">
                     Report Security Issue
                   </Link>
