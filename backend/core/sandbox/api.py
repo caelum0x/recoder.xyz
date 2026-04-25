@@ -717,7 +717,10 @@ async def get_project_sandbox_details(
         config = sandbox_resource.get('config', {})
         
         logger.debug(f"Fetching sandbox details for sandbox {sandbox_id} (project {project_id})")
-        sandbox = await daytona.get(sandbox_id)
+        sandbox = await retry_with_backoff(
+            operation=lambda: daytona.get(sandbox_id),
+            operation_name=f"daytona.get({sandbox_id})",
+        )
         
         sandbox_details = {
             "sandbox_id": sandbox.id,
@@ -1005,7 +1008,10 @@ async def get_project_sandbox_status(
         sandbox = None
         daytona_state = "unknown"
         try:
-            sandbox = await daytona.get(sandbox_id)
+            sandbox = await retry_with_backoff(
+                operation=lambda: daytona.get(sandbox_id),
+                operation_name=f"daytona.get({sandbox_id})",
+            )
             daytona_state = sandbox.state.value if hasattr(sandbox.state, 'value') else str(sandbox.state)
         except Exception as daytona_err:
             logger.warning(f"Daytona unreachable for sandbox {sandbox_id}: {daytona_err}")
@@ -1154,7 +1160,10 @@ async def stream_project_sandbox_status(
         sandbox = None
         daytona_state = "unknown"
         try:
-            sandbox = await daytona.get(sandbox_id)
+            sandbox = await retry_with_backoff(
+                operation=lambda: daytona.get(sandbox_id),
+                operation_name=f"daytona.get({sandbox_id})",
+            )
             daytona_state = (
                 sandbox.state.value
                 if hasattr(sandbox.state, "value")
@@ -1358,7 +1367,10 @@ async def start_project_sandbox(
 
         # Check current state
         try:
-            sandbox = await daytona.get(sandbox_id)
+            sandbox = await retry_with_backoff(
+                operation=lambda: daytona.get(sandbox_id),
+                operation_name=f"daytona.get({sandbox_id})",
+            )
         except Exception as e:
             logger.warning(f"Sandbox lookup failed for project {project_id} ({sandbox_id}): {str(e)}")
 
@@ -1427,7 +1439,10 @@ async def get_sandbox_status_by_id(
 
     try:
         # Get Daytona state
-        sandbox = await daytona.get(sandbox_id)
+        sandbox = await retry_with_backoff(
+            operation=lambda: daytona.get(sandbox_id),
+            operation_name=f"daytona.get({sandbox_id})",
+        )
         daytona_state = sandbox.state.value if hasattr(sandbox.state, 'value') else str(sandbox.state)
 
         # Try to get sandbox URL for health check
@@ -1514,7 +1529,10 @@ async def start_sandbox_by_id(
 
     try:
         # Check current state
-        sandbox = await daytona.get(sandbox_id)
+        sandbox = await retry_with_backoff(
+            operation=lambda: daytona.get(sandbox_id),
+            operation_name=f"daytona.get({sandbox_id})",
+        )
         current_state = sandbox.state.value.lower() if hasattr(sandbox.state, 'value') else str(sandbox.state).lower()
 
         if current_state == 'started':
