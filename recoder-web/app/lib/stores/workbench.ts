@@ -143,6 +143,20 @@ export async function ensureContainerExists(
         options?.framework ? `(framework: ${options.framework})` : '',
         options?.templateId ? `(template: ${options.templateId})` : '');
 
+      try {
+        const health = await dockerGet<{ status?: string }>('/health', {
+          timeout: 3000,
+          skipRetry: true,
+        });
+        if (!health || (health.status !== 'ok' && health.status !== 'healthy')) {
+          throw new Error('Docker backend health check did not return ready status');
+        }
+      } catch (healthError: any) {
+        throw new Error(
+          healthError?.message || 'Docker backend is unavailable. Container creation was skipped.'
+        );
+      }
+
       // Go through the same-origin route so server-side session verification owns
       // the create path instead of relying on browser-readable auth state.
       await createViaWebRoute();

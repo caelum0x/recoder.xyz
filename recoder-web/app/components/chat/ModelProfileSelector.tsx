@@ -23,18 +23,18 @@ import { AVAILABLE_MODELS, type ModelMetadata } from '~/lib/stores/model-selecti
 
 const PROFILE_COLORS: Record<string, { active: string; hover: string; text: string }> = {
   green: {
-    active: 'bg-recoder-elements-background-depth-3 border-green-500/40 text-recoder-elements-textPrimary',
-    hover: 'hover:bg-recoder-elements-background-depth-2',
+    active: 'bg-black border-green-500/40 text-white',
+    hover: 'hover:bg-zinc-900',
     text: 'text-green-400',
   },
   blue: {
-    active: 'bg-recoder-elements-background-depth-3 border-blue-500/40 text-recoder-elements-textPrimary',
-    hover: 'hover:bg-recoder-elements-background-depth-2',
+    active: 'bg-black border-blue-500/40 text-white',
+    hover: 'hover:bg-zinc-900',
     text: 'text-blue-400',
   },
   purple: {
-    active: 'bg-recoder-elements-background-depth-3 border-purple-500/40 text-recoder-elements-textPrimary',
-    hover: 'hover:bg-recoder-elements-background-depth-2',
+    active: 'bg-black border-purple-500/40 text-white',
+    hover: 'hover:bg-zinc-900',
     text: 'text-purple-400',
   },
 };
@@ -107,7 +107,7 @@ export function ModelProfileSelector() {
   return (
     <div ref={dropdownRef} className="relative flex items-center">
       {/* Pill group */}
-      <div className="flex items-center rounded-lg border border-recoder-elements-borderColor bg-recoder-elements-background-depth-1 overflow-hidden">
+      <div className="flex items-center overflow-hidden rounded-lg border border-white/10 bg-black">
         {profileIds.map((id) => {
           const profile = profiles[id];
           const isActive = id === activeId;
@@ -119,8 +119,8 @@ export function ModelProfileSelector() {
               onClick={() => handleProfileClick(id)}
               className={`
                 relative flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors
-                ${isActive ? colors.active : `text-recoder-elements-textTertiary ${colors.hover}`}
-                ${id !== 'fast' ? 'border-l border-recoder-elements-borderColor' : ''}
+                ${isActive ? colors.active : `bg-black text-gray-300 ${colors.hover}`}
+                ${id !== 'fast' ? 'border-l border-white/10' : ''}
               `}
               title={`${profile.label}: ${profile.description} (${profile.modelId})`}
             >
