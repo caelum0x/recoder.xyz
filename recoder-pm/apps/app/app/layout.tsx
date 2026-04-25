@@ -51,10 +51,18 @@ const siteUrl = env.RECODER_PM_API_URL;
 const title = "Recoder PM — Cursor for Product Managers";
 const description = "AI-first product management. Automated feedback analysis, intelligent feature prioritization, insight synthesis, and roadmap planning. The way PMs should work.";
 
+function toAbsoluteUrl(value: string | undefined, fallback: string): URL {
+  try {
+    return new URL(value || fallback);
+  } catch {
+    return new URL(fallback);
+  }
+}
+
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: toAbsoluteUrl(siteUrl, "https://pm.recoder.xyz/api"),
   title,
   description,
   applicationName: "Recoder PM",

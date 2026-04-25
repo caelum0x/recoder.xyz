@@ -482,22 +482,25 @@ async def start_agent_run(
         except Exception:
             pass  # May already exist
 
-        try:
-            sandbox_info = await asyncio.wait_for(
-                resolve_sandbox(project_id, account_id, None, require_started=True),
-                timeout=30.0,
-            )
-            if sandbox_info and sandbox_info.sandbox_id:
-                sandbox_id = sandbox_info.sandbox_id
-                logger.info(f"[AGENT_START] Sandbox ready before agent dispatch for {project_id}: {sandbox_id}")
-            else:
-                raise RuntimeError("Sandbox resolver returned no sandbox")
-        except asyncio.TimeoutError:
-            logger.error(f"[AGENT_START] Sandbox creation timed out for {project_id}")
-            raise HTTPException(status_code=503, detail="Sandbox creation timed out. Please retry in a moment.")
-        except Exception as e:
-            logger.error(f"[AGENT_START] Sandbox creation failed for {project_id}: {e}")
-            raise HTTPException(status_code=503, detail=f"Sandbox creation failed: {str(e)[:120]}")
+        if mode != 'deep-coding':
+            try:
+                sandbox_info = await asyncio.wait_for(
+                    resolve_sandbox(project_id, account_id, None, require_started=True),
+                    timeout=30.0,
+                )
+                if sandbox_info and sandbox_info.sandbox_id:
+                    sandbox_id = sandbox_info.sandbox_id
+                    logger.info(f"[AGENT_START] Sandbox ready before agent dispatch for {project_id}: {sandbox_id}")
+                else:
+                    raise RuntimeError("Sandbox resolver returned no sandbox")
+            except asyncio.TimeoutError:
+                logger.error(f"[AGENT_START] Sandbox creation timed out for {project_id}")
+                raise HTTPException(status_code=503, detail="Sandbox creation timed out. Please retry in a moment.")
+            except Exception as e:
+                logger.error(f"[AGENT_START] Sandbox creation failed for {project_id}: {e}")
+                raise HTTPException(status_code=503, detail=f"Sandbox creation failed: {str(e)[:120]}")
+        else:
+            logger.info(f"[AGENT_START] Skipping Daytona sandbox prewarm for deep-coding run {project_id}")
     
     # Clean up stale runs before checking slot availability
     await _cleanup_stale_runs(account_id)
@@ -796,22 +799,6 @@ async def _background_setup_and_execute(
         cleanup_errors = []
         run_timeout_seconds = int(os.getenv("AGENT_RUN_TIMEOUT_SECONDS", "3000"))  # 65min, > MAX_DURATION so cleanup always runs
 
-        # Wait for sandbox to be ready before executing (max 30s)
-        # The sandbox was created in a fire-and-forget background task
-        # but tools will fail if it's not ready when execution starts.
-        try:
-            from core.sandbox.resolver import resolve_sandbox
-            for _attempt in range(6):
-                sandbox_info = await resolve_sandbox(project_id, account_id, None, require_started=True)
-                if sandbox_info and sandbox_info.sandbox_id:
-                    logger.info(f"✅ [SANDBOX_READY] Sandbox {sandbox_info.sandbox_id[:12]} ready for execution")
-                    break
-                await asyncio.sleep(5)
-            else:
-                logger.warning(f"⚠️ [SANDBOX_WAIT] Sandbox not ready after 30s, proceeding anyway")
-        except Exception as e:
-            logger.warning(f"⚠️ [SANDBOX_WAIT] Error checking sandbox: {e}")
-
         try:
             if mode == 'deep-coding':
                 await asyncio.wait_for(
@@ -828,6 +815,20 @@ async def _background_setup_and_execute(
                     timeout=run_timeout_seconds,
                 )
             else:
+                # Non-deep-coding runs still depend on the Daytona sandbox toolchain.
+                try:
+                    from core.sandbox.resolver import resolve_sandbox
+                    for _attempt in range(6):
+                        sandbox_info = await resolve_sandbox(project_id, account_id, None, require_started=True)
+                        if sandbox_info and sandbox_info.sandbox_id:
+                            logger.info(f"✅ [SANDBOX_READY] Sandbox {sandbox_info.sandbox_id[:12]} ready for execution")
+                            break
+                        await asyncio.sleep(5)
+                    else:
+                        logger.warning(f"⚠️ [SANDBOX_WAIT] Sandbox not ready after 30s, proceeding anyway")
+                except Exception as e:
+                    logger.warning(f"⚠️ [SANDBOX_WAIT] Error checking sandbox: {e}")
+
                 await asyncio.wait_for(
                     execute_agent_run(
                         agent_run_id=agent_run_id,
