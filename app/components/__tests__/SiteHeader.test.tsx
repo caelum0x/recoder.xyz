@@ -19,10 +19,10 @@ describe('SiteHeader', () => {
     render(<SiteHeader fixed={false} />);
 
     expect(screen.getByText('Docs')).toBeDefined();
-    expect(screen.getByText('Security')).toBeDefined();
     expect(screen.getByText('Agents')).toBeDefined();
     expect(screen.getByText('Dashboard')).toBeDefined();
     expect(screen.getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe('/agents');
+    expect(screen.queryByText('Security')).toBeNull();
     expect(screen.queryByText('Pricing')).toBeNull();
     expect(screen.queryByText('Launch Web IDE')).toBeNull();
   });
