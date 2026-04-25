@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { Suspense, lazy } from 'react';
 import { useAccounts } from '@/hooks/account';
 import { useAuth } from '@/components/AuthProvider';
@@ -107,7 +107,9 @@ export default function DashboardLayoutContent({
 }: DashboardLayoutContentProps) {
   const { user, isLoading } = useAuth();
   const params = useParams();
+  const pathname = usePathname();
   const threadId = params?.threadId as string | undefined;
+  const isThreadSurface = Boolean(threadId) || pathname?.includes('/thread/new');
   
   usePresence(threadId);
   
@@ -223,7 +225,7 @@ export default function DashboardLayoutContent({
 
   return (
     <div className="flex flex-col h-screen">
-    <DashboardShellNav />
+    {!isThreadSurface && <DashboardShellNav />}
     <div className="flex-1 overflow-hidden flex flex-col">
     <AppProviders
       showSidebar={true}
