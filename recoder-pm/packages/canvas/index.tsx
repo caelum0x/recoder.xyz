@@ -9,7 +9,7 @@ import type {
 } from "@excalidraw/excalidraw/types/types";
 import { useDebouncedCallback } from "@react-hookz/web";
 import deepEqual from "deep-equal";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { CanvasBackground } from "./components/background";
 
 export type CanvasState = {
@@ -33,6 +33,32 @@ export const Canvas = ({
   editable = false,
 }: CanvasProperties) => {
   const lastSnapshot = useRef<CanvasState | null>(null);
+
+  useEffect(() => {
+    const canvasPrototype = HTMLCanvasElement.prototype as any;
+    const originalGetContext = canvasPrototype.getContext;
+
+    canvasPrototype.getContext = function patchedGetContext(
+      this: HTMLCanvasElement,
+      contextId: string,
+      options?: Record<string, unknown>,
+    ) {
+      if (contextId === "2d") {
+        const nextOptions =
+          options && typeof options === "object"
+            ? { ...options, willReadFrequently: true }
+            : { willReadFrequently: true };
+
+        return originalGetContext.call(this, contextId, nextOptions);
+      }
+
+      return originalGetContext.call(this, contextId, options);
+    };
+
+    return () => {
+      canvasPrototype.getContext = originalGetContext;
+    };
+  }, []);
 
   const handleChange: ExcalidrawProps["onChange"] = (
     elements,
@@ -84,6 +110,32 @@ export const CanvasBeta = ({
   editable = false,
 }: CanvasProperties) => {
   const lastSnapshot = useRef<CanvasState | null>(null);
+
+  useEffect(() => {
+    const canvasPrototype = HTMLCanvasElement.prototype as any;
+    const originalGetContext = canvasPrototype.getContext;
+
+    canvasPrototype.getContext = function patchedGetContext(
+      this: HTMLCanvasElement,
+      contextId: string,
+      options?: Record<string, unknown>,
+    ) {
+      if (contextId === "2d") {
+        const nextOptions =
+          options && typeof options === "object"
+            ? { ...options, willReadFrequently: true }
+            : { willReadFrequently: true };
+
+        return originalGetContext.call(this, contextId, nextOptions);
+      }
+
+      return originalGetContext.call(this, contextId, options);
+    };
+
+    return () => {
+      canvasPrototype.getContext = originalGetContext;
+    };
+  }, []);
   const handleChange: ExcalidrawProps["onChange"] = (
     elements,
     _appState,
