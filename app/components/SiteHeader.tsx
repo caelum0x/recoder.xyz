@@ -6,12 +6,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { useSession } from '@/lib/session-provider';
-import { getServiceUrlClient } from '@/lib/config/platforms';
 
 const NAV_LINKS = [
   { href: '/docs', label: 'Docs', external: false },
   { href: '/security', label: 'Security', external: false },
-  { href: getServiceUrlClient('agents'), label: 'Agents', external: true },
+  { href: '/agents', label: 'Agents', external: false },
   { href: '/dashboard', label: 'Dashboard', external: false },
 ];
 
