@@ -55,7 +55,7 @@ Keep the live Recoder surfaces working end to end:
 - fresh live proof confirmed signed preview host token differs from `sandbox.id`
 
 ### Agents
-
+- remove shared navbar from agents chat page
 - shared ecosystem nav removed from agents shell
 - top-right notification/customize controls removed
 - `Plan` removed from user menu
@@ -181,3 +181,108 @@ Launch is complete when:
 - Keep this file short and current.
 - Use `bd` for detailed tracking, not this file.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not treated as a product bug.
+
+## Problems
+
+This section is the clean working list of issues. Raw repeated console tails were removed.
+
+### Main App / Mail
+
+- `recoder.xyz` is live again.
+- auth routes work.
+- signup-email reaches account creation.
+- DNS/mail setup is mostly in place:
+  - `mail.recoder.xyz` -> `77.42.23.19`
+  - DKIM exists
+  - SPF includes the server IP and mail host
+  - DMARC is set to quarantine
+- remaining mail blocker:
+  - Postfix is accepting injected mail but not flushing queued mail to recipients
+  - local sendmail handoff works
+  - end-to-end inbox delivery is still not proven
+
+### Agents
+
+- `agents.recoder.xyz` is not stable yet.
+- reported runtime errors:
+  - `/v1/agent/start` returns `503`
+  - `Sandbox creation failed: Sandbox resolver returned no sandbox`
+  - optimistic agent start fails
+  - thread retry fails
+  - some `/v1/threads/...` requests return `404`
+  - `/v1/project/<id>/sandbox/start` returns `500`
+  - `Failed to get sandbox: [Errno 104] Connection reset by peer`
+  - `Node cannot be found in the current page`
+- deployed bundle also showed deep-coding i18n misses:
+  - `recoder.prompts.deep-coding.0`
+  - `recoder.prompts.deep-coding.1`
+  - `recoder.prompts.deep-coding.2`
+  - `recoder.prompts.deep-coding.3`
+  - `recoder.prompts.deep-coding.4`
+  - `recoder.prompts.deep-coding.5`
+  - `recoder.prompts.deep-coding.6`
+  - `recoder.prompts.deep-coding.7`
+
+### Web IDE
+
+- `web.recoder.xyz` is not stable yet.
+- reported runtime errors:
+  - container/sandbox bring-up returns `500`
+  - `Could not create Docker container. Make sure docker-backend is running`
+  - terminal/preview initialization gets skipped because the container is unavailable
+- project creation also fails:
+  - `/api/projects` returns `500`
+  - `ProjectsPage Error creating project: Internal server error`
+- UI cleanup still needed:
+  - many web components still have white backgrounds
+  - buttons/panels are visually inconsistent with the dark UI
+
+### PM
+
+- `pm.recoder.xyz` is not stable yet.
+- reported page crash on feature route:
+  - `TypeError: Failed to construct 'URL': Invalid URL`
+  - `Parsing error: Failed to construct 'URL': Invalid URL`
+- reported browser warning:
+  - `Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true`
+
+### Dashboard / UX Cleanup
+
+- dashboard is too complicated and too crowded.
+- simplify top-level items and repeated framing.
+- current clutter called out:
+  - `Overview`
+  - `Developer Keys`
+  - `Projects`
+  - `Usage`
+  - `Analytics`
+  - `Settings`
+  - nested `Settings`
+  - `AI Provider Keys`
+  - `Account`
+  - `Launch`
+  - `CLI`
+  - `Web IDE`
+- duplicated or low-value content should be reduced:
+  - repeated name/email blocks
+  - `Welcome back`
+  - `Beta Status`
+  - `Beta User`
+  - `100% Free Forever`
+  - oversized promo cards
+- `Launch` should show all relevant platforms, not just:
+  - `CLI`
+  - `Web IDE`
+- remove or redesign weak/broken sections:
+  - `Platform Activity`
+  - `Agents Unavailable`
+  - `Agency Unavailable`
+  - `PM Unavailable`
+  - `Web IDE 0 total / 0 active`
+
+### Short Platform Summary
+
+- app: live, but outbound mail still blocked by host mail transport
+- agents: broken runtime paths still exist
+- web: broken container/project creation paths still exist
+- pm: feature page URL construction crash still exists
