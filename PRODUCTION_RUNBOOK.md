@@ -7,6 +7,11 @@ Canonical deployment path:
 - Supported production compose manifest: `docker-compose.deploy.yml`
 - Do not use `deploy.sh` or `scripts/deploy-production.sh` for production deploys
 
+Host disk-pressure preflight:
+- `scripts/check-hetzner-docker-disk-pressure.sh` runs during deploy preflight on the Hetzner host.
+- Automatic reclaim is limited to dangling Docker images, BuildKit cache, and journal vacuuming.
+- Do not delete active Docker volumes or shared-host app data unless ownership is verified first.
+
 This runbook contains the exact commands to bring the entire recoder.xyz ecosystem to production. All feature code is complete. Only config/ops steps remain.
 
 ---
