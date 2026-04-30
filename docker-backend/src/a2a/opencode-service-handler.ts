@@ -17,12 +17,15 @@ import {
   promptProject,
   setProviderKey,
   getProjectDiff,
+  getProjectMessages,
   type MessageWithParts,
   type PromptInput,
 } from './opencode-service-adapter';
 import { createLogger } from '../logger';
 
 const logger = createLogger('opencode-service-handler');
+const FILE_EDIT_TOOL_NAMES = new Set(['edit', 'write', 'create_file', 'file_edit', 'str_replace_editor', 'apply_patch']);
+const PATH_ARG_KEYS = new Set(['path', 'file', 'filepath', 'filePath', 'targetPath', 'targetFile', 'newPath', 'oldPath', 'movePath']);
 
 export interface OpencodeServiceHandlerInput {
   projectId: string;
@@ -128,24 +131,89 @@ function extractModifiedFilePaths(result: MessageWithParts): string[] {
   const paths = new Set<string>();
   const textPathPattern = /(?:\/workspace\/|\/home\/daytona\/)([^\s"'`),:;]+)|`((?:\/workspace\/|\/home\/daytona\/)[^`]+)`/g;
 
+  const normalizeWorkspacePath = (value: unknown): string | null => {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim().replace(/`/g, '');
+    if (!trimmed || trimmed === '/workspace' || trimmed === '/home/daytona') {
+      return null;
+    }
+
+    if (trimmed.startsWith('/workspace/')) {
+      return trimmed.slice('/workspace/'.length);
+    }
+
+    if (trimmed.startsWith('/home/daytona/')) {
+      return trimmed.slice('/home/daytona/'.length);
+    }
+
+    if (trimmed.startsWith('/')) {
+      return null;
+    }
+
+    return trimmed.replace(/^\.\//, '');
+  };
+
+  const addPath = (value: unknown) => {
+    const normalized = normalizeWorkspacePath(value);
+    if (normalized) {
+      paths.add(normalized);
+    }
+  };
+
+  const collectToolPaths = (value: unknown): void => {
+    if (!value || typeof value !== 'object') {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(addPath);
+      return;
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+      if (PATH_ARG_KEYS.has(key)) {
+        addPath(nested);
+        continue;
+      }
+
+      if (key === 'files' && Array.isArray(nested)) {
+        nested.forEach(addPath);
+      }
+    }
+  };
+
   for (const part of result.parts) {
     const record = part as Record<string, unknown>;
 
-    // tool-call parts contain the tool name and arguments
-    if (record.type === 'tool-call') {
+    // tool parts contain the tool name and the executed input payload.
+    if (record.type === 'tool' || record.type === 'tool-call') {
       const name = String(record.name || record.tool || '');
-      const args = (record.args || record.input || {}) as Record<string, unknown>;
+      const state = record.state && typeof record.state === 'object'
+        ? record.state as Record<string, unknown>
+        : undefined;
+      const args = (state?.input || record.args || record.input || {}) as Record<string, unknown>;
 
-      if (['edit', 'write', 'create_file', 'file_edit', 'str_replace_editor'].includes(name)) {
-        const filePath = String(args.path || args.file || args.filePath || '');
-        if (filePath) paths.add(filePath);
+      if (FILE_EDIT_TOOL_NAMES.has(name)) {
+        collectToolPaths(args);
       }
     }
 
     // file-type parts directly reference a path
-    if (record.type === 'file' || record.type === 'patch') {
-      const filePath = String(record.path || record.file || '');
-      if (filePath) paths.add(filePath);
+    if (record.type === 'file') {
+      addPath(record.path || record.file);
+      const source = record.source && typeof record.source === 'object'
+        ? record.source as Record<string, unknown>
+        : undefined;
+      addPath(source?.path);
+    }
+
+    if (record.type === 'patch') {
+      addPath(record.path || record.file);
+      const patchFiles = Array.isArray(record.files) ? record.files : [];
+      patchFiles.forEach(addPath);
     }
 
     // Some opencode responses only mention created/edited files in text or
@@ -158,14 +226,27 @@ function extractModifiedFilePaths(result: MessageWithParts): string[] {
 
       let match: RegExpExecArray | null;
       while ((match = textPathPattern.exec(content)) !== null) {
-        const filePath = match[0].replace(/`/g, '');
-        if (filePath) paths.add(filePath);
+        addPath(match[0]);
       }
       textPathPattern.lastIndex = 0;
     }
   }
 
   return [...paths];
+}
+
+async function loadCanonicalMessage(projectId: string, messageId?: string): Promise<MessageWithParts | null> {
+  if (!messageId) {
+    return null;
+  }
+
+  try {
+    const messages = await getProjectMessages(projectId);
+    return messages.find((message) => message.info.id === messageId) ?? null;
+  } catch (err) {
+    logger.warn({ projectId, messageId, err }, 'Failed to load canonical OpenCode message');
+    return null;
+  }
 }
 
 /**
@@ -182,6 +263,16 @@ async function syncFilesToSandbox(
   // Strategy 1: extract file paths from message parts (tool-call args)
   let filePaths = extractModifiedFilePaths(result);
 
+  // Strategy 1b: fetch the stored canonical message for this prompt. The
+  // immediate HTTP response can omit patch/tool details that are later present
+  // on the persisted session message.
+  if (filePaths.length === 0 && result.info.id) {
+    const canonicalMessage = await loadCanonicalMessage(projectId, result.info.id);
+    if (canonicalMessage) {
+      filePaths = extractModifiedFilePaths(canonicalMessage);
+    }
+  }
+
   // Strategy 2: if no paths from parts, try getDiff API
   if (filePaths.length === 0 && result.info.id) {
     try {
@@ -194,16 +285,28 @@ async function syncFilesToSandbox(
     }
   }
 
-  if (filePaths.length === 0) return [];
+  filePaths = [...new Set(filePaths)];
+
+  if (filePaths.length === 0) {
+    logger.warn(
+      {
+        projectId,
+        messageId: result.info.id,
+        partTypes: result.parts.map((part) => part.type),
+      },
+      'OpenCode prompt completed without any detectable changed files',
+    );
+    return [];
+  }
 
   const synced: string[] = [];
 
   for (const filePath of filePaths) {
     try {
-      // Strip leading /workspace/ or / to get the relative path
       const relativePath = filePath
         .replace(/^\/workspace\//, '')
         .replace(/^\/home\/daytona\//, '')
+        .replace(/^\.\//, '')
         .replace(/^\//, '');
 
       const content = await readWorkspaceFile(relativePath);
