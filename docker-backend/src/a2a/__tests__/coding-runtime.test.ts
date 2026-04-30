@@ -180,6 +180,7 @@ describe('coding-runtime', () => {
 
   describe('opencode adapter', () => {
     const ORIGINAL_URL = process.env.OPENCODE_SERVICE_URL;
+    const ORIGINAL_MODE = process.env.OPENCODE_MODE;
 
     beforeEach(() => {
       vi.resetModules();
@@ -188,6 +189,8 @@ describe('coding-runtime', () => {
     afterEach(() => {
       if (ORIGINAL_URL === undefined) delete process.env.OPENCODE_SERVICE_URL;
       else process.env.OPENCODE_SERVICE_URL = ORIGINAL_URL;
+      if (ORIGINAL_MODE === undefined) delete process.env.OPENCODE_MODE;
+      else process.env.OPENCODE_MODE = ORIGINAL_MODE;
       vi.unstubAllGlobals();
     });
 
@@ -198,6 +201,7 @@ describe('coding-runtime', () => {
 
     it('uses centralized service when OPENCODE_SERVICE_URL is set', async () => {
       process.env.OPENCODE_SERVICE_URL = 'http://opencode-test:4096';
+      process.env.OPENCODE_MODE = 'centralized';
 
       const mockFetch = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({
@@ -226,6 +230,7 @@ describe('coding-runtime', () => {
 
     it('reuses session model and provider key for centralized prompts', async () => {
       process.env.OPENCODE_SERVICE_URL = 'http://opencode-test:4096';
+      process.env.OPENCODE_MODE = 'centralized';
 
       const getOrCreateSession = vi.fn().mockResolvedValue({
         id: 'sess_configured',
