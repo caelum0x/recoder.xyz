@@ -93,6 +93,7 @@ type RuntimeProviderKey = keyof OmoProviderKeys;
 interface StoredRuntimeConfig {
   model?: string;
   providerKeys?: OmoProviderKeys;
+  sandboxId?: string;
 }
 
 function inferProviderFromModel(model?: string): RuntimeProviderKey | undefined {
@@ -152,7 +153,7 @@ const centralizedOpenCodeConfigs = new Map<string, StoredRuntimeConfig>();
 // ---------------------------------------------------------------------------
 
 export function createOpenCodeAdapter(): RuntimeAdapter {
-  const useCentralized = !!process.env.OPENCODE_SERVICE_URL;
+  const useCentralized = process.env.OPENCODE_MODE === 'centralized' && !!process.env.OPENCODE_SERVICE_URL;
 
   return {
     type: 'opencode',
@@ -167,6 +168,7 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
         centralizedOpenCodeConfigs.set(params.projectId, {
           model: params.model,
           providerKeys: buildProviderKeys(params.provider, params.apiKey, params.model),
+          sandboxId: params.sandboxId,
         });
         return {
           id: session.id,
@@ -196,12 +198,25 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
       if (useCentralized) {
         const { handleOpencodeServicePrompt } = await import('./opencode-service-handler.js');
         const runtimeConfig = centralizedOpenCodeConfigs.get(params.projectId);
+        const { createRecoderOpencodeClient } = await import('@recoder/shared/opencode-client');
+        const { daytonaWriteFile } = await import('../daytona-file-ops.js');
+        const client = createRecoderOpencodeClient({
+          baseUrl: process.env.OPENCODE_SERVICE_URL!,
+          password: process.env.OPENCODE_SERVER_PASSWORD,
+          username: process.env.OPENCODE_SERVER_USERNAME,
+        });
         const result = await handleOpencodeServicePrompt({
           projectId: params.projectId,
           prompt: params.prompt,
           model: runtimeConfig?.model,
           providerKeys: runtimeConfig?.providerKeys,
           directory: '/workspace',
+          sandboxId: runtimeConfig?.sandboxId,
+          readWorkspaceFile: async (path: string) => {
+            const content = await client.readFile(path, '/workspace');
+            return typeof content === 'string' ? content : JSON.stringify(content);
+          },
+          writeSandboxFile: daytonaWriteFile,
         });
 
         const textParts = [result.text]
@@ -228,7 +243,7 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
           return {
             id: match.sessionId,
             projectId,
-            sandboxId: projectId,
+            sandboxId: centralizedOpenCodeConfigs.get(projectId)?.sandboxId || projectId,
             runtimeType: 'opencode',
             status: 'ready',
             createdAt: new Date().toISOString(),

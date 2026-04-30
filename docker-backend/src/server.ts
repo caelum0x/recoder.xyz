@@ -84,9 +84,9 @@ import {
   destroyPublishedShare,
   restorePublishedShares,
   updateShareTarget,
-  getPreviewUrl as getZrokPreviewUrl,
   getPublishedShareUrl,
 } from './zrok-preview.js';
+import { getDaytonaPreviewAccess } from './daytona-preview.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
@@ -151,7 +151,6 @@ import {
   isStrictAuthMode,
   resolveA2ASystemSession,
 } from './auth-utils.js';
-import { recoverContainerFromDocker } from './container-recovery.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
 import { bootstrapDaytonaPreview } from './preview';
 // Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
@@ -1774,6 +1773,7 @@ function persistContainers(): void {
       userId: v.userId,
       daytona: (v as any).daytona,
       daytonaPreviewUrl: (v as any).daytonaPreviewUrl,
+      daytonaWorkDir: (v as any).daytonaWorkDir,
     };
   }
   debouncedSave('containers', data, 500);
@@ -1797,9 +1797,10 @@ try {
 }
 
 /**
- * Get container entry, auto-recovering from Daytona if the in-memory mapping
- * was lost (e.g., docker-backend restart). Queries Daytona for sandboxes
- * with matching projectId label and re-registers them.
+ * Get the tracked container entry for a project.
+ *
+ * Containers are only used when we already have an explicit mapping.
+ * Do not scan Docker or Daytona to infer ownership/state at request time.
  */
 async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry | undefined> {
   const existing = containers.get(projectId);
@@ -1813,84 +1814,30 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
     daytonaSandboxIds.add(existing.id);
     registerDaytonaId(existing.id);
 
-    const status = await ensureDaytonaSandboxRunning(existing.id);
-    if (status.running) {
+    try {
+      const dc = getDaytonaClient();
+      await dc.getSandbox(existing.id);
+      if (existing.daytonaWorkDir) {
+        dc.rememberWorkDir(existing.id, existing.daytonaWorkDir);
+      } else {
+        existing.daytonaWorkDir = await dc.getWorkDir(existing.id);
+        persistContainers();
+      }
       return existing;
+    } catch (err: any) {
+      logger.warn(
+        { projectId, sandboxId: existing.id, error: err?.message },
+        'Tracked Daytona sandbox no longer exists, clearing cached mapping',
+      );
+      containers.delete(projectId);
+      daytonaSandboxIds.delete(existing.id);
+      unregisterDaytonaId(existing.id);
+      persistContainers();
+      return undefined;
     }
-
-    logger.warn(
-      { projectId, sandboxId: existing.id, error: status.error },
-      'Stored Daytona sandbox could not be resumed, clearing cached mapping',
-    );
-    containers.delete(projectId);
-    daytonaSandboxIds.delete(existing.id);
-    unregisterDaytonaId(existing.id);
-    persistContainers();
   }
 
-  const recoveredDocker = await recoverContainerFromDocker(docker, projectId, containers);
-  if (recoveredDocker) {
-    persistContainers();
-    return recoveredDocker as ContainerEntry;
-  }
-
-  // Try to recover from Daytona
-  if (!isDaytonaConfigured() || process.env.USE_DAYTONA_CONTAINERS !== 'true') return undefined;
-
-  try {
-    const dc = getDaytonaClient();
-    const sandboxes = await dc.listSandboxes();
-    // Find matching sandboxes — exclude stopping/error states, prefer running ones
-    const matches = sandboxes
-      .filter((s: any) => s.labels?.projectId === projectId && s.state !== 'stopping' && s.state !== 'error' && s.state !== 'unknown')
-      .sort((a: any, b: any) => {
-        // Running sandboxes first
-        const aRunning = a.state === 'started' || a.state === 'running' ? 1 : 0;
-        const bRunning = b.state === 'started' || b.state === 'running' ? 1 : 0;
-        if (aRunning !== bRunning) return bRunning - aRunning;
-        // Then by creation time (newest first)
-        return (b.createdAt || '').localeCompare(a.createdAt || '');
-      });
-    const match = matches[0];
-    if (!match) return undefined;
-
-    let isRunning = match.state === 'started' || match.state === 'running';
-    if (!isRunning) {
-      // Try to start the sandbox
-      try {
-        const started = await dc.getOrStartSandbox(match.id, 30000);
-        isRunning = started.state === 'started' || started.state === 'running';
-      } catch (startErr: any) {
-        logger.warn({ projectId, sandboxId: match.id, err: startErr.message }, 'Failed to start sandbox, skipping');
-        isRunning = false;
-      }
-      // If still not running after start attempt, don't use this sandbox
-      if (!isRunning) {
-        logger.warn({ projectId, sandboxId: match.id, state: match.state }, 'Sandbox could not be started, returning undefined');
-        return undefined;
-      }
-    }
-
-    const previewUrl = dc.getPreviewUrl(match.id, 5173);
-    const entry: ContainerEntry = {
-      id: match.id,
-      port: 5173,
-      ptyPort: 0,
-      lastActive: Date.now(),
-      userId: match.labels?.userId,
-      daytona: true,
-      daytonaPreviewUrl: previewUrl,
-    };
-    containers.set(projectId, entry);
-    daytonaSandboxIds.add(match.id);
-    registerDaytonaId(match.id);
-    persistContainers();
-    logger.info({ projectId, sandboxId: match.id }, 'Auto-recovered container mapping from Daytona');
-    return entry;
-  } catch (err: any) {
-    logger.warn({ projectId, err: err.message }, 'Failed to recover container from Daytona');
-    return undefined;
-  }
+  return undefined;
 }
 
 // Track containers being created to prevent race conditions
@@ -1901,6 +1848,7 @@ const CONTAINER_CREATE_TIMEOUT_MS = Number(process.env.CONTAINER_CREATE_TIMEOUT_
 // Per-user container tracking for limits
 const userContainers = new Map<string, Set<string>>(); // userId -> Set of projectIds
 const MAX_CONTAINERS_PER_USER = Number(process.env.MAX_CONTAINERS_PER_USER) || 5;
+const DAYTONA_WEB_IDE_DISK_GB = Number(process.env.DAYTONA_WEB_IDE_DISK_GB || 20);
 
 /**
  * Get count of active containers for a user
@@ -2042,9 +1990,7 @@ for (const [, entry] of containers.entries()) {
 async function execInContainer(containerId: string, cmd: string): Promise<string> {
   // Route through Daytona toolbox exec if this is a known sandbox
   if (daytonaSandboxIds.has(containerId)) {
-    // Daytona workspace is /home/daytona/, not /workspace/
-    const daytonaCmd = cmd.replace(/\/workspace\//g, '/home/daytona/').replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
-    const result = await daytonaExec(containerId, daytonaCmd, { timeoutSecs: 30 });
+    const result = await daytonaExec(containerId, cmd, { timeoutSecs: 30 });
     return result.output;
   }
 
@@ -2758,8 +2704,33 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
 
     if (!projectId) return res.status(400).json({ error: 'projectId required' });
 
-    // Daytona-first: if USE_DAYTONA_CONTAINERS is set, create via Daytona
+    // Daytona-first: if USE_DAYTONA_CONTAINERS is set, use Daytona only.
+    // Do not silently spill into Docker when Daytona provisioning fails.
     if (isDaytonaConfigured() && process.env.USE_DAYTONA_CONTAINERS === 'true') {
+      const buildDaytonaContainerResponse = (entry: ContainerEntry, reused: boolean) => {
+        const previewPort = entry.port || 5173;
+        const previewUrl = entry.daytonaPreviewUrl || `http://localhost:${previewPort}`;
+        return {
+          containerId: entry.id,
+          reused,
+          fromPool: false,
+          port: previewPort,
+          ptyPort: entry.ptyPort || 0,
+          ports: {
+            preview: previewPort,
+            vite: previewPort,
+            other: previewPort + 1,
+            pty: entry.ptyPort || 0,
+          },
+          urls: {
+            preview: previewUrl,
+            vite: previewUrl,
+            pty: entry.ptyPort ? `ws://localhost:${entry.ptyPort}` : '',
+          },
+          daytona: true,
+        };
+      };
+
       // Check in-memory map first
       let existingDaytona = containers.get(projectId);
 
@@ -2785,13 +2756,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           }
         }
         if (existingDaytona) {
-          return res.json({
-            containerId: existingDaytona.id,
-            reused: true,
-            fromPool: false,
-            port: existingDaytona.port,
-            urls: { preview: existingDaytona.daytonaPreviewUrl || `http://localhost:${existingDaytona.port}` },
-          });
+          return res.json(buildDaytonaContainerResponse(existingDaytona, true));
         }
       }
       try {
@@ -2800,6 +2765,9 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           labels: { projectId, userId, source: 'web-ide' },
           // Uses 43200s (12hr) defaults from daytona-client.ts — do NOT override here
           public: true,
+          resources: {
+            disk: DAYTONA_WEB_IDE_DISK_GB,
+          },
         });
 
         // Wait for sandbox to reach running state before returning — prevents exec failures
@@ -2822,7 +2790,9 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
 
         // Default to 5173 (Vite) — will be updated when dev server starts and detects actual port
         const defaultPort = 5173;
-        const previewUrl = dc.getPreviewUrl(sandbox.id, defaultPort);
+        const workDir = await dc.getWorkDir(sandbox.id);
+        const preview = await getDaytonaPreviewAccess({ id: sandbox.id }, defaultPort);
+        const previewUrl = preview.url;
         containers.set(projectId, {
           id: sandbox.id,
           lastActive: Date.now(),
@@ -2833,6 +2803,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           daytona: true,
           daytonaPreviewUrl: previewUrl,
           daytonaDevSessionId: buildDaytonaDevServerSessionId(projectId),
+          daytonaWorkDir: workDir,
         });
         daytonaSandboxIds.add(sandbox.id);
         registerDaytonaId(sandbox.id);
@@ -2840,38 +2811,31 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
         persistContainers();
 
         // ── Sprint C: Zrok instant preview URL (non-blocking upgrade) ──
-        let finalPreviewUrl = previewUrl;
         try {
-          const zrokShare = await createPreviewShare({
+          await createPreviewShare({
             sandboxId: sandbox.id,
             projectId,
             targetPort: defaultPort,
           });
-          if (zrokShare) {
-            finalPreviewUrl = zrokShare.previewUrl;
-            const stored = containers.get(projectId);
-            if (stored) {
-              stored.daytonaPreviewUrl = finalPreviewUrl;
-              persistContainers();
-            }
-            logger.info({ projectId, zrokUrl: finalPreviewUrl }, 'Zrok preview share active');
-          }
         } catch (zrokErr) {
-          logger.debug({ err: zrokErr, projectId }, 'Zrok share skipped — using Daytona preview');
+          logger.debug({ err: zrokErr, projectId }, 'Zrok share skipped — using Daytona preview contract');
         }
 
-        logger.info({ sandboxId: sandbox.id, projectId, previewUrl: finalPreviewUrl }, 'Daytona sandbox created for web IDE');
-        return res.json({
-          containerId: sandbox.id,
-          reused: false,
-          fromPool: false,
-          port: 3000,
-          urls: { preview: finalPreviewUrl },
-          daytona: true,
-        });
+        logger.info({ sandboxId: sandbox.id, projectId, previewUrl }, 'Daytona sandbox created for web IDE');
+        return res.json(buildDaytonaContainerResponse(containers.get(projectId)!, false));
       } catch (err: any) {
-        logger.error({ err: err.message, projectId }, 'Daytona sandbox creation failed, falling back to Docker');
-        // Fall through to Docker container creation
+        logger.error({ err: err.message, projectId }, 'Daytona sandbox creation failed');
+        if (reservedOwnership && reservedProjectId && reservedUserId && !containers.has(reservedProjectId)) {
+          unregisterUserContainer(reservedUserId, reservedProjectId);
+          reservedOwnership = false;
+          reservedProjectId = null;
+          reservedUserId = null;
+        }
+        return res.status(503).json({
+          error: err?.message || 'Daytona sandbox creation failed',
+          provider: 'daytona',
+          canRetry: false,
+        });
       }
     }
 
@@ -3607,7 +3571,7 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
   const projectId = sanitizeProjectId(req.params.projectId);
   const batchOpStartTime = Date.now();
   try {
-    const { files } = req.body; // Array of { path, content }
+    const { files, bootstrapPreview = false } = req.body; // Array of { path, content }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
       metricsCollector.recordFileOperation({
@@ -3648,7 +3612,13 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
       // Daytona sandbox — write files via toolbox exec
       const { failed } = await daytonaWriteFiles(entry.id, sanitizedFiles);
       failedFiles.push(...failed);
-      logger.info({ projectId, fileCount: sanitizedFiles.length, failedCount: failed.length, durationMs: Date.now() - batchOpStartTime }, 'Daytona batch write complete');
+      logger.info({
+        projectId,
+        fileCount: sanitizedFiles.length,
+        failedCount: failed.length,
+        failedSample: failed.slice(0, 3),
+        durationMs: Date.now() - batchOpStartTime,
+      }, 'Daytona batch write complete');
     } else {
       // FAST BATCH WRITE: Use tar-based upload (10x faster than exec-based)
       // Single network round trip for all files
@@ -3722,7 +3692,7 @@ app.post('/api/files/:projectId/batch', authenticateRequest, verifyProjectOwners
     // Notify auto-restore that user made file changes (gives more retry attempts)
     devServerManager.onFileChange(projectId);
 
-    if (isDaytonaSandbox(entry) && sanitizedFiles.length > 0) {
+    if (isDaytonaSandbox(entry) && sanitizedFiles.length > 0 && bootstrapPreview === true) {
       try {
         const bootstrap = await bootstrapDaytonaPreview(projectId, entry as any);
         if (bootstrap.ready && bootstrap.port) {
@@ -4356,12 +4326,8 @@ app.get('/api/files/:projectId', authenticateRequest, verifyProjectOwnership, as
     entry.lastActive = Date.now();
 
     if (isDaytonaSandbox(entry)) {
-      // Daytona sandbox — translate /workspace → /home/daytona for Daytona's filesystem
-      const daytonaPath = safePath.replace(/^\/workspace/, '/home/daytona');
-      const files = await daytonaListFiles(entry.id, daytonaPath);
-      // Translate paths back to /workspace/ so the frontend can strip them consistently
-      const normalizedFiles = files.map(f => f.replace(/^\/home\/daytona\//, '/workspace/').replace(/^\/home\/daytona$/, '/workspace'));
-      return res.json({ files: normalizedFiles });
+      const files = await daytonaListFiles(entry.id, safePath);
+      return res.json({ files });
     }
 
     // Docker container
@@ -4814,11 +4780,10 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
     if (isDaytonaSandbox(entry)) {
       if (background) {
         // Kill existing dev server, then start in background
-        const dayCwd = cwd.replace(/\/workspace/g, '/home/daytona');
         await daytonaExec(entry.id, 'pkill -f "npm run dev|bun run dev|vite|next dev" || true', { timeoutSecs: 5 }).catch(() => {});
         await new Promise(resolve => setTimeout(resolve, 1000));
-        await daytonaExec(entry.id, `mkdir -p "${dayCwd}"`, { timeoutSecs: 5 });
-        await daytonaExecBackground(entry.id, command.replace(/\/workspace\//g, '/home/daytona/'), dayCwd);
+        await daytonaExec(entry.id, `mkdir -p "${cwd}"`, { timeoutSecs: 5 });
+        await daytonaExecBackground(entry.id, command, cwd, { projectId });
         logger.info({ projectId }, 'Daytona: dev server started in background');
 
         // Wait for startup
@@ -4846,12 +4811,8 @@ app.post('/api/exec/:projectId', authenticateRequest, verifyProjectOwnership, as
         });
       }
 
-      // Foreground exec — convert /workspace/ paths to /home/daytona/ for Daytona sandboxes
-      const dayCwd = cwd.replace(/\/workspace/g, '/home/daytona');
-      const dayCmd = command.replace(/\/workspace\//g, '/home/daytona/').replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
-      // Don't add cd here — execCommand handles cwd internally
       const execStartMs = Date.now();
-      const result = await daytonaExec(entry.id, dayCmd, { cwd: dayCwd, timeoutSecs: 60 });
+      const result = await daytonaExec(entry.id, command, { cwd, timeoutSecs: 60 });
       trackSandboxExec({
         userId: req.userId ?? 'anonymous',
         projectId,
@@ -5060,8 +5021,10 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
       return res.status(400).json({ success: false, error: 'prompt is required' });
     }
 
-    // If OPENCODE_SERVICE_URL is set, route through the centralized opencode service
-    if (process.env.OPENCODE_SERVICE_URL) {
+    const useCentralizedOpencode = process.env.OPENCODE_MODE === 'centralized' && !!process.env.OPENCODE_SERVICE_URL;
+
+    // If explicitly configured, route through the centralized opencode service
+    if (useCentralizedOpencode) {
       const { handleOpencodeServicePrompt } = await import('./a2a/opencode-service-handler.js');
 
       // Resolve Daytona sandbox ID for file sync
@@ -5132,6 +5095,79 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
 
     entry.lastActive = Date.now();
 
+    if (isDaytonaSandbox(entry)) {
+      const effectiveProviderKeys = {
+        openrouter: providerKeys?.openrouter,
+        openai: providerKeys?.openai,
+        anthropic: providerKeys?.anthropic,
+        google: providerKeys?.google,
+      };
+
+      if (!Object.values(effectiveProviderKeys).some(Boolean)) {
+        return res.status(400).json({
+          success: false,
+          error: 'BYOK provider keys are required for OpenCode prompts',
+        });
+      }
+
+      const normalizedModel = model?.trim().toLowerCase() || '';
+      const selectedProvider = normalizedModel.startsWith('openrouter/')
+        ? 'openrouter'
+        : normalizedModel.startsWith('openai/')
+          ? 'openai'
+          : normalizedModel.startsWith('anthropic/')
+            ? 'anthropic'
+            : normalizedModel.startsWith('google/') || normalizedModel.startsWith('gemini/')
+              ? 'google'
+              : Object.entries(effectiveProviderKeys).find(([, value]) => typeof value === 'string' && value.length > 0)?.[0];
+
+      const selectedApiKey = selectedProvider
+        ? (effectiveProviderKeys as Record<string, string | undefined>)[selectedProvider]
+        : undefined;
+
+      if (!selectedProvider || !selectedApiKey) {
+        return res.status(400).json({
+          success: false,
+          error: 'Could not determine a BYOK provider key for the requested OpenCode model',
+        });
+      }
+
+      const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
+      const sandboxExecUrl = `${daytonaUrl}/api/toolbox/${entry.id}/toolbox/process/execute`;
+      const { startSession, sendPrompt } = await import('./a2a/opencode-connector.service.js');
+
+      const session = await startSession({
+        projectId,
+        sandboxId: entry.id,
+        sandboxExecUrl,
+        daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+        model,
+        provider: selectedProvider,
+        apiKey: selectedApiKey,
+      });
+
+      const result = await sendPrompt({
+        projectId,
+        prompt,
+        sandboxExecUrl,
+        daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+      });
+
+      const text = result.parts
+        .filter((part) => part.type === 'text' || part.type === 'tool-result')
+        .map((part) => part.content)
+        .filter(Boolean)
+        .join('\n\n');
+
+      return res.json({
+        success: !result.error,
+        sessionId: session.opencodeSessionId || session.id,
+        text,
+        error: result.error,
+        output: JSON.stringify(result),
+      });
+    }
+
     const command = buildOpencodeSandboxCommand({
       prompt,
       model,
@@ -5145,11 +5181,9 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
     let exitCode: number | null = 0;
 
     if (isDaytonaSandbox(entry)) {
-      const dayCommand = command
-        .replace(/\/workspace\//g, '/home/daytona/')
-        .replace(/\/workspace(?=["'\s]|$)/g, '/home/daytona');
-      const result = await daytonaExec(entry.id, dayCommand, {
-        cwd: '/home/daytona',
+      const workDir = entry.daytonaWorkDir || '/workspace';
+      const result = await daytonaExec(entry.id, command, {
+        cwd: workDir,
         timeoutSecs: 15 * 60,
       });
       output = result.output;
@@ -5388,14 +5422,10 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
     if (result.ready && result.port) {
       entry.port = result.port;
       if (isDaytonaSandbox(entry)) {
-        const dc = getDaytonaClient();
-        const daytonaPreviewUrl = dc.getPreviewUrl(entry.id, result.port);
-        let effectivePreviewUrl = daytonaPreviewUrl;
+        const preview = await getDaytonaPreviewAccess(entry.id, result.port);
+        const effectivePreviewUrl = preview.url;
         try {
-          const zrokUpdated = await updateShareTarget(safeProjectId, result.port);
-          if (zrokUpdated) {
-            effectivePreviewUrl = getZrokPreviewUrl(safeProjectId) ?? daytonaPreviewUrl;
-          }
+          await updateShareTarget(safeProjectId, result.port);
         } catch (zrokErr) {
           logger.debug({ err: zrokErr, projectId: safeProjectId, port: result.port }, 'Zrok target update skipped');
         }
@@ -15454,7 +15484,7 @@ const codingRuntimeSelectionByProject = new Map<string, {
 app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
   const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt } = req.body;
-  if (!projectId || !sandboxId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and sandboxId required'));
+  if (!projectId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId required'));
   let resolvedRuntimeType = runtimeType;
   let autoSelection: { classification: unknown; routeDecision: unknown } | undefined;
 
@@ -15473,10 +15503,15 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
 
   const runtime = getRuntime(resolvedRuntimeType as never);
   if (!runtime) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${resolvedRuntimeType}`));
+  const entry = await getOrRecoverContainer(projectId);
+  if (!entry) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No active sandbox container for project'));
+  }
+  const resolvedSandboxId = isDaytonaSandbox(entry) ? entry.id : (sandboxId || entry.id);
   const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
   const session = await runtime.startSession({
-    projectId, sandboxId,
-    sandboxExecUrl: `${daytonaUrl}/api/toolbox/${sandboxId}/toolbox/process/execute`,
+    projectId, sandboxId: resolvedSandboxId,
+    sandboxExecUrl: `${daytonaUrl}/api/toolbox/${resolvedSandboxId}/toolbox/process/execute`,
     daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
     model, provider, apiKey,
   });
@@ -16145,11 +16180,13 @@ import { execFileSync } from 'child_process';
 /**
  * Detect the build output directory based on framework/package.json
  */
-function getContainerWorkspaceRoot(entry: { id: string; daytona?: boolean }): '/home/daytona' | '/workspace' {
-  return entry.daytona === true || daytonaSandboxIds.has(entry.id) ? '/home/daytona' : '/workspace';
+function getContainerWorkspaceRoot(entry: { id: string; daytona?: boolean; daytonaWorkDir?: string }): string {
+  return entry.daytona === true || daytonaSandboxIds.has(entry.id)
+    ? (entry.daytonaWorkDir || '/workspace')
+    : '/workspace';
 }
 
-async function detectBuildOutput(entry: ContainerEntry): Promise<{ buildCmd: string; outputDir: string; framework: string; workspaceRoot: '/home/daytona' | '/workspace' }> {
+async function detectBuildOutput(entry: ContainerEntry): Promise<{ buildCmd: string; outputDir: string; framework: string; workspaceRoot: string }> {
   const workspaceRoot = getContainerWorkspaceRoot(entry);
 
   // Read package.json to detect framework
