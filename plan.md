@@ -176,6 +176,39 @@ Near-term runtime work is only complete when the evidence shows:
   - keep this as post-runtime-reliability work
   - treat VNC and computer-use as an optional runtime class, not a dependency for fixing the main coding lane
 
+## Upstream Intake Rules
+
+When this plan pulls in external repos, the default rule is:
+
+- only use upstream repos that Recoder can directly clone into a Daytona workspace and exercise through normal file, process, log, test, or preview flows
+
+Reference shortlist:
+
+- [daytona-projects/can-be-fork-repos.md](/Users/arhansubasi/recoder.xyz/daytona-projects/can-be-fork-repos.md:1)
+
+Working standard:
+
+- no new external dependency should enter the near-term backlog unless it passes the direct-clone criteria in that file
+- reference-only repos can inform design, but they should not become implicit implementation dependencies
+- infra-heavy or desktop-first repos should not displace the current runtime-truth sequence
+
+Preferred upstream order for this plan:
+
+1. `daytonaio/daytona`
+2. `a2aproject/a2a-js`
+3. `browserbase/stagehand`
+4. `lightpanda-io/browser`
+5. `vercel-labs/agent-browser`
+6. `anomalyco/opencode`
+7. `e2b-dev/E2B` only for execution-substrate comparison
+
+Phase mapping:
+
+- Phase 1 should lean on `daytonaio/daytona` and `anomalyco/opencode` for runtime, file, process, and preview behavior validation
+- Phase 2 should lean on `a2aproject/a2a-js` for protocol and routing reference
+- Phase 3 may borrow from `browserbase/stagehand`, `lightpanda-io/browser`, and `vercel-labs/agent-browser` for browser-task and computer-use-adjacent patterns
+- no phase should assume a fork-first strategy unless upstream use has already failed for product-specific reasons
+
 ## Implementation Backlog
 
 Detailed ticket tracking stays in `bd`. This file defines the coding sequence and proof requirements.
@@ -202,6 +235,7 @@ Coding task format:
 | Harden follow-up edit verification | `recoder-web` verifier flow plus `docker-backend` file and preview paths | Ensure follow-up edits are validated against both file state and rendered preview output. | Successful two-turn verifier run ends with changed files and matching preview content. | Depends on stable preview readiness and mutation evidence. |
 | Stabilize sandbox-local fallback lane | `docker-backend` sandbox-local OpenCode bootstrap path | Make sandbox-local execution reliable enough to use when centralized transport fails. | Fallback path starts within the expected timeout window and completes a real mutation-backed run. | Blocked by current bootstrap speed and timeout instability. |
 | Reduce host-level false negatives | deploy and verifier environment on the Daytona host | Prevent disk pressure from masquerading as runtime regressions. | Verifier failures correlate to app/runtime bugs rather than host exhaustion during repeated runs. | Depends on host cleanup and capacity discipline outside the chat/runtime code path. |
+| Keep upstream runtime references cloneable | runtime research and implementation intake | Ensure any external runtime reference used during Phase 1 can be cloned and exercised directly in a Daytona workspace before it influences product code. | Every adopted external runtime reference is on the direct-clone shortlist or is filed as an exception in `bd`. | Depends on the direct-clone criteria in `daytona-projects/can-be-fork-repos.md`. |
 
 ## Phase 2: Agent Control Plane
 
@@ -224,6 +258,7 @@ Coding task format:
 | Unify execution history and artifacts | chat history, runtime logs, file evidence, and preview ownership surfaces | Share run history, artifacts, and preview ownership across Web, Agents, and PM views. | A run exposes prompt, runtime lane, logs, file evidence, and preview linkage in one shared history model. | Depends on artifact capture from existing runtime and preview paths. |
 | Integrate PM approval and handoff | PM approval and handoff surfaces around existing run flow | Make approval, reject, and handoff part of the run lifecycle instead of a separate manual layer. | A run can pause for PM approval and resume or hand off with preserved artifacts and ownership. | Depends on shared history and artifact linkage. |
 | Align BYOK-first control-plane billing follow-up | billing, quotas, and run accounting surfaces | Rework platform accounting around workflow control and connected agents instead of bundled token resale. | Billing follow-up is defined against run control-plane primitives, not treated as already solved. | Depends on stable run ownership, artifact retention, and approval surfaces. |
+| Keep protocol references upstream-first | A2A and control-plane integration intake | Use cloneable upstream protocol references before inventing new adapters or forking existing ones. | Control-plane work cites `a2aproject/a2a-js` or a documented `bd` exception when choosing a protocol implementation path. | Depends on the upstream intake rules above. |
 
 ## Phase 3: Agent OS Features
 
@@ -245,6 +280,7 @@ Coding task format:
 | Add audit trail and observability | execution history, runtime logs, and stuck-run debugging surfaces | Make it clear who ran what, where, when, and with which artifacts. | Debugging view can explain a stuck or failed run from logs, runtime lane, preview state, and file evidence. | Depends on shared artifact model and process-log capture. |
 | Promote Daytona primitives to first-class platform capabilities | coding runtime, file operations, process sessions, and preview surfaces | Treat process, file, and preview control as core platform capabilities rather than hidden implementation details. | Product surfaces can reference runtime sessions, file evidence, and preview ownership consistently. | Depends on Phase 1 and Phase 2 normalization work. |
 | Add optional computer-use runtime lane | existing desktop, browser automation, and screenshot-capable surfaces | Support desktop session lifecycle, GUI automation health, screenshot artifacts, and VNC/computer-use routing as an optional runtime class. | Computer-use run shows session start, health status, screenshot or visual artifact capture, and clean stop behavior without displacing the main coding lane. | Post-runtime-reliability work; depends on the Daytona computer-use lane being operationally viable. |
+| Keep browser-agent references runnable in Daytona | browser-task and computer-use-adjacent intake | Restrict Phase 3 upstream inputs to repos that can be cloned and exercised in a normal Daytona sandbox before adoption. | Browser or computer-use implementation work is based on a runnable upstream repo from the shortlist or a documented `bd` exception. | Depends on Phase 1 runtime truth and the upstream intake rules above. |
 
 ## Phase 4: Expansion Lanes
 
