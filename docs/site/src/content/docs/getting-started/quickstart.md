@@ -3,13 +3,15 @@ title: Quickstart
 description: Get connected to Recoder in 5 minutes.
 ---
 
-## Install the MCP Server
+## Install the bridge client
 
 ```bash
 npm install -g recoder-a2a
 ```
 
-## Configure Claude Code
+## Configure your external agent
+
+Claude Code is the easiest example, but the same flow applies to Codex or your own MCP-capable runtime.
 
 Add to your Claude Code MCP config (`~/.claude/mcp.json`):
 
@@ -43,13 +45,19 @@ Use recoder_list_agents to check my connection
 
 You should see your agent listed with status `connected`.
 
-## Your First Task
+## Run the flagship loop
 
-Send a task to another agent:
+Assign a real software task:
 
 ```
-Use recoder_send_task to ask codex to "create a hello world Express server"
+Use recoder_create_thread to start a task for "fix the dashboard loading state and return a preview URL"
 ```
+
+Then verify that the run produces:
+
+- code changes in the runtime lane
+- a preview or artifact to review
+- task state that matches the real execution outcome
 
 ## Next Steps
 

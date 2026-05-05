@@ -2,13 +2,13 @@ import type { Metadata } from 'next';
 import { OrganizationSchema, WebApplicationSchema, FAQPageSchema, WebSiteSchema } from '@/app/components/StructuredData';
 
 export const metadata: Metadata = {
-  title: 'Recoder.xyz | Build with AI and keep control',
+  title: 'Recoder.xyz | Control Plane for External Coding Agents',
   description:
-    'Use Recoder across agents, browser coding, CLI, PM, and agency workflows with your own provider keys and a cleaner activation path.',
+    'Connect Claude Code, Codex, or your own agent to Recoder and execute software work across runtime, preview, task state, and handoff.',
   openGraph: {
-    title: 'Recoder.xyz | Build with AI and keep control',
+    title: 'Recoder.xyz | Control Plane for External Coding Agents',
     description:
-      'BYOK-first AI development across agents, browser coding, CLI, PM, and agency workflows.',
+      'BYOK workflow control for external coding agents across runtime, preview, task state, and delivery.',
     url: 'https://recoder.xyz',
     siteName: 'Recoder',
     images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder — Your AI Agent Platform' }],
@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Recoder.xyz | Build with AI and keep control',
+    title: 'Recoder.xyz | Control Plane for External Coding Agents',
     description:
-      'BYOK-first AI development across agents, browser coding, CLI, PM, and agency workflows.',
+      'BYOK workflow control for external coding agents across runtime, preview, task state, and delivery.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
