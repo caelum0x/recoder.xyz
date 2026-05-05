@@ -5063,6 +5063,7 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
                 return typeof content === 'string' ? content : JSON.stringify(content);
               }
             : undefined,
+          readSandboxFile: sandboxId ? daytonaReadFile : undefined,
           writeSandboxFile: sandboxId ? daytonaWriteFile : undefined,
         });
       } catch (handlerErr: any) {
