@@ -129,6 +129,7 @@ export class DaytonaClient {
   private defaultSnapshot: string;
   private timeoutMs: number;
   private _toolboxProxyUrl: string | null;
+  private workDirCache = new Map<string, string>();
 
   constructor(config?: DaytonaClientConfig) {
     this.baseUrl = (config?.baseUrl || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api').replace(/\/$/, '');
@@ -347,6 +348,28 @@ export class DaytonaClient {
    */
   async getSandbox(sandboxId: string): Promise<DaytonaSandboxInfo> {
     return this.request<DaytonaSandboxInfo>('GET', `/sandbox/${sandboxId}`);
+  }
+
+  rememberWorkDir(sandboxId: string, workDir: string | null | undefined): void {
+    if (!workDir) return;
+    this.workDirCache.set(sandboxId, workDir);
+  }
+
+  async getWorkDir(sandboxId: string): Promise<string> {
+    const cached = this.workDirCache.get(sandboxId);
+    if (cached) {
+      return cached;
+    }
+
+    const result = await this.toolboxRequest<{ dir?: string }>(
+      'GET',
+      sandboxId,
+      '/work-dir',
+    );
+
+    const workDir = result?.dir || '/home/daytona';
+    this.workDirCache.set(sandboxId, workDir);
+    return workDir;
   }
 
   /**
