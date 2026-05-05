@@ -11,14 +11,13 @@ import { useSession } from '@/lib/session-provider';
 import Link from 'next/link';
 import { SiteHeader } from '@/components/SiteHeader';
 import { 
-  Terminal,
   Sparkles,
   Check,
   ArrowRight,
-  Zap,
   Shield,
-  Code2,
-  Globe
+  Bot,
+  Workflow,
+  Terminal,
 } from 'lucide-react';
 import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
@@ -72,24 +71,24 @@ export default function WelcomePage() {
 
   const features = [
     {
-      icon: Zap,
-      title: 'Access 50+ AI Models',
-      description: 'Claude, GPT-4, Gemini, Llama, and more - all in one place',
+      icon: Bot,
+      title: 'Connect External Agents',
+      description: 'Bring Claude Code, Codex, or your own runtime into one shared execution system',
     },
     {
-      icon: Code2,
-      title: 'Multiple Platforms',
-      description: 'Web, CLI, VS Code extension, and API access',
+      icon: Terminal,
+      title: 'Run Real Software Work',
+      description: 'Use the runtime lane for code changes, preview, logs, and verification instead of chat-only demos',
     },
     {
       icon: Shield,
-      title: 'Production Ready',
-      description: 'Real, working code - not mock implementations',
+      title: 'Keep Human Control',
+      description: 'Approvals, artifacts, and handoff stay visible to your team before anything ships',
     },
     {
-      icon: Globe,
-      title: 'Enterprise Features',
-      description: 'Team collaboration, usage tracking, and analytics',
+      icon: Workflow,
+      title: 'Scale the Same Loop',
+      description: 'Start with one agent and expand into PM, approvals, and repeatable delivery workflows',
     },
   ];
 
@@ -108,10 +107,10 @@ export default function WelcomePage() {
               Welcome to Recoder!
             </h1>
             <p className="text-2xl text-gray-400 mb-4">
-              Let's get you set up in just a few steps
+              Set up the first agent-work loop
             </p>
             <p className="text-lg text-gray-500">
-              This takes only a couple of minutes. We&apos;ll help you connect your provider keys and reach a real first project fast.
+              This takes only a couple of minutes. We&apos;ll help you connect your provider keys, wire up an external agent, and reach a real software task fast.
             </p>
           </div>
 
@@ -143,8 +142,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">1</span>
                 </div>
                 <div>
-                  <div className="font-medium">Tell us about yourself</div>
-                  <div className="text-sm text-gray-400">Your role and how you'll use Recoder</div>
+                  <div className="font-medium">Tell us about your workflow</div>
+                  <div className="text-sm text-gray-400">Your role and the kind of software work you want agents to execute</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -152,8 +151,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">2</span>
                 </div>
                 <div>
-                  <div className="font-medium">Connect your provider</div>
-                  <div className="text-sm text-gray-400">Add OpenRouter, OpenAI, Anthropic, or Google when you are ready</div>
+                  <div className="font-medium">Connect your provider and agent</div>
+                  <div className="text-sm text-gray-400">Add OpenRouter, OpenAI, Anthropic, or Google, then move into the external-agent workflow</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -161,8 +160,8 @@ export default function WelcomePage() {
                   <Check className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="font-medium">Start building</div>
-                  <div className="text-sm text-gray-400">Head into the dashboard and choose the surface that fits the job</div>
+                  <div className="font-medium">Run one real task</div>
+                  <div className="text-sm text-gray-400">Use the dashboard and project surfaces to prove the loop across task, runtime, preview, and handoff</div>
                 </div>
               </div>
             </div>
