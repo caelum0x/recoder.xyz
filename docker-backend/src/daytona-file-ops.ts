@@ -49,6 +49,8 @@ export interface ContainerEntry {
   daytonaPreviewUrl?: string;
   /** Named Daytona session used for the dev server process */
   daytonaDevSessionId?: string;
+  /** Discovered Daytona sandbox workdir, e.g. /workspace or /home/daytona */
+  daytonaWorkDir?: string;
 }
 
 /**
