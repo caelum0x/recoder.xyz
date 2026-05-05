@@ -61,6 +61,7 @@ const toastAnimation = cssTransition({
 
 const logger = createScopedLogger('ChatClient');
 const CODE_CONTEXT_LOAD_TIMEOUT_MS = 2500;
+const SAVE_ALL_FILES_TIMEOUT_MS = 3000;
 
 export function Chat() {
   renderLogger.trace('Chat');
@@ -720,7 +721,16 @@ export const ChatImpl = memo(({ chatId, projectId, projectName, projectFramework
      * happy case to be no unsaved files and I would expect users to save their changes
      * before they send another message.
      */
-    await workbenchStore.saveAllFiles();
+    try {
+      await Promise.race([
+        workbenchStore.saveAllFiles(),
+        new Promise((_, reject) => {
+          window.setTimeout(() => reject(new Error('saveAllFiles timed out')), SAVE_ALL_FILES_TIMEOUT_MS);
+        }),
+      ]);
+    } catch (error) {
+      logger.warn('Proceeding without waiting for saveAllFiles:', error);
+    }
 
     // Load code context for AI awareness before sending
     // This helps AI understand existing code when modifying files
