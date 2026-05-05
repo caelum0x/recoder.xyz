@@ -15,7 +15,7 @@
 import { createRecoderOpencodeClient, type PromptInput } from '@recoder/shared/opencode-client';
 import { createLogger } from '../logger';
 import { getDaytonaClient } from '../daytona-client.js';
-import { getDaytonaPreviewAccess } from '../daytona-preview.js';
+import { getDaytonaPreviewAccess, type DaytonaPreviewAccess } from '../daytona-preview.js';
 
 const logger = createLogger('opencode-connector');
 
@@ -47,6 +47,7 @@ export interface OpenCodeSession {
   opencodeSessionId?: string;
   model?: string;
   providerKeys?: ProviderKeyMap;
+  previewAccess?: DaytonaPreviewAccess;
 }
 
 export interface PromptResult {
@@ -147,20 +148,40 @@ function buildSandboxAwareConfig(workDir: string, previewUrlPattern: string): st
   });
 }
 
+async function refreshPreviewAccess(session: OpenCodeSession, force = false): Promise<DaytonaPreviewAccess> {
+  if (!force && session.previewAccess) {
+    return session.previewAccess;
+  }
+
+  const preview = await getDaytonaPreviewAccess(session.sandboxId, SERVER_PORT, { preferSigned: false });
+  session.previewAccess = preview;
+  session.serverUrl = preview.url.replace(/\/$/, '');
+  return preview;
+}
+
 function createPreviewFetch(session: OpenCodeSession) {
   return async (input: RequestInfo | URL, init?: RequestInit) => {
-    const headers = new Headers(init?.headers || {});
-    headers.set('X-Daytona-Skip-Preview-Warning', 'true');
-    headers.set('X-Daytona-Disable-CORS', 'true');
-    const preview = await getDaytonaPreviewAccess(session.sandboxId, SERVER_PORT, { preferSigned: false });
-    if (preview.token) {
-      headers.set('X-Daytona-Preview-Token', preview.token);
+    const runFetch = async (forceRefresh = false) => {
+      const headers = new Headers(init?.headers || {});
+      headers.set('X-Daytona-Skip-Preview-Warning', 'true');
+      headers.set('X-Daytona-Disable-CORS', 'true');
+      const preview = await refreshPreviewAccess(session, forceRefresh);
+      if (preview.token) {
+        headers.set('X-Daytona-Preview-Token', preview.token);
+      }
+
+      return fetch(input, {
+        ...init,
+        headers,
+      });
+    };
+
+    const response = await runFetch(false);
+    if (response.status !== 401 && response.status !== 403) {
+      return response;
     }
 
-    return fetch(input, {
-      ...init,
-      headers,
-    });
+    return runFetch(true);
   };
 }
 
@@ -213,7 +234,7 @@ async function createDurableOpencodeSession(session: OpenCodeSession): Promise<v
 
 function shouldRecreateOpencodeSession(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /failed \(502\)|failed \(404\)|session.*not found|Bad Gateway|ECONNRESET|ECONNREFUSED/i.test(message);
+  return /failed \((401|403|404|502)\)|Unauthorized|Forbidden|session.*not found|Bad Gateway|ECONNRESET|ECONNREFUSED/i.test(message);
 }
 
 export async function startSession(params: {
@@ -276,8 +297,7 @@ export async function startSession(params: {
 
     session.serverCommandId = serverCommand.cmdId;
 
-    const preview = await getDaytonaPreviewAccess(params.sandboxId, SERVER_PORT, { preferSigned: false });
-    session.serverUrl = preview.url.replace(/\/$/, '');
+    await refreshPreviewAccess(session, true);
 
     await waitForServerReady(session);
 
@@ -340,6 +360,7 @@ export async function sendPrompt(params: {
         throw err;
       }
       logger.warn({ err, projectId: params.projectId }, 'Sandbox-local OpenCode prompt failed; recreating session and retrying once');
+      await refreshPreviewAccess(session, true);
       await createDurableOpencodeSession(session);
       response = await runPrompt();
     }
