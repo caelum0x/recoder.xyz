@@ -18,7 +18,7 @@ export function OrganizationSchema() {
       email: 'support@recoder.xyz',
       contactType: 'Customer Support',
     },
-    description: 'BYOK-first AI development platform for agents, CLI, browser coding, PM, and agency workflows.',
+    description: 'Control plane for external coding agents executing software work across code, preview, task state, and handoff.',
   };
 
   return (
@@ -35,7 +35,7 @@ export function WebSiteSchema() {
     '@type': 'WebSite',
     name: 'Recoder.xyz',
     url: 'https://recoder.xyz',
-    description: 'BYOK-first AI development platform for agents, browser coding, CLI, PM, and agency workflows.',
+    description: 'Connect external coding agents to execute software work with BYOK workflow control and runtime visibility.',
   };
 
   return (
@@ -57,9 +57,9 @@ export function SoftwareApplicationSchema() {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: 'Bring your own provider key and use Recoder across CLI and browser surfaces.',
+      description: 'Bring your own provider keys and route external coding agents through Recoder workflow control.',
     },
-    description: 'Terminal-first AI coding tool with provider flexibility, agent workflows, and browser sync.',
+    description: 'Terminal and MCP entrypoint for external coding agents with BYOK routing and shared execution context.',
     downloadUrl: 'https://www.npmjs.com/package/recoder-code',
     screenshot: 'https://recoder.xyz/og-image.png',
   };
@@ -83,9 +83,9 @@ export function WebApplicationSchema() {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: 'Bring your own provider key and use the browser coding workspace directly.',
+      description: 'Bring your own provider keys and run software work in the browser runtime lane with preview capture.',
     },
-    description: 'Browser-based AI workspace with live preview, coding assistance, and BYOK provider support.',
+    description: 'Browser runtime lane for connected coding agents with live preview, code execution, and artifact capture.',
     url: 'https://web.recoder.xyz',
     screenshot: 'https://recoder.xyz/og-image.png',
   };
@@ -105,10 +105,10 @@ export function FAQPageSchema() {
     mainEntity: [
       {
         '@type': 'Question',
-        name: 'Is Recoder.xyz really free?',
+        name: 'What does Recoder do?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Recoder is BYOK-first. You connect your own provider keys so you keep model choice and pay providers directly.',
+          text: 'Recoder connects external coding agents to runtime, preview, task state, and handoff so teams can execute real software work with control.',
         },
       },
       {
@@ -121,18 +121,18 @@ export function FAQPageSchema() {
       },
       {
         '@type': 'Question',
-        name: 'How does Web ↔ CLI sync work?',
+        name: 'What are teams paying for?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Recoder is designed so teams can move between browser and terminal surfaces without changing the overall workflow or provider setup.',
+          text: 'Teams pay Recoder for workflow control, approvals, artifacts, run visibility, and multi-surface execution rather than subsidized tokens.',
         },
       },
       {
         '@type': 'Question',
-        name: 'Which AI models are supported?',
+        name: 'How do external agents connect?',
         acceptedAnswer: {
           '@type': 'Answer',
-          text: 'Recoder supports a broad multi-provider model stack through connected vendors such as OpenRouter, Anthropic, OpenAI, and Google.',
+          text: 'Agents connect through MCP and A2A surfaces so Claude Code, Codex, and custom runtimes can execute tasks with shared task and artifact state.',
         },
       },
     ],
@@ -202,7 +202,7 @@ export function RecoderAgentsSchema() {
   return (
     <PlatformServiceSchema
       name="Recoder Agents"
-      description="AI agent IDE with multi-turn conversations, 40+ model support, agent configuration, snapshots, and real-time monitoring."
+      description="Connection and execution surface for external coding agents with run visibility, task routing, and runtime access."
       url="https://recoder.xyz/platform/agents"
       applicationCategory="DeveloperApplication"
     />
@@ -213,7 +213,7 @@ export function RecoderAgencySchema() {
   return (
     <PlatformServiceSchema
       name="Recoder Agency"
-      description="AI-powered agency workflows for managing clients, projects, quotes, and deliverables with template library and client portal."
+      description="Optional client-facing delivery wrapper for packaging approved outputs from the Recoder agent work loop."
       url="https://recoder.xyz/platform/agency"
       applicationCategory="DeveloperApplication"
     />
@@ -224,7 +224,7 @@ export function RecoderWebSchema() {
   return (
     <PlatformServiceSchema
       name="Recoder Web IDE"
-      description="Browser-based AI IDE supporting 40+ AI models via BYOK, real-time preview, integrated terminal, and instant deployment for full-stack development."
+      description="Browser runtime lane with preview, logs, terminal access, and artifact capture for connected external coding agents."
       url="https://recoder.xyz/platform/web"
       applicationCategory="DeveloperApplication"
     />
@@ -235,7 +235,7 @@ export function RecoderPMSchema() {
   return (
     <PlatformServiceSchema
       name="Recoder PM"
-      description="AI-powered project management with task tracking, sprint management, AI agent task assignment, cross-platform coordination, project analytics, and workflow automation."
+      description="Task state, approvals, artifacts, and status visibility that wrap around the Recoder software execution loop."
       url="https://recoder.xyz/platform/pm"
       applicationCategory="ProjectManagement"
     />
@@ -246,7 +246,7 @@ export function RecoderAPISchema() {
   return (
     <PlatformServiceSchema
       name="Recoder API"
-      description="Unified API gateway and task engine with real-time streaming, queue management, rate limiting, BYOK proxy, public API versioning, and A2A (Agent-to-Agent) protocol support."
+      description="API and bridge layer for A2A, MCP, BYOK routing, run history, and the external-agent control plane."
       url="https://recoder.xyz/platform/api"
       applicationCategory="DeveloperApplication"
     />

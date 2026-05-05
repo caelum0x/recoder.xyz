@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import { PlatformDetailPage } from '@/components/PlatformDetailPage';
 
 export const metadata: Metadata = {
-  title: 'Recoder Agents - Autonomous AI Development Environment | Recoder.xyz',
-  description: 'Recoder Agents is a full-featured autonomous AI coding environment with browser automation, sandboxed execution, and multi-model support. Build, debug, and deploy code with AI agents that handle complex development workflows end-to-end.',
+  title: 'Recoder Agents - External Agent Control Surface | Recoder.xyz',
+  description: 'Recoder Agents is the connection and execution surface for external coding agents. Route Claude Code, Codex, and custom runtimes through task state, preview, artifacts, and handoff.',
   openGraph: {
-    title: 'Recoder Agents - Autonomous AI Development Environment | Recoder.xyz',
-    description: 'Autonomous AI coding agents with browser automation, sandboxed execution, and multi-model support including Claude, GPT-4, and Gemini.',
+    title: 'Recoder Agents - External Agent Control Surface | Recoder.xyz',
+    description: 'Connect external coding agents to runtime, preview, artifacts, and human approvals.',
     url: 'https://recoder.xyz/platform/agents',
     siteName: 'Recoder.xyz',
     images: [
@@ -14,15 +14,15 @@ export const metadata: Metadata = {
         url: 'https://recoder.xyz/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Recoder Agents - Autonomous AI Development Environment',
+        alt: 'Recoder Agents - External Agent Control Surface',
       },
     ],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Recoder Agents - Autonomous AI Development Environment',
-    description: 'Autonomous AI coding agents with browser automation, sandboxed execution, and multi-model support.',
+    title: 'Recoder Agents - External Agent Control Surface',
+    description: 'Connect external coding agents to runtime, preview, artifacts, and human approvals.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -34,22 +34,22 @@ export default function AgentsPlatformPage() {
   return (
     <PlatformDetailPage
       serviceId="agents"
-      longDescription="Recoder Agents is a full-featured autonomous AI development environment. It provides AI agents that can write, debug, and deploy code independently. With browser automation, file management, and sandboxed execution, it handles complex development workflows end-to-end."
+      longDescription="Recoder Agents is the external-agent connection and dispatch surface inside Recoder. It gives Claude Code, Codex, and custom runtimes a stable identity, execution context, and shared task loop across runtime, preview, artifacts, and handoff."
       features={[
-        'Autonomous AI coding agents',
-        'Browser automation and web scraping',
-        'File system management and editing',
+        'External agent registration and identity',
+        'Task routing and execution dispatch',
         'Sandboxed code execution',
-        'Real-time collaboration',
+        'Preview, logs, and artifact capture',
+        'Human approval and handoff visibility',
         'Git integration and version control',
-        'Multi-model support (Claude, GPT-4, Gemini)',
+        'BYOK provider support',
         'Custom agent configurations',
       ]}
       useCases={[
-        'Build full-stack applications with AI agents doing the heavy lifting',
-        'Automate repetitive development tasks like testing and refactoring',
-        'Prototype new features rapidly with autonomous coding assistance',
-        'Debug complex issues with AI-powered code analysis',
+        'Connect Claude Code or Codex to a shared software execution workflow',
+        'Route bugs, features, and review work into one agent-controlled runtime lane',
+        'Track preview, artifacts, and approvals for real delivery work',
+        'Scale from one connected agent into multi-agent team workflows over time',
       ]}
     />
   );

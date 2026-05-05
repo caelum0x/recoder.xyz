@@ -12,9 +12,9 @@
     "learnMore": "Learn More"
   },
   "home": {
-    "title": "Build with AI",
-    "subtitle": "Web IDE + CLI with 40+ Models",
-    "description": "The only platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK (Bring Your Own Key).",
+    "title": "Connect your coding agents",
+    "subtitle": "External agent control plane",
+    "description": "Connect Claude Code, Codex, or your own agent to runtime, preview, task state, and handoff with BYOK workflow control.",
     "freeBeta": "FREE BETA - No Credit Card Required",
     "byok": "Bring Your Own Key",
     "models": "40+ AI Models",
