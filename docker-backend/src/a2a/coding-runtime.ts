@@ -94,6 +94,8 @@ interface StoredRuntimeConfig {
   model?: string;
   providerKeys?: OmoProviderKeys;
   sandboxId?: string;
+  provider?: string;
+  apiKey?: string;
 }
 
 function inferProviderFromModel(model?: string): RuntimeProviderKey | undefined {
@@ -147,6 +149,33 @@ function buildProviderKeys(provider?: string, apiKey?: string, model?: string): 
 }
 
 const centralizedOpenCodeConfigs = new Map<string, StoredRuntimeConfig>();
+const opencodeExecutionModeByProject = new Map<string, 'centralized' | 'legacy'>();
+
+function shouldFallbackToLegacyOpencode(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|socket hang up|Bad Gateway|502|503|504|timed out/i.test(message);
+}
+
+async function startLegacyOpenCodeSession(params: StartSessionParams): Promise<CodingSession> {
+  const { startSession } = await import('./opencode-connector.service.js');
+  const session = await startSession(params);
+  opencodeExecutionModeByProject.set(params.projectId, 'legacy');
+
+  return {
+    id: session.id,
+    projectId: params.projectId,
+    sandboxId: params.sandboxId,
+    threadId: params.threadId,
+    runtimeType: 'opencode',
+    status: session.status === 'ready' ? 'ready' : 'starting',
+    createdAt: session.createdAt,
+  };
+}
+
+async function sendLegacyOpenCodePrompt(params: SendPromptParams): Promise<PromptResult> {
+  const { sendPrompt } = await import('./opencode-connector.service.js');
+  return sendPrompt(params);
+}
 
 // ---------------------------------------------------------------------------
 // OpenCode adapter
@@ -160,80 +189,123 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
 
     async startSession(params: StartSessionParams): Promise<CodingSession> {
       if (useCentralized) {
-        const { getOrCreateSession } = await import('./opencode-service-adapter.js');
-        const session = await getOrCreateSession(params.projectId, {
-          directory: '/workspace',
-          title: `Project ${params.projectId}`,
-        });
-        centralizedOpenCodeConfigs.set(params.projectId, {
-          model: params.model,
-          providerKeys: buildProviderKeys(params.provider, params.apiKey, params.model),
-          sandboxId: params.sandboxId,
-        });
-        return {
-          id: session.id,
-          projectId: params.projectId,
-          sandboxId: params.sandboxId,
-          threadId: params.threadId,
-          runtimeType: 'opencode',
-          status: 'ready',
-          createdAt: new Date(session.time.created).toISOString(),
-        };
+        try {
+          const { getOrCreateSession } = await import('./opencode-service-adapter.js');
+          const session = await getOrCreateSession(params.projectId, {
+            directory: '/workspace',
+            title: `Project ${params.projectId}`,
+          });
+          centralizedOpenCodeConfigs.set(params.projectId, {
+            model: params.model,
+            providerKeys: buildProviderKeys(params.provider, params.apiKey, params.model),
+            sandboxId: params.sandboxId,
+            provider: params.provider,
+            apiKey: params.apiKey,
+          });
+          opencodeExecutionModeByProject.set(params.projectId, 'centralized');
+          return {
+            id: session.id,
+            projectId: params.projectId,
+            sandboxId: params.sandboxId,
+            threadId: params.threadId,
+            runtimeType: 'opencode',
+            status: 'ready',
+            createdAt: new Date(session.time.created).toISOString(),
+          };
+        } catch (error) {
+          if (!shouldFallbackToLegacyOpencode(error)) {
+            throw error;
+          }
+
+          logger.warn(
+            { err: error, projectId: params.projectId },
+            'Centralized OpenCode session start failed; falling back to sandbox-local OpenCode',
+          );
+          centralizedOpenCodeConfigs.delete(params.projectId);
+          return startLegacyOpenCodeSession(params);
+        }
       }
 
-      const { startSession } = await import('./opencode-connector.service.js');
-      const session = await startSession(params);
-      return {
-        id: session.id,
-        projectId: params.projectId,
-        sandboxId: params.sandboxId,
-        threadId: params.threadId,
-        runtimeType: 'opencode',
-        status: session.status === 'ready' ? 'ready' : 'starting',
-        createdAt: session.createdAt,
-      };
+      return startLegacyOpenCodeSession(params);
     },
 
     async sendPrompt(params: SendPromptParams): Promise<PromptResult> {
-      if (useCentralized) {
-        const { handleOpencodeServicePrompt } = await import('./opencode-service-handler.js');
+      const executionMode = opencodeExecutionModeByProject.get(params.projectId);
+
+      if (useCentralized && executionMode !== 'legacy') {
         const runtimeConfig = centralizedOpenCodeConfigs.get(params.projectId);
-        const { createRecoderOpencodeClient } = await import('@recoder/shared/opencode-client');
-        const { daytonaWriteFile } = await import('../daytona-file-ops.js');
-        const client = createRecoderOpencodeClient({
-          baseUrl: process.env.OPENCODE_SERVICE_URL!,
-          password: process.env.OPENCODE_SERVER_PASSWORD,
-          username: process.env.OPENCODE_SERVER_USERNAME,
-        });
-        const result = await handleOpencodeServicePrompt({
-          projectId: params.projectId,
-          prompt: params.prompt,
-          model: runtimeConfig?.model,
-          providerKeys: runtimeConfig?.providerKeys,
-          directory: '/workspace',
-          sandboxId: runtimeConfig?.sandboxId,
-          readWorkspaceFile: async (path: string) => {
-            const content = await client.readFile(path, '/workspace');
-            return typeof content === 'string' ? content : JSON.stringify(content);
-          },
-          writeSandboxFile: daytonaWriteFile,
-        });
 
-        const textParts = [result.text]
-          .filter(Boolean);
+        try {
+          const { handleOpencodeServicePrompt } = await import('./opencode-service-handler.js');
+          const { createRecoderOpencodeClient } = await import('@recoder/shared/opencode-client');
+          const { daytonaWriteFile } = await import('../daytona-file-ops.js');
+          const client = createRecoderOpencodeClient({
+            baseUrl: process.env.OPENCODE_SERVICE_URL!,
+            password: process.env.OPENCODE_SERVER_PASSWORD,
+            username: process.env.OPENCODE_SERVER_USERNAME,
+          });
+          const result = await handleOpencodeServicePrompt({
+            projectId: params.projectId,
+            prompt: params.prompt,
+            model: runtimeConfig?.model,
+            providerKeys: runtimeConfig?.providerKeys,
+            directory: '/workspace',
+            sandboxId: runtimeConfig?.sandboxId,
+            readWorkspaceFile: async (path: string) => {
+              const content = await client.readFile(path, '/workspace');
+              return typeof content === 'string' ? content : JSON.stringify(content);
+            },
+            writeSandboxFile: daytonaWriteFile,
+          });
 
-        return {
-          messageId: (result.raw as { info?: { id?: string } } | undefined)?.info?.id || `opencode_${Date.now()}`,
-          parts: textParts.map((t: string) => ({ type: 'text' as const, content: t })),
-        };
+          if (!result.syncedFiles?.length) {
+            throw new Error('Centralized OpenCode completed without detectable file sync');
+          }
+
+          const textParts = [
+            result.text,
+            result.syncedFiles.length ? `Files changed: ${result.syncedFiles.join(', ')}` : '',
+          ].filter(Boolean);
+
+          return {
+            messageId: (result.raw as { info?: { id?: string } } | undefined)?.info?.id || `opencode_${Date.now()}`,
+            parts: textParts.map((t: string) => ({ type: 'text' as const, content: t })),
+          };
+        } catch (error) {
+          if (!shouldFallbackToLegacyOpencode(error) && !/without detectable file sync/i.test(error instanceof Error ? error.message : String(error))) {
+            throw error;
+          }
+
+          logger.warn(
+            { err: error, projectId: params.projectId },
+            'Centralized OpenCode prompt failed or produced no synced edits; falling back to sandbox-local OpenCode',
+          );
+
+          if (!runtimeConfig?.sandboxId) {
+            throw error;
+          }
+
+          await startLegacyOpenCodeSession({
+            projectId: params.projectId,
+            sandboxId: runtimeConfig.sandboxId,
+            sandboxExecUrl: params.sandboxExecUrl,
+            daytonaApiKey: params.daytonaApiKey,
+            model: runtimeConfig.model,
+            provider: runtimeConfig.provider,
+            apiKey: runtimeConfig.apiKey,
+          });
+
+          return sendLegacyOpenCodePrompt(params);
+        }
       }
 
-      const { sendPrompt } = await import('./opencode-connector.service.js');
-      return sendPrompt(params);
+      return sendLegacyOpenCodePrompt(params);
     },
 
     getState(projectId: string): CodingSession | undefined {
-      if (useCentralized) {
+      const executionMode = opencodeExecutionModeByProject.get(projectId);
+
+      if (useCentralized && executionMode !== 'legacy') {
         // Dynamic import not usable in sync function — check session map
         try {
           const adapter = require('./opencode-service-adapter.js');
@@ -271,15 +343,20 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
     },
 
     async dispose(projectId: string): Promise<void> {
-      if (useCentralized) {
+      const executionMode = opencodeExecutionModeByProject.get(projectId);
+
+      if (useCentralized && executionMode !== 'legacy') {
         const { disposeProjectSession } = await import('./opencode-service-adapter.js');
         await disposeProjectSession(projectId);
         centralizedOpenCodeConfigs.delete(projectId);
+        opencodeExecutionModeByProject.delete(projectId);
         return;
       }
 
       const { disposeSession, getSession } = await import('./opencode-connector.service.js');
       const session = getSession(projectId);
+      opencodeExecutionModeByProject.delete(projectId);
+      centralizedOpenCodeConfigs.delete(projectId);
       if (!session) return;
       await disposeSession({
         projectId,
