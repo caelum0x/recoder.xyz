@@ -26,6 +26,122 @@ Keep the live Recoder surfaces working end to end:
 | API Backend | `api.recoder.xyz` | No new public API blocker beyond sandbox/runtime coordination. |
 | Docs | `docs.recoder.xyz` | Live. |
 
+## Agent OS Direction
+
+### Product Thesis
+
+Recoder should become the agent OS for AI agents doing real software work.
+
+That means:
+
+- external agents like Claude Code, Codex, OpenCode, and custom runtimes connect to Recoder instead of being replaced by it
+- Recoder owns identity, task routing, runtime access, preview, artifacts, approvals, and handoff
+- model vendors keep improving raw intelligence while Recoder becomes the workflow and control layer around execution
+
+### Core Product Loop
+
+The platform should converge on one canonical loop:
+
+1. connect an agent
+2. assign a real task
+3. execute in a runtime lane
+4. capture preview, logs, files, and artifacts
+5. request approval or handoff
+6. repeat across more agents and more tasks
+
+### What Recoder Must Own
+
+- agent identity and session health
+- workspace and account authority
+- runtime selection and sandbox lifecycle
+- task state and execution history
+- artifact retention and preview capture
+- approvals, auditability, and delivery packaging
+
+### What Recoder Should Not Compete On
+
+- subsidized model access
+- generic chat UX
+- being the only coding agent runtime
+- hidden “AI magic” that cannot be verified from files, logs, or previews
+
+## Agent OS Transformation Plan
+
+### Phase 1: Make the flagship loop trustworthy
+
+Primary outcome:
+
+- one external coding agent can complete a real software task end to end in production without manual rescue
+
+Required work:
+
+- finish collapsing Web IDE build mode onto the Daytona-backed runtime lane
+- make sandbox creation, file mutation, preview health, and follow-up edits deterministic
+- remove dead-end transport failures and hidden legacy fallbacks
+- expose enough logs and artifacts that each run can be debugged from evidence
+
+### Phase 2: Turn the working loop into a real control plane
+
+Primary outcome:
+
+- multiple external agents can connect to the same Recoder workspace with visible ownership and run history
+
+Required work:
+
+- stable agent registry and session model
+- explicit task routing and runtime selection per task
+- shared artifact and preview model across surfaces
+- approvals, status, and handoff integrated into PM instead of bolted on
+- BYOK-first billing model aligned to workflow control, not token resale
+
+### Phase 3: Add operating-system features for agent teams
+
+Primary outcome:
+
+- Recoder becomes the default execution substrate for small AI-native dev teams
+
+Required work:
+
+- multi-agent routing by role, capability, and runtime health
+- durable audit trail for who ran what, where, and with which artifacts
+- workspace policies for deployment, retention, and approval gates
+- stronger observability for stuck runs, missing mutations, and preview drift
+- packaging and delivery surfaces for client-facing or stakeholder-facing outputs
+
+### Phase 4: Expand from dev wedge to broader agent work infrastructure
+
+Primary outcome:
+
+- the same control-plane primitives support adjacent agent workflows beyond the first coding wedge
+
+Possible expansion lanes:
+
+- product and planning agents operating on the same task graph
+- delivery and agency workflows wrapping proven implementation outputs
+- service-assisted or enterprise governance layers on top of the base platform
+
+## Strategic Priorities
+
+### 1. Runtime truth over surface count
+
+- do not add more product breadth until the coding loop is reliable
+- if the runtime says success but files did not change, that is a product failure
+
+### 2. BYOK platform fee over token arbitrage
+
+- charge for workflow control, approvals, observability, retention, and connected-agent capacity
+- better models should increase Recoder value without forcing Recoder to subsidize usage
+
+### 3. External-agent compatibility over closed-world assumptions
+
+- Recoder should integrate with the agents users already prefer
+- connector health, session recovery, and task interop matter more than inventing another isolated assistant
+
+### 4. Evidence-first execution
+
+- previews, logs, diffs, and artifacts must stay aligned
+- every major product claim should be provable by live verifier runs or production evidence
+
 ## Verified Working
 
 ### Preview / Sandbox Baseline
