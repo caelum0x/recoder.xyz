@@ -212,21 +212,6 @@ async function sendPrompt(page, prompt) {
   await textarea.waitFor({ state: 'visible', timeout: 30000 });
   await textarea.focus();
   await textarea.fill(prompt);
-
-  const submitButton = page
-    .locator('button[aria-label*="Send message"], button[title*="Send message"], button[type="submit"]')
-    .first();
-  if (await submitButton.isVisible().catch(() => false)) {
-    await page.waitForFunction(() => {
-      const button = document.querySelector('button[aria-label*="Send message"], button[title*="Send message"], button[type="submit"]');
-      return Boolean(button && !(button instanceof HTMLButtonElement && button.disabled));
-    }, { timeout: 5000 }).catch(() => {});
-    await submitButton.click({ timeout: 3000 }).catch(async () => {
-      await textarea.press('Enter');
-    });
-    return;
-  }
-
   await textarea.press('Enter');
 }
 
