@@ -238,7 +238,7 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
         try {
           const { handleOpencodeServicePrompt } = await import('./opencode-service-handler.js');
           const { createRecoderOpencodeClient } = await import('@recoder/shared/opencode-client');
-          const { daytonaWriteFile } = await import('../daytona-file-ops.js');
+          const { daytonaReadFile, daytonaWriteFile } = await import('../daytona-file-ops.js');
           const client = createRecoderOpencodeClient({
             baseUrl: process.env.OPENCODE_SERVICE_URL!,
             password: process.env.OPENCODE_SERVER_PASSWORD,
@@ -255,6 +255,7 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
               const content = await client.readFile(path, '/workspace');
               return typeof content === 'string' ? content : JSON.stringify(content);
             },
+            readSandboxFile: daytonaReadFile,
             writeSandboxFile: daytonaWriteFile,
           });
 

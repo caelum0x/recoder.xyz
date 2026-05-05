@@ -275,6 +275,67 @@ describe('opencode-service-handler', () => {
       expect(result.syncedFiles).toEqual(['hello.txt']);
     });
 
+    it('skips sandbox sync when the file content is unchanged', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm_same', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          {
+            type: 'text',
+            text: 'Updated `/workspace/src/App.tsx`.',
+          },
+        ],
+      });
+
+      const readWorkspaceFile = vi.fn().mockResolvedValue('same content');
+      const readSandboxFile = vi.fn().mockResolvedValue('same content');
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'update app',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        readSandboxFile,
+        writeSandboxFile,
+      });
+
+      expect(readWorkspaceFile).toHaveBeenCalledWith('src/App.tsx');
+      expect(readSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx');
+      expect(writeSandboxFile).not.toHaveBeenCalled();
+      expect(result.syncedFiles).toEqual([]);
+    });
+
+    it('writes the sandbox file when it does not exist yet', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm_new', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          {
+            type: 'text',
+            text: 'Created `/workspace/src/App.tsx`.',
+          },
+        ],
+      });
+
+      const readWorkspaceFile = vi.fn().mockResolvedValue('new content');
+      const readSandboxFile = vi.fn().mockRejectedValue(new Error('ENOENT: no such file or directory'));
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'create app',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        readSandboxFile,
+        writeSandboxFile,
+      });
+
+      expect(readSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx');
+      expect(writeSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx', 'new content');
+      expect(result.syncedFiles).toEqual(['src/App.tsx']);
+    });
+
     it('syncs files from patch parts that expose a files array', async () => {
       mocks.promptProject.mockResolvedValueOnce({
         info: { id: 'm_patch', sessionID: 's', role: 'assistant', time: { created: 0 } },
