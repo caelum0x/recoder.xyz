@@ -15555,6 +15555,11 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
     const classification = classifyIntent(prompt);
     const routeDecision = routeByCategory(classification);
     resolvedRuntimeType = routeDecision.runtimeType;
+
+    if (resolvedRuntimeType === 'native') {
+      resolvedRuntimeType = 'opencode';
+    }
+
     autoSelection = { classification, routeDecision };
   }
 
