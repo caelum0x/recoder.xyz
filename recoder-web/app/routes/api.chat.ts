@@ -326,6 +326,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   // console.log(`[Chat API] Authenticated user: ${session.user.email}`);
 
   let messages: Messages;
+  let runtimeMessages: Messages;
   let provider: string = 'openrouter'; // Default provider
   let model: string | undefined;
   let requestBody: any;
@@ -394,6 +395,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     }
 
     messages = validation.sanitized as Messages;
+    runtimeMessages = JSON.parse(JSON.stringify(messages)) as Messages;
   } catch (error) {
     logger.error('Failed to parse request');
     chatDebug('parse request error', error instanceof Error ? error.message : String(error));
@@ -716,13 +718,37 @@ IMPORTANT:
       !requestBody.projectContext?.trim()
     ) {
       try {
-        const workspaceStateResponse = await fetch(
+        let workspaceStateResponse = await fetch(
           `${dockerUrl}/api/workspace-state/${encodeURIComponent(requestBody.projectId)}`,
           {
             method: 'GET',
             headers: dockerHeaders,
           },
         );
+
+        if (workspaceStateResponse.status === 404) {
+          const ensureContainerResponse = await fetch(
+            `${dockerUrl}/api/container`,
+            {
+              method: 'POST',
+              headers: dockerHeaders,
+              body: JSON.stringify({ projectId: requestBody.projectId }),
+            },
+          );
+
+          if (!ensureContainerResponse.ok) {
+            const details = await ensureContainerResponse.text().catch(() => '');
+            logger.warn(`Sandbox ensure failed for ${requestBody.projectId}: ${ensureContainerResponse.status} ${details.slice(0, 300)}`);
+          } else {
+            workspaceStateResponse = await fetch(
+              `${dockerUrl}/api/workspace-state/${encodeURIComponent(requestBody.projectId)}`,
+              {
+                method: 'GET',
+                headers: dockerHeaders,
+              },
+            );
+          }
+        }
 
         const workspaceState = workspaceStateResponse.ok
           ? await workspaceStateResponse.json() as { hasFiles?: boolean; hasPackageJson?: boolean }
@@ -764,10 +790,18 @@ IMPORTANT:
     // `cloneGitHub` when it can't diagnose the error, which blows away the
     // project and makes recovery impossible. Strip those action types from
     // the available actions for auto-fix turns only.
-    // ── Default project chat: prefer Pi, then OpenCode ──
-    // Pi is the more reliable live path for project creation/editing right now.
-    // Keep OpenCode as a fallback when Pi is unavailable.
-    if (requestBody.projectId) {
+    //
+    // Project-chat routing:
+    // - `build` mode must stay on the normal coding/action path so starter seeding,
+    //   file diffs, targeted edits, and follow-up preview-driven iterations work.
+    // - Non-build project chats can still prefer Pi, then OpenCode, as a lighter
+    //   direct-sandbox lane.
+    const shouldPreferPiProjectPath =
+      Boolean(requestBody.projectId) &&
+      requestBody.chatMode !== 'build' &&
+      requestBody.chatMode !== 'deep-coding';
+
+    if (shouldPreferPiProjectPath) {
       try {
         const providerKeys = {
           openrouter: projectOpenrouterKey,
@@ -858,7 +892,7 @@ IMPORTANT:
       }
     }
 
-    if (chatMode === 'deep-coding') {
+    if (requestBody.projectId && (chatMode === 'build' || chatMode === 'deep-coding')) {
       const { executeCodingRuntimeChat } = await import('~/lib/.server/llm/coding-runtime-exec');
       const runtimeStream = await executeCodingRuntimeChat({
         context,
@@ -868,7 +902,7 @@ IMPORTANT:
         provider,
         model,
         systemPrompt,
-        messages,
+        messages: runtimeMessages,
       });
 
       stream.switchSource(runtimeStream);
@@ -1042,6 +1076,10 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
         if (editIntent) {
           // Route to different strategies based on intent type
           let strategyPrompt = '';
+          const isStarterLeafTarget = editIntent.targetFiles.some((file) =>
+            ['src/App.tsx', 'src/App.jsx', 'app/page.tsx', 'index.html', 'src/index.css'].includes(file)
+          );
+          const buildModeIsActive = requestBody.chatMode === 'build';
 
           switch (editIntent.type) {
             case EditType.FULL_REBUILD:
@@ -1098,6 +1136,28 @@ RULES:
 - For follow-up edits on existing files, prefer readFile includeLineHashes="true" and reuse lineRef/startLineRef/endLineRef on edit actions so stale edits are rejected
 - Only change what the user asked for — nothing else`;
               break;
+          }
+
+          if (buildModeIsActive) {
+            strategyPrompt += `
+
+BUILD MODE FOLLOW-UP RULES:
+- If a target file already exists, DO NOT invent oldString snippets.
+- Only emit str_replace when the oldString appears verbatim in the provided file context or in a prior readFile result.
+- If you do not have an exact oldString match, use readFile includeLineHashes="true" first, then use lineRef/startLineRef/endLineRef on the edit action.
+- For small leaf UI files such as src/App.tsx, app/page.tsx, index.html, or src/index.css, prefer a complete type="file" rewrite over brittle str_replace when the requested change is mostly visual/layout text changes.
+- Never rewrite config files unless the user explicitly asked for that file.
+`;
+          }
+
+          if (isStarterLeafTarget) {
+            strategyPrompt += `
+
+STARTER-BASED FILE SAFETY:
+- This looks like a starter-based leaf file.
+- Prefer replacing the full target component/page file with a coherent updated version instead of guessing two separate str_replace operations.
+- Do NOT target placeholder wrappers like <div className="App"> unless that exact text exists in the provided context.
+`;
           }
 
           messages.push({
