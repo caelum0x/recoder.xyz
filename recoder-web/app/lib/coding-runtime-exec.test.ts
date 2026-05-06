@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildRuntimePrompt,
+  hasObservableMutation,
   containsLegacyRuntimeMarkup,
   extractCodingRuntimeText,
   inferCodingRuntimeProvider,
@@ -60,5 +61,23 @@ Keep real runtime behavior.`);
     expect(prompt).not.toContain('str_replace');
     expect(prompt).not.toContain('Use recoderAction');
     expect(prompt).not.toContain('Use str_replace');
+  });
+
+  it('detects observable mutation across starter entry files', () => {
+    const before = {
+      files: {
+        '/src/App.tsx': 'old',
+        '/index.html': null,
+      },
+    };
+    const after = {
+      files: {
+        '/src/App.tsx': 'new',
+        '/index.html': null,
+      },
+    };
+
+    expect(hasObservableMutation(before as any, after as any)).toBe(true);
+    expect(hasObservableMutation(before as any, before as any)).toBe(false);
   });
 });
