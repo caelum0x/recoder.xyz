@@ -55,6 +55,10 @@ type MutationProofSnapshot = {
   files: Record<string, string | null>;
 };
 
+type LegacyFileMutation =
+  | { type: 'file'; path: string; content: string }
+  | { type: 'str_replace'; path: string; oldString: string; newString: string };
+
 function pruneExpiredSessions(now = Date.now()): void {
   for (const [key, value] of runtimeSessionsByChat.entries()) {
     if (now - value.updatedAt > SESSION_TTL_MS) {
@@ -274,6 +278,41 @@ function createTextStream(text: string): ReadableStream<Uint8Array> {
   });
 }
 
+function decodeXmlAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+export function extractLegacyFileMutations(text: string): LegacyFileMutation[] {
+  const mutations: LegacyFileMutation[] = [];
+  let match: RegExpExecArray | null;
+
+  const fileRegex = /<recoderAction[^>]*type="file"[^>]*filePath="([^"]+)"[^>]*>([\s\S]*?)<\/recoderAction>/gi;
+  while ((match = fileRegex.exec(text)) !== null) {
+    mutations.push({
+      type: 'file',
+      path: match[1],
+      content: match[2].trim(),
+    });
+  }
+
+  const replaceRegex = /<recoderAction[^>]*type="str_replace"[^>]*filePath="([^"]+)"[^>]*oldString="([^"]*)"[^>]*newString="([^"]*)"[^>]*\/?>/gi;
+  while ((match = replaceRegex.exec(text)) !== null) {
+    mutations.push({
+      type: 'str_replace',
+      path: match[1],
+      oldString: decodeXmlAttr(match[2]),
+      newString: decodeXmlAttr(match[3]),
+    });
+  }
+
+  return mutations;
+}
+
 async function readProjectFile(
   dockerUrl: string,
   headers: HeadersInit,
@@ -300,6 +339,25 @@ async function readProjectFile(
   }
 
   return typeof payload === 'string' ? payload : JSON.stringify(payload);
+}
+
+async function writeProjectFile(
+  dockerUrl: string,
+  headers: HeadersInit,
+  projectId: string,
+  path: string,
+  content: string,
+): Promise<void> {
+  const response = await fetch(`${dockerUrl}/api/file/${encodeURIComponent(projectId)}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ path, content }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => '');
+    throw new Error(`Mutation proof file write failed with ${response.status}. ${details || 'No additional details were returned.'}`);
+  }
 }
 
 async function captureMutationProofSnapshot(
@@ -331,6 +389,55 @@ function buildNoMutationRetryPrompt(prompt: string): string {
     'Retry the same task now:',
     prompt,
   ].join('\n\n');
+}
+
+async function applyLegacyFileMutations(
+  dockerUrl: string,
+  headers: HeadersInit,
+  projectId: string,
+  text: string,
+): Promise<{ appliedCount: number; touchedPaths: string[] }> {
+  const mutations = extractLegacyFileMutations(text);
+  const touchedPaths = new Set<string>();
+
+  for (const mutation of mutations) {
+    if (mutation.type === 'file') {
+      await writeProjectFile(dockerUrl, headers, projectId, mutation.path, mutation.content);
+      touchedPaths.add(mutation.path);
+      continue;
+    }
+
+    const currentContent = await readProjectFile(dockerUrl, headers, projectId, mutation.path);
+    if (currentContent === null || !currentContent.includes(mutation.oldString)) {
+      continue;
+    }
+
+    const nextContent = currentContent.replace(mutation.oldString, mutation.newString);
+    if (nextContent !== currentContent) {
+      await writeProjectFile(dockerUrl, headers, projectId, mutation.path, nextContent);
+      touchedPaths.add(mutation.path);
+    }
+  }
+
+  return {
+    appliedCount: touchedPaths.size,
+    touchedPaths: [...touchedPaths],
+  };
+}
+
+async function ensurePreviewBootstrap(
+  dockerUrl: string,
+  headers: HeadersInit,
+  projectId: string,
+): Promise<void> {
+  await fetch(`${dockerUrl}/api/dev-server/start`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      projectId,
+      framework: 'vite',
+    }),
+  }).catch(() => {});
 }
 
 async function ensureSandboxContainer(options: {
@@ -515,37 +622,49 @@ export async function executeCodingRuntimeChat(options: ExecuteCodingRuntimeChat
     let text = extractCodingRuntimeText(promptPayload);
 
     if (containsLegacyRuntimeMarkup(text)) {
-      clearRuntimeSession(options.projectId, options.chatId);
-      const basePrompt = buildRuntimePrompt({
-        systemPrompt: options.systemPrompt,
-        messages: options.messages,
-        hasSession: false,
-      });
-      prompt = buildLegacyMarkupRetryPrompt(basePrompt);
-
-      activeSession = await ensureRuntimeSession({
-        ...options,
+      const compatibilityApply = await applyLegacyFileMutations(
         dockerUrl,
         headers,
-        prompt,
-        provider: resolvedProvider,
-        apiKey,
-      });
+        options.projectId,
+        text,
+      );
 
-      const retryPayload = await executePrompt({
-        dockerUrl,
-        headers,
-        projectId: options.projectId,
-        runtimeType: activeSession.runtimeType,
-        prompt,
-      });
+      if (compatibilityApply.appliedCount > 0) {
+        await ensurePreviewBootstrap(dockerUrl, headers, options.projectId);
+        text = `Applied direct file edits in the sandbox: ${compatibilityApply.touchedPaths.join(', ')}`;
+      } else {
+        clearRuntimeSession(options.projectId, options.chatId);
+        const basePrompt = buildRuntimePrompt({
+          systemPrompt: options.systemPrompt,
+          messages: options.messages,
+          hasSession: false,
+        });
+        prompt = buildLegacyMarkupRetryPrompt(basePrompt);
 
-      const retryErrorText = retryPayload.error || retryPayload.result?.error;
-      if (retryErrorText) {
-        return createTextStream(retryErrorText);
+        activeSession = await ensureRuntimeSession({
+          ...options,
+          dockerUrl,
+          headers,
+          prompt,
+          provider: resolvedProvider,
+          apiKey,
+        });
+
+        const retryPayload = await executePrompt({
+          dockerUrl,
+          headers,
+          projectId: options.projectId,
+          runtimeType: activeSession.runtimeType,
+          prompt,
+        });
+
+        const retryErrorText = retryPayload.error || retryPayload.result?.error;
+        if (retryErrorText) {
+          return createTextStream(retryErrorText);
+        }
+
+        text = extractCodingRuntimeText(retryPayload);
       }
-
-      text = extractCodingRuntimeText(retryPayload);
     }
 
     let mutationSnapshotAfter = await captureMutationProofSnapshot(
