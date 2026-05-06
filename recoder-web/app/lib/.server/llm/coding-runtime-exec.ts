@@ -40,6 +40,21 @@ interface CodingRuntimePromptResponse {
   parts?: Array<{ type?: string; content?: string; text?: string }>;
 }
 
+const MUTATION_PROOF_CANDIDATE_FILES = [
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/main.tsx',
+  '/src/main.jsx',
+  '/src/index.css',
+  '/app/page.tsx',
+  '/index.html',
+  '/package.json',
+] as const;
+
+type MutationProofSnapshot = {
+  files: Record<string, string | null>;
+};
+
 function pruneExpiredSessions(now = Date.now()): void {
   for (const [key, value] of runtimeSessionsByChat.entries()) {
     if (now - value.updatedAt > SESSION_TTL_MS) {
@@ -259,6 +274,65 @@ function createTextStream(text: string): ReadableStream<Uint8Array> {
   });
 }
 
+async function readProjectFile(
+  dockerUrl: string,
+  headers: HeadersInit,
+  projectId: string,
+  path: string,
+): Promise<string | null> {
+  const response = await fetch(`${dockerUrl}/api/file/${encodeURIComponent(projectId)}?path=${encodeURIComponent(path)}`, {
+    method: 'GET',
+    headers,
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => '');
+    throw new Error(`Mutation proof file read failed with ${response.status}. ${details || 'No additional details were returned.'}`);
+  }
+
+  const payload = await response.json().catch(async () => ({ content: await response.text() }));
+  if (payload && typeof payload === 'object' && 'content' in payload) {
+    return typeof payload.content === 'string' ? payload.content : JSON.stringify(payload.content);
+  }
+
+  return typeof payload === 'string' ? payload : JSON.stringify(payload);
+}
+
+async function captureMutationProofSnapshot(
+  dockerUrl: string,
+  headers: HeadersInit,
+  projectId: string,
+): Promise<MutationProofSnapshot> {
+  const entries = await Promise.all(
+    MUTATION_PROOF_CANDIDATE_FILES.map(async (path) => [path, await readProjectFile(dockerUrl, headers, projectId, path)] as const),
+  );
+
+  return {
+    files: Object.fromEntries(entries),
+  };
+}
+
+export function hasObservableMutation(
+  before: MutationProofSnapshot,
+  after: MutationProofSnapshot,
+): boolean {
+  return Object.keys(after.files).some((path) => before.files[path] !== after.files[path]);
+}
+
+function buildNoMutationRetryPrompt(prompt: string): string {
+  return [
+    'The previous response did not produce any observable file changes in the project entry files.',
+    'Do not describe actions. Edit the real files in /workspace so the app changes on disk.',
+    'Prefer rewriting the existing app entry file directly (such as src/App.tsx, app/page.tsx, or index.html) instead of emitting abstract plans.',
+    'Retry the same task now:',
+    prompt,
+  ].join('\n\n');
+}
+
 async function ensureSandboxContainer(options: {
   dockerUrl: string;
   headers: HeadersInit;
@@ -370,6 +444,12 @@ export async function executeCodingRuntimeChat(options: ExecuteCodingRuntimeChat
       projectId: options.projectId,
     });
 
+    const mutationSnapshotBefore = await captureMutationProofSnapshot(
+      dockerUrl,
+      headers,
+      options.projectId,
+    );
+
     let activeSession = storedSession ?? await ensureRuntimeSession({
       ...options,
       dockerUrl,
@@ -465,6 +545,55 @@ export async function executeCodingRuntimeChat(options: ExecuteCodingRuntimeChat
       }
 
       text = extractCodingRuntimeText(retryPayload);
+    }
+
+    let mutationSnapshotAfter = await captureMutationProofSnapshot(
+      dockerUrl,
+      headers,
+      options.projectId,
+    );
+
+    if (!hasObservableMutation(mutationSnapshotBefore, mutationSnapshotAfter)) {
+      clearRuntimeSession(options.projectId, options.chatId);
+      const basePrompt = buildRuntimePrompt({
+        systemPrompt: options.systemPrompt,
+        messages: options.messages,
+        hasSession: false,
+      });
+      prompt = buildNoMutationRetryPrompt(basePrompt);
+
+      activeSession = await ensureRuntimeSession({
+        ...options,
+        dockerUrl,
+        headers,
+        prompt,
+        provider: resolvedProvider,
+        apiKey,
+      });
+
+      const retryPayload = await executePrompt({
+        dockerUrl,
+        headers,
+        projectId: options.projectId,
+        runtimeType: activeSession.runtimeType,
+        prompt,
+      });
+
+      const retryErrorText = retryPayload.error || retryPayload.result?.error;
+      if (retryErrorText) {
+        return createTextStream(retryErrorText);
+      }
+
+      text = extractCodingRuntimeText(retryPayload);
+      mutationSnapshotAfter = await captureMutationProofSnapshot(
+        dockerUrl,
+        headers,
+        options.projectId,
+      );
+
+      if (!hasObservableMutation(mutationSnapshotBefore, mutationSnapshotAfter)) {
+        return createTextStream('Deep Coding returned without any observable file mutation. The runtime must edit the real sandbox files before the run can be treated as successful.');
+      }
     }
 
     return createTextStream(text || 'Deep Coding completed, but it did not return a textual summary.');
