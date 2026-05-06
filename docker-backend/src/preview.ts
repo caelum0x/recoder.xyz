@@ -650,57 +650,39 @@ async function probeDaytonaPort(
   path: string = '/',
   previewAccess?: Awaited<ReturnType<typeof getDaytonaPreviewAccess>>,
 ): Promise<boolean> {
-  const proxyHost = getDaytonaProxyHost();
-  const proxyPort = getDaytonaProxyPort();
   const preview = previewAccess || await getDaytonaPreviewAccess(entry, port);
+  const targetUrl = new URL(preview.url);
+  targetUrl.pathname = path;
 
-  return await new Promise<boolean>((resolve) => {
-    const req = http.request({
-      hostname: proxyHost,
-      port: proxyPort,
-      path,
-      method: 'GET',
-      headers: buildDaytonaPreviewHeaders(preview),
-      timeout: 4000,
-    }, (resp) => {
-      const status = resp.statusCode || 0;
-      const contentType = String(resp.headers['content-type'] || '');
-      let body = '';
+  const response = await fetch(targetUrl.toString(), {
+    method: 'GET',
+    headers: {
+      Accept: '*/*',
+      'X-Daytona-Skip-Preview-Warning': 'true',
+      'X-Daytona-Disable-CORS': 'true',
+      ...(preview.token && !preview.signed
+        ? { 'X-Daytona-Preview-Token': preview.token }
+        : {}),
+    },
+    signal: AbortSignal.timeout(4000),
+  }).catch(() => null);
 
-      resp.setEncoding('utf8');
-      resp.on('data', (chunk: string) => {
-        if (body.length < 8192) {
-          body += chunk.slice(0, 8192 - body.length);
-        }
-      });
-      resp.on('end', () => {
-        const okStatus = status >= 200 && status < 400;
-        if (!okStatus) {
-          resolve(false);
-          return;
-        }
+  if (!response || !response.ok) {
+    return false;
+  }
 
-        if (path === '/' && looksLikeDirectoryListing(body, contentType)) {
-          resolve(false);
-          return;
-        }
+  const contentType = response.headers.get('content-type') || '';
+  const body = (await response.text().catch(() => '')).slice(0, 8192);
 
-        if (path === '/' && looksLikePreviewBuildError(body, contentType)) {
-          resolve(false);
-          return;
-        }
+  if (path === '/' && looksLikeDirectoryListing(body, contentType)) {
+    return false;
+  }
 
-        resolve(true);
-      });
-    });
+  if (path === '/' && looksLikePreviewBuildError(body, contentType)) {
+    return false;
+  }
 
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(false);
-    });
-    req.end();
-  });
+  return true;
 }
 
 async function detectDaytonaPortFromLogs(entry: { id: string }): Promise<number | null> {
