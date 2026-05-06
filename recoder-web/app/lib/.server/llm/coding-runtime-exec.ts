@@ -121,6 +121,30 @@ function summarizeConversation(messages: Messages, maxMessages = 8): string {
     .join('\n\n');
 }
 
+export function sanitizeRuntimeSystemPrompt(systemPrompt: string): string {
+  const stripped = systemPrompt
+    .replace(/<current_mode>[\s\S]*?<\/current_mode>/gi, '')
+    .replace(/<quality_standards>[\s\S]*?<\/quality_standards>/gi, '')
+    .replace(/<security_awareness>[\s\S]*?<\/security_awareness>/gi, '')
+    .replace(/<agentic_workflow>[\s\S]*?(?:<\/agentic_workflow>|$)/gi, '')
+    .replace(/<recoderArtifact[\s\S]*?<\/recoderArtifact>/gi, '')
+    .replace(/<recoderAction[\s\S]*?<\/recoderAction>/gi, '')
+    .replace(/<project_context>[\s\S]*?<\/project_context>/gi, '')
+    .replace(/<existing_files>[\s\S]*?<\/existing_files>/gi, '')
+    .replace(/\n{3,}/g, '\n\n');
+
+  return stripped
+    .split('\n')
+    .filter((line) => !/recoderAction|recoderArtifact|\bXML\b|type="file"|type="shell"|action tags?/i.test(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export function containsLegacyRuntimeMarkup(text: string): boolean {
+  return /<recoderArtifact|<recoderAction|<\/recoderArtifact>|<\/recoderAction>/i.test(text);
+}
+
 function buildRuntimePrompt(options: { systemPrompt: string; messages: Messages; hasSession: boolean }): string {
   const lastUserMessage = [...options.messages]
     .reverse()
@@ -132,21 +156,23 @@ function buildRuntimePrompt(options: { systemPrompt: string; messages: Messages;
     return [
       'Continue working in the existing sandbox session for this project.',
       'Edit files directly in the workspace, run commands/tests when needed, and keep going until the request is handled.',
-      'Do not emit <recoderAction> XML. Apply changes directly and return a concise plain-English summary.',
+      'Do not emit XML or describe hypothetical edits. Apply changes directly and return a concise plain-English summary.',
       'Latest user request:',
       lastUserText || 'No new user request was provided.',
     ].join('\n\n');
   }
 
+  const runtimeGuidance = sanitizeRuntimeSystemPrompt(options.systemPrompt);
+
   return [
     'You are working directly inside the user\'s live Recoder sandbox at /workspace.',
     'Edit files directly, run verification commands when useful, and return a concise plain-English summary of what changed.',
-    'Do not emit <recoderAction> XML or describe hypothetical edits. Make the changes in the repo.',
-    'Additional Recoder product guidance:',
-    options.systemPrompt,
+    'Do not emit XML, tool plans, or hypothetical edits. Make the changes in the repo.',
+    runtimeGuidance ? 'Additional product guidance:' : '',
+    runtimeGuidance,
     'Conversation transcript:',
     summarizeConversation(options.messages),
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
 }
 
 export function inferCodingRuntimeProvider(provider?: string, model?: string): RuntimeApiProvider | undefined {
@@ -221,6 +247,25 @@ function createTextStream(text: string): ReadableStream<Uint8Array> {
       controller.close();
     },
   });
+}
+
+async function ensureSandboxContainer(options: {
+  dockerUrl: string;
+  headers: HeadersInit;
+  projectId: string;
+}): Promise<void> {
+  const response = await fetch(`${options.dockerUrl}/api/container`, {
+    method: 'POST',
+    headers: options.headers,
+    body: JSON.stringify({
+      projectId: options.projectId,
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => '');
+    throw new Error(`Deep coding sandbox ensure failed with ${response.status}. ${details || 'No additional details were returned.'}`);
+  }
 }
 
 async function ensureRuntimeSession(options: ExecuteCodingRuntimeChatOptions & {
@@ -307,6 +352,12 @@ export async function executeCodingRuntimeChat(options: ExecuteCodingRuntimeChat
   });
 
   try {
+    await ensureSandboxContainer({
+      dockerUrl,
+      headers,
+      projectId: options.projectId,
+    });
+
     let activeSession = storedSession ?? await ensureRuntimeSession({
       ...options,
       dockerUrl,
@@ -368,7 +419,41 @@ export async function executeCodingRuntimeChat(options: ExecuteCodingRuntimeChat
       return createTextStream(errorText);
     }
 
-    const text = extractCodingRuntimeText(promptPayload);
+    let text = extractCodingRuntimeText(promptPayload);
+
+    if (containsLegacyRuntimeMarkup(text)) {
+      clearRuntimeSession(options.projectId, options.chatId);
+      prompt = buildRuntimePrompt({
+        systemPrompt: options.systemPrompt,
+        messages: options.messages,
+        hasSession: false,
+      });
+
+      activeSession = await ensureRuntimeSession({
+        ...options,
+        dockerUrl,
+        headers,
+        prompt,
+        provider: resolvedProvider,
+        apiKey,
+      });
+
+      const retryPayload = await executePrompt({
+        dockerUrl,
+        headers,
+        projectId: options.projectId,
+        runtimeType: activeSession.runtimeType,
+        prompt,
+      });
+
+      const retryErrorText = retryPayload.error || retryPayload.result?.error;
+      if (retryErrorText) {
+        return createTextStream(retryErrorText);
+      }
+
+      text = extractCodingRuntimeText(retryPayload);
+    }
+
     return createTextStream(text || 'Deep Coding completed, but it did not return a textual summary.');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
