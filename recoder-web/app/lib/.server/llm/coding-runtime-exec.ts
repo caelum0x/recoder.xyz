@@ -59,6 +59,14 @@ type LegacyFileMutation =
   | { type: 'file'; path: string; content: string }
   | { type: 'str_replace'; path: string; oldString: string; newString: string };
 
+const STARTER_LEAF_FILE_PATHS = new Set([
+  'src/App.tsx',
+  'src/App.jsx',
+  'app/page.tsx',
+  'index.html',
+  'src/index.css',
+]);
+
 function pruneExpiredSessions(now = Date.now()): void {
   for (const [key, value] of runtimeSessionsByChat.entries()) {
     if (now - value.updatedAt > SESSION_TTL_MS) {
@@ -162,6 +170,25 @@ export function sanitizeRuntimeSystemPrompt(systemPrompt: string): string {
 
 export function containsLegacyRuntimeMarkup(text: string): boolean {
   return /<recoderArtifact|<recoderAction|<\/recoderArtifact>|<\/recoderAction>/i.test(text);
+}
+
+function extractLegacyActionAttribute(actionTag: string, attribute: string): string | null {
+  const quotedMatch = actionTag.match(new RegExp(`${attribute}="([^"]*)"`, 'i'));
+  if (quotedMatch?.[1] !== undefined) {
+    return decodeXmlAttr(quotedMatch[1]);
+  }
+
+  const templateMatch = actionTag.match(new RegExp(attribute + '=\\{`([\\s\\S]*?)`\\}', 'i'));
+  if (templateMatch?.[1] !== undefined) {
+    return decodeXmlAttr(templateMatch[1]);
+  }
+
+  const singleTemplateMatch = actionTag.match(new RegExp(`${attribute}=\\{'([\\s\\S]*?)'\\}`, 'i'));
+  if (singleTemplateMatch?.[1] !== undefined) {
+    return decodeXmlAttr(singleTemplateMatch[1]);
+  }
+
+  return null;
 }
 
 export function buildRuntimePrompt(options: { systemPrompt: string; messages: Messages; hasSession: boolean }): string {
@@ -300,13 +327,22 @@ export function extractLegacyFileMutations(text: string): LegacyFileMutation[] {
     });
   }
 
-  const replaceRegex = /<recoderAction[^>]*type="str_replace"[^>]*filePath="([^"]+)"[^>]*oldString="([^"]*)"[^>]*newString="([^"]*)"[^>]*\/?>/gi;
+  const replaceRegex = /<recoderAction[^>]*type="str_replace"[\s\S]*?\/?>/gi;
   while ((match = replaceRegex.exec(text)) !== null) {
+    const actionTag = match[0];
+    const path = extractLegacyActionAttribute(actionTag, 'filePath');
+    const oldString = extractLegacyActionAttribute(actionTag, 'oldString');
+    const newString = extractLegacyActionAttribute(actionTag, 'newString');
+
+    if (!path || oldString === null || newString === null) {
+      continue;
+    }
+
     mutations.push({
       type: 'str_replace',
-      path: match[1],
-      oldString: decodeXmlAttr(match[2]),
-      newString: decodeXmlAttr(match[3]),
+      path,
+      oldString,
+      newString,
     });
   }
 
@@ -408,11 +444,32 @@ async function applyLegacyFileMutations(
     }
 
     const currentContent = await readProjectFile(dockerUrl, headers, projectId, mutation.path);
-    if (currentContent === null || !currentContent.includes(mutation.oldString)) {
+    if (currentContent === null) {
       continue;
     }
 
-    const nextContent = currentContent.replace(mutation.oldString, mutation.newString);
+    let nextContent: string | null = null;
+
+    if (currentContent.includes(mutation.oldString)) {
+      nextContent = currentContent.replace(mutation.oldString, mutation.newString);
+    } else if (STARTER_LEAF_FILE_PATHS.has(mutation.path) && mutation.newString.trim().length > 0) {
+      // Build-mode starter leaf files often leak a brittle str_replace with a stale
+      // oldString. Prefer a direct rewrite of the leaf file instead of treating it
+      // as a no-op when the intent is clearly to replace the whole component/page.
+      nextContent = mutation.newString;
+      if (
+        /src\/App\.(t|j)sx?$/.test(mutation.path) &&
+        /function\s+App\s*\(/.test(nextContent) &&
+        !/export\s+default\s+App/.test(nextContent)
+      ) {
+        nextContent = `${nextContent.trim()}\n\nexport default App;\n`;
+      }
+    }
+
+    if (nextContent === null) {
+      continue;
+    }
+
     if (nextContent !== currentContent) {
       await writeProjectFile(dockerUrl, headers, projectId, mutation.path, nextContent);
       touchedPaths.add(mutation.path);
