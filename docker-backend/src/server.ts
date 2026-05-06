@@ -1817,15 +1817,32 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
 
     try {
       const dc = getDaytonaClient();
-      await dc.getSandbox(existing.id);
+      await Promise.race([
+        dc.getSandbox(existing.id),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timed out checking sandbox ${existing.id}`)), DAYTONA_RECOVERY_TIMEOUT_MS),
+        ),
+      ]);
       if (existing.daytonaWorkDir) {
         dc.rememberWorkDir(existing.id, existing.daytonaWorkDir);
       } else {
-        existing.daytonaWorkDir = await dc.getWorkDir(existing.id);
+        existing.daytonaWorkDir = await Promise.race([
+          dc.getWorkDir(existing.id),
+          new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error(`Timed out loading workdir for sandbox ${existing.id}`)), DAYTONA_RECOVERY_TIMEOUT_MS),
+          ),
+        ]).catch(() => existing.daytonaWorkDir);
         persistContainers();
       }
       return existing;
     } catch (err: any) {
+      if (/Timed out/i.test(err?.message || '')) {
+        logger.warn(
+          { projectId, sandboxId: existing.id, error: err?.message },
+          'Timed out validating tracked Daytona sandbox, proceeding with cached mapping',
+        );
+        return existing;
+      }
       logger.warn(
         { projectId, sandboxId: existing.id, error: err?.message },
         'Tracked Daytona sandbox no longer exists, clearing cached mapping',
@@ -1905,6 +1922,7 @@ const CONTAINER_CREATE_TIMEOUT_MS = Number(process.env.CONTAINER_CREATE_TIMEOUT_
 const userContainers = new Map<string, Set<string>>(); // userId -> Set of projectIds
 const MAX_CONTAINERS_PER_USER = Number(process.env.MAX_CONTAINERS_PER_USER) || 5;
 const DAYTONA_WEB_IDE_DISK_GB = Number(process.env.DAYTONA_WEB_IDE_DISK_GB || 20);
+const DAYTONA_RECOVERY_TIMEOUT_MS = 3000;
 
 /**
  * Get count of active containers for a user
