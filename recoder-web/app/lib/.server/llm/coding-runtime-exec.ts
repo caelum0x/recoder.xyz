@@ -135,7 +135,7 @@ export function sanitizeRuntimeSystemPrompt(systemPrompt: string): string {
 
   return stripped
     .split('\n')
-    .filter((line) => !/recoderAction|recoderArtifact|\bXML\b|type="file"|type="shell"|action tags?/i.test(line))
+    .filter((line) => !/recoderAction|recoderArtifact|\bXML\b|type="file"|type="shell"|action tags?|str_replace|readFile|listFiles|searchFiles|importStarter|cloneGitHub/i.test(line))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -145,7 +145,7 @@ export function containsLegacyRuntimeMarkup(text: string): boolean {
   return /<recoderArtifact|<recoderAction|<\/recoderArtifact>|<\/recoderAction>/i.test(text);
 }
 
-function buildRuntimePrompt(options: { systemPrompt: string; messages: Messages; hasSession: boolean }): string {
+export function buildRuntimePrompt(options: { systemPrompt: string; messages: Messages; hasSession: boolean }): string {
   const lastUserMessage = [...options.messages]
     .reverse()
     .find((message) => message.role === 'user');
@@ -173,6 +173,16 @@ function buildRuntimePrompt(options: { systemPrompt: string; messages: Messages;
     'Conversation transcript:',
     summarizeConversation(options.messages),
   ].filter(Boolean).join('\n\n');
+}
+
+function buildLegacyMarkupRetryPrompt(prompt: string): string {
+  return [
+    'The previous response was invalid because it returned legacy XML action markup instead of editing files directly.',
+    'Do not emit recoderAction tags, recoderArtifact tags, XML, or action plans.',
+    'You must modify files directly in /workspace, run verification if needed, and return only a concise plain-English summary.',
+    'Retry the same task now:',
+    prompt,
+  ].join('\n\n');
 }
 
 export function inferCodingRuntimeProvider(provider?: string, model?: string): RuntimeApiProvider | undefined {
@@ -423,11 +433,12 @@ export async function executeCodingRuntimeChat(options: ExecuteCodingRuntimeChat
 
     if (containsLegacyRuntimeMarkup(text)) {
       clearRuntimeSession(options.projectId, options.chatId);
-      prompt = buildRuntimePrompt({
+      const basePrompt = buildRuntimePrompt({
         systemPrompt: options.systemPrompt,
         messages: options.messages,
         hasSession: false,
       });
+      prompt = buildLegacyMarkupRetryPrompt(basePrompt);
 
       activeSession = await ensureRuntimeSession({
         ...options,
