@@ -331,8 +331,19 @@ export function extractLegacyFileMutations(text: string): LegacyFileMutation[] {
   while ((match = replaceRegex.exec(text)) !== null) {
     const actionTag = match[0];
     const path = extractLegacyActionAttribute(actionTag, 'filePath');
-    const oldString = extractLegacyActionAttribute(actionTag, 'oldString');
-    const newString = extractLegacyActionAttribute(actionTag, 'newString');
+    let oldString = extractLegacyActionAttribute(actionTag, 'oldString');
+    let newString = extractLegacyActionAttribute(actionTag, 'newString');
+
+    if (oldString === null || newString === null) {
+      const nestedOldString = actionTag.match(/<oldString>([\s\S]*?)<\/oldString>/i);
+      const nestedNewString = actionTag.match(/<newString>([\s\S]*?)<\/newString>/i);
+      if (nestedOldString?.[1] !== undefined) {
+        oldString = decodeXmlAttr(nestedOldString[1].trim());
+      }
+      if (nestedNewString?.[1] !== undefined) {
+        newString = decodeXmlAttr(nestedNewString[1].trim());
+      }
+    }
 
     if (!path || oldString === null || newString === null) {
       continue;

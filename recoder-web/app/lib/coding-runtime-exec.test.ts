@@ -140,4 +140,28 @@ Keep real runtime behavior.`);
       },
     ]);
   });
+
+  it('extracts nested oldString/newString blocks from leaked runtime output', () => {
+    const mutations = extractLegacyFileMutations(`
+      <recoderArtifact id="simple-page">
+        <recoderAction type="str_replace" filePath="src/App.tsx">
+          <oldString>
+function App() { old }
+          </oldString>
+          <newString>
+function App() { next }
+          </newString>
+        </recoderAction>
+      </recoderArtifact>
+    `);
+
+    expect(mutations).toEqual([
+      {
+        type: 'str_replace',
+        path: 'src/App.tsx',
+        oldString: 'function App() { old }',
+        newString: 'function App() { next }',
+      },
+    ]);
+  });
 });
