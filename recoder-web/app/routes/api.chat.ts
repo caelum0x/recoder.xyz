@@ -710,6 +710,18 @@ IMPORTANT:
     const { getWebToolCapabilityPrompt } = modesModule;
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
     let systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
+    const runtimeSystemPrompt = [
+      'You are executing inside the Recoder Daytona coding runtime.',
+      'Edit the real project files in the sandbox workspace directly.',
+      'Do not emit recoderAction tags, recoderArtifact tags, XML, or action plans.',
+      'Do not describe hypothetical edits. Make the edits on disk and return only a concise plain-English summary.',
+      frameworkSkillsPrompt,
+      projectConfigPrompt,
+      themePrompt,
+      projectContext,
+      codeContext,
+      ragContextPrompt,
+    ].filter(Boolean).join('\n\n');
 
     if (
       requestBody.projectId &&
@@ -893,6 +905,62 @@ IMPORTANT:
     }
 
     if (requestBody.projectId && (chatMode === 'build' || chatMode === 'deep-coding')) {
+      try {
+        const providerKeys = {
+          openrouter: projectOpenrouterKey,
+          openai: projectOpenaiKey,
+          anthropic: projectAnthropicKey,
+          google: projectGoogleKey,
+        };
+        const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
+
+        if (hasKeys) {
+          const piPrompt = buildDirectPiPrompt(runtimeSystemPrompt, runtimeMessages);
+          const piResponse = await fetch(`${dockerUrl}/api/pi/${encodeURIComponent(requestBody.projectId)}`, {
+            method: 'POST',
+            headers: createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              prompt: piPrompt,
+              model,
+              providerKeys,
+            }),
+          });
+
+          if (piResponse.ok) {
+            const piResult = await piResponse.json() as {
+              success?: boolean;
+              text?: string;
+              error?: string;
+              filesChanged?: string[];
+            };
+
+            if (piResult.success && (piResult.filesChanged?.length || 0) > 0) {
+              let piText = piResult.text || 'Done.';
+              piText += `\n\nFiles changed: ${piResult.filesChanged!.join(', ')}`;
+
+              const piStream = new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(new TextEncoder().encode(piText));
+                  controller.close();
+                },
+              });
+
+              stream.switchSource(piStream);
+
+              return new Response(stream.readable, {
+                status: 200,
+                headers: {
+                  'Content-Type': 'text/plain; charset=utf-8',
+                },
+              });
+            }
+          }
+        }
+      } catch (piError) {
+        const message = piError instanceof Error ? piError.message : String(piError);
+        logger.warn(`Build-mode Pi attempt failed, falling back to sandbox-local OpenCode: ${message}`);
+      }
+
       const { executeCodingRuntimeChat } = await import('~/lib/.server/llm/coding-runtime-exec');
       const runtimeStream = await executeCodingRuntimeChat({
         context,
@@ -901,7 +969,7 @@ IMPORTANT:
         chatId: requestBody.chatId,
         provider,
         model,
-        systemPrompt,
+        systemPrompt: runtimeSystemPrompt,
         messages: runtimeMessages,
       });
 
