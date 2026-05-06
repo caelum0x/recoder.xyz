@@ -72,6 +72,59 @@ function buildDirectPiPrompt(systemPrompt: string, messages: Messages): string {
   ].join('\n');
 }
 
+const RUNTIME_MUTATION_CANDIDATE_FILES = [
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/main.tsx',
+  '/src/main.jsx',
+  '/src/index.css',
+  '/app/page.tsx',
+  '/index.html',
+  '/package.json',
+] as const;
+
+async function readRuntimeMutationSnapshot(
+  dockerUrl: string,
+  dockerHeaders: Record<string, string>,
+  projectId: string,
+): Promise<Record<string, string | null>> {
+  const entries = await Promise.all(
+    RUNTIME_MUTATION_CANDIDATE_FILES.map(async (path) => {
+      try {
+        const response = await fetch(
+          `${dockerUrl}/api/file/${encodeURIComponent(projectId)}?path=${encodeURIComponent(path)}`,
+          {
+            method: 'GET',
+            headers: dockerHeaders,
+          },
+        );
+
+        if (response.status === 404) {
+          return [path, null] as const;
+        }
+
+        const payload = await response.json().catch(async () => ({ content: await response.text() }));
+        if (payload && typeof payload === 'object' && 'content' in payload) {
+          return [path, typeof payload.content === 'string' ? payload.content : JSON.stringify(payload.content)] as const;
+        }
+
+        return [path, typeof payload === 'string' ? payload : JSON.stringify(payload)] as const;
+      } catch {
+        return [path, null] as const;
+      }
+    }),
+  );
+
+  return Object.fromEntries(entries);
+}
+
+function hasRuntimeMutation(
+  before: Record<string, string | null>,
+  after: Record<string, string | null>,
+): boolean {
+  return Object.keys(after).some((path) => before[path] !== after[path]);
+}
+
 export async function action(args: ActionFunctionArgs) {
   // Dynamic imports for server-only modules
   const [
@@ -915,6 +968,11 @@ IMPORTANT:
         const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
 
         if (hasKeys) {
+          const beforeMutation = await readRuntimeMutationSnapshot(
+            dockerUrl,
+            createDockerProxyHeaders(request),
+            requestBody.projectId,
+          );
           const piPrompt = buildDirectPiPrompt(runtimeSystemPrompt, runtimeMessages);
           const piResponse = await fetch(`${dockerUrl}/api/pi/${encodeURIComponent(requestBody.projectId)}`, {
             method: 'POST',
@@ -934,9 +992,19 @@ IMPORTANT:
               filesChanged?: string[];
             };
 
-            if (piResult.success && (piResult.filesChanged?.length || 0) > 0) {
+            const afterMutation = await readRuntimeMutationSnapshot(
+              dockerUrl,
+              createDockerProxyHeaders(request),
+              requestBody.projectId,
+            );
+            const observedMutation = hasRuntimeMutation(beforeMutation, afterMutation);
+
+            if (piResult.success && ((piResult.filesChanged?.length || 0) > 0 || observedMutation)) {
               let piText = piResult.text || 'Done.';
-              piText += `\n\nFiles changed: ${piResult.filesChanged!.join(', ')}`;
+              const changedPaths = (piResult.filesChanged?.length || 0) > 0
+                ? piResult.filesChanged!
+                : Object.keys(afterMutation).filter((path) => beforeMutation[path] !== afterMutation[path]);
+              piText += `\n\nFiles changed: ${changedPaths.join(', ')}`;
 
               const piStream = new ReadableStream<Uint8Array>({
                 start(controller) {
