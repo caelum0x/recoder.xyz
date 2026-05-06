@@ -138,6 +138,7 @@ import {
   daytonaDeleteSandbox,
   daytonaGetLogs,
 } from './daytona-file-ops.js';
+import { recoverContainerFromDocker } from './container-recovery.js';
 import { templateManager } from './templates/index.js';
 import {
   buildOpencodeSandboxCommand,
@@ -1834,6 +1835,61 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
       unregisterDaytonaId(existing.id);
       persistContainers();
       return undefined;
+    }
+  }
+
+  const recoveredDocker = await recoverContainerFromDocker(docker, projectId, containers, logger);
+  if (recoveredDocker) {
+    if (recoveredDocker.userId) {
+      registerUserContainer(recoveredDocker.userId, projectId);
+    }
+    persistContainers();
+    return containers.get(projectId) as ContainerEntry | undefined;
+  }
+
+  if (isDaytonaConfigured() && process.env.USE_DAYTONA_CONTAINERS === 'true') {
+    try {
+      const dc = getDaytonaClient();
+      const sandboxes = await dc.listSandboxes();
+      const matches = sandboxes
+        .filter((sandbox: any) => sandbox.labels?.projectId === projectId || sandbox.labels?.id === projectId)
+        .sort((a: any, b: any) => {
+          const aRunning = a.state === 'started' || a.state === 'running' ? 1 : 0;
+          const bRunning = b.state === 'started' || b.state === 'running' ? 1 : 0;
+          if (aRunning !== bRunning) return bRunning - aRunning;
+          return (b.createdAt || '').localeCompare(a.createdAt || '');
+        });
+
+      const match = matches[0];
+      if (match) {
+        const defaultPort = 5173;
+        const preview = await getDaytonaPreviewAccess({ id: match.id }, defaultPort);
+        const workDir = await dc.getWorkDir(match.id).catch(() => undefined);
+
+        const recoveredDaytona: ContainerEntry = {
+          id: match.id,
+          lastActive: Date.now(),
+          port: defaultPort,
+          ptyPort: 0,
+          backgroundDev: false,
+          userId: match.labels?.userId,
+          daytona: true,
+          daytonaPreviewUrl: preview.url,
+          daytonaDevSessionId: buildDaytonaDevServerSessionId(projectId),
+          daytonaWorkDir: workDir,
+        };
+
+        containers.set(projectId, recoveredDaytona);
+        daytonaSandboxIds.add(match.id);
+        registerDaytonaId(match.id);
+        if (match.labels?.userId) {
+          registerUserContainer(match.labels.userId, projectId);
+        }
+        persistContainers();
+        return recoveredDaytona;
+      }
+    } catch (err: any) {
+      logger.warn({ projectId, error: err?.message }, 'Failed to recover Daytona sandbox by project ID');
     }
   }
 
