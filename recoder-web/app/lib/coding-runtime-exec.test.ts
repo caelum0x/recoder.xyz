@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRuntimePrompt,
   hasObservableMutation,
+  extractLegacyFileMutations,
   containsLegacyRuntimeMarkup,
   extractCodingRuntimeText,
   inferCodingRuntimeProvider,
@@ -79,5 +80,28 @@ Keep real runtime behavior.`);
 
     expect(hasObservableMutation(before as any, after as any)).toBe(true);
     expect(hasObservableMutation(before as any, before as any)).toBe(false);
+  });
+
+  it('extracts legacy file and str_replace mutations from XML output', () => {
+    const mutations = extractLegacyFileMutations(`
+      <recoderArtifact id="a1">
+        <recoderAction type="file" filePath="src/App.tsx">export default function App() { return null; }</recoderAction>
+        <recoderAction type="str_replace" filePath="src/index.css" oldString="color: blue;" newString="color: red;" />
+      </recoderArtifact>
+    `);
+
+    expect(mutations).toEqual([
+      {
+        type: 'file',
+        path: 'src/App.tsx',
+        content: 'export default function App() { return null; }',
+      },
+      {
+        type: 'str_replace',
+        path: 'src/index.css',
+        oldString: 'color: blue;',
+        newString: 'color: red;',
+      },
+    ]);
   });
 });
