@@ -5455,7 +5455,7 @@ app.post('/api/dev-server/start', authenticateRequest, async (req: Authenticated
       }
     }
 
-    const entry = containers.get(safeProjectId);
+    const entry = await getOrRecoverContainer(safeProjectId);
     if (!entry) return res.status(404).json({ error: 'Container not found' });
 
     entry.lastActive = Date.now();
