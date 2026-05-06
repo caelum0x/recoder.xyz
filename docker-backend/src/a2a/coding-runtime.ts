@@ -50,6 +50,7 @@ export interface StartSessionParams {
   model?: string;
   provider?: string;
   apiKey?: string;
+  executionMode?: 'centralized' | 'sandbox-local';
 }
 
 export interface SendPromptParams {
@@ -188,7 +189,9 @@ export function createOpenCodeAdapter(): RuntimeAdapter {
     type: 'opencode',
 
     async startSession(params: StartSessionParams): Promise<CodingSession> {
-      if (useCentralized) {
+      const forceSandboxLocal = params.executionMode === 'sandbox-local';
+
+      if (useCentralized && !forceSandboxLocal) {
         try {
           const { getOrCreateSession } = await import('./opencode-service-adapter.js');
           const session = await getOrCreateSession(params.projectId, {

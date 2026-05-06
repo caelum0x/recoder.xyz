@@ -15540,7 +15540,7 @@ const codingRuntimeSelectionByProject = new Map<string, {
 
 app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
-  const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt } = req.body;
+  const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt, executionMode } = req.body;
   if (!projectId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId required'));
   let resolvedRuntimeType = runtimeType;
   let autoSelection: { classification: unknown; routeDecision: unknown } | undefined;
@@ -15575,7 +15575,7 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
     projectId, sandboxId: resolvedSandboxId,
     sandboxExecUrl: `${daytonaUrl}/api/toolbox/${resolvedSandboxId}/toolbox/process/execute`,
     daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
-    model, provider, apiKey,
+    model, provider, apiKey, executionMode,
   });
 
   codingRuntimeSelectionByProject.set(projectId, {
