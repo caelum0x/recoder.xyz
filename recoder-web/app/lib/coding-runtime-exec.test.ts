@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildRuntimePrompt,
   containsLegacyRuntimeMarkup,
   extractCodingRuntimeText,
   inferCodingRuntimeProvider,
@@ -30,10 +31,14 @@ describe('coding-runtime-exec', () => {
   it('strips legacy recoder action guidance from runtime system prompts', () => {
     const sanitized = sanitizeRuntimeSystemPrompt(`You are in BUILD mode.
 Generate complete, production-ready code. Create files directly using recoderAction type="file".
+Use str_replace for targeted edits on existing files.
+Use readFile first.
 Do not emit XML.
 Keep real runtime behavior.`);
 
     expect(sanitized).not.toContain('recoderAction');
+    expect(sanitized).not.toContain('str_replace');
+    expect(sanitized).not.toContain('readFile');
     expect(sanitized).not.toContain('XML');
     expect(sanitized).toContain('Keep real runtime behavior.');
   });
@@ -41,5 +46,19 @@ Keep real runtime behavior.`);
   it('detects legacy runtime markup in text responses', () => {
     expect(containsLegacyRuntimeMarkup('<recoderArtifact id="a1"><recoderAction type="file">x</recoderAction></recoderArtifact>')).toBe(true);
     expect(containsLegacyRuntimeMarkup('Updated src/App.tsx and ran npm test.')).toBe(false);
+  });
+
+  it('builds runtime prompts from user conversation without legacy action terms', () => {
+    const prompt = buildRuntimePrompt({
+      systemPrompt: `Use recoderAction type="file". Use str_replace. Do not emit XML.`,
+      hasSession: false,
+      messages: [{ role: 'user', content: 'Make the heading red.' }] as any,
+    });
+
+    expect(prompt).toContain('Make the heading red.');
+    expect(prompt).not.toContain('recoderAction');
+    expect(prompt).not.toContain('str_replace');
+    expect(prompt).not.toContain('Use recoderAction');
+    expect(prompt).not.toContain('Use str_replace');
   });
 });
