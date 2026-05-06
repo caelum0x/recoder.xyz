@@ -429,15 +429,40 @@ async function ensurePreviewBootstrap(
   dockerUrl: string,
   headers: HeadersInit,
   projectId: string,
-): Promise<void> {
-  await fetch(`${dockerUrl}/api/dev-server/start`, {
+): Promise<boolean> {
+  const startResponse = await fetch(`${dockerUrl}/api/dev-server/start`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
       projectId,
       framework: 'vite',
     }),
-  }).catch(() => {});
+  }).catch(() => null);
+
+  if (!startResponse?.ok) {
+    return false;
+  }
+
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    const healthResponse = await fetch(`${dockerUrl}/api/preview/${encodeURIComponent(projectId)}/health`, {
+      method: 'GET',
+      headers,
+    }).catch(() => null);
+
+    if (healthResponse?.ok) {
+      const payload = await healthResponse.json().catch(() => null) as {
+        ports?: Array<{ responding?: boolean }>;
+      } | null;
+      if (payload?.ports?.some((entry) => entry.responding)) {
+        return true;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  return false;
 }
 
 async function ensureSandboxContainer(options: {
@@ -630,8 +655,11 @@ export async function executeCodingRuntimeChat(options: ExecuteCodingRuntimeChat
       );
 
       if (compatibilityApply.appliedCount > 0) {
-        await ensurePreviewBootstrap(dockerUrl, headers, options.projectId);
+        const previewReady = await ensurePreviewBootstrap(dockerUrl, headers, options.projectId);
         text = `Applied direct file edits in the sandbox: ${compatibilityApply.touchedPaths.join(', ')}`;
+        if (!previewReady) {
+          text += '\n\nWarning: files changed but preview is not responding yet.';
+        }
       } else {
         clearRuntimeSession(options.projectId, options.chatId);
         const basePrompt = buildRuntimePrompt({
