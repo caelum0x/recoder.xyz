@@ -327,7 +327,7 @@ export function extractLegacyFileMutations(text: string): LegacyFileMutation[] {
     });
   }
 
-  const replaceRegex = /<recoderAction[^>]*type="str_replace"[\s\S]*?\/?>/gi;
+  const replaceRegex = /<recoderAction[^>]*type="str_replace"[\s\S]*?(?:\/>|<\/recoderAction>)/gi;
   while ((match = replaceRegex.exec(text)) !== null) {
     const actionTag = match[0];
     const path = extractLegacyActionAttribute(actionTag, 'filePath');
