@@ -103,7 +103,6 @@ export async function ensureContainerExists(
             projectId,
             framework: options?.framework,
             templateId: options?.templateId,
-            skipInit: true,
           }),
           signal: controller.signal,
         });
