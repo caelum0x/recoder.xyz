@@ -92,8 +92,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
     // Internal ref for textarea auto-expand
     const internalTextareaRef = useRef<HTMLTextAreaElement>(null);
     const actualTextareaRef = textareaRef || internalTextareaRef;
-    const liveTextareaValue = actualTextareaRef.current?.value ?? input;
-    const canSend = liveTextareaValue.trim().length > 0 || attachments.length > 0;
 
     // Track textarea height for auto-expand
     const [textareaHeight, setTextareaHeight] = useState(TEXTAREA_DEFAULT_HEIGHT);
@@ -121,6 +119,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       handlePaste,
       clearAttachments,
     } = useAttachments();
+
+    const liveTextareaValue = actualTextareaRef.current?.value ?? input;
+    const canSend = liveTextareaValue.trim().length > 0 || attachments.length > 0;
 
     // Get filtered commands for slash menu
     const slashCommands = useMemo(() => {
