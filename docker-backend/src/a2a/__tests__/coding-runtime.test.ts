@@ -330,6 +330,47 @@ describe('coding-runtime', () => {
       expect(session.status).toBe('ready');
     });
 
+    it('uses sandbox-local opencode directly when executionMode requests it', async () => {
+      process.env.OPENCODE_SERVICE_URL = 'http://opencode-test:4096';
+      process.env.OPENCODE_MODE = 'centralized';
+
+      const legacyStartSession = vi.fn().mockResolvedValue({
+        id: 'sess_local_forced',
+        projectId: 'proj_local_forced',
+        sandboxId: 'sbx_1',
+        createdAt: new Date(3_500).toISOString(),
+        status: 'ready',
+      });
+      const getOrCreateSession = vi.fn();
+
+      vi.doMock('../opencode-service-adapter', () => ({
+        getOrCreateSession,
+        disposeProjectSession: vi.fn(),
+        getActiveProjects: vi.fn(() => []),
+      }));
+      vi.doMock('../opencode-connector.service', () => ({
+        startSession: legacyStartSession,
+        sendPrompt: vi.fn(),
+        getSession: vi.fn(),
+        disposeSession: vi.fn(),
+      }));
+
+      const { createOpenCodeAdapter: freshCreateOpenCodeAdapter } = await import('../coding-runtime');
+      const adapter = freshCreateOpenCodeAdapter();
+
+      const session = await adapter.startSession({
+        projectId: 'proj_local_forced',
+        sandboxId: 'sbx_1',
+        sandboxExecUrl: 'http://test/exec',
+        daytonaApiKey: 'key',
+        executionMode: 'sandbox-local',
+      });
+
+      expect(legacyStartSession).toHaveBeenCalled();
+      expect(getOrCreateSession).not.toHaveBeenCalled();
+      expect(session.id).toBe('sess_local_forced');
+    });
+
     it('falls back to sandbox-local opencode when centralized prompt returns no synced files', async () => {
       process.env.OPENCODE_SERVICE_URL = 'http://opencode-test:4096';
       process.env.OPENCODE_MODE = 'centralized';

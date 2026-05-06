@@ -368,6 +368,7 @@ async function ensureRuntimeSession(options: ExecuteCodingRuntimeChatOptions & {
       // Phase 1 runtime truth: the Web IDE build/deep-coding lane must stay on
       // the direct coding runtime path, not the legacy native/XML path.
       runtimeType: 'opencode',
+      executionMode: 'sandbox-local',
       prompt: options.prompt,
       model: options.model,
       provider: options.provider,
