@@ -121,4 +121,23 @@ Keep real runtime behavior.`);
       },
     ]);
   });
+
+  it('extracts nested str_replace wrappers from malformed leaked runtime output', () => {
+    const mutations = extractLegacyFileMutations(`
+      <recoderArtifact id="simple-page">
+        <recoderAction type="str_replace" filePath="src/App.tsx">
+          <recoderAction oldString="function App() { old }" newString="function App() { next }" />
+        </recoderAction>
+      </recoderArtifact>
+    `);
+
+    expect(mutations).toEqual([
+      {
+        type: 'str_replace',
+        path: 'src/App.tsx',
+        oldString: 'function App() { old }',
+        newString: 'function App() { next }',
+      },
+    ]);
+  });
 });
