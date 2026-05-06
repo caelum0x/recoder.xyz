@@ -104,4 +104,21 @@ Keep real runtime behavior.`);
       },
     ]);
   });
+
+  it('extracts JSX-style str_replace attribute expressions from leaked runtime output', () => {
+    const mutations = extractLegacyFileMutations(`
+      <recoderArtifact id="simple-page" title="Simple Red Heading Page">
+        <recoderAction type="str_replace" filePath="src/App.tsx" oldString={\`function App() { old }\`} newString={\`function App() { next }\`} />
+      </recoderArtifact>
+    `);
+
+    expect(mutations).toEqual([
+      {
+        type: 'str_replace',
+        path: 'src/App.tsx',
+        oldString: 'function App() { old }',
+        newString: 'function App() { next }',
+      },
+    ]);
+  });
 });
