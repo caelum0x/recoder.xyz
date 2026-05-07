@@ -242,6 +242,8 @@ interface CreateSandboxResponse {
   message?: string;
   error?: string;
   details?: string;
+  provider?: string;
+  canRetry?: boolean;
 }
 
 interface ContainerResponse {
@@ -261,6 +263,38 @@ interface ContainerResponse {
     preview?: string;
     vite?: string;
     pty?: string;
+  };
+}
+
+function extractDockerErrorPayload(error: DockerHttpError): {
+  error: string;
+  details?: string;
+  provider?: string;
+  canRetry?: boolean;
+} {
+  const payload = error.payload as
+    | string
+    | {
+        error?: string;
+        message?: string;
+        details?: string;
+        provider?: string;
+        canRetry?: boolean;
+      }
+    | null;
+
+  if (typeof payload === 'string') {
+    return {
+      error: error.message || 'Docker backend request failed',
+      details: payload,
+    };
+  }
+
+  return {
+    error: payload?.error || payload?.message || error.message || 'Docker backend request failed',
+    details: payload?.details,
+    provider: payload?.provider,
+    canRetry: payload?.canRetry,
   };
 }
 
@@ -355,21 +389,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
       } catch (retryError) {
         logger.error('Retry container create also failed:', retryError);
         const status = retryError instanceof DockerHttpError ? retryError.status : 503;
-        const details =
-          retryError instanceof DockerHttpError
-            ? (typeof retryError.payload === 'string'
-                ? retryError.payload
-                : (retryError.payload as { error?: string; message?: string; details?: string } | null)?.details
-                  || (retryError.payload as { error?: string; message?: string } | null)?.error
-                  || (retryError.payload as { message?: string } | null)?.message
-                  || retryError.message)
-            : (retryError instanceof Error ? retryError.message : 'Could not create Daytona sandbox');
+        const dockerError = retryError instanceof DockerHttpError
+          ? extractDockerErrorPayload(retryError)
+          : {
+              error: 'Failed to create container',
+              details: retryError instanceof Error ? retryError.message : 'Could not create Daytona sandbox',
+            };
 
         return json<CreateSandboxResponse>(
           {
             success: false,
-            error: 'Failed to create container',
-            details,
+            error: dockerError.error,
+            details: dockerError.details,
+            provider: dockerError.provider,
+            canRetry: dockerError.canRetry,
           },
           { status }
         );
@@ -479,6 +512,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
     });
   } catch (error) {
     logger.error('Error creating sandbox:', error);
+
+    if (error instanceof DockerHttpError) {
+      const dockerError = extractDockerErrorPayload(error);
+      return json<CreateSandboxResponse>(
+        {
+          success: false,
+          error: dockerError.error,
+          details: dockerError.details,
+          provider: dockerError.provider,
+          canRetry: dockerError.canRetry,
+        },
+        { status: error.status }
+      );
+    }
 
     return json<CreateSandboxResponse>(
       {
