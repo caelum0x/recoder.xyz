@@ -17,6 +17,7 @@ const logger = createScopedLogger('Chat');
 const DEBUG_CHAT = process.env.NODE_ENV !== 'production' && process.env.DEBUG_CHAT === 'true';
 const BUILD_MODE_PI_TIMEOUT_MS = 20000;
 const BUILD_MODE_OPENCODE_TIMEOUT_MS = 45000;
+const BUILD_MODE_PREVIEW_TIMEOUT_MS = 30000;
 
 function chatDebug(message: string, meta?: unknown) {
   if (!DEBUG_CHAT) return;
@@ -125,6 +126,59 @@ function hasRuntimeMutation(
   after: Record<string, string | null>,
 ): boolean {
   return Object.keys(after).some((path) => before[path] !== after[path]);
+}
+
+async function ensureBuildPreviewReady(
+  dockerUrl: string,
+  dockerHeaders: Record<string, string>,
+  projectId: string,
+): Promise<{ ready: boolean; previewUrl?: string; port?: number | null }> {
+  const startResponse = await fetch(`${dockerUrl}/api/dev-server/start`, {
+    method: 'POST',
+    headers: dockerHeaders,
+    body: JSON.stringify({
+      projectId,
+      framework: 'vite',
+    }),
+  }).catch(() => null);
+
+  if (!startResponse?.ok) {
+    return { ready: false, port: null };
+  }
+
+  const deadline = Date.now() + BUILD_MODE_PREVIEW_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(
+        `${dockerUrl}/api/preview/${encodeURIComponent(projectId)}/health`,
+        {
+          method: 'GET',
+          headers: dockerHeaders,
+        },
+      );
+
+      if (response.ok) {
+        const payload = await response.json() as {
+          previewUrl?: string;
+          ports?: Array<{ port: number; responding?: boolean }>;
+        };
+        const responding = payload.ports?.find((entry) => entry.responding);
+        if (responding) {
+          return {
+            ready: true,
+            previewUrl: payload.previewUrl,
+            port: responding.port,
+          };
+        }
+      }
+    } catch {
+      // keep polling
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  return { ready: false, port: null };
 }
 
 export async function action(args: ActionFunctionArgs) {
@@ -983,6 +1037,16 @@ IMPORTANT:
                 ? piResult.filesChanged!
                 : Object.keys(afterMutation).filter((path) => beforeMutation[path] !== afterMutation[path]);
               piText += `\n\nFiles changed: ${changedPaths.join(', ')}`;
+              const preview = await ensureBuildPreviewReady(
+                dockerUrl,
+                createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+                requestBody.projectId,
+              );
+              if (preview.ready) {
+                piText += `\n\nPreview ready on port ${preview.port}.`;
+              } else {
+                piText += '\n\nWarning: files changed but preview is not responding yet.';
+              }
 
               const piStream = new ReadableStream<Uint8Array>({
                 start(controller) {
@@ -1062,6 +1126,16 @@ IMPORTANT:
             ? opencodeResult.syncedFiles!
             : Object.keys(afterMutation).filter((path) => beforeMutation[path] !== afterMutation[path]);
           opencodeText += `\n\nFiles changed: ${changedPaths.join(', ')}`;
+          const preview = await ensureBuildPreviewReady(
+            dockerUrl,
+            createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+            requestBody.projectId,
+          );
+          if (preview.ready) {
+            opencodeText += `\n\nPreview ready on port ${preview.port}.`;
+          } else {
+            opencodeText += '\n\nWarning: files changed but preview is not responding yet.';
+          }
 
           const opencodeStream = new ReadableStream<Uint8Array>({
             start(controller) {
