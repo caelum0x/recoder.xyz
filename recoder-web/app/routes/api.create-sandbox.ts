@@ -340,15 +340,52 @@ export async function action({ request, context }: ActionFunctionArgs) {
         dockerHeaders,
       );
     } catch (error) {
-      logger.error('Failed to create container:', error);
-      const status = error instanceof DockerHttpError ? error.status : 503;
+      logger.error('Failed to create container, retrying once:', error);
+
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        containerResponse = await dockerFetchJson<ContainerResponse>(
+          `${dockerUrl}/api/container`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ projectId, framework, templateId }),
+          },
+          dockerHeaders,
+        );
+      } catch (retryError) {
+        logger.error('Retry container create also failed:', retryError);
+        const status = retryError instanceof DockerHttpError ? retryError.status : 503;
+        const details =
+          retryError instanceof DockerHttpError
+            ? (typeof retryError.payload === 'string'
+                ? retryError.payload
+                : (retryError.payload as { error?: string; message?: string; details?: string } | null)?.details
+                  || (retryError.payload as { error?: string; message?: string } | null)?.error
+                  || (retryError.payload as { message?: string } | null)?.message
+                  || retryError.message)
+            : (retryError instanceof Error ? retryError.message : 'Could not create Daytona sandbox');
+
+        return json<CreateSandboxResponse>(
+          {
+            success: false,
+            error: 'Failed to create container',
+            details,
+          },
+          { status }
+        );
+      }
+
+      logger.info(`Container create recovered on retry: ${containerResponse.containerId.slice(0, 12)}, port: ${containerResponse.port}`);
+    }
+
+    if (!containerResponse) {
       return json<CreateSandboxResponse>(
         {
           success: false,
           error: 'Failed to create container',
-          details: 'Could not create Docker container. Make sure docker-backend is running.',
+          details: 'Container response missing after retry',
         },
-        { status }
+        { status: 503 }
       );
     }
 
@@ -365,14 +402,30 @@ export async function action({ request, context }: ActionFunctionArgs) {
           content,
         }));
 
-        await dockerFetchJson(
+        const batchWriteResponse = await dockerFetchJson<{
+          success?: boolean;
+          failedFiles?: Array<{ path?: string; error?: string }>;
+        }>(
           `${dockerUrl}/api/files/${projectId}/batch`,
           {
             method: 'POST',
-            body: JSON.stringify({ files }),
+            body: JSON.stringify({ files, bootstrapPreview: false }),
           },
           dockerHeaders,
         );
+
+        if (batchWriteResponse?.success === false) {
+          const failedSummary = (batchWriteResponse.failedFiles || [])
+            .slice(0, 3)
+            .map((file) => `${file.path || 'unknown'}: ${file.error || 'write failed'}`)
+            .join('; ');
+
+          throw new Error(
+            failedSummary
+              ? `Template batch write failed: ${failedSummary}`
+              : 'Template batch write failed',
+          );
+        }
 
         logger.info(`Wrote ${files.length} template files to container`);
       } catch (error) {

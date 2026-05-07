@@ -44,7 +44,7 @@ function parseSessionExpiry(sessionData) {
     }
   }
 
-  return Math.floor(new Date('2026-05-07T00:00:00Z').getTime() / 1000);
+  return Math.floor((Date.now() + 7 * 24 * 60 * 60 * 1000) / 1000);
 }
 
 export const SESSION_USER_ID = parseSessionUserId(SESSION_DATA);
