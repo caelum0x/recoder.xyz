@@ -778,9 +778,11 @@ async function recoverContainerFromDaytona(
     const match = matches[0];
     if (match) {
       const workDir = await dc.getWorkDir(match.id);
-      // Default to 8080 (common for file servers in agent sandboxes)
-      // The preview route's health check will detect the actual port
-      const defaultPort = 8080;
+      dc.rememberWorkDir(match.id, workDir);
+      // Align recovered preview entries with the main Web IDE runtime lane.
+      // Vite-based build sandboxes should start on 5173 unless a later probe
+      // proves another port is actually responding.
+      const defaultPort = 5173;
       const preview = await getDaytonaPreviewAccess({ id: match.id }, defaultPort);
       const entry = {
         id: match.id,
@@ -1667,35 +1669,8 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     if (!entry) {
       // Try Docker recovery first, then Daytona recovery
       entry = await recoverContainerFromDocker(docker, projectId, containers);
-      if (!entry && process.env.USE_DAYTONA_CONTAINERS === 'true') {
-        try {
-          const dc = getDaytonaClient();
-          const sandboxes = await dc.listSandboxes();
-          const matches = sandboxes
-            .filter((s: any) => s.labels?.projectId === projectId)
-            .sort((a: any, b: any) => {
-              const aR = a.state === 'started' || a.state === 'running' ? 1 : 0;
-              const bR = b.state === 'started' || b.state === 'running' ? 1 : 0;
-              if (aR !== bR) return bR - aR;
-              return (b.createdAt || '').localeCompare(a.createdAt || '');
-            });
-          const match = matches[0];
-          if (match) {
-            const preview = await getDaytonaPreviewAccess({ id: match.id }, 5173);
-            entry = {
-              id: match.id,
-              port: 5173,
-              ptyPort: 0,
-              lastActive: Date.now(),
-              userId: match.labels?.userId,
-              daytona: true,
-              daytonaPreviewUrl: preview.url,
-            } as any;
-            containers.set(projectId, entry as any);
-          }
-        } catch (e) {
-          // Daytona recovery failed, continue to 404
-        }
+      if (!entry) {
+        entry = await recoverContainerFromDaytona(projectId, containers);
       }
     }
     if (!entry) {
@@ -1705,8 +1680,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     // For Daytona sandboxes, ensure sandbox is running before checking ports
     if ((entry as any)?.daytona) {
       try {
-        const dc = getDaytonaClient();
-        await dc.getOrStartSandbox(entry.id, 3000);
+        await ensureDaytonaSandboxRunning(entry.id);
       } catch {
         // Non-fatal — sandbox may already be running or start may timeout
       }
