@@ -87,6 +87,7 @@ import {
   getPublishedShareUrl,
 } from './zrok-preview.js';
 import { getDaytonaPreviewAccess } from './daytona-preview.js';
+import { DAYTONA_WORKSPACE_ROOT } from './daytona-runtime.js';
 import { patternRouter } from './a2a/patterns/index.js';
 import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
@@ -2856,20 +2857,29 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
           }
         }
 
-        // Create /workspace -> /home/daytona symlink (Daytona sandboxes use /home/daytona as home)
-        try {
-          await dc.execCommand(sandbox.id, 'test -L /workspace || ln -sf /home/daytona /workspace', { timeoutSecs: 10 });
-          logger.info({ sandboxId: sandbox.id }, 'Created /workspace symlink');
-        } catch (symlinkErr: any) {
-          logger.warn({ sandboxId: sandbox.id, err: symlinkErr.message }, 'Failed to create /workspace symlink');
+        const workDir = await dc.getWorkDir(sandbox.id).catch((err: any) => {
+          logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'Falling back to default Daytona workdir');
+          return DAYTONA_WORKSPACE_ROOT;
+        });
+        dc.rememberWorkDir(sandbox.id, workDir);
+
+        // Keep /workspace usable for legacy callers, but point it at the real
+        // sandbox workdir Daytona reports instead of guessing a home path.
+        if (workDir !== DAYTONA_WORKSPACE_ROOT) {
+          try {
+            await dc.execCommand(
+              sandbox.id,
+              `test -e ${DAYTONA_WORKSPACE_ROOT} || ln -sf '${workDir.replace(/'/g, "'\\''")}' ${DAYTONA_WORKSPACE_ROOT}`,
+              { timeoutSecs: 10 },
+            );
+            logger.info({ sandboxId: sandbox.id, workDir }, 'Ensured /workspace alias for Daytona sandbox');
+          } catch (symlinkErr: any) {
+            logger.warn({ sandboxId: sandbox.id, workDir, err: symlinkErr.message }, 'Failed to align /workspace alias with Daytona workdir');
+          }
         }
 
         // Default to 5173 (Vite) — will be updated when dev server starts and detects actual port
         const defaultPort = 5173;
-        const workDir = await dc.getWorkDir(sandbox.id).catch((err: any) => {
-          logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'Falling back to default Daytona workdir');
-          return '/workspace';
-        });
         const preview = await getDaytonaPreviewAccess({ id: sandbox.id }, defaultPort).catch((err: any) => {
           logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'Falling back to default Daytona preview URL');
           return { url: dc.getPreviewUrl(sandbox.id, defaultPort) } as { url: string };
