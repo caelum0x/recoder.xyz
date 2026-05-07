@@ -1,6 +1,6 @@
 # Recoder Platform Status and Agent-OS Backlog
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
 
 ## Goal
 
@@ -11,94 +11,97 @@ Keep the live Recoder surfaces working end to end while turning the platform int
 | Surface | URL | Current truth |
 | --- | --- | --- |
 | Hub | `recoder.xyz` | Core auth and main-site flows are live. |
-| Web IDE | `web.recoder.xyz` | Sandbox creation and preview are recoverable, but the coding lane is not yet trusted end to end. |
+| Web IDE | `web.recoder.xyz` | First-turn authenticated build requests now reach the coding runtime, but preview proof is still not reliable enough to trust the lane end to end. |
 | Agents | `agents.recoder.xyz` | Authenticated core flow is verified live, including `/v1/agent/start` and follow-up chat rendering. |
 | PM | `pm.recoder.xyz` | Feature-route `Invalid URL` crash is fixed live. `View in portal` still needs positive UI verification. |
 | Agency | `agency.recoder.xyz` | Previously verified on key authenticated routes. No new local code changes in this status pass. |
-| Docker Backend | `docker.recoder.xyz` | Daytona preview routing is explicit and signed preview flow is live. Coding runtime behavior is still the main backend risk. |
+| Docker Backend | `docker.recoder.xyz` | Daytona preview routing is explicit and signed preview flow is live. Build-mode runtime and preview responsiveness are still the main backend risk. |
 | API Backend | `api.recoder.xyz` | No new public API blocker beyond sandbox and runtime coordination. |
 | Docs | `docs.recoder.xyz` | Live. |
 
 ## Verified Working Paths
 
 - `web.recoder.xyz/api/create-sandbox` can return `200`.
-- `docker.recoder.xyz/api/dev-server/start` can return `200`.
-- Daytona preview health can report a responding preview port.
-- Preview URL lookup can return a direct signed Daytona preview URL.
-- Final preview fetch can return `200`.
+- `docker.recoder.xyz/api/container` can create or recover a Daytona-backed project mapping.
+- first-turn browser build requests now emit `/api/chat`.
+- Daytona preview health can return signed preview URLs for the candidate ports.
 - `agents.recoder.xyz` authenticated start flow and follow-up chat rendering are verified live.
 
 ## Active Runtime Blockers
 
-### 1. Centralized OpenCode transport can fail before work starts
+### 1. Build-mode runtime can still end without responding preview proof
 
 Symptoms:
 
-- chat can return `200` with body text `"fetch failed"`
-- preview and file APIs then return `404 Container not found`
+- build-mode chat can return `200`
+- starter entry files may mutate, but preview health still reports no responding port
+- dev-server logs can remain empty even after the coding backend reports completion
 
 Current implementation areas:
 
-- `recoder-web` chat and runtime execution path
-- `docker-backend` coding-runtime session and prompt routing
-- `docker-backend` OpenCode adapter path
+- `recoder-web` build and deep-coding routing
+- `docker-backend` sandbox-local coding runtime and dev-server bootstrap
+- Daytona preview health and port-probing path
 
 Required outcome:
 
-- transport errors surface as recoverable runtime behavior, not opaque success text
-- runtime either recovers cleanly or switches to a working fallback lane
+- build-mode success requires both observable file mutation and a responding preview port
+- dev-server startup failures surface clearly instead of leaving a non-responding preview state
 
-### 2. Runtime can report success without real file mutation
+### 2. Runtime can still report success without real file mutation
 
 Symptoms:
 
-- preview responds on both turns
 - chat returns `200`
-- sandbox files remain unchanged
-- rendered preview never shows the requested updated content
+- leaked backend output can still describe edits that never land on disk
+- browser-created sandboxes can start in the wrong workspace shape if starter bootstrap is not guaranteed
 
 Current implementation areas:
 
-- `docker-backend` coding-runtime handler
-- `docker-backend` coding-runtime loop
-- verifier and follow-up edit path across `recoder-web` and `docker-backend`
+- `recoder-web` build-mode backend routing
+- `recoder-web` coding-runtime executor
+- `docker-backend` Pi and sandbox-local Opencode runtime adapters
 
 Required outcome:
 
 - no run is marked successful unless sandbox file mutation is observed
-- follow-up edit verification proves mutation and preview drift resolution
+- build-mode uses real coding backends (`Pi`, sandbox-local `Opencode`) instead of XML-style output generation
 
-### 3. Sandbox-local OpenCode bootstrap remains slow or unstable
+### 3. Sandbox-local coding backends can still stall under browser load
 
 Symptoms:
 
-- sandbox-local OpenCode can fail to start within the current timeout window
+- `Pi` or sandbox-local `Opencode` can stall during session start or prompt execution
+- the route must fail over quickly instead of hanging the browser request
 
 Current implementation areas:
 
+- `docker-backend` Pi runtime adapter
 - `docker-backend` sandbox-local OpenCode bootstrap path
+- `recoder-web` build-mode backend routing
 
 Required outcome:
 
-- sandbox-local runtime startup is reliable enough to act as the fallback execution lane
+- `Pi` and sandbox-local `Opencode` both fail fast enough to preserve browser responsiveness
+- fallback behavior is explicit and deterministic
 
-### 4. Legacy action-runner fallback still leaks into build-mode verification
+### 4. Legacy XML/action output can still leak from runtime-adjacent paths
 
 Symptoms:
 
-- some sessions still show old action-lane behavior
-- final proof that build and deep-coding stay on the runtime lane is still missing
+- some build-mode responses still arrive in `recoderAction` or `recoderArtifact` form
+- malformed `str_replace` output shapes can still appear even after prompt sanitization
 
 Current implementation areas:
 
-- `recoder-web` chat routing
-- `recoder-web` action-runner path
-- `docker-backend` runtime adapter path
+- `recoder-web` build-mode backend routing
+- `recoder-web` coding-runtime compatibility handling
+- `docker-backend` Pi and Opencode adapters
 
 Required outcome:
 
 - build and deep-coding stay on the Daytona-backed runtime lane end to end
-- no hidden legacy action-runner fallback is counted as success
+- XML-style output is treated as invalid or translated only as a temporary safety net, never as the intended success path
 
 ### 5. Host disk pressure still raises deploy and verifier risk
 
@@ -118,7 +121,7 @@ Required outcome:
 - `docker-backend` provides the coding runtime, preview, and file-operation control path for Daytona-backed execution.
 - Sandboxes are disposable execution state, not persistence.
 - Browser preview uses direct signed Daytona preview URLs for iframe-safe access.
-- Successful runtime flows do not rely on hidden retry masking or implicit Docker fallback when Daytona mode is enabled.
+- Build and deep-coding use real coding backends (`Pi`, sandbox-local `Opencode`) instead of the legacy XML-oriented action lane.
 
 ## Launch Criteria
 
@@ -126,7 +129,7 @@ Launch is complete when:
 
 - `recoder.xyz` auth and Web bridge work
 - outbound mail delivery is proven end to end
-- `web.recoder.xyz` supports create, follow-up edit, and preview rendering in production on the runtime lane
+- `web.recoder.xyz` supports create, first-turn build, follow-up edit, and preview rendering in production on the runtime lane
 - `agents.recoder.xyz` key authenticated routes and agent-start flows work
 - `pm.recoder.xyz` key authenticated routes work without feature-route crashes
 - `agency.recoder.xyz` key authenticated routes work
@@ -141,7 +144,7 @@ Near-term runtime work is only complete when the evidence shows:
 - real mutation in sandbox files
 - preview render matching expected content after the follow-up edit
 - no hidden fallback path counted as the success condition
-- transport failures surfaced as recoverable runtime behavior instead of opaque `"fetch failed"` text
+- transport failures surfaced as recoverable runtime behavior instead of opaque success text
 
 ## Daytona Capability Mapping
 
@@ -152,6 +155,7 @@ Near-term runtime work is only complete when the evidence shows:
   - standardize command execution and runtime session ownership in the existing coding-runtime path
   - standardize long-running session handling for coding loops, dev servers, and verifier flows
   - treat process-session logs as first-class execution evidence for stuck-run debugging
+  - prefer direct coding backends (`Pi`, sandbox-local `Opencode`) over the legacy XML action lane for build and deep-coding
 
 ### File operations
 
@@ -160,6 +164,7 @@ Near-term runtime work is only complete when the evidence shows:
   - route file read, write, and list verification through the existing `docker-backend` file-operation path
   - record mutation evidence for runtime success checks
   - prevent “success” responses when file-state verification fails
+  - use on-disk snapshot checks to confirm `Pi` or sandbox-local `Opencode` actually changed starter entry files
 
 ### Preview
 
@@ -168,6 +173,7 @@ Near-term runtime work is only complete when the evidence shows:
   - make preview URL issuance an explicit responsibility of the existing preview path
   - treat preview readiness and port health as explicit checks, not inferred success
   - detect preview drift when preview stays healthy but rendered content does not match the last verified mutation
+  - probe preview URLs the way Daytona documents them, using signed URLs directly when signed
 
 ### Computer use
 
@@ -195,16 +201,17 @@ Working standard:
 Preferred upstream order for this plan:
 
 1. `daytonaio/daytona`
-2. `a2aproject/a2a-js`
-3. `browserbase/stagehand`
-4. `lightpanda-io/browser`
-5. `vercel-labs/agent-browser`
-6. `anomalyco/opencode`
-7. `e2b-dev/E2B` only for execution-substrate comparison
+2. `anomalyco/opencode`
+3. `badlogic/pi-mono`
+4. `a2aproject/a2a-js`
+5. `browserbase/stagehand`
+6. `lightpanda-io/browser`
+7. `vercel-labs/agent-browser`
+8. `e2b-dev/E2B` only for execution-substrate comparison
 
 Phase mapping:
 
-- Phase 1 should lean on `daytonaio/daytona` and `anomalyco/opencode` for runtime, file, process, and preview behavior validation
+- Phase 1 should lean on `daytonaio/daytona`, `anomalyco/opencode`, and `badlogic/pi-mono` for runtime, file, process, and preview behavior validation
 - Phase 2 should lean on `a2aproject/a2a-js` for protocol and routing reference
 - Phase 3 may borrow from `browserbase/stagehand`, `lightpanda-io/browser`, and `vercel-labs/agent-browser` for browser-task and computer-use-adjacent patterns
 - no phase should assume a fork-first strategy unless upstream use has already failed for product-specific reasons
@@ -229,11 +236,13 @@ Coding task format:
 
 | Task name | Target subsystem | Intended outcome | Proof of completion | Blocker or dependency |
 | --- | --- | --- | --- | --- |
-| Eliminate transport dead ends | `recoder-web` chat/runtime path and `docker-backend` coding-runtime transport | Remove `"fetch failed"` success-looking responses and replace them with recoverable runtime errors or working fallback behavior. | Live verifier shows no opaque `"fetch failed"` response; transport failure is surfaced with a retryable or fallback-backed outcome. | Depends on stable runtime error propagation across existing chat and coding-runtime surfaces. |
-| Enforce runtime-lane-only build mode | `recoder-web` chat routing, `action-runner`, and runtime adapter paths | Keep build and deep-coding on the Daytona-backed runtime lane for successful production runs. | Two-turn verifier shows the intended runtime lane; no hidden legacy action-runner path appears in logs or artifacts for success cases. | May require isolating or disabling legacy fallback behavior for runtime-backed chats. |
-| Require real file mutation for success | `docker-backend` coding-runtime and file-operation verification paths | Mark runs successful only when sandbox file changes are observable. | Sandbox file diff or file-state check proves mutation on both initial and follow-up edit turns. | Depends on trustworthy file read and list verification. |
-| Harden follow-up edit verification | `recoder-web` verifier flow plus `docker-backend` file and preview paths | Ensure follow-up edits are validated against both file state and rendered preview output. | Successful two-turn verifier run ends with changed files and matching preview content. | Depends on stable preview readiness and mutation evidence. |
-| Stabilize sandbox-local fallback lane | `docker-backend` sandbox-local OpenCode bootstrap path | Make sandbox-local execution reliable enough to use when centralized transport fails. | Fallback path starts within the expected timeout window and completes a real mutation-backed run. | Blocked by current bootstrap speed and timeout instability. |
+| Eliminate transport dead ends | `recoder-web` chat/runtime path and `docker-backend` coding-runtime transport | Remove opaque success-looking responses and replace them with recoverable runtime errors or working fallback behavior. | Live verifier shows no opaque `"fetch failed"` response or hidden session-start hang. | Depends on stable runtime error propagation across existing chat and coding-runtime surfaces. |
+| Enforce runtime-lane-only build mode | `recoder-web` chat routing and backend runtime selection | Keep build and deep-coding on the Daytona-backed runtime lane for successful production runs. | Two-turn verifier shows `Pi` first or sandbox-local `Opencode` fallback; no hidden legacy action-runner path appears in logs or artifacts for success cases. | May require bypassing generic runtime routing and legacy XML-oriented prompt paths. |
+| Require real file mutation for success | `recoder-web` coding-runtime executor and `docker-backend` file-operation verification paths | Mark runs successful only when sandbox file changes are observable. | Sandbox file diff or file-state check proves mutation on both initial and follow-up edit turns. | Depends on trustworthy file read and list verification. |
+| Prefer Pi before Opencode in build mode | `recoder-web` build-mode backend routing | Use `Pi` as the first coding backend for build and deep-coding, with sandbox-local `Opencode` only as fallback. | The first browser build request reaches `Pi`, and fallback to sandbox-local `Opencode` happens only on explicit failure or no mutation proof. | Depends on stable provider-key wiring and direct sandbox mutation checks. |
+| Make browser-created sandboxes non-empty | Web IDE container bootstrap and starter seeding | Ensure browser-created Daytona workspaces contain the starter files before runtime edits begin. | Fresh browser-created projects expose starter entry files through the file API before the first build prompt. | Depends on removing `skipInit` from the Web IDE container bootstrap path. |
+| Turn preview health into a required proof gate | Daytona preview probing and dev-server bootstrap | Do not accept build-mode success until preview health reports a responding port. | Direct probe shows file mutation plus at least one responding preview port, or the run fails explicitly. | Depends on signed-preview probing and dev-server start/recovery reliability. |
+| Stabilize sandbox-local fallback lane | `docker-backend` sandbox-local OpenCode bootstrap path | Make sandbox-local execution reliable enough to use when `Pi` fails or times out. | Fallback path starts within the expected timeout window and completes a real mutation-backed run. | Blocked by current sandbox-local bootstrap speed, startup errors, and preview bring-up failures. |
 | Reduce host-level false negatives | deploy and verifier environment on the Daytona host | Prevent disk pressure from masquerading as runtime regressions. | Verifier failures correlate to app/runtime bugs rather than host exhaustion during repeated runs. | Depends on host cleanup and capacity discipline outside the chat/runtime code path. |
 | Keep upstream runtime references cloneable | runtime research and implementation intake | Ensure any external runtime reference used during Phase 1 can be cloned and exercised directly in a Daytona workspace before it influences product code. | Every adopted external runtime reference is on the direct-clone shortlist or is filed as an exception in `bd`. | Depends on the direct-clone criteria in `daytona-projects/can-be-fork-repos.md`. |
 
@@ -305,11 +314,11 @@ Coding task format:
 
 ## Immediate Next Step
 
-1. Run the live two-turn Web IDE verifier against the current runtime routing.
-2. Confirm the response came from the intended runtime lane.
-3. Verify real sandbox file mutation plus preview update after the second turn.
-4. If centralized OpenCode fails or produces no synced edits, force the runtime to a working fallback lane.
-5. If legacy action behavior still appears, isolate or disable it for runtime-backed build chats.
+1. Run the live build-mode probe against the `Pi -> sandbox-local Opencode` browser path.
+2. Confirm the starter entry file is present before the prompt and changed on disk after the prompt.
+3. Confirm preview health reports at least one responding port after mutation.
+4. If `Pi` stalls, verify the route fails over quickly to sandbox-local `Opencode`.
+5. If preview still does not respond, fix dev-server bootstrap or workdir/path handling before accepting the lane as healthy.
 
 ## Notes
 
@@ -317,4 +326,5 @@ Coding task format:
 - Use `bd` for detailed issue tracking and discovered follow-up work.
 - Production evidence wins over stale notes.
 - Keep computer use in Phase 3 unless the main coding lane is already proven reliable.
+- Build and deep-coding are now intended to use real coding backends (`Pi`, sandbox-local `Opencode`) rather than the old XML-oriented action lane.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not treated as a product bug.

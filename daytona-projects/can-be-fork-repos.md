@@ -1,6 +1,6 @@
 # Repos We Can Directly Clone Into Daytona
 
-Updated: May 6, 2026
+Updated: May 7, 2026
 
 This file is not a generic OSS inspiration list.
 
@@ -59,71 +59,23 @@ These are still valid clone targets, but they should not be treated as instant d
 | `badlogic/sitegeist` | Interesting UX and browser-native patterns, but not a direct runtime primitive for Recoder. | Clone only for UI or interaction pattern borrowing. |
 | `gastownhall/beads` | Cloneable and usable, but it is workflow infrastructure, not a runtime or preview primitive. | Clone when iterating on issue-tracking or agent-memory workflows. |
 | `mem0ai/mem0` | Technically cloneable, but practical value depends on a larger memory-system decision. | Clone only when persistent agent memory becomes an active implementation lane. |
-
-## Reference Only, Not Direct-Clone Inputs
-
-These may still be useful to read, but they should not be presented as repos we can simply clone into Daytona and immediately use for the current Recoder lane.
-
-| Repo | Why not |
-| --- | --- |
 | `vercel-labs/open-agents` | Better treated as a product reference than a direct runtime building block. |
 | `vercel-labs/workflow-builder-template` | More of a later workflow-UI reference than an execution substrate. |
 | `kortix-ai/wbac` | Overlaps with broader browser-agent tooling without being a clear direct-clone win. |
 | `kortix-ai/agent-computer-use` | Too dependent on the later computer-use lane to count as a near-term direct-use repo. |
-| `badlogic/pi-mono` | Broad agent toolkit; useful to study, but not a focused direct-clone dependency for Recoder. |
-| `anomalyco/models.dev` | Reference dataset and service ideas, not a runnable core dependency. |
-| `openclaw/openclaw` | Too broad and product-shaped relative to the current runtime-first priorities. |
-| `openclaw/lobster` | Interesting shell and workflow ideas, but not a current direct-use repo. |
-| `openclaw/clawhub` | Ecosystem directory, not an execution primitive. |
+| `badlogic/pi-mono` | Pi is now part of the active build-mode backend stack, but the upstream repo is still broader than the exact runtime slice Recoder needs. | Clone only when iterating directly on the Pi backend or comparing Pi tool behavior against sandbox-local Opencode. |
 
-## Out Of Scope
-
-These should stay off the working shortlist for the current Daytona-backed Recoder lane.
-
-### Trading and crypto agents
-
-- `NoFxAiOS/nofx`
-- `kunalsinghdadhwal/LiqX`
-- `yllvar/multi-modal-hyperliquid-trading-agent`
-- `yolojewjitsu/moon-dev-ai-agents`
-- `DefiLlama/DefiLlama-Adapters`
-- `Jnix2007/hyper402`
-- `hyperliquid-dex/order_book_server`
-
-### Consumer chat, clone, or app-builder projects
-
-- `ChatGPTNextWeb/NextChat`
-- `nextify-limited/libra`
-- `dyad-sh/dyad`
-- `giselles-ai/giselle`
-- `firecrawl/open-lovable`
-- `zaidmukaddam/scira`
-- `FOLLGAD/complexity`
-- `Galaxies-dev/*`
-
-### Large infra or adjacent stacks that are not direct-clone wins for this lane
-
-- `openziti/ziti`
-- `vllm-project/vllm`
-- `slatedb/slatedb`
-- `neondatabase/neon`
-- `Dokploy/dokploy`
-- `hunvreus/devpush`
-- `SonicJs-Org/sonicjs`
-- `directus-labs/agency-os`
-- `haydenbleasel/eververse`
-
-## Preferred Order
 
 When I need an upstream repo for Daytona-backed Recoder work, use this order:
 
 1. `daytonaio/daytona`
-2. `a2aproject/a2a-js`
-3. `browserbase/stagehand`
-4. `lightpanda-io/browser`
-5. `vercel-labs/agent-browser`
-6. `anomalyco/opencode`
-7. `e2b-dev/E2B`
+2. `anomalyco/opencode`
+3. `badlogic/pi-mono`
+4. `a2aproject/a2a-js`
+5. `browserbase/stagehand`
+6. `lightpanda-io/browser`
+7. `vercel-labs/agent-browser`
+8. `e2b-dev/E2B`
 
 ## Practical Rule
 
