@@ -929,33 +929,8 @@ IMPORTANT:
           },
         });
       } catch (piError) {
-        // Pi unavailable — try OpenCode, then fall through to normal chat
         const message = piError instanceof Error ? piError.message : String(piError);
-        logger.warn(`Pi unavailable, trying OpenCode fallback: ${message}`);
-
-        try {
-          const opencodeStream = await executeOpencodeChat({
-            context,
-            request,
-            projectId: requestBody.projectId,
-            chatId: requestBody.chatId,
-            model,
-            systemPrompt,
-            messages,
-          });
-
-          stream.switchSource(opencodeStream);
-
-          return new Response(stream.readable, {
-            status: 200,
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-            },
-          });
-        } catch {
-          // Both Pi and OpenCode unavailable — fall through to normal chat
-          logger.warn('Both Pi and OpenCode unavailable, falling back to chat LLM');
-        }
+        logger.warn(`Pi unavailable on non-build project path: ${message}`);
       }
     }
 
@@ -995,7 +970,6 @@ IMPORTANT:
               error?: string;
               filesChanged?: string[];
             };
-
             const afterMutation = await readRuntimeMutationSnapshot(
               dockerUrl,
               createDockerProxyHeaders(request),
@@ -1075,7 +1049,6 @@ IMPORTANT:
           error?: string;
           syncedFiles?: string[];
         };
-
         const afterMutation = await readRuntimeMutationSnapshot(
           dockerUrl,
           createDockerProxyHeaders(request),
