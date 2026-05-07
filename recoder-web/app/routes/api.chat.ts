@@ -958,13 +958,14 @@ IMPORTANT:
     }
 
     if (requestBody.projectId && (chatMode === 'build' || chatMode === 'deep-coding')) {
+      const providerKeys = {
+        openrouter: projectOpenrouterKey,
+        openai: projectOpenaiKey,
+        anthropic: projectAnthropicKey,
+        google: projectGoogleKey,
+      };
+
       try {
-        const providerKeys = {
-          openrouter: projectOpenrouterKey,
-          openai: projectOpenaiKey,
-          anthropic: projectAnthropicKey,
-          google: projectGoogleKey,
-        };
         const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
 
         if (hasKeys) {
@@ -1029,20 +1030,90 @@ IMPORTANT:
         logger.warn(`Build-mode Pi attempt failed, falling back to sandbox-local OpenCode: ${message}`);
       }
 
-      const { executeCodingRuntimeChat } = await import('~/lib/.server/llm/coding-runtime-exec');
-      const runtimeStream = await executeCodingRuntimeChat({
-        context,
-        request,
-        projectId: requestBody.projectId || '',
-        chatId: requestBody.chatId,
-        provider,
-        model,
-        systemPrompt: runtimeSystemPrompt,
-        messages: runtimeMessages,
+      const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
+      if (!hasKeys) {
+        const failureStream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('Build mode requires a configured BYOK provider key for Pi or OpenCode.'));
+            controller.close();
+          },
+        });
+        stream.switchSource(failureStream);
+        return new Response(stream.readable, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        });
+      }
+
+      const beforeMutation = await readRuntimeMutationSnapshot(
+        dockerUrl,
+        createDockerProxyHeaders(request),
+        requestBody.projectId,
+      );
+
+      try {
+        const opencodeResponse = await fetch(`${dockerUrl}/api/opencode/${encodeURIComponent(requestBody.projectId)}`, {
+          method: 'POST',
+          headers: createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            prompt: buildDirectPiPrompt(runtimeSystemPrompt, runtimeMessages),
+            model,
+            providerKeys,
+            forceSandboxLocal: true,
+          }),
+        });
+
+        const opencodeResult = await opencodeResponse.json().catch(async () => ({ text: await opencodeResponse.text() })) as {
+          success?: boolean;
+          text?: string;
+          error?: string;
+          syncedFiles?: string[];
+        };
+
+        const afterMutation = await readRuntimeMutationSnapshot(
+          dockerUrl,
+          createDockerProxyHeaders(request),
+          requestBody.projectId,
+        );
+        const observedMutation = hasRuntimeMutation(beforeMutation, afterMutation);
+
+        if (opencodeResponse.ok && opencodeResult.success !== false && ((opencodeResult.syncedFiles?.length || 0) > 0 || observedMutation)) {
+          let opencodeText = opencodeResult.text || 'Done.';
+          const changedPaths = (opencodeResult.syncedFiles?.length || 0) > 0
+            ? opencodeResult.syncedFiles!
+            : Object.keys(afterMutation).filter((path) => beforeMutation[path] !== afterMutation[path]);
+          opencodeText += `\n\nFiles changed: ${changedPaths.join(', ')}`;
+
+          const opencodeStream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(opencodeText));
+              controller.close();
+            },
+          });
+
+          stream.switchSource(opencodeStream);
+
+          return new Response(stream.readable, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+            },
+          });
+        }
+      } catch (opencodeError) {
+        const message = opencodeError instanceof Error ? opencodeError.message : String(opencodeError);
+        logger.warn(`Build-mode sandbox-local OpenCode failed: ${message}`);
+      }
+
+      const failureStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Build mode failed to produce any observable sandbox file mutation via Pi or sandbox-local OpenCode.'));
+          controller.close();
+        },
       });
-
-      stream.switchSource(runtimeStream);
-
+      stream.switchSource(failureStream);
       return new Response(stream.readable, {
         status: 200,
         headers: {
