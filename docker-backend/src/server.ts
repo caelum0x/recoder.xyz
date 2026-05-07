@@ -5083,19 +5083,21 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
       sessionId,
       continueSession,
       providerKeys,
+      forceSandboxLocal = false,
     } = (req.body || {}) as {
       prompt?: string;
       model?: string;
       sessionId?: string;
       continueSession?: boolean;
       providerKeys?: OpencodeSandboxProviderKeys;
+      forceSandboxLocal?: boolean;
     };
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ success: false, error: 'prompt is required' });
     }
 
-    const useCentralizedOpencode = process.env.OPENCODE_MODE === 'centralized' && !!process.env.OPENCODE_SERVICE_URL;
+    const useCentralizedOpencode = !forceSandboxLocal && process.env.OPENCODE_MODE === 'centralized' && !!process.env.OPENCODE_SERVICE_URL;
 
     // If explicitly configured, route through the centralized opencode service
     if (useCentralizedOpencode) {
