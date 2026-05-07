@@ -49,17 +49,22 @@ export function buildDaytonaInstallCommand(hasPackageLock: boolean): string {
   const npmPrelude = [
     'rm -rf "$HOME/.npm/_cacache" "$HOME/.npm/_logs" /tmp/npm-cache 2>/dev/null || true',
     'mkdir -p /tmp/npm-cache',
+    'mkdir -p /tmp/npm-tmp',
+    'export TMPDIR=/tmp/npm-tmp',
+    'export npm_config_tmp=/tmp/npm-tmp',
     'export npm_config_cache=/tmp/npm-cache',
     'export npm_config_update_notifier=false',
     'export npm_config_fund=false',
     'export npm_config_audit=false',
+    'export npm_config_progress=false',
+    'export npm_config_prefer_offline=true',
   ].join(' && ');
 
   if (hasPackageLock) {
-    return `${npmPrelude} && "${'$'}NPM_BIN" ci --no-audit --no-fund`;
+    return `${npmPrelude} && "${'$'}NPM_BIN" ci --no-audit --no-fund --install-strategy=shallow`;
   }
 
-  return `${npmPrelude} && "${'$'}NPM_BIN" install --legacy-peer-deps --no-audit --no-fund`;
+  return `${npmPrelude} && "${'$'}NPM_BIN" install --legacy-peer-deps --no-audit --no-fund --install-strategy=shallow`;
 }
 
 export function buildDaytonaCommandScript(
