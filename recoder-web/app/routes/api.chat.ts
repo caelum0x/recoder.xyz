@@ -75,6 +75,33 @@ function buildDirectPiPrompt(systemPrompt: string, messages: Messages): string {
   ].join('\n');
 }
 
+function resolveBackendCompatibleModel(
+  model: string | undefined,
+  providerKeys: Record<string, string | null>,
+): string | undefined {
+  const normalizedModel = model?.trim().toLowerCase();
+  if (!normalizedModel) {
+    return undefined;
+  }
+
+  const requiredProvider =
+    normalizedModel.startsWith('openrouter/')
+      ? 'openrouter'
+      : normalizedModel.startsWith('openai/')
+        ? 'openai'
+        : normalizedModel.startsWith('anthropic/')
+          ? 'anthropic'
+          : normalizedModel.startsWith('google/') || normalizedModel.startsWith('gemini/')
+            ? 'google'
+            : undefined;
+
+  if (!requiredProvider) {
+    return undefined;
+  }
+
+  return providerKeys[requiredProvider] ? model : undefined;
+}
+
 const RUNTIME_MUTATION_CANDIDATE_FILES = [
   '/src/App.tsx',
   '/src/App.jsx',
@@ -998,6 +1025,7 @@ IMPORTANT:
 
       try {
         const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
+        const backendModel = resolveBackendCompatibleModel(model, providerKeys as Record<string, string | null>);
 
         if (hasKeys) {
           const beforeMutation = await readRuntimeMutationSnapshot(
@@ -1011,7 +1039,7 @@ IMPORTANT:
             headers: createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({
               prompt: piPrompt,
-              model,
+              model: backendModel,
               providerKeys,
             }),
             signal: AbortSignal.timeout(BUILD_MODE_PI_TIMEOUT_MS),
@@ -1100,7 +1128,7 @@ IMPORTANT:
           headers: createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             prompt: buildDirectPiPrompt(runtimeSystemPrompt, runtimeMessages),
-            model,
+            model: backendModel,
             providerKeys,
             forceSandboxLocal: true,
           }),
