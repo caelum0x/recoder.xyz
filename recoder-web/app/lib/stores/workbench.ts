@@ -10,6 +10,7 @@ import { FilesStore, type FileMap } from './files';
 import { PreviewsStore } from './previews';
 import { TerminalStore } from './terminal';
 import { dockerGet, dockerPost, dockerDelete, DOCKER_URL, CONTAINER_CREATE_TIMEOUT_MS, withDockerCredentials } from '~/lib/services/docker-api';
+import { getViteReactTemplateFiles } from '~/lib/services/default-starter-template';
 import {
   clearContainerCreateFailure,
   noteContainerCreateFailure,
@@ -137,6 +138,35 @@ export async function ensureContainerExists(
       }
     };
 
+    const createViaDirectDocker = async () => {
+      const containerResponse = await dockerPost<{
+        containerId?: string;
+        reused?: boolean;
+        daytona?: boolean;
+      }>('/api/container', {
+        projectId,
+        framework: options?.framework,
+        templateId: options?.templateId,
+      }, containerCreateRequestOptions);
+
+      if (!containerResponse?.containerId) {
+        throw new Error('Direct Docker container creation did not return a containerId');
+      }
+
+      if (!containerResponse.reused) {
+        const files = getViteReactTemplateFiles();
+        await dockerPost(`/api/files/${projectId}/batch`, {
+          files,
+          bootstrapPreview: false,
+        }, {
+          timeout: CONTAINER_CREATE_TIMEOUT_MS,
+          skipRetry: true,
+        });
+      }
+
+      return true;
+    };
+
     try {
       logger.info('🐳 [ensureContainerExists] Creating container for', projectId,
         options?.framework ? `(framework: ${options.framework})` : '',
@@ -156,9 +186,14 @@ export async function ensureContainerExists(
         );
       }
 
-      // Go through the same-origin route so server-side session verification owns
-      // the create path instead of relying on browser-readable auth state.
-      await createViaWebRoute();
+      try {
+        // Go through the same-origin route so server-side session verification owns
+        // the create path instead of relying on browser-readable auth state.
+        await createViaWebRoute();
+      } catch (webRouteError: any) {
+        logger.warn('[ensureContainerExists] Web route bootstrap failed, trying direct Docker fallback:', webRouteError?.message || webRouteError);
+        await createViaDirectDocker();
+      }
 
       clearContainerCreateFailure(projectId);
       logger.info('✅ [ensureContainerExists] Container ready for', projectId);
