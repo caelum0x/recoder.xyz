@@ -24,6 +24,8 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 
 const logger = createLogger('pi-runtime');
+const PI_SESSION_START_TIMEOUT_MS = 15000;
+const PI_PROMPT_TIMEOUT_MS = 45000;
 
 // ── Daytona-backed Operations ───────────────────────────────────────
 
@@ -239,6 +241,15 @@ const activeSessions = new Map<string, PiSession>();
 /** Session TTL: 30 minutes */
 const SESSION_TTL_MS = 30 * 60 * 1000;
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs),
+    ),
+  ]);
+}
+
 /**
  * Get or create a Pi coding agent session for a project's Daytona sandbox.
  */
@@ -268,7 +279,7 @@ export async function getOrCreatePiSession(
 
   // Load the ESM-only Pi package by absolute file URL so CommonJS output
   // does not collapse this into require(), which breaks on the package exports map.
-  const piModule = await loadPiModule();
+  const piModule = await withTimeout(loadPiModule(), PI_SESSION_START_TIMEOUT_MS, 'Pi module load');
   const {
     AuthStorage,
     ModelRegistry,
@@ -320,7 +331,7 @@ export async function getOrCreatePiSession(
   // Use customTools with ToolDefinitions (not AgentTool) — this bypasses
   // the allTools global registry and ensures our Daytona-backed operations
   // are actually used instead of the default fs implementations.
-  const { session } = await createAgentSession({
+  const sessionResult = await withTimeout<any>(createAgentSession({
     cwd: DAYTONA_CWD,
     authStorage,
     modelRegistry,
@@ -333,7 +344,8 @@ export async function getOrCreatePiSession(
       createBashToolDefinition(DAYTONA_CWD, { operations: bashOps }) as any,
     ],
     sessionManager: SessionManager?.inMemory?.() ?? undefined,
-  });
+  }), PI_SESSION_START_TIMEOUT_MS, 'Pi session creation');
+  const { session } = sessionResult;
 
   const piSession: PiSession = {
     sessionPromise: Promise.resolve(session),
@@ -363,7 +375,11 @@ export async function promptPiSession(
     providerKeys?: Record<string, string | undefined>;
   },
 ): Promise<{ success: boolean; text: string; filesChanged: string[] }> {
-  const session = await getOrCreatePiSession(projectId, sandboxId, options);
+  const session = await withTimeout(
+    getOrCreatePiSession(projectId, sandboxId, options),
+    PI_SESSION_START_TIMEOUT_MS,
+    'Pi session bootstrap',
+  );
 
   const textParts: string[] = [];
   const filesChanged: string[] = [];
@@ -389,7 +405,11 @@ export async function promptPiSession(
   });
 
   try {
-    await session.prompt(buildPiExecutionPrompt(prompt));
+    await withTimeout(
+      session.prompt(buildPiExecutionPrompt(prompt)),
+      PI_PROMPT_TIMEOUT_MS,
+      'Pi prompt execution',
+    );
 
     if (filesChanged.length === 0 && textParts.length > 0) {
       const legacyWrites = await applyLegacyRecoderFileActions(sandboxId, textParts.join('\n\n'));
