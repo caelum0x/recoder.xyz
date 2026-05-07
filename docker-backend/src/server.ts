@@ -1923,6 +1923,8 @@ const userContainers = new Map<string, Set<string>>(); // userId -> Set of proje
 const MAX_CONTAINERS_PER_USER = Number(process.env.MAX_CONTAINERS_PER_USER) || 5;
 const DAYTONA_WEB_IDE_DISK_GB = Number(process.env.DAYTONA_WEB_IDE_DISK_GB || 20);
 const DAYTONA_RECOVERY_TIMEOUT_MS = 3000;
+const SANDBOX_LOCAL_OPENCODE_START_TIMEOUT_MS = 45000;
+const SANDBOX_LOCAL_OPENCODE_PROMPT_TIMEOUT_MS = 60000;
 
 /**
  * Get count of active containers for a user
@@ -5213,22 +5215,30 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
       const sandboxExecUrl = `${daytonaUrl}/api/toolbox/${entry.id}/toolbox/process/execute`;
       const { startSession, sendPrompt } = await import('./a2a/opencode-connector.service.js');
 
-      const session = await startSession({
-        projectId,
-        sandboxId: entry.id,
-        sandboxExecUrl,
-        daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
-        model,
-        provider: selectedProvider,
-        apiKey: selectedApiKey,
-      });
+      const session = await withTimeout(
+        startSession({
+          projectId,
+          sandboxId: entry.id,
+          sandboxExecUrl,
+          daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+          model,
+          provider: selectedProvider,
+          apiKey: selectedApiKey,
+        }),
+        SANDBOX_LOCAL_OPENCODE_START_TIMEOUT_MS,
+        'Sandbox-local OpenCode session start',
+      );
 
-      const result = await sendPrompt({
-        projectId,
-        prompt,
-        sandboxExecUrl,
-        daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
-      });
+      const result = await withTimeout(
+        sendPrompt({
+          projectId,
+          prompt,
+          sandboxExecUrl,
+          daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+        }),
+        SANDBOX_LOCAL_OPENCODE_PROMPT_TIMEOUT_MS,
+        'Sandbox-local OpenCode prompt',
+      );
 
       const text = result.parts
         .filter((part) => part.type === 'text' || part.type === 'tool-result')
