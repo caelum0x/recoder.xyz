@@ -1921,7 +1921,7 @@ const CONTAINER_CREATE_TIMEOUT_MS = Number(process.env.CONTAINER_CREATE_TIMEOUT_
 // Per-user container tracking for limits
 const userContainers = new Map<string, Set<string>>(); // userId -> Set of projectIds
 const MAX_CONTAINERS_PER_USER = Number(process.env.MAX_CONTAINERS_PER_USER) || 5;
-const DAYTONA_WEB_IDE_DISK_GB = Number(process.env.DAYTONA_WEB_IDE_DISK_GB || 20);
+const DAYTONA_WEB_IDE_DISK_GB = Number(process.env.DAYTONA_WEB_IDE_DISK_GB || 40);
 const DAYTONA_RECOVERY_TIMEOUT_MS = 3000;
 const SANDBOX_LOCAL_OPENCODE_START_TIMEOUT_MS = 45000;
 const SANDBOX_LOCAL_OPENCODE_PROMPT_TIMEOUT_MS = 60000;
