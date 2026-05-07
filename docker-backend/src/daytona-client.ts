@@ -107,6 +107,10 @@ export interface DaytonaClientConfig {
   baseUrl?: string;
   /** API key for authentication */
   apiKey?: string;
+  /** JWT token for authentication with the Daytona API */
+  jwtToken?: string;
+  /** Organization ID required when using JWT auth */
+  organizationId?: string;
   /** Default target/region */
   target?: string;
   /** Default snapshot image */
@@ -129,6 +133,8 @@ export interface DaytonaClientConfig {
 export class DaytonaClient {
   private baseUrl: string;
   private apiKey: string;
+  private jwtToken: string;
+  private organizationId: string;
   private toolboxApiKey: string;
   private target: string;
   private defaultSnapshot: string;
@@ -137,8 +143,10 @@ export class DaytonaClient {
   private workDirCache = new Map<string, string>();
 
   constructor(config?: DaytonaClientConfig) {
-    this.baseUrl = (config?.baseUrl || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api').replace(/\/$/, '');
+    this.baseUrl = (config?.baseUrl || process.env.DAYTONA_API_URL || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api').replace(/\/$/, '');
     this.apiKey = config?.apiKey || process.env.DAYTONA_API_KEY || '';
+    this.jwtToken = config?.jwtToken || process.env.DAYTONA_JWT_TOKEN || '';
+    this.organizationId = config?.organizationId || process.env.DAYTONA_ORGANIZATION_ID || '';
     // The daytona-proxy uses PROXY_API_KEY=super_secret_key (different from the API key)
     this.toolboxApiKey = config?.toolboxApiKey || process.env.DAYTONA_TOOLBOX_API_KEY || 'super_secret_key';
     this.target = config?.target || process.env.DAYTONA_TARGET || 'us';
@@ -147,19 +155,32 @@ export class DaytonaClient {
     // Default toolbox URL to the internal proxy port to avoid SSL round-trip
     this._toolboxProxyUrl = config?.toolboxProxyUrl || process.env.DAYTONA_TOOLBOX_PROXY_URL || null;
 
-    if (!this.apiKey) {
-      logger.warn('DaytonaClient initialized without API key — sandbox operations will fail');
+    if (!this.apiKey && !this.jwtToken) {
+      logger.warn('DaytonaClient initialized without Daytona auth credentials — sandbox operations will fail');
+    } else if (this.jwtToken && !this.organizationId && !this.apiKey) {
+      logger.warn('DaytonaClient initialized with JWT token but no organization ID — sandbox operations may fail');
     } else {
-      logger.info({ baseUrl: this.baseUrl, target: this.target }, 'DaytonaClient initialized');
+      logger.info(
+        {
+          baseUrl: this.baseUrl,
+          target: this.target,
+          authMode: this.apiKey ? 'api-key' : 'jwt',
+        },
+        'DaytonaClient initialized',
+      );
     }
   }
 
   // ── Helpers ──
 
   private get headers(): Record<string, string> {
+    const bearerToken = this.apiKey || this.jwtToken;
     return {
       'Content-Type': 'application/json',
-      ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+      ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+      ...(!this.apiKey && this.jwtToken && this.organizationId
+        ? { 'X-Daytona-Organization-ID': this.organizationId }
+        : {}),
     };
   }
 
@@ -1128,5 +1149,8 @@ export function getDaytonaClient(): DaytonaClient {
  * Check if Daytona integration is configured (API key present).
  */
 export function isDaytonaConfigured(): boolean {
-  return !!(process.env.DAYTONA_API_KEY);
+  return !!(
+    process.env.DAYTONA_API_KEY
+    || (process.env.DAYTONA_JWT_TOKEN && process.env.DAYTONA_ORGANIZATION_ID)
+  );
 }
