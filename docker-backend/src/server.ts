@@ -2866,8 +2866,14 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
 
         // Default to 5173 (Vite) — will be updated when dev server starts and detects actual port
         const defaultPort = 5173;
-        const workDir = await dc.getWorkDir(sandbox.id);
-        const preview = await getDaytonaPreviewAccess({ id: sandbox.id }, defaultPort);
+        const workDir = await dc.getWorkDir(sandbox.id).catch((err: any) => {
+          logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'Falling back to default Daytona workdir');
+          return '/workspace';
+        });
+        const preview = await getDaytonaPreviewAccess({ id: sandbox.id }, defaultPort).catch((err: any) => {
+          logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'Falling back to default Daytona preview URL');
+          return { url: dc.getPreviewUrl(sandbox.id, defaultPort) } as { url: string };
+        });
         const previewUrl = preview.url;
         containers.set(projectId, {
           id: sandbox.id,
