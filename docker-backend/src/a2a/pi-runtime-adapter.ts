@@ -15,9 +15,9 @@
 import { createLogger } from '../logger.js';
 import {
   daytonaWriteFile,
-  daytonaReadFile,
   daytonaExec,
   daytonaCreateFolder,
+  daytonaReadFile,
 } from '../daytona-file-ops.js';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -57,91 +57,6 @@ function buildPiExecutionPrompt(userPrompt: string): string {
     'User request:',
     userPrompt,
   ].join('\n');
-}
-
-async function applyLegacyRecoderFileActions(
-  sandboxId: string,
-  responseText: string,
-): Promise<string[]> {
-  const appliedFiles: string[] = [];
-  const isPlaceholderPath = (value: string) => value.includes('[') || value.includes(']');
-  const candidateExistingFiles = ['src/App.tsx', 'src/main.tsx', 'src/main.jsx', 'src/App.jsx'];
-  const actionRegex = /<recoderAction\s+type="file"\s+filePath="([^"]+)"\s*>([\s\S]*?)<\/recoderAction>/gi;
-  const replaceRegex = /<recoderAction\s+type="str_replace"\s+filePath="([^"]+)"\s+oldString="([^"]*)"\s+newString="([^"]*)"\s*>[\s\S]*?<\/recoderAction>/gi;
-
-  for (const match of responseText.matchAll(actionRegex)) {
-    const filePath = match[1]?.trim();
-    const fileContent = match[2];
-    if (!filePath || fileContent == null || isPlaceholderPath(filePath)) continue;
-
-    const normalizedContent = fileContent.replace(/^\n+|\n+$/g, '');
-    await daytonaWriteFile(sandboxId, filePath, normalizedContent);
-    appliedFiles.push(filePath);
-    logger.warn({ sandboxId, filePath }, 'Applied legacy recoderAction file output via Daytona fallback');
-  }
-
-  for (const match of responseText.matchAll(replaceRegex)) {
-    const filePath = match[1]?.trim();
-    const oldString = match[2] ?? '';
-    const newString = match[3] ?? '';
-    if (!filePath || !oldString || isPlaceholderPath(filePath)) continue;
-
-    const currentContent = await daytonaReadFile(sandboxId, filePath);
-    if (!currentContent.includes(oldString)) continue;
-
-    const updatedContent = currentContent.replace(oldString, newString);
-    await daytonaWriteFile(sandboxId, filePath, updatedContent);
-    appliedFiles.push(filePath);
-    logger.warn({ sandboxId, filePath }, 'Applied legacy recoderAction str_replace output via Daytona fallback');
-  }
-
-  if (appliedFiles.length === 0) {
-    const referencedFiles = Array.from(
-      new Set(Array.from(responseText.matchAll(/filePath="([^"]+)"/g)).map((match) => match[1]?.trim()).filter(Boolean)),
-    ) as string[];
-    const codeBlocks = Array.from(responseText.matchAll(/```(?:[\w-]+)?\n([\s\S]*?)```/g))
-      .map((match) => match[1]?.trim())
-      .filter(Boolean) as string[];
-    const candidateBlock = codeBlocks.reverse().find((block) => {
-      return !block.startsWith('<recoder') && (block.includes('export default') || block.includes('function App'));
-    });
-
-    const validReferencedFiles = referencedFiles.filter((filePath) => !isPlaceholderPath(filePath));
-    let fallbackTarget = validReferencedFiles.length === 1 ? validReferencedFiles[0] : '';
-
-    if (!fallbackTarget && candidateBlock) {
-      for (const candidate of candidateExistingFiles) {
-        try {
-          const existing = await daytonaReadFile(sandboxId, candidate);
-          if (!existing) continue;
-          if (
-            (candidate.endsWith('App.tsx') || candidate.endsWith('App.jsx'))
-            && (candidateBlock.includes('function App') || candidateBlock.includes('export default App'))
-          ) {
-            fallbackTarget = candidate;
-            break;
-          }
-          if (
-            (candidate.endsWith('main.tsx') || candidate.endsWith('main.jsx'))
-            && (candidateBlock.includes('createRoot') || candidateBlock.includes('ReactDOM'))
-          ) {
-            fallbackTarget = candidate;
-            break;
-          }
-        } catch {
-          // candidate file not present in this sandbox
-        }
-      }
-    }
-
-    if (fallbackTarget && candidateBlock) {
-      await daytonaWriteFile(sandboxId, fallbackTarget, candidateBlock);
-      appliedFiles.push(fallbackTarget);
-      logger.warn({ sandboxId, filePath: fallbackTarget }, 'Applied legacy fenced code fallback via Daytona');
-    }
-  }
-
-  return appliedFiles;
 }
 
 /** ReadOperations backed by Daytona */
@@ -410,11 +325,6 @@ export async function promptPiSession(
       PI_PROMPT_TIMEOUT_MS,
       'Pi prompt execution',
     );
-
-    if (filesChanged.length === 0 && textParts.length > 0) {
-      const legacyWrites = await applyLegacyRecoderFileActions(sandboxId, textParts.join('\n\n'));
-      filesChanged.push(...legacyWrites);
-    }
 
     return {
       success: true,
