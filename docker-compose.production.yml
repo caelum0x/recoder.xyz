@@ -234,6 +234,9 @@ services:
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
       # Daytona sandbox integration — preview URLs via *.sandbox.recoder.xyz
       - DAYTONA_API_KEY=dyt_8532c63d57a211830b617731b30787d913870bfc0d82479a3ad6ff6e916e1946
+      - DAYTONA_JWT_TOKEN=${DAYTONA_JWT_TOKEN:-}
+      - DAYTONA_ORGANIZATION_ID=${DAYTONA_ORGANIZATION_ID:-}
+      - DAYTONA_API_URL=${DAYTONA_API_URL:-http://host.docker.internal:3900/api}
       - DAYTONA_SERVER_URL=http://host.docker.internal:3900/api
       - USE_DAYTONA_CONTAINERS=true
       # Public URL for preview proxy (same-origin via web.recoder.xyz/preview/)
