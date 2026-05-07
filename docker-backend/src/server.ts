@@ -2230,7 +2230,7 @@ app.get('/api/health/daytona', async (_req, res) => {
   if (!isDaytonaConfigured()) {
     return res.status(503).json({
       status: 'not_configured',
-      message: 'DAYTONA_API_KEY not set',
+      message: 'Set DAYTONA_API_KEY or both DAYTONA_JWT_TOKEN and DAYTONA_ORGANIZATION_ID',
     });
   }
   try {
@@ -2239,7 +2239,7 @@ app.get('/api/health/daytona', async (_req, res) => {
       status: check.healthy ? 'healthy' : 'unhealthy',
       latencyMs: check.latencyMs,
       error: check.error,
-      serverUrl: process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api',
+      serverUrl: process.env.DAYTONA_API_URL || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api',
     });
   } catch (err) {
     res.status(503).json({

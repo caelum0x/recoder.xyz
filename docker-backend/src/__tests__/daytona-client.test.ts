@@ -64,4 +64,29 @@ describe('DaytonaClient path resolution', () => {
       encodeURIComponent('/workspace/package.json'),
     );
   });
+
+  it('sends JWT auth plus organization header when API key is absent', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new DaytonaClient({
+      baseUrl: 'http://daytona.test/api',
+      jwtToken: 'jwt-token',
+      organizationId: 'org-123',
+      toolboxApiKey: 'toolbox-key',
+      toolboxProxyUrl: 'http://daytona.test/api/toolbox',
+    });
+
+    await client.listSandboxes();
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.headers).toMatchObject({
+      Authorization: 'Bearer jwt-token',
+      'X-Daytona-Organization-ID': 'org-123',
+    });
+  });
 });
