@@ -15,6 +15,8 @@ import { getSessionCookie, getUserApiKey } from '~/lib/.server/llm/user-api-key'
 const logger = createScopedLogger('Chat');
 
 const DEBUG_CHAT = process.env.NODE_ENV !== 'production' && process.env.DEBUG_CHAT === 'true';
+const BUILD_MODE_PI_TIMEOUT_MS = 20000;
+const BUILD_MODE_OPENCODE_TIMEOUT_MS = 45000;
 
 function chatDebug(message: string, meta?: unknown) {
   if (!DEBUG_CHAT) return;
@@ -983,6 +985,7 @@ IMPORTANT:
               model,
               providerKeys,
             }),
+            signal: AbortSignal.timeout(BUILD_MODE_PI_TIMEOUT_MS),
           });
 
           if (piResponse.ok) {
@@ -1063,6 +1066,7 @@ IMPORTANT:
             providerKeys,
             forceSandboxLocal: true,
           }),
+          signal: AbortSignal.timeout(BUILD_MODE_OPENCODE_TIMEOUT_MS),
         });
 
         const opencodeResult = await opencodeResponse.json().catch(async () => ({ text: await opencodeResponse.text() })) as {
