@@ -193,6 +193,15 @@ export class ApprovalGateService {
     );
   }
 
+  listByWorkspace(workspaceId: string, statuses?: ApprovalStatus[]): ApprovalRequest[] {
+    const statusSet = statuses && statuses.length > 0 ? new Set(statuses) : null;
+    return [...this.requests.values()].filter((request) => {
+      if (request.workspaceId !== workspaceId) return false;
+      if (!statusSet) return true;
+      return statusSet.has(request.status);
+    });
+  }
+
   /**
    * Register a callback for when an approval is resolved.
    */

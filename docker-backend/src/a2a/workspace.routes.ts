@@ -30,6 +30,9 @@ import { getA2AEventBus } from './a2a-event-bus';
 import { multiDispatchRouter } from './multi-dispatch.routes';
 import { getWorktreeManagerService } from './worktree-manager.service';
 import { getAgentBridgeService } from './agent-bridge.service';
+import { getApprovalGateService } from './approval-gate.service';
+import { getDelegationChainService, type DelegationRequest, type DelegationStatus } from './delegation-chain.service';
+import { getAgentRegistryService } from './agent-registry.service';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-workspace-routes');
@@ -56,6 +59,48 @@ function sendSuccess<T>(res: Response, data: T, statusCode = 200): void {
 function sendError(res: Response, httpStatus: number, error: A2AError): void {
   const response: ErrorResponse = { success: false, error };
   res.status(httpStatus).json(response);
+}
+
+function mapDelegationStatus(status: DelegationStatus): 'active' | 'accepted' | 'declined' | 'completed' {
+  switch (status) {
+    case 'accepted':
+      return 'accepted';
+    case 'completed':
+      return 'completed';
+    case 'rejected':
+    case 'failed':
+    case 'cancelled':
+      return 'declined';
+    case 'pending':
+    case 'in-progress':
+    default:
+      return 'active';
+  }
+}
+
+function inferWorkspaceIdForDelegation(delegation: DelegationRequest): string | null {
+  const directWorkspace = delegation.metadata?.workspaceId;
+  if (directWorkspace) return directWorkspace;
+
+  const channelId = delegation.metadata?.channelId;
+  if (!channelId) return null;
+
+  const workspace = getWorkspaceService().list().find((ws) => ws.defaultChannelId === channelId);
+  return workspace?.workspaceId || null;
+}
+
+function mapDelegationToHandoffRecord(delegation: DelegationRequest, workspaceId: string) {
+  return {
+    handoffId: delegation.delegationId,
+    workspaceId,
+    fromAgentId: delegation.fromAgentId,
+    toAgentId: delegation.toAgentId,
+    taskId: delegation.metadata?.sourceTaskId || delegation.metadata?.handoffSourceTaskId || '',
+    intent: ((delegation.metadata?.intent as 'handoff' | 'delegate' | 'review' | undefined) || 'handoff'),
+    context: delegation.metadata ? { ...delegation.metadata } : {},
+    status: mapDelegationStatus(delegation.status),
+    createdAt: delegation.createdAt,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -246,14 +291,36 @@ workspaceRouter.get('/:wsId/agents', (req: Request, res: Response) => {
 
     // Enrich agent IDs with bridge connection status
     const bridge = getAgentBridgeService();
+    const registry = getAgentRegistryService();
     const agents = agentIds.map((agentId) => {
       const connected = bridge.getAgent(agentId);
+      const sessions = bridge.getSessionsForAgent(agentId);
+      const registryAgent = registry.getWithHealth(agentId);
+      const bridgeCapabilities = Array.from(new Set(sessions.flatMap((session) => session.capabilities)));
+      const skillNames = registryAgent?.card.skills.map((skill) => skill.name) ?? [];
+      const status = connected
+        ? connected.status
+        : registryAgent?.health.online
+          ? 'online'
+          : 'offline';
       return {
         agentId,
-        status: connected ? connected.status : 'offline',
-        isLocal: !!connected,
-        capabilities: connected?.capabilities ?? [],
-        lastSeen: connected?.lastHeartbeat,
+        name: registryAgent?.identity.name ?? agentId,
+        platform: registryAgent?.identity.platform ?? 'custom',
+        status,
+        isLocal: sessions.length > 0,
+        capabilities: bridgeCapabilities,
+        skills: skillNames,
+        lastSeen: connected?.lastHeartbeat ?? registryAgent?.health.lastHeartbeat ?? '',
+        connectedSessionCount: sessions.length,
+        registry: registryAgent
+          ? {
+              online: registryAgent.health.online,
+              lastHeartbeat: registryAgent.health.lastHeartbeat,
+              reconnectCount: registryAgent.lifecycle.reconnectCount,
+              registrationCount: registryAgent.lifecycle.registrationCount,
+            }
+          : null,
       };
     });
 
@@ -306,6 +373,122 @@ workspaceRouter.get('/:wsId/tasks', (req: Request, res: Response) => {
 
     // Tasks are filtered by workspace_id in the task lifecycle service
     sendSuccess(res, { tasks: [], total: 0 });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/approvals — List workspace approvals ─────────────────────
+
+workspaceRouter.get('/:wsId/approvals', (req: Request, res: Response) => {
+  try {
+    const ws = getWorkspaceService().get(req.params.wsId);
+    if (!ws) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    const statusQuery = String(req.query.status || '').trim().toLowerCase();
+    const approvals = statusQuery === 'pending'
+      ? getApprovalGateService().listPending(ws.workspaceId)
+      : getApprovalGateService().listByWorkspace(ws.workspaceId);
+
+    sendSuccess(res, { approvals, total: approvals.length });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/handoffs — List workspace handoffs ───────────────────────
+
+workspaceRouter.get('/:wsId/handoffs', (req: Request, res: Response) => {
+  try {
+    const ws = getWorkspaceService().get(req.params.wsId);
+    if (!ws) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    const requestedStatus = String(req.query.status || '').trim().toLowerCase();
+    const activeStatuses: DelegationStatus[] = ['pending', 'accepted', 'in-progress'];
+    const rawDelegations = getDelegationChainService().list({
+      statuses: requestedStatus === 'active' ? activeStatuses : undefined,
+    });
+
+    const handoffs = rawDelegations
+      .map((delegation) => {
+        const workspaceId = inferWorkspaceIdForDelegation(delegation);
+        return workspaceId === ws.workspaceId
+          ? mapDelegationToHandoffRecord(delegation, workspaceId)
+          : null;
+      })
+      .filter(Boolean);
+
+    sendSuccess(res, { handoffs, total: handoffs.length });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── POST /:wsId/handoffs — Create workspace handoff ─────────────────────
+
+workspaceRouter.post('/:wsId/handoffs', (req: Request, res: Response) => {
+  try {
+    const ws = getWorkspaceService().get(req.params.wsId);
+    if (!ws) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const fromAgentId = String(body?.fromAgentId || '').trim();
+    const toAgentId = String(body?.toAgentId || '').trim();
+    const taskId = String(body?.taskId || '').trim();
+    const intent = String(body?.intent || 'handoff').trim().toLowerCase();
+    const context = body?.context && typeof body.context === 'object' ? body.context : {};
+
+    if (!fromAgentId || !toAgentId || !taskId) {
+      return sendError(res, 400, buildA2AError({
+        code: A2AErrorCodeEnum.InvalidParams,
+        message: 'fromAgentId, toAgentId, and taskId are required',
+      }));
+    }
+
+    const prompt =
+      typeof (context as Record<string, unknown>).prompt === 'string' &&
+      (context as Record<string, unknown>).prompt
+        ? String((context as Record<string, unknown>).prompt)
+        : `Continue ${intent} for task ${taskId}`;
+
+    const delegation = getDelegationChainService().delegate({
+      fromAgentId,
+      toAgentId,
+      prompt,
+      metadata: {
+        workspaceId: ws.workspaceId,
+        projectId: ws.projectId,
+        channelId: ws.defaultChannelId,
+        sourceTaskId: taskId,
+        intent: intent === 'delegate' || intent === 'review' ? intent : 'handoff',
+      },
+    });
+
+    sendSuccess(res, mapDelegationToHandoffRecord(delegation, ws.workspaceId), 201);
   } catch (err: any) {
     sendError(res, 500, buildA2AError({
       code: A2AErrorCodeEnum.InternalError,
