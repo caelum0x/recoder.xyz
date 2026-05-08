@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
     isAgentOnline: vi.fn(() => false),
     sendToAgent: vi.fn(() => true),
     getAgent: vi.fn(() => bridgeAgent),
+    getSessionsForAgent: vi.fn(() => []),
   };
 
   return { bridge, bridgeAgent };
@@ -250,5 +251,9 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     expect(state.jsonData.data.links.delegation.delegationId).toBe(delegation.delegationId);
     expect(state.jsonData.data.links.delegationChain.rootDelegationId).toBe(delegation.delegationId);
     expect(Array.isArray(state.jsonData.data.audit)).toBe(true);
+    expect(state.jsonData.data.assignee.agentId).toBe('agent-b');
+    expect(Array.isArray(state.jsonData.data.assignee.localBridgeSessions)).toBe(true);
+    expect(Array.isArray(state.jsonData.data.assignee.pairedBridgeSessions)).toBe(true);
+    expect(state.jsonData.data.runtime.evidenceCount).toBe(0);
   });
 });
