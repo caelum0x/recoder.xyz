@@ -8,6 +8,7 @@ import { getApprovalGateService, resetApprovalGateService } from './approval-gat
 import { getDelegationChainService, resetDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService, resetAgentRegistryService } from './agent-registry.service';
 import { resetCollaborationSvc } from './collaboration.service';
+import { getTaskLifecycleService, resetTaskLifecycleService } from './task-lifecycle.service';
 
 describe('A2A workspace routes', () => {
   let server: any;
@@ -19,6 +20,7 @@ describe('A2A workspace routes', () => {
     resetDelegationChainService();
     resetAgentRegistryService();
     resetCollaborationSvc();
+    resetTaskLifecycleService();
 
     const app = express();
     app.use('/api/a2a', express.text({ type: 'application/json' }));
@@ -95,6 +97,31 @@ describe('A2A workspace routes', () => {
     expect(body.success).toBe(true);
     expect(body.data.total).toBe(1);
     expect(body.data.approvals[0].approvalId).toBe(approval.approvalId);
+  });
+
+  it('lists workspace tasks for the mission-control task pipeline', async () => {
+    const workspace = createWorkspace(['agent-a', 'agent-b'], 'proj-tasks');
+    const created = getTaskLifecycleService().createTask({
+      workspace_id: workspace.workspaceId,
+      thread_id: 'thread-task-pipeline',
+      requester: { agent_id: 'agent-a', platform: 'codex' },
+      assignee: { agent_id: 'agent-b', platform: 'claude_code' },
+      connector: { connector_id: 'claude-1', platform: 'claude_code', protocol: 'mcp' },
+      payload: { kind: 'text', text: 'Write tests for the latest patch' },
+    });
+    expect(created.ok).toBe(true);
+
+    const response = await fetch(`${baseUrl}/api/a2a/workspaces/${workspace.workspaceId}/tasks`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.total).toBe(1);
+    expect(body.data.tasks[0]).toMatchObject({
+      prompt: 'Write tests for the latest patch',
+      state: 'submitted',
+      assignee_agent_id: 'agent-b',
+      workspace_id: workspace.workspaceId,
+    });
   });
 
   it('creates and lists workspace handoffs with active filtering', async () => {
