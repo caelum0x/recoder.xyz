@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/session-provider';
-import { ArrowLeft, FolderOpen, Globe, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Loader2, RefreshCw } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
@@ -86,7 +86,7 @@ export default function ProjectsPage() {
                 Back to Dashboard
               </Link>
               <h1 className="text-4xl font-bold mb-2">Projects</h1>
-              <p className="text-gray-400">Your Web IDE projects and synced workspaces.</p>
+              <p className="text-gray-400">Your linked runtime projects and synced workspaces.</p>
             </div>
             <button
               onClick={() => void loadProjects()}
@@ -102,18 +102,15 @@ export default function ProjectsPage() {
               <FolderOpen className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <h2 className="text-2xl font-semibold mb-2">No projects yet</h2>
               <p className="text-gray-400 mb-6">
-                Your account does not have any Web IDE projects yet. Create one in the Web IDE and it will show up here.
+                Your account does not have any linked projects yet. Active work will appear here once a runtime-backed project is created through the supported control-plane surfaces.
               </p>
-              <a
-                href="https://web.recoder.xyz"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => trackEvent(AnalyticsEvents.CTA_CLICKED, { ctaLabel: 'Open Web IDE', destination: 'https://web.recoder.xyz', location: 'projects_empty_state', source: 'projects' })}
+              <Link
+                href="/dashboard"
+                onClick={() => trackEvent(AnalyticsEvents.CTA_CLICKED, { ctaLabel: 'Open Dashboard', destination: '/dashboard', location: 'projects_empty_state', source: 'projects' })}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 transition-colors"
               >
-                <Globe className="w-5 h-5" />
-                Open Web IDE
-              </a>
+                Open Dashboard
+              </Link>
             </div>
           ) : (
             <div className="space-y-4">
