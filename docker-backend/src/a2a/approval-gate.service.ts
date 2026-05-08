@@ -139,6 +139,8 @@ export class ApprovalGateService {
       workspaceId: request.workspaceId,
     });
 
+    this.fireCallbacks(approvalId, request);
+
     logger.info({ approvalId, resolvedBy }, 'approval rejected');
     return request;
   }
@@ -207,6 +209,7 @@ export class ApprovalGateService {
     request.status = 'expired';
     request.resolvedAt = new Date().toISOString();
     this.persist();
+    this.fireCallbacks(approvalId, request);
 
     logger.info({ approvalId }, 'approval expired');
   }
