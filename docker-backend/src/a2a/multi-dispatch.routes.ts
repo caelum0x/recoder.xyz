@@ -74,6 +74,7 @@ multiDispatchRouter.post('/', async (req: Request, res: Response) => {
       aggregationStrategy: body.aggregationStrategy,
       priority: body.priority,
       worktreeIsolation: body.worktreeIsolation,
+      routingHints: body.routingHints,
     });
 
     sendSuccess(res, dispatch, 201);
