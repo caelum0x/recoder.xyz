@@ -6,6 +6,7 @@ import { AgentFleetOverview } from '@/components/workspaces/mission-control/agen
 import { TaskPipelineView } from '@/components/workspaces/mission-control/task-pipeline-view';
 import { SLODashboard } from '@/components/workspaces/mission-control/slo-dashboard';
 import { ActivityTimeline } from '@/components/workspaces/mission-control/activity-timeline';
+import { ControlPlanePanel } from '@/components/workspaces/mission-control/control-plane-panel';
 
 export default function MissionControlPage() {
   const params = useParams();
@@ -32,6 +33,9 @@ export default function MissionControlPage() {
 
       {/* Task Pipeline */}
       <TaskPipelineView tasks={(tasks as any[]) ?? []} />
+
+      {/* Control-plane state */}
+      <ControlPlanePanel workspaceId={wsId} />
 
       {/* Activity Timeline */}
       <ActivityTimeline workspaceId={wsId} />
