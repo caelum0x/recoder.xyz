@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-type FilterType = "status_change" | "deliverable" | "approval" | "comment";
+type FilterType = "status_change" | "deliverable" | "approval" | "run" | "comment";
 
 const filters: { label: string; value: FilterType | null }[] = [
 	{ label: "All", value: null },
 	{ label: "Status Changes", value: "status_change" },
 	{ label: "Deliverables", value: "deliverable" },
 	{ label: "Approvals", value: "approval" },
+	{ label: "Runs", value: "run" },
 ];
 
 interface TimelineFilterProps {
