@@ -264,6 +264,7 @@ export class AutonomousRoutingService {
   ): Promise<void> {
     const now = new Date().toISOString();
     const bus = getA2AEventBus();
+    const workspace = this.findWorkspaceForChannel(channelId);
 
     // Publish handoff initiated event
     bus.publish({
@@ -289,6 +290,8 @@ export class AutonomousRoutingService {
         priority: 'normal',
         metadata: {
           channelId,
+          ...(workspace ? { workspaceId: workspace.workspaceId, projectId: workspace.projectId } : {}),
+          intent: intent.type,
           ...(context?.sourceTaskId ? { sourceTaskId: context.sourceTaskId } : {}),
           ...(context?.approvalId ? { approvalId: context.approvalId } : {}),
         },
