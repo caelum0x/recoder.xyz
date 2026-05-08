@@ -13,6 +13,7 @@ import {
 } from "@/db";
 import { getClientForUser } from "@/lib/agency/get-client-for-user";
 import { applyProjectTransitionWithAudit } from "@/lib/agency/project-transition";
+import { buildRecoderProjectControlSummaryFromTaskIds } from "@/lib/agency/recoder-control-plane";
 import {
 	normalizeProjectStatus,
 	validateProjectStatusTransition,
@@ -55,6 +56,15 @@ async function verifyDeliverableOwnership(deliverableId: string) {
 	};
 }
 
+async function getProjectControlPlaneSummary(projectDbId: number) {
+	const projectDeliverables = await db.query.deliverables.findMany({
+		where: eq(deliverables.projectDbId, projectDbId),
+	});
+	return buildRecoderProjectControlSummaryFromTaskIds(
+		projectDeliverables.map((deliverable) => deliverable.taskId),
+	);
+}
+
 async function transitionProjectStatusIfValid({
 	projectDbId,
 	currentStatus,
@@ -63,6 +73,7 @@ async function transitionProjectStatusIfValid({
 	reason,
 	deliverableId,
 	bulk = false,
+	controlPlaneSummary,
 }: {
 	projectDbId: number;
 	currentStatus: ProjectStatus;
@@ -71,6 +82,7 @@ async function transitionProjectStatusIfValid({
 	reason: string;
 	deliverableId?: string;
 	bulk?: boolean;
+	controlPlaneSummary?: Record<string, unknown>;
 }) {
 	const fromStatus = normalizeProjectStatus(currentStatus);
 	const toStatus = normalizeProjectStatus(nextStatus);
@@ -95,6 +107,7 @@ async function transitionProjectStatusIfValid({
 			metadata: {
 				deliverableId: deliverableId ?? null,
 				bulk,
+				controlPlaneSummary: controlPlaneSummary ?? null,
 			},
 		});
 		didUpdate = result.applied;
@@ -169,6 +182,7 @@ export async function approveDeliverable(deliverableId: string) {
 		: hasRejected
 			? "in_progress"
 			: "done";
+	const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
 
 	await transitionProjectStatusIfValid({
 		projectDbId: project.dbId,
@@ -178,6 +192,7 @@ export async function approveDeliverable(deliverableId: string) {
 		reason: "Client approved deliverable",
 		deliverableId,
 		bulk: false,
+		controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
 	});
 
 	revalidatePath(`/portal/projects/${project.id}`);
@@ -231,6 +246,8 @@ export async function rejectDeliverable(
 		throw new Error("Only deliverables in pending review can be rejected.");
 	}
 
+	const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
+
 	await transitionProjectStatusIfValid({
 		projectDbId: project.dbId,
 		currentStatus: project.status,
@@ -241,6 +258,7 @@ export async function rejectDeliverable(
 			: "Client requested revisions",
 		deliverableId,
 		bulk: false,
+		controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
 	});
 
 	revalidatePath(`/portal/projects/${project.id}`);
@@ -330,6 +348,7 @@ export async function approveAllPendingDeliverables(projectId: string) {
 		: hasRejected
 			? "in_progress"
 			: "done";
+	const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
 
 	await transitionProjectStatusIfValid({
 		projectDbId: project.dbId,
@@ -338,6 +357,7 @@ export async function approveAllPendingDeliverables(projectId: string) {
 		actorUserDbId,
 		reason: "Client approved all pending deliverables",
 		bulk: true,
+		controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
 	});
 
 	revalidatePath(`/portal/projects/${project.id}`);
@@ -367,6 +387,7 @@ export async function rejectAllPendingDeliverables(
 		.returning({ id: deliverables.id });
 
 	if (rejectedRows.length > 0) {
+		const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
 		await transitionProjectStatusIfValid({
 			projectDbId: project.dbId,
 			currentStatus: project.status,
@@ -374,6 +395,7 @@ export async function rejectAllPendingDeliverables(
 			actorUserDbId,
 			reason: `Client requested revisions (bulk): ${normalizedFeedback}`,
 			bulk: true,
+			controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
 		});
 	}
 
