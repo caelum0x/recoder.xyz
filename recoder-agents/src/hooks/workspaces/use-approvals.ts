@@ -15,8 +15,10 @@ export interface ApprovalRequest {
   action: string;
   details: Record<string, unknown>;
   status: 'pending' | 'granted' | 'rejected' | 'expired' | 'escalated';
-  expiresAt: string;
   createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  timeoutMs: number;
 }
 
 // ---------------------------------------------------------------------------
