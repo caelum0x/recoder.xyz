@@ -18,6 +18,10 @@ import {
 } from "@/db";
 import { getClientForUser } from "@/lib/agency/get-client-for-user";
 import { normalizeProjectStatus } from "@/lib/agency/project-workflow";
+import {
+	getRecoderTaskContext,
+	type RecoderTaskContext,
+} from "@/lib/agency/recoder-control-plane";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { approveChangeOrder, rejectChangeOrderFromForm } from "./actions";
 import { DeliverablesReviewPanel } from "./deliverables-review-panel";
@@ -84,6 +88,15 @@ export default async function ClientProjectDetailPage({
 			? "in_progress"
 			: normalizedProjectStatus;
 	const currentStep = statusSteps.indexOf(timelineStatus);
+
+	const controlPlaneByDeliverableId = Object.fromEntries(
+		await Promise.all(
+			projectDeliverables.map(async (deliverable) => [
+				deliverable.id,
+				await getRecoderTaskContext(deliverable.taskId),
+			]),
+		),
+	) as Record<string, RecoderTaskContext | null>;
 
 	return (
 		<div className="space-y-6">
@@ -162,6 +175,7 @@ export default async function ClientProjectDetailPage({
 				initialDeliverables={projectDeliverables.map((d) => ({
 					dbId: d.dbId,
 					id: d.id,
+					taskId: d.taskId,
 					name: d.name,
 					content: d.content,
 					status: d.status,
@@ -174,6 +188,7 @@ export default async function ClientProjectDetailPage({
 					milestoneLabel: ma.milestoneLabel,
 					status: ma.status,
 				}))}
+				controlPlaneByDeliverableId={controlPlaneByDeliverableId}
 			/>
 
 			<div className="rounded-xl border border-border bg-background p-4">
