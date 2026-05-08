@@ -5,6 +5,10 @@ import {
 	copilotToolDefinitions,
 	executeTool,
 } from "@/lib/agency/copilot-tools";
+import {
+	getRecoderTaskContext,
+	summarizeRecoderTaskContexts,
+} from "@/lib/agency/recoder-control-plane";
 import { requireCurrentTeamRole } from "@/services/teams";
 
 export const maxDuration = 60;
@@ -123,6 +127,8 @@ export async function POST(req: Request) {
 						name: deliverables.name,
 						type: deliverables.type,
 						status: deliverables.status,
+						projectDbId: deliverables.projectDbId,
+						taskId: deliverables.taskId,
 					})
 					.from(deliverables)
 					.where(inArray(deliverables.projectDbId, projectDbIds))
@@ -155,6 +161,30 @@ export async function POST(req: Request) {
 		),
 	].join("\n");
 
+	const projectDbIdToPublicId = new Map(
+		allProjects.map((project) => [project.dbId, project.id] as const),
+	);
+	const controlPlaneSummaries = await Promise.all(
+		allProjects.map(async (project) => {
+			const contexts = await Promise.all(
+				allDeliverables
+					.filter((deliverable) => deliverable.projectDbId === project.dbId)
+					.map((deliverable) => getRecoderTaskContext(deliverable.taskId)),
+			);
+			return {
+				projectId: project.id,
+				projectName: project.name,
+				summary: summarizeRecoderTaskContexts(contexts),
+			};
+		}),
+	);
+	const controlPlaneContext = [
+		`### Shared Control Plane`,
+		...controlPlaneSummaries.map(({ projectId, projectName, summary }) =>
+			`- ${projectName} (${projectId}) runs=${summary.totalTasks} approvals=${summary.pendingApprovals} handoffs=${summary.activeHandoffs} onlineAgents=${summary.onlineAgents} evidence=${summary.evidenceCount}`,
+		),
+	].join("\n");
+
 	const { getUserOpenRouterApiKeyForAgency } = await import(
 		"@/lib/agency/openrouter-model"
 	);
@@ -172,9 +202,11 @@ You have tools to create and modify data. When the user asks you to create clien
 
 When referencing IDs in tool calls, use the exact IDs from the context or from previous tool results.
 
-You have access to this agency data:
+You have access to this agency data and project-level shared execution state:
 
 ${context}
+
+${controlPlaneContext}
 
 Be concise, actionable, and professional. Reference specific data points. Suggest next steps based on agency state. When you perform an action with a tool, clearly confirm what you did.`;
 
