@@ -28,7 +28,9 @@ vi.mock('../agent-bridge.service', () => ({
 
 import type { Router } from 'express';
 import { taskLifecycleRouter } from '../task-lifecycle.routes';
-import { resetTaskLifecycleService } from '../task-lifecycle.service';
+import { getTaskLifecycleService, resetTaskLifecycleService } from '../task-lifecycle.service';
+import { getApprovalGateService, resetApprovalGateService } from '../approval-gate.service';
+import { getDelegationChainService, resetDelegationChainService } from '../delegation-chain.service';
 
 type MockReq = EventEmitter & {
   method: string;
@@ -74,7 +76,7 @@ function makeRes(): { res: any; state: { statusCode: number; jsonData: any } } {
   return { res, state };
 }
 
-function getRouteStack(router: Router, path: string, method: 'post') {
+function getRouteStack(router: Router, path: string, method: 'post' | 'get') {
   const middleware = router.stack.filter((l: any) => !l.route).map((l: any) => l.handle);
   const routeLayer = router.stack.find(
     (l: any) => l.route?.path === path && l.route?.methods?.[method],
@@ -87,7 +89,7 @@ function getRouteStack(router: Router, path: string, method: 'post') {
 async function runStack(
   router: Router,
   path: string,
-  method: 'post',
+  method: 'post' | 'get',
   req: MockReq,
   res: any,
 ): Promise<void> {
@@ -124,6 +126,8 @@ async function runStack(
 describe('taskLifecycleRouter bridge dispatch', () => {
   beforeEach(() => {
     resetTaskLifecycleService();
+    resetApprovalGateService();
+    resetDelegationChainService();
     vi.clearAllMocks();
     mocks.bridgeAgent.status = 'online';
     mocks.bridge.getAgent.mockReturnValue(mocks.bridgeAgent);
@@ -188,5 +192,63 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     expect(state.statusCode).toBe(201);
     expect(mocks.bridge.sendToAgent).not.toHaveBeenCalled();
     expect(mocks.bridgeAgent.status).toBe('online');
+  });
+
+  it('returns unified task context with audit, approval, and delegation linkage', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_ctx',
+      thread_id: 'thread_ctx',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Context task' },
+      metadata: {},
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const approval = getApprovalGateService().createRequest({
+      workspaceId: 'ws_ctx',
+      requestingAgentId: 'agent-a',
+      targetAgentId: 'agent-b',
+      action: 'delegate',
+      details: { sourceTaskId: created.data.id },
+      timeoutMs: 10_000,
+    });
+    const delegation = getDelegationChainService().delegate({
+      fromAgentId: 'agent-a',
+      toAgentId: 'agent-b',
+      prompt: 'Please handle this',
+      metadata: {
+        sourceTaskId: created.data.id,
+        approvalId: approval.approvalId,
+      },
+    });
+
+    service.updateTaskMetadata(created.data.id, {
+      metadataPatch: {
+        approval: { approvalId: approval.approvalId, status: approval.status },
+        handoff: { delegationId: delegation.delegationId, status: delegation.status },
+      },
+      triggeredBy: 'test',
+      reason: 'Link approval and delegation',
+    });
+
+    const req = makeReq({
+      method: 'GET',
+      params: { taskId: created.data.id },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/context', 'get', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.success).toBe(true);
+    expect(state.jsonData.data.task.id).toBe(created.data.id);
+    expect(state.jsonData.data.links.approval.approvalId).toBe(approval.approvalId);
+    expect(state.jsonData.data.links.delegation.delegationId).toBe(delegation.delegationId);
+    expect(state.jsonData.data.links.delegationChain.rootDelegationId).toBe(delegation.delegationId);
+    expect(Array.isArray(state.jsonData.data.audit)).toBe(true);
   });
 });
