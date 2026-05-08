@@ -179,6 +179,21 @@ Status:
 
 - Active phase.
 
+### Current Implementation Progress
+
+- `docker-backend/src/a2a-gateway.ts` now binds paired bridge sessions to optional control-plane ownership metadata: `agentId`, `workspaceId`, `projectId`, `capabilities`, and arbitrary session metadata.
+- Bridge session pairing now reuses an existing token on reconnect when the same bridge, scope, agent, workspace, and project binding reconnects. This moves the bridge lane away from duplicate session registration and toward durable session identity.
+- Bridge heartbeats now inherit paired session ownership and reject mismatched `agentId`, `workspaceId`, or `projectId` claims instead of silently accepting conflicting identity.
+- Bridge session pairing now validates control-plane ownership against the workspace registry: bound workspaces must exist, `projectId` must match the workspace when provided, and the bound agent must already be a member of that workspace.
+- Session visibility now exposes the paired ownership metadata and the latest heartbeat together, which gives Agents and PM a stronger base for shared session visibility.
+
+### What Is Still Missing In Phase 2
+
+- Bridge session identity is stronger, but it is not yet unified with the broader agent registry lifecycle or durable registry reconciliation.
+- Session ownership is now validated against workspaces, but PM approval state, handoff state, and orchestration history are not yet fully attached to the same shared run record.
+- Runtime evidence has not yet been normalized into the same history model for git state, file mutation, stdout, stderr, preview linkage, and later desktop artifacts.
+- Agents does not yet expose the full shared workspace and run state backed by the improved bridge-session contract.
+
 Coding task format:
 
 - Task name
@@ -430,10 +445,10 @@ Coding task format:
 
 ## Immediate Next Step
 
-1. Stabilize agent registry and session lifecycle.
-2. Unify A2A routing, history, artifact, validation, and error-taxonomy primitives.
-3. Integrate PM approvals and handoffs into the run lifecycle.
-4. Expose shared workspace and run state in Agents.
+1. Finish stabilizing agent registry and session lifecycle by reconciling paired bridge sessions with the broader agent registry and reconnect model.
+2. Attach PM approvals and handoff state to the same shared run and session record instead of keeping them parallel to bridge-session visibility.
+3. Unify A2A routing, history, artifact, validation, and error-taxonomy primitives around one shared run-history model.
+4. Expose the improved shared workspace, bridge-session, and run state in Agents.
 5. Bring Agency onto those primitives in the next phase.
 
 ## Notes
