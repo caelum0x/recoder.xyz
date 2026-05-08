@@ -192,6 +192,10 @@ export interface TaskResult {
   data?: Record<string, unknown>;
   /** Artifacts produced during execution (patches, files, reports). */
   artifacts?: TaskArtifact[];
+  /** Preview URLs associated with the run. */
+  preview?: TaskPreviewLink[];
+  /** Derived or explicit evidence references for history/debugging consumers. */
+  evidence?: TaskEvidenceItem[];
 }
 
 /**
@@ -209,6 +213,34 @@ export interface TaskArtifact {
   /** Optional file path when the artifact represents a file. */
   path?: string;
   /** Optional metadata about the artifact. */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Preview link produced or associated with a task result.
+ */
+export interface TaskPreviewLink {
+  /** Fully-qualified preview URL. */
+  url: string;
+  /** Optional label for UI display. */
+  label?: string;
+  /** Optional source of the preview (e.g. daytona, preview-proxy). */
+  source?: string;
+  /** Optional port when the preview maps to a specific dev-server port. */
+  port?: number;
+  /** Optional preview metadata. */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Lightweight evidence reference attached to a completed task result.
+ * This gives Web, Agents, and PM one shared place to look for trace, preview,
+ * artifact, and file-change linkage without connector-specific parsing.
+ */
+export interface TaskEvidenceItem {
+  kind: 'trace' | 'preview' | 'artifact' | 'file-change' | 'log' | 'runtime';
+  label: string;
+  ref?: string;
   metadata?: Record<string, unknown>;
 }
 
