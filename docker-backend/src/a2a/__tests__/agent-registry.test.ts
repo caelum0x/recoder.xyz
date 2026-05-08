@@ -35,6 +35,7 @@ import {
   type RegisterAgentInput,
   type SelfRegisterInput,
 } from '../agent-registry.service';
+import { getHeartbeatTracker, resetHeartbeatTracker } from '../heartbeat-tracker.service';
 import {
   validateRegisterBody,
   validateSelfRegisterBody,
@@ -127,6 +128,7 @@ describe('AgentRegistryService', () => {
       lifecycle: new Map(),
     });
     persistenceMocks.saveA2AAgentRegistryState.mockReset();
+    resetHeartbeatTracker();
     resetAgentRegistryService();
     service = new AgentRegistryService();
   });
@@ -155,6 +157,10 @@ describe('AgentRegistryService', () => {
       const health = service.getHealth('test-agent');
       expect(health.online).toBe(true);
       expect(health.lastHeartbeat).toBeTruthy();
+      expect(getHeartbeatTracker().getRecord('test-agent')).toMatchObject({
+        agentId: 'test-agent',
+        metadata: expect.objectContaining({ source: 'registry' }),
+      });
     });
 
     it('overwrites existing agent with same id', () => {
@@ -358,13 +364,14 @@ describe('AgentRegistryService', () => {
 
     it('agent goes offline after heartbeat timeout', () => {
       service.register(makeRegisterInput());
-      // Manually set a stale heartbeat
-      const staleTime = new Date(Date.now() - 10 * 60 * 1000).toISOString(); // 10 min ago
-      (service as any).heartbeats.set('test-agent', staleTime);
+      const trackerRecord = getHeartbeatTracker().getRecord('test-agent');
+      expect(trackerRecord).toBeDefined();
+      trackerRecord!.lastHeartbeatAt = Date.now() - 10 * 60 * 1000;
+      trackerRecord!.isOnline = false;
 
       const health = service.getHealth('test-agent');
       expect(health.online).toBe(false);
-      expect(health.lastHeartbeat).toBe(staleTime);
+      expect(health.lastHeartbeat).toBe(new Date(trackerRecord!.lastHeartbeatAt).toISOString());
     });
 
     it('getHealth returns empty/offline for unknown agent', () => {
@@ -466,6 +473,22 @@ describe('AgentRegistryService', () => {
       expect(lastSnapshot.agents.has('test-agent')).toBe(false);
       expect(lastSnapshot.heartbeats.has('test-agent')).toBe(false);
       expect(lastSnapshot.lifecycle.has('test-agent')).toBe(false);
+    });
+
+    it('prefers heartbeat tracker state over the persisted registry heartbeat map', () => {
+      service.register(makeRegisterInput({
+        identity: { id: 'tracked-agent', name: 'Tracked Agent', platform: 'custom' },
+      }));
+      const trackerRecord = getHeartbeatTracker().getRecord('tracked-agent');
+      expect(trackerRecord).toBeDefined();
+      trackerRecord!.lastHeartbeatAt = Date.now() - 30_000;
+
+      const staleRegistryHeartbeat = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+      (service as any).heartbeats.set('tracked-agent', staleRegistryHeartbeat);
+
+      const health = service.getHealth('tracked-agent');
+      expect(health.online).toBe(true);
+      expect(health.lastHeartbeat).toBe(new Date(trackerRecord!.lastHeartbeatAt).toISOString());
     });
   });
 
