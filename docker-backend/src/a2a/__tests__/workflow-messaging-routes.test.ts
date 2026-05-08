@@ -35,12 +35,16 @@ vi.mock('../../logger', () => ({
   }),
 }));
 
-vi.mock('../task-lifecycle.service', () => ({
-  generateId: vi.fn(
-    (prefix: string) =>
-      `${prefix}-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-  ),
-}));
+vi.mock('../task-lifecycle.service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../task-lifecycle.service')>();
+  return {
+    ...actual,
+    generateId: vi.fn(
+      (prefix: string) =>
+        `${prefix}-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    ),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Import after mocks
@@ -59,6 +63,7 @@ import {
   resetDelegationChainService,
   resetDelegationIdCounter,
 } from '../delegation-chain.service';
+import { getTaskLifecycleService, resetTaskLifecycleService } from '../task-lifecycle.service';
 
 // ---------------------------------------------------------------------------
 // Mock request / response helpers
@@ -220,6 +225,7 @@ describe('Workflow-messaging routes', () => {
     resetMsgIdCounter();
     resetDelegationChainService();
     resetDelegationIdCounter();
+    resetTaskLifecycleService();
     vi.restoreAllMocks();
   });
 
@@ -227,6 +233,7 @@ describe('Workflow-messaging routes', () => {
     resetWorkflowEngine();
     resetAgentMessagingService();
     resetDelegationChainService();
+    resetTaskLifecycleService();
   });
 
   // =========================================================================
@@ -555,6 +562,58 @@ describe('Workflow-messaging routes', () => {
       expect(state.jsonData.data.toAgentId).toBe('agent-y');
       expect(state.jsonData.data.status).toBe('pending');
       expect(state.jsonData.data.delegationId).toBeDefined();
+    });
+
+    it('writes delegation lifecycle state back into linked task metadata', async () => {
+      const taskService = getTaskLifecycleService();
+      const createdTask = taskService.createTask({
+        prompt: 'Source task',
+        workspace_id: 'ws-manual',
+        thread_id: 'thread-manual',
+        assignee_agent_id: 'agent-a',
+      });
+
+      const taskId = createdTask.id;
+      const createReq = makeReq({
+        method: 'POST',
+        body: {
+          fromAgentId: 'agent-a',
+          toAgentId: 'agent-b',
+          prompt: 'Please take over',
+          metadata: { sourceTaskId: taskId },
+        },
+      });
+      const { res: createRes, state: createState } = makeRes();
+
+      await runSubStack(workflowMessagingRouter, prefix, '/', 'post', createReq, createRes);
+
+      expect(createState.statusCode).toBe(201);
+      const delegationId = createState.jsonData.data.delegationId as string;
+
+      const acceptReq = makeReq({
+        method: 'POST',
+        params: { delegationId },
+      });
+      const { res: acceptRes } = makeRes();
+      await runSubStack(workflowMessagingRouter, prefix, '/:delegationId/accept', 'post', acceptReq, acceptRes);
+
+      const completeReq = makeReq({
+        method: 'POST',
+        params: { delegationId },
+        body: { result: 'done' },
+      });
+      const { res: completeRes } = makeRes();
+      await runSubStack(workflowMessagingRouter, prefix, '/:delegationId/complete', 'post', completeReq, completeRes);
+
+      const updatedTask = taskService.getTask(taskId);
+      expect(updatedTask.ok).toBe(true);
+      if (!updatedTask.ok) return;
+      expect(updatedTask.data.metadata?.handoff).toMatchObject({
+        delegationId,
+        status: 'completed',
+        targetAgentId: 'agent-b',
+        result: 'done',
+      });
     });
 
     // 11. POST /delegations/:id/accept accepts
