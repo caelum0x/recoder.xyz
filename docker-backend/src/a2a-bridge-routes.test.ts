@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import express from 'express';
 import { __resetA2ATestState, a2aRouter } from './a2a-gateway';
 import { getWorkspaceService, resetWorkspaceService } from './a2a/workspace.service';
+import { getAgentRegistryService, resetAgentRegistryService } from './a2a/agent-registry.service';
 
 // Preserve real fetch before the global test setup replaces it with a mock.
 const _realFetch = globalThis.fetch;
@@ -35,6 +36,7 @@ describe('A2A bridge routes', () => {
     delete process.env.REDIS_URL;
     __resetA2ATestState();
     resetWorkspaceService();
+    resetAgentRegistryService();
 
     const app = express();
     app.use('/api/a2a', express.text({ type: 'application/json' }));
@@ -121,6 +123,8 @@ describe('A2A bridge routes', () => {
         bridgeId: 'bridge-scoped',
         issuedBy: 'test-suite',
         agentId: 'codex-agent-1',
+        agentName: 'Codex Agent One',
+        agentPlatform: 'codex',
         workspaceId: workspace.workspaceId,
         projectId: 'proj-agent-1',
         capabilities: ['plan', 'execute'],
@@ -133,10 +137,13 @@ describe('A2A bridge routes', () => {
     expect(typeof pairBody.token).toBe('string');
     expect(pairBody.scope).toBe('team-alpha');
     expect(pairBody.agentId).toBe('codex-agent-1');
+    expect(pairBody.agentName).toBe('Codex Agent One');
+    expect(pairBody.agentPlatform).toBe('codex');
     expect(pairBody.workspaceId).toBe(workspace.workspaceId);
     expect(pairBody.projectId).toBe('proj-agent-1');
     expect(pairBody.capabilities).toEqual(['plan', 'execute']);
     expect(pairBody.metadata).toEqual({ sessionOwner: 'codex' });
+    expect(getAgentRegistryService().get('codex-agent-1')?.identity.platform).toBe('codex');
 
     const enqueue = await fetch(`${baseUrl}/api/a2a/bridge/jobs`, {
       method: 'POST',
@@ -189,6 +196,8 @@ describe('A2A bridge routes', () => {
         (s: any) =>
           s.bridgeId === 'bridge-scoped' &&
           s.agentId === 'codex-agent-1' &&
+          s.registry?.registered === true &&
+          s.registry?.online === true &&
           s.workspaceId === workspace.workspaceId &&
           s.projectId === 'proj-agent-1',
       ),
@@ -265,6 +274,33 @@ describe('A2A bridge routes', () => {
     expect(reusedSessions).toHaveLength(1);
     expect(reusedSessions[0].capabilities).toEqual(['plan', 'execute']);
     expect(reusedSessions[0].metadata).toEqual({ reconnectCount: 1 });
+  });
+
+  it('rejects bridge session registry binding when an existing agent platform conflicts', async () => {
+    getAgentRegistryService().selfRegister({
+      agentId: 'conflict-agent',
+      name: 'Conflict Agent',
+      platform: 'claude_code',
+    });
+    const workspace = createWorkspace(['conflict-agent'], 'proj-conflict');
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-platform-conflict',
+        agentId: 'conflict-agent',
+        agentPlatform: 'codex',
+        workspaceId: workspace.workspaceId,
+        projectId: workspace.projectId,
+      }),
+    });
+    expect(pair.status).toBe(409);
+    const body = await pair.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('platform mismatch');
   });
 
   it('rejects bridge session binding for unknown workspace', async () => {
@@ -540,6 +576,7 @@ describe('A2A bridge routes', () => {
       body: JSON.stringify({
         bridgeId: 'bridge-default',
         agentId: 'codex-agent-heartbeat',
+        agentPlatform: 'codex',
         workspaceId: workspace.workspaceId,
         projectId: 'proj-heartbeat',
       }),
@@ -580,6 +617,7 @@ describe('A2A bridge routes', () => {
     expect(singleBody.heartbeat.agentId).toBe('codex-agent-heartbeat');
     expect(singleBody.heartbeat.workspaceId).toBe('ws-heartbeat');
     expect(singleBody.heartbeat.projectId).toBe('proj-heartbeat');
+    expect(getAgentRegistryService().getWithHealth('codex-agent-heartbeat')?.health.online).toBe(true);
 
     const status = await fetch(`${baseUrl}/api/a2a/bridge/status`, {
       headers: { 'x-recoder-a2a-admin-token': 'admin-token' },

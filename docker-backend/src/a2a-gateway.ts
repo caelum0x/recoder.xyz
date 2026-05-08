@@ -6,6 +6,7 @@ import {
   type RecoderA2AEnvelope,
 } from '@recoder/shared/a2a';
 import { getWorkspaceService, resetWorkspaceService } from './a2a/workspace.service';
+import { getAgentRegistryService, resetAgentRegistryService } from './a2a/agent-registry.service';
 
 const router = Router();
 
@@ -134,6 +135,8 @@ type BridgeSession = {
   bridgeId: string;
   scope?: string | null;
   agentId?: string | null;
+  agentName?: string | null;
+  agentPlatform?: GatewayAgentPlatform | null;
   workspaceId?: string | null;
   projectId?: string | null;
   capabilities?: string[];
@@ -1938,6 +1941,61 @@ function validateBridgeSessionWorkspaceBinding(input: {
   return { ok: true };
 }
 
+function reconcileBridgeSessionRegistryBinding(input: {
+  bridgeId: string;
+  agentId: string | null;
+  agentName: string | null;
+  agentPlatform: GatewayAgentPlatform | null;
+  capabilities: string[];
+  workspaceId: string | null;
+  projectId: string | null;
+}): { ok: true } | { ok: false; status: number; error: string } {
+  if (!input.agentId) return { ok: true };
+
+  const registry = getAgentRegistryService();
+  const existing = registry.get(input.agentId);
+  const desiredPlatform = input.agentPlatform || 'custom';
+
+  if (existing) {
+    if (existing.identity.platform !== desiredPlatform) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Agent platform mismatch for ${input.agentId}`,
+      };
+    }
+    registry.recordHeartbeat(input.agentId);
+    return { ok: true };
+  }
+
+  const tags = Array.from(
+    new Set(
+      [
+        'bridge',
+        `bridge:${input.bridgeId}`,
+        ...(input.workspaceId ? [`workspace:${input.workspaceId}`] : []),
+        ...(input.projectId ? [`project:${input.projectId}`] : []),
+        ...input.capabilities.map((capability) => `capability:${capability}`),
+      ].filter(Boolean),
+    ),
+  );
+
+  registry.selfRegister({
+    agentId: input.agentId,
+    name: input.agentName || input.agentId,
+    platform: desiredPlatform,
+    tags,
+    skills: input.capabilities.map((capability) => ({
+      id: capability,
+      name: capability,
+      description: capability,
+      tags: [capability],
+    })),
+  });
+
+  return { ok: true };
+}
+
 function newBridgeSessionToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return Array.from(bytes)
@@ -2040,6 +2098,8 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     return;
   }
   const agentId = asOptionalString((parsedBody as any).agentId);
+  const agentName = asOptionalString((parsedBody as any).agentName);
+  const agentPlatform = agentId ? normalizePlatform((parsedBody as any).agentPlatform || 'custom') : null;
   const workspaceId = asOptionalString((parsedBody as any).workspaceId);
   const projectId = asOptionalString((parsedBody as any).projectId);
   const capabilities = asStringArray((parsedBody as any).capabilities);
@@ -2054,6 +2114,19 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
   const workspaceValidation = validateBridgeSessionWorkspaceBinding({ agentId, workspaceId, projectId });
   if (!workspaceValidation.ok) {
     res.status(workspaceValidation.status).json({ ok: false, error: workspaceValidation.error });
+    return;
+  }
+  const registryValidation = reconcileBridgeSessionRegistryBinding({
+    bridgeId,
+    agentId,
+    agentName,
+    agentPlatform,
+    capabilities,
+    workspaceId,
+    projectId,
+  });
+  if (!registryValidation.ok) {
+    res.status(registryValidation.status).json({ ok: false, error: registryValidation.error });
     return;
   }
 
@@ -2075,6 +2148,8 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     bridgeId,
     scope: requestedScope,
     agentId,
+    agentName,
+    agentPlatform,
     workspaceId,
     projectId,
     capabilities,
@@ -2091,6 +2166,8 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     token: session.token,
     scope: session.scope || null,
     agentId: session.agentId || null,
+    agentName: session.agentName || null,
+    agentPlatform: session.agentPlatform || null,
     workspaceId: session.workspaceId || null,
     projectId: session.projectId || null,
     capabilities: session.capabilities || [],
@@ -2109,20 +2186,38 @@ router.get('/bridge/sessions', async (req: Request, res: Response) => {
 
   const sessions = await listBridgeSessions();
   const sessionRows = await Promise.all(
-    sessions.map(async (session) => ({
-      bridgeId: session.bridgeId,
-      scope: session.scope || null,
-      agentId: session.agentId || null,
-      workspaceId: session.workspaceId || null,
-      projectId: session.projectId || null,
-      issuedBy: session.issuedBy,
-      capabilities: session.capabilities || [],
-      metadata: session.metadata || null,
-      createdAt: session.createdAt,
-      expiresAt: session.expiresAt,
-      tokenPreview: `${session.token.slice(0, 8)}...`,
-      heartbeat: await getBridgeHeartbeat(session.bridgeId),
-    })),
+    sessions.map(async (session) => {
+      const registryAgent = session.agentId ? getAgentRegistryService().getWithHealth(session.agentId) : undefined;
+      return {
+        bridgeId: session.bridgeId,
+        scope: session.scope || null,
+        agentId: session.agentId || null,
+        agentName: session.agentName || registryAgent?.identity.name || null,
+        agentPlatform: session.agentPlatform || registryAgent?.identity.platform || null,
+        workspaceId: session.workspaceId || null,
+        projectId: session.projectId || null,
+        issuedBy: session.issuedBy,
+        capabilities: session.capabilities || [],
+        metadata: session.metadata || null,
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+        tokenPreview: `${session.token.slice(0, 8)}...`,
+        heartbeat: await getBridgeHeartbeat(session.bridgeId),
+        registry: registryAgent
+          ? {
+              registered: true,
+              online: registryAgent.health.online,
+              lastHeartbeat: registryAgent.health.lastHeartbeat,
+              reconnectCount: registryAgent.lifecycle.reconnectCount,
+              registrationCount: registryAgent.lifecycle.registrationCount,
+            }
+          : {
+              registered: false,
+              online: false,
+              lastHeartbeat: '',
+            },
+      };
+    }),
   );
   res.status(200).json({
     ok: true,
@@ -2278,6 +2373,21 @@ router.post('/bridge/heartbeat', async (req: Request, res: Response) => {
   if (boundSession?.projectId && payloadProjectId && boundSession.projectId !== payloadProjectId) {
     res.status(403).json({ ok: false, error: 'Heartbeat projectId does not match paired bridge session' });
     return;
+  }
+  if (boundSession?.agentId) {
+    const registryValidation = reconcileBridgeSessionRegistryBinding({
+      bridgeId,
+      agentId: boundSession.agentId,
+      agentName: boundSession.agentName || null,
+      agentPlatform: boundSession.agentPlatform || null,
+      capabilities: boundSession.capabilities || [],
+      workspaceId: boundSession.workspaceId || null,
+      projectId: boundSession.projectId || null,
+    });
+    if (!registryValidation.ok) {
+      res.status(registryValidation.status).json({ ok: false, error: registryValidation.error });
+      return;
+    }
   }
 
   const mergedPayload: Record<string, unknown> = {
@@ -3416,6 +3526,7 @@ export function __resetA2ATestState(): void {
   orchestrationHistorySubscribers.clear();
   orchestrationHistoryEventLog.clear();
   resetWorkspaceService();
+  resetAgentRegistryService();
 }
 
 export const __testSelectTargets = selectTargets;
