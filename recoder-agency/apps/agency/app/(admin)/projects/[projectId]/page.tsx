@@ -22,6 +22,10 @@ import { InvoiceSection } from "./invoice-section";
 import { ProjectStatusControl } from "./project-status-control";
 import { ProjectTransitionHistory } from "./project-transition-history";
 import { RetryClientTransitionPanel } from "./retry-client-transition-panel";
+import {
+	getRecoderTaskContext,
+	type RecoderTaskContext,
+} from "@/lib/agency/recoder-control-plane";
 
 type DodTemplateConfig = {
 	minContentLength: number;
@@ -332,6 +336,15 @@ export default async function ProjectDetailPage({
 		};
 	}
 
+	const controlPlaneByDeliverableId = Object.fromEntries(
+		await Promise.all(
+			projectDeliverables.map(async (deliverable) => [
+				deliverable.id,
+				await getRecoderTaskContext(deliverable.taskId),
+			]),
+		),
+	) as Record<string, RecoderTaskContext | null>;
+
 	return (
 		<div className="space-y-6">
 			<div className="flex items-center gap-3">
@@ -530,6 +543,7 @@ export default async function ProjectDetailPage({
 				projectId={project.id}
 				deliverables={projectDeliverables}
 				dodTemplatesByType={dodTemplatesByType}
+				controlPlaneByDeliverableId={controlPlaneByDeliverableId}
 			/>
 
 			<div className="rounded-xl border border-border bg-background p-4">
