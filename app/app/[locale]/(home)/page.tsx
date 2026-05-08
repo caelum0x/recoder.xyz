@@ -18,6 +18,7 @@ import {
 import { useState } from 'react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
+import { LeadCaptureForm } from '@/components/LeadCaptureForm';
 import { useSession } from '@/lib/session-provider';
 import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
@@ -205,6 +206,15 @@ export default function HomePage() {
                   </>
                 )}
               </div>
+
+              {!session?.user && (
+                <LeadCaptureForm
+                  source="homepage_hero_lead_capture"
+                  title="Not ready to connect GitHub or Google?"
+                  description="Leave your email and we’ll send product updates, launch notes, and early access to the parts of Recoder that are actually becoming reliable."
+                  submitLabel="Join the list"
+                />
+              )}
 
               <p className="text-sm text-gray-500">
                 Do not pay Recoder to subsidize models. Bring your own provider budget and pay the platform for control.
