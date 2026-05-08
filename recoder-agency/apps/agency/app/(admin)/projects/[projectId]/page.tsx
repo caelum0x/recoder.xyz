@@ -25,6 +25,7 @@ import { RetryClientTransitionPanel } from "./retry-client-transition-panel";
 import {
 	getRecoderTaskContext,
 	type RecoderTaskContext,
+	summarizeRecoderTaskContexts,
 } from "@/lib/agency/recoder-control-plane";
 
 type DodTemplateConfig = {
@@ -344,6 +345,9 @@ export default async function ProjectDetailPage({
 			]),
 		),
 	) as Record<string, RecoderTaskContext | null>;
+	const controlPlaneSummary = summarizeRecoderTaskContexts(
+		Object.values(controlPlaneByDeliverableId),
+	);
 
 	return (
 		<div className="space-y-6">
@@ -392,6 +396,59 @@ export default async function ProjectDetailPage({
 					</p>
 				</div>
 			)}
+
+			<div className="rounded-xl border border-border bg-background p-4">
+				<h2 className="text-sm font-medium text-text-muted mb-3">
+					Control Plane Summary
+				</h2>
+				<div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Linked runs</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.totalTasks}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Pending approvals</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.pendingApprovals}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Active handoffs</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.activeHandoffs}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Online agents</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.onlineAgents}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Evidence refs</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.evidenceCount}
+						</p>
+					</div>
+				</div>
+				<div className="mt-3 flex flex-wrap gap-2">
+					{Object.entries(controlPlaneSummary.states).map(([state, count]) => (
+						<span
+							key={state}
+							className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
+						>
+							{state}: {count}
+						</span>
+					))}
+					{controlPlaneSummary.previewCount > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
+							previews: {controlPlaneSummary.previewCount}
+						</span>
+					) : null}
+				</div>
+			</div>
 
 			<ProjectTransitionHistory
 				items={transitions.map((item) => ({

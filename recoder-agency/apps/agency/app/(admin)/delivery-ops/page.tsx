@@ -1,13 +1,18 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { DatabaseIcon, DownloadIcon } from "lucide-react";
 import Link from "next/link";
-import { alertSubscriptions, db } from "@/db";
+import { alertSubscriptions, db, deliverables, projects } from "@/db";
 import {
 	type DeliveryOpsFilters,
 	fetchDeliveryOpsData,
 	parseDeliveryOpsFilters,
 	toDeliveryOpsSearchParams,
 } from "@/lib/agency/delivery-ops";
+import {
+	getRecoderTaskContext,
+	summarizeRecoderTaskContexts,
+	type RecoderProjectControlSummary,
+} from "@/lib/agency/recoder-control-plane";
 import { getTeamCapacitySnapshot } from "@/lib/agency/team-capacity";
 import { fetchCurrentTeam } from "@/services/teams";
 import {
@@ -98,6 +103,71 @@ export default async function DeliveryOpsPage({
 		const delta = current - prior;
 		const sign = delta > 0 ? "+" : "";
 		return `${sign}${delta.toFixed(1)}pp`;
+	};
+
+	const projectIdsNeedingSummary = Array.from(
+		new Set([
+			...data.stuckProjects.map((project) => project.projectId),
+			...data.breachedProjects.map((project) => project.projectId),
+			...data.reworkSpikes.map((project) => project.projectId),
+			...data.forcedTransitions.map((project) => project.projectId),
+			...data.exceptionQueue.map((project) => project.projectId),
+		]),
+	);
+
+	const controlPlaneByProjectId = projectIdsNeedingSummary.length === 0
+		? {}
+		: Object.fromEntries(
+				await Promise.all(
+					projectIdsNeedingSummary.map(async (projectId) => {
+						const projectDeliverables = await db
+							.select({
+								id: deliverables.id,
+								taskId: deliverables.taskId,
+							})
+							.from(deliverables)
+							.innerJoin(projects, eq(deliverables.projectDbId, projects.dbId))
+							.where(
+								and(
+									eq(projects.teamDbId, team.dbId),
+									eq(projects.id, projectId),
+								),
+							);
+						const contexts = await Promise.all(
+							projectDeliverables.map((deliverable) =>
+								getRecoderTaskContext(deliverable.taskId),
+							),
+						);
+						return [projectId, summarizeRecoderTaskContexts(contexts)];
+					}),
+				),
+			) as Record<string, RecoderProjectControlSummary>;
+
+	const renderControlPlaneSummary = (projectId: string) => {
+		const summary = controlPlaneByProjectId[projectId];
+		if (!summary || summary.totalTasks === 0) {
+			return null;
+		}
+
+		return (
+			<div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+				<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+					runs:{summary.totalTasks}
+				</span>
+				<span className="rounded bg-purple-500/10 px-2 py-0.5 text-purple-300">
+					approvals:{summary.pendingApprovals}
+				</span>
+				<span className="rounded bg-amber-500/10 px-2 py-0.5 text-amber-300">
+					handoffs:{summary.activeHandoffs}
+				</span>
+				<span className="rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+					online:{summary.onlineAgents}
+				</span>
+				<span className="rounded bg-slate-500/10 px-2 py-0.5 text-slate-300">
+					evidence:{summary.evidenceCount}
+				</span>
+			</div>
+		);
 	};
 
 	return (
@@ -363,6 +433,7 @@ export default async function DeliveryOpsPage({
 										{item.reason}
 									</p>
 								) : null}
+								{renderControlPlaneSummary(item.projectId)}
 							</Link>
 						))}
 					</div>
@@ -517,6 +588,7 @@ export default async function DeliveryOpsPage({
 												Escalation reason: {project.escalationReason}
 											</p>
 										)}
+										{renderControlPlaneSummary(project.projectId)}
 									</div>
 									<span className="text-xs text-text-muted">
 										Updated{" "}
@@ -571,6 +643,7 @@ export default async function DeliveryOpsPage({
 												Escalation reason: {project.escalationReason}
 											</p>
 										)}
+										{renderControlPlaneSummary(project.projectId)}
 									</div>
 								</div>
 							</Link>
@@ -608,6 +681,7 @@ export default async function DeliveryOpsPage({
 								{item.reason && (
 									<p className="mt-1 text-xs text-text-muted">{item.reason}</p>
 								)}
+								{renderControlPlaneSummary(item.projectId)}
 							</Link>
 						))}
 					</div>
@@ -647,6 +721,7 @@ export default async function DeliveryOpsPage({
 												? new Date(item.lastReworkAt).toLocaleDateString()
 												: "-"}
 										</p>
+										{renderControlPlaneSummary(item.projectId)}
 									</div>
 								</div>
 							</Link>
