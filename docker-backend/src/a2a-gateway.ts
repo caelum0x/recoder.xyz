@@ -1749,6 +1749,25 @@ async function listBridgeSessions(): Promise<BridgeSession[]> {
   return Array.from(bridgeSessionStore.values()).map((row) => JSON.parse(row.value) as BridgeSession);
 }
 
+export async function listBridgeSessionsForBinding(input: {
+  agentId?: string;
+  workspaceId?: string;
+}): Promise<Array<BridgeSession & { heartbeat: Record<string, unknown> | null }>> {
+  const sessions = await listBridgeSessions();
+  const filtered = sessions.filter((session) => {
+    if (input.agentId && session.agentId !== input.agentId) return false;
+    if (input.workspaceId && session.workspaceId !== input.workspaceId) return false;
+    return true;
+  });
+
+  return Promise.all(
+    filtered.map(async (session) => ({
+      ...session,
+      heartbeat: await getBridgeHeartbeat(session.bridgeId),
+    })),
+  );
+}
+
 async function findReusableBridgeSession(input: {
   bridgeId: string;
   scope: string | null;

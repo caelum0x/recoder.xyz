@@ -32,8 +32,7 @@ import {
   type TransitionTaskInput,
   type TaskListFilter,
 } from './task-lifecycle.service';
-import { getApprovalGateService } from './approval-gate.service';
-import { getDelegationChainService } from './delegation-chain.service';
+import { buildTaskRunContext } from './run-context.service';
 import {
   validateCreateTaskBody,
   validateTransitionBody,
@@ -67,29 +66,6 @@ function sendSuccess<T>(res: Response, data: T, statusCode = 200): void {
 function sendError(res: Response, httpStatus: number, error: A2AError): void {
   const response: A2AErrorResponse = { success: false, error };
   res.status(httpStatus).json(response);
-}
-
-function extractApprovalId(task: TaskEnvelope): string | undefined {
-  const direct = task.metadata?.approval as Record<string, unknown> | undefined;
-  if (direct && typeof direct.approvalId === 'string' && direct.approvalId) {
-    return direct.approvalId;
-  }
-  const nested = task.metadata?.handoff as Record<string, unknown> | undefined;
-  if (nested && typeof nested.approvalId === 'string' && nested.approvalId) {
-    return nested.approvalId;
-  }
-  return undefined;
-}
-
-function extractDelegationId(task: TaskEnvelope): string | undefined {
-  if (typeof task.metadata?.delegationId === 'string' && task.metadata.delegationId) {
-    return task.metadata.delegationId;
-  }
-  const handoff = task.metadata?.handoff as Record<string, unknown> | undefined;
-  if (handoff && typeof handoff.delegationId === 'string' && handoff.delegationId) {
-    return handoff.delegationId;
-  }
-  return undefined;
 }
 
 function extractBridgePrompt(payload: unknown): string {
@@ -346,7 +322,7 @@ taskLifecycleRouter.get(
 
 taskLifecycleRouter.get(
   '/:taskId/context',
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const { taskId } = req.params;
       const service = getTaskLifecycleService();
@@ -357,30 +333,8 @@ taskLifecycleRouter.get(
         return;
       }
 
-      const task = taskResult.data;
-      const historyResult = service.getTaskHistory(taskId);
-      if (!historyResult.ok) {
-        sendError(res, historyResult.httpStatus, historyResult.error);
-        return;
-      }
-
-      const approvalId = extractApprovalId(task);
-      const delegationId = extractDelegationId(task);
-      const approval = approvalId ? getApprovalGateService().get(approvalId) : undefined;
-      const delegation = delegationId ? getDelegationChainService().getDelegation(delegationId) : undefined;
-      const delegationChain = delegationId ? getDelegationChainService().getChain(delegationId) : undefined;
-      const audit = service.getRecentAuditEventsForTask(taskId, 100);
-
-      sendSuccess(res, {
-        task,
-        transitions: historyResult.data,
-        audit,
-        links: {
-          ...(approval ? { approval } : {}),
-          ...(delegation ? { delegation } : {}),
-          ...(delegationChain ? { delegationChain } : {}),
-        },
-      });
+      const context = await buildTaskRunContext(taskResult.data);
+      sendSuccess(res, context);
     } catch (err) {
       logger.error({ err, taskId: req.params.taskId }, 'unhandled error in GET /api/a2a/tasks/:taskId/context');
       sendError(res, 500, buildA2AError({
