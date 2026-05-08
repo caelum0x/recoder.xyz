@@ -274,6 +274,11 @@ export class InMemoryTaskStore implements TaskStore {
  */
 export type AuditEventSink = (event: AuditEvent) => void | Promise<void>;
 
+export interface TaskAuditRecord {
+  event: AuditEvent;
+  expiresAt: number;
+}
+
 // ---------------------------------------------------------------------------
 // Create-task input
 // ---------------------------------------------------------------------------
@@ -1057,6 +1062,16 @@ export class TaskLifecycleService {
     const normalizedLimit = Math.max(0, Math.floor(limit));
     if (normalizedLimit === 0) return [];
     return this.auditTrail.slice(-normalizedLimit).map((item) => item.event);
+  }
+
+  getRecentAuditEventsForTask(taskId: string, limit = 100): AuditEvent[] {
+    this.pruneAuditTrail();
+    const normalizedLimit = Math.max(0, Math.floor(limit));
+    if (normalizedLimit === 0) return [];
+    return this.auditTrail
+      .filter((item) => item.event.task_id === taskId)
+      .slice(-normalizedLimit)
+      .map((item) => item.event);
   }
 
   private stateToAuditEventType(state: TaskState): (typeof AuditEventTypeEnum)[keyof typeof AuditEventTypeEnum] {

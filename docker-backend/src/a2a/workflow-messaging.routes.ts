@@ -20,6 +20,30 @@ import { getDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 
+function syncDelegationToTaskMetadata(
+  delegation: { delegationId: string; toAgentId: string; status: string; metadata?: Record<string, string>; error?: string; result?: string },
+  patch: Record<string, unknown>,
+  reason: string,
+): void {
+  const sourceTaskId = delegation.metadata?.sourceTaskId;
+  if (!sourceTaskId) return;
+
+  const taskService = getTaskLifecycleService();
+  taskService.updateTaskMetadata(sourceTaskId, {
+    metadataPatch: {
+      handoff: {
+        delegationId: delegation.delegationId,
+        targetAgentId: delegation.toAgentId,
+        status: delegation.status,
+        ...(delegation.metadata?.approvalId ? { approvalId: delegation.metadata.approvalId } : {}),
+        ...patch,
+      },
+    },
+    triggeredBy: 'workflow-messaging',
+    reason,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Stub executor (kept for reference)
 // ---------------------------------------------------------------------------
@@ -441,6 +465,12 @@ delegationRouter.post('/', (req: Request, res: Response) => {
       metadata,
     });
 
+    syncDelegationToTaskMetadata(
+      delegation,
+      {},
+      'Delegation created via workflow messaging route',
+    );
+
     sendSuccess(res, delegation, 201);
   } catch (err: any) {
     const message = err?.message ?? 'Internal error';
@@ -476,6 +506,11 @@ delegationRouter.post('/:delegationId/accept', (req: Request, res: Response) => 
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { acceptedAt: delegation.acceptedAt },
+      'Delegation accepted via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
@@ -490,6 +525,11 @@ delegationRouter.post('/:delegationId/reject', (req: Request, res: Response) => 
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { error: delegation.error, completedAt: delegation.completedAt },
+      'Delegation rejected via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
@@ -510,6 +550,11 @@ delegationRouter.post('/:delegationId/complete', (req: Request, res: Response) =
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { result: delegation.result, completedAt: delegation.completedAt },
+      'Delegation completed via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
@@ -530,6 +575,11 @@ delegationRouter.post('/:delegationId/fail', (req: Request, res: Response) => {
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { error: delegation.error, completedAt: delegation.completedAt },
+      'Delegation failed via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
@@ -543,6 +593,11 @@ delegationRouter.post('/:delegationId/cancel', (req: Request, res: Response) => 
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { completedAt: delegation.completedAt },
+      'Delegation cancelled via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
