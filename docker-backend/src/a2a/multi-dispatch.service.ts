@@ -10,7 +10,8 @@
 
 import { v4 as uuid } from 'uuid';
 import Docker from 'dockerode';
-import { getCapabilityMatcher } from './capability-matcher.service';
+import { getCapabilityMatcher, type TaskRequirements } from './capability-matcher.service';
+import { classifyIntent, type IntentClassification } from './intent-gate';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { getTaskResultAggregator } from './task-result-aggregator';
 import { getCollaborationSvc } from './collaboration.service';
@@ -27,11 +28,98 @@ import type {
   DispatchRecord,
   DispatchStatus,
   MultiDispatchRequest,
+  TaskRoutingHints,
   WorktreeInfo,
 } from '@recoder/shared/a2a';
 
 const logger = createLogger('a2a-multi-dispatch');
 const docker = new Docker();
+
+export interface DerivedRoutingPlan {
+  requirements: TaskRequirements;
+  runtimeCategory: NonNullable<TaskRoutingHints['runtimeCategory']>;
+  intent: IntentClassification;
+}
+
+export function deriveRoutingPlan(
+  prompt: string,
+  routingHints?: TaskRoutingHints,
+): DerivedRoutingPlan {
+  const intent = classifyIntent(prompt);
+
+  const defaultsByCategory: Record<
+    IntentClassification['category'],
+    {
+      runtimeCategory: NonNullable<TaskRoutingHints['runtimeCategory']>;
+      requiredCapabilities: string[];
+      preferredCapabilities: string[];
+      preferredPlatform?: string;
+    }
+  > = {
+    'bug-fix': {
+      runtimeCategory: 'implementation',
+      requiredCapabilities: ['code-generation'],
+      preferredCapabilities: ['code-review'],
+      preferredPlatform: 'codex',
+    },
+    feature: {
+      runtimeCategory: 'implementation',
+      requiredCapabilities: ['code-generation'],
+      preferredCapabilities: ['testing'],
+      preferredPlatform: 'codex',
+    },
+    refactor: {
+      runtimeCategory: 'implementation',
+      requiredCapabilities: ['code-generation'],
+      preferredCapabilities: ['refactoring'],
+      preferredPlatform: 'codex',
+    },
+    test: {
+      runtimeCategory: 'implementation',
+      requiredCapabilities: ['testing'],
+      preferredCapabilities: ['code-generation'],
+      preferredPlatform: 'codex',
+    },
+    doc: {
+      runtimeCategory: 'documentation',
+      requiredCapabilities: ['code-review'],
+      preferredCapabilities: ['documentation'],
+      preferredPlatform: 'claude_code',
+    },
+    visual: {
+      runtimeCategory: 'visual',
+      requiredCapabilities: ['web-interface'],
+      preferredCapabilities: ['design', 'ui'],
+      preferredPlatform: 'recoder_web',
+    },
+    debug: {
+      runtimeCategory: 'debug',
+      requiredCapabilities: ['code-review'],
+      preferredCapabilities: ['debugging'],
+      preferredPlatform: 'claude_code',
+    },
+    other: {
+      runtimeCategory: 'general',
+      requiredCapabilities: [],
+      preferredCapabilities: [],
+    },
+  };
+
+  const categoryDefaults = defaultsByCategory[intent.category];
+
+  return {
+    requirements: {
+      requiredCapabilities:
+        routingHints?.requiredCapabilities ?? categoryDefaults.requiredCapabilities,
+      preferredCapabilities:
+        routingHints?.preferredCapabilities ?? categoryDefaults.preferredCapabilities,
+      preferredPlatform:
+        routingHints?.preferredPlatform ?? categoryDefaults.preferredPlatform,
+    },
+    runtimeCategory: routingHints?.runtimeCategory ?? categoryDefaults.runtimeCategory,
+    intent,
+  };
+}
 
 /**
  * Resolve a Docker container ID from a project ID by matching the `projectId`
@@ -93,13 +181,13 @@ export class MultiDispatchService {
     let agentIds: string[];
     // Per-agent routing reasons (populated when auto-routing)
     const routingReasons: Record<string, string> = {};
+    const routingPlan = deriveRoutingPlan(request.prompt, request.routingHints);
 
     if (request.autoRoute || (!request.agentIds?.length)) {
       // Auto-route using capability matcher
       const matcher = getCapabilityMatcher();
       const matchResult = matcher.matchAgents({
-        requiredCapabilities: [],
-        preferredCapabilities: [],
+        ...routingPlan.requirements,
         tags: [],
       });
 
@@ -154,6 +242,11 @@ export class MultiDispatchService {
         metadata: {
           dispatchId,
           orchestrationPattern: pattern,
+          runtimeCategory: routingPlan.runtimeCategory,
+          routingHints: request.routingHints,
+          routingRequirements: routingPlan.requirements,
+          intentCategory: routingPlan.intent.category,
+          intentConfidence: routingPlan.intent.confidence,
           ...(routingReasons[agentId] ? { routingReason: routingReasons[agentId] } : {}),
         },
       });
@@ -270,6 +363,12 @@ export class MultiDispatchService {
       results: [],
       ...(Object.keys(worktrees).length > 0 ? { worktrees } : {}),
       ...(Object.keys(routingReasons).length > 0 ? { routingReasons } : {}),
+      routingHints: request.routingHints,
+      intentClassification: {
+        category: routingPlan.intent.category,
+        confidence: routingPlan.intent.confidence,
+        keywords: routingPlan.intent.keywords,
+      },
       createdAt: now,
     };
 
