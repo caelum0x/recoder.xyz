@@ -2,6 +2,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import express from 'express';
 import { __resetA2ATestState, a2aRouter } from './a2a-gateway';
+import { getWorkspaceService, resetWorkspaceService } from './a2a/workspace.service';
 
 // Preserve real fetch before the global test setup replaces it with a mock.
 const _realFetch = globalThis.fetch;
@@ -33,6 +34,7 @@ describe('A2A bridge routes', () => {
     delete process.env.RECODER_A2A_REDIS_URL;
     delete process.env.REDIS_URL;
     __resetA2ATestState();
+    resetWorkspaceService();
 
     const app = express();
     app.use('/api/a2a', express.text({ type: 'application/json' }));
@@ -52,6 +54,15 @@ describe('A2A bridge routes', () => {
       });
     });
   });
+
+  function createWorkspace(memberAgentIds: string[], projectId = `proj-${Math.random().toString(16).slice(2, 10)}`) {
+    return getWorkspaceService().create({
+      name: `ws-${projectId}`,
+      projectId,
+      ownerId: 'test-owner',
+      memberAgentIds,
+    });
+  }
 
   it('enqueues and dequeues bridge jobs', async () => {
     const enqueue = await fetch(`${baseUrl}/api/a2a/bridge/jobs`, {
@@ -98,6 +109,7 @@ describe('A2A bridge routes', () => {
   it('issues scoped bridge session token and enforces bridgeId scope', async () => {
     process.env.RECODER_A2A_ENFORCE_SCOPE = 'true';
     process.env.RECODER_A2A_ADMIN_TOKEN_SCOPES = JSON.stringify({ 'scope-admin': 'team-alpha' });
+    const workspace = createWorkspace(['codex-agent-1'], 'proj-agent-1');
 
     const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
       method: 'POST',
@@ -109,7 +121,7 @@ describe('A2A bridge routes', () => {
         bridgeId: 'bridge-scoped',
         issuedBy: 'test-suite',
         agentId: 'codex-agent-1',
-        workspaceId: 'ws-agent-1',
+        workspaceId: workspace.workspaceId,
         projectId: 'proj-agent-1',
         capabilities: ['plan', 'execute'],
         metadata: { sessionOwner: 'codex' },
@@ -121,7 +133,7 @@ describe('A2A bridge routes', () => {
     expect(typeof pairBody.token).toBe('string');
     expect(pairBody.scope).toBe('team-alpha');
     expect(pairBody.agentId).toBe('codex-agent-1');
-    expect(pairBody.workspaceId).toBe('ws-agent-1');
+    expect(pairBody.workspaceId).toBe(workspace.workspaceId);
     expect(pairBody.projectId).toBe('proj-agent-1');
     expect(pairBody.capabilities).toEqual(['plan', 'execute']);
     expect(pairBody.metadata).toEqual({ sessionOwner: 'codex' });
@@ -177,7 +189,7 @@ describe('A2A bridge routes', () => {
         (s: any) =>
           s.bridgeId === 'bridge-scoped' &&
           s.agentId === 'codex-agent-1' &&
-          s.workspaceId === 'ws-agent-1' &&
+          s.workspaceId === workspace.workspaceId &&
           s.projectId === 'proj-agent-1',
       ),
     ).toBe(true);
@@ -202,6 +214,7 @@ describe('A2A bridge routes', () => {
   });
 
   it('reuses an existing bound bridge session on reconnect and refreshes metadata', async () => {
+    const workspace = createWorkspace(['codex-agent-reuse'], 'proj-reuse');
     const firstPair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
       method: 'POST',
       headers: {
@@ -211,7 +224,7 @@ describe('A2A bridge routes', () => {
       body: JSON.stringify({
         bridgeId: 'bridge-reuse',
         agentId: 'codex-agent-reuse',
-        workspaceId: 'ws-reuse',
+        workspaceId: workspace.workspaceId,
         projectId: 'proj-reuse',
         capabilities: ['plan'],
         metadata: { reconnectCount: 0 },
@@ -230,7 +243,7 @@ describe('A2A bridge routes', () => {
       body: JSON.stringify({
         bridgeId: 'bridge-reuse',
         agentId: 'codex-agent-reuse',
-        workspaceId: 'ws-reuse',
+        workspaceId: workspace.workspaceId,
         projectId: 'proj-reuse',
         capabilities: ['plan', 'execute'],
         metadata: { reconnectCount: 1 },
@@ -252,6 +265,67 @@ describe('A2A bridge routes', () => {
     expect(reusedSessions).toHaveLength(1);
     expect(reusedSessions[0].capabilities).toEqual(['plan', 'execute']);
     expect(reusedSessions[0].metadata).toEqual({ reconnectCount: 1 });
+  });
+
+  it('rejects bridge session binding for unknown workspace', async () => {
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-missing-workspace',
+        agentId: 'agent-missing-workspace',
+        workspaceId: 'ws-does-not-exist',
+      }),
+    });
+    expect(pair.status).toBe(404);
+    const body = await pair.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('Workspace not found');
+  });
+
+  it('rejects bridge session binding when the agent is not a workspace member', async () => {
+    const workspace = createWorkspace(['agent-a'], 'proj-membership');
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-membership',
+        agentId: 'agent-b',
+        workspaceId: workspace.workspaceId,
+        projectId: workspace.projectId,
+      }),
+    });
+    expect(pair.status).toBe(403);
+    const body = await pair.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('is not a member');
+  });
+
+  it('rejects bridge session binding when workspace and project do not match', async () => {
+    const workspace = createWorkspace(['agent-project'], 'proj-correct');
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-project-mismatch',
+        agentId: 'agent-project',
+        workspaceId: workspace.workspaceId,
+        projectId: 'proj-wrong',
+      }),
+    });
+    expect(pair.status).toBe(409);
+    const body = await pair.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('projectId mismatch');
   });
 
   it('filters bridge dequeue by token scope claim', async () => {
@@ -456,6 +530,7 @@ describe('A2A bridge routes', () => {
   });
 
   it('accepts bridge heartbeat', async () => {
+    const workspace = createWorkspace(['codex-agent-heartbeat'], 'proj-heartbeat');
     const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
       method: 'POST',
       headers: {
@@ -465,7 +540,7 @@ describe('A2A bridge routes', () => {
       body: JSON.stringify({
         bridgeId: 'bridge-default',
         agentId: 'codex-agent-heartbeat',
-        workspaceId: 'ws-heartbeat',
+        workspaceId: workspace.workspaceId,
         projectId: 'proj-heartbeat',
       }),
     });
@@ -517,6 +592,7 @@ describe('A2A bridge routes', () => {
   });
 
   it('rejects heartbeat ownership mismatches for paired bridge sessions', async () => {
+    const workspace = createWorkspace(['codex-agent-bound'], 'proj-bound');
     const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
       method: 'POST',
       headers: {
@@ -526,7 +602,7 @@ describe('A2A bridge routes', () => {
       body: JSON.stringify({
         bridgeId: 'bridge-default',
         agentId: 'codex-agent-bound',
-        workspaceId: 'ws-bound',
+        workspaceId: workspace.workspaceId,
         projectId: 'proj-bound',
       }),
     });
