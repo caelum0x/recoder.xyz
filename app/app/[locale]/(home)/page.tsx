@@ -75,9 +75,9 @@ const platformLanes = [
     textColor: 'text-cyan-400',
   },
   {
-    title: 'Web Runtime',
+    title: 'Runtime Lane',
     subtitle: 'Code, preview, logs',
-    text: 'The main execution lane for software work with browser runtime, file mutation, terminal access, and preview.',
+    text: 'The execution lane for software work with runtime, file mutation, terminal access, and preview attached to the run instead of hidden behind a separate surface.',
     icon: Terminal,
     border: 'border-violet-500/20',
     bg: 'bg-violet-500/5',
