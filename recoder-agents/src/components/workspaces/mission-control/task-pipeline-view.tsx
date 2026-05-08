@@ -8,6 +8,31 @@ interface Task {
   prompt?: string;
   state: string;
   assignee_agent_id?: string;
+  approval?: {
+    approvalId: string;
+    status: string;
+    action?: string;
+    resolvedBy?: string;
+  } | null;
+  handoff?: {
+    delegationId: string;
+    status: string;
+    toAgentId?: string;
+  } | null;
+  assignee?: {
+    name?: string;
+    registry?: {
+      online: boolean;
+    } | null;
+    localBridgeSessions?: Array<unknown>;
+    pairedBridgeSessions?: Array<unknown>;
+  };
+  runtime?: {
+    evidenceCount?: number;
+    previewCount?: number;
+    artifactCount?: number;
+    filesChanged?: string[];
+  };
   priority?: string;
   createdAt?: string;
 }
@@ -67,11 +92,45 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                       onClick={() => onTaskClick?.(task.id)}
                     >
                       <p className="text-xs truncate">{task.prompt ?? task.id}</p>
-                      {task.assignee_agent_id && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          {task.assignee_agent_id}
-                        </p>
-                      )}
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {task.assignee_agent_id && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {task.assignee?.name ?? task.assignee_agent_id}
+                          </span>
+                        )}
+                        {task.assignee?.registry && (
+                          <span
+                            className={cn(
+                              'text-[10px] rounded px-1 py-0.5',
+                              task.assignee.registry.online
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+                            )}
+                          >
+                            {task.assignee.registry.online ? 'online' : 'offline'}
+                          </span>
+                        )}
+                        {task.approval && (
+                          <span className="text-[10px] rounded bg-purple-100 px-1 py-0.5 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                            approval:{task.approval.status}
+                          </span>
+                        )}
+                        {task.handoff && (
+                          <span className="text-[10px] rounded bg-amber-100 px-1 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                            handoff:{task.handoff.status}
+                          </span>
+                        )}
+                        {typeof task.runtime?.evidenceCount === 'number' && task.runtime.evidenceCount > 0 && (
+                          <span className="text-[10px] rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            evidence:{task.runtime.evidenceCount}
+                          </span>
+                        )}
+                        {typeof task.runtime?.previewCount === 'number' && task.runtime.previewCount > 0 && (
+                          <span className="text-[10px] rounded bg-emerald-100 px-1 py-0.5 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            previews:{task.runtime.previewCount}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))
                 )}
