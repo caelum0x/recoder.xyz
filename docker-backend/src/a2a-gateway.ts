@@ -1745,6 +1745,27 @@ async function listBridgeSessions(): Promise<BridgeSession[]> {
   return Array.from(bridgeSessionStore.values()).map((row) => JSON.parse(row.value) as BridgeSession);
 }
 
+async function findReusableBridgeSession(input: {
+  bridgeId: string;
+  scope: string | null;
+  agentId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+}): Promise<BridgeSession | null> {
+  if (!input.agentId) return null;
+  const sessions = await listBridgeSessions();
+  return (
+    sessions.find(
+      (session) =>
+        session.bridgeId === input.bridgeId &&
+        (session.scope || null) === input.scope &&
+        (session.agentId || null) === input.agentId &&
+        (session.workspaceId || null) === input.workspaceId &&
+        (session.projectId || null) === input.projectId,
+    ) || null
+  );
+}
+
 async function emitAuditEvent(event: string, details: Record<string, unknown>): Promise<void> {
   const auditEvent: AuditEvent = {
     id: `audit-${Date.now()}-${crypto.randomUUID().slice(0, 10)}`,
@@ -2006,8 +2027,18 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
   const ttlMs = Number((parsedBody as any).ttlMs || BRIDGE_SESSION_TTL_MS);
   const boundedTtlMs = Math.min(Math.max(ttlMs, 60 * 1000), 7 * 24 * 60 * 60 * 1000);
   const now = Date.now();
+  const reuseExisting = (parsedBody as any).reuseExisting !== false;
+  const reusableSession = reuseExisting
+    ? await findReusableBridgeSession({
+        bridgeId,
+        scope: requestedScope,
+        agentId,
+        workspaceId,
+        projectId,
+      })
+    : null;
   const session: BridgeSession = {
-    token: newBridgeSessionToken(),
+    token: reusableSession?.token || newBridgeSessionToken(),
     bridgeId,
     scope: requestedScope,
     agentId,
@@ -2015,13 +2046,14 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     projectId,
     capabilities,
     metadata,
-    createdAt: new Date(now).toISOString(),
+    createdAt: reusableSession?.createdAt || new Date(now).toISOString(),
     expiresAt: new Date(now + boundedTtlMs).toISOString(),
     issuedBy: String((parsedBody as any).issuedBy || 'admin'),
   };
   await storeBridgeSession(session);
-  res.status(201).json({
+  res.status(reusableSession ? 200 : 201).json({
     ok: true,
+    reused: Boolean(reusableSession),
     bridgeId: session.bridgeId,
     token: session.token,
     scope: session.scope || null,
