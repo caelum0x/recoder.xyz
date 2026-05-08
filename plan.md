@@ -189,10 +189,17 @@ Status:
 
 ### What Is Still Missing In Phase 2
 
-- Bridge session identity is stronger, but it is not yet unified with the broader agent registry lifecycle or durable registry reconciliation.
+- Bridge session identity is stronger, but it is not yet fully unified with the broader agent registry service, registry-backed health model, or durable registry reconciliation.
 - Session ownership is now validated against workspaces, but PM approval state, handoff state, and orchestration history are not yet fully attached to the same shared run record.
 - Runtime evidence has not yet been normalized into the same history model for git state, file mutation, stdout, stderr, preview linkage, and later desktop artifacts.
 - Agents does not yet expose the full shared workspace and run state backed by the improved bridge-session contract.
+
+### Next Concrete Coding Sequence
+
+- Reconcile paired bridge sessions with the broader agent registry so a reconnecting bridge agent is validated not just against workspace membership but against the same durable agent identity and health model used elsewhere in the control plane.
+- Attach PM approval and handoff objects to the same shared run or session record that currently exposes bridge-session visibility, instead of keeping approvals and handoffs parallel to bridge state.
+- Normalize runtime evidence into shared history records, starting with git status, clone provenance, stdout, stderr, and preview linkage.
+- Expose the resulting session, approval, handoff, and evidence shape through Agents-facing workspace and mission-control surfaces.
 
 Coding task format:
 
@@ -447,8 +454,8 @@ Coding task format:
 
 1. Finish stabilizing agent registry and session lifecycle by reconciling paired bridge sessions with the broader agent registry and reconnect model.
 2. Attach PM approvals and handoff state to the same shared run and session record instead of keeping them parallel to bridge-session visibility.
-3. Unify A2A routing, history, artifact, validation, and error-taxonomy primitives around one shared run-history model.
-4. Expose the improved shared workspace, bridge-session, and run state in Agents.
+3. Normalize runtime evidence and unify A2A routing, history, artifact, validation, and error-taxonomy primitives around one shared run-history model.
+4. Expose the improved shared workspace, bridge-session, run, approval, and evidence state in Agents.
 5. Bring Agency onto those primitives in the next phase.
 
 ## Notes
