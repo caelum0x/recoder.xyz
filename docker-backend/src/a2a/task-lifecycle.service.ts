@@ -28,6 +28,8 @@ import {
   type TaskConnectorInfo,
   type TaskResult,
   type TaskErrorInfo,
+  type TaskPreviewLink,
+  type TaskEvidenceItem,
   type CreateTaskEnvelopeInput,
   type AuditEvent,
   type A2AError,
@@ -54,6 +56,98 @@ import { getA2ARetentionWindowConfig, redactSensitiveData } from './data-hygiene
 import { loadA2ATasks, saveA2ATasks } from './a2a-persistence';
 
 const logger = createLogger('a2a-task-lifecycle');
+
+function collectPreviewLinks(
+  result: TaskResult,
+  metadata?: Record<string, unknown>,
+): TaskPreviewLink[] {
+  const links = [...(result.preview ?? [])];
+  const candidates: Array<{ url: unknown; source?: string }> = [
+    { url: result.data?.previewUrl, source: 'result.data.previewUrl' },
+    { url: (result.data?.preview as Record<string, unknown> | undefined)?.url, source: 'result.data.preview' },
+    { url: ((result.data?.raw as Record<string, unknown> | undefined)?.previewUrl), source: 'result.data.raw.previewUrl' },
+    { url: metadata?.previewUrl, source: 'task.metadata.previewUrl' },
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate.url !== 'string' || candidate.url.trim() === '') continue;
+    if (links.some((link) => link.url === candidate.url)) continue;
+    links.push({
+      url: candidate.url,
+      source: candidate.source,
+    });
+  }
+
+  return links;
+}
+
+function collectFilesChanged(result: TaskResult): string[] {
+  const direct = result.data?.filesChanged;
+  if (Array.isArray(direct)) {
+    return direct.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  }
+
+  const rawFiles = (result.data?.raw as Record<string, unknown> | undefined)?.filesChanged;
+  if (Array.isArray(rawFiles)) {
+    return rawFiles.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  }
+
+  return [];
+}
+
+function enrichTaskResult(
+  envelope: TaskEnvelope,
+  result: TaskResult,
+): TaskResult {
+  const preview = collectPreviewLinks(result, envelope.metadata);
+  const filesChanged = collectFilesChanged(result);
+  const explicitEvidence = [...(result.evidence ?? [])];
+  const derivedEvidence: TaskEvidenceItem[] = [
+    {
+      kind: 'trace',
+      label: 'Task trace',
+      ref: envelope.trace_id,
+      metadata: { taskId: envelope.id },
+    },
+    ...preview.map((link) => ({
+      kind: 'preview' as const,
+      label: link.label || 'Preview URL',
+      ref: link.url,
+      metadata: {
+        ...(link.source ? { source: link.source } : {}),
+        ...(link.port != null ? { port: link.port } : {}),
+      },
+    })),
+    ...(result.artifacts ?? []).map((artifact) => ({
+      kind: artifact.artifact_type === 'log' ? 'log' as const : 'artifact' as const,
+      label: artifact.path || artifact.key,
+      ref: artifact.key,
+      metadata: {
+        artifactType: artifact.artifact_type,
+        ...(artifact.path ? { path: artifact.path } : {}),
+      },
+    })),
+    ...filesChanged.map((path) => ({
+      kind: 'file-change' as const,
+      label: path,
+      ref: path,
+    })),
+  ];
+
+  const seen = new Set<string>();
+  const evidence = [...explicitEvidence, ...derivedEvidence].filter((item) => {
+    const key = `${item.kind}:${item.ref || item.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return {
+    ...result,
+    ...(preview.length > 0 ? { preview } : {}),
+    evidence,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // ID generation
@@ -629,7 +723,7 @@ export class TaskLifecycleService {
 
     // 5. Attach result / error / cost data if provided
     if (input.result && input.target_state === TaskStateEnum.Completed) {
-      updated = { ...updated, result: input.result };
+      updated = { ...updated, result: enrichTaskResult(updated, input.result) };
     }
     if (input.error && input.target_state === TaskStateEnum.Failed) {
       updated = { ...updated, error: input.error };

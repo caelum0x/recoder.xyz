@@ -1020,6 +1020,54 @@ describe('Full lifecycle integration', () => {
     ]);
   });
 
+  it('enriches completed task results with preview and evidence linkage', () => {
+    const created = service.createTask(makeCreateInput({
+      metadata: {
+        previewUrl: 'https://preview.recoder.xyz/run-123',
+      },
+    }));
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const taskId = created.data.id;
+    service.startTask(taskId, 'connector-codex');
+
+    const completed = service.completeTask(
+      taskId,
+      {
+        text: 'Done',
+        data: {
+          filesChanged: ['src/app.tsx', 'README.md'],
+        },
+        artifacts: [
+          {
+            key: 'artifact-1',
+            artifact_type: 'file',
+            mime_type: 'text/plain',
+            content: 'export const ok = true;',
+            path: 'src/app.tsx',
+          },
+        ],
+      },
+      'connector-codex',
+    );
+
+    expect(completed.ok).toBe(true);
+    if (!completed.ok) return;
+
+    expect(completed.data.result?.preview).toEqual([
+      expect.objectContaining({ url: 'https://preview.recoder.xyz/run-123' }),
+    ]);
+    expect(completed.data.result?.evidence).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'trace', ref: completed.data.trace_id }),
+        expect.objectContaining({ kind: 'preview', ref: 'https://preview.recoder.xyz/run-123' }),
+        expect.objectContaining({ kind: 'artifact', ref: 'artifact-1' }),
+        expect.objectContaining({ kind: 'file-change', ref: 'src/app.tsx' }),
+      ]),
+    );
+  });
+
   it('submitted -> working -> input-required -> working -> completed', () => {
     const created = service.createTask(makeCreateInput());
     if (!created.ok) return;
