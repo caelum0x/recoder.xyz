@@ -6,7 +6,6 @@
 ACTIVE_SURFACES=(
   "app"
   "docker-backend"
-  "recoder-web"
   "recoder-agents"
   "apps/mobile"
   "apps/desktop"

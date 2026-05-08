@@ -287,7 +287,7 @@ cd /root/recoder.xyz
 # Validate required env files exist before building
 echo "--- Validating required env files ---"
 MISSING_ENV=0
-for envfile in app/.env.production recoder-web/.env docker-backend/.env recoder-agents/.env.local; do
+for envfile in app/.env.production docker-backend/.env recoder-agents/.env.local; do
   if [ ! -f "$envfile" ]; then
     echo "FATAL: Missing required env file: $envfile"
     MISSING_ENV=1
@@ -336,7 +336,6 @@ fi
 CONTAINER_NAMES=(
   recoder-redis
   recoder-docker-backend
-  recoder-web
   recoder-frontend
   recoder-app
 )
@@ -423,10 +422,6 @@ echo "--- Building docker-backend ---"
 docker build -f docker-backend/Dockerfile -t recoderxyz-docker-backend:latest .
 echo "[$(date -u)] docker-backend built"
 
-echo "--- Building recoder-web ---"
-docker build -f recoder-web/Dockerfile -t recoderxyz-recoder-web:latest .
-echo "[$(date -u)] recoder-web built"
-
 echo "--- Building recoder-app ---"
 docker build -f app/Dockerfile -t recoderxyz-recoder-app:latest .
 echo "[$(date -u)] recoder-app built"
@@ -453,7 +448,7 @@ echo "--- Waiting for services to start ---"
 sleep 10
 
 echo "--- Waiting for service health ---"
-for service in redis docker-backend recoder-web recoder-frontend recoder-app; do
+for service in redis docker-backend recoder-frontend recoder-app; do
   for i in $(seq 1 30); do
     CID=$(docker compose -f docker-compose.deploy.yml ps -q "$service" 2>/dev/null || true)
     if [ -n "$CID" ]; then
@@ -549,12 +544,8 @@ check_service() {
 }
 
 check_service "docker-backend(:3100)" curl -sf http://localhost:3100/health
-check_service "recoder-web(:5173)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:5173
 check_service "recoder-app(:3000)" curl -sf http://localhost:3000/api/health
 check_service "recoder-frontend(:3001)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001
-echo -n "A2A runtime: "
-curl -sf http://localhost:5173/api/a2a/runtime | head -c 200
-echo ""
 
 echo -n "Redis ping: "
 if docker compose -f docker-compose.deploy.yml exec -T redis redis-cli -a "$(grep REDIS_PASSWORD .env | cut -d= -f2)" ping 2>/dev/null | grep -q PONG; then
@@ -626,7 +617,6 @@ echo "=== Deployment complete ==="
 echo ""
 echo "Services:"
 echo "  docker-backend:    http://77.42.23.19:3100"
-echo "  recoder-web:       http://77.42.23.19:5173"
 echo "  recoder-frontend:  http://77.42.23.19:3001"
 echo ""
 echo "A2A Secrets (save these):"

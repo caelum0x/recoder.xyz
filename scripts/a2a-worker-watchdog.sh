@@ -35,7 +35,6 @@ fi
 
 # name|pgrep pattern used by the worker script
 WORKERS=(
-  "recoder-web|pnpm -C recoder-web a2a:worker"
   "recoder-agency|pnpm -C recoder-agency/apps/agency a2a:worker"
   "recoder-pm-api|pnpm -C recoder-pm/apps/api a2a:worker"
   "docker-backend|pnpm -C docker-backend a2a:worker"
