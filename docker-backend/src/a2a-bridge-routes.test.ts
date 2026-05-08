@@ -105,13 +105,26 @@ describe('A2A bridge routes', () => {
         'content-type': 'application/json',
         'x-recoder-a2a-admin-token': 'scope-admin',
       },
-      body: JSON.stringify({ bridgeId: 'bridge-scoped', issuedBy: 'test-suite' }),
+      body: JSON.stringify({
+        bridgeId: 'bridge-scoped',
+        issuedBy: 'test-suite',
+        agentId: 'codex-agent-1',
+        workspaceId: 'ws-agent-1',
+        projectId: 'proj-agent-1',
+        capabilities: ['plan', 'execute'],
+        metadata: { sessionOwner: 'codex' },
+      }),
     });
     expect(pair.status).toBe(201);
     const pairBody = await pair.json();
     expect(pairBody.ok).toBe(true);
     expect(typeof pairBody.token).toBe('string');
     expect(pairBody.scope).toBe('team-alpha');
+    expect(pairBody.agentId).toBe('codex-agent-1');
+    expect(pairBody.workspaceId).toBe('ws-agent-1');
+    expect(pairBody.projectId).toBe('proj-agent-1');
+    expect(pairBody.capabilities).toEqual(['plan', 'execute']);
+    expect(pairBody.metadata).toEqual({ sessionOwner: 'codex' });
 
     const enqueue = await fetch(`${baseUrl}/api/a2a/bridge/jobs`, {
       method: 'POST',
@@ -159,6 +172,33 @@ describe('A2A bridge routes', () => {
     expect(Array.isArray(sessionsBody.sessions)).toBe(true);
     expect(sessionsBody.sessions.some((s: any) => s.bridgeId === 'bridge-scoped')).toBe(true);
     expect(sessionsBody.sessions.some((s: any) => s.bridgeId === 'bridge-scoped' && s.scope === 'team-alpha')).toBe(true);
+    expect(
+      sessionsBody.sessions.some(
+        (s: any) =>
+          s.bridgeId === 'bridge-scoped' &&
+          s.agentId === 'codex-agent-1' &&
+          s.workspaceId === 'ws-agent-1' &&
+          s.projectId === 'proj-agent-1',
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects incomplete bridge session ownership binding', async () => {
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-invalid-binding',
+        workspaceId: 'ws-only',
+      }),
+    });
+    expect(pair.status).toBe(400);
+    const body = await pair.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('agentId is required');
   });
 
   it('filters bridge dequeue by token scope claim', async () => {
@@ -363,10 +403,26 @@ describe('A2A bridge routes', () => {
   });
 
   it('accepts bridge heartbeat', async () => {
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-default',
+        agentId: 'codex-agent-heartbeat',
+        workspaceId: 'ws-heartbeat',
+        projectId: 'proj-heartbeat',
+      }),
+    });
+    expect(pair.status).toBe(201);
+    const pairBody = await pair.json();
+
     const response = await fetch(`${baseUrl}/api/a2a/bridge/heartbeat`, {
       method: 'POST',
       headers: {
-        authorization: 'Bearer bridge-token',
+        authorization: `Bearer ${pairBody.token}`,
         'content-type': 'application/json',
         'x-recoder-a2a-bridge-id': 'bridge-default',
       },
@@ -393,6 +449,9 @@ describe('A2A bridge routes', () => {
     const singleBody = await single.json();
     expect(singleBody.ok).toBe(true);
     expect(singleBody.bridgeId).toBe('bridge-default');
+    expect(singleBody.heartbeat.agentId).toBe('codex-agent-heartbeat');
+    expect(singleBody.heartbeat.workspaceId).toBe('ws-heartbeat');
+    expect(singleBody.heartbeat.projectId).toBe('proj-heartbeat');
 
     const status = await fetch(`${baseUrl}/api/a2a/bridge/status`, {
       headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
@@ -402,6 +461,41 @@ describe('A2A bridge routes', () => {
     expect(statusBody.ok).toBe(true);
     expect(Array.isArray(statusBody.bridges)).toBe(true);
     expect(statusBody.bridges.some((row: any) => row.bridgeId === 'bridge-default')).toBe(true);
+  });
+
+  it('rejects heartbeat ownership mismatches for paired bridge sessions', async () => {
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-default',
+        agentId: 'codex-agent-bound',
+        workspaceId: 'ws-bound',
+        projectId: 'proj-bound',
+      }),
+    });
+    expect(pair.status).toBe(201);
+    const pairBody = await pair.json();
+
+    const response = await fetch(`${baseUrl}/api/a2a/bridge/heartbeat`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${pairBody.token}`,
+        'content-type': 'application/json',
+        'x-recoder-a2a-bridge-id': 'bridge-default',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-default',
+        agentId: 'codex-agent-other',
+      }),
+    });
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('agentId');
   });
 
   it('reads orchestration state by threadId and traceId', async () => {

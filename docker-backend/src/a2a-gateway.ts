@@ -132,6 +132,11 @@ type BridgeSession = {
   token: string;
   bridgeId: string;
   scope?: string | null;
+  agentId?: string | null;
+  workspaceId?: string | null;
+  projectId?: string | null;
+  capabilities?: string[];
+  metadata?: Record<string, unknown>;
   createdAt: string;
   expiresAt: string;
   issuedBy: string;
@@ -215,6 +220,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function asOptionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
 }
 
 function normalizePlatform(value: unknown): GatewayAgentPlatform {
@@ -1832,7 +1848,10 @@ function extractBearerToken(req: Request): string {
 
 async function verifyBridgeTokenForRequest(
   req: Request,
-): Promise<{ ok: true; scope: string | null } | { ok: false; status: number; error: string }> {
+): Promise<
+  | { ok: true; scope: string | null; session: BridgeSession | null }
+  | { ok: false; status: number; error: string }
+> {
   const basic = verifyBridgeToken(req);
   if (!basic.ok) return basic;
 
@@ -1840,7 +1859,7 @@ async function verifyBridgeTokenForRequest(
   const staticToken = process.env.RECODER_A2A_BRIDGE_TOKEN || '';
   if (staticToken && bearerToken === staticToken) {
     const staticScope = String(process.env.RECODER_A2A_BRIDGE_TOKEN_SCOPE || '').trim() || null;
-    return { ok: true, scope: staticScope };
+    return { ok: true, scope: staticScope, session: null };
   }
 
   const session = await getBridgeSession(bearerToken);
@@ -1853,7 +1872,21 @@ async function verifyBridgeTokenForRequest(
     return { ok: false, status: 403, error: 'Bridge token does not match bridge id' };
   }
 
-  return { ok: true, scope: session.scope || null };
+  return { ok: true, scope: session.scope || null, session };
+}
+
+function validateBridgeSessionInput(input: {
+  agentId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+}): { ok: true } | { ok: false; status: number; error: string } {
+  if (input.workspaceId && !input.agentId) {
+    return { ok: false, status: 400, error: 'agentId is required when workspaceId is provided' };
+  }
+  if (input.projectId && !input.workspaceId) {
+    return { ok: false, status: 400, error: 'workspaceId is required when projectId is provided' };
+  }
+  return { ok: true };
 }
 
 function newBridgeSessionToken(): string {
@@ -1957,6 +1990,18 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: 'Scope claim is required for bridge session' });
     return;
   }
+  const agentId = asOptionalString((parsedBody as any).agentId);
+  const workspaceId = asOptionalString((parsedBody as any).workspaceId);
+  const projectId = asOptionalString((parsedBody as any).projectId);
+  const capabilities = asStringArray((parsedBody as any).capabilities);
+  const metadata = isRecord((parsedBody as any).metadata)
+    ? ((parsedBody as any).metadata as Record<string, unknown>)
+    : undefined;
+  const bindingValidation = validateBridgeSessionInput({ agentId, workspaceId, projectId });
+  if (!bindingValidation.ok) {
+    res.status(bindingValidation.status).json({ ok: false, error: bindingValidation.error });
+    return;
+  }
 
   const ttlMs = Number((parsedBody as any).ttlMs || BRIDGE_SESSION_TTL_MS);
   const boundedTtlMs = Math.min(Math.max(ttlMs, 60 * 1000), 7 * 24 * 60 * 60 * 1000);
@@ -1965,6 +2010,11 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     token: newBridgeSessionToken(),
     bridgeId,
     scope: requestedScope,
+    agentId,
+    workspaceId,
+    projectId,
+    capabilities,
+    metadata,
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + boundedTtlMs).toISOString(),
     issuedBy: String((parsedBody as any).issuedBy || 'admin'),
@@ -1975,6 +2025,11 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     bridgeId: session.bridgeId,
     token: session.token,
     scope: session.scope || null,
+    agentId: session.agentId || null,
+    workspaceId: session.workspaceId || null,
+    projectId: session.projectId || null,
+    capabilities: session.capabilities || [],
+    metadata: session.metadata || null,
     expiresAt: session.expiresAt,
     createdAt: session.createdAt,
   });
@@ -1988,16 +2043,25 @@ router.get('/bridge/sessions', async (req: Request, res: Response) => {
   }
 
   const sessions = await listBridgeSessions();
-  res.status(200).json({
-    ok: true,
-    sessions: sessions.map((session) => ({
+  const sessionRows = await Promise.all(
+    sessions.map(async (session) => ({
       bridgeId: session.bridgeId,
       scope: session.scope || null,
+      agentId: session.agentId || null,
+      workspaceId: session.workspaceId || null,
+      projectId: session.projectId || null,
       issuedBy: session.issuedBy,
+      capabilities: session.capabilities || [],
+      metadata: session.metadata || null,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
       tokenPreview: `${session.token.slice(0, 8)}...`,
+      heartbeat: await getBridgeHeartbeat(session.bridgeId),
     })),
+  );
+  res.status(200).json({
+    ok: true,
+    sessions: sessionRows,
   });
 });
 
@@ -2134,10 +2198,37 @@ router.post('/bridge/heartbeat', async (req: Request, res: Response) => {
   }
 
   const bridgeId = String(req.header('x-recoder-a2a-bridge-id') || (parsedBody as any).bridgeId || process.env.RECODER_A2A_BRIDGE_DEFAULT_ID || 'default').trim();
-  await storeBridgeHeartbeat({ bridgeId, payload: parsedBody as Record<string, unknown> });
+  const payloadAgentId = asOptionalString((parsedBody as any).agentId);
+  const payloadWorkspaceId = asOptionalString((parsedBody as any).workspaceId);
+  const payloadProjectId = asOptionalString((parsedBody as any).projectId);
+  const boundSession = auth.session;
+  if (boundSession?.agentId && payloadAgentId && boundSession.agentId !== payloadAgentId) {
+    res.status(403).json({ ok: false, error: 'Heartbeat agentId does not match paired bridge session' });
+    return;
+  }
+  if (boundSession?.workspaceId && payloadWorkspaceId && boundSession.workspaceId !== payloadWorkspaceId) {
+    res.status(403).json({ ok: false, error: 'Heartbeat workspaceId does not match paired bridge session' });
+    return;
+  }
+  if (boundSession?.projectId && payloadProjectId && boundSession.projectId !== payloadProjectId) {
+    res.status(403).json({ ok: false, error: 'Heartbeat projectId does not match paired bridge session' });
+    return;
+  }
+
+  const mergedPayload: Record<string, unknown> = {
+    ...(parsedBody as Record<string, unknown>),
+    ...(boundSession?.agentId ? { agentId: boundSession.agentId } : {}),
+    ...(boundSession?.workspaceId ? { workspaceId: boundSession.workspaceId } : {}),
+    ...(boundSession?.projectId ? { projectId: boundSession.projectId } : {}),
+    ...(boundSession?.capabilities?.length ? { sessionCapabilities: boundSession.capabilities } : {}),
+  };
+  await storeBridgeHeartbeat({ bridgeId, payload: mergedPayload });
   await emitAuditEvent('bridge_heartbeat', {
     bridgeId,
-    capabilities: (parsedBody as any).capabilities || null,
+    agentId: boundSession?.agentId || payloadAgentId || null,
+    workspaceId: boundSession?.workspaceId || payloadWorkspaceId || null,
+    projectId: boundSession?.projectId || payloadProjectId || null,
+    capabilities: (parsedBody as any).capabilities || boundSession?.capabilities || null,
   });
   res.status(200).json({ ok: true, bridgeId });
 });
