@@ -88,6 +88,9 @@ Near-term platform work is only complete when the evidence shows:
 - [computer-use.md](/Users/arhansubasi/recoder.xyz/daytona-projects/computer-use.md:1) defines the lifecycle and health model for Daytona computer-use processes. This is relevant to a later optional runtime lane, not the current Phase 2 wedge.
 - [file.md](/Users/arhansubasi/recoder.xyz/daytona-projects/file.md:1) clarifies that sandbox file operations are first-class APIs with explicit relative-vs-absolute path semantics. This matters for mutation proof and later artifact capture.
 - [coding.md](/Users/arhansubasi/recoder.xyz/daytona-projects/coding.md:1) clarifies the split between stateless code execution, stateful interpreter contexts, and process sessions. This matters for linking runtime evidence to the control plane without turning code execution into the control plane itself.
+- [git-ops.md](/Users/arhansubasi/recoder.xyz/daytona-projects/git-ops.md:1) clarifies that repo clone and status are first-class sandbox capabilities with explicit workspace-root semantics. This is useful for run artifact provenance and later workspace handoff proof.
+- [log.md](/Users/arhansubasi/recoder.xyz/daytona-projects/log.md:1) clarifies stdout and stderr streaming for long-running sandbox sessions. This is directly relevant to Phase 2 run-history evidence and auditability.
+- [vnc.md](/Users/arhansubasi/recoder.xyz/daytona-projects/vnc.md:1) clarifies that VNC is the human-observation layer paired with Computer Use. This belongs to a later optional desktop lane, not the Phase 2 center of gravity.
 
 ### Phase 2 reference sources
 
@@ -101,6 +104,7 @@ Near-term platform work is only complete when the evidence shows:
 - `daytona-projects/daytona` is the authoritative upstream for sandbox, snapshot, filesystem, process, preview, VNC, and computer-use capabilities.
 - `daytona-projects/pi-mono-upstream`, `daytona-projects/opencode-upstream-2`, and `daytona-projects/inngest-agentkit-coding-agent` remain useful coding-runtime references for runtime behavior, agent loops, and sandbox-driven execution patterns.
 - `daytona-projects/e2b-upstream` remains a comparison substrate for isolated code execution, not the primary implementation direction.
+- `daytona-projects/lightpanda-browser-upstream` is a lightweight browser-runtime reference for later experimentation, but it is still a future browser-task lane input rather than an active control-plane dependency.
 
 ### Later browser and desktop lane references
 
@@ -111,6 +115,7 @@ Near-term platform work is only complete when the evidence shows:
 ### Adjacent product and workflow references
 
 - `daytona-projects/suna-upstream`, `daytona-projects/workflow-builder-template-upstream`, `daytona-projects/opencode-channels-upstream`, and `daytona-projects/kortix-ocx-registry-upstream` are adjacent product or channel references. They can inform future packaging, workflow composition, or channel delivery, but they should not distort the current control-plane sequence.
+- `daytona-projects/mem0-upstream` is an adjacent memory-system reference. It may inform future retrieval or personalization layers, but it should not replace the control plane's canonical ownership of workspace identity, run history, approvals, or artifacts.
 
 ## Desired Architecture
 
@@ -120,6 +125,7 @@ Near-term platform work is only complete when the evidence shows:
 - `recoder-agents` owns the operator-facing control surface for workspace membership, agent/session status, approvals, handoffs, and run visibility.
 - `recoder-agency` consumes the same run, artifact, approval, and handoff primitives in Phase 3 for delivery packaging and client-facing workflows.
 - Agent execution and workflow orchestration stay outside the sandbox. The sandbox exposes capabilities and evidence, but it does not own platform identity, approval state, or run history.
+- Sandbox git status, filesystem mutation checks, process-session logs, and preview linkage should feed the shared history model as evidence attachments rather than creating separate hidden runtime truth stores.
 - `recoder-web` and `docker-backend` remain runtime integrations, not the organizing center of the near-term platform plan.
 - Sandboxes and previews remain runtime details that can attach evidence to the control plane later; they are not the current sequencing wedge.
 
@@ -190,6 +196,7 @@ Coding task format:
 | Integrate PM approval, reject, pause, and handoff into the run lifecycle | `recoder-pm` plus shared orchestration state | Make PM decisions first-class lifecycle transitions instead of downstream annotations. | A run can pause for approval, resume after approval, terminate on reject, or hand off to a new assignee with preserved ownership, artifacts, and audit history. | Depends on shared run history, state mapping, and artifact linkage. |
 | Unify run history, artifacts, and auditability across PM and Agents | orchestration history, artifact linkage, and audit-event surfaces | Share prompt, assignee, connector, approval history, logs, artifacts, and decision trail under one history model. | A run exposes its activity, artifacts, policy checks, approvals, and handoffs through one shared history stream rather than per-surface copies. | Depends on stable envelope IDs, trace IDs, artifact capture, and history persistence. |
 | Attach runtime evidence without making runtime proof the sequencing gate | shared run history plus runtime evidence adapters | Link Daytona process sessions, file mutations, preview URLs, and later screenshots into the same run history as optional evidence objects instead of separate parallel histories. | A run can reference process logs, mutation evidence, preview linkage, or desktop artifacts in one history model, while Phase 2 still proceeds without requiring fresh end-to-end browser preview proof. | Depends on stable artifact linkage and deferred runtime adapters. |
+| Normalize git and log evidence into run history | runtime evidence adapters plus orchestration history | Treat sandbox git status, branch state, clone provenance, stdout, and stderr streams as standard evidence types for run auditing and handoff. | A run history can explain not just who approved or handed off a task, but also which repo state, branch state, and streamed execution logs were attached to that decision. | Depends on stable artifact schemas and consistent evidence ingestion. |
 | Expose shared workspace and run state in Agents | `recoder-agents` operator UI and backend data hooks | Make Agents the operator surface for workspace membership, agent status, session health, approvals, handoffs, and run visibility. | The Agents surface can show workspace membership, run status, approvals, handoffs, and recent activity from the same underlying control-plane history used by PM. | Depends on the shared history and session contract being exposed consistently. |
 | Route by capability, workspace policy, assignee identity, and protocol intent | orchestration and assignment logic across control-plane surfaces | Stop assuming `recoder-web` runtime selection is the primary routing dimension. | The same workspace can assign work based on agent capability, policy, assignee identity, and A2A intent, with runtime lane choice preserved only as secondary execution metadata when relevant. | Depends on accurate registry metadata and stable control-plane ownership semantics. |
 
@@ -418,6 +425,7 @@ Coding task format:
 | Add governance and enterprise controls | account, workspace policy, audit, and retention surfaces | Support stricter governance without inventing a separate execution model. | Workspace-level governance rules affect runtime access, approvals, and retention in auditable ways. | Depends on Phase 2 policy and observability foundations. |
 | Add browser-task execution lane on shared control-plane primitives | browser automation integrations and orchestration surfaces | Attach web navigation, extraction, and browser action capabilities to the shared run model without turning browser automation into a parallel product stack. | A browser-task run can use a later `agent-browser` / `Stagehand` / `wbac` style capability while still preserving the same workspace, assignee, artifact, approval, and audit model. | Depends on stable Phase 2 ownership, history, and policy semantics. |
 | Add desktop or computer-use execution lane on shared control-plane primitives | desktop automation and computer-use integrations | Attach Daytona computer use or accessibility-driven desktop automation as an optional execution class after the control plane is stable. | A desktop-task run can start, monitor, and stop computer-use sessions while preserving the same run identity, ownership, artifact model, and approval state as coding or browser runs. | Depends on later Daytona computer-use viability and Phase 2 control-plane maturity. |
+| Keep human observation separate from automation semantics | VNC, operator tooling, and desktop-lane surfaces | Treat VNC as an observation and intervention surface, not as the source of truth for run state. | A desktop or browser run can be watched or inspected through VNC or similar tooling without making the observation surface the canonical run-history or approval system. | Depends on the control plane remaining the source of truth for state and audit history. |
 | Promote optional runtime classes after control-plane maturity | coding, browser, desktop, and computer-use integrations | Attach additional runtime classes to the same control plane once identity, history, policy, and approval semantics are stable. | A later browser or computer-use run can execute end to end without bypassing the shared control plane. | Depends on Phase 2 stability and deferred runtime backlog results when those integrations matter. |
 
 ## Immediate Next Step
