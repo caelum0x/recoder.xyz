@@ -5,6 +5,7 @@ import {
   type A2AEnvelopeValidationIssue,
   type RecoderA2AEnvelope,
 } from '@recoder/shared/a2a';
+import { getWorkspaceService, resetWorkspaceService } from './a2a/workspace.service';
 
 const router = Router();
 
@@ -1910,6 +1911,33 @@ function validateBridgeSessionInput(input: {
   return { ok: true };
 }
 
+function validateBridgeSessionWorkspaceBinding(input: {
+  agentId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+}): { ok: true } | { ok: false; status: number; error: string } {
+  if (!input.workspaceId) return { ok: true };
+  const workspace = getWorkspaceService().get(input.workspaceId);
+  if (!workspace) {
+    return { ok: false, status: 404, error: `Workspace not found: ${input.workspaceId}` };
+  }
+  if (input.projectId && workspace.projectId !== input.projectId) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Workspace projectId mismatch for ${input.workspaceId}`,
+    };
+  }
+  if (input.agentId && !workspace.memberAgentIds.includes(input.agentId)) {
+    return {
+      ok: false,
+      status: 403,
+      error: `Agent ${input.agentId} is not a member of workspace ${input.workspaceId}`,
+    };
+  }
+  return { ok: true };
+}
+
 function newBridgeSessionToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return Array.from(bytes)
@@ -2021,6 +2049,11 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
   const bindingValidation = validateBridgeSessionInput({ agentId, workspaceId, projectId });
   if (!bindingValidation.ok) {
     res.status(bindingValidation.status).json({ ok: false, error: bindingValidation.error });
+    return;
+  }
+  const workspaceValidation = validateBridgeSessionWorkspaceBinding({ agentId, workspaceId, projectId });
+  if (!workspaceValidation.ok) {
+    res.status(workspaceValidation.status).json({ ok: false, error: workspaceValidation.error });
     return;
   }
 
@@ -3382,6 +3415,7 @@ export function __resetA2ATestState(): void {
   bridgeSessionStore.clear();
   orchestrationHistorySubscribers.clear();
   orchestrationHistoryEventLog.clear();
+  resetWorkspaceService();
 }
 
 export const __testSelectTargets = selectTargets;
