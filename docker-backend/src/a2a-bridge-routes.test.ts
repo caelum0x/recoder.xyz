@@ -201,6 +201,59 @@ describe('A2A bridge routes', () => {
     expect(body.error).toContain('agentId is required');
   });
 
+  it('reuses an existing bound bridge session on reconnect and refreshes metadata', async () => {
+    const firstPair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-reuse',
+        agentId: 'codex-agent-reuse',
+        workspaceId: 'ws-reuse',
+        projectId: 'proj-reuse',
+        capabilities: ['plan'],
+        metadata: { reconnectCount: 0 },
+      }),
+    });
+    expect(firstPair.status).toBe(201);
+    const firstBody = await firstPair.json();
+    expect(firstBody.reused).toBe(false);
+
+    const secondPair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-reuse',
+        agentId: 'codex-agent-reuse',
+        workspaceId: 'ws-reuse',
+        projectId: 'proj-reuse',
+        capabilities: ['plan', 'execute'],
+        metadata: { reconnectCount: 1 },
+      }),
+    });
+    expect(secondPair.status).toBe(200);
+    const secondBody = await secondPair.json();
+    expect(secondBody.reused).toBe(true);
+    expect(secondBody.token).toBe(firstBody.token);
+    expect(secondBody.capabilities).toEqual(['plan', 'execute']);
+    expect(secondBody.metadata).toEqual({ reconnectCount: 1 });
+
+    const sessions = await fetch(`${baseUrl}/api/a2a/bridge/sessions`, {
+      headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
+    });
+    expect(sessions.status).toBe(200);
+    const sessionsBody = await sessions.json();
+    const reusedSessions = sessionsBody.sessions.filter((s: any) => s.bridgeId === 'bridge-reuse');
+    expect(reusedSessions).toHaveLength(1);
+    expect(reusedSessions[0].capabilities).toEqual(['plan', 'execute']);
+    expect(reusedSessions[0].metadata).toEqual({ reconnectCount: 1 });
+  });
+
   it('filters bridge dequeue by token scope claim', async () => {
     process.env.RECODER_A2A_ENFORCE_SCOPE = 'true';
     process.env.RECODER_A2A_ADMIN_TOKEN_SCOPES = JSON.stringify({
