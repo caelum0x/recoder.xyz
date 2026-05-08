@@ -51,12 +51,6 @@ rsync -avz --relative \
   -e "ssh -i ~/.ssh/id_ed25519_hetzner" \
   ${SERVER}:${BASE}/
 
-# Web IDE (language model registry)
-rsync -avz --relative \
-  recoder-web/app/lib/services/language-model-registry/ \
-  -e "ssh -i ~/.ssh/id_ed25519_hetzner" \
-  ${SERVER}:${BASE}/
-
 # OpenClaw removal script
 rsync -avz scripts/remove-openclaw.sh \
   -e "ssh -i ~/.ssh/id_ed25519_hetzner" \
@@ -87,11 +81,11 @@ $SSH "pm2 restart recoder-agency"
 
 echo ""
 echo "=== Step 7: Health check ==="
-$SSH "sleep 5 && curl -sf https://agents.recoder.xyz -o /dev/null -w '%{http_code} agents\n' && curl -sf https://agency.recoder.xyz -o /dev/null -w '%{http_code} agency\n' && curl -sf https://web.recoder.xyz -o /dev/null -w '%{http_code} web\n' && curl -sf https://api.recoder.xyz/v1/health -o /dev/null -w '%{http_code} api\n'"
+$SSH "sleep 5 && curl -sf https://agents.recoder.xyz -o /dev/null -w '%{http_code} agents\n' && curl -sf https://agency.recoder.xyz -o /dev/null -w '%{http_code} agency\n' && curl -sf https://recoder.xyz/dashboard -o /dev/null -w '%{http_code} dashboard\n' && curl -sf https://api.recoder.xyz/v1/health -o /dev/null -w '%{http_code} api\n'"
 
 echo ""
 echo "=== Deploy complete ==="
 echo "Test in browser:"
 echo "  1. agents.recoder.xyz — send chat message"
-echo "  2. web.recoder.xyz — create project, check preview"
-echo "  3. agency.recoder.xyz — copilot button"
+echo "  2. agency.recoder.xyz — copilot button"
+echo "  3. recoder.xyz/dashboard — confirm Web IDE is no longer advertised"
