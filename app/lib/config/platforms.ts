@@ -50,13 +50,13 @@ export const RECODER_SERVICES: RecoderService[] = [
   {
     id: 'web',
     label: 'Recoder Web',
-    description: 'Web AI IDE',
+    description: 'Temporarily deactivated',
     productionUrl: RECODER_ECOSYSTEM_URLS.web,
     devUrl: 'http://localhost:5173',
     port: 5173,
     healthPath: '/',
     healthResponseType: 'html',
-    showInSwitcher: SWITCHER_SERVICE_IDS.has('web'),
+    showInSwitcher: false,
     internal: false,
   },
   {
