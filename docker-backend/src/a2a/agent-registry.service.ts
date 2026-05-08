@@ -26,6 +26,7 @@ import type {
 } from '@recoder/shared/a2a';
 import { createLogger } from '../logger';
 import { loadA2AAgentRegistryState, saveA2AAgentRegistryState } from './a2a-persistence';
+import { getHeartbeatTracker } from './heartbeat-tracker.service';
 
 const logger = createLogger('a2a-agent-registry');
 
@@ -280,6 +281,18 @@ const HEARTBEAT_TIMEOUT_MS = Number(
   process.env.RECODER_A2A_HEARTBEAT_TIMEOUT_MS || 5 * 60 * 1000,
 );
 
+function buildTrackerMetadata(agent: RegisteredAgent): Record<string, unknown> {
+  return {
+    source: 'registry',
+    platform: agent.identity.platform,
+    tier: agent.tier,
+    url: agent.card.url,
+    tagCount: agent.tags.length,
+    skillCount: agent.card.skills.length,
+    ...(agent.identity.instanceId ? { instanceId: agent.identity.instanceId } : {}),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -372,6 +385,7 @@ export class AgentRegistryService {
           ? { lastInstanceId: previousLifecycle.lastInstanceId }
           : {}),
     });
+    getHeartbeatTracker().recordHeartbeat(agent.identity.id, 'healthy', buildTrackerMetadata(agent));
     this.persist();
     logger.info(
       {
@@ -410,6 +424,7 @@ export class AgentRegistryService {
     if (deleted) {
       this.heartbeats.delete(agentId);
       this.lifecycle.delete(agentId);
+      getHeartbeatTracker().removeAgent(agentId);
       this.persist();
       logger.info({ agentId }, 'Agent unregistered');
     }
@@ -465,13 +480,23 @@ export class AgentRegistryService {
         ? { lastInstanceId: agent.identity.instanceId }
         : existingLifecycle?.lastInstanceId
           ? { lastInstanceId: existingLifecycle.lastInstanceId }
-          : {}),
+        : {}),
     });
+    getHeartbeatTracker().recordHeartbeat(agentId, 'healthy', buildTrackerMetadata(agent));
     this.persist();
     return true;
   }
 
   getHealth(agentId: string): AgentHeartbeat {
+    const tracker = getHeartbeatTracker();
+    const trackerRecord = tracker.getRecord(agentId);
+    if (trackerRecord) {
+      return {
+        lastHeartbeat: new Date(trackerRecord.lastHeartbeatAt).toISOString(),
+        online: tracker.isAgentOnline(agentId),
+      };
+    }
+
     const lastHeartbeat = this.heartbeats.get(agentId);
     if (!lastHeartbeat) {
       return { lastHeartbeat: '', online: false };
