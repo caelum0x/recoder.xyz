@@ -33,6 +33,7 @@ import { getAgentBridgeService } from './agent-bridge.service';
 import { getApprovalGateService } from './approval-gate.service';
 import { getDelegationChainService, type DelegationRequest, type DelegationStatus } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
+import { getTaskLifecycleService } from './task-lifecycle.service';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-workspace-routes');
@@ -101,6 +102,17 @@ function mapDelegationToHandoffRecord(delegation: DelegationRequest, workspaceId
     status: mapDelegationStatus(delegation.status),
     createdAt: delegation.createdAt,
   };
+}
+
+function extractTaskPrompt(task: { payload: unknown }): string {
+  const payload = Array.isArray(task.payload) ? task.payload[0] : task.payload;
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const maybeText = (payload as Record<string, unknown>).text;
+    if (typeof maybeText === 'string' && maybeText.trim().length > 0) {
+      return maybeText;
+    }
+  }
+  return '';
 }
 
 // ---------------------------------------------------------------------------
@@ -371,8 +383,26 @@ workspaceRouter.get('/:wsId/tasks', (req: Request, res: Response) => {
       }));
     }
 
-    // Tasks are filtered by workspace_id in the task lifecycle service
-    sendSuccess(res, { tasks: [], total: 0 });
+    const rawTasks = getTaskLifecycleService().list({
+      workspace_id: ws.workspaceId,
+      limit: Number(req.query.limit || 200),
+    });
+    const tasks = rawTasks.map((task) => ({
+      id: task.id,
+      prompt: extractTaskPrompt(task),
+      state: task.state,
+      assignee_agent_id: task.assignee.agent_id,
+      requester_agent_id: task.requester.agent_id,
+      workspace_id: task.workspace_id,
+      thread_id: task.thread_id,
+      trace_id: task.trace_id,
+      createdAt: task.created_at,
+      updatedAt: task.updated_at,
+      metadata: task.metadata ?? {},
+      result: task.result ?? null,
+      error: task.error ?? null,
+    }));
+    sendSuccess(res, { tasks, total: tasks.length });
   } catch (err: any) {
     sendError(res, 500, buildA2AError({
       code: A2AErrorCodeEnum.InternalError,
