@@ -13,9 +13,11 @@ import {
   Github,
   Terminal,
   Check,
+  ArrowRight,
 } from 'lucide-react';
 import { signIn } from '@/lib/auth-client';
 import { SiteHeader } from '@/components/SiteHeader';
+import { LeadCaptureForm } from '@/components/LeadCaptureForm';
 import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 function SignUpForm() {
@@ -55,12 +57,12 @@ function SignUpForm() {
   };
 
   const features = [
-    'Access to Recoder CLI tools',
-    'Access to all Recoder platforms',
-    'Multi-AI model support',
-    'Real code generation',
-    'Production-ready output',
-    'Community support'
+    'Create your workspace with GitHub or Google',
+    'Connect your own provider keys after signup',
+    'Run CLI, web, and agent workflows from one account',
+    'Keep previews, logs, and task state attached to real runs',
+    'Start free before deciding whether to upgrade',
+    'Move into docs or updates if you are not ready yet',
   ];
 
   return (
@@ -81,10 +83,10 @@ function SignUpForm() {
             <div className="space-y-8">
               <div className="space-y-4">
                 <h1 className="text-4xl font-bold">
-                  Start Building with <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">AI</span>
+                  Create your Recoder <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-purple-600">workspace</span>
                 </h1>
                 <p className="text-xl text-gray-400">
-                  Build production-ready software with AI-powered tools
+                  Start with OAuth, bring your own model keys later, and keep the execution workflow under one account.
                 </p>
               </div>
 
@@ -105,9 +107,9 @@ function SignUpForm() {
                     <Terminal className="w-6 h-6 text-white" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="font-bold text-white">Start Free</h3>
+                    <h3 className="font-bold text-white">Start free, wire keys later</h3>
                     <p className="text-sm text-gray-400">
-                      Get started with our free tier. No credit card required. Upgrade anytime.
+                      OAuth creates the workspace. Provider keys, projects, and deeper runtime setup can happen after you get inside.
                     </p>
                   </div>
                 </div>
@@ -119,7 +121,7 @@ function SignUpForm() {
               <div className="text-center space-y-3 mb-8">
                 <h2 className="text-3xl font-bold">Create Account</h2>
                 <p className="text-gray-400">
-                  Get started with recoder.xyz today
+                  Use GitHub or Google to create your workspace in under a minute
                 </p>
               </div>
 
@@ -167,6 +169,24 @@ function SignUpForm() {
 
                 <div className="p-4 rounded-lg border border-white/10 bg-white/5 text-sm text-gray-400">
                   Email/password sign-up is disabled on the main site. Use GitHub or Google to create your account.
+                </div>
+
+                <LeadCaptureForm
+                  source="signup_page_lead_capture"
+                  title="Not ready to connect an account yet?"
+                  description="Leave your email and we’ll send launch notes, product updates, and a better moment to come back when the workflow fits."
+                  submitLabel="Get updates instead"
+                />
+
+                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-4 text-sm text-cyan-100">
+                  <p className="font-medium text-white">Need proof before creating an account?</p>
+                  <Link
+                    href="/docs/getting-started"
+                    className="mt-2 inline-flex items-center gap-2 text-cyan-200 hover:text-white"
+                  >
+                    Read the real workflow first
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </div>
 
                 <div className="text-center text-sm pt-4 border-t border-white/10">
