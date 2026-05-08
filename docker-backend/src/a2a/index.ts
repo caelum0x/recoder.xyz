@@ -114,6 +114,7 @@ export {
   type SelfRegisterInput,
   type AgentWithHealth,
   type AgentHeartbeat,
+  type AgentLifecycleMetadata,
   type DefaultAgentConfig,
 } from './agent-registry.service';
 
