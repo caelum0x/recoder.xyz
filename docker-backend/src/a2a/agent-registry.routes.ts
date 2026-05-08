@@ -191,7 +191,7 @@ agentRegistryRouter.get(
       if (typeof req.query.status === 'string') query.status = req.query.status;
       if (typeof req.query.skillTag === 'string') query.skillTag = req.query.skillTag;
 
-      const agents = service.discover(query as any);
+      const agents = service.discoverWithHealth(query as any);
 
       sendSuccess(res, {
         agents,
