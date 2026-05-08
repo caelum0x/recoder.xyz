@@ -133,3 +133,12 @@ export function summarizeRecoderTaskContexts(
 
 	return summary;
 }
+
+export async function buildRecoderProjectControlSummaryFromTaskIds(
+	taskIds: Array<string | null | undefined>,
+): Promise<RecoderProjectControlSummary> {
+	const contexts = await Promise.all(
+		taskIds.map((taskId) => getRecoderTaskContext(taskId)),
+	);
+	return summarizeRecoderTaskContexts(contexts);
+}
