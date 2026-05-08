@@ -338,6 +338,12 @@ export interface TransitionTaskInput {
   estimatedCostUsd?: number;
 }
 
+export interface UpdateTaskMetadataInput {
+  metadataPatch: Record<string, unknown>;
+  triggeredBy?: string;
+  reason?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Service result types
 // ---------------------------------------------------------------------------
@@ -908,6 +914,70 @@ export class TaskLifecycleService {
       triggered_by: triggeredBy,
       reason: reason || 'Additional input required',
     });
+  }
+
+  /**
+   * Merge metadata into an existing task without changing its state.
+   * This is used for canonical run-context updates such as approvals,
+   * handoffs, routing decisions, and other lifecycle-adjacent state that
+   * should live on the task envelope itself.
+   */
+  updateTaskMetadata(
+    taskId: string,
+    input: UpdateTaskMetadataInput,
+  ): ServiceResult<TaskEnvelope> {
+    const envelope = this.store.get(taskId);
+    if (!envelope) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    const now = new Date().toISOString();
+    const updated: TaskEnvelope = {
+      ...envelope,
+      updated_at: now,
+      metadata: {
+        ...(envelope.metadata ?? {}),
+        ...input.metadataPatch,
+      },
+    };
+
+    this.store.set(taskId, updated);
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: input.triggeredBy || 'orchestrator',
+          name: input.triggeredBy || 'orchestrator',
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: input.reason || 'Task metadata updated',
+          metadata_patch: input.metadataPatch,
+        },
+        now,
+      }),
+    );
+
+    return { ok: true, data: updated };
   }
 
   // -----------------------------------------------------------------------
