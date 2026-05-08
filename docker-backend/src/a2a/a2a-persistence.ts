@@ -15,6 +15,8 @@ import type { A2AWorkspace } from './workspace.service';
 import type { DispatchRecord, ApprovalRequest } from '@recoder/shared/a2a';
 import type { TaskEnvelope } from '@recoder/shared/a2a';
 import type { A2AEvent } from './a2a-event-bus';
+import type { RegisteredAgent } from '@recoder/shared/a2a';
+import type { AgentLifecycleMetadata } from './agent-registry.service';
 
 // ---------------------------------------------------------------------------
 // Store names (resolve to data/a2a-*.json)
@@ -25,6 +27,7 @@ const DISPATCHES_STORE = 'a2a-dispatches';
 const TASKS_STORE = 'a2a-tasks';
 const APPROVALS_STORE = 'a2a-approvals';
 const EVENTS_STORE = 'a2a-events';
+const AGENT_REGISTRY_STORE = 'a2a-agent-registry';
 
 /** Maximum number of recent events persisted to disk. */
 const MAX_PERSISTED_EVENTS = 1000;
@@ -129,4 +132,59 @@ export function saveA2AEvents(events: A2AEvent[]): void {
       ? events.slice(-MAX_PERSISTED_EVENTS)
       : events;
   debouncedSave(EVENTS_STORE, capped, DEBOUNCE_MS);
+}
+
+// ---------------------------------------------------------------------------
+// Agent registry
+// ---------------------------------------------------------------------------
+
+export interface PersistedA2AAgentRegistryState {
+  agents: Array<[string, RegisteredAgent]>;
+  heartbeats: Array<[string, string]>;
+  lifecycle?: Array<[string, AgentLifecycleMetadata]>;
+}
+
+export function loadA2AAgentRegistryState(): {
+  agents: Map<string, RegisteredAgent>;
+  heartbeats: Map<string, string>;
+  lifecycle: Map<string, AgentLifecycleMetadata>;
+} {
+  const raw = loadStore<PersistedA2AAgentRegistryState | null>(AGENT_REGISTRY_STORE, null);
+  if (!raw || typeof raw !== 'object') {
+    return {
+      agents: new Map(),
+      heartbeats: new Map(),
+      lifecycle: new Map(),
+    };
+  }
+
+  try {
+    return {
+      agents: new Map(raw.agents || []),
+      heartbeats: new Map(raw.heartbeats || []),
+      lifecycle: new Map(raw.lifecycle || []),
+    };
+  } catch {
+    return {
+      agents: new Map(),
+      heartbeats: new Map(),
+      lifecycle: new Map(),
+    };
+  }
+}
+
+export function saveA2AAgentRegistryState(input: {
+  agents: Map<string, RegisteredAgent>;
+  heartbeats: Map<string, string>;
+  lifecycle: Map<string, AgentLifecycleMetadata>;
+}): void {
+  debouncedSave(
+    AGENT_REGISTRY_STORE,
+    {
+      agents: [...input.agents.entries()],
+      heartbeats: [...input.heartbeats.entries()],
+      lifecycle: [...input.lifecycle.entries()],
+    },
+    DEBOUNCE_MS,
+  );
 }

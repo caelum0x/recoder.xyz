@@ -12,6 +12,21 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+
+const persistenceMocks = vi.hoisted(() => ({
+  loadA2AAgentRegistryState: vi.fn(() => ({
+    agents: new Map(),
+    heartbeats: new Map(),
+    lifecycle: new Map(),
+  })),
+  saveA2AAgentRegistryState: vi.fn(),
+}));
+
+vi.mock('../a2a-persistence', () => ({
+  loadA2AAgentRegistryState: persistenceMocks.loadA2AAgentRegistryState,
+  saveA2AAgentRegistryState: persistenceMocks.saveA2AAgentRegistryState,
+}));
+
 import {
   AgentRegistryService,
   getAgentRegistryService,
@@ -105,6 +120,13 @@ describe('AgentRegistryService', () => {
   let service: AgentRegistryService;
 
   beforeEach(() => {
+    persistenceMocks.loadA2AAgentRegistryState.mockReset();
+    persistenceMocks.loadA2AAgentRegistryState.mockReturnValue({
+      agents: new Map(),
+      heartbeats: new Map(),
+      lifecycle: new Map(),
+    });
+    persistenceMocks.saveA2AAgentRegistryState.mockReset();
     resetAgentRegistryService();
     service = new AgentRegistryService();
   });
@@ -125,6 +147,7 @@ describe('AgentRegistryService', () => {
       expect(result.protocol).toBe('rest');
       expect(result.tier).toBe('tier1');
       expect(result.tags).toEqual(['test']);
+      expect(persistenceMocks.saveA2AAgentRegistryState).toHaveBeenCalled();
     });
 
     it('sets a heartbeat on registration', () => {
@@ -156,6 +179,7 @@ describe('AgentRegistryService', () => {
       service.register(makeRegisterInput());
       expect(service.unregister('test-agent')).toBe(true);
       expect(service.get('test-agent')).toBeUndefined();
+      expect(persistenceMocks.saveA2AAgentRegistryState).toHaveBeenCalled();
     });
 
     it('returns false when agent does not exist', () => {
@@ -193,6 +217,8 @@ describe('AgentRegistryService', () => {
       expect(agentWithHealth).toBeDefined();
       expect(agentWithHealth!.health.online).toBe(true);
       expect(agentWithHealth!.health.lastHeartbeat).toBeTruthy();
+      expect(agentWithHealth!.lifecycle.registrationCount).toBe(1);
+      expect(agentWithHealth!.lifecycle.reconnectCount).toBe(0);
     });
 
     it('getWithHealth returns undefined for unknown agent', () => {
@@ -299,10 +325,35 @@ describe('AgentRegistryService', () => {
 
     it('recordHeartbeat returns true and updates last heartbeat', () => {
       service.register(makeRegisterInput());
+      const before = service.getLifecycle('test-agent');
       const result = service.recordHeartbeat('test-agent');
       expect(result).toBe(true);
       const health = service.getHealth('test-agent');
       expect(health.online).toBe(true);
+      const after = service.getLifecycle('test-agent');
+      expect(after?.lastSeenAt).toBeTruthy();
+      expect(after?.firstRegisteredAt).toBe(before?.firstRegisteredAt);
+      expect(after?.lastSeenAt).toBe(health.lastHeartbeat);
+      expect(persistenceMocks.saveA2AAgentRegistryState).toHaveBeenCalled();
+    });
+
+    it('tracks reconnect lifecycle metadata for repeated registration of the same agent id', () => {
+      service.register(makeRegisterInput({
+        identity: { id: 'repeat-agent', name: 'Repeat Agent', platform: 'custom', instanceId: 'inst-1' },
+      }));
+      const firstLifecycle = service.getLifecycle('repeat-agent');
+
+      service.register(makeRegisterInput({
+        identity: { id: 'repeat-agent', name: 'Repeat Agent', platform: 'custom', instanceId: 'inst-2' },
+      }));
+      const secondLifecycle = service.getLifecycle('repeat-agent');
+
+      expect(firstLifecycle).toBeDefined();
+      expect(secondLifecycle).toBeDefined();
+      expect(secondLifecycle?.firstRegisteredAt).toBe(firstLifecycle?.firstRegisteredAt);
+      expect(secondLifecycle?.registrationCount).toBe(2);
+      expect(secondLifecycle?.reconnectCount).toBe(1);
+      expect(secondLifecycle?.lastInstanceId).toBe('inst-2');
     });
 
     it('agent goes offline after heartbeat timeout', () => {
@@ -320,6 +371,101 @@ describe('AgentRegistryService', () => {
       const health = service.getHealth('unknown');
       expect(health.online).toBe(false);
       expect(health.lastHeartbeat).toBe('');
+    });
+  });
+
+  describe('persistence', () => {
+    it('hydrates persisted agents and heartbeats on startup', () => {
+      const persistedAgent = makeRegisterInput({
+        identity: { id: 'persisted-agent', name: 'Persisted Agent', platform: 'codex' },
+        protocol: 'jsonrpc',
+      });
+      const persistedHeartbeat = new Date(Date.now() - 60_000).toISOString();
+
+      persistenceMocks.loadA2AAgentRegistryState.mockReturnValueOnce({
+        agents: new Map([['persisted-agent', {
+          identity: persistedAgent.identity,
+          card: persistedAgent.card,
+          protocol: persistedAgent.protocol,
+          tier: persistedAgent.tier,
+          status: 'supported',
+          tags: persistedAgent.tags,
+        } satisfies RegisteredAgent]]),
+        heartbeats: new Map([['persisted-agent', persistedHeartbeat]]),
+        lifecycle: new Map([['persisted-agent', {
+          firstRegisteredAt: persistedHeartbeat,
+          lastRegisteredAt: persistedHeartbeat,
+          lastSeenAt: persistedHeartbeat,
+          reconnectCount: 2,
+          registrationCount: 3,
+          lastInstanceId: 'persisted-instance',
+        }]]),
+      });
+
+      const hydrated = new AgentRegistryService();
+
+      expect(hydrated.get('persisted-agent')).toMatchObject({
+        identity: { id: 'persisted-agent', platform: 'codex' },
+        protocol: 'jsonrpc',
+      });
+      expect(hydrated.getHealth('persisted-agent')).toMatchObject({
+        lastHeartbeat: persistedHeartbeat,
+        online: true,
+      });
+      expect(hydrated.getLifecycle('persisted-agent')).toMatchObject({
+        reconnectCount: 2,
+        registrationCount: 3,
+        lastInstanceId: 'persisted-instance',
+      });
+    });
+
+    it('backfills lifecycle metadata for older persisted registry snapshots', () => {
+      const persistedHeartbeat = new Date(Date.now() - 60_000).toISOString();
+      persistenceMocks.loadA2AAgentRegistryState.mockReturnValueOnce({
+        agents: new Map([['legacy-agent', {
+          identity: { id: 'legacy-agent', name: 'Legacy Agent', platform: 'custom' },
+          card: makeRegisterInput().card,
+          protocol: 'rest',
+          tier: 'tier1',
+          status: 'supported',
+          tags: ['legacy'],
+        } satisfies RegisteredAgent]]),
+        heartbeats: new Map([['legacy-agent', persistedHeartbeat]]),
+        lifecycle: new Map(),
+      });
+
+      const hydrated = new AgentRegistryService();
+      expect(hydrated.getLifecycle('legacy-agent')).toMatchObject({
+        firstRegisteredAt: persistedHeartbeat,
+        lastRegisteredAt: persistedHeartbeat,
+        lastSeenAt: persistedHeartbeat,
+        reconnectCount: 0,
+        registrationCount: 1,
+      });
+    });
+
+    it('persists updated registry snapshots after register, heartbeat, and unregister', () => {
+      service.register(makeRegisterInput());
+      service.recordHeartbeat('test-agent');
+      service.unregister('test-agent');
+
+      const calls = persistenceMocks.saveA2AAgentRegistryState.mock.calls;
+      expect(calls.length).toBeGreaterThanOrEqual(3);
+
+      const firstSnapshot = calls[0]?.[0];
+      expect(firstSnapshot.agents.get('test-agent')).toMatchObject({
+        identity: { id: 'test-agent' },
+      });
+      expect(firstSnapshot.heartbeats.get('test-agent')).toBeTruthy();
+      expect(firstSnapshot.lifecycle.get('test-agent')).toMatchObject({
+        registrationCount: 1,
+        reconnectCount: 0,
+      });
+
+      const lastSnapshot = calls[calls.length - 1]?.[0];
+      expect(lastSnapshot.agents.has('test-agent')).toBe(false);
+      expect(lastSnapshot.heartbeats.has('test-agent')).toBe(false);
+      expect(lastSnapshot.lifecycle.has('test-agent')).toBe(false);
     });
   });
 
@@ -875,6 +1021,11 @@ describe('Agent Registry Workflow', () => {
     const withHealth = service.getWithHealth('lifecycle-agent');
     expect(withHealth).toBeDefined();
     expect(withHealth!.health.online).toBe(true);
+    expect(withHealth!.lifecycle.registrationCount).toBe(1);
+
+    // 6b. Discover with health should include lifecycle metadata
+    const enrichedDiscovery = service.discoverWithHealth({ platform: 'recoder_web' });
+    expect(enrichedDiscovery[0]?.lifecycle.lastSeenAt).toBeTruthy();
 
     // 7. Unregister
     expect(service.unregister('lifecycle-agent')).toBe(true);
