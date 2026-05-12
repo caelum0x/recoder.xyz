@@ -162,6 +162,24 @@ export interface CreateAgencyWorkspaceRunInput {
 	metadata?: Record<string, unknown>;
 }
 
+export interface CreateAgencyDeliverableRevisionRunInput {
+	workspaceId: string;
+	projectId: string;
+	projectDbId: number;
+	projectName: string;
+	deliverable: {
+		id: string;
+		dbId: number;
+		taskId: string | null;
+		name: string;
+		type: string | null;
+		content: string | null;
+	};
+	feedback: string;
+	source: string;
+	reviewerUserDbId?: number | null;
+}
+
 export async function getRecoderTaskContext(
 	taskId: string | null | undefined,
 ): Promise<RecoderTaskContext | null> {
@@ -269,6 +287,69 @@ export async function createAgencyWorkspaceRun(
 		autoRoute: true,
 		routingHints: input.routingHints,
 		metadata: input.metadata,
+	});
+}
+
+function buildRevisionRoutingHints(deliverableType: string | null | undefined) {
+	switch (deliverableType) {
+		case "design":
+			return {
+				runtimeCategory: "visual",
+				requiredCapabilities: ["web-interface"],
+				preferredCapabilities: ["design", "ui"],
+				preferredPlatform: "recoder_web",
+			};
+		case "document":
+			return {
+				runtimeCategory: "documentation",
+				requiredCapabilities: ["code-review"],
+				preferredCapabilities: ["documentation"],
+				preferredPlatform: "claude_code",
+			};
+		case "code":
+		default:
+			return {
+				runtimeCategory: "implementation",
+				requiredCapabilities: ["code-generation"],
+				preferredCapabilities: ["testing"],
+				preferredPlatform: "codex",
+			};
+	}
+}
+
+export async function createAgencyDeliverableRevisionRun(
+	input: CreateAgencyDeliverableRevisionRunInput,
+): Promise<{ taskId: string; state: string } | null> {
+	const prompt = [
+		`Client requested revisions for deliverable "${input.deliverable.name}".`,
+		`Project: ${input.projectName}.`,
+		`Deliverable type: ${input.deliverable.type ?? "other"}.`,
+		`Feedback: ${input.feedback}.`,
+		input.deliverable.content
+			? `Current deliverable content:\n${input.deliverable.content.slice(0, 2000)}`
+			: null,
+	].filter(Boolean).join("\n\n");
+
+	return createAgencyWorkspaceRun({
+		workspaceId: input.workspaceId,
+		threadPrefix: "agency-revision",
+		entityId: input.deliverable.id,
+		prompt,
+		routingHints: buildRevisionRoutingHints(input.deliverable.type),
+		metadata: {
+			projectId: input.projectId,
+			projectDbId: input.projectDbId,
+			deliverableId: input.deliverable.id,
+			deliverableDbId: input.deliverable.dbId,
+			deliverableType: input.deliverable.type,
+			revisionRequest: {
+				source: input.source,
+				reviewerUserDbId: input.reviewerUserDbId ?? null,
+				feedback: input.feedback,
+				previousTaskId: input.deliverable.taskId ?? null,
+				requestedAt: new Date().toISOString(),
+			},
+		},
 	});
 }
 
