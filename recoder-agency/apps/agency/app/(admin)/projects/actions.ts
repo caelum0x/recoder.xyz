@@ -10,6 +10,7 @@ import {
 	type DeliveryProjectStatus,
 	db,
 	deliverables,
+	modelRoutingPolicies,
 	projects,
 	quotes,
 	serviceSkus,
@@ -672,4 +673,88 @@ export async function requestProjectGovernanceRun(
 		redirect(`/projects/${project.id}?governanceRequested=error`);
 	}
 	redirect(`/projects/${project.id}?governanceTaskId=${encodeURIComponent(created.taskId)}`);
+}
+
+export async function saveProjectRoutingPolicy(
+	projectId: string,
+	formData: FormData,
+) {
+	const team = await requireAdminRole();
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+
+	const name = String(formData.get("name") ?? "").trim();
+	const preferredModelId = String(formData.get("preferredModelId") ?? "").trim();
+	const fallbackModelId = String(formData.get("fallbackModelId") ?? "").trim() || null;
+	const ceilingRaw = Number.parseInt(
+		String(formData.get("costCeilingCentsPerGeneration") ?? ""),
+		10,
+	);
+	const costCeiling = Number.isNaN(ceilingRaw) ? null : Math.max(0, ceilingRaw);
+	const isActive = formData.get("isActive") === "1";
+	const priorityRaw = Number.parseInt(String(formData.get("priority") ?? ""), 10);
+	const priority = Number.isNaN(priorityRaw) ? 0 : priorityRaw;
+
+	if (!name) throw new Error("Policy name is required.");
+	if (!preferredModelId) throw new Error("Preferred model is required.");
+
+	const existing = await db.query.modelRoutingPolicies.findFirst({
+		where: and(
+			eq(modelRoutingPolicies.teamDbId, team.dbId),
+			eq(modelRoutingPolicies.projectDbId, project.dbId),
+		),
+	});
+
+	if (existing) {
+		await db
+			.update(modelRoutingPolicies)
+			.set({
+				name,
+				preferredModelId,
+				fallbackModelId,
+				costCeilingCentsPerGeneration: costCeiling,
+				isActive,
+				priority,
+			})
+			.where(eq(modelRoutingPolicies.dbId, existing.dbId));
+	} else {
+		await db.insert(modelRoutingPolicies).values({
+			id: `mrp_${crypto.randomUUID()}`,
+			teamDbId: team.dbId,
+			projectDbId: project.dbId,
+			name,
+			preferredModelId,
+			fallbackModelId,
+			costCeilingCentsPerGeneration: costCeiling,
+			isActive,
+			priority,
+		});
+	}
+
+	revalidatePath(`/projects/${project.id}`);
+}
+
+export async function deleteProjectRoutingPolicy(projectId: string) {
+	const team = await requireAdminRole();
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+
+	await db
+		.delete(modelRoutingPolicies)
+		.where(
+			and(
+				eq(modelRoutingPolicies.teamDbId, team.dbId),
+				eq(modelRoutingPolicies.projectDbId, project.dbId),
+			),
+		);
+
+	revalidatePath(`/projects/${project.id}`);
 }

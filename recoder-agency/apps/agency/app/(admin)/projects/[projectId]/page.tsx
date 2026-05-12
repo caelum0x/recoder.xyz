@@ -18,9 +18,11 @@ import {
 import { fetchCurrentTeam } from "@/services/teams";
 import { createChangeOrder } from "./change-order-actions";
 import {
+	deleteProjectRoutingPolicy,
 	requestProjectGovernanceRun,
 	requestProjectHandoff,
 	requestProjectPlanningRun,
+	saveProjectRoutingPolicy,
 } from "../actions";
 import { CostSection } from "./cost-section";
 import { DeliverableSection } from "./deliverable-section";
@@ -594,6 +596,74 @@ export default async function ProjectDetailPage({
 						</span>
 					)}
 				</div>
+				<form
+					action={saveProjectRoutingPolicy.bind(null, project.id)}
+					className="grid grid-cols-1 gap-2 md:grid-cols-5"
+				>
+					<input
+						name="name"
+						required
+						defaultValue={effectiveRoutingPolicy?.name ?? `${project.name} policy`}
+						placeholder="Policy name"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="preferredModelId"
+						required
+						defaultValue={effectiveRoutingPolicy?.preferredModelId ?? ""}
+						placeholder="Preferred model ID"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="fallbackModelId"
+						defaultValue={effectiveRoutingPolicy?.fallbackModelId ?? ""}
+						placeholder="Fallback model ID"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="costCeilingCentsPerGeneration"
+						type="number"
+						min={0}
+						defaultValue={effectiveRoutingPolicy?.costCeilingCentsPerGeneration ?? ""}
+						placeholder="Cost ceiling cents/gen"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="priority"
+						type="number"
+						defaultValue={effectiveRoutingPolicy?.priority ?? 0}
+						placeholder="Priority"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<label className="inline-flex items-center gap-2 text-xs text-text-muted">
+						<input
+							type="checkbox"
+							name="isActive"
+							value="1"
+							defaultChecked={effectiveRoutingPolicy?.dbId ? true : true}
+							className="size-4 rounded border border-border bg-background"
+						/>
+						Policy active
+					</label>
+					<div className="md:col-span-4 flex flex-wrap gap-2">
+						<button
+							type="submit"
+							className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+						>
+							Save Project Routing Policy
+						</button>
+					</div>
+				</form>
+				{effectiveRoutingPolicy ? (
+					<form action={deleteProjectRoutingPolicy.bind(null, project.id)}>
+						<button
+							type="submit"
+							className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover"
+						>
+							Delete Project Routing Policy
+						</button>
+					</form>
+				) : null}
 			</div>
 
 			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
