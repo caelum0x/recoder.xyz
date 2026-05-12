@@ -17,6 +17,7 @@ import {
 } from "@/db";
 import { createProjectFromPlaybook as createProjectFromPlaybookHelper } from "@/lib/agency/playbook-actions";
 import { applyProjectTransitionWithAudit } from "@/lib/agency/project-transition";
+import { createRecoderTask } from "@/lib/agency/recoder-control-plane";
 import {
 	deliveryProjectStatusLabels,
 	getAllowedProjectStatusTransitions,
@@ -453,4 +454,74 @@ export async function deleteProject(projectId: string) {
 
 	revalidatePath("/projects");
 	redirect("/projects");
+}
+
+export async function requestProjectHandoff(
+	projectId: string,
+	formData: FormData,
+) {
+	const [team, user] = await Promise.all([
+		requireAdminRole(),
+		getCurrentUser(),
+	]);
+	const note = String(formData.get("note") ?? "").trim();
+
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+	if (!project.workspaceDbId) {
+		throw new Error("Project has no linked workspace for shared handoff");
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		throw new Error("Linked workspace not found");
+	}
+
+	const prompt = [
+		`Create a project handoff package for "${project.name}".`,
+		`Project status: ${project.status}.`,
+		project.brief ? `Project brief:\n${project.brief.slice(0, 2000)}` : null,
+		note ? `Handoff note:\n${note}` : null,
+		"Summarize current status, open approvals or handoffs, next actions, and the key deliverables to continue from.",
+	].filter(Boolean).join("\n\n");
+
+	const created = await createRecoderTask({
+		workspaceId: workspace.id,
+		threadId: `agency-handoff-${project.id}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt,
+		autoRoute: true,
+		routingHints: {
+			runtimeCategory: "documentation",
+			requiredCapabilities: ["code-review"],
+			preferredCapabilities: ["documentation"],
+			preferredPlatform: "claude_code",
+		},
+		metadata: {
+			projectId: project.id,
+			projectDbId: project.dbId,
+			projectHandoff: {
+				note: note || null,
+				requestedByUserDbId: user.dbId,
+				requestedAt: new Date().toISOString(),
+				source: "agency.admin.project-handoff",
+			},
+		},
+	});
+
+	revalidatePath(`/projects/${project.id}`);
+	if (!created?.taskId) {
+		redirect(`/projects/${project.id}?handoffRequested=error`);
+	}
+	redirect(`/projects/${project.id}?handoffTaskId=${encodeURIComponent(created.taskId)}`);
 }
