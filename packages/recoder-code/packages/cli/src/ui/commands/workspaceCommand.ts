@@ -6,6 +6,7 @@
  *   /workspace join <id> - Connect to a workspace via AgentBridgeService
  *   /workspace leave   - Disconnect from current workspace
  *   /workspace status  - Show connection status and online agents
+ *   /workspace context - Show the Recoder Space context package
  */
 
 import type { SlashCommand, MessageActionReturn } from './types.js';
@@ -42,6 +43,33 @@ interface WorkspaceAgentInfo {
   capabilities: string[];
 }
 
+interface WorkspaceContextPackage {
+  contextVersion: string;
+  workspace: {
+    workspaceId: string;
+    name: string;
+    projectId: string;
+  };
+  summary?: {
+    totalAgents?: number;
+    onlineAgents?: number;
+    totalTasks?: number;
+    activeTasks?: number;
+    pendingApprovals?: number;
+    activeHandoffs?: number;
+  };
+  recentTasks?: Array<{
+    prompt?: string;
+    state?: string;
+    assignee_agent_id?: string;
+  }>;
+  pendingApprovals?: Array<{
+    action?: string;
+    requester?: string;
+    target?: string;
+  }>;
+}
+
 export const workspaceCommand: SlashCommand = {
   name: 'workspace',
   description: 'Manage Recoder Space connections',
@@ -65,7 +93,7 @@ export const workspaceCommand: SlashCommand = {
         }
 
         try {
-          const response = await fetch(`${DOCKER_BACKEND_URL}/api/a2a/workspaces`, {
+          const response = await fetch(`${DOCKER_BACKEND_URL}/api/spaces`, {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -230,6 +258,119 @@ export const workspaceCommand: SlashCommand = {
     },
 
     // -----------------------------------------------------------------------
+    // /workspace context
+    // -----------------------------------------------------------------------
+    {
+      name: 'context',
+      description: 'Show the structured context package for the current or specified Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const bridge = getBridge();
+        const workspaceId = args?.trim() || bridge.getWorkspaceId();
+        if (!workspaceId) {
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: [
+              'Recoder Space Context',
+              '',
+              'Usage: /workspace context [workspace-id]',
+              '',
+              'Connect to a space first with /workspace join <id>,',
+              'or pass a workspace ID explicitly.',
+            ].join('\n'),
+          };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/spaces/${encodeURIComponent(workspaceId)}/context`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to fetch space context (${response.status}): ${errText}`,
+            };
+          }
+
+          const raw = await response.json();
+          const context: WorkspaceContextPackage = raw.data || raw;
+          const summary = context.summary || {};
+          const recentTasks = context.recentTasks || [];
+          const pendingApprovals = context.pendingApprovals || [];
+
+          const lines: string[] = [
+            '┌────────────────────────────────────────────────┐',
+            '│  Recoder Space Context                         │',
+            '├────────────────────────────────────────────────┤',
+            `│  Name: ${String(context.workspace?.name || workspaceId).substring(0, 40).padEnd(40)}│`,
+            `│  ID:   ${String(context.workspace?.workspaceId || workspaceId).substring(0, 40).padEnd(40)}│`,
+            `│  Ver:  ${String(context.contextVersion || 'unknown').substring(0, 40).padEnd(40)}│`,
+            '├────────────────────────────────────────────────┤',
+            `│  Agents: ${String(summary.totalAgents ?? 0).padEnd(4)} Online: ${String(summary.onlineAgents ?? 0).padEnd(5)} Tasks: ${String(summary.totalTasks ?? 0).padEnd(6)}│`,
+            `│  Active: ${String(summary.activeTasks ?? 0).padEnd(4)} Approvals: ${String(summary.pendingApprovals ?? 0).padEnd(3)} Handoffs: ${String(summary.activeHandoffs ?? 0).padEnd(3)}│`,
+          ];
+
+          if (recentTasks.length > 0) {
+            lines.push('├────────────────────────────────────────────────┤');
+            lines.push('│  Recent Tasks                                  │');
+            lines.push('│                                                │');
+            for (const task of recentTasks.slice(0, 3)) {
+              const prompt = String(task.prompt || '').substring(0, 31);
+              const state = String(task.state || '').substring(0, 10);
+              const assignee = String(task.assignee_agent_id || '').substring(0, 44);
+              lines.push(`│  ${prompt.padEnd(31)} ${state.padEnd(10)}│`);
+              if (assignee) {
+                lines.push(`│    -> ${assignee.padEnd(40)}│`);
+              }
+            }
+          }
+
+          if (pendingApprovals.length > 0) {
+            lines.push('├────────────────────────────────────────────────┤');
+            lines.push('│  Pending Approvals                             │');
+            lines.push('│                                                │');
+            for (const approval of pendingApprovals.slice(0, 2)) {
+              const action = String(approval.action || '').substring(0, 18);
+              const requester = String(approval.requester || '').substring(0, 10);
+              const target = String(approval.target || '').substring(0, 10);
+              lines.push(`│  ${action.padEnd(18)} ${requester.padEnd(10)} ${target.padEnd(10)}│`);
+            }
+          }
+
+          lines.push('└────────────────────────────────────────────────┘');
+          return { type: 'message', messageType: 'info', content: lines.join('\n') };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to fetch space context: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
     // /workspace leave
     // -----------------------------------------------------------------------
     {
@@ -309,7 +450,7 @@ export const workspaceCommand: SlashCommand = {
         if (token) {
           try {
             const response = await fetch(
-              `${DOCKER_BACKEND_URL}/api/a2a/workspaces/${encodeURIComponent(workspaceId)}/agents`,
+              `${DOCKER_BACKEND_URL}/api/spaces/${encodeURIComponent(workspaceId)}/agents`,
               {
                 method: 'GET',
                 headers: {
@@ -373,6 +514,7 @@ export const workspaceCommand: SlashCommand = {
         'Commands:',
         '  /workspace list       - List available workspaces',
         '  /workspace join <id>  - Connect to a workspace',
+        '  /workspace context    - Show space context',
         '  /workspace leave      - Disconnect from workspace',
         '  /workspace status     - Show connection status',
       ].join('\n'),
