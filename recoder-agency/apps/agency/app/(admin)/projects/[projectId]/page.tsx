@@ -797,12 +797,59 @@ export default async function ProjectDetailPage({
 					action={requestProjectBrowserRun.bind(null, project.id)}
 					className="space-y-2"
 				>
+					<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+						<input
+							name="targetUrl"
+							placeholder="Target URL (optional)"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+						<input
+							name="sessionName"
+							placeholder="Session name (optional)"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+					</div>
+					<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+						<select
+							name="engine"
+							defaultValue="chrome"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="chrome">Chrome</option>
+							<option value="lightpanda">Lightpanda</option>
+						</select>
+						<input
+							name="allowedDomains"
+							placeholder="Allowed domains comma-separated"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+					</div>
 					<textarea
 						name="goal"
 						rows={3}
 						placeholder="Optional browser goal, validation task, or research target"
 						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
 					/>
+					<div className="flex flex-wrap gap-4 text-xs text-text-muted">
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="headed"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Run headed
+						</label>
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="annotate"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Annotated screenshots
+						</label>
+					</div>
 					<button
 						type="submit"
 						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
@@ -823,12 +870,58 @@ export default async function ProjectDetailPage({
 					action={requestProjectComputerUseRun.bind(null, project.id)}
 					className="space-y-2"
 				>
+					<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+						<input
+							name="appName"
+							placeholder="Target app (optional)"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+						<select
+							name="targetMode"
+							defaultValue="auto"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="auto">Auto detect</option>
+							<option value="native">Native accessibility</option>
+							<option value="electron">Electron / CDP</option>
+						</select>
+					</div>
 					<textarea
 						name="goal"
 						rows={3}
 						placeholder="Optional desktop goal, GUI workflow, or validation target"
 						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
 					/>
+					<div className="flex flex-wrap gap-4 text-xs text-text-muted">
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="useCdp"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Prefer CDP
+						</label>
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="captureScreenshot"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Capture screenshots
+						</label>
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="includeSnapshot"
+								value="1"
+								defaultChecked
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Include snapshots
+						</label>
+					</div>
 					<button
 						type="submit"
 						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
