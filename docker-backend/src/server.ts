@@ -15539,6 +15539,7 @@ app.use('/api/a2a/adapters/rest', restAdapterRouter);
 app.use('/api/a2a/adapters/git', gitAdapterRouter);
 app.use('/api/a2a/context', contextBridgeRouter);
 app.use('/api/a2a/workspaces', a2aWorkspaceRouter);
+app.use('/api/spaces', a2aWorkspaceRouter);
 app.use('/api/a2a/memory', authenticateRequest, memoryRouter);
 app.use('/api/a2a/code-search', codeSearchRouter);
 app.use('/api/a2a/search', searchRouter);
