@@ -93,6 +93,9 @@ router.post('/run-steps', async (req, res) => {
     }
     const durable = req.query.durable === 'true' || req.body.durable === true;
     try {
+        if (req.userId && context._userId == null) {
+            context._userId = req.userId;
+        }
         if (durable) {
             // Durable execution via Upstash Workflow — survives crashes, auto-resumes
             const { executeDurableWorkflow } = await Promise.resolve().then(() => __importStar(require('./durable-workflow.js')));

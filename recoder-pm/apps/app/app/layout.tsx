@@ -47,17 +47,27 @@ const roobertMono = localFont({
   display: "swap",
 });
 
-const siteUrl = env.RECODER_PM_API_URL;
+const rawSiteUrl = env.RECODER_PM_API_URL;
 const title = "Recoder PM — Cursor for Product Managers";
 const description = "AI-first product management. Automated feedback analysis, intelligent feature prioritization, insight synthesis, and roadmap planning. The way PMs should work.";
 
-function toAbsoluteUrl(value: string | undefined, fallback: string): URL {
+function normalizeAbsoluteUrl(value: string | undefined, fallback: string): string {
   try {
-    return new URL(value || fallback);
+    return new URL(value || fallback).toString();
   } catch {
-    return new URL(fallback);
+    try {
+      return new URL(fallback).toString();
+    } catch {
+      return fallback.startsWith("http") ? fallback : `https://${fallback}`;
+    }
   }
 }
+
+function toAbsoluteUrl(value: string | undefined, fallback: string): URL {
+  return new URL(normalizeAbsoluteUrl(value, fallback));
+}
+
+const siteUrl = normalizeAbsoluteUrl(rawSiteUrl, "https://pm.recoder.xyz/api");
 
 export const dynamic = "force-dynamic";
 

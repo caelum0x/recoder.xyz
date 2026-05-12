@@ -29,7 +29,7 @@ router.post('/search', async (req, res) => {
         return err(res, 400, 'projectId and query are required');
     }
     try {
-        const results = await (0, code_search_js_1.searchCode)({ projectId, query, limit });
+        const results = await (0, code_search_js_1.searchCode)({ projectId, query, limit, userId: req.userId });
         ok(res, results);
     }
     catch (e) {
@@ -44,7 +44,7 @@ router.post('/index', async (req, res) => {
         return err(res, 400, 'projectId, filePath, and content are required');
     }
     try {
-        await (0, code_search_js_1.indexFile)({ projectId, filePath, content, debounce });
+        await (0, code_search_js_1.indexFile)({ projectId, filePath, content, debounce, userId: req.userId });
         ok(res, { queued: debounce, filePath });
     }
     catch (e) {

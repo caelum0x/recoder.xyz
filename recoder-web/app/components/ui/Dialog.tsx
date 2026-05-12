@@ -51,13 +51,13 @@ export const DialogButton = memo(({ type, children, onClick }: DialogButtonProps
     switch (type) {
       case 'primary':
         return {
-          backgroundColor: '#2563eb',
-          color: '#ffffff',
+          backgroundColor: 'var(--recoder-elements-button-primary-background)',
+          color: 'var(--recoder-elements-button-primary-text)',
         };
       case 'danger':
         return {
-          backgroundColor: '#dc2626',
-          color: '#ffffff',
+          backgroundColor: 'var(--recoder-elements-button-danger-background)',
+          color: 'var(--recoder-elements-button-danger-text)',
         };
       case 'secondary':
       default:
@@ -125,7 +125,7 @@ export const Dialog = memo(({ className, children, onBackdrop, onClose, 'aria-la
     <RadixDialog.Portal>
       <RadixDialog.Overlay onClick={onBackdrop} asChild>
         <motion.div
-          className="bg-black/50 fixed inset-0 z-max"
+          className="bg-recoder-elements-bg-depth-1/50 backdrop-blur-sm fixed inset-0 z-max"
           initial="closed"
           animate="open"
           exit="closed"

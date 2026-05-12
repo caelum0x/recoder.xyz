@@ -17,8 +17,8 @@ exports.forgetEntry = forgetEntry;
 exports.getRecentContext = getRecentContext;
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const logger_js_1 = require("../logger.js");
+const byok_js_1 = require("./byok.js");
 const QDRANT_URL = process.env.QDRANT_URL ?? 'http://localhost:6333';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const EMBED_MODEL = 'openai/text-embedding-ada-002';
 const VECTOR_SIZE = 1536;
 // ── Qdrant REST helpers ──────────────────────────────────────────────────────
@@ -61,15 +61,16 @@ function collectionFor(userId) {
     return `agent-memory-${safe}`;
 }
 // ── Embedding ────────────────────────────────────────────────────────────────
-async function embed(text) {
-    if (!OPENROUTER_API_KEY) {
-        throw new Error('OPENROUTER_API_KEY not set — cannot embed memory');
+async function embed(text, userId) {
+    const openRouterKey = await (0, byok_js_1.getOpenRouterByokKey)(userId);
+    if (!openRouterKey) {
+        throw new Error('No BYOK OpenRouter key available — cannot embed memory');
     }
     const res = await fetch('https://openrouter.ai/api/v1/embeddings', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            Authorization: `Bearer ${openRouterKey}`,
         },
         body: JSON.stringify({ model: EMBED_MODEL, input: text }),
         signal: AbortSignal.timeout(15_000),
@@ -86,7 +87,7 @@ async function rememberEntry(params) {
     const { content, type, tags, agentId, userId } = params;
     const id = node_crypto_1.default.randomUUID();
     const createdAt = new Date().toISOString();
-    const vector = await embed(content);
+    const vector = await embed(content, userId);
     const collection = collectionFor(userId);
     await ensureCollection(collection);
     await qdrantRequest('PUT', `/collections/${collection}/points`, {
@@ -110,7 +111,7 @@ async function recallEntries(params) {
     catch {
         return []; // Collection doesn't exist yet
     }
-    const vector = await embed(query);
+    const vector = await embed(query, userId);
     const filter = type
         ? { must: [{ key: 'type', match: { value: type } }] }
         : undefined;
