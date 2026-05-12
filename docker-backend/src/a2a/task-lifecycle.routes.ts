@@ -568,6 +568,55 @@ taskLifecycleRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// POST /:taskId/metadata -- Merge metadata into a task without state change
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/metadata',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const metadataPatch = readRecord(req.body?.metadataPatch);
+      const reason =
+        typeof req.body?.reason === 'string' && req.body.reason.trim().length > 0
+          ? req.body.reason.trim()
+          : 'Task metadata updated';
+      const triggeredBy =
+        typeof req.body?.triggeredBy === 'string' && req.body.triggeredBy.trim().length > 0
+          ? req.body.triggeredBy.trim()
+          : 'external-client';
+
+      if (!metadataPatch) {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.InvalidEnvelope,
+          message: 'metadataPatch must be an object',
+        }));
+        return;
+      }
+
+      const result = getTaskLifecycleService().updateTaskMetadata(taskId, {
+        metadataPatch,
+        reason,
+        triggeredBy,
+      });
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      sendSuccess(res, result.data);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/metadata');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while updating task metadata',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // POST /:taskId/claim -- Claim a task for exclusive processing by a session
 // ---------------------------------------------------------------------------
 

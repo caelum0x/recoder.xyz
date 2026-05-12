@@ -126,6 +126,13 @@ export default async function ClientProjectDetailPage({
 					<ClockIcon className="size-3.5" />
 					Activity Timeline
 				</Link>
+				<Link
+					href={`/portal/projects/${projectId}/delivery-package`}
+					className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-bg-hover transition-colors"
+				>
+					<ExternalLinkIcon className="size-3.5" />
+					Delivery Package
+				</Link>
 			</div>
 
 			{/* Status timeline */}
