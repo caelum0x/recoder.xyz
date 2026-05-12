@@ -159,6 +159,36 @@ export async function getRecoderTaskContext(
 	}
 }
 
+export async function annotateRecoderTaskMetadata(input: {
+	taskId: string | null | undefined;
+	metadataPatch: Record<string, unknown>;
+	reason: string;
+	triggeredBy: string;
+}): Promise<boolean> {
+	if (!input.taskId) return false;
+
+	try {
+		const response = await fetch(
+			`${DEFAULT_BASE_URL}/api/a2a/tasks/${input.taskId}/metadata`,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					metadataPatch: input.metadataPatch,
+					reason: input.reason,
+					triggeredBy: input.triggeredBy,
+				}),
+				cache: "no-store",
+			},
+		);
+		return response.ok;
+	} catch {
+		return false;
+	}
+}
+
 export async function getRecoderWorkspaceControlSnapshot(
 	workspaceId: string | null | undefined,
 ): Promise<RecoderWorkspaceControlPlaneSnapshot | null> {
