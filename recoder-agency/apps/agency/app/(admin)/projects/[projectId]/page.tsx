@@ -13,6 +13,7 @@ import {
 	projects,
 	quotes,
 	users,
+	workspaces,
 } from "@/db";
 import { fetchCurrentTeam } from "@/services/teams";
 import { createChangeOrder } from "./change-order-actions";
@@ -23,9 +24,9 @@ import { ProjectStatusControl } from "./project-status-control";
 import { ProjectTransitionHistory } from "./project-transition-history";
 import { RetryClientTransitionPanel } from "./retry-client-transition-panel";
 import {
+	buildRecoderProjectControlSummary,
 	getRecoderTaskContext,
 	type RecoderTaskContext,
-	summarizeRecoderTaskContexts,
 } from "@/lib/agency/recoder-control-plane";
 
 type DodTemplateConfig = {
@@ -214,6 +215,7 @@ export default async function ProjectDetailPage({
 		dodTemplatesRaw,
 		projectCostEntries,
 		linkedQuote,
+		projectWorkspace,
 	] = await Promise.all([
 		db.query.clients.findFirst({
 			where: eq(clients.dbId, project.clientDbId),
@@ -302,6 +304,11 @@ export default async function ProjectDetailPage({
 					where: eq(quotes.dbId, project.quoteDbId),
 				})
 			: Promise.resolve(null),
+		project.workspaceDbId
+			? db.query.workspaces.findFirst({
+					where: eq(workspaces.dbId, project.workspaceDbId),
+				})
+			: Promise.resolve(null),
 	]);
 	const qaGateRuns = qaGateRunsRaw.rows.map((row) => {
 		const record = row as Record<string, unknown>;
@@ -345,9 +352,10 @@ export default async function ProjectDetailPage({
 			]),
 		),
 	) as Record<string, RecoderTaskContext | null>;
-	const controlPlaneSummary = summarizeRecoderTaskContexts(
-		Object.values(controlPlaneByDeliverableId),
-	);
+	const controlPlaneSummary = await buildRecoderProjectControlSummary({
+		workspaceId: projectWorkspace?.id ?? null,
+		taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
+	});
 
 	return (
 		<div className="space-y-6">
@@ -434,6 +442,9 @@ export default async function ProjectDetailPage({
 					</div>
 				</div>
 				<div className="mt-3 flex flex-wrap gap-2">
+					<span className="inline-flex items-center rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-300">
+						source: {controlPlaneSummary.source}
+					</span>
 					{Object.entries(controlPlaneSummary.states).map(([state, count]) => (
 						<span
 							key={state}
@@ -445,6 +456,23 @@ export default async function ProjectDetailPage({
 					{controlPlaneSummary.previewCount > 0 ? (
 						<span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
 							previews: {controlPlaneSummary.previewCount}
+						</span>
+					) : null}
+					{controlPlaneSummary.artifactCount > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-indigo-500/10 px-2 py-0.5 text-[11px] text-indigo-300">
+							artifacts: {controlPlaneSummary.artifactCount}
+						</span>
+					) : null}
+					{controlPlaneSummary.logCount > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">
+							logs: {controlPlaneSummary.logCount}
+						</span>
+					) : null}
+					{controlPlaneSummary.pairedBridgeSessions > 0 ||
+					controlPlaneSummary.localBridgeSessions > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-300">
+							sessions: {controlPlaneSummary.pairedBridgeSessions}/
+							{controlPlaneSummary.localBridgeSessions}
 						</span>
 					) : null}
 				</div>

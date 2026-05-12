@@ -307,6 +307,18 @@ export function DeliverableSection({
 													evidence:{controlPlane.runtime.evidenceCount}
 												</span>
 											) : null}
+											{typeof controlPlane.runtime?.logCount === "number" &&
+											controlPlane.runtime.logCount > 0 ? (
+												<span className="rounded bg-zinc-500/10 px-2 py-0.5 text-zinc-300">
+													logs:{controlPlane.runtime.logCount}
+												</span>
+											) : null}
+											{typeof controlPlane.runtime?.artifactCount === "number" &&
+											controlPlane.runtime.artifactCount > 0 ? (
+												<span className="rounded bg-indigo-500/10 px-2 py-0.5 text-indigo-300">
+													artifacts:{controlPlane.runtime.artifactCount}
+												</span>
+											) : null}
 											{controlPlane.assignee?.registry ? (
 												<span
 													className={`rounded px-2 py-0.5 ${
@@ -321,7 +333,20 @@ export function DeliverableSection({
 														: "offline"}
 												</span>
 											) : null}
+											{((controlPlane.assignee?.pairedBridgeSessions?.length ?? 0) +
+												(controlPlane.assignee?.localBridgeSessions?.length ?? 0)) > 0 ? (
+												<span className="rounded bg-sky-500/10 px-2 py-0.5 text-sky-300">
+													sessions:
+													{(controlPlane.assignee?.pairedBridgeSessions?.length ?? 0) +
+														(controlPlane.assignee?.localBridgeSessions?.length ?? 0)}
+												</span>
+											) : null}
 										</div>
+										{controlPlane.runtime?.git?.branch ? (
+											<p className="mt-2 text-[11px] text-text-muted">
+												git branch: {controlPlane.runtime.git.branch}
+											</p>
+										) : null}
 										{previewUrl ? (
 											<a
 												href={previewUrl}

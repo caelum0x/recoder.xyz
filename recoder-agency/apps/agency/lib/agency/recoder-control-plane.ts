@@ -46,7 +46,19 @@ export interface RecoderTaskContext {
 		evidenceCount?: number;
 		previewCount?: number;
 		artifactCount?: number;
+		logCount?: number;
+		runtimeCount?: number;
 		filesChanged?: string[];
+		logs?: Array<{
+			label?: string;
+			ref?: string | null;
+			excerpt?: string | null;
+		}>;
+		git?: {
+			branch?: string | null;
+			status?: string | null;
+			cloneUrl?: string | null;
+		} | null;
 	};
 }
 
@@ -59,6 +71,35 @@ export interface RecoderProjectControlSummary {
 	offlineAgents: number;
 	evidenceCount: number;
 	previewCount: number;
+	artifactCount: number;
+	logCount: number;
+	runtimeCount: number;
+	localBridgeSessions: number;
+	pairedBridgeSessions: number;
+	source: "task-contexts" | "workspace-snapshot";
+}
+
+export interface RecoderWorkspaceControlPlaneSnapshot {
+	workspace?: {
+		workspaceId?: string;
+		name?: string;
+		projectId?: string;
+	} | null;
+	summary: {
+		totalTasks?: number;
+		tasksByState?: Record<string, number>;
+		pendingApprovals?: number;
+		activeHandoffs?: number;
+		onlineAgents?: number;
+		offlineAgents?: number;
+		evidenceItems?: number;
+		previews?: number;
+		artifacts?: number;
+		logEvidence?: number;
+		runtimeEvidence?: number;
+		localBridgeSessions?: number;
+		pairedBridgeSessions?: number;
+	};
 }
 
 export async function getRecoderTaskContext(
@@ -81,6 +122,50 @@ export async function getRecoderTaskContext(
 	}
 }
 
+export async function getRecoderWorkspaceControlSnapshot(
+	workspaceId: string | null | undefined,
+): Promise<RecoderWorkspaceControlPlaneSnapshot | null> {
+	if (!workspaceId) return null;
+
+	try {
+		const response = await fetch(
+			`${DEFAULT_BASE_URL}/api/a2a/workspaces/${workspaceId}/control-plane`,
+			{
+				cache: "no-store",
+			},
+		);
+		if (!response.ok) return null;
+		const json = (await response.json()) as {
+			success?: boolean;
+			data?: RecoderWorkspaceControlPlaneSnapshot;
+		};
+		return json.success && json.data ? json.data : null;
+	} catch {
+		return null;
+	}
+}
+
+export function summarizeRecoderWorkspaceControlSnapshot(
+	snapshot: RecoderWorkspaceControlPlaneSnapshot | null | undefined,
+): RecoderProjectControlSummary {
+	return {
+		totalTasks: snapshot?.summary.totalTasks ?? 0,
+		states: snapshot?.summary.tasksByState ?? {},
+		pendingApprovals: snapshot?.summary.pendingApprovals ?? 0,
+		activeHandoffs: snapshot?.summary.activeHandoffs ?? 0,
+		onlineAgents: snapshot?.summary.onlineAgents ?? 0,
+		offlineAgents: snapshot?.summary.offlineAgents ?? 0,
+		evidenceCount: snapshot?.summary.evidenceItems ?? 0,
+		previewCount: snapshot?.summary.previews ?? 0,
+		artifactCount: snapshot?.summary.artifacts ?? 0,
+		logCount: snapshot?.summary.logEvidence ?? 0,
+		runtimeCount: snapshot?.summary.runtimeEvidence ?? 0,
+		localBridgeSessions: snapshot?.summary.localBridgeSessions ?? 0,
+		pairedBridgeSessions: snapshot?.summary.pairedBridgeSessions ?? 0,
+		source: "workspace-snapshot",
+	};
+}
+
 export function summarizeRecoderTaskContexts(
 	contexts: Array<RecoderTaskContext | null | undefined>,
 ): RecoderProjectControlSummary {
@@ -93,6 +178,12 @@ export function summarizeRecoderTaskContexts(
 		offlineAgents: 0,
 		evidenceCount: 0,
 		previewCount: 0,
+		artifactCount: 0,
+		logCount: 0,
+		runtimeCount: 0,
+		localBridgeSessions: 0,
+		pairedBridgeSessions: 0,
+		source: "task-contexts",
 	};
 
 	for (const context of contexts) {
@@ -129,9 +220,26 @@ export function summarizeRecoderTaskContexts(
 
 		summary.evidenceCount += context.runtime?.evidenceCount ?? 0;
 		summary.previewCount += context.runtime?.previewCount ?? 0;
+		summary.artifactCount += context.runtime?.artifactCount ?? 0;
+		summary.logCount += context.runtime?.logCount ?? 0;
+		summary.runtimeCount += context.runtime?.runtimeCount ?? 0;
+		summary.localBridgeSessions += context.assignee?.localBridgeSessions?.length ?? 0;
+		summary.pairedBridgeSessions += context.assignee?.pairedBridgeSessions?.length ?? 0;
 	}
 
 	return summary;
+}
+
+export async function buildRecoderProjectControlSummary(input: {
+	workspaceId?: string | null;
+	taskIds: Array<string | null | undefined>;
+}): Promise<RecoderProjectControlSummary> {
+	const snapshot = await getRecoderWorkspaceControlSnapshot(input.workspaceId);
+	if (snapshot) {
+		return summarizeRecoderWorkspaceControlSnapshot(snapshot);
+	}
+
+	return buildRecoderProjectControlSummaryFromTaskIds(input.taskIds);
 }
 
 export async function buildRecoderProjectControlSummaryFromTaskIds(
