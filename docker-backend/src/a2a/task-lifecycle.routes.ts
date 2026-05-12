@@ -24,6 +24,7 @@ import {
   buildA2AError,
   type A2AError,
   type TaskEnvelope,
+  type TaskRoutingHints,
 } from '@recoder/shared/a2a';
 import { getAgentBridgeService } from './agent-bridge.service';
 import {
@@ -33,6 +34,12 @@ import {
   type TaskListFilter,
 } from './task-lifecycle.service';
 import { buildTaskRunContext } from './run-context.service';
+import { getWorkspaceService } from './workspace.service';
+import { getAgentRegistryService } from './agent-registry.service';
+import { getCapabilityMatcher } from './capability-matcher.service';
+import { deriveRoutingPlan } from './multi-dispatch.service';
+import { getApprovalGateService } from './approval-gate.service';
+import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
 import {
   validateCreateTaskBody,
   validateTransitionBody,
@@ -111,6 +118,182 @@ function extractBridgeIntent(payload: unknown): string | undefined {
   return typeof intent === 'string' && intent.trim() ? intent : undefined;
 }
 
+function parseRoutingHints(value: unknown): TaskRoutingHints | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as TaskRoutingHints;
+}
+
+function deriveConnectorProtocol(platform: string): 'jsonrpc' | 'mcp' | 'rest' {
+  if (platform === 'claude_code') return 'mcp';
+  if (platform === 'codex' || platform === 'cursor' || platform === 'windsurf') return 'jsonrpc';
+  return 'rest';
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+async function resolveAutoRouteAssignee(input: {
+  workspaceId: string;
+  payload: unknown;
+  routingHints?: TaskRoutingHints;
+}) {
+  const workspace = getWorkspaceService().get(input.workspaceId);
+  if (!workspace) {
+    throw buildA2AError({
+      code: A2AErrorCodeEnum.TaskNotFound,
+      message: `Workspace not found: ${input.workspaceId}`,
+    });
+  }
+
+  const prompt = extractBridgePrompt(input.payload);
+  const routingPlan = deriveRoutingPlan(prompt, input.routingHints);
+  const matcher = getCapabilityMatcher();
+  const bridge = getAgentBridgeService();
+  const registry = getAgentRegistryService();
+
+  const ranked = matcher.matchAgents({
+    ...routingPlan.requirements,
+    tags: [],
+  }).matches
+    .filter((candidate) => workspace.memberAgentIds.includes(candidate.agentId))
+    .map((candidate) => ({
+      ...candidate,
+      onlineBonus: bridge.isAgentOnline(candidate.agentId) ? 15 : 0,
+      totalScore: candidate.score + (bridge.isAgentOnline(candidate.agentId) ? 15 : 0),
+    }))
+    .sort((a, b) => b.totalScore - a.totalScore);
+
+  const fallbackAgentId =
+    workspace.memberAgentIds.find((agentId) => bridge.isAgentOnline(agentId))
+    ?? workspace.memberAgentIds[0];
+
+  const selected = ranked[0];
+  const selectedAgentId = selected?.agentId ?? fallbackAgentId;
+  if (!selectedAgentId) {
+    throw buildA2AError({
+      code: A2AErrorCodeEnum.InvalidParams,
+      message: `Workspace ${input.workspaceId} has no eligible member agents`,
+    });
+  }
+
+  const registryAgent = registry.get(selectedAgentId);
+  const platform = registryAgent?.identity.platform ?? selected?.platform ?? routingPlan.requirements.preferredPlatform ?? 'custom';
+
+  return {
+    assignee: {
+      agent_id: selectedAgentId,
+      platform,
+      name: registryAgent?.identity.name,
+    },
+    connector: {
+      connector_id: registryAgent?.identity.id ? `registry-${registryAgent.identity.id}` : `auto-${selectedAgentId}`,
+      platform,
+      protocol: deriveConnectorProtocol(platform),
+      metadata: {
+        autoRouted: true,
+      },
+    },
+    routing: {
+      runtimeCategory: routingPlan.runtimeCategory,
+      routingRequirements: routingPlan.requirements,
+      intentCategory: routingPlan.intent.category,
+      intentConfidence: routingPlan.intent.confidence,
+      routingReason: selected?.reason ?? 'Fallback to first available workspace member',
+      selectedBy: selected ? 'capability-matcher' : 'workspace-fallback',
+      onlineAtRouting: bridge.isAgentOnline(selectedAgentId),
+    },
+  };
+}
+
+async function gateTaskForApproval(task: TaskEnvelope, input: {
+  requesterAgentId: string;
+  assigneeAgentId: string;
+  action: string;
+  prompt: string;
+  routing?: Record<string, unknown>;
+}): Promise<TaskEnvelope> {
+  const lifecycle = getTaskLifecycleService();
+  const approvalGate = getApprovalGateService();
+  const approval = approvalGate.createRequest({
+    workspaceId: task.workspace_id,
+    requestingAgentId: input.requesterAgentId,
+    targetAgentId: input.assigneeAgentId,
+    action: input.action,
+    details: {
+      prompt: input.prompt,
+      taskId: task.id,
+      threadId: task.thread_id,
+      ...(input.routing ? { routing: input.routing } : {}),
+    },
+    timeoutMs: 300_000,
+  });
+
+  lifecycle.updateTaskMetadata(task.id, {
+    metadataPatch: {
+      approval: {
+        approvalId: approval.approvalId,
+        status: approval.status,
+        action: input.action,
+        targetAgentId: input.assigneeAgentId,
+      },
+      ...(input.routing ? { routing: input.routing } : {}),
+    },
+    triggeredBy: 'approval-gate',
+    reason: 'Task approval requested',
+  });
+  lifecycle.startTask(task.id, 'approval-gate');
+  const gated = lifecycle.requestInput(
+    task.id,
+    `Awaiting approval for ${input.action} to ${input.assigneeAgentId}`,
+    'approval-gate',
+  );
+  const pending = gated.ok ? gated.data : task;
+
+  approvalGate.onResolved(approval.approvalId, (resolved) => {
+    lifecycle.updateTaskMetadata(task.id, {
+      metadataPatch: {
+        approval: {
+          approvalId: resolved.approvalId,
+          status: resolved.status,
+          action: resolved.action,
+          targetAgentId: resolved.targetAgentId,
+          resolvedAt: resolved.resolvedAt,
+          resolvedBy: resolved.resolvedBy,
+        },
+        ...(input.routing ? { routing: input.routing } : {}),
+      },
+      triggeredBy: 'approval-gate',
+      reason: `Task approval ${resolved.status}`,
+    });
+
+    if (resolved.status === 'granted') {
+      const resumed = lifecycle.startTask(task.id, 'approval-gate');
+      if (resumed.ok) {
+        void dispatchTaskToBridgeIfOnline(resumed.data);
+      }
+      return;
+    }
+
+    lifecycle.cancelTask(task.id, `Approval ${resolved.status}`, 'approval-gate');
+  });
+
+  getA2AEventBus().publish({
+    id: `evt_${Date.now()}_${approval.approvalId}`,
+    type: A2AEventType.ApprovalRequested,
+    timestamp: new Date().toISOString(),
+    data: { approval, taskId: task.id },
+    taskId: task.id,
+    workspaceId: task.workspace_id,
+  });
+
+  return pending;
+}
+
 async function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): Promise<void> {
   const assigneeId = task.assignee?.agent_id;
   if (!assigneeId) return;
@@ -171,19 +354,35 @@ taskLifecycleRouter.use(parseJsonTextBody);
 taskLifecycleRouter.post(
   '/',
   validateCreateTaskBody,
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const service = getTaskLifecycleService();
+      const routingHints = parseRoutingHints(req.body.routing_hints);
+      const wantsAutoRoute = req.body.auto_route === true;
+      const resolvedAssignment = wantsAutoRoute
+        ? await resolveAutoRouteAssignee({
+            workspaceId: req.body.workspace_id,
+            payload: req.body.payload,
+            routingHints,
+          })
+        : null;
+      const workspace = getWorkspaceService().get(req.body.workspace_id);
+      const assignee = resolvedAssignment?.assignee ?? req.body.assignee;
+      const connector = resolvedAssignment?.connector ?? req.body.connector;
+      const metadata = {
+        ...(readRecord(req.body.metadata) ?? {}),
+        ...(resolvedAssignment?.routing ? { routing: resolvedAssignment.routing } : {}),
+      };
       const input: CreateTaskInput = {
         workspace_id: req.body.workspace_id,
         thread_id: req.body.thread_id,
         trace_id: req.body.trace_id,
         parent_id: req.body.parent_id,
         requester: req.body.requester,
-        assignee: req.body.assignee,
-        connector: req.body.connector,
+        assignee,
+        connector,
         payload: req.body.payload,
-        metadata: req.body.metadata,
+        metadata,
         tags: req.body.tags,
       };
 
@@ -194,12 +393,35 @@ taskLifecycleRouter.post(
         return;
       }
 
-      // Bridge dispatch is best-effort and async (memory lookup) — fire-and-forget.
-      void dispatchTaskToBridgeIfOnline(result.data);
+      const createdTask = result.data;
+      const prompt = extractBridgePrompt(createdTask.payload);
+      const requiresApproval = Boolean(
+        workspace?.settings.approvalRequired &&
+        createdTask.requester.agent_id !== createdTask.assignee.agent_id,
+      );
 
-      sendSuccess(res, result.data, 201);
+      if (requiresApproval) {
+        const gatedTask = await gateTaskForApproval(createdTask, {
+          requesterAgentId: createdTask.requester.agent_id,
+          assigneeAgentId: createdTask.assignee.agent_id,
+          action: wantsAutoRoute ? 'auto-route' : 'delegate',
+          prompt,
+          routing: resolvedAssignment?.routing,
+        });
+        sendSuccess(res, gatedTask, 201);
+        return;
+      }
+
+      // Bridge dispatch is best-effort and async (memory lookup) — fire-and-forget.
+      void dispatchTaskToBridgeIfOnline(createdTask);
+
+      sendSuccess(res, createdTask, 201);
     } catch (err) {
       logger.error({ err }, 'unhandled error in POST /api/a2a/tasks');
+      if (err && typeof err === 'object' && 'code' in err && 'message' in err) {
+        sendError(res, 400, err as A2AError);
+        return;
+      }
       sendError(res, 500, buildA2AError({
         code: A2AErrorCodeEnum.InternalError,
         message: 'Internal server error while creating task',
