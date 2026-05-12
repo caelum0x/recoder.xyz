@@ -15,6 +15,8 @@ import {
 import { getTeamCapacitySnapshot } from "@/lib/agency/team-capacity";
 import { fetchCurrentTeam } from "@/services/teams";
 import {
+	createDeliveryOpsGovernanceRuns,
+	createDeliveryOpsPlanningRuns,
 	createAlertSubscription,
 	deleteAlertSubscription,
 	saveCapacitySettings,
@@ -75,11 +77,17 @@ export default async function DeliveryOpsPage({
 		minRiskScore?: string;
 		hasForcedOnly?: string;
 		preset?: string;
+		opsRunMode?: string;
+		opsRunCount?: string;
 	}>;
 }) {
 	const team = await fetchCurrentTeam();
 	const params = await searchParams;
 	const filters = parseDeliveryOpsFilters(params);
+	const opsRunMode = params.opsRunMode === "planning" || params.opsRunMode === "governance"
+		? params.opsRunMode
+		: "";
+	const opsRunCount = Number.parseInt(params.opsRunCount ?? "", 10);
 	const [data, capacity, teamAlertSubscriptions] = await Promise.all([
 		fetchDeliveryOpsData(team.dbId, filters),
 		getTeamCapacitySnapshot(team.dbId),
@@ -351,6 +359,55 @@ export default async function DeliveryOpsPage({
 					</Link>
 				</div>
 			</form>
+
+			{opsRunMode && Number.isFinite(opsRunCount) ? (
+				<div className="rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm text-text">
+					Created {opsRunCount} delivery-ops {opsRunMode} run(s) for the current filtered project set.
+				</div>
+			) : null}
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">
+						Ops Workflow Runs
+					</h2>
+					<span className="text-xs text-text-muted">
+						Launch planning or governance runs for the current risk set
+					</span>
+				</div>
+				<div className="flex flex-wrap gap-2">
+					<form action={createDeliveryOpsPlanningRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+						>
+							Create Ops Planning Runs
+						</button>
+					</form>
+					<form action={createDeliveryOpsGovernanceRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
+						>
+							Create Ops Governance Runs
+						</button>
+					</form>
+				</div>
+			</div>
 
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
 				<div className="rounded-xl border border-border bg-background p-4">

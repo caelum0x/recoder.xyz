@@ -2,13 +2,23 @@
 
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
 	type AlertChannel,
 	type AlertConfig,
 	type AlertEventType,
 	alertSubscriptions,
 	db,
+	deliverables,
+	projects,
+	workspaces,
 } from "@/db";
+import {
+	fetchDeliveryOpsData,
+	parseDeliveryOpsFilters,
+	toDeliveryOpsSearchParams,
+} from "@/lib/agency/delivery-ops";
+import { createRecoderTask } from "@/lib/agency/recoder-control-plane";
 import { updateTeamCapacitySettings } from "@/lib/agency/team-capacity";
 import { fetchCurrentTeam } from "@/services/teams";
 
@@ -114,4 +124,139 @@ export async function deleteAlertSubscription(subscriptionDbId: number) {
 		);
 
 	revalidatePath("/delivery-ops");
+}
+
+type OpsRunMode = "planning" | "governance";
+
+async function createDeliveryOpsRuns(mode: OpsRunMode, formData: FormData) {
+	const team = await fetchCurrentTeam();
+	const filters = parseDeliveryOpsFilters({
+		windowDays: String(formData.get("windowDays") ?? ""),
+		stuckDays: String(formData.get("stuckDays") ?? ""),
+		reworkThreshold: String(formData.get("reworkThreshold") ?? ""),
+		minRiskScore: String(formData.get("minRiskScore") ?? ""),
+		hasForcedOnly:
+			formData.get("hasForcedOnly") === "1" ? "1" : undefined,
+	});
+
+	const data = await fetchDeliveryOpsData(team.dbId, filters);
+	const reasonByProjectId = new Map<string, Set<string>>();
+	const addReason = (projectId: string, reason: string) => {
+		if (!reasonByProjectId.has(projectId)) {
+			reasonByProjectId.set(projectId, new Set());
+		}
+		reasonByProjectId.get(projectId)!.add(reason);
+	};
+
+	for (const row of data.stuckProjects) addReason(row.projectId, "stuck project");
+	for (const row of data.breachedProjects) addReason(row.projectId, "SLA breach");
+	for (const row of data.reworkSpikes)
+		addReason(row.projectId, `rework spike x${row.reworkCount}`);
+	for (const row of data.exceptionQueue)
+		addReason(row.projectId, `exception:${row.kind}`);
+
+	const projectIds = Array.from(reasonByProjectId.keys()).slice(0, 12);
+	if (projectIds.length === 0) {
+		const params = toDeliveryOpsSearchParams(filters);
+		params.set("opsRunMode", mode);
+		params.set("opsRunCount", "0");
+		redirect(`/delivery-ops?${params.toString()}`);
+	}
+
+	const projectRows = await db
+		.select({
+			projectId: projects.id,
+			projectDbId: projects.dbId,
+			projectName: projects.name,
+			projectStatus: projects.status,
+			projectBrief: projects.brief,
+			workspaceId: workspaces.id,
+		})
+		.from(projects)
+		.leftJoin(workspaces, eq(projects.workspaceDbId, workspaces.dbId))
+		.where(and(eq(projects.teamDbId, team.dbId)));
+
+	const projectById = new Map(projectRows.map((row) => [row.projectId, row]));
+	let createdCount = 0;
+
+	for (const projectId of projectIds) {
+		const project = projectById.get(projectId);
+		if (!project?.workspaceId) continue;
+
+		const projectDeliverables = await db
+			.select({
+				taskId: deliverables.taskId,
+				name: deliverables.name,
+				status: deliverables.status,
+			})
+			.from(deliverables)
+			.where(eq(deliverables.projectDbId, project.projectDbId));
+
+		const reasons = Array.from(reasonByProjectId.get(projectId) ?? []);
+		const prompt = [
+			mode === "planning"
+				? `Create an operations planning run for "${project.projectName}".`
+				: `Create an operations governance run for "${project.projectName}".`,
+			`Project status: ${project.projectStatus}.`,
+			project.projectBrief
+				? `Project brief:\n${project.projectBrief.slice(0, 2000)}`
+				: null,
+			`Delivery ops reasons: ${reasons.join(", ")}.`,
+			projectDeliverables.length > 0
+				? `Deliverables: ${projectDeliverables
+						.map((d) => `${d.name} (${d.status})`)
+						.join("; ")}`
+				: "Deliverables: none linked.",
+			mode === "planning"
+				? "Produce an execution plan with priority order, risks, dependencies, approvals, and next actions."
+				: "Audit policy, approvals, handoffs, cost risk, and operator follow-up. Recommend concrete governance actions.",
+		]
+			.filter(Boolean)
+			.join("\n\n");
+
+		const created = await createRecoderTask({
+			workspaceId: project.workspaceId,
+			threadId: `delivery-ops-${mode}-${projectId}-${Date.now()}`,
+			requester: {
+				agentId: "recoder-agency",
+				platform: "recoder_agency",
+				name: "Recoder Agency",
+			},
+			prompt,
+			autoRoute: true,
+			routingHints: {
+				runtimeCategory: "documentation",
+				requiredCapabilities: ["code-review"],
+				preferredCapabilities: ["documentation"],
+				preferredPlatform: "claude_code",
+			},
+			metadata: {
+				projectId,
+				projectDbId: project.projectDbId,
+				deliveryOpsRun: {
+					mode,
+					reasons,
+					filters,
+					requestedAt: new Date().toISOString(),
+				},
+			},
+		});
+
+		if (created?.taskId) {
+			createdCount += 1;
+		}
+	}
+
+	const params = toDeliveryOpsSearchParams(filters);
+	params.set("opsRunMode", mode);
+	params.set("opsRunCount", String(createdCount));
+	redirect(`/delivery-ops?${params.toString()}`);
+}
+
+export async function createDeliveryOpsPlanningRuns(formData: FormData) {
+	await createDeliveryOpsRuns("planning", formData);
+}
+
+export async function createDeliveryOpsGovernanceRuns(formData: FormData) {
+	await createDeliveryOpsRuns("governance", formData);
 }
