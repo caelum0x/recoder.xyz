@@ -105,6 +105,7 @@ const search_proxy_js_1 = require("./a2a/search-proxy.js");
 const openmeter_client_js_1 = require("./metering/openmeter-client.js");
 const zrok_preview_js_1 = require("./zrok-preview.js");
 const daytona_preview_js_1 = require("./daytona-preview.js");
+const daytona_runtime_js_1 = require("./daytona-runtime.js");
 const index_js_6 = require("./a2a/patterns/index.js");
 const index_js_7 = require("./policy/index.js");
 const a2a_intent_worker_js_1 = require("./a2a-intent-worker.js");
@@ -122,6 +123,7 @@ const health_monitor_js_1 = require("./health-monitor.js");
 const resource_optimizer_js_1 = require("./resource-optimizer.js");
 const daytona_client_js_1 = require("./daytona-client.js");
 const daytona_file_ops_js_1 = require("./daytona-file-ops.js");
+const container_recovery_js_1 = require("./container-recovery.js");
 const index_js_8 = require("./templates/index.js");
 const opencode_sandbox_js_1 = require("./opencode-sandbox.js");
 const auth_utils_js_1 = require("./auth-utils.js");
@@ -1440,23 +1442,85 @@ async function getOrRecoverContainer(projectId) {
         (0, snapshot_manager_js_1.registerDaytonaId)(existing.id);
         try {
             const dc = (0, daytona_client_js_1.getDaytonaClient)();
-            await dc.getSandbox(existing.id);
+            await Promise.race([
+                dc.getSandbox(existing.id),
+                new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out checking sandbox ${existing.id}`)), DAYTONA_RECOVERY_TIMEOUT_MS)),
+            ]);
             if (existing.daytonaWorkDir) {
                 dc.rememberWorkDir(existing.id, existing.daytonaWorkDir);
             }
             else {
-                existing.daytonaWorkDir = await dc.getWorkDir(existing.id);
+                existing.daytonaWorkDir = await Promise.race([
+                    dc.getWorkDir(existing.id),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out loading workdir for sandbox ${existing.id}`)), DAYTONA_RECOVERY_TIMEOUT_MS)),
+                ]).catch(() => existing.daytonaWorkDir);
                 persistContainers();
             }
             return existing;
         }
         catch (err) {
+            if (/Timed out/i.test(err?.message || '')) {
+                logger.warn({ projectId, sandboxId: existing.id, error: err?.message }, 'Timed out validating tracked Daytona sandbox, proceeding with cached mapping');
+                return existing;
+            }
             logger.warn({ projectId, sandboxId: existing.id, error: err?.message }, 'Tracked Daytona sandbox no longer exists, clearing cached mapping');
             containers.delete(projectId);
             daytonaSandboxIds.delete(existing.id);
             (0, snapshot_manager_js_1.unregisterDaytonaId)(existing.id);
             persistContainers();
             return undefined;
+        }
+    }
+    const recoveredDocker = await (0, container_recovery_js_1.recoverContainerFromDocker)(docker, projectId, containers, logger);
+    if (recoveredDocker) {
+        if (recoveredDocker.userId) {
+            registerUserContainer(recoveredDocker.userId, projectId);
+        }
+        persistContainers();
+        return containers.get(projectId);
+    }
+    if ((0, daytona_client_js_1.isDaytonaConfigured)() && process.env.USE_DAYTONA_CONTAINERS === 'true') {
+        try {
+            const dc = (0, daytona_client_js_1.getDaytonaClient)();
+            const sandboxes = await dc.listSandboxes();
+            const matches = sandboxes
+                .filter((sandbox) => sandbox.labels?.projectId === projectId || sandbox.labels?.id === projectId)
+                .sort((a, b) => {
+                const aRunning = a.state === 'started' || a.state === 'running' ? 1 : 0;
+                const bRunning = b.state === 'started' || b.state === 'running' ? 1 : 0;
+                if (aRunning !== bRunning)
+                    return bRunning - aRunning;
+                return (b.createdAt || '').localeCompare(a.createdAt || '');
+            });
+            const match = matches[0];
+            if (match) {
+                const defaultPort = 5173;
+                const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)({ id: match.id }, defaultPort);
+                const workDir = await dc.getWorkDir(match.id).catch(() => undefined);
+                const recoveredDaytona = {
+                    id: match.id,
+                    lastActive: Date.now(),
+                    port: defaultPort,
+                    ptyPort: 0,
+                    backgroundDev: false,
+                    userId: match.labels?.userId,
+                    daytona: true,
+                    daytonaPreviewUrl: preview.url,
+                    daytonaDevSessionId: (0, daytona_file_ops_js_1.buildDaytonaDevServerSessionId)(projectId),
+                    daytonaWorkDir: workDir,
+                };
+                containers.set(projectId, recoveredDaytona);
+                daytonaSandboxIds.add(match.id);
+                (0, snapshot_manager_js_1.registerDaytonaId)(match.id);
+                if (match.labels?.userId) {
+                    registerUserContainer(match.labels.userId, projectId);
+                }
+                persistContainers();
+                return recoveredDaytona;
+            }
+        }
+        catch (err) {
+            logger.warn({ projectId, error: err?.message }, 'Failed to recover Daytona sandbox by project ID');
         }
     }
     return undefined;
@@ -1466,7 +1530,10 @@ const CONTAINER_CREATE_TIMEOUT_MS = Number(process.env.CONTAINER_CREATE_TIMEOUT_
 // Per-user container tracking for limits
 const userContainers = new Map(); // userId -> Set of projectIds
 const MAX_CONTAINERS_PER_USER = Number(process.env.MAX_CONTAINERS_PER_USER) || 5;
-const DAYTONA_WEB_IDE_DISK_GB = Number(process.env.DAYTONA_WEB_IDE_DISK_GB || 20);
+const DAYTONA_WEB_IDE_DISK_GB = Number(process.env.DAYTONA_WEB_IDE_DISK_GB || 40);
+const DAYTONA_RECOVERY_TIMEOUT_MS = 3000;
+const SANDBOX_LOCAL_OPENCODE_START_TIMEOUT_MS = 45000;
+const SANDBOX_LOCAL_OPENCODE_PROMPT_TIMEOUT_MS = 60000;
 /**
  * Get count of active containers for a user
  */
@@ -1745,7 +1812,7 @@ app.get('/api/health/daytona', async (_req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
         return res.status(503).json({
             status: 'not_configured',
-            message: 'DAYTONA_API_KEY not set',
+            message: 'Set DAYTONA_API_KEY or both DAYTONA_JWT_TOKEN and DAYTONA_ORGANIZATION_ID',
         });
     }
     try {
@@ -1754,7 +1821,7 @@ app.get('/api/health/daytona', async (_req, res) => {
             status: check.healthy ? 'healthy' : 'unhealthy',
             latencyMs: check.latencyMs,
             error: check.error,
-            serverUrl: process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api',
+            serverUrl: process.env.DAYTONA_API_URL || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api',
         });
     }
     catch (err) {
@@ -2296,18 +2363,28 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
                         logger.warn({ sandboxId: sandbox.id, err: waitErr.message }, 'Sandbox readiness wait failed, proceeding anyway');
                     }
                 }
-                // Create /workspace -> /home/daytona symlink (Daytona sandboxes use /home/daytona as home)
-                try {
-                    await dc.execCommand(sandbox.id, 'test -L /workspace || ln -sf /home/daytona /workspace', { timeoutSecs: 10 });
-                    logger.info({ sandboxId: sandbox.id }, 'Created /workspace symlink');
-                }
-                catch (symlinkErr) {
-                    logger.warn({ sandboxId: sandbox.id, err: symlinkErr.message }, 'Failed to create /workspace symlink');
+                const workDir = await dc.getWorkDir(sandbox.id).catch((err) => {
+                    logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'Falling back to default Daytona workdir');
+                    return daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT;
+                });
+                dc.rememberWorkDir(sandbox.id, workDir);
+                // Keep /workspace usable for legacy callers, but point it at the real
+                // sandbox workdir Daytona reports instead of guessing a home path.
+                if (workDir !== daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT) {
+                    try {
+                        await dc.execCommand(sandbox.id, `test -e ${daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT} || ln -sf '${workDir.replace(/'/g, "'\\''")}' ${daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT}`, { timeoutSecs: 10 });
+                        logger.info({ sandboxId: sandbox.id, workDir }, 'Ensured /workspace alias for Daytona sandbox');
+                    }
+                    catch (symlinkErr) {
+                        logger.warn({ sandboxId: sandbox.id, workDir, err: symlinkErr.message }, 'Failed to align /workspace alias with Daytona workdir');
+                    }
                 }
                 // Default to 5173 (Vite) — will be updated when dev server starts and detects actual port
                 const defaultPort = 5173;
-                const workDir = await dc.getWorkDir(sandbox.id);
-                const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)({ id: sandbox.id }, defaultPort);
+                const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)({ id: sandbox.id }, defaultPort).catch((err) => {
+                    logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'Falling back to default Daytona preview URL');
+                    return { url: dc.getPreviewUrl(sandbox.id, defaultPort) };
+                });
                 const previewUrl = preview.url;
                 containers.set(projectId, {
                     id: sandbox.id,
@@ -4314,11 +4391,11 @@ app.post('/api/pi/:projectId', optionalAuthenticateRequest, flexibleProjectOwner
 app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjectOwnership, async (req, res) => {
     try {
         const projectId = sanitizeProjectId(req.params.projectId);
-        const { prompt, model, sessionId, continueSession, providerKeys, } = (req.body || {});
+        const { prompt, model, sessionId, continueSession, providerKeys, forceSandboxLocal = false, } = (req.body || {});
         if (!prompt || typeof prompt !== 'string') {
             return res.status(400).json({ success: false, error: 'prompt is required' });
         }
-        const useCentralizedOpencode = process.env.OPENCODE_MODE === 'centralized' && !!process.env.OPENCODE_SERVICE_URL;
+        const useCentralizedOpencode = !forceSandboxLocal && process.env.OPENCODE_MODE === 'centralized' && !!process.env.OPENCODE_SERVICE_URL;
         // If explicitly configured, route through the centralized opencode service
         if (useCentralizedOpencode) {
             const { handleOpencodeServicePrompt } = await Promise.resolve().then(() => __importStar(require('./a2a/opencode-service-handler.js')));
@@ -4355,6 +4432,7 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
                             return typeof content === 'string' ? content : JSON.stringify(content);
                         }
                         : undefined,
+                    readSandboxFile: sandboxId ? daytona_file_ops_js_1.daytonaReadFile : undefined,
                     writeSandboxFile: sandboxId ? daytona_file_ops_js_1.daytonaWriteFile : undefined,
                 });
             }
@@ -4419,7 +4497,7 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
             const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
             const sandboxExecUrl = `${daytonaUrl}/api/toolbox/${entry.id}/toolbox/process/execute`;
             const { startSession, sendPrompt } = await Promise.resolve().then(() => __importStar(require('./a2a/opencode-connector.service.js')));
-            const session = await startSession({
+            const session = await withTimeout(startSession({
                 projectId,
                 sandboxId: entry.id,
                 sandboxExecUrl,
@@ -4427,13 +4505,13 @@ app.post('/api/opencode/:projectId', optionalAuthenticateRequest, flexibleProjec
                 model,
                 provider: selectedProvider,
                 apiKey: selectedApiKey,
-            });
-            const result = await sendPrompt({
+            }), SANDBOX_LOCAL_OPENCODE_START_TIMEOUT_MS, 'Sandbox-local OpenCode session start');
+            const result = await withTimeout(sendPrompt({
                 projectId,
                 prompt,
                 sandboxExecUrl,
                 daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
-            });
+            }), SANDBOX_LOCAL_OPENCODE_PROMPT_TIMEOUT_MS, 'Sandbox-local OpenCode prompt');
             const text = result.parts
                 .filter((part) => part.type === 'text' || part.type === 'tool-result')
                 .map((part) => part.content)
@@ -4659,7 +4737,7 @@ app.post('/api/dev-server/start', authenticateRequest, async (req, res) => {
                 return res.status(403).json({ error: 'Access denied' });
             }
         }
-        const entry = containers.get(safeProjectId);
+        const entry = await getOrRecoverContainer(safeProjectId);
         if (!entry)
             return res.status(404).json({ error: 'Container not found' });
         entry.lastActive = Date.now();
@@ -13182,6 +13260,7 @@ app.use('/api/a2a/adapters/rest', index_js_5.restAdapterRouter);
 app.use('/api/a2a/adapters/git', index_js_5.gitAdapterRouter);
 app.use('/api/a2a/context', index_js_5.contextBridgeRouter);
 app.use('/api/a2a/workspaces', workspace_routes_js_1.workspaceRouter);
+app.use('/api/spaces', workspace_routes_js_1.workspaceRouter);
 app.use('/api/a2a/memory', authenticateRequest, memory_routes_js_1.memoryRouter);
 app.use('/api/a2a/code-search', code_search_routes_js_1.codeSearchRouter);
 app.use('/api/a2a/search', search_routes_js_1.searchRouter);
@@ -13219,7 +13298,8 @@ app.use('/api/a2a/dashboard', unified_dashboard_js_1.dashboardRouter);
 const codingRuntimeSelectionByProject = new Map();
 app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, (0, index_js_11.asyncHandler)(async (req, res) => {
     const { getRuntime } = await Promise.resolve().then(() => __importStar(require('./a2a/coding-runtime.js')));
-    const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt } = req.body;
+    const { getCodingRuntimeHistoryService } = await Promise.resolve().then(() => __importStar(require('./coding-runtime-history.js')));
+    const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt, executionMode } = req.body;
     if (!projectId)
         return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'projectId required'));
     let resolvedRuntimeType = runtimeType;
@@ -13233,6 +13313,9 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
         const classification = classifyIntent(prompt);
         const routeDecision = routeByCategory(classification);
         resolvedRuntimeType = routeDecision.runtimeType;
+        if (resolvedRuntimeType === 'native') {
+            resolvedRuntimeType = 'opencode';
+        }
         autoSelection = { classification, routeDecision };
     }
     const runtime = getRuntime(resolvedRuntimeType);
@@ -13248,13 +13331,22 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
         projectId, sandboxId: resolvedSandboxId,
         sandboxExecUrl: `${daytonaUrl}/api/toolbox/${resolvedSandboxId}/toolbox/process/execute`,
         daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
-        model, provider, apiKey,
+        model, provider, apiKey, executionMode,
     });
     codingRuntimeSelectionByProject.set(projectId, {
         runtimeType: resolvedRuntimeType,
         selectedAt: new Date().toISOString(),
         classification: autoSelection?.classification,
         routeDecision: autoSelection?.routeDecision,
+    });
+    getCodingRuntimeHistoryService().recordSessionSelection({
+        projectId,
+        runtimeType: resolvedRuntimeType,
+        requestedRuntimeType: runtimeType,
+        sandboxId: resolvedSandboxId,
+        executionMode,
+        prompt: typeof prompt === 'string' ? prompt : undefined,
+        autoSelection,
     });
     (0, index_js_11.sendSuccess)(res, {
         ...session,
@@ -13264,6 +13356,7 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
 }));
 app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwnership, (0, index_js_11.asyncHandler)(async (req, res) => {
     const { getRuntime } = await Promise.resolve().then(() => __importStar(require('./a2a/coding-runtime.js')));
+    const { getCodingRuntimeHistoryService } = await Promise.resolve().then(() => __importStar(require('./coding-runtime-history.js')));
     const { projectId, prompt, runtimeType, agent, enableCompletionLoop, maxIterations, backoffMs } = req.body;
     if (!projectId || !prompt)
         return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
@@ -13297,6 +13390,19 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
             maxIterations: typeof maxIterations === 'number' ? maxIterations : 3,
             backoffMs: typeof backoffMs === 'number' ? backoffMs : 1000,
         });
+        getCodingRuntimeHistoryService().recordPromptRun({
+            projectId,
+            runtimeType: resolvedRuntimeType,
+            requestedRuntimeType: typeof runtimeType === 'string' ? runtimeType : 'session-default',
+            prompt,
+            agent,
+            autoSelection,
+            completionLoop: {
+                enabled: true,
+                completed: outcome.completed,
+                iterations: outcome.iterations,
+            },
+        });
         return (0, index_js_11.sendSuccess)(res, {
             ...outcome.result,
             selectedRuntime: resolvedRuntimeType,
@@ -13307,10 +13413,36 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
         });
     }
     const result = await runtime.sendPrompt(promptParams);
+    getCodingRuntimeHistoryService().recordPromptRun({
+        projectId,
+        runtimeType: resolvedRuntimeType,
+        requestedRuntimeType: typeof runtimeType === 'string' ? runtimeType : 'session-default',
+        prompt,
+        agent,
+        autoSelection,
+        completionLoop: {
+            enabled: false,
+        },
+    });
     (0, index_js_11.sendSuccess)(res, {
         ...result,
         selectedRuntime: resolvedRuntimeType,
         autoSelection,
+    });
+}));
+app.get('/api/coding-runtime/history/:projectId', authenticateRequest, flexibleProjectOwnership, (0, index_js_11.asyncHandler)(async (req, res) => {
+    const { getCodingRuntimeHistoryService } = await Promise.resolve().then(() => __importStar(require('./coding-runtime-history.js')));
+    const projectId = String(req.params.projectId || '').trim();
+    if (!projectId)
+        return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'projectId required'));
+    const rawLimit = Number(req.query.limit);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
+    const historyService = getCodingRuntimeHistoryService();
+    (0, index_js_11.sendSuccess)(res, {
+        projectId,
+        entries: historyService.listProjectHistory(projectId, limit),
+        total: historyService.getProjectHistoryCount(projectId),
+        activeSelection: codingRuntimeSelectionByProject.get(projectId) ?? null,
     });
 }));
 app.get('/api/coding-runtime/runtimes', (_req, res) => {

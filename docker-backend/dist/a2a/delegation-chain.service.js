@@ -259,6 +259,18 @@ class DelegationChainService extends events_1.EventEmitter {
         }
         return results;
     }
+    list(filter = {}) {
+        const statusSet = filter.statuses && filter.statuses.length > 0 ? new Set(filter.statuses) : null;
+        return [...this.delegations.values()].filter((delegation) => {
+            if (filter.fromAgentId && delegation.fromAgentId !== filter.fromAgentId)
+                return false;
+            if (filter.toAgentId && delegation.toAgentId !== filter.toAgentId)
+                return false;
+            if (statusSet && !statusSet.has(delegation.status))
+                return false;
+            return true;
+        });
+    }
     // -----------------------------------------------------------------------
     // Chain
     // -----------------------------------------------------------------------

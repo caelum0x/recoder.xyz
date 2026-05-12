@@ -182,12 +182,16 @@ async function loadCanonicalMessage(projectId, messageId) {
         return null;
     }
 }
+function isMissingSandboxFileError(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /ENOENT|not found|404|No such file/i.test(message);
+}
 /**
  * Sync files that opencode wrote to its /workspace to the Daytona sandbox.
  * Reads each file from opencode's workspace, writes to Daytona.
  */
 async function syncFilesToSandbox(input, result) {
-    const { sandboxId, readWorkspaceFile, writeSandboxFile, projectId } = input;
+    const { sandboxId, readWorkspaceFile, readSandboxFile, writeSandboxFile, projectId } = input;
     if (!sandboxId || !readWorkspaceFile || !writeSandboxFile)
         return [];
     // Strategy 1: extract file paths from message parts (tool-call args)
@@ -231,6 +235,20 @@ async function syncFilesToSandbox(input, result) {
                 .replace(/^\.\//, '')
                 .replace(/^\//, '');
             const content = await readWorkspaceFile(relativePath);
+            if (readSandboxFile) {
+                try {
+                    const existingContent = await readSandboxFile(sandboxId, relativePath);
+                    if (existingContent === content) {
+                        logger.info({ projectId, sandboxId, filePath: relativePath }, 'Skipping sandbox sync for unchanged file');
+                        continue;
+                    }
+                }
+                catch (err) {
+                    if (!isMissingSandboxFileError(err)) {
+                        logger.warn({ projectId, sandboxId, filePath: relativePath, err }, 'Failed to read existing sandbox file before sync; continuing with write');
+                    }
+                }
+            }
             await writeSandboxFile(sandboxId, relativePath, content);
             synced.push(relativePath);
         }

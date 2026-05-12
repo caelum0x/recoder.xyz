@@ -23,6 +23,7 @@ exports.DaytonaClient = void 0;
 exports.getDaytonaClient = getDaytonaClient;
 exports.isDaytonaConfigured = isDaytonaConfigured;
 const logger_js_1 = require("./logger.js");
+const daytona_runtime_js_1 = require("./daytona-runtime.js");
 const logger = (0, logger_js_1.createLogger)('daytona-client');
 function shellQuoteSingle(value) {
     return `'${value.replace(/'/g, "'\\''")}'`;
@@ -31,6 +32,8 @@ function shellQuoteSingle(value) {
 class DaytonaClient {
     baseUrl;
     apiKey;
+    jwtToken;
+    organizationId;
     toolboxApiKey;
     target;
     defaultSnapshot;
@@ -38,8 +41,10 @@ class DaytonaClient {
     _toolboxProxyUrl;
     workDirCache = new Map();
     constructor(config) {
-        this.baseUrl = (config?.baseUrl || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api').replace(/\/$/, '');
+        this.baseUrl = (config?.baseUrl || process.env.DAYTONA_API_URL || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api').replace(/\/$/, '');
         this.apiKey = config?.apiKey || process.env.DAYTONA_API_KEY || '';
+        this.jwtToken = config?.jwtToken || process.env.DAYTONA_JWT_TOKEN || '';
+        this.organizationId = config?.organizationId || process.env.DAYTONA_ORGANIZATION_ID || '';
         // The daytona-proxy uses PROXY_API_KEY=super_secret_key (different from the API key)
         this.toolboxApiKey = config?.toolboxApiKey || process.env.DAYTONA_TOOLBOX_API_KEY || 'super_secret_key';
         this.target = config?.target || process.env.DAYTONA_TARGET || 'us';
@@ -47,18 +52,29 @@ class DaytonaClient {
         this.timeoutMs = config?.timeoutMs || 30000;
         // Default toolbox URL to the internal proxy port to avoid SSL round-trip
         this._toolboxProxyUrl = config?.toolboxProxyUrl || process.env.DAYTONA_TOOLBOX_PROXY_URL || null;
-        if (!this.apiKey) {
-            logger.warn('DaytonaClient initialized without API key — sandbox operations will fail');
+        if (!this.apiKey && !this.jwtToken) {
+            logger.warn('DaytonaClient initialized without Daytona auth credentials — sandbox operations will fail');
+        }
+        else if (this.jwtToken && !this.organizationId && !this.apiKey) {
+            logger.warn('DaytonaClient initialized with JWT token but no organization ID — sandbox operations may fail');
         }
         else {
-            logger.info({ baseUrl: this.baseUrl, target: this.target }, 'DaytonaClient initialized');
+            logger.info({
+                baseUrl: this.baseUrl,
+                target: this.target,
+                authMode: this.apiKey ? 'api-key' : 'jwt',
+            }, 'DaytonaClient initialized');
         }
     }
     // ── Helpers ──
     get headers() {
+        const bearerToken = this.apiKey || this.jwtToken;
         return {
             'Content-Type': 'application/json',
-            ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+            ...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+            ...(!this.apiKey && this.jwtToken && this.organizationId
+                ? { 'X-Daytona-Organization-ID': this.organizationId }
+                : {}),
         };
     }
     /** Headers for toolbox proxy requests (uses PROXY_API_KEY, not the Daytona API key). */
@@ -67,6 +83,28 @@ class DaytonaClient {
             'Content-Type': 'application/json',
             ...(this.toolboxApiKey ? { Authorization: `Bearer ${this.toolboxApiKey}` } : {}),
         };
+    }
+    getCachedWorkDir(sandboxId) {
+        return this.workDirCache.get(sandboxId) || daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT;
+    }
+    async getSandboxWorkDirOrFallback(sandboxId) {
+        const cached = this.workDirCache.get(sandboxId);
+        if (cached) {
+            return cached;
+        }
+        try {
+            return await this.getWorkDir(sandboxId);
+        }
+        catch {
+            return daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT;
+        }
+    }
+    async resolveSandboxPath(sandboxId, sandboxPath) {
+        if (sandboxPath.startsWith('/')) {
+            return sandboxPath;
+        }
+        const workDir = await this.getSandboxWorkDirOrFallback(sandboxId);
+        return `${workDir.replace(/\/$/, '')}/${sandboxPath.replace(/^\/+/, '')}`;
     }
     /**
      * Make an authenticated request to the Daytona API server.
@@ -233,7 +271,7 @@ class DaytonaClient {
             return cached;
         }
         const result = await this.toolboxRequest('GET', sandboxId, '/work-dir');
-        const workDir = result?.dir || '/home/daytona';
+        const workDir = result?.dir || daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT;
         this.workDirCache.set(sandboxId, workDir);
         return workDir;
     }
@@ -280,7 +318,8 @@ class DaytonaClient {
         let fullCommand = command;
         if (options?.cwd) {
             const safeCwd = options.cwd.replace(/'/g, "'\\''");
-            fullCommand = `cd '${safeCwd}' 2>/dev/null || cd /home/daytona 2>/dev/null || true; ${command}`;
+            const fallbackCwd = (await this.getSandboxWorkDirOrFallback(sandboxId)).replace(/'/g, "'\\''");
+            fullCommand = `cd '${safeCwd}' 2>/dev/null || cd '${fallbackCwd}' 2>/dev/null || true; ${command}`;
         }
         let execCmd;
         // Short commands: inline sh -c (fast, no temp file overhead)
@@ -350,10 +389,11 @@ class DaytonaClient {
      * POST /filesystem/upload with base64-encoded content.
      */
     async uploadFileNative(sandboxId, filePath, content) {
-        const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, filePath);
+        const workDir = await this.getSandboxWorkDirOrFallback(sandboxId);
         // Create parent directory first
         const dir = absPath.substring(0, absPath.lastIndexOf('/'));
-        if (dir && dir !== '/home/daytona') {
+        if (dir && dir !== workDir) {
             await this.createDirectoryNative(sandboxId, dir);
         }
         // Upload file content (base64-encoded to handle binary/special chars)
@@ -368,7 +408,7 @@ class DaytonaClient {
      * GET /filesystem/download?path=...
      */
     async downloadFileNative(sandboxId, filePath) {
-        const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, filePath);
         const toolboxBase = await this.getToolboxProxyUrl();
         const url = `${toolboxBase}/${sandboxId}/filesystem/download?path=${encodeURIComponent(absPath)}`;
         const controller = new AbortController();
@@ -404,7 +444,7 @@ class DaytonaClient {
      * POST /filesystem/mkdir
      */
     async createDirectoryNative(sandboxId, dirPath) {
-        const absPath = dirPath.startsWith('/') ? dirPath : `/home/daytona/${dirPath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, dirPath);
         await this.toolboxRequest('POST', sandboxId, '/filesystem/mkdir', {
             path: absPath,
             mode: '0755',
@@ -415,7 +455,7 @@ class DaytonaClient {
      * GET /filesystem/list?path=...
      */
     async listFilesNative(sandboxId, dirPath) {
-        const absPath = dirPath.startsWith('/') ? dirPath : `/home/daytona/${dirPath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, dirPath);
         const result = await this.toolboxRequest('GET', sandboxId, `/filesystem/list?path=${encodeURIComponent(absPath)}`);
         // Handle both array response and { entries: [...] } wrapper
         if (Array.isArray(result)) {
@@ -436,7 +476,7 @@ class DaytonaClient {
      * DELETE /filesystem/delete?path=...
      */
     async deleteFileNative(sandboxId, filePath) {
-        const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, filePath);
         await this.toolboxRequest('DELETE', sandboxId, `/filesystem/delete?path=${encodeURIComponent(absPath)}`);
     }
     // ── Exec-based File Operations (fallbacks) ──
@@ -469,7 +509,7 @@ class DaytonaClient {
         };
     }
     async uploadFileExec(sandboxId, filePath, content) {
-        const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, filePath);
         const safePath = absPath.replace(/'/g, "'\\''");
         const b64Content = Buffer.from(content, 'utf-8').toString('base64');
         // Create parent directory
@@ -511,7 +551,7 @@ class DaytonaClient {
      * Kept as fallback for when native filesystem API is unavailable.
      */
     async downloadFileExec(sandboxId, filePath) {
-        const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, filePath);
         const result = await this.rawShellExec(sandboxId, `cat '${absPath.replace(/'/g, "'\\''")}'`, 30);
         if (result.exitCode !== 0) {
             throw new Error(`File read from ${absPath} failed (exit ${result.exitCode}): ${result.output}`);
@@ -523,7 +563,7 @@ class DaytonaClient {
      * Kept as fallback for when native filesystem API is unavailable.
      */
     async listFilesExec(sandboxId, dirPath) {
-        const absPath = dirPath.startsWith('/') ? dirPath : `/home/daytona/${dirPath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, dirPath);
         const escaped = absPath.replace(/'/g, "'\\''");
         const cmd = [
             `if [ ! -d '${escaped}' ]; then exit 0; fi`,
@@ -550,7 +590,7 @@ class DaytonaClient {
      * Kept as fallback for when native filesystem API is unavailable.
      */
     async deleteFileExec(sandboxId, filePath) {
-        const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
+        const absPath = await this.resolveSandboxPath(sandboxId, filePath);
         const result = await this.execCommand(sandboxId, `rm -f '${absPath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
         if (result.exitCode !== 0) {
             throw new Error(`File delete of ${absPath} failed (exit ${result.exitCode}): ${result.output}`);
@@ -807,5 +847,6 @@ function getDaytonaClient() {
  * Check if Daytona integration is configured (API key present).
  */
 function isDaytonaConfigured() {
-    return !!(process.env.DAYTONA_API_KEY);
+    return !!(process.env.DAYTONA_API_KEY
+        || (process.env.DAYTONA_JWT_TOKEN && process.env.DAYTONA_ORGANIZATION_ID));
 }

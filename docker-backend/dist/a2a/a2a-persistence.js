@@ -22,6 +22,8 @@ exports.loadA2AApprovals = loadA2AApprovals;
 exports.saveA2AApprovals = saveA2AApprovals;
 exports.loadA2AEvents = loadA2AEvents;
 exports.saveA2AEvents = saveA2AEvents;
+exports.loadA2AAgentRegistryState = loadA2AAgentRegistryState;
+exports.saveA2AAgentRegistryState = saveA2AAgentRegistryState;
 const persistence_js_1 = require("../persistence.js");
 // ---------------------------------------------------------------------------
 // Store names (resolve to data/a2a-*.json)
@@ -31,6 +33,7 @@ const DISPATCHES_STORE = 'a2a-dispatches';
 const TASKS_STORE = 'a2a-tasks';
 const APPROVALS_STORE = 'a2a-approvals';
 const EVENTS_STORE = 'a2a-events';
+const AGENT_REGISTRY_STORE = 'a2a-agent-registry';
 /** Maximum number of recent events persisted to disk. */
 const MAX_PERSISTED_EVENTS = 1000;
 /** Debounce delay for high-frequency writes (tasks, events). */
@@ -121,4 +124,35 @@ function saveA2AEvents(events) {
         ? events.slice(-MAX_PERSISTED_EVENTS)
         : events;
     (0, persistence_js_1.debouncedSave)(EVENTS_STORE, capped, DEBOUNCE_MS);
+}
+function loadA2AAgentRegistryState() {
+    const raw = (0, persistence_js_1.loadStore)(AGENT_REGISTRY_STORE, null);
+    if (!raw || typeof raw !== 'object') {
+        return {
+            agents: new Map(),
+            heartbeats: new Map(),
+            lifecycle: new Map(),
+        };
+    }
+    try {
+        return {
+            agents: new Map(raw.agents || []),
+            heartbeats: new Map(raw.heartbeats || []),
+            lifecycle: new Map(raw.lifecycle || []),
+        };
+    }
+    catch {
+        return {
+            agents: new Map(),
+            heartbeats: new Map(),
+            lifecycle: new Map(),
+        };
+    }
+}
+function saveA2AAgentRegistryState(input) {
+    (0, persistence_js_1.debouncedSave)(AGENT_REGISTRY_STORE, {
+        agents: [...input.agents.entries()],
+        heartbeats: [...input.heartbeats.entries()],
+        lifecycle: [...input.lifecycle.entries()],
+    }, DEBOUNCE_MS);
 }
