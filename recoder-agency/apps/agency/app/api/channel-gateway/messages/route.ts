@@ -1002,7 +1002,14 @@ export async function POST(request: Request) {
 		}
 
 		const milestoneDeliverables = await db
-			.select({ dbId: deliverables.dbId, id: deliverables.id })
+			.select({
+				dbId: deliverables.dbId,
+				id: deliverables.id,
+				taskId: deliverables.taskId,
+				name: deliverables.name,
+				type: deliverables.type,
+				content: deliverables.content,
+			})
 			.from(deliverables)
 			.where(
 				and(
@@ -1233,6 +1240,18 @@ export async function POST(request: Request) {
 			bulk: true,
 		});
 
+		const milestoneFollowUps = await Promise.all(
+			milestoneDeliverables.map(async (deliverable) => ({
+				deliverable,
+				followUpTaskId: await createDeliverableRevisionRun({
+					project,
+					deliverable,
+					feedback: reason,
+					source: "client.channel-gateway.message.milestone-reject",
+				}),
+			})),
+		);
+
 		const projectLink = buildProjectLink(project.id);
 		await recordGatewayEvent({
 			provider: payload.provider,
@@ -1250,6 +1269,11 @@ export async function POST(request: Request) {
 			replyText: projectLink
 				? `Milestone "${milestoneLabel}" rejected for ${project.name}. We'll follow up. ${projectLink}`
 				: `Milestone "${milestoneLabel}" rejected for ${project.name}. We'll follow up.`,
+			metadata: {
+				followUpTaskIds: milestoneFollowUps
+					.map((entry) => entry.followUpTaskId)
+					.filter(Boolean),
+			},
 			replyBlocks: [
 				{
 					type: "section",
