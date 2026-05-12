@@ -745,6 +745,78 @@ export async function requestProjectBrowserRun(
 	redirect(`/projects/${project.id}?browserTaskId=${encodeURIComponent(created.taskId)}`);
 }
 
+export async function requestProjectComputerUseRun(
+	projectId: string,
+	formData: FormData,
+) {
+	const [team, user] = await Promise.all([
+		requireAdminRole(),
+		getCurrentUser(),
+	]);
+	const goal = String(formData.get("goal") ?? "").trim();
+
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+	if (!project.workspaceDbId) {
+		throw new Error("Project has no linked workspace for shared computer-use runs");
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		throw new Error("Linked workspace not found");
+	}
+
+	const prompt = [
+		`Create a desktop/computer-use run for "${project.name}".`,
+		`Project status: ${project.status}.`,
+		project.brief ? `Project brief:\n${project.brief.slice(0, 2500)}` : null,
+		goal ? `Desktop goal:\n${goal}` : null,
+		"Use desktop/computer-use capabilities to inspect, interact with, or validate GUI workflows relevant to this project. Return concrete observations, artifacts, and next actions.",
+	].filter(Boolean).join("\n\n");
+
+	const created = await createRecoderTask({
+		workspaceId: workspace.id,
+		threadId: `agency-computer-use-${project.id}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt,
+		autoRoute: true,
+		routingHints: {
+			runtimeCategory: "general",
+			requiredCapabilities: [],
+			preferredCapabilities: ["desktop", "ide"],
+			preferredPlatform: "recoder_desktop",
+		},
+		metadata: {
+			projectId: project.id,
+			projectDbId: project.dbId,
+			computerUseRun: {
+				goal: goal || null,
+				requestedByUserDbId: user.dbId,
+				requestedAt: new Date().toISOString(),
+				source: "agency.admin.project-computer-use",
+				executionClass: "computer-use",
+				referenceRepo: "agent-computer-use-upstream",
+			},
+		},
+	});
+
+	revalidatePath(`/projects/${project.id}`);
+	if (!created?.taskId) {
+		redirect(`/projects/${project.id}?computerUseRequested=error`);
+	}
+	redirect(`/projects/${project.id}?computerUseTaskId=${encodeURIComponent(created.taskId)}`);
+}
+
 export async function saveProjectRoutingPolicy(
 	projectId: string,
 	formData: FormData,
