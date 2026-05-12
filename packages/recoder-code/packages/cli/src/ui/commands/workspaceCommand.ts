@@ -4,6 +4,7 @@
  * Subcommands:
  *   /workspace list    - List available workspaces
  *   /workspace join <id> - Connect to a workspace via AgentBridgeService
+ *   /workspace create <prompt> - Create a task in the current Recoder Space
  *   /workspace leave   - Disconnect from current workspace
  *   /workspace status  - Show connection status and online agents
  *   /workspace context - Show the Recoder Space context package
@@ -13,6 +14,7 @@ import type { SlashCommand, MessageActionReturn } from './types.js';
 import { CommandKind } from './types.js';
 import { RecoderAuthService } from '../../services/RecoderAuthService.js';
 import { AgentBridgeService } from '../../services/AgentBridgeService.js';
+import { randomUUID } from 'node:crypto';
 
 const DOCKER_BACKEND_URL = process.env['DOCKER_BACKEND_URL'] || 'http://localhost:3100';
 
@@ -252,6 +254,118 @@ export const workspaceCommand: SlashCommand = {
             type: 'message',
             messageType: 'error',
             content: `Failed to join workspace: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace create <prompt>
+    // -----------------------------------------------------------------------
+    {
+      name: 'create',
+      description: 'Create a task in the current Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const prompt = args?.trim();
+        if (!prompt) {
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: [
+              'Create Task',
+              '',
+              'Usage: /workspace create <task prompt>',
+              '',
+              'Example:',
+              '  /workspace create Add pricing page with three tiers and FAQ',
+            ].join('\n'),
+          };
+        }
+
+        const bridge = getBridge();
+        const workspaceId = bridge.getWorkspaceId();
+        if (!workspaceId) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not connected to a Recoder Space. Run /workspace join <id> first.',
+          };
+        }
+
+        const threadId = `thread_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+
+        try {
+          const response = await fetch(`${DOCKER_BACKEND_URL}/api/a2a/tasks`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              workspace_id: workspaceId,
+              thread_id: threadId,
+              requester: {
+                agent_id: bridge.getAgentId(),
+                platform: 'custom',
+                name: 'Recoder Code CLI',
+              },
+              payload: {
+                kind: 'text',
+                text: prompt,
+              },
+              auto_route: true,
+              metadata: {
+                source: 'recoder-code-cli',
+                createdFrom: 'workspace.create',
+              },
+            }),
+          });
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to create task (${response.status}): ${errText}`,
+            };
+          }
+
+          const raw = await response.json();
+          const task = raw.data || raw;
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: [
+              '┌────────────────────────────────────────────────┐',
+              '│  Recoder Space Task Created                    │',
+              '├────────────────────────────────────────────────┤',
+              `│  Workspace: ${workspaceId.substring(0, 34).padEnd(34)}│`,
+              `│  Task ID:   ${String(task.id || 'unknown').substring(0, 34).padEnd(34)}│`,
+              `│  State:     ${String(task.state || 'submitted').substring(0, 34).padEnd(34)}│`,
+              '├────────────────────────────────────────────────┤',
+              `│  ${prompt.substring(0, 46).padEnd(46)}│`,
+              '│                                                │',
+              '│  The Space can now route or dispatch this      │',
+              '│  task to an available agent.                   │',
+              '└────────────────────────────────────────────────┘',
+            ].join('\n'),
+          };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to create task: ${msg}`,
           };
         }
       },
@@ -514,6 +628,7 @@ export const workspaceCommand: SlashCommand = {
         'Commands:',
         '  /workspace list       - List available workspaces',
         '  /workspace join <id>  - Connect to a workspace',
+        '  /workspace create ... - Create a task in the current space',
         '  /workspace context    - Show space context',
         '  /workspace leave      - Disconnect from workspace',
         '  /workspace status     - Show connection status',
