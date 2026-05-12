@@ -102,6 +102,43 @@ export interface RecoderWorkspaceControlPlaneSnapshot {
 	};
 }
 
+export interface RecoderDeliveryPackageDeliverable {
+	deliverableId: string;
+	name: string;
+	status: string;
+	type?: string | null;
+	taskId?: string | null;
+	fileKey?: string | null;
+	milestoneLabel?: string | null;
+	contentLength?: number;
+	controlPlane: {
+		taskId: string | null;
+		state: string | null;
+		approvalStatus?: string | null;
+		handoffStatus?: string | null;
+		assigneeName?: string | null;
+		agentOnline?: boolean | null;
+		previewUrls: string[];
+		filesChanged: string[];
+		gitBranch?: string | null;
+		logExcerpts: string[];
+		evidenceCount: number;
+		artifactCount: number;
+		logCount: number;
+	};
+}
+
+export interface RecoderProjectDeliveryPackage {
+	generatedAt: string;
+	project: {
+		id: string;
+		name: string;
+		workspaceId?: string | null;
+	};
+	summary: RecoderProjectControlSummary;
+	deliverables: RecoderDeliveryPackageDeliverable[];
+}
+
 export async function getRecoderTaskContext(
 	taskId: string | null | undefined,
 ): Promise<RecoderTaskContext | null> {
@@ -240,6 +277,73 @@ export async function buildRecoderProjectControlSummary(input: {
 	}
 
 	return buildRecoderProjectControlSummaryFromTaskIds(input.taskIds);
+}
+
+export async function buildRecoderProjectDeliveryPackage(input: {
+	projectId: string;
+	projectName: string;
+	workspaceId?: string | null;
+	deliverables: Array<{
+		id: string;
+		name: string;
+		status: string;
+		type?: string | null;
+		taskId?: string | null;
+		fileKey?: string | null;
+		milestoneLabel?: string | null;
+		content?: string | null;
+	}>;
+}): Promise<RecoderProjectDeliveryPackage> {
+	const contexts = await Promise.all(
+		input.deliverables.map((deliverable) => getRecoderTaskContext(deliverable.taskId)),
+	);
+	const summary = await buildRecoderProjectControlSummary({
+		workspaceId: input.workspaceId ?? null,
+		taskIds: input.deliverables.map((deliverable) => deliverable.taskId),
+	});
+
+	const deliverables = input.deliverables.map((deliverable, index) => {
+		const context = contexts[index];
+		return {
+			deliverableId: deliverable.id,
+			name: deliverable.name,
+			status: deliverable.status,
+			type: deliverable.type ?? null,
+			taskId: deliverable.taskId ?? null,
+			fileKey: deliverable.fileKey ?? null,
+			milestoneLabel: deliverable.milestoneLabel ?? null,
+			contentLength: deliverable.content?.length ?? 0,
+			controlPlane: {
+				taskId: context?.task.id ?? null,
+				state: context?.task.state ?? null,
+				approvalStatus: context?.links?.approval?.status ?? null,
+				handoffStatus: context?.links?.delegation?.status ?? null,
+				assigneeName: context?.assignee?.name ?? null,
+				agentOnline: context?.assignee?.registry?.online ?? null,
+				previewUrls: context?.task.result?.preview?.map((preview) => preview.url) ?? [],
+				filesChanged: context?.runtime?.filesChanged ?? [],
+				gitBranch: context?.runtime?.git?.branch ?? null,
+				logExcerpts:
+					context?.runtime?.logs
+						?.map((log) => log.excerpt ?? "")
+						.filter((value) => value.length > 0) ?? [],
+				evidenceCount: context?.runtime?.evidenceCount ?? 0,
+				artifactCount: context?.runtime?.artifactCount ?? 0,
+				logCount: context?.runtime?.logCount ?? 0,
+			},
+		};
+	});
+
+	return {
+		generatedAt: new Date().toISOString(),
+		project: {
+			id: input.projectId,
+			name: input.projectName,
+			workspaceId: input.workspaceId ?? null,
+		},
+		summary,
+		deliverables,
+	};
 }
 
 export async function buildRecoderProjectControlSummaryFromTaskIds(
