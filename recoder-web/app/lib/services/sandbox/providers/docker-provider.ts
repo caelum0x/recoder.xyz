@@ -587,37 +587,36 @@ export class DockerSandbox extends BaseSandbox {
   }
 
   getHost(port: number): string {
-    // Use same-origin proxy path so the preview iframe is served from web.recoder.xyz.
-    // This eliminates X-Frame-Options cross-origin issues because the Remix proxy
-    // (server.js /preview/ → docker-backend) strips restrictive headers from upstream.
+    // Fallback only. The authoritative preview contract comes from docker-backend
+    // /api/preview/* endpoints, which may return a direct Daytona signed preview URL.
     if (typeof window !== 'undefined') {
-      return `${window.location.origin}/preview/${this.projectId}/${port}`;
+      return `${window.location.origin}/preview/${this.projectId}`;
     }
-    // SSR fallback (not used for iframe src, just for initial render)
     const dockerUrl = this.dockerUrl || getDockerUrl();
-    const baseUrl = dockerUrl.replace(/^http/, '');
-    return `http${baseUrl}/preview/${this.projectId}/${port}`;
+    return `${dockerUrl.replace(/\/+$/, '')}/preview/${this.projectId}`;
   }
 
   async getPreviewInfo(port: number): Promise<PreviewInfo> {
-    // Docker backend handles preview URLs directly
-    const [previewInfo, error] = await tryCatch(async () => {
-      return await dockerFetch<{ url: string; token?: string }>(
-        `/api/preview/${this.projectId}/${port}`,
+    const [healthInfo, error] = await tryCatch(async () => {
+      return await dockerFetch<{
+        daytona?: boolean;
+        previewUrl?: string;
+        ports?: Array<{ port: number; responding: boolean; type: string; url?: string; signed?: boolean }>;
+      }>(
+        `/api/preview/${this.projectId}/health`,
         { timeout: CONTAINER_TIMEOUTS.HEALTH_CHECK }
       );
     });
 
     if (error) {
-      // Fallback to constructed URL
       return {
         url: this.getHost(port),
       };
     }
 
+    const matchingPort = healthInfo.ports?.find((entry) => entry.port === port);
     return {
-      url: previewInfo.url,
-      token: previewInfo.token,
+      url: matchingPort?.url || healthInfo.previewUrl || this.getHost(port),
     };
   }
 

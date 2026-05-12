@@ -33,7 +33,6 @@ import { HashlineMismatchError, formatHashLines, resolveLineRef, validateLineRef
 import {
   runTypeCheck,
   formatTypeCheckErrors,
-  generateAutoFixContext,
 } from '~/lib/services/typecheck-service';
 
 // Import types and utilities from extracted modules
@@ -2920,16 +2919,8 @@ export class ActionRunner {
               output: logs.slice(-2000), // Include last 2000 chars for debugging
             }
           }));
-
-          // Also directly trigger auto-fix
-          window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
-            detail: {
-              prompt: this.#formatCompileErrorsForAI(detectedErrors),
-              auto: true,
-              errors: detectedErrors,
-            }
-          }));
-        }    } else {
+        }
+      } else {
       // Fallback: run TypeScript typecheck using our dedicated endpoint
       // This catches errors that don't show up in dev server logs
       try {
@@ -2951,16 +2942,6 @@ export class ActionRunner {
                   filesWritten: this.#writtenFileContents.size,
                   output: formatTypeCheckErrors(typeCheckResult.errors),
                   source: 'typecheck',
-                }
-              }));
-
-              // Trigger auto-fix with structured context
-              window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
-                detail: {
-                  prompt: generateAutoFixContext(typeCheckResult.errors),
-                  auto: true,
-                  errors: formatted,
-                  typeCheckResult,
                 }
               }));
             }
@@ -3027,6 +3008,9 @@ export class ActionRunner {
 
         if (respondingPort) {
           logger.info(`✅ Dev server verified responding on port ${respondingPort.port} (${respondingPort.type})`);
+          if (healthData.previewUrl) {
+            logger.info(`🌐 Dev server URL: ${healthData.previewUrl}`);
+          }
 
           // Mark container as ready and notify preview
           if (markContainerReady && typeof window !== 'undefined') {
@@ -3109,13 +3093,6 @@ export class ActionRunner {
       // Check for success indicators
       if (logs.includes('ready') || logs.includes('Local:') || logs.includes('http://')) {
         logger.info('✅ Dev server is running successfully');
-
-        // Log the actual preview URL instead of container's localhost
-        if (DOCKER_URL && this.#projectId) {
-          const origin = typeof window !== 'undefined' ? window.location.origin : DOCKER_URL;
-          const previewUrl = `${origin}/preview/${this.#projectId}`;
-          logger.info(`🌐 Dev server URL: ${previewUrl}`);
-        }
       } else if (logs.length > 10) {
         logger.info(`📋 Dev server output: ${logs.split('\n').slice(-3).join(' | ')}`);
       }
@@ -3159,15 +3136,18 @@ export class ActionRunner {
     logger.info(`🚀 Starting dev server via backend API (framework: ${framework})...`);
 
     try {
-      // Backend waits up to 30s for health check + process startup overhead, so use 45s timeout
-      const result = await dockerPost<{ ready: boolean; port?: number; logs?: string }>(
+      // Dependency install + startup can legitimately exceed 45s on cold sandboxes.
+      const result = await dockerPost<{ ready: boolean; port?: number; logs?: string; previewUrl?: string }>(
         '/api/dev-server/start',
         { projectId: this.#projectId, framework },
-        { timeout: 45000 }
+        { timeout: 65000 }
       );
 
       if (result.ready) {
         logger.info(`✅ Dev server ready on port ${result.port}`);
+        if (result.previewUrl) {
+          logger.info(`🌐 Dev server URL: ${result.previewUrl}`);
+        }
 
         // Mark container as ready and notify preview
         try {

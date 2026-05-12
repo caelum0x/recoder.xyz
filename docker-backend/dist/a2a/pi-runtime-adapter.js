@@ -108,6 +108,7 @@ async function applyLegacyRecoderFileActions(sandboxId, responseText) {
                     }
                 }
                 catch {
+                    // candidate file not present in this sandbox
                 }
             }
         }

@@ -1,9 +1,15 @@
 import "server-only";
 import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 let resendInstance: Resend | null = null;
+let smtpInstance: nodemailer.Transporter | null = null;
+
+const getEmailProvider = () => process.env.EMAIL_PROVIDER ?? "resend";
 
 const getResend = () => {
+  if (getEmailProvider() !== "resend") return null;
+
   if (!resendInstance) {
     const apiKey = process.env.RESEND_TOKEN ?? process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -14,24 +20,79 @@ const getResend = () => {
   return resendInstance;
 };
 
+const getSmtp = () => {
+  if (!smtpInstance) {
+    const smartHost = process.env.SMTP_SMARTHOST?.trim();
+    const [smartHostName, smartHostPort] = smartHost?.split(":") ?? [];
+    const host = process.env.SMTP_HOST ?? smartHostName ?? "127.0.0.1";
+    const port = parseInt(process.env.SMTP_PORT ?? smartHostPort ?? "25", 10);
+    const user = process.env.SMTP_USER ?? process.env.SMTP_AUTH_USERNAME;
+    const pass =
+      process.env.SMTP_PASS ??
+      process.env.SMTP_PASSWORD ??
+      process.env.SMTP_AUTH_PASSWORD;
+
+    smtpInstance = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: user && pass ? { user, pass } : undefined,
+    });
+  }
+  return smtpInstance;
+};
+
 const getFromAddress = () =>
-  process.env.RESEND_FROM ?? "Recoder PM <noreply@recoder.xyz>";
+  process.env.RESEND_FROM ??
+  process.env.SMTP_FROM ??
+  process.env.EMAIL_FROM ??
+  "Recoder PM <noreply@recoder.xyz>";
+
+const sendEmail = async ({
+  to,
+  subject,
+  html,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<{ sent: boolean }> => {
+  const provider = getEmailProvider();
+
+  if (provider === "resend") {
+    const resend = getResend();
+    if (resend) {
+      await resend.emails.send({
+        from: getFromAddress(),
+        to,
+        subject,
+        html,
+      });
+      return { sent: true };
+    }
+  }
+
+  // Fallback to SMTP or explicit SMTP
+  try {
+    const smtp = getSmtp();
+    await smtp.sendMail({
+      from: getFromAddress(),
+      to,
+      subject,
+      html,
+    });
+    return { sent: true };
+  } catch (error) {
+    console.error("[Email] Failed to send email via SMTP:", error);
+    return { sent: false };
+  }
+};
 
 export const sendMagicLinkEmail = async (
   email: string,
   url: string
 ): Promise<{ sent: boolean }> => {
-  const resend = getResend();
-
-  if (!resend) {
-    console.warn(
-      "[Auth] RESEND_TOKEN not configured - magic link email not sent"
-    );
-    return { sent: false };
-  }
-
-  await resend.emails.send({
-    from: getFromAddress(),
+  return sendEmail({
     to: email,
     subject: "Sign in to Recoder PM",
     html: `
@@ -49,23 +110,13 @@ export const sendMagicLinkEmail = async (
       </div>
     `,
   });
-
-  return { sent: true };
 };
 
 export const sendSignupEmail = async (
   email: string,
   url: string
 ): Promise<{ sent: boolean }> => {
-  const resend = getResend();
-
-  if (!resend) {
-    console.warn("[Auth] RESEND_TOKEN not configured - signup email not sent");
-    return { sent: false };
-  }
-
-  await resend.emails.send({
-    from: getFromAddress(),
+  return sendEmail({
     to: email,
     subject: "Confirm your email address for Recoder PM",
     html: `
@@ -83,8 +134,6 @@ export const sendSignupEmail = async (
       </div>
     `,
   });
-
-  return { sent: true };
 };
 
 export const sendDataHealthAlertEmail = async ({
@@ -96,21 +145,11 @@ export const sendDataHealthAlertEmail = async ({
   organizationName: string;
   issues: string[];
 }): Promise<{ sent: boolean }> => {
-  const resend = getResend();
-
-  if (!resend) {
-    console.warn(
-      `[Data Health] RESEND_TOKEN not configured - alert for ${organizationName} → ${to}: ${issues.join(" | ")}`
-    );
-    return { sent: false };
-  }
-
   const list = issues
     .map((issue) => `<li style="margin-bottom: 8px;">${issue}</li>`)
     .join("");
 
-  await resend.emails.send({
-    from: getFromAddress(),
+  return sendEmail({
     to,
     subject: `Recoder PM data health alert: ${organizationName}`,
     html: `
@@ -128,6 +167,4 @@ export const sendDataHealthAlertEmail = async ({
       </div>
     `,
   });
-
-  return { sent: true };
 };

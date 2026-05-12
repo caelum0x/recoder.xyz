@@ -20,7 +20,11 @@ function toAbsoluteUrl(value: string | undefined, fallback: string): string {
   try {
     return new URL(value || fallback).toString();
   } catch {
-    return new URL(fallback).toString();
+    try {
+      return new URL(fallback).toString();
+    } catch {
+      return fallback.startsWith("http") ? fallback : `https://${fallback}`;
+    }
   }
 }
 

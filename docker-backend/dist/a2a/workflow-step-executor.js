@@ -53,10 +53,8 @@ const logger_1 = require("../logger");
 const openmeter_client_js_1 = require("../metering/openmeter-client.js");
 const a2a_event_bus_1 = require("./a2a-event-bus");
 const uuid_1 = require("uuid");
+const byok_js_1 = require("./byok.js");
 const logger = (0, logger_1.createLogger)('workflow-step-executor');
-function getOpenRouterKey() {
-    return process.env.OPENROUTER_API_KEY ?? '';
-}
 // ---------------------------------------------------------------------------
 // Streaming LLM response consumer
 // ---------------------------------------------------------------------------
@@ -150,12 +148,17 @@ async function executeLlmStep(config, context) {
     const systemPrompt = config.system ? String(config.system) : undefined;
     const maxTokens = Number(config.maxTokens ?? 2048);
     const shouldStream = config.stream !== false; // default: stream
-    const openRouterKey = getOpenRouterKey();
+    const explicitProviderKeys = typeof context._providerKeys === 'object' && context._providerKeys && !Array.isArray(context._providerKeys)
+        ? context._providerKeys
+        : {};
+    const openRouterKey = (typeof explicitProviderKeys.openrouter === 'string' && explicitProviderKeys.openrouter) ||
+        (await (0, byok_js_1.getOpenRouterByokKey)(typeof context._userId === 'string' ? context._userId : undefined)) ||
+        '';
     const startedAt = Date.now();
     if (!prompt)
         throw new Error('llm step requires config.prompt');
     if (!openRouterKey)
-        throw new Error('OPENROUTER_API_KEY not configured');
+        throw new Error('No BYOK OpenRouter key available for workflow LLM step');
     // Inject context variables into prompt via {{key}} placeholders
     const resolvedPrompt = prompt.replace(/\{\{(\w+)\}\}/g, (_, key) => (context[key] != null ? String(context[key]) : `{{${key}}}`));
     const messages = [];

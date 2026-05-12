@@ -96,6 +96,24 @@ else
   check_required_var "$ROOT_ENV" "AUTH_DATABASE_URL" "Core auth"
   check_required_var "$ROOT_ENV" "MAIN_SITE_INTERNAL_URL" "Core routing"
   check_daytona_auth "$ROOT_ENV"
+
+  RESEND_API_KEY_VALUE="$(get_env_value "$ROOT_ENV" "RESEND_API_KEY")"
+  SMTP_HOST_VALUE="$(get_env_value "$ROOT_ENV" "SMTP_HOST")"
+  SMTP_SMARTHOST_VALUE="$(get_env_value "$ROOT_ENV" "SMTP_SMARTHOST")"
+  SMTP_AUTH_PASSWORD_VALUE="$(get_env_value "$ROOT_ENV" "SMTP_AUTH_PASSWORD")"
+  SMTP_PASSWORD_VALUE="$(get_env_value "$ROOT_ENV" "SMTP_PASSWORD")"
+
+  if [[ -n "$RESEND_API_KEY_VALUE" ]]; then
+    pass "Core email — RESEND_API_KEY set"
+  elif [[ -n "$SMTP_HOST_VALUE" || -n "$SMTP_SMARTHOST_VALUE" ]]; then
+    if [[ -n "$SMTP_PASSWORD_VALUE" || -n "$SMTP_AUTH_PASSWORD_VALUE" ]]; then
+      pass "Core email — SMTP fallback configured"
+    else
+      fail "Core email — SMTP host configured without SMTP password"
+    fi
+  else
+    fail "Core email — neither RESEND_API_KEY nor SMTP fallback configured"
+  fi
 fi
 
 if [[ "$PRODUCTION_SCOPE" != "core" && "$PRODUCTION_SCOPE" != "full" ]]; then
@@ -132,10 +150,29 @@ else
   check_required_var "$PM_ENV" "BETTER_AUTH_SECRET" "PM auth"
   check_required_var "$PM_ENV" "AUTH_DATABASE_URL" "PM auth"
   check_required_var "$PM_ENV" "DATABASE_URL" "PM database"
-  check_required_var "$PM_ENV" "RESEND_API_KEY" "PM email"
   check_required_var "$PM_ENV" "POLAR_ACCESS_TOKEN" "PM billing"
   check_required_var "$PM_ENV" "POLAR_WEBHOOK_SECRET" "PM billing"
   check_required_var "$PM_ENV" "MINIO_ROOT_PASSWORD" "PM storage"
+
+  PM_RESEND_API_KEY="$(get_env_value "$PM_ENV" "RESEND_API_KEY")"
+  PM_RESEND_TOKEN="$(get_env_value "$PM_ENV" "RESEND_TOKEN")"
+  PM_SMTP_HOST="$(get_env_value "$PM_ENV" "SMTP_HOST")"
+  PM_SMTP_SMARTHOST="$(get_env_value "$PM_ENV" "SMTP_SMARTHOST")"
+  PM_SMTP_PASSWORD="$(get_env_value "$PM_ENV" "SMTP_PASSWORD")"
+  PM_SMTP_PASS="$(get_env_value "$PM_ENV" "SMTP_PASS")"
+  PM_SMTP_AUTH_PASSWORD="$(get_env_value "$PM_ENV" "SMTP_AUTH_PASSWORD")"
+
+  if [[ -n "$PM_RESEND_API_KEY" || -n "$PM_RESEND_TOKEN" ]]; then
+    pass "PM email — Resend configured"
+  elif [[ -n "$PM_SMTP_HOST" || -n "$PM_SMTP_SMARTHOST" ]]; then
+    if [[ -n "$PM_SMTP_PASSWORD" || -n "$PM_SMTP_PASS" || -n "$PM_SMTP_AUTH_PASSWORD" ]]; then
+      pass "PM email — SMTP fallback configured"
+    else
+      fail "PM email — SMTP host configured without SMTP password"
+    fi
+  else
+    fail "PM email — neither Resend nor SMTP fallback configured"
+  fi
 
   MINIO_PW="$(get_env_value "$PM_ENV" "MINIO_ROOT_PASSWORD")"
   if [[ "$MINIO_PW" == "minioadmin" || "$MINIO_PW" == "change-me-in-production" ]]; then

@@ -2,22 +2,15 @@
 /**
  * @module opencode-connector
  *
- * OpenCode connector runtime for deep coding sessions.
+ * Sandbox-local OpenCode runtime modeled after Daytona's official examples:
+ * - install and run OpenCode inside the Daytona sandbox
+ * - wait for "opencode server listening" in session logs
+ * - attach over the sandbox preview URL
+ * - keep one durable OpenCode session per Recoder project
  *
- * OpenCode provides a durable coding runtime with:
- *   - Persistent session state across prompts
- *   - Built-in file edit, bash, grep, glob tools
- *   - Streaming LLM responses with tool execution
- *   - Git-aware patching and snapshot support
- *
- * This connector wraps OpenCode's HTTP API so docker-backend can use it
- * as a backend coding runtime for "Deep Coding Mode" tasks.
- *
- * Architecture:
- *   docker-backend → HTTP → opencode server (in sandbox) → LLM + tools → workspace
- *
- * The opencode server runs inside the Daytona sandbox alongside the user's project.
- * docker-backend sends prompts and receives streaming events over HTTP.
+ * This avoids the unstable shared recoder-opencode service and removes the
+ * need to mirror file changes back into Daytona, because OpenCode edits the
+ * same sandbox workspace the preview is already serving from.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startSession = startSession;
@@ -25,228 +18,292 @@ exports.sendPrompt = sendPrompt;
 exports.getSession = getSession;
 exports.disposeSession = disposeSession;
 exports.listSessions = listSessions;
+const opencode_client_1 = require("@recoder/shared/opencode-client");
 const logger_1 = require("../logger");
+const daytona_client_js_1 = require("../daytona-client.js");
+const daytona_preview_js_1 = require("../daytona-preview.js");
 const logger = (0, logger_1.createLogger)('opencode-connector');
-// ---------------------------------------------------------------------------
-// Session registry
-// ---------------------------------------------------------------------------
+const SERVER_PORT = 4096;
+const SERVER_HOSTNAME = '0.0.0.0';
+const SERVER_READY_LINE = 'opencode server listening';
+const OPENCODE_PACKAGE = 'opencode-ai@1.1.1';
+const USER_NPM_PREFIX = '$HOME/.npm-global';
 const activeSessions = new Map();
-// ---------------------------------------------------------------------------
-// Core API
-// ---------------------------------------------------------------------------
-/**
- * Start an OpenCode session in a Daytona sandbox.
- *
- * This installs opencode (if not present) and starts the HTTP server
- * inside the sandbox, then returns a session handle.
- */
+function injectEnvVar(name, content) {
+    const base64 = Buffer.from(content, 'utf8').toString('base64');
+    return `${name}=$(echo '${base64}' | base64 -d)`;
+}
+function buildProviderEnv(providerKeys) {
+    if (!providerKeys) {
+        return '';
+    }
+    const envs = [];
+    if (providerKeys.openrouter)
+        envs.push(`OPENROUTER_API_KEY=${JSON.stringify(providerKeys.openrouter)}`);
+    if (providerKeys.openai)
+        envs.push(`OPENAI_API_KEY=${JSON.stringify(providerKeys.openai)}`);
+    if (providerKeys.anthropic)
+        envs.push(`ANTHROPIC_API_KEY=${JSON.stringify(providerKeys.anthropic)}`);
+    const google = providerKeys.google || providerKeys.gemini;
+    if (google) {
+        envs.push(`GOOGLE_API_KEY=${JSON.stringify(google)}`);
+        envs.push(`GEMINI_API_KEY=${JSON.stringify(google)}`);
+    }
+    return envs.join('; ');
+}
+function buildUserNpmBootstrap() {
+    return [
+        `export NPM_CONFIG_PREFIX=${USER_NPM_PREFIX}`,
+        'export PATH="$HOME/.npm-global/bin:$PATH"',
+        'mkdir -p "$HOME/.npm-global/bin"',
+    ].join('; ');
+}
+function inferProviderFromModel(model) {
+    const normalized = model?.trim().toLowerCase();
+    if (!normalized)
+        return undefined;
+    if (normalized.startsWith('openrouter/'))
+        return 'openrouter';
+    if (normalized.startsWith('openai/'))
+        return 'openai';
+    if (normalized.startsWith('anthropic/'))
+        return 'anthropic';
+    if (normalized.startsWith('google/') || normalized.startsWith('gemini/'))
+        return 'google';
+    return undefined;
+}
+function buildProviderKeys(params) {
+    if (!params.apiKey)
+        return undefined;
+    const provider = params.provider?.trim().toLowerCase() || inferProviderFromModel(params.model);
+    if (!provider)
+        return undefined;
+    if (provider === 'gemini') {
+        return { google: params.apiKey };
+    }
+    return { [provider]: params.apiKey };
+}
+function buildSandboxAwareConfig(workDir, previewUrlPattern) {
+    const prompt = [
+        'You are running in a Daytona sandbox.',
+        `Use the ${workDir} directory for file operations.`,
+        'You are working inside an existing project workspace, not a blank folder.',
+        'Before creating new files, inspect the existing project structure and prefer editing existing entry files.',
+        'If a Vite or React app already exists, update src/App.tsx, src/main.tsx, src/index.css, and package.json as needed instead of creating a standalone HTML file.',
+        'Do not create /home/daytona/index.html or other parallel one-off app files when the project already has framework entrypoints.',
+        `When running services on localhost, they will be accessible as: ${previewUrlPattern}`,
+        'When starting a server, always give the user the preview URL to access it.',
+        'When starting a server, start it in the background with & so the command does not block further instructions.',
+    ].join(' ');
+    return JSON.stringify({
+        $schema: 'https://opencode.ai/config.json',
+        default_agent: 'daytona',
+        agent: {
+            daytona: {
+                description: 'Daytona sandbox-aware coding agent',
+                mode: 'primary',
+                prompt,
+            },
+        },
+    });
+}
+function createPreviewFetch(session) {
+    return async (input, init) => {
+        const headers = new Headers(init?.headers || {});
+        headers.set('X-Daytona-Skip-Preview-Warning', 'true');
+        headers.set('X-Daytona-Disable-CORS', 'true');
+        const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(session.sandboxId, SERVER_PORT, { preferSigned: false });
+        if (preview.token) {
+            headers.set('X-Daytona-Preview-Token', preview.token);
+        }
+        return fetch(input, {
+            ...init,
+            headers,
+        });
+    };
+}
+async function waitForServerReady(session, maxWaitMs = 180_000) {
+    const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    const startedAt = Date.now();
+    const previewFetch = createPreviewFetch(session);
+    const healthUrl = `${session.serverUrl.replace(/\/$/, '')}/path`;
+    while (Date.now() - startedAt < maxWaitMs) {
+        const logs = await dc.getSessionLogs(session.sandboxId, session.serverSessionId, session.serverCommandId);
+        if (logs.includes(SERVER_READY_LINE)) {
+            return;
+        }
+        if (/Unexpected error|panic|segmentation fault/i.test(logs)) {
+            throw new Error(`Sandbox-local OpenCode server crashed during startup: ${logs.slice(-500)}`);
+        }
+        try {
+            const response = await previewFetch(healthUrl, {
+                method: 'GET',
+                signal: AbortSignal.timeout(5_000),
+            });
+            if (response.ok) {
+                return;
+            }
+        }
+        catch {
+            // Ignore until the server is listening.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw new Error(`Sandbox-local OpenCode server failed to start within ${Math.ceil(maxWaitMs / 1000)}s`);
+}
+async function createDurableOpencodeSession(session) {
+    const client = (0, opencode_client_1.createRecoderOpencodeClient)({
+        baseUrl: session.serverUrl,
+        timeout: 120_000,
+        fetchFn: createPreviewFetch(session),
+    });
+    const created = await client.createSession({
+        directory: session.workDir,
+        title: `Recoder project ${session.projectId}`,
+    });
+    session.opencodeSessionId = created.id;
+}
+function shouldRecreateOpencodeSession(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /failed \(502\)|failed \(404\)|session.*not found|Bad Gateway|ECONNRESET|ECONNREFUSED/i.test(message);
+}
 async function startSession(params) {
-    const { projectId, sandboxId, sandboxExecUrl, daytonaApiKey } = params;
-    // Check for existing session
-    const existing = activeSessions.get(projectId);
-    if (existing && existing.status === 'ready') {
+    const existing = activeSessions.get(params.projectId);
+    if (existing?.status === 'ready') {
         return existing;
     }
+    const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    const workDir = await dc.getWorkDir(params.sandboxId);
+    const previewPattern = dc.getPreviewUrl(params.sandboxId, 1234).replace('1234-', '{PORT}-');
+    const configJson = buildSandboxAwareConfig(workDir, previewPattern);
+    const serverSessionId = `opencode-serve-${params.projectId}`;
+    const providerKeys = buildProviderKeys(params);
     const session = {
         id: `oc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-        projectId,
-        sandboxId,
-        serverUrl: '', // Set after server starts
+        projectId: params.projectId,
+        sandboxId: params.sandboxId,
+        serverUrl: '',
         createdAt: new Date().toISOString(),
         status: 'starting',
+        workDir,
+        serverSessionId,
+        model: params.model,
+        providerKeys,
     };
-    activeSessions.set(projectId, session);
+    activeSessions.set(params.projectId, session);
     try {
-        const headers = {
-            Authorization: `Bearer ${daytonaApiKey}`,
-            'Content-Type': 'application/json',
-        };
-        // Install opencode if not present
-        const installCmd = 'command -v opencode || npm install -g opencode@latest 2>/dev/null || npx opencode --version';
-        await fetch(sandboxExecUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ command: installCmd }),
-            signal: AbortSignal.timeout(60_000),
-        });
-        // Start opencode server in background on port 3333
-        const envVars = [
-            params.apiKey ? `OPENAI_API_KEY=${params.apiKey}` : '',
-            params.apiKey ? `ANTHROPIC_API_KEY=${params.apiKey}` : '',
-            params.provider === 'openrouter' && params.apiKey ? `OPENROUTER_API_KEY=${params.apiKey}` : '',
-        ].filter(Boolean).join(' ');
-        const startCmd = `${envVars} nohup opencode server --port 3333 --dir /home/daytona > /tmp/opencode-server.log 2>&1 &`;
-        await fetch(sandboxExecUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ command: `sh -c "${startCmd}"` }),
-            signal: AbortSignal.timeout(15_000),
-        });
-        // Wait for server to be ready (up to 30s)
-        const serverUrl = `http://localhost:3333`;
-        let ready = false;
-        for (let i = 0; i < 30; i++) {
-            try {
-                const checkResult = await fetch(sandboxExecUrl, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({ command: `curl -sf ${serverUrl}/path 2>/dev/null && echo READY || echo WAITING` }),
-                    signal: AbortSignal.timeout(5_000),
-                });
-                const data = await checkResult.json();
-                const output = data.result ?? data.stdout ?? '';
-                if (output.includes('READY')) {
-                    ready = true;
-                    break;
-                }
-            }
-            catch { /* retry */ }
-            await new Promise(r => setTimeout(r, 1000));
+        const installResult = await dc.execCommand(params.sandboxId, `${buildUserNpmBootstrap()}; command -v opencode >/dev/null 2>&1 || npm install -g ${OPENCODE_PACKAGE}`, { cwd: workDir, timeoutSecs: 180 });
+        if (installResult.exitCode !== 0) {
+            throw new Error(`OpenCode install failed: ${installResult.output.slice(-1000)}`);
         }
-        if (!ready) {
-            session.status = 'disposed';
-            throw new Error('OpenCode server failed to start within 30s');
-        }
-        session.serverUrl = serverUrl;
+        await dc.deleteSession(params.sandboxId, serverSessionId);
+        await dc.createSession(params.sandboxId, serverSessionId);
+        const envVar = injectEnvVar('OPENCODE_CONFIG_CONTENT', configJson);
+        const providerEnv = buildProviderEnv(providerKeys);
+        const serverCommand = await dc.execInSession(params.sandboxId, serverSessionId, `${buildUserNpmBootstrap()}; ${providerEnv ? `${providerEnv}; ` : ''}${envVar} opencode serve --port ${SERVER_PORT} --hostname ${SERVER_HOSTNAME}`, { runAsync: true });
+        session.serverCommandId = serverCommand.cmdId;
+        const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(params.sandboxId, SERVER_PORT, { preferSigned: false });
+        session.serverUrl = preview.url.replace(/\/$/, '');
+        await waitForServerReady(session);
+        await createDurableOpencodeSession(session);
         session.status = 'ready';
-        activeSessions.set(projectId, session);
-        logger.info({ projectId, sandboxId, sessionId: session.id }, 'OpenCode session started');
+        activeSessions.set(params.projectId, session);
+        logger.info({ projectId: params.projectId, sandboxId: params.sandboxId, serverUrl: session.serverUrl, opencodeSessionId: session.opencodeSessionId }, 'Sandbox-local OpenCode session started');
         return session;
     }
     catch (err) {
         session.status = 'disposed';
-        activeSessions.delete(projectId);
-        logger.error({ err, projectId }, 'Failed to start OpenCode session');
+        activeSessions.delete(params.projectId);
+        logger.error({ err, projectId: params.projectId }, 'Failed to start sandbox-local OpenCode session');
         throw err;
     }
 }
-/**
- * Send a prompt to an OpenCode session and collect the full response.
- *
- * For streaming, use sendPromptStreaming() instead.
- */
 async function sendPrompt(params) {
     const session = activeSessions.get(params.projectId);
-    if (!session || session.status !== 'ready') {
+    if (!session || session.status !== 'ready' || !session.opencodeSessionId) {
         throw new Error(`No ready OpenCode session for project ${params.projectId}`);
     }
     session.status = 'busy';
     session.lastPromptAt = new Date().toISOString();
-    const headers = {
-        Authorization: `Bearer ${params.daytonaApiKey}`,
-        'Content-Type': 'application/json',
-    };
     try {
-        // Create a session in opencode if none exists, then send the message
-        // First, list sessions to find or create one
-        const listResult = await fetch(params.sandboxExecUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                command: `curl -sf ${session.serverUrl}/session 2>/dev/null || echo '[]'`,
-            }),
-            signal: AbortSignal.timeout(10_000),
-        });
-        const listData = await listResult.json();
-        const sessions = JSON.parse(listData.result ?? listData.stdout ?? '[]');
-        let sessionId;
-        if (Array.isArray(sessions) && sessions.length > 0) {
-            sessionId = sessions[0].id;
-        }
-        else {
-            // Create a new session
-            const createResult = await fetch(params.sandboxExecUrl, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    command: `curl -sf -X POST ${session.serverUrl}/session -H 'Content-Type: application/json' -d '{}' 2>/dev/null`,
-                }),
-                signal: AbortSignal.timeout(10_000),
+        const promptInput = {
+            content: params.prompt,
+            ...(params.agent ? { agent: params.agent } : {}),
+            ...(session.model?.includes('/') ? {
+                providerID: session.model.slice(0, session.model.indexOf('/')),
+                modelID: session.model.slice(session.model.indexOf('/') + 1),
+            } : {}),
+        };
+        const runPrompt = async () => {
+            const client = (0, opencode_client_1.createRecoderOpencodeClient)({
+                baseUrl: session.serverUrl,
+                timeout: 300_000,
+                fetchFn: createPreviewFetch(session),
             });
-            const createData = await createResult.json();
-            const created = JSON.parse(createData.result ?? createData.stdout ?? '{}');
-            sessionId = created.id;
-        }
-        // Send the prompt
-        const promptBody = JSON.stringify({
-            agent: params.agent ?? 'build',
-            parts: [{ type: 'text', text: params.prompt }],
-        });
-        const promptResult = await fetch(params.sandboxExecUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                command: `curl -sf -X POST '${session.serverUrl}/session/${sessionId}/message' -H 'Content-Type: application/json' -d '${promptBody.replace(/'/g, "'\\''")}'`,
-            }),
-            signal: AbortSignal.timeout(300_000), // 5 min for complex tasks
-        });
-        const resultData = await promptResult.json();
-        const rawOutput = resultData.result ?? resultData.stdout ?? '';
-        // Parse the response
-        let parsed;
+            return client.prompt(session.opencodeSessionId, promptInput, session.workDir);
+        };
+        let response;
         try {
-            parsed = JSON.parse(rawOutput);
+            response = await runPrompt();
         }
-        catch {
-            parsed = { parts: [{ type: 'text', content: rawOutput }] };
+        catch (err) {
+            if (!shouldRecreateOpencodeSession(err)) {
+                throw err;
+            }
+            logger.warn({ err, projectId: params.projectId }, 'Sandbox-local OpenCode prompt failed; recreating session and retrying once');
+            await createDurableOpencodeSession(session);
+            response = await runPrompt();
         }
-        const parts = (parsed.parts ?? []).map((p) => ({
-            type: p.type ?? 'text',
-            content: p.text ?? p.output ?? p.content ?? JSON.stringify(p),
-            metadata: p.metadata,
-        }));
+        const parts = (response.parts ?? []).map((part) => {
+            const record = part;
+            return {
+                type: part.type || 'text',
+                content: String(record.text ?? record.output ?? record.content ?? ''),
+                metadata: record,
+            };
+        });
         session.status = 'ready';
         return {
-            messageId: parsed.info?.id ?? `msg_${Date.now()}`,
+            messageId: response.info?.id ?? `msg_${Date.now()}`,
             parts,
-            usage: parsed.info?.usage ? {
-                inputTokens: parsed.info.usage.tokens?.input ?? 0,
-                outputTokens: parsed.info.usage.tokens?.output ?? 0,
-                cost: parsed.info.usage.cost,
-            } : undefined,
         };
     }
     catch (err) {
         session.status = 'ready';
-        logger.error({ err, projectId: params.projectId }, 'OpenCode prompt failed');
+        logger.error({ err, projectId: params.projectId }, 'Sandbox-local OpenCode prompt failed');
         throw err;
     }
 }
-/**
- * Get the current state of an OpenCode session.
- */
 function getSession(projectId) {
     return activeSessions.get(projectId);
 }
-/**
- * Dispose an OpenCode session (stop the server).
- */
 async function disposeSession(params) {
     const session = activeSessions.get(params.projectId);
     if (!session)
         return;
     try {
-        await fetch(params.sandboxExecUrl, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${params.daytonaApiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                command: `curl -sf -X POST ${session.serverUrl}/instance/dispose 2>/dev/null; pkill -f 'opencode server' 2>/dev/null || true`,
-            }),
-            signal: AbortSignal.timeout(10_000),
-        });
+        if (session.opencodeSessionId) {
+            const client = (0, opencode_client_1.createRecoderOpencodeClient)({
+                baseUrl: session.serverUrl,
+                timeout: 30_000,
+                fetchFn: createPreviewFetch(session),
+            });
+            await client.deleteSession(session.opencodeSessionId).catch(() => { });
+        }
     }
     catch {
-        // Best effort
+        // best effort
+    }
+    try {
+        const dc = (0, daytona_client_js_1.getDaytonaClient)();
+        await dc.deleteSession(session.sandboxId, session.serverSessionId);
+    }
+    catch {
+        // best effort
     }
     activeSessions.delete(params.projectId);
-    logger.info({ projectId: params.projectId }, 'OpenCode session disposed');
+    logger.info({ projectId: params.projectId }, 'Sandbox-local OpenCode session disposed');
 }
-/**
- * List all active sessions.
- */
 function listSessions() {
     return Array.from(activeSessions.values());
 }

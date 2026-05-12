@@ -21,7 +21,6 @@ exports.ALLOWED_ORIGINS = [
     'https://agents.recoder.xyz',
     'https://app.recoder.xyz',
     'https://web.recoder.xyz',
-    'https://studio.recoder.xyz',
     'https://agency.recoder.xyz',
     'https://pm.recoder.xyz',
     'https://docker.recoder.xyz',

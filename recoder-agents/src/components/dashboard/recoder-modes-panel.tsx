@@ -972,6 +972,10 @@ export function RecoderModesPanel({
       const originalPrompt = mode.samplePrompts[index];
       try {
         const key = `prompts.${modeId}.${index}` as any;
+        if (typeof t.has === 'function' && !t.has(key)) {
+          prompts.push(originalPrompt);
+          continue;
+        }
         const translatedText = t(key);
         // Check if translation exists (next-intl returns the key if missing)
         if (!translatedText || translatedText === `recoder.${key}` || translatedText.startsWith('recoder.prompts.') || translatedText.includes(modeId)) {
