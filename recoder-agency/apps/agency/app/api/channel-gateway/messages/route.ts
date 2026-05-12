@@ -13,6 +13,7 @@ import {
 	type ProjectStatus,
 	projects,
 	quotes,
+	workspaces,
 } from "@/db";
 import { executeIntent } from "@/lib/agency/agent-orchestrator";
 import {
@@ -28,6 +29,10 @@ import {
 	normalizeProjectStatus,
 	validateProjectStatusTransition,
 } from "@/lib/agency/project-workflow";
+import {
+	annotateRecoderTaskMetadata,
+	createRecoderTask,
+} from "@/lib/agency/recoder-control-plane";
 import { maybeRefreshWeeklyDeliveryMetrics } from "@/lib/agency/weekly-delivery-metrics-refresh";
 import { getAMBDispatcher } from "../../../../../../lib/amb-singleton";
 
@@ -220,6 +225,115 @@ const formatProjectLink = (projectId: string) => {
 	const link = buildProjectLink(projectId);
 	return link ? `<${link}|View project>` : null;
 };
+
+function buildRevisionRoutingHints(deliverableType: string | null | undefined) {
+	switch (deliverableType) {
+		case "design":
+			return {
+				runtimeCategory: "visual",
+				requiredCapabilities: ["web-interface"],
+				preferredCapabilities: ["design", "ui"],
+				preferredPlatform: "recoder_web",
+			};
+		case "document":
+			return {
+				runtimeCategory: "documentation",
+				requiredCapabilities: ["code-review"],
+				preferredCapabilities: ["documentation"],
+				preferredPlatform: "claude_code",
+			};
+		case "code":
+		default:
+			return {
+				runtimeCategory: "implementation",
+				requiredCapabilities: ["code-generation"],
+				preferredCapabilities: ["testing"],
+				preferredPlatform: "codex",
+			};
+	}
+}
+
+async function createDeliverableRevisionRun(input: {
+	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
+	deliverable: Awaited<ReturnType<typeof db.query.deliverables.findFirst>>;
+	feedback: string;
+	source: string;
+}) {
+	if (!input.project?.workspaceDbId || !input.deliverable) {
+		return null;
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, input.project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		return null;
+	}
+
+	const prompt = [
+		`Client requested revisions for deliverable "${input.deliverable.name}".`,
+		`Project: ${input.project.name}.`,
+		`Deliverable type: ${input.deliverable.type ?? "other"}.`,
+		`Feedback: ${input.feedback}.`,
+		input.deliverable.content
+			? `Current deliverable content:\n${input.deliverable.content.slice(0, 2000)}`
+			: null,
+	].filter(Boolean).join("\n\n");
+
+	const created = await createRecoderTask({
+		workspaceId: workspace.id,
+		threadId: `gateway-revision-${input.deliverable.id}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt,
+		autoRoute: true,
+		routingHints: buildRevisionRoutingHints(input.deliverable.type),
+		metadata: {
+			projectId: input.project.id,
+			projectDbId: input.project.dbId,
+			deliverableId: input.deliverable.id,
+			deliverableDbId: input.deliverable.dbId,
+			deliverableType: input.deliverable.type,
+			revisionRequest: {
+				source: input.source,
+				feedback: input.feedback,
+				previousTaskId: input.deliverable.taskId ?? null,
+				requestedAt: new Date().toISOString(),
+			},
+		},
+	});
+
+	if (!created?.taskId) {
+		return null;
+	}
+
+	await db
+		.update(deliverables)
+		.set({ taskId: created.taskId })
+		.where(eq(deliverables.dbId, input.deliverable.dbId));
+
+	if (input.deliverable.taskId) {
+		await annotateRecoderTaskMetadata({
+			taskId: input.deliverable.taskId,
+			triggeredBy: "client-channel-gateway",
+			reason: "Client review rejected deliverable",
+			metadataPatch: {
+				clientReview: {
+					status: "rejected",
+					feedback: input.feedback,
+					followUpTaskId: created.taskId,
+					source: input.source,
+					reviewedAt: new Date().toISOString(),
+				},
+			},
+		});
+	}
+
+	return created.taskId;
+}
 
 const parseListProjectsPage = (text: string) => {
 	const match = /list projects(?:\s+page)?\s+(\d+)/i.exec(text.trim());
@@ -811,6 +925,13 @@ export async function POST(request: Request) {
 			deliverableId: deliverable.id,
 		});
 
+		const followUpTaskId = await createDeliverableRevisionRun({
+			project,
+			deliverable,
+			feedback: reason,
+			source: "client.channel-gateway.message.reject",
+		});
+
 		const projectLink = buildProjectLink(project.id);
 		await recordGatewayEvent({
 			provider: payload.provider,
@@ -828,6 +949,7 @@ export async function POST(request: Request) {
 			replyText: projectLink
 				? `Deliverable ${deliverable.id} rejected for ${project.name}. We'll follow up. ${projectLink}`
 				: `Deliverable ${deliverable.id} rejected for ${project.name}. We'll follow up.`,
+			metadata: followUpTaskId ? { followUpTaskId } : undefined,
 			replyBlocks: [
 				{
 					type: "section",

@@ -10,10 +10,15 @@ import {
 	type ProjectStatus,
 	projects,
 	quotes,
+	workspaces,
 } from "@/db";
 import type { ConversationMessage } from "./conversation-store";
 import type { DetectedIntent } from "./intent-detector";
 import { applyProjectTransitionWithAudit } from "./project-transition";
+import {
+	annotateRecoderTaskMetadata,
+	createRecoderTask,
+} from "./recoder-control-plane";
 import {
 	normalizeProjectStatus,
 	validateProjectStatusTransition,
@@ -35,6 +40,115 @@ type OrchestratorResult = {
 	projectId?: string;
 	metadata?: Record<string, unknown>;
 };
+
+function buildRevisionRoutingHints(deliverableType: string | null | undefined) {
+	switch (deliverableType) {
+		case "design":
+			return {
+				runtimeCategory: "visual",
+				requiredCapabilities: ["web-interface"],
+				preferredCapabilities: ["design", "ui"],
+				preferredPlatform: "recoder_web",
+			};
+		case "document":
+			return {
+				runtimeCategory: "documentation",
+				requiredCapabilities: ["code-review"],
+				preferredCapabilities: ["documentation"],
+				preferredPlatform: "claude_code",
+			};
+		case "code":
+		default:
+			return {
+				runtimeCategory: "implementation",
+				requiredCapabilities: ["code-generation"],
+				preferredCapabilities: ["testing"],
+				preferredPlatform: "codex",
+			};
+	}
+}
+
+async function createDeliverableRevisionRun(input: {
+	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
+	deliverable: Awaited<ReturnType<typeof db.query.deliverables.findFirst>>;
+	feedback: string;
+	source: string;
+}): Promise<string | null> {
+	if (!input.project?.workspaceDbId || !input.deliverable) {
+		return null;
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, input.project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		return null;
+	}
+
+	const prompt = [
+		`Client requested revisions for deliverable "${input.deliverable.name}".`,
+		`Project: ${input.project.name}.`,
+		`Deliverable type: ${input.deliverable.type ?? "other"}.`,
+		`Feedback: ${input.feedback}.`,
+		input.deliverable.content
+			? `Current deliverable content:\n${input.deliverable.content.slice(0, 2000)}`
+			: null,
+	].filter(Boolean).join("\n\n");
+
+	const created = await createRecoderTask({
+		workspaceId: workspace.id,
+		threadId: `agency-revision-${input.deliverable.id}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt,
+		autoRoute: true,
+		routingHints: buildRevisionRoutingHints(input.deliverable.type),
+		metadata: {
+			projectId: input.project.id,
+			projectDbId: input.project.dbId,
+			deliverableId: input.deliverable.id,
+			deliverableDbId: input.deliverable.dbId,
+			deliverableType: input.deliverable.type,
+			revisionRequest: {
+				source: input.source,
+				feedback: input.feedback,
+				previousTaskId: input.deliverable.taskId ?? null,
+				requestedAt: new Date().toISOString(),
+			},
+		},
+	});
+
+	if (!created?.taskId) {
+		return null;
+	}
+
+	await db
+		.update(deliverables)
+		.set({ taskId: created.taskId })
+		.where(eq(deliverables.dbId, input.deliverable.dbId));
+
+	if (input.deliverable.taskId) {
+		await annotateRecoderTaskMetadata({
+			taskId: input.deliverable.taskId,
+			triggeredBy: "client-channel",
+			reason: "Client review rejected deliverable",
+			metadataPatch: {
+				clientReview: {
+					status: "rejected",
+					feedback: input.feedback,
+					followUpTaskId: created.taskId,
+					source: input.source,
+					reviewedAt: new Date().toISOString(),
+				},
+			},
+		});
+	}
+
+	return created.taskId;
+}
 
 /**
  * Execute a detected intent by performing the corresponding action.
@@ -387,10 +501,18 @@ async function handleRejectDeliverable(params: {
 		"Client rejected deliverable via agent",
 	);
 
+	const followUpTaskId = await createDeliverableRevisionRun({
+		project,
+		deliverable,
+		feedback: params.reason,
+		source: "client.agent.deliverable-review",
+	});
+
 	return {
 		action: "deliverable_rejected",
 		projectId: project.id,
 		replyText: `Noted — "${deliverable.name}" sent back for revision. Your feedback: "${params.reason}"`,
+		metadata: followUpTaskId ? { followUpTaskId } : undefined,
 	};
 }
 
