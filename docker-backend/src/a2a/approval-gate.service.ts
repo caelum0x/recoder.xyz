@@ -249,6 +249,14 @@ export class ApprovalGateService {
       this.callbacks.delete(approvalId);
     }
   }
+
+  dispose(): void {
+    for (const timer of this.timeouts.values()) {
+      clearTimeout(timer);
+    }
+    this.timeouts.clear();
+    this.callbacks.clear();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -265,5 +273,6 @@ export function getApprovalGateService(): ApprovalGateService {
 }
 
 export function resetApprovalGateService(): void {
+  _instance?.dispose();
   _instance = null;
 }

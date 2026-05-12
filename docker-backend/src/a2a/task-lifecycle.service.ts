@@ -95,6 +95,127 @@ function collectFilesChanged(result: TaskResult): string[] {
   return [];
 }
 
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter(Boolean);
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return [value.trim()];
+  }
+  return [];
+}
+
+function toExcerpt(value: string, maxLength = 240): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function collectLogEvidence(result: TaskResult): TaskEvidenceItem[] {
+  const data = readRecord(result.data);
+  const raw = readRecord(data?.raw);
+  const candidates = [
+    { stream: 'stdout', value: data?.stdout ?? raw?.stdout, label: 'stdout' },
+    { stream: 'stderr', value: data?.stderr ?? raw?.stderr, label: 'stderr' },
+    { stream: 'logs', value: data?.logs ?? raw?.logs, label: 'runtime logs' },
+  ] as const;
+
+  const evidence: TaskEvidenceItem[] = [];
+  for (const candidate of candidates) {
+    const entries = readStringArray(candidate.value);
+    if (entries.length === 0) continue;
+    evidence.push({
+      kind: 'log',
+      label: candidate.label,
+      ref: candidate.stream,
+      metadata: {
+        stream: candidate.stream,
+        lineCount: entries.length,
+        excerpt: toExcerpt(entries.join('\n')),
+      },
+    });
+  }
+
+  return evidence;
+}
+
+function collectRuntimeEvidence(result: TaskResult): TaskEvidenceItem[] {
+  const data = readRecord(result.data);
+  const raw = readRecord(data?.raw);
+  const gitStatus =
+    readString(data?.gitStatus) ??
+    readString(data?.git_status) ??
+    readString(raw?.gitStatus) ??
+    readString(raw?.git_status);
+  const gitBranch =
+    readString(data?.gitBranch) ??
+    readString(data?.git_branch) ??
+    readString(raw?.gitBranch) ??
+    readString(raw?.git_branch);
+  const cloneUrl =
+    readString(data?.cloneUrl) ??
+    readString(data?.clone_url) ??
+    readString(raw?.cloneUrl) ??
+    readString(raw?.clone_url);
+  const runtimeType =
+    readString(data?.runtimeType) ??
+    readString(data?.runtime_type) ??
+    readString(raw?.runtimeType) ??
+    readString(raw?.runtime_type);
+  const sessionId =
+    readString(data?.sessionId) ??
+    readString(data?.session_id) ??
+    readString(raw?.sessionId) ??
+    readString(raw?.session_id);
+  const sandboxId =
+    readString(data?.sandboxId) ??
+    readString(data?.sandbox_id) ??
+    readString(raw?.sandboxId) ??
+    readString(raw?.sandbox_id);
+
+  const evidence: TaskEvidenceItem[] = [];
+
+  if (gitStatus || gitBranch || cloneUrl) {
+    evidence.push({
+      kind: 'runtime',
+      label: gitBranch ? `Git state (${gitBranch})` : 'Git state',
+      ref: gitBranch ? `git:${gitBranch}` : 'git',
+      metadata: {
+        ...(gitStatus ? { gitStatus: toExcerpt(gitStatus) } : {}),
+        ...(gitBranch ? { gitBranch } : {}),
+        ...(cloneUrl ? { cloneUrl } : {}),
+      },
+    });
+  }
+
+  if (runtimeType || sessionId || sandboxId) {
+    evidence.push({
+      kind: 'runtime',
+      label: runtimeType ? `Runtime session (${runtimeType})` : 'Runtime session',
+      ref: sessionId || sandboxId || runtimeType || 'runtime',
+      metadata: {
+        ...(runtimeType ? { runtimeType } : {}),
+        ...(sessionId ? { sessionId } : {}),
+        ...(sandboxId ? { sandboxId } : {}),
+      },
+    });
+  }
+
+  return evidence;
+}
+
 function enrichTaskResult(
   envelope: TaskEnvelope,
   result: TaskResult,
@@ -132,6 +253,8 @@ function enrichTaskResult(
       label: path,
       ref: path,
     })),
+    ...collectLogEvidence(result),
+    ...collectRuntimeEvidence(result),
   ];
 
   const seen = new Set<string>();
