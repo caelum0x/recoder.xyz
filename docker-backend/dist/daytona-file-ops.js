@@ -32,6 +32,7 @@ const logger_js_1 = require("./logger.js");
 const daytona_runtime_js_1 = require("./daytona-runtime.js");
 const logger = (0, logger_js_1.createLogger)('daytona-file-ops');
 const DAYTONA_DEV_SERVER_PORTS = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 3000, 3001, 4173, 4174, 8080, 8081];
+const DAYTONA_STATE_CHECK_TIMEOUT_MS = 3000;
 function looksLikeDirectoryListing(body, contentType) {
     if (!contentType.includes('text/html')) {
         return false;
@@ -94,7 +95,16 @@ async function cleanupDaytonaDevServerProcesses(sandboxId, projectId) {
 // running. Do not auto-wake sandboxes as part of ordinary file traffic.
 async function ensureRunningBeforeOp(sandboxId) {
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    const sandbox = await dc.getSandbox(sandboxId);
+    const sandbox = await Promise.race([
+        dc.getSandbox(sandboxId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timed out checking sandbox state for ${sandboxId}`)), DAYTONA_STATE_CHECK_TIMEOUT_MS)),
+    ]).catch((error) => {
+        logger.warn({ sandboxId: sandboxId.slice(0, 12), error: error.message }, 'Daytona: sandbox state check timed out, proceeding with file operation');
+        return null;
+    });
+    if (!sandbox) {
+        return;
+    }
     if (sandbox.state === 'started' || sandbox.state === 'running') {
         return;
     }

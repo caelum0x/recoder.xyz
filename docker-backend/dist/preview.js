@@ -552,51 +552,33 @@ function buildDockerPreviewUpstreamHeaders(targetPort, baseHeaders = {}) {
     };
 }
 async function probeDaytonaPort(entry, port, path = '/', previewAccess) {
-    const proxyHost = getDaytonaProxyHost();
-    const proxyPort = getDaytonaProxyPort();
     const preview = previewAccess || await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(entry, port);
-    return await new Promise((resolve) => {
-        const req = http_1.default.request({
-            hostname: proxyHost,
-            port: proxyPort,
-            path,
-            method: 'GET',
-            headers: (0, daytona_preview_js_1.buildDaytonaPreviewHeaders)(preview),
-            timeout: 4000,
-        }, (resp) => {
-            const status = resp.statusCode || 0;
-            const contentType = String(resp.headers['content-type'] || '');
-            let body = '';
-            resp.setEncoding('utf8');
-            resp.on('data', (chunk) => {
-                if (body.length < 8192) {
-                    body += chunk.slice(0, 8192 - body.length);
-                }
-            });
-            resp.on('end', () => {
-                const okStatus = status >= 200 && status < 400;
-                if (!okStatus) {
-                    resolve(false);
-                    return;
-                }
-                if (path === '/' && looksLikeDirectoryListing(body, contentType)) {
-                    resolve(false);
-                    return;
-                }
-                if (path === '/' && looksLikePreviewBuildError(body, contentType)) {
-                    resolve(false);
-                    return;
-                }
-                resolve(true);
-            });
-        });
-        req.on('error', () => resolve(false));
-        req.on('timeout', () => {
-            req.destroy();
-            resolve(false);
-        });
-        req.end();
-    });
+    const targetUrl = new URL(preview.url);
+    targetUrl.pathname = path;
+    const response = await fetch(targetUrl.toString(), {
+        method: 'GET',
+        headers: {
+            Accept: '*/*',
+            'X-Daytona-Skip-Preview-Warning': 'true',
+            'X-Daytona-Disable-CORS': 'true',
+            ...(preview.token && !preview.signed
+                ? { 'X-Daytona-Preview-Token': preview.token }
+                : {}),
+        },
+        signal: AbortSignal.timeout(4000),
+    }).catch(() => null);
+    if (!response || !response.ok) {
+        return false;
+    }
+    const contentType = response.headers.get('content-type') || '';
+    const body = (await response.text().catch(() => '')).slice(0, 8192);
+    if (path === '/' && looksLikeDirectoryListing(body, contentType)) {
+        return false;
+    }
+    if (path === '/' && looksLikePreviewBuildError(body, contentType)) {
+        return false;
+    }
+    return true;
 }
 async function detectDaytonaPortFromLogs(entry) {
     try {
@@ -678,9 +660,11 @@ async function recoverContainerFromDaytona(projectId, containers) {
         const match = matches[0];
         if (match) {
             const workDir = await dc.getWorkDir(match.id);
-            // Default to 8080 (common for file servers in agent sandboxes)
-            // The preview route's health check will detect the actual port
-            const defaultPort = 8080;
+            dc.rememberWorkDir(match.id, workDir);
+            // Align recovered preview entries with the main Web IDE runtime lane.
+            // Vite-based build sandboxes should start on 5173 unless a later probe
+            // proves another port is actually responding.
+            const defaultPort = 5173;
             const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)({ id: match.id }, defaultPort);
             const entry = {
                 id: match.id,
@@ -1492,37 +1476,8 @@ function setupPreviewProxy(app, containers) {
         if (!entry) {
             // Try Docker recovery first, then Daytona recovery
             entry = await (0, container_recovery_js_1.recoverContainerFromDocker)(docker, projectId, containers);
-            if (!entry && process.env.USE_DAYTONA_CONTAINERS === 'true') {
-                try {
-                    const dc = (0, daytona_client_js_1.getDaytonaClient)();
-                    const sandboxes = await dc.listSandboxes();
-                    const matches = sandboxes
-                        .filter((s) => s.labels?.projectId === projectId)
-                        .sort((a, b) => {
-                        const aR = a.state === 'started' || a.state === 'running' ? 1 : 0;
-                        const bR = b.state === 'started' || b.state === 'running' ? 1 : 0;
-                        if (aR !== bR)
-                            return bR - aR;
-                        return (b.createdAt || '').localeCompare(a.createdAt || '');
-                    });
-                    const match = matches[0];
-                    if (match) {
-                        const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)({ id: match.id }, 5173);
-                        entry = {
-                            id: match.id,
-                            port: 5173,
-                            ptyPort: 0,
-                            lastActive: Date.now(),
-                            userId: match.labels?.userId,
-                            daytona: true,
-                            daytonaPreviewUrl: preview.url,
-                        };
-                        containers.set(projectId, entry);
-                    }
-                }
-                catch (e) {
-                    // Daytona recovery failed, continue to 404
-                }
+            if (!entry) {
+                entry = await recoverContainerFromDaytona(projectId, containers);
             }
         }
         if (!entry) {
@@ -1531,8 +1486,7 @@ function setupPreviewProxy(app, containers) {
         // For Daytona sandboxes, ensure sandbox is running before checking ports
         if (entry?.daytona) {
             try {
-                const dc = (0, daytona_client_js_1.getDaytonaClient)();
-                await dc.getOrStartSandbox(entry.id, 15000);
+                await (0, daytona_file_ops_js_1.ensureDaytonaSandboxRunning)(entry.id);
             }
             catch {
                 // Non-fatal — sandbox may already be running or start may timeout

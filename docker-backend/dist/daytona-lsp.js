@@ -8,7 +8,7 @@
  * Architecture:
  * - LSP endpoints are served by the main Daytona API at port 3900:
  *   POST/GET /api/toolbox/{sandboxId}/toolbox/lsp/*
- * - Auth uses the Daytona API key (Authorization: Bearer <DAYTONA_API_KEY>)
+ * - Auth uses either DAYTONA_API_KEY or DAYTONA_JWT_TOKEN + DAYTONA_ORGANIZATION_ID
  * - Request bodies use camelCase: languageId, pathToProject, uri, position
  * - document-symbols and workspace-symbols are GET with query params
  * - All other LSP ops (start, stop, completions, did-open, did-close) are POST
@@ -23,10 +23,12 @@ const logger = (0, logger_js_1.createLogger)('daytona-lsp');
 const router = (0, express_1.Router)();
 exports.daytonaLspRouter = router;
 // ── Daytona API helpers ──────────────────────────────────────────
-const DAYTONA_API_URL = process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api';
+const DAYTONA_API_URL = process.env.DAYTONA_API_URL || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api';
 const DAYTONA_API_KEY = process.env.DAYTONA_API_KEY || '';
+const DAYTONA_JWT_TOKEN = process.env.DAYTONA_JWT_TOKEN || '';
+const DAYTONA_ORGANIZATION_ID = process.env.DAYTONA_ORGANIZATION_ID || '';
 function isDaytonaConfigured() {
-    return !!DAYTONA_API_KEY;
+    return !!(DAYTONA_API_KEY || (DAYTONA_JWT_TOKEN && DAYTONA_ORGANIZATION_ID));
 }
 /**
  * Call a Daytona toolbox LSP endpoint via the main API.
@@ -44,7 +46,10 @@ async function callDaytonaLsp(sandboxId, endpoint, method, body, queryParams, ti
         const response = await fetch(url, {
             method,
             headers: {
-                'Authorization': `Bearer ${DAYTONA_API_KEY}`,
+                'Authorization': `Bearer ${DAYTONA_API_KEY || DAYTONA_JWT_TOKEN}`,
+                ...(!DAYTONA_API_KEY && DAYTONA_JWT_TOKEN && DAYTONA_ORGANIZATION_ID
+                    ? { 'X-Daytona-Organization-ID': DAYTONA_ORGANIZATION_ID }
+                    : {}),
                 ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
             },
             body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -71,7 +76,7 @@ async function callDaytonaLsp(sandboxId, endpoint, method, body, queryParams, ti
 }
 // ── Route helpers ────────────────────────────────────────────────
 function notConfigured(res) {
-    res.status(503).json({ ok: false, error: 'Daytona not configured — set DAYTONA_API_KEY' });
+    res.status(503).json({ ok: false, error: 'Daytona not configured — set DAYTONA_API_KEY or DAYTONA_JWT_TOKEN + DAYTONA_ORGANIZATION_ID' });
 }
 // ── Routes ───────────────────────────────────────────────────────
 /**
