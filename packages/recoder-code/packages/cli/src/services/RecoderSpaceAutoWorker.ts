@@ -1,10 +1,14 @@
-import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import type { AgentBridgeService, TaskAssignment } from './AgentBridgeService.js';
 
 const DOCKER_BACKEND_URL = process.env['DOCKER_BACKEND_URL'] || 'http://localhost:3100';
-const MAX_OUTPUT_CHARS = 12_000;
+const MAX_OUTPUT_CHARS = 24_000;
+const MAX_PROGRESS_OUTPUT_CHARS = 600;
+const MODEL_TIMEOUT_MS = 10 * 60 * 1000;
 
 interface CommandResult {
   command: string[];
@@ -14,73 +18,71 @@ interface CommandResult {
   stderr: string;
 }
 
-interface PackageScripts {
-  test?: string;
-  lint?: string;
-  build?: string;
+interface ModelRunResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  command: string[];
 }
 
-function truncate(text: string): string {
-  return text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n...[truncated]` : text;
+interface RepoArtifacts {
+  baselineStatus: string;
+  finalStatus: string;
+  diff: string;
+  changedFiles: string;
+}
+
+function truncate(text: string, max = MAX_OUTPUT_CHARS): string {
+  return text.length > max ? `${text.slice(0, max)}\n...[truncated]` : text;
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function detectPackageManager(cwd: string): 'pnpm' | 'yarn' | 'npm' | null {
-  if (existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (existsSync(path.join(cwd, 'yarn.lock'))) return 'yarn';
-  if (existsSync(path.join(cwd, 'package-lock.json'))) return 'npm';
-  if (existsSync(path.join(cwd, 'package.json'))) return 'npm';
-  return null;
-}
-
-function readPackageScripts(cwd: string): PackageScripts {
-  const packageJsonPath = path.join(cwd, 'package.json');
-  if (!existsSync(packageJsonPath)) return {};
-
-  try {
-    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { scripts?: PackageScripts };
-    return pkg.scripts || {};
-  } catch {
-    return {};
-  }
-}
-
-function buildScriptCommand(
-  packageManager: 'pnpm' | 'yarn' | 'npm',
-  scriptName: 'test' | 'lint' | 'build',
-): string[] {
-  if (packageManager === 'yarn') return ['yarn', scriptName];
-  if (packageManager === 'pnpm') return ['pnpm', scriptName];
-  return ['npm', 'run', scriptName];
-}
-
-function pickExecutionPlan(prompt: string, cwd: string): string[][] {
-  const lowered = prompt.toLowerCase();
-  const commands: string[][] = [
-    ['pwd'],
-    ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-    ['git', 'status', '--short'],
+function resolveCliEntryPath(): string {
+  const packageRoot = path.resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const candidates = [
+    path.join(packageRoot, 'index.js'),
+    path.join(packageRoot, 'index.ts'),
   ];
 
-  const packageManager = detectPackageManager(cwd);
-  const scripts = readPackageScripts(cwd);
-  if (!packageManager) return commands;
-
-  if (/\btest|verify|spec\b/.test(lowered) && scripts.test) {
-    commands.push(buildScriptCommand(packageManager, 'test'));
-  } else if (/\blint|format|check\b/.test(lowered) && scripts.lint) {
-    commands.push(buildScriptCommand(packageManager, 'lint'));
-  } else if (/\bbuild|preview|deploy\b/.test(lowered) && scripts.build) {
-    commands.push(buildScriptCommand(packageManager, 'build'));
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
   }
 
-  return commands;
+  throw new Error('Unable to resolve Recoder Code CLI entrypoint for Space worker');
 }
 
-async function runCommand(command: string[], cwd: string, timeoutMs = 60_000): Promise<CommandResult> {
+function buildWorkerPrompt(assignment: TaskAssignment, bridge: AgentBridgeService): string {
+  return [
+    'You are Recoder Code running as a connected worker inside a Recoder Space.',
+    'Execute the task directly in the current local repository.',
+    'Prefer making the smallest correct code changes needed to satisfy the request.',
+    'When helpful, run tests, lint, or build commands and leave the repo in a reviewable state.',
+    'Do not explain the plan first. Do the work.',
+    '',
+    `Workspace ID: ${bridge.getWorkspaceId() || 'unknown'}`,
+    `Task ID: ${assignment.taskId}`,
+    `Assigned Agent ID: ${bridge.getAgentId()}`,
+    assignment.worktreeBranch ? `Suggested Worktree Branch: ${assignment.worktreeBranch}` : '',
+    '',
+    'Task Prompt:',
+    assignment.prompt,
+    '',
+    'Structured Space Context:',
+    '```json',
+    JSON.stringify(assignment.context, null, 2),
+    '```',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function runCommand(command: string[], cwd: string, timeoutMs = 30_000): Promise<CommandResult> {
   return new Promise((resolve) => {
     const child = spawn(command[0], command.slice(1), {
       cwd,
@@ -140,12 +142,35 @@ async function runCommand(command: string[], cwd: string, timeoutMs = 60_000): P
   });
 }
 
-function writeArtifacts(taskId: string, prompt: string, context: Record<string, unknown>, results: CommandResult[]) {
+async function captureRepoArtifacts(cwd: string): Promise<RepoArtifacts> {
+  const baseline = await runCommand(['git', 'status', '--short'], cwd, 15_000);
+  const diff = await runCommand(['git', 'diff', '--no-ext-diff', '--', '.'], cwd, 30_000);
+  const changedFiles = await runCommand(['git', 'diff', '--name-only', '--', '.'], cwd, 15_000);
+  const finalStatus = await runCommand(['git', 'status', '--short'], cwd, 15_000);
+
+  return {
+    baselineStatus: baseline.stdout || baseline.stderr,
+    finalStatus: finalStatus.stdout || finalStatus.stderr,
+    diff: diff.stdout || diff.stderr,
+    changedFiles: changedFiles.stdout || changedFiles.stderr,
+  };
+}
+
+function writeArtifacts(
+  taskId: string,
+  prompt: string,
+  context: Record<string, unknown>,
+  modelRun: ModelRunResult,
+  repoArtifacts: RepoArtifacts,
+) {
   const artifactDir = path.join(process.cwd(), '.recoder', 'artifacts', taskId);
   mkdirSync(artifactDir, { recursive: true });
 
   const reportPath = path.join(artifactDir, 'report.md');
-  const commandsPath = path.join(artifactDir, 'commands.json');
+  const outputPath = path.join(artifactDir, 'model-output.txt');
+  const diffPath = path.join(artifactDir, 'git.diff');
+  const statusPath = path.join(artifactDir, 'git-status.txt');
+  const changedFilesPath = path.join(artifactDir, 'changed-files.txt');
 
   const report = [
     '# Recoder Space Task Execution Report',
@@ -153,38 +178,48 @@ function writeArtifacts(taskId: string, prompt: string, context: Record<string, 
     `- Task ID: ${taskId}`,
     `- Prompt: ${prompt}`,
     `- Working Directory: ${process.cwd()}`,
+    `- Model Exit Code: ${modelRun.exitCode}`,
+    `- Duration (ms): ${modelRun.durationMs}`,
     '',
     '## Context',
     '```json',
     JSON.stringify(context, null, 2),
     '```',
     '',
-    '## Commands',
-    ...results.flatMap((result) => [
-      `### ${result.command.join(' ')}`,
-      '',
-      `- Exit code: ${result.exitCode}`,
-      `- CWD: ${result.cwd}`,
-      '',
-      '#### stdout',
-      '```text',
-      result.stdout || '(empty)',
-      '```',
-      '',
-      '#### stderr',
-      '```text',
-      result.stderr || '(empty)',
-      '```',
-      '',
-    ]),
+    '## Repo Status Before/After',
+    '### Before',
+    '```text',
+    repoArtifacts.baselineStatus || '(clean or unavailable)',
+    '```',
+    '',
+    '### After',
+    '```text',
+    repoArtifacts.finalStatus || '(clean or unavailable)',
+    '```',
+  ].join('\n');
+
+  const output = [
+    '# Model stdout',
+    '',
+    modelRun.stdout || '(empty)',
+    '',
+    '# Model stderr',
+    '',
+    modelRun.stderr || '(empty)',
   ].join('\n');
 
   writeFileSync(reportPath, report, 'utf8');
-  writeFileSync(commandsPath, JSON.stringify(results, null, 2), 'utf8');
+  writeFileSync(outputPath, output, 'utf8');
+  writeFileSync(diffPath, repoArtifacts.diff || '', 'utf8');
+  writeFileSync(statusPath, repoArtifacts.finalStatus || repoArtifacts.baselineStatus || '', 'utf8');
+  writeFileSync(changedFilesPath, repoArtifacts.changedFiles || '', 'utf8');
 
   return {
-    report: { path: reportPath, content: report },
-    commands: { path: commandsPath, content: readFileSync(commandsPath, 'utf8') },
+    report: { path: reportPath, content: readFileSync(reportPath, 'utf8') },
+    output: { path: outputPath, content: readFileSync(outputPath, 'utf8') },
+    diff: { path: diffPath, content: readFileSync(diffPath, 'utf8') },
+    status: { path: statusPath, content: readFileSync(statusPath, 'utf8') },
+    changedFiles: { path: changedFilesPath, content: readFileSync(changedFilesPath, 'utf8') },
   };
 }
 
@@ -212,6 +247,100 @@ async function claimTask(token: string, bridge: AgentBridgeService, taskId: stri
   }
 }
 
+async function runModelDrivenTask(
+  assignment: TaskAssignment,
+  bridge: AgentBridgeService,
+): Promise<ModelRunResult> {
+  const cliEntry = resolveCliEntryPath();
+  const prompt = buildWorkerPrompt(assignment, bridge);
+  const command = [
+    process.execPath,
+    cliEntry,
+    '--prompt',
+    prompt,
+    '--approval-mode',
+    'yolo',
+    '--all-files',
+  ];
+
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const child = spawn(command[0], command.slice(1), {
+      cwd: process.cwd(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        RECODER_SPACE_DISABLE_AUTO_WORKER: '1',
+        GEMINI_CLI_NO_RELAUNCH: 'true',
+      },
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let progressValue = 20;
+
+    const emitChunk = (label: string, chunk: string) => {
+      progressValue = Math.min(progressValue + 5, 85);
+      bridge.sendProgress(
+        assignment.taskId,
+        progressValue,
+        `${label}: ${truncate(chunk.trim() || '(empty)', MAX_PROGRESS_OUTPUT_CHARS)}`,
+      );
+    };
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill('SIGTERM');
+      resolve({
+        exitCode: 124,
+        stdout: truncate(stdout),
+        stderr: truncate(`${stderr}\nModel-driven worker timed out after ${MODEL_TIMEOUT_MS}ms`),
+        durationMs: Date.now() - startedAt,
+        command,
+      });
+    }, MODEL_TIMEOUT_MS);
+
+    child.stdout.on('data', (chunk) => {
+      const text = chunk.toString();
+      stdout += text;
+      emitChunk('stdout', text);
+    });
+    child.stderr.on('data', (chunk) => {
+      const text = chunk.toString();
+      stderr += text;
+      emitChunk('stderr', text);
+    });
+
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        exitCode: 1,
+        stdout: truncate(stdout),
+        stderr: truncate(`${stderr}\n${error.message}`),
+        durationMs: Date.now() - startedAt,
+        command,
+      });
+    });
+
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({
+        exitCode: code ?? 1,
+        stdout: truncate(stdout),
+        stderr: truncate(stderr),
+        durationMs: Date.now() - startedAt,
+        command,
+      });
+    });
+  });
+}
+
 export function installRecoderSpaceAutoWorker(
   bridge: AgentBridgeService,
   getToken: () => Promise<string | null>,
@@ -226,41 +355,36 @@ export function installRecoderSpaceAutoWorker(
 
         bridge.sendProgress(assignment.taskId, 10, 'Claimed task in current Recoder Space');
         await sleep(150);
+        bridge.sendProgress(assignment.taskId, 15, 'Launching model-driven local Recoder Code worker');
 
-        const commands = pickExecutionPlan(assignment.prompt, process.cwd());
-        const results: CommandResult[] = [];
-
-        for (let index = 0; index < commands.length; index += 1) {
-          const command = commands[index];
-          const progress = 20 + Math.round(((index + 1) / commands.length) * 60);
-          bridge.sendProgress(assignment.taskId, progress, `Running: ${command.join(' ')}`);
-          const result = await runCommand(command, process.cwd());
-          results.push(result);
-        }
-
+        const modelRun = await runModelDrivenTask(assignment, bridge);
+        const repoArtifacts = await captureRepoArtifacts(process.cwd());
         const artifacts = writeArtifacts(
           assignment.taskId,
           assignment.prompt,
           assignment.context,
-          results,
+          modelRun,
+          repoArtifacts,
         );
 
-        const failedCommands = results.filter((result) => result.exitCode !== 0);
-        const summary = failedCommands.length === 0
-          ? `Completed local execution for task: ${assignment.prompt}`
-          : `Completed local execution with ${failedCommands.length} failing command(s) for task: ${assignment.prompt}`;
+        const changedFiles = repoArtifacts.changedFiles
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const summary =
+          modelRun.exitCode === 0
+            ? `Model-driven Recoder Code worker completed task: ${assignment.prompt}`
+            : `Model-driven Recoder Code worker exited with code ${modelRun.exitCode} for task: ${assignment.prompt}`;
 
         bridge.completeTask(assignment.taskId, {
           text: summary,
           data: {
-            source: 'recoder-space-auto-worker',
+            source: 'recoder-space-model-worker',
             workspaceId: bridge.getWorkspaceId(),
-            commandCount: results.length,
-            failedCommandCount: failedCommands.length,
-            commands: results.map((result) => ({
-              command: result.command.join(' '),
-              exitCode: result.exitCode,
-            })),
+            exitCode: modelRun.exitCode,
+            durationMs: modelRun.durationMs,
+            changedFiles,
+            command: modelRun.command.join(' '),
           },
           artifacts: [
             {
@@ -271,11 +395,32 @@ export function installRecoderSpaceAutoWorker(
               path: artifacts.report.path,
             },
             {
-              key: `${assignment.taskId}-commands.json`,
+              key: `${assignment.taskId}-model-output.txt`,
               artifact_type: 'log',
-              mime_type: 'application/json',
-              content: artifacts.commands.content,
-              path: artifacts.commands.path,
+              mime_type: 'text/plain',
+              content: artifacts.output.content,
+              path: artifacts.output.path,
+            },
+            {
+              key: `${assignment.taskId}-git.diff`,
+              artifact_type: 'patch',
+              mime_type: 'text/x-diff',
+              content: artifacts.diff.content,
+              path: artifacts.diff.path,
+            },
+            {
+              key: `${assignment.taskId}-git-status.txt`,
+              artifact_type: 'log',
+              mime_type: 'text/plain',
+              content: artifacts.status.content,
+              path: artifacts.status.path,
+            },
+            {
+              key: `${assignment.taskId}-changed-files.txt`,
+              artifact_type: 'log',
+              mime_type: 'text/plain',
+              content: artifacts.changedFiles.content,
+              path: artifacts.changedFiles.path,
             },
           ],
         });
