@@ -139,6 +139,29 @@ export interface RecoderProjectDeliveryPackage {
 	deliverables: RecoderDeliveryPackageDeliverable[];
 }
 
+export interface CreateRecoderTaskInput {
+	workspaceId: string;
+	threadId: string;
+	requester: {
+		agentId: string;
+		platform: string;
+		name?: string;
+	};
+	prompt: string;
+	autoRoute?: boolean;
+	routingHints?: Record<string, unknown>;
+	metadata?: Record<string, unknown>;
+}
+
+export interface CreateAgencyWorkspaceRunInput {
+	workspaceId: string;
+	threadPrefix: string;
+	entityId: string;
+	prompt: string;
+	routingHints?: Record<string, unknown>;
+	metadata?: Record<string, unknown>;
+}
+
 export async function getRecoderTaskContext(
 	taskId: string | null | undefined,
 ): Promise<RecoderTaskContext | null> {
@@ -187,6 +210,66 @@ export async function annotateRecoderTaskMetadata(input: {
 	} catch {
 		return false;
 	}
+}
+
+export async function createRecoderTask(
+	input: CreateRecoderTaskInput,
+): Promise<{ taskId: string; state: string } | null> {
+	try {
+		const response = await fetch(`${DEFAULT_BASE_URL}/api/a2a/tasks`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				workspace_id: input.workspaceId,
+				thread_id: input.threadId,
+				requester: {
+					agent_id: input.requester.agentId,
+					platform: input.requester.platform,
+					name: input.requester.name,
+				},
+				payload: {
+					kind: "text",
+					text: input.prompt,
+				},
+				auto_route: input.autoRoute ?? true,
+				routing_hints: input.routingHints,
+				metadata: input.metadata,
+			}),
+			cache: "no-store",
+		});
+		if (!response.ok) return null;
+		const json = (await response.json()) as {
+			success?: boolean;
+			data?: { id?: string; state?: string };
+		};
+		if (!json.success || !json.data?.id) return null;
+		return {
+			taskId: json.data.id,
+			state: json.data.state ?? "submitted",
+		};
+	} catch {
+		return null;
+	}
+}
+
+export async function createAgencyWorkspaceRun(
+	input: CreateAgencyWorkspaceRunInput,
+): Promise<{ taskId: string; state: string } | null> {
+	return createRecoderTask({
+		workspaceId: input.workspaceId,
+		threadId: `${input.threadPrefix}-${input.entityId}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt: input.prompt,
+		autoRoute: true,
+		routingHints: input.routingHints,
+		metadata: input.metadata,
+	});
 }
 
 export async function getRecoderWorkspaceControlSnapshot(

@@ -15,6 +15,8 @@ import {
 import { getTeamCapacitySnapshot } from "@/lib/agency/team-capacity";
 import { fetchCurrentTeam } from "@/services/teams";
 import {
+	createDeliveryOpsBrowserRuns,
+	createDeliveryOpsComputerUseRuns,
 	createDeliveryOpsGovernanceRuns,
 	createDeliveryOpsPlanningRuns,
 	createAlertSubscription,
@@ -404,6 +406,36 @@ export default async function DeliveryOpsPage({
 							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
 						>
 							Create Ops Governance Runs
+						</button>
+					</form>
+					<form action={createDeliveryOpsBrowserRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
+						>
+							Create Ops Browser Runs
+						</button>
+					</form>
+					<form action={createDeliveryOpsComputerUseRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
+						>
+							Create Ops Computer-Use Runs
 						</button>
 					</form>
 				</div>
