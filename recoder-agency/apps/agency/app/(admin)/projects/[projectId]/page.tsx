@@ -17,7 +17,11 @@ import {
 } from "@/db";
 import { fetchCurrentTeam } from "@/services/teams";
 import { createChangeOrder } from "./change-order-actions";
-import { requestProjectHandoff, requestProjectPlanningRun } from "../actions";
+import {
+	requestProjectGovernanceRun,
+	requestProjectHandoff,
+	requestProjectPlanningRun,
+} from "../actions";
 import { CostSection } from "./cost-section";
 import { DeliverableSection } from "./deliverable-section";
 import { InvoiceSection } from "./invoice-section";
@@ -29,6 +33,7 @@ import {
 	getRecoderTaskContext,
 	type RecoderTaskContext,
 } from "@/lib/agency/recoder-control-plane";
+import { resolveModelRoutingPolicyForWorkspace } from "@/lib/agency/model-routing";
 
 type DodTemplateConfig = {
 	minContentLength: number;
@@ -84,6 +89,8 @@ export default async function ProjectDetailPage({
 		handoffRequested?: string;
 		planningTaskId?: string;
 		planningRequested?: string;
+		governanceTaskId?: string;
+		governanceRequested?: string;
 	}>;
 }) {
 	const { projectId } = await params;
@@ -155,6 +162,8 @@ export default async function ProjectDetailPage({
 	const handoffRequested = query.handoffRequested?.trim() ?? "";
 	const planningTaskId = query.planningTaskId?.trim() ?? "";
 	const planningRequested = query.planningRequested?.trim() ?? "";
+	const governanceTaskId = query.governanceTaskId?.trim() ?? "";
+	const governanceRequested = query.governanceRequested?.trim() ?? "";
 	if (parsedStartDate) {
 		transitionWhere.push(
 			gte(projectStatusTransitions.createdAt, parsedStartDate),
@@ -220,6 +229,12 @@ export default async function ProjectDetailPage({
 		}
 		if (planningRequested) {
 			params.set("planningRequested", planningRequested);
+		}
+		if (governanceTaskId) {
+			params.set("governanceTaskId", governanceTaskId);
+		}
+		if (governanceRequested) {
+			params.set("governanceRequested", governanceRequested);
 		}
 		params.set("pageSize", String(pageSize));
 		params.set("page", String(currentPage));
@@ -331,6 +346,9 @@ export default async function ProjectDetailPage({
 				})
 			: Promise.resolve(null),
 	]);
+	const effectiveRoutingPolicy = projectWorkspace?.id
+		? await resolveModelRoutingPolicyForWorkspace(projectWorkspace.id)
+		: null;
 	const qaGateRuns = qaGateRunsRaw.rows.map((row) => {
 		const record = row as Record<string, unknown>;
 		const failureReasonsRaw = record.failure_reasons;
@@ -453,6 +471,16 @@ export default async function ProjectDetailPage({
 					Project planning request was submitted, but no shared run was created.
 				</div>
 			) : null}
+			{governanceTaskId ? (
+				<div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4 text-sm text-violet-200">
+					Project governance run created: <span className="font-medium">{governanceTaskId}</span>
+				</div>
+			) : null}
+			{governanceRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project governance request was submitted, but no shared run was created.
+				</div>
+			) : null}
 
 			<div className="rounded-xl border border-border bg-background p-4">
 				<h2 className="text-sm font-medium text-text-muted mb-3">
@@ -529,6 +557,47 @@ export default async function ProjectDetailPage({
 
 			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
 				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Policy Snapshot</h2>
+					<span className="text-xs text-text-muted">
+						Routing and budget guardrails for this project
+					</span>
+				</div>
+				<div className="flex flex-wrap gap-2 text-[11px]">
+					<span className="rounded bg-orange-500/10 px-2 py-0.5 text-orange-300">
+						warn:{project.costWarningThresholdPct}%
+					</span>
+					<span className="rounded bg-red-500/10 px-2 py-0.5 text-red-300">
+						hard-stop:{project.costHardStopThresholdPct}% {project.costHardStopEnabled ? "on" : "off"}
+					</span>
+					{effectiveRoutingPolicy ? (
+						<>
+							<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+								policy:{effectiveRoutingPolicy.name}
+							</span>
+							<span className="rounded bg-cyan-500/10 px-2 py-0.5 text-cyan-300">
+								model:{effectiveRoutingPolicy.preferredModelId}
+							</span>
+							{effectiveRoutingPolicy.fallbackModelId ? (
+								<span className="rounded bg-teal-500/10 px-2 py-0.5 text-teal-300">
+									fallback:{effectiveRoutingPolicy.fallbackModelId}
+								</span>
+							) : null}
+							{effectiveRoutingPolicy.costCeilingCentsPerGeneration != null ? (
+								<span className="rounded bg-indigo-500/10 px-2 py-0.5 text-indigo-300">
+									ceiling:{effectiveRoutingPolicy.costCeilingCentsPerGeneration}c
+								</span>
+							) : null}
+						</>
+					) : (
+						<span className="rounded bg-zinc-500/10 px-2 py-0.5 text-zinc-300">
+							no routing policy
+						</span>
+					)}
+				</div>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
 					<h2 className="text-sm font-medium text-text-muted">Project Handoff</h2>
 					<span className="text-xs text-text-muted">
 						Create a shared handoff run in the linked workspace
@@ -575,6 +644,32 @@ export default async function ProjectDetailPage({
 						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
 					>
 						Create Planning Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Governance Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared governance/policy audit run
+					</span>
+				</div>
+				<form
+					action={requestProjectGovernanceRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<textarea
+						name="note"
+						rows={3}
+						placeholder="Optional governance focus, policy concern, or audit question"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Governance Run
 					</button>
 				</form>
 			</div>
