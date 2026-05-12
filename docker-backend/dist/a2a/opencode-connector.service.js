@@ -107,19 +107,35 @@ function buildSandboxAwareConfig(workDir, previewUrlPattern) {
         },
     });
 }
+async function refreshPreviewAccess(session, force = false) {
+    if (!force && session.previewAccess) {
+        return session.previewAccess;
+    }
+    const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(session.sandboxId, SERVER_PORT, { preferSigned: false });
+    session.previewAccess = preview;
+    session.serverUrl = preview.url.replace(/\/$/, '');
+    return preview;
+}
 function createPreviewFetch(session) {
     return async (input, init) => {
-        const headers = new Headers(init?.headers || {});
-        headers.set('X-Daytona-Skip-Preview-Warning', 'true');
-        headers.set('X-Daytona-Disable-CORS', 'true');
-        const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(session.sandboxId, SERVER_PORT, { preferSigned: false });
-        if (preview.token) {
-            headers.set('X-Daytona-Preview-Token', preview.token);
+        const runFetch = async (forceRefresh = false) => {
+            const headers = new Headers(init?.headers || {});
+            headers.set('X-Daytona-Skip-Preview-Warning', 'true');
+            headers.set('X-Daytona-Disable-CORS', 'true');
+            const preview = await refreshPreviewAccess(session, forceRefresh);
+            if (preview.token) {
+                headers.set('X-Daytona-Preview-Token', preview.token);
+            }
+            return fetch(input, {
+                ...init,
+                headers,
+            });
+        };
+        const response = await runFetch(false);
+        if (response.status !== 401 && response.status !== 403) {
+            return response;
         }
-        return fetch(input, {
-            ...init,
-            headers,
-        });
+        return runFetch(true);
     };
 }
 async function waitForServerReady(session, maxWaitMs = 180_000) {
@@ -165,7 +181,7 @@ async function createDurableOpencodeSession(session) {
 }
 function shouldRecreateOpencodeSession(error) {
     const message = error instanceof Error ? error.message : String(error);
-    return /failed \(502\)|failed \(404\)|session.*not found|Bad Gateway|ECONNRESET|ECONNREFUSED/i.test(message);
+    return /failed \((401|403|404|502)\)|Unauthorized|Forbidden|session.*not found|Bad Gateway|ECONNRESET|ECONNREFUSED/i.test(message);
 }
 async function startSession(params) {
     const existing = activeSessions.get(params.projectId);
@@ -202,8 +218,7 @@ async function startSession(params) {
         const providerEnv = buildProviderEnv(providerKeys);
         const serverCommand = await dc.execInSession(params.sandboxId, serverSessionId, `${buildUserNpmBootstrap()}; ${providerEnv ? `${providerEnv}; ` : ''}${envVar} opencode serve --port ${SERVER_PORT} --hostname ${SERVER_HOSTNAME}`, { runAsync: true });
         session.serverCommandId = serverCommand.cmdId;
-        const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(params.sandboxId, SERVER_PORT, { preferSigned: false });
-        session.serverUrl = preview.url.replace(/\/$/, '');
+        await refreshPreviewAccess(session, true);
         await waitForServerReady(session);
         await createDurableOpencodeSession(session);
         session.status = 'ready';
@@ -251,6 +266,7 @@ async function sendPrompt(params) {
                 throw err;
             }
             logger.warn({ err, projectId: params.projectId }, 'Sandbox-local OpenCode prompt failed; recreating session and retrying once');
+            await refreshPreviewAccess(session, true);
             await createDurableOpencodeSession(session);
             response = await runPrompt();
         }

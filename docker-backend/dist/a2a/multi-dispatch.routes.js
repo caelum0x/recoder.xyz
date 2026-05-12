@@ -49,6 +49,7 @@ exports.multiDispatchRouter.post('/', async (req, res) => {
             aggregationStrategy: body.aggregationStrategy,
             priority: body.priority,
             worktreeIsolation: body.worktreeIsolation,
+            routingHints: body.routingHints,
         });
         sendSuccess(res, dispatch, 201);
     }

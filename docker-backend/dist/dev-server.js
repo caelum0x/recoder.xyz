@@ -460,45 +460,25 @@ class DevServerManager {
         return result.output;
     }
     async probeDaytonaPort(sandboxId, port) {
-        const proxyHost = getDaytonaProxyHost();
-        const proxyPort = getDaytonaProxyPort();
         const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(sandboxId, port);
-        return await new Promise((resolve) => {
-            const req = http_1.default.request({
-                hostname: proxyHost,
-                port: proxyPort,
-                path: '/',
-                method: 'GET',
-                headers: {
-                    Accept: 'text/html,*/*',
-                    ...(0, daytona_preview_js_1.buildDaytonaPreviewHeaders)(preview),
-                },
-                timeout: 4000,
-            }, (resp) => {
-                const status = resp.statusCode || 0;
-                const contentType = String(resp.headers['content-type'] || '');
-                let body = '';
-                resp.setEncoding('utf8');
-                resp.on('data', (chunk) => {
-                    if (body.length < 8192) {
-                        body += chunk.slice(0, 8192 - body.length);
-                    }
-                });
-                resp.on('end', () => {
-                    if (!(status >= 200 && status < 400)) {
-                        resolve(false);
-                        return;
-                    }
-                    resolve(!looksLikeDirectoryListing(body, contentType));
-                });
-            });
-            req.on('error', () => resolve(false));
-            req.on('timeout', () => {
-                req.destroy();
-                resolve(false);
-            });
-            req.end();
-        });
+        const response = await fetch(preview.url, {
+            method: 'GET',
+            headers: {
+                Accept: 'text/html,*/*',
+                'X-Daytona-Skip-Preview-Warning': 'true',
+                'X-Daytona-Disable-CORS': 'true',
+                ...(preview.token && !preview.signed
+                    ? { 'X-Daytona-Preview-Token': preview.token }
+                    : {}),
+            },
+            signal: AbortSignal.timeout(4000),
+        }).catch(() => null);
+        if (!response || !response.ok) {
+            return false;
+        }
+        const contentType = response.headers.get('content-type') || '';
+        const body = (await response.text().catch(() => '')).slice(0, 8192);
+        return !looksLikeDirectoryListing(body, contentType);
     }
     async waitForDaytonaReady(sandboxId, framework, maxWaitMs = 30000) {
         const startTime = Date.now();

@@ -111,6 +111,7 @@ class ApprovalGateService {
             data: { approval: request },
             workspaceId: request.workspaceId,
         });
+        this.fireCallbacks(approvalId, request);
         logger.info({ approvalId, resolvedBy }, 'approval rejected');
         return request;
     }
@@ -152,6 +153,16 @@ class ApprovalGateService {
     listPending(workspaceId) {
         return [...this.requests.values()].filter((r) => r.workspaceId === workspaceId && (r.status === 'pending' || r.status === 'escalated'));
     }
+    listByWorkspace(workspaceId, statuses) {
+        const statusSet = statuses && statuses.length > 0 ? new Set(statuses) : null;
+        return [...this.requests.values()].filter((request) => {
+            if (request.workspaceId !== workspaceId)
+                return false;
+            if (!statusSet)
+                return true;
+            return statusSet.has(request.status);
+        });
+    }
     /**
      * Register a callback for when an approval is resolved.
      */
@@ -167,6 +178,7 @@ class ApprovalGateService {
         request.status = 'expired';
         request.resolvedAt = new Date().toISOString();
         this.persist();
+        this.fireCallbacks(approvalId, request);
         logger.info({ approvalId }, 'approval expired');
     }
     clearTimeout(approvalId) {
@@ -194,6 +206,13 @@ class ApprovalGateService {
             this.callbacks.delete(approvalId);
         }
     }
+    dispose() {
+        for (const timer of this.timeouts.values()) {
+            clearTimeout(timer);
+        }
+        this.timeouts.clear();
+        this.callbacks.clear();
+    }
 }
 exports.ApprovalGateService = ApprovalGateService;
 // ---------------------------------------------------------------------------
@@ -207,5 +226,6 @@ function getApprovalGateService() {
     return _instance;
 }
 function resetApprovalGateService() {
+    _instance?.dispose();
     _instance = null;
 }
