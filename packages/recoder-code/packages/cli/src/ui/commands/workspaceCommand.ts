@@ -1,5 +1,5 @@
 /**
- * /workspace slash command - Manage A2A workspace connections
+ * /workspace slash command - Manage Recoder Space connections
  *
  * Subcommands:
  *   /workspace list    - List available workspaces
@@ -44,7 +44,7 @@ interface WorkspaceAgentInfo {
 
 export const workspaceCommand: SlashCommand = {
   name: 'workspace',
-  description: 'Manage A2A workspace connections',
+  description: 'Manage Recoder Space connections',
   kind: CommandKind.BUILT_IN,
   subCommands: [
     // -----------------------------------------------------------------------
@@ -91,7 +91,7 @@ export const workspaceCommand: SlashCommand = {
               messageType: 'info',
               content: [
                 '┌────────────────────────────────────────────────┐',
-                '│  A2A Workspaces                                │',
+                '│  Recoder Spaces                                │',
                 '├────────────────────────────────────────────────┤',
                 '│  No workspaces found.                          │',
                 '│                                                │',
@@ -104,7 +104,7 @@ export const workspaceCommand: SlashCommand = {
 
           const lines: string[] = [
             '┌────────────────────────────────────────────────┐',
-            '│  A2A Workspaces                                │',
+            '│  Recoder Spaces                                │',
             '├────────────────────────────────────────────────┤',
           ];
 
@@ -188,14 +188,14 @@ export const workspaceCommand: SlashCommand = {
               messageType: 'info',
               content: [
                 '┌────────────────────────────────────────────────┐',
-                '│  Workspace Connected                           │',
+                '│  Recoder Space Connected                       │',
                 '├────────────────────────────────────────────────┤',
                 `│  Workspace: ${workspaceId.substring(0, 35).padEnd(35)}│`,
                 `│  Agent ID:  ${bridge.getAgentId().substring(0, 35).padEnd(35)}│`,
                 '│  Status:    Online                             │',
                 '├────────────────────────────────────────────────┤',
                 '│  You will receive task assignments in          │',
-                '│  real-time from the workspace coordinator.     │',
+                '│  real-time from the Recoder Space.             │',
                 '│                                                │',
                 '│  /workspace status  - Check connection         │',
                 '│  /workspace leave   - Disconnect               │',
@@ -255,7 +255,7 @@ export const workspaceCommand: SlashCommand = {
           messageType: 'info',
           content: [
             '┌────────────────────────────────────────────────┐',
-            '│  Workspace Disconnected                        │',
+            '│  Recoder Space Disconnected                    │',
             '├────────────────────────────────────────────────┤',
             `│  Left: ${workspaceId.substring(0, 40).padEnd(40)}│`,
             '│  Status: Offline                               │',
@@ -283,7 +283,7 @@ export const workspaceCommand: SlashCommand = {
             messageType: 'info',
             content: [
               '┌────────────────────────────────────────────────┐',
-              '│  Workspace Status                              │',
+              '│  Recoder Space Status                          │',
               '├────────────────────────────────────────────────┤',
               '│  Status:    Disconnected                       │',
               `│  Agent ID:  ${bridge.getAgentId().substring(0, 35).padEnd(35)}│`,
@@ -297,7 +297,7 @@ export const workspaceCommand: SlashCommand = {
         const workspaceId = bridge.getWorkspaceId() || 'none';
         const lines: string[] = [
           '┌────────────────────────────────────────────────┐',
-          '│  Workspace Status                              │',
+          '│  Recoder Space Status                          │',
           '├────────────────────────────────────────────────┤',
           '│  Status:    Connected                          │',
           `│  Workspace: ${workspaceId.substring(0, 35).padEnd(35)}│`,
@@ -368,7 +368,7 @@ export const workspaceCommand: SlashCommand = {
       type: 'message',
       messageType: 'info',
       content: [
-        `A2A Workspace (${statusLine})`,
+        `Recoder Space (${statusLine})`,
         '',
         'Commands:',
         '  /workspace list       - List available workspaces',

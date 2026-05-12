@@ -211,6 +211,73 @@ describe('A2A workspace routes', () => {
     });
   });
 
+  it('builds a structured Recoder Space context package', async () => {
+    const workspace = createWorkspace(['agent-a', 'agent-b'], 'proj-context');
+    getAgentRegistryService().selfRegister({
+      agentId: 'agent-b',
+      name: 'Context Agent',
+      platform: 'codex',
+      tags: ['code'],
+      skills: [{ id: 'execute', name: 'execute', description: 'execute', tags: ['execute'] }],
+    });
+
+    getApprovalGateService().createRequest({
+      workspaceId: workspace.workspaceId,
+      requestingAgentId: 'agent-a',
+      targetAgentId: 'agent-b',
+      action: 'delegate',
+      details: { prompt: 'Need review before merge' },
+    });
+
+    getDelegationChainService().delegate({
+      fromAgentId: 'agent-a',
+      toAgentId: 'agent-b',
+      prompt: 'Review the pricing work',
+      metadata: {
+        workspaceId: workspace.workspaceId,
+        projectId: workspace.projectId,
+        channelId: workspace.defaultChannelId,
+        sourceTaskId: 'task-context',
+        intent: 'review',
+      },
+    });
+
+    const created = getTaskLifecycleService().createTask({
+      workspace_id: workspace.workspaceId,
+      thread_id: 'thread-context',
+      requester: { agent_id: 'agent-a', platform: 'codex' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-ctx', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Add pricing page' },
+      metadata: { previewUrl: 'https://preview.recoder.xyz/context' },
+    });
+    expect(created.ok).toBe(true);
+
+    const response = await fetch(`${baseUrl}/api/a2a/workspaces/${workspace.workspaceId}/context`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.contextVersion).toBe('2026-05-12');
+    expect(body.data.workspace).toMatchObject({
+      workspaceId: workspace.workspaceId,
+      name: workspace.name,
+      projectId: workspace.projectId,
+    });
+    expect(body.data.summary).toMatchObject({
+      totalAgents: 2,
+      totalTasks: 1,
+      pendingApprovals: 1,
+      activeHandoffs: 1,
+    });
+    expect(body.data.agents).toHaveLength(2);
+    expect(body.data.recentTasks[0]).toMatchObject({
+      prompt: 'Add pricing page',
+      workspace_id: workspace.workspaceId,
+    });
+    expect(body.data.pendingApprovals).toHaveLength(1);
+    expect(body.data.activeHandoffs).toHaveLength(1);
+  });
+
   it('creates and lists workspace handoffs with active filtering', async () => {
     const workspace = createWorkspace(['agent-a', 'agent-b'], 'proj-handoffs');
 

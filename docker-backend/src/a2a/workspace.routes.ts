@@ -252,6 +252,86 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
   };
 }
 
+function buildWorkspaceContextPackageFromSnapshot(
+  snapshot: NonNullable<Awaited<ReturnType<typeof buildWorkspaceControlPlaneSnapshot>>>,
+) {
+  return {
+    contextVersion: '2026-05-12',
+    workspace: {
+      workspaceId: snapshot.workspace.workspaceId,
+      name: snapshot.workspace.name,
+      projectId: snapshot.workspace.projectId,
+      ownerId: snapshot.workspace.ownerId,
+      defaultChannelId: snapshot.workspace.defaultChannelId,
+      settings: snapshot.workspace.settings,
+      createdAt: snapshot.workspace.createdAt,
+      updatedAt: snapshot.workspace.updatedAt,
+    },
+    summary: snapshot.summary,
+    agents: snapshot.agents.map((agent) => ({
+      agentId: agent.agentId,
+      name: agent.name,
+      platform: agent.platform,
+      status: agent.status,
+      capabilities: agent.capabilities,
+      skills: agent.skills,
+      lastSeen: agent.lastSeen,
+      connectedSessionCount: agent.connectedSessionCount,
+      isLocal: agent.isLocal,
+    })),
+    recentTasks: snapshot.tasks.slice(0, 20).map((task) => ({
+      id: task.id,
+      prompt: task.prompt,
+      state: task.state,
+      workspace_id: task.workspace_id,
+      assignee_agent_id: task.assignee_agent_id,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      approvalStatus: task.approval?.status ?? null,
+      handoffStatus: task.handoff?.status ?? null,
+      runtime: task.runtime ?? null,
+    })),
+    pendingApprovals: snapshot.approvals
+      .filter((approval) => approval.status === 'pending' || approval.status === 'escalated')
+      .map((approval) => ({
+        approvalId: approval.approvalId,
+        taskId:
+          typeof approval.details.sourceTaskId === 'string'
+            ? approval.details.sourceTaskId
+            : typeof approval.details.taskId === 'string'
+              ? approval.details.taskId
+              : null,
+        status: approval.status,
+        action: approval.action,
+        requester: approval.requestingAgentId,
+        target: approval.targetAgentId,
+        createdAt: approval.createdAt,
+      })),
+    activeHandoffs: snapshot.handoffs
+      .filter((handoff) => handoff.status === 'active' || handoff.status === 'accepted')
+      .map((handoff) => ({
+        handoffId: handoff.handoffId,
+        taskId: handoff.taskId,
+        fromAgentId: handoff.fromAgentId,
+        toAgentId: handoff.toAgentId,
+        intent: handoff.intent,
+        status: handoff.status,
+        createdAt: handoff.createdAt,
+      })),
+    bridgeSessions: snapshot.bridgeSessions.map((session) => ({
+      bridgeId: session.bridgeId,
+      agentId: session.agentId,
+      agentName: session.agentName,
+      agentPlatform: session.agentPlatform,
+      workspaceId: session.workspaceId,
+      projectId: session.projectId,
+      capabilities: session.capabilities,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+    })),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -467,6 +547,27 @@ workspaceRouter.get('/:wsId/control-plane', async (req: Request, res: Response) 
     }
 
     sendSuccess(res, snapshot);
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/context — Structured Recoder Space context package ───────
+
+workspaceRouter.get('/:wsId/context', async (req: Request, res: Response) => {
+  try {
+    const snapshot = await buildWorkspaceControlPlaneSnapshot(req.params.wsId);
+    if (!snapshot) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    sendSuccess(res, buildWorkspaceContextPackageFromSnapshot(snapshot));
   } catch (err: any) {
     sendError(res, 500, buildA2AError({
       code: A2AErrorCodeEnum.InternalError,
