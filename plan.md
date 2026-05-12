@@ -1,14 +1,14 @@
-# Recoder Platform Status and Agent Control-Plane Plan
+# Recoder Spaces Platform Status and Agent Control-Plane Plan
 
 Last updated: 2026-05-12
 
 ## Goal
 
-Recoder is the control plane for AI software agents.
+Recoder Spaces is the workspace where humans and AI agents build, coordinate, review, and deploy software together.
 
 - MCP gives agents tools.
 - A2A lets agents talk.
-- Recoder gives agents a workplace.
+- Recoder Spaces gives agents a workplace.
 
 The product thesis is: one workspace, many agents, controlled delivery. The core product is a shared task room where humans, coding agents, PM agents, review agents, deployment agents, browser agents, and later desktop agents work together through tasks, artifacts, approvals, logs, and audit trails.
 
@@ -17,6 +17,7 @@ Recoder should compete on orchestration, governance, and delivery reliability ra
 ## Strategy
 
 - Many agents, one control plane.
+- Recoder Spaces is the center of the product; the CLI, agent surfaces, PM, Agency, deploys, and later modules plug into Spaces instead of behaving like separate products.
 - Compete at orchestration and governance, not raw model quality.
 - Wedge: a task room for coding agents with human-controlled assignment, approval, and handoff.
 - Product model: artifact-first runs, not generic chat as the system of record.
@@ -31,9 +32,22 @@ Recoder should compete on orchestration, governance, and delivery reliability ra
 ## Platform Layers
 
 - Protocol layer: shared A2A contracts, validation, routing, state mapping, and policy semantics.
-- Workspace layer: shared task room, agent identity, membership, approvals, handoffs, artifacts, and audit history.
+- Workspace layer: `Recoder Spaces`, the shared task room for agent identity, membership, approvals, handoffs, artifacts, and audit history.
 - Runner layer: coding, browser, and later computer-use execution lanes attached to the workspace rather than owning it.
 - Outcome layer: previews, pull requests, exports, delivery packages, and client-safe handoff built from the same run history.
+
+## Product Stack
+
+- `Recoder Spaces` -> workspace and control room
+- `Recoder Code` -> first-party coding CLI and reference agent
+- `Recoder A2A Gateway` -> agent communication layer
+- `Recoder Runner` -> local, self-hosted, and later hosted runtime
+- `Recoder Deploy` -> preview and production deployment
+- `Recoder Agency` -> client delivery layer
+- `Recoder Edge` -> later routing and security layer
+- `Recoder Marketplace` -> later agents, workflows, and templates
+
+These are surfaces and layers around one workspace, not separate flagship products.
 
 ## Moat
 
@@ -45,20 +59,34 @@ Recoder should compete on orchestration, governance, and delivery reliability ra
 
 ## MVP / Killer Demo
 
-- One local runner and one external agent join the same workspace.
-- An operator assigns a task and the agent claims it under durable identity.
+- User creates a Recoder Space.
+- User starts `Recoder Code` locally and connects it to that Space.
+- The CLI appears as an online agent with capabilities and durable identity.
+- The user creates a task and the agent claims it.
 - Logs stream, artifacts appear, and runtime evidence attaches to the same run.
-- PM pauses the run for approval or handoff without losing context.
-- The outcome ships as a preview, artifact package, or pull request from the same control-plane record.
+- The task moves to `Done`, with approvals and later PRs or previews attaching to the same record.
 
 ## Positioning / Messaging
 
-- Headline: The control plane for AI software agents.
-- Subheadline: One workspace for many agents, with controlled delivery, approvals, artifacts, and audit history.
-- Landing-page bullet: Give agents a workplace, not just a model endpoint.
+- Headline: The workspace where AI agents ship software with your team.
+- Subheadline: Connect Recoder Code, Claude Code, Codex, local agents, and MCP tools into one shared workspace with tasks, artifacts, approvals, logs, and deployments.
+- Core promise: Bring your own agents. Bring your own keys. Keep control.
+- Landing-page bullet: Give agents a workspace, not just a model endpoint.
 - Landing-page bullet: Coordinate coding, review, PM, browser, and delivery agents in one task room.
 - Landing-page bullet: Keep humans in control with approvals, policy, and handoffs.
-- Landing-page bullet: Bring your own keys and agents; Recoder governs the work, not the inference vendor.
+- Landing-page bullet: Turn agent work into artifacts, PRs, previews, and client-safe delivery.
+
+## Scope Discipline
+
+- Do not treat full hosted compute, a Cloudflare-like edge stack, a Vercel-like deployment stack, a marketplace, and an agency OS as first-cycle launch goals.
+- The near-term product proof is narrower: external or first-party agents enter a Space, claim tasks, create artifacts, and ship work under approval.
+- Edge, Marketplace, and broader infrastructure layers should expand only after Spaces, PR artifacts, and preview deploys work end to end.
+
+## Near-Term Proof Order
+
+1. Local agent -> Recoder Space -> task -> logs -> artifact -> done.
+2. Agent -> GitHub PR artifact -> human approval.
+3. Agent -> preview deploy -> client approval.
 
 ## Sequencing Decision
 
@@ -66,7 +94,7 @@ Recoder should compete on orchestration, governance, and delivery reliability ra
 - `recoder-web` and `docker-backend` remain important runtime integrations, but they are not the current category-defining gate for the roadmap.
 - Their unresolved runtime issues remain documented below as deferred Phase 1 backlog.
 - Those runtime issues should not block Phase 2 or later control-plane work unless a hard dependency appears.
-- The active execution lane starts with shared A2A contracts, durable agent identity, PM approvals and handoffs, shared workspace ownership, and cross-surface run history that Agency can consume next.
+- The active execution lane starts with shared A2A contracts, durable agent identity, PM approvals and handoffs, shared workspace ownership, and cross-surface run history inside Recoder Spaces that Agency can consume next.
 
 ## Production Snapshot
 
@@ -222,11 +250,11 @@ Phase mapping:
 
 Detailed ticket tracking stays in `bd`. This file defines the coding sequence, ownership split, and proof requirements.
 
-## Phase 2: Protocol and Control-Plane Foundation
+## Phase 2: Recoder Spaces Kernel and Control-Plane Foundation
 
 Outcome:
 
-- External agents can connect to the same Recoder workspace with durable identity, stable reconnect behavior, shared history, PM-mediated approvals and handoffs, and one canonical control-plane contract for routing, artifacts, and auditability.
+- External agents can connect to the same Recoder Space with durable identity, stable reconnect behavior, shared history, PM-mediated approvals and handoffs, and one canonical control-plane contract for routing, artifacts, and auditability.
 
 Status:
 
