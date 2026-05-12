@@ -73,9 +73,89 @@ const a2a_event_bus_1 = require("./a2a-event-bus");
 const workspace_service_1 = require("./workspace.service");
 const collaboration_service_1 = require("./collaboration.service");
 const heartbeat_tracker_service_1 = require("./heartbeat-tracker.service");
+const task_lifecycle_service_1 = require("./task-lifecycle.service");
 const logger_1 = require("../logger");
 const memory_store_1 = require("./memory-store");
+const a2a_1 = require("@recoder/shared/a2a");
 const logger = (0, logger_1.createLogger)('agent-bridge');
+function isRecord(value) {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+function normalizeBridgeArtifacts(value) {
+    if (!Array.isArray(value))
+        return undefined;
+    const artifacts = value
+        .map((artifact) => {
+        if (!isRecord(artifact))
+            return null;
+        if (typeof artifact.key !== 'string' ||
+            typeof artifact.artifact_type !== 'string' ||
+            typeof artifact.mime_type !== 'string' ||
+            typeof artifact.content !== 'string') {
+            return null;
+        }
+        return {
+            key: artifact.key,
+            artifact_type: artifact.artifact_type,
+            mime_type: artifact.mime_type,
+            content: artifact.content,
+            ...(typeof artifact.path === 'string' ? { path: artifact.path } : {}),
+            ...(isRecord(artifact.metadata) ? { metadata: artifact.metadata } : {}),
+        };
+    })
+        .filter((artifact) => artifact !== null);
+    return artifacts.length > 0 ? artifacts : undefined;
+}
+function normalizeBridgeTaskResult(value) {
+    if (typeof value === 'string') {
+        return { text: value };
+    }
+    if (!isRecord(value))
+        return undefined;
+    const text = typeof value.text === 'string' ? value.text : undefined;
+    const data = isRecord(value.data) ? value.data : undefined;
+    const artifacts = normalizeBridgeArtifacts(value.artifacts);
+    if (!text && !data && !artifacts)
+        return undefined;
+    return {
+        ...(text ? { text } : {}),
+        ...(data ? { data } : {}),
+        ...(artifacts ? { artifacts } : {}),
+    };
+}
+function normalizeBridgeTaskError(value) {
+    if (typeof value === 'string') {
+        return {
+            code: 'BRIDGE_TASK_FAILED',
+            category: 'bridge',
+            message: value,
+            severity: 'medium',
+            retryable: true,
+        };
+    }
+    if (!isRecord(value)) {
+        return {
+            code: 'BRIDGE_TASK_FAILED',
+            category: 'bridge',
+            message: 'Task failed via bridge',
+            severity: 'medium',
+            retryable: true,
+        };
+    }
+    return {
+        code: typeof value.code === 'string' ? value.code : 'BRIDGE_TASK_FAILED',
+        category: typeof value.category === 'string' ? value.category : 'bridge',
+        message: typeof value.message === 'string' ? value.message : 'Task failed via bridge',
+        severity: value.severity === 'low' ||
+            value.severity === 'medium' ||
+            value.severity === 'high' ||
+            value.severity === 'critical'
+            ? value.severity
+            : 'medium',
+        retryable: typeof value.retryable === 'boolean' ? value.retryable : true,
+        ...(isRecord(value.details) ? { details: value.details } : {}),
+    };
+}
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -412,11 +492,41 @@ class AgentBridgeService {
             case 'task.progress': {
                 if (!sessionId || !agentId)
                     break;
+                if (agent)
+                    agent.status = 'working';
+                const taskId = msg.taskId;
+                const lifecycle = (0, task_lifecycle_service_1.getTaskLifecycleService)();
+                const existing = lifecycle.getTask(taskId);
+                if (existing.ok) {
+                    if (existing.data.state === a2a_1.TaskStateEnum.Submitted || existing.data.state === a2a_1.TaskStateEnum.InputRequired) {
+                        lifecycle.startTask(taskId, agentId);
+                    }
+                    const currentMetadata = isRecord(existing.data.metadata) ? existing.data.metadata : {};
+                    const priorEvents = Array.isArray(currentMetadata.bridgeProgressEvents)
+                        ? currentMetadata.bridgeProgressEvents.filter((entry) => isRecord(entry))
+                        : [];
+                    const progressEvent = {
+                        at: new Date().toISOString(),
+                        sessionId,
+                        agentId,
+                        progress: typeof msg.progress === 'number' ? msg.progress : null,
+                        output: typeof msg.output === 'string' ? msg.output : null,
+                    };
+                    const nextEvents = [...priorEvents, progressEvent].slice(-20);
+                    lifecycle.updateTaskMetadata(taskId, {
+                        metadataPatch: {
+                            bridgeProgress: progressEvent,
+                            bridgeProgressEvents: nextEvents,
+                        },
+                        triggeredBy: agentId,
+                        reason: 'Bridge task progress received',
+                    });
+                }
                 (0, a2a_event_bus_1.getA2AEventBus)().publish({
                     id: `evt_${(0, uuid_1.v4)().replace(/-/g, '').slice(0, 16)}`,
                     type: a2a_event_bus_1.A2AEventType.TaskProgress,
                     timestamp: new Date().toISOString(),
-                    taskId: msg.taskId,
+                    taskId,
                     data: {
                         agentId,
                         sessionId,
@@ -431,11 +541,20 @@ class AgentBridgeService {
                     break;
                 if (agent)
                     agent.status = 'idle';
+                const taskId = msg.taskId;
+                const lifecycle = (0, task_lifecycle_service_1.getTaskLifecycleService)();
+                const existing = lifecycle.getTask(taskId);
+                if (existing.ok) {
+                    if (existing.data.state === a2a_1.TaskStateEnum.Submitted || existing.data.state === a2a_1.TaskStateEnum.InputRequired) {
+                        lifecycle.startTask(taskId, agentId);
+                    }
+                    lifecycle.completeTask(taskId, normalizeBridgeTaskResult(msg.result), agentId);
+                }
                 (0, a2a_event_bus_1.getA2AEventBus)().publish({
                     id: `evt_${(0, uuid_1.v4)().replace(/-/g, '').slice(0, 16)}`,
                     type: a2a_event_bus_1.A2AEventType.TaskCompleted,
                     timestamp: new Date().toISOString(),
-                    taskId: msg.taskId,
+                    taskId,
                     data: {
                         agentId,
                         sessionId,
@@ -449,11 +568,20 @@ class AgentBridgeService {
                     break;
                 if (agent)
                     agent.status = 'idle';
+                const taskId = msg.taskId;
+                const lifecycle = (0, task_lifecycle_service_1.getTaskLifecycleService)();
+                const existing = lifecycle.getTask(taskId);
+                if (existing.ok) {
+                    if (existing.data.state === a2a_1.TaskStateEnum.Submitted || existing.data.state === a2a_1.TaskStateEnum.InputRequired) {
+                        lifecycle.startTask(taskId, agentId);
+                    }
+                    lifecycle.failTask(taskId, normalizeBridgeTaskError(msg.error), agentId);
+                }
                 (0, a2a_event_bus_1.getA2AEventBus)().publish({
                     id: `evt_${(0, uuid_1.v4)().replace(/-/g, '').slice(0, 16)}`,
                     type: a2a_event_bus_1.A2AEventType.TaskFailed,
                     timestamp: new Date().toISOString(),
-                    taskId: msg.taskId,
+                    taskId,
                     data: {
                         agentId,
                         sessionId,
