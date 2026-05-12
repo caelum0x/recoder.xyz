@@ -18,7 +18,7 @@ import {
 	parseDeliveryOpsFilters,
 	toDeliveryOpsSearchParams,
 } from "@/lib/agency/delivery-ops";
-import { createRecoderTask } from "@/lib/agency/recoder-control-plane";
+import { createAgencyWorkspaceRun } from "@/lib/agency/recoder-control-plane";
 import { updateTeamCapacitySettings } from "@/lib/agency/team-capacity";
 import { fetchCurrentTeam } from "@/services/teams";
 
@@ -126,7 +126,7 @@ export async function deleteAlertSubscription(subscriptionDbId: number) {
 	revalidatePath("/delivery-ops");
 }
 
-type OpsRunMode = "planning" | "governance";
+type OpsRunMode = "planning" | "governance" | "browser" | "computer-use";
 
 async function createDeliveryOpsRuns(mode: OpsRunMode, formData: FormData) {
 	const team = await fetchCurrentTeam();
@@ -196,7 +196,11 @@ async function createDeliveryOpsRuns(mode: OpsRunMode, formData: FormData) {
 		const prompt = [
 			mode === "planning"
 				? `Create an operations planning run for "${project.projectName}".`
-				: `Create an operations governance run for "${project.projectName}".`,
+				: mode === "governance"
+					? `Create an operations governance run for "${project.projectName}".`
+					: mode === "browser"
+						? `Create an operations browser run for "${project.projectName}".`
+						: `Create an operations computer-use run for "${project.projectName}".`,
 			`Project status: ${project.projectStatus}.`,
 			project.projectBrief
 				? `Project brief:\n${project.projectBrief.slice(0, 2000)}`
@@ -209,26 +213,41 @@ async function createDeliveryOpsRuns(mode: OpsRunMode, formData: FormData) {
 				: "Deliverables: none linked.",
 			mode === "planning"
 				? "Produce an execution plan with priority order, risks, dependencies, approvals, and next actions."
-				: "Audit policy, approvals, handoffs, cost risk, and operator follow-up. Recommend concrete governance actions.",
+				: mode === "governance"
+					? "Audit policy, approvals, handoffs, cost risk, and operator follow-up. Recommend concrete governance actions."
+					: mode === "browser"
+						? "Use browser-facing capabilities to validate web flows, inspect interfaces, collect relevant findings, and return actionable next steps."
+						: "Use desktop/computer-use capabilities to validate GUI workflows or operator tooling paths and return actionable findings.",
 		]
 			.filter(Boolean)
 			.join("\n\n");
 
-		const created = await createRecoderTask({
+		const created = await createAgencyWorkspaceRun({
 			workspaceId: project.workspaceId,
-			threadId: `delivery-ops-${mode}-${projectId}-${Date.now()}`,
-			requester: {
-				agentId: "recoder-agency",
-				platform: "recoder_agency",
-				name: "Recoder Agency",
-			},
+			threadPrefix: `delivery-ops-${mode}`,
+			entityId: projectId,
 			prompt,
-			autoRoute: true,
 			routingHints: {
-				runtimeCategory: "documentation",
-				requiredCapabilities: ["code-review"],
-				preferredCapabilities: ["documentation"],
-				preferredPlatform: "claude_code",
+				runtimeCategory:
+					mode === "browser"
+						? "visual"
+						: mode === "computer-use"
+							? "general"
+							: "documentation",
+				requiredCapabilities:
+					mode === "browser" ? ["web-interface"] : ["code-review"],
+				preferredCapabilities:
+					mode === "browser"
+						? ["design", "ui"]
+						: mode === "computer-use"
+							? ["desktop", "ide"]
+							: ["documentation"],
+				preferredPlatform:
+					mode === "browser"
+						? "recoder_web"
+						: mode === "computer-use"
+							? "recoder_desktop"
+							: "claude_code",
 			},
 			metadata: {
 				projectId,
@@ -259,4 +278,12 @@ export async function createDeliveryOpsPlanningRuns(formData: FormData) {
 
 export async function createDeliveryOpsGovernanceRuns(formData: FormData) {
 	await createDeliveryOpsRuns("governance", formData);
+}
+
+export async function createDeliveryOpsBrowserRuns(formData: FormData) {
+	await createDeliveryOpsRuns("browser", formData);
+}
+
+export async function createDeliveryOpsComputerUseRuns(formData: FormData) {
+	await createDeliveryOpsRuns("computer-use", formData);
 }

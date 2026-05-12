@@ -18,7 +18,7 @@ import {
 } from "@/db";
 import { createProjectFromPlaybook as createProjectFromPlaybookHelper } from "@/lib/agency/playbook-actions";
 import { applyProjectTransitionWithAudit } from "@/lib/agency/project-transition";
-import { createRecoderTask } from "@/lib/agency/recoder-control-plane";
+import { createAgencyWorkspaceRun } from "@/lib/agency/recoder-control-plane";
 import { resolveModelRoutingPolicyForWorkspace } from "@/lib/agency/model-routing";
 import {
 	deliveryProjectStatusLabels,
@@ -493,16 +493,11 @@ export async function requestProjectHandoff(
 		"Summarize current status, open approvals or handoffs, next actions, and the key deliverables to continue from.",
 	].filter(Boolean).join("\n\n");
 
-	const created = await createRecoderTask({
+	const created = await createAgencyWorkspaceRun({
 		workspaceId: workspace.id,
-		threadId: `agency-handoff-${project.id}-${Date.now()}`,
-		requester: {
-			agentId: "recoder-agency",
-			platform: "recoder_agency",
-			name: "Recoder Agency",
-		},
+		threadPrefix: "agency-handoff",
+		entityId: project.id,
 		prompt,
-		autoRoute: true,
 		routingHints: {
 			runtimeCategory: "documentation",
 			requiredCapabilities: ["code-review"],
@@ -563,16 +558,11 @@ export async function requestProjectPlanningRun(
 		"Produce a concrete plan with risks, dependencies, sequencing, approval points, and recommended next actions for delivery.",
 	].filter(Boolean).join("\n\n");
 
-	const created = await createRecoderTask({
+	const created = await createAgencyWorkspaceRun({
 		workspaceId: workspace.id,
-		threadId: `agency-planning-${project.id}-${Date.now()}`,
-		requester: {
-			agentId: "recoder-agency",
-			platform: "recoder_agency",
-			name: "Recoder Agency",
-		},
+		threadPrefix: "agency-planning",
+		entityId: project.id,
 		prompt,
-		autoRoute: true,
 		routingHints: {
 			runtimeCategory: "documentation",
 			requiredCapabilities: ["code-review"],
@@ -639,16 +629,11 @@ export async function requestProjectGovernanceRun(
 		"Audit approvals, handoffs, routing policy, cost guardrails, and open governance risks. Recommend concrete operator actions and retention/audit follow-up.",
 	].filter(Boolean).join("\n\n");
 
-	const created = await createRecoderTask({
+	const created = await createAgencyWorkspaceRun({
 		workspaceId: workspace.id,
-		threadId: `agency-governance-${project.id}-${Date.now()}`,
-		requester: {
-			agentId: "recoder-agency",
-			platform: "recoder_agency",
-			name: "Recoder Agency",
-		},
+		threadPrefix: "agency-governance",
+		entityId: project.id,
 		prompt,
-		autoRoute: true,
 		routingHints: {
 			runtimeCategory: "documentation",
 			requiredCapabilities: ["code-review"],
@@ -730,16 +715,11 @@ export async function requestProjectBrowserRun(
 		"Return concrete findings, links, and recommended next actions.",
 	].filter(Boolean).join("\n\n");
 
-	const created = await createRecoderTask({
+	const created = await createAgencyWorkspaceRun({
 		workspaceId: workspace.id,
-		threadId: `agency-browser-${project.id}-${Date.now()}`,
-		requester: {
-			agentId: "recoder-agency",
-			platform: "recoder_agency",
-			name: "Recoder Agency",
-		},
+		threadPrefix: "agency-browser",
+		entityId: project.id,
 		prompt,
-		autoRoute: true,
 		routingHints: {
 			runtimeCategory: "visual",
 			requiredCapabilities: ["web-interface"],
@@ -819,16 +799,11 @@ export async function requestProjectComputerUseRun(
 		"Return concrete observations, artifacts, and next actions.",
 	].filter(Boolean).join("\n\n");
 
-	const created = await createRecoderTask({
+	const created = await createAgencyWorkspaceRun({
 		workspaceId: workspace.id,
-		threadId: `agency-computer-use-${project.id}-${Date.now()}`,
-		requester: {
-			agentId: "recoder-agency",
-			platform: "recoder_agency",
-			name: "Recoder Agency",
-		},
+		threadPrefix: "agency-computer-use",
+		entityId: project.id,
 		prompt,
-		autoRoute: true,
 		routingHints: {
 			runtimeCategory: "general",
 			requiredCapabilities: [],
