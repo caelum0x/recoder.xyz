@@ -1,21 +1,72 @@
-# Recoder Platform Status and A2A Control-Plane Plan
+# Recoder Platform Status and Agent Control-Plane Plan
 
-Last updated: 2026-05-08
+Last updated: 2026-05-12
 
 ## Goal
 
-Recoder's near-term platform goal is a durable agent control plane spanning `recoder-pm`, `recoder-agents`, `recoder-agency`, `packages/a2a-sdk`, and `tools/a2a-interop`.
+Recoder is the control plane for AI software agents.
 
-The immediate wedge is no longer browser-coding proof through `recoder-web` and `docker-backend`. That lane is operationally expensive and still not reliable enough on Daytona to be the platform's current launch gate. The active plan is now shared A2A contracts, durable agent identity, PM approvals and handoffs, shared workspace ownership, and cross-surface run history that Agency can consume next.
+- MCP gives agents tools.
+- A2A lets agents talk.
+- Recoder gives agents a workplace.
 
-One architectural rule is now explicit: the agent control plane is not the sandbox. Agent identity, workflow state, approval state, and orchestration history live in the shared control plane. Daytona sandboxes remain execution substrates that provide process, file, preview, and later computer-use capabilities.
+The product thesis is: one workspace, many agents, controlled delivery. The core product is a shared task room where humans, coding agents, PM agents, review agents, deployment agents, browser agents, and later desktop agents work together through tasks, artifacts, approvals, logs, and audit trails.
+
+Recoder should compete on orchestration, governance, and delivery reliability rather than model quality. The control plane owns agent identity, workflow state, approval state, and orchestration history. Daytona sandboxes and other runners stay execution substrates.
+
+## Strategy
+
+- Many agents, one control plane.
+- Compete at orchestration and governance, not raw model quality.
+- Wedge: a task room for coding agents with human-controlled assignment, approval, and handoff.
+- Product model: artifact-first runs, not generic chat as the system of record.
+- BYOK/BYOA is an advantage because Recoder governs work and outcomes without forcing one model vendor or runtime.
+
+## Target Users
+
+- AI agencies coordinating operators, specialists, and client approval loops.
+- Freelancers and small dev teams running multiple coding and review agents against the same workspace.
+- Solo technical founders using several agents but still needing one place to control delivery, approvals, and history.
+
+## Platform Layers
+
+- Protocol layer: shared A2A contracts, validation, routing, state mapping, and policy semantics.
+- Workspace layer: shared task room, agent identity, membership, approvals, handoffs, artifacts, and audit history.
+- Runner layer: coding, browser, and later computer-use execution lanes attached to the workspace rather than owning it.
+- Outcome layer: previews, pull requests, exports, delivery packages, and client-safe handoff built from the same run history.
+
+## Moat
+
+- Agent identity graph across people, agents, workspaces, sessions, and assignees.
+- Artifact history that ties prompts, logs, approvals, previews, and outputs to one durable run record.
+- Permission and approval system that makes multi-agent work governable instead of opaque.
+- Client-safe delivery layer that turns internal runs into reviewable packages, revisions, and handoffs.
+- Workflow templates for recurring coding, review, governance, browser, and delivery flows.
+
+## MVP / Killer Demo
+
+- One local runner and one external agent join the same workspace.
+- An operator assigns a task and the agent claims it under durable identity.
+- Logs stream, artifacts appear, and runtime evidence attaches to the same run.
+- PM pauses the run for approval or handoff without losing context.
+- The outcome ships as a preview, artifact package, or pull request from the same control-plane record.
+
+## Positioning / Messaging
+
+- Headline: The control plane for AI software agents.
+- Subheadline: One workspace for many agents, with controlled delivery, approvals, artifacts, and audit history.
+- Landing-page bullet: Give agents a workplace, not just a model endpoint.
+- Landing-page bullet: Coordinate coding, review, PM, browser, and delivery agents in one task room.
+- Landing-page bullet: Keep humans in control with approvals, policy, and handoffs.
+- Landing-page bullet: Bring your own keys and agents; Recoder governs the work, not the inference vendor.
 
 ## Sequencing Decision
 
-- `recoder-web` and `docker-backend` are not the active execution lane for this plan.
-- Their unresolved runtime issues remain documented below in full as deferred Phase 1 backlog.
+- The active launch wedge is not broad chat or generic IDE usage. It is the shared task room for coding agents.
+- `recoder-web` and `docker-backend` remain important runtime integrations, but they are not the current category-defining gate for the roadmap.
+- Their unresolved runtime issues remain documented below as deferred Phase 1 backlog.
 - Those runtime issues should not block Phase 2 or later control-plane work unless a hard dependency appears.
-- The active execution lane starts with shared A2A control-plane primitives and PM-mediated approvals, not fresh browser-preview proof.
+- The active execution lane starts with shared A2A contracts, durable agent identity, PM approvals and handoffs, shared workspace ownership, and cross-surface run history that Agency can consume next.
 
 ## Production Snapshot
 
@@ -117,13 +168,15 @@ Near-term platform work is only complete when the evidence shows:
 - `daytona-projects/suna-upstream`, `daytona-projects/workflow-builder-template-upstream`, `daytona-projects/opencode-channels-upstream`, and `daytona-projects/kortix-ocx-registry-upstream` are adjacent product or channel references. They can inform future packaging, workflow composition, or channel delivery, but they should not distort the current control-plane sequence.
 - `daytona-projects/mem0-upstream` is an adjacent memory-system reference. It may inform future retrieval or personalization layers, but it should not replace the control plane's canonical ownership of workspace identity, run history, approvals, or artifacts.
 
-## Desired Architecture
+## Control-Plane Architecture
 
-- `packages/a2a-sdk` defines the shared contract for envelope structure, validation, error mapping, state mapping, and audit semantics.
-- `tools/a2a-interop` defines the shared bridge and admin API surface for job polling, result submission, heartbeats, policy, history, overrides, recompute, pairing, and session visibility.
-- `recoder-pm` owns human approval, reject, decision, and handoff transitions inside the run lifecycle.
-- `recoder-agents` owns the operator-facing control surface for workspace membership, agent/session status, approvals, handoffs, and run visibility.
-- `recoder-agency` consumes the same run, artifact, approval, and handoff primitives in Phase 3 for delivery packaging and client-facing workflows.
+The stack should read from inside out: protocol, workspace, runner, outcome.
+
+- `packages/a2a-sdk` owns the protocol layer for envelope structure, validation, error mapping, state mapping, and audit semantics.
+- `tools/a2a-interop` owns the shared bridge and admin API surface for job polling, result submission, heartbeats, policy, history, overrides, recompute, pairing, and session visibility.
+- `recoder-pm` owns human approval, reject, decision, and handoff transitions inside the shared workspace lifecycle.
+- `recoder-agents` owns the operator-facing control surface for workspace membership, agent and session status, approvals, handoffs, and run visibility.
+- `recoder-agency` is the outcome-layer consumer in Phase 3, packaging the same run, artifact, approval, and handoff primitives for client-facing delivery workflows.
 - Agent execution and workflow orchestration stay outside the sandbox. The sandbox exposes capabilities and evidence, but it does not own platform identity, approval state, or run history.
 - Sandbox git status, filesystem mutation checks, process-session logs, and preview linkage should feed the shared history model as evidence attachments rather than creating separate hidden runtime truth stores.
 - `recoder-web` and `docker-backend` remain runtime integrations, not the organizing center of the near-term platform plan.
@@ -169,15 +222,15 @@ Phase mapping:
 
 Detailed ticket tracking stays in `bd`. This file defines the coding sequence, ownership split, and proof requirements.
 
-## Phase 2: Shared A2A Control Plane
+## Phase 2: Protocol and Control-Plane Foundation
 
 Outcome:
 
-- External agents can connect to the same Recoder workspace with durable identity, stable reconnect behavior, shared history, PM-mediated approvals and handoffs, and one canonical contract for routing, artifacts, and auditability.
+- External agents can connect to the same Recoder workspace with durable identity, stable reconnect behavior, shared history, PM-mediated approvals and handoffs, and one canonical control-plane contract for routing, artifacts, and auditability.
 
 Status:
 
-- Active phase.
+- Active phase. This is the foundation layer for the rest of the product.
 
 ### Current Implementation Progress
 
@@ -406,11 +459,15 @@ Coding task format:
 | Reduce host-level false negatives | deploy and verifier environment on the Daytona host | Prevent disk pressure from masquerading as runtime regressions. | Verifier failures correlate to app/runtime bugs rather than host exhaustion during repeated runs. | Depends on host cleanup and capacity discipline outside the chat/runtime code path. |
 | Keep upstream runtime references cloneable | runtime research and implementation intake | Ensure any external runtime reference used during Phase 1 can be cloned and exercised directly in a Daytona workspace before it influences product code. | Every adopted external runtime reference is on the direct-clone shortlist or is filed as an exception in `bd`. | Depends on the direct-clone criteria in `daytona-projects/can-be-fork-repos.md`. |
 
-## Phase 3: Agency Delivery Consumer
+## Phase 3: Delivery and Client Consumption Layer
 
 Outcome:
 
-- `recoder-agency` consumes the shared control-plane primitives for delivery packaging, client approval or revision loops, project and workspace handoff, and artifact-backed delivery state without becoming a separate execution model.
+- `recoder-agency` consumes the shared control-plane primitives as the delivery and client-consumption layer for packaging, client approval or revision loops, project and workspace handoff, and artifact-backed delivery state without becoming a separate execution model.
+
+Status:
+
+- Largely implemented. The remaining work is hardening, integration depth, and delivery polish rather than first-time surface creation.
 
 Coding task format:
 
@@ -427,11 +484,24 @@ Coding task format:
 | Reuse shared workspace and project handoff primitives | agency project/workspace handoff surfaces | Make Agency consume control-plane ownership and workspace membership instead of inventing separate assignment semantics. | Project and workspace handoff preserve assignee identity, artifact links, and run history across Agency workflows. | Depends on stable workspace identity and agent membership primitives. |
 | Keep Agency downstream from the shared execution model | agency orchestration and delivery workflow design | Prevent Agency from becoming a parallel execution system with incompatible state or audit semantics. | Agency delivery workflows are backed by the same A2A history, artifacts, approvals, and handoffs used by PM and Agents. | Depends on Phase 2 remaining the canonical platform contract. |
 
-## Phase 4: Expansion Lanes
+### Current Implementation Progress
+
+- Agency now consumes shared control-plane summaries from workspace snapshots when available and falls back to task contexts when not.
+- Admin and client project surfaces now show richer shared run state, including approvals, handoffs, evidence, artifacts, logs, previews, and session visibility.
+- Admin and client delivery-package exports now assemble project packages from shared run artifacts instead of a separate artifact store.
+- Client review decisions now write back into shared task metadata so approval/rejection lives on the shared run model, not only on Agency-side rows.
+- Rejected deliverables now create real follow-up shared runs across client portal, conversational review, and channel-gateway entrypoints.
+- Admin project handoff runs now create shared A2A tasks in the linked workspace instead of local-only assignment notes.
+
+## Phase 4: Planning, Governance, and Runtime-Class Expansion
 
 Outcome:
 
-- The same control-plane primitives support broader planning, governance, and optional runtime classes without breaking the shared contract.
+- The same control-plane primitives support planning, governance, and optional runtime classes such as browser and computer-use lanes without breaking the shared contract.
+
+Status:
+
+- Active. Planning, governance, browser, and computer-use entrypoints already exist; the remaining work is mostly breadth, integration depth, and hardening.
 
 Coding task format:
 
@@ -450,13 +520,25 @@ Coding task format:
 | Keep human observation separate from automation semantics | VNC, operator tooling, and desktop-lane surfaces | Treat VNC as an observation and intervention surface, not as the source of truth for run state. | A desktop or browser run can be watched or inspected through VNC or similar tooling without making the observation surface the canonical run-history or approval system. | Depends on the control plane remaining the source of truth for state and audit history. |
 | Promote optional runtime classes after control-plane maturity | coding, browser, desktop, and computer-use integrations | Attach additional runtime classes to the same control plane once identity, history, policy, and approval semantics are stable. | A later browser or computer-use run can execute end to end without bypassing the shared control plane. | Depends on Phase 2 stability and deferred runtime backlog results when those integrations matter. |
 
-## Immediate Next Step
+### Current Implementation Progress
 
-1. Finish stabilizing agent registry and session lifecycle by reconciling paired bridge sessions with the broader agent registry and reconnect model.
-2. Attach PM approvals and handoff state to the same shared run and session record instead of keeping them parallel to bridge-session visibility.
-3. Normalize runtime evidence and unify A2A routing, history, artifact, validation, and error-taxonomy primitives around one shared run-history model.
-4. Expose the improved shared workspace, bridge-session, run, approval, and evidence state in Agents.
-5. Bring Agency onto those primitives in the next phase.
+- Planning runs now exist as explicit shared A2A tasks from Agency admin project pages.
+- Governance runs now exist as explicit shared A2A tasks from Agency admin project pages and can also be triggered from cost-guardrail policy changes.
+- Project handoff runs now exist as explicit shared A2A tasks from Agency admin project pages.
+- Browser-task runs now exist as explicit shared A2A tasks with browser-oriented routing hints and upstream-informed runtime parameters from `agent-browser-upstream`.
+- Desktop/computer-use runs now exist as explicit shared A2A tasks with desktop-oriented routing hints and upstream-informed runtime parameters from `agent-computer-use-upstream`.
+- Delivery Ops can now launch project-set planning, governance, browser, and computer-use runs for the currently filtered risk set, not just single-project runs.
+- Agency transition history now surfaces control-plane governance metadata directly, including approval/handoff counts, evidence counts, cost guardrail state, and follow-up task IDs.
+- Project pages now expose project-scoped routing policy management directly, turning policy visibility into a real governance control surface.
+- Shared run launchers are now centralized through one Agency helper so planning, governance, handoff, browser, and desktop runs use a consistent task-creation path.
+
+## Strategic Next Steps
+
+1. Deepen the browser-task lane so shared browser runs produce richer verified artifacts, not just routed tasks.
+2. Deepen the desktop/computer-use lane so shared desktop runs capture structured evidence and explicit execution-state semantics, not only launch metadata.
+3. Extend project and program governance controls beyond routing policy and cost guardrails into stronger operator policy workflows and retention/compliance exports.
+4. Keep removing duplicated run-launch and follow-up logic across Agency, PM, Agents, and gateway paths until all runtime classes use one shared control-plane creation path.
+5. Only define a true "Phase 5" after the optional runtime classes are proven end to end on the same control-plane model.
 
 ## Notes
 
@@ -467,3 +549,7 @@ Coding task format:
 - Fresh browser-preview proof is not the current prerequisite for control-plane execution unless a concrete dependency appears later.
 - Runtime-specific routing is secondary to capability, workspace policy, assignee identity, and protocol intent.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not treated as a product bug.
+- The strategic category should stay narrow: Recoder is the control plane for AI software agents, not a generic AI IDE or AI OS.
+- The strongest wedge remains: one workspace, many agents, controlled delivery.
+- BYOK/BYOA continues to be a strategic advantage because Recoder governs agents instead of reselling inference.
+- A future Phase 5 should only be declared once the current Phase 4 runtime classes are proven end to end and the next product boundary is explicit.
