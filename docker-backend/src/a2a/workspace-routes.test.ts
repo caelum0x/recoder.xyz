@@ -35,6 +35,12 @@ describe('A2A workspace routes', () => {
   });
 
   afterEach(async () => {
+    resetApprovalGateService();
+    resetDelegationChainService();
+    resetAgentRegistryService();
+    resetWorkspaceService();
+    resetCollaborationSvc();
+    resetTaskLifecycleService();
     await new Promise<void>((resolve, reject) => {
       server.close((error: Error | null) => {
         if (error) reject(error);
@@ -121,6 +127,87 @@ describe('A2A workspace routes', () => {
       state: 'submitted',
       assignee_agent_id: 'agent-b',
       workspace_id: workspace.workspaceId,
+    });
+  });
+
+  it('builds a unified workspace control-plane snapshot with evidence totals', async () => {
+    const workspace = createWorkspace(['agent-a', 'agent-b'], 'proj-control-plane');
+    getAgentRegistryService().selfRegister({
+      agentId: 'agent-b',
+      name: 'Assignee Agent',
+      platform: 'codex',
+      tags: ['code'],
+      skills: [{ id: 'execute', name: 'execute', description: 'execute', tags: ['execute'] }],
+    });
+
+    getApprovalGateService().createRequest({
+      workspaceId: workspace.workspaceId,
+      requestingAgentId: 'agent-a',
+      targetAgentId: 'agent-b',
+      action: 'delegate',
+      details: { prompt: 'review current task' },
+    });
+
+    getDelegationChainService().delegate({
+      fromAgentId: 'agent-a',
+      toAgentId: 'agent-b',
+      prompt: 'Review the patch set',
+      metadata: {
+        workspaceId: workspace.workspaceId,
+        projectId: workspace.projectId,
+        channelId: workspace.defaultChannelId,
+        sourceTaskId: 'task-snapshot',
+        intent: 'review',
+      },
+    });
+
+    const created = getTaskLifecycleService().createTask({
+      workspace_id: workspace.workspaceId,
+      thread_id: 'thread-control-plane',
+      requester: { agent_id: 'agent-a', platform: 'codex' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Capture evidence and finish the task' },
+      metadata: { previewUrl: 'https://preview.recoder.xyz/control-plane' },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    getTaskLifecycleService().startTask(created.data.id, 'codex-1');
+    const completed = getTaskLifecycleService().completeTask(
+      created.data.id,
+      {
+        text: 'Done',
+        data: {
+          filesChanged: ['src/app.tsx'],
+          stdout: 'server started',
+          stderr: 'warning: cache warmup',
+          gitStatus: 'M src/app.tsx',
+          gitBranch: 'feature/control-plane',
+        },
+      },
+      'codex-1',
+    );
+    expect(completed.ok).toBe(true);
+
+    const response = await fetch(`${baseUrl}/api/a2a/workspaces/${workspace.workspaceId}/control-plane`);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.summary).toMatchObject({
+      totalAgents: 2,
+      totalTasks: 1,
+      pendingApprovals: 1,
+      activeHandoffs: 1,
+      evidenceItems: 6,
+      logEvidence: 2,
+      runtimeEvidence: 1,
+      previews: 1,
+    });
+    expect(body.data.tasks[0].runtime).toMatchObject({
+      evidenceCount: 6,
+      logCount: 2,
+      runtimeCount: 1,
     });
   });
 
