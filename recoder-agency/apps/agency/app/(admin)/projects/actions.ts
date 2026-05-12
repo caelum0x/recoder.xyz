@@ -684,6 +684,15 @@ export async function requestProjectBrowserRun(
 		getCurrentUser(),
 	]);
 	const goal = String(formData.get("goal") ?? "").trim();
+	const targetUrl = String(formData.get("targetUrl") ?? "").trim();
+	const sessionName = String(formData.get("sessionName") ?? "").trim();
+	const engine = String(formData.get("engine") ?? "chrome").trim() || "chrome";
+	const headed = formData.get("headed") === "1";
+	const annotate = formData.get("annotate") === "1";
+	const allowedDomains = String(formData.get("allowedDomains") ?? "")
+		.split(",")
+		.map((value) => value.trim())
+		.filter((value) => value.length > 0);
 
 	const project = await db.query.projects.findFirst({
 		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
@@ -706,8 +715,19 @@ export async function requestProjectBrowserRun(
 		`Create a browser-task run for "${project.name}".`,
 		`Project status: ${project.status}.`,
 		project.brief ? `Project brief:\n${project.brief.slice(0, 2500)}` : null,
+		targetUrl ? `Target URL: ${targetUrl}` : null,
+		sessionName ? `Session name: ${sessionName}` : null,
+		`Engine: ${engine}. ${headed ? "Run headed." : "Run headless if supported."}`,
+		annotate
+			? "Capture annotated screenshots or snapshots when useful."
+			: null,
+		allowedDomains.length > 0
+			? `Allowed domains: ${allowedDomains.join(", ")}.`
+			: null,
 		goal ? `Browser goal:\n${goal}` : null,
-		"Use browser-facing capabilities to inspect, navigate, validate, or collect information relevant to this project. Return concrete findings, links, and recommended next actions.",
+		"Use browser-facing capabilities to inspect, navigate, validate, or collect information relevant to this project.",
+		"Follow the browser workflow from the local agent-browser reference: open, snapshot, interact by refs/selectors, then verify with screenshot/snapshot.",
+		"Return concrete findings, links, and recommended next actions.",
 	].filter(Boolean).join("\n\n");
 
 	const created = await createRecoderTask({
@@ -731,9 +751,16 @@ export async function requestProjectBrowserRun(
 			projectDbId: project.dbId,
 			browserRun: {
 				goal: goal || null,
+				targetUrl: targetUrl || null,
+				sessionName: sessionName || null,
+				engine,
+				headed,
+				annotate,
+				allowedDomains,
 				requestedByUserDbId: user.dbId,
 				requestedAt: new Date().toISOString(),
 				source: "agency.admin.project-browser",
+				referenceRepo: "agent-browser-upstream",
 			},
 		},
 	});
@@ -754,6 +781,11 @@ export async function requestProjectComputerUseRun(
 		getCurrentUser(),
 	]);
 	const goal = String(formData.get("goal") ?? "").trim();
+	const appName = String(formData.get("appName") ?? "").trim();
+	const targetMode = String(formData.get("targetMode") ?? "auto").trim() || "auto";
+	const useCdp = formData.get("useCdp") === "1";
+	const captureScreenshot = formData.get("captureScreenshot") === "1";
+	const includeSnapshot = formData.get("includeSnapshot") === "1";
 
 	const project = await db.query.projects.findFirst({
 		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
@@ -776,8 +808,15 @@ export async function requestProjectComputerUseRun(
 		`Create a desktop/computer-use run for "${project.name}".`,
 		`Project status: ${project.status}.`,
 		project.brief ? `Project brief:\n${project.brief.slice(0, 2500)}` : null,
+		appName ? `Target app: ${appName}` : null,
+		`Target mode: ${targetMode}. ${useCdp ? "Prefer CDP/Electron path when available." : "Use native accessibility path unless CDP is automatically required."}`,
+		captureScreenshot ? "Capture screenshots as evidence." : null,
+		includeSnapshot ? "Capture accessibility or DOM snapshots before acting and after verification." : null,
 		goal ? `Desktop goal:\n${goal}` : null,
-		"Use desktop/computer-use capabilities to inspect, interact with, or validate GUI workflows relevant to this project. Return concrete observations, artifacts, and next actions.",
+		"Use desktop/computer-use capabilities to inspect, interact with, or validate GUI workflows relevant to this project.",
+		"Follow the computer-use workflow from the local agent-computer-use reference: snapshot, identify refs, act, then re-snapshot or verify.",
+		"Use CDP-first behavior for Electron apps when useful, otherwise native accessibility automation.",
+		"Return concrete observations, artifacts, and next actions.",
 	].filter(Boolean).join("\n\n");
 
 	const created = await createRecoderTask({
@@ -801,6 +840,11 @@ export async function requestProjectComputerUseRun(
 			projectDbId: project.dbId,
 			computerUseRun: {
 				goal: goal || null,
+				appName: appName || null,
+				targetMode,
+				useCdp,
+				captureScreenshot,
+				includeSnapshot,
 				requestedByUserDbId: user.dbId,
 				requestedAt: new Date().toISOString(),
 				source: "agency.admin.project-computer-use",
