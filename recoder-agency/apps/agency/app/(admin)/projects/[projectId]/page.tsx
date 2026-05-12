@@ -563,6 +563,42 @@ export default async function ProjectDetailPage({
 								qaTemplate?: { deliverableType?: string } | null;
 							} | null
 						)?.qaTemplate?.deliverableType ?? null,
+					controlPlaneSummary:
+						(
+							item.metadata as {
+								controlPlaneSummary?: {
+									totalTasks?: number;
+									pendingApprovals?: number;
+									activeHandoffs?: number;
+									onlineAgents?: number;
+									evidenceCount?: number;
+									previewCount?: number;
+								} | null;
+							} | null
+						)?.controlPlaneSummary ?? null,
+					costGuardrail:
+						(
+							item.metadata as {
+								costGuardrail?: {
+									percentUsed?: number | null;
+									warningBreached?: boolean;
+									hardStopBreached?: boolean;
+								} | null;
+							} | null
+						)?.costGuardrail ?? null,
+					followUpTaskId:
+						(
+							item.metadata as {
+								followUpTaskId?: string | null;
+								clientReview?: { followUpTaskId?: string | null } | null;
+							} | null
+						)?.followUpTaskId ??
+						(
+							item.metadata as {
+								clientReview?: { followUpTaskId?: string | null } | null;
+							} | null
+						)?.clientReview?.followUpTaskId ??
+						null,
 				}))}
 				projectId={project.id}
 				filters={{

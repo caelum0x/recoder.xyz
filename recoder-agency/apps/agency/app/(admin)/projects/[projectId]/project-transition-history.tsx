@@ -18,6 +18,20 @@ type TransitionItem = {
 	qaGatePassed: boolean | null;
 	qaFailureCount: number;
 	qaTemplateType: string | null;
+	controlPlaneSummary?: {
+		totalTasks?: number;
+		pendingApprovals?: number;
+		activeHandoffs?: number;
+		onlineAgents?: number;
+		evidenceCount?: number;
+		previewCount?: number;
+	} | null;
+	costGuardrail?: {
+		percentUsed?: number | null;
+		warningBreached?: boolean;
+		hardStopBreached?: boolean;
+	} | null;
+	followUpTaskId?: string | null;
 };
 
 interface ProjectTransitionHistoryProps {
@@ -285,6 +299,26 @@ export function ProjectTransitionHistory({
 											DoD {item.qaTemplateType}
 										</span>
 									)}
+									{item.controlPlaneSummary?.pendingApprovals ? (
+										<span className="inline-flex items-center rounded-full bg-purple-500/10 px-2 py-0.5 text-purple-300 font-medium">
+											approvals {item.controlPlaneSummary.pendingApprovals}
+										</span>
+									) : null}
+									{item.controlPlaneSummary?.activeHandoffs ? (
+										<span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300 font-medium">
+											handoffs {item.controlPlaneSummary.activeHandoffs}
+										</span>
+									) : null}
+									{item.costGuardrail?.warningBreached ? (
+										<span className="inline-flex items-center rounded-full bg-orange-500/10 px-2 py-0.5 text-orange-300 font-medium">
+											cost warning
+										</span>
+									) : null}
+									{item.costGuardrail?.hardStopBreached ? (
+										<span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-red-300 font-medium">
+											hard stop
+										</span>
+									) : null}
 								</div>
 								<div className="mt-1 text-xs text-text-muted">
 									{actor} • {new Date(item.createdAt).toLocaleString()}
@@ -292,6 +326,41 @@ export function ProjectTransitionHistory({
 								{item.reason && (
 									<p className="mt-2 text-sm text-text">{item.reason}</p>
 								)}
+								{item.controlPlaneSummary ? (
+									<div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+										{typeof item.controlPlaneSummary.totalTasks === "number" ? (
+											<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+												runs:{item.controlPlaneSummary.totalTasks}
+											</span>
+										) : null}
+										{typeof item.controlPlaneSummary.onlineAgents === "number" ? (
+											<span className="rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+												online:{item.controlPlaneSummary.onlineAgents}
+											</span>
+										) : null}
+										{typeof item.controlPlaneSummary.evidenceCount === "number" ? (
+											<span className="rounded bg-slate-500/10 px-2 py-0.5 text-slate-300">
+												evidence:{item.controlPlaneSummary.evidenceCount}
+											</span>
+										) : null}
+										{typeof item.controlPlaneSummary.previewCount === "number" &&
+										item.controlPlaneSummary.previewCount > 0 ? (
+											<span className="rounded bg-teal-500/10 px-2 py-0.5 text-teal-300">
+												previews:{item.controlPlaneSummary.previewCount}
+											</span>
+										) : null}
+									</div>
+								) : null}
+								{typeof item.costGuardrail?.percentUsed === "number" ? (
+									<p className="mt-2 text-[11px] text-text-muted">
+										Cost usage: {item.costGuardrail.percentUsed.toFixed(1)}%
+									</p>
+								) : null}
+								{item.followUpTaskId ? (
+									<p className="mt-2 text-[11px] text-text-muted">
+										Follow-up run: {item.followUpTaskId}
+									</p>
+								) : null}
 							</div>
 						);
 					})}
