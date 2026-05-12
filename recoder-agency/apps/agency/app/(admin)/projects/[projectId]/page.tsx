@@ -20,6 +20,7 @@ import { createChangeOrder } from "./change-order-actions";
 import {
 	deleteProjectRoutingPolicy,
 	requestProjectBrowserRun,
+	requestProjectComputerUseRun,
 	requestProjectGovernanceRun,
 	requestProjectHandoff,
 	requestProjectPlanningRun,
@@ -96,6 +97,8 @@ export default async function ProjectDetailPage({
 		governanceRequested?: string;
 		browserTaskId?: string;
 		browserRequested?: string;
+		computerUseTaskId?: string;
+		computerUseRequested?: string;
 	}>;
 }) {
 	const { projectId } = await params;
@@ -171,6 +174,8 @@ export default async function ProjectDetailPage({
 	const governanceRequested = query.governanceRequested?.trim() ?? "";
 	const browserTaskId = query.browserTaskId?.trim() ?? "";
 	const browserRequested = query.browserRequested?.trim() ?? "";
+	const computerUseTaskId = query.computerUseTaskId?.trim() ?? "";
+	const computerUseRequested = query.computerUseRequested?.trim() ?? "";
 	if (parsedStartDate) {
 		transitionWhere.push(
 			gte(projectStatusTransitions.createdAt, parsedStartDate),
@@ -248,6 +253,12 @@ export default async function ProjectDetailPage({
 		}
 		if (browserRequested) {
 			params.set("browserRequested", browserRequested);
+		}
+		if (computerUseTaskId) {
+			params.set("computerUseTaskId", computerUseTaskId);
+		}
+		if (computerUseRequested) {
+			params.set("computerUseRequested", computerUseRequested);
 		}
 		params.set("pageSize", String(pageSize));
 		params.set("page", String(currentPage));
@@ -502,6 +513,16 @@ export default async function ProjectDetailPage({
 			{browserRequested === "error" ? (
 				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
 					Project browser request was submitted, but no shared run was created.
+				</div>
+			) : null}
+			{computerUseTaskId ? (
+				<div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-200">
+					Project computer-use run created: <span className="font-medium">{computerUseTaskId}</span>
+				</div>
+			) : null}
+			{computerUseRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project computer-use request was submitted, but no shared run was created.
 				</div>
 			) : null}
 
@@ -787,6 +808,32 @@ export default async function ProjectDetailPage({
 						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
 					>
 						Create Browser Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Computer Use Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared desktop/computer-use run in the linked workspace
+					</span>
+				</div>
+				<form
+					action={requestProjectComputerUseRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<textarea
+						name="goal"
+						rows={3}
+						placeholder="Optional desktop goal, GUI workflow, or validation target"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Computer Use Run
 					</button>
 				</form>
 			</div>
