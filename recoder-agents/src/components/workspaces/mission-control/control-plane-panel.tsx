@@ -12,12 +12,14 @@ import {
   useActiveHandoffs,
   useDeclineHandoff,
 } from '@/hooks/workspaces/use-handoffs';
+import type { MissionControlSummary } from '@/hooks/workspaces/use-mission-control';
 
 interface ControlPlanePanelProps {
   workspaceId: string;
+  summary?: MissionControlSummary | null;
 }
 
-export function ControlPlanePanel({ workspaceId }: ControlPlanePanelProps) {
+export function ControlPlanePanel({ workspaceId, summary = null }: ControlPlanePanelProps) {
   const { data: approvalsData, isLoading: approvalsLoading } = usePendingApprovals(workspaceId);
   const { data: handoffsData, isLoading: handoffsLoading } = useActiveHandoffs(workspaceId);
   const acceptHandoff = useAcceptHandoff();
@@ -27,7 +29,57 @@ export function ControlPlanePanel({ workspaceId }: ControlPlanePanelProps) {
   const handoffs = handoffsData?.handoffs ?? [];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="space-y-6">
+      {summary ? (
+        <section className="rounded-xl border bg-card">
+          <div className="border-b px-4 py-3">
+            <h2 className="text-sm font-medium">Snapshot</h2>
+            <p className="text-xs text-muted-foreground">
+              Unified session, approval, handoff, and evidence totals
+            </p>
+          </div>
+          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Sessions</p>
+              <p className="mt-1 text-lg font-semibold">
+                {summary.pairedBridgeSessions}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                paired / {summary.localBridgeSessions} local
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Approvals</p>
+              <p className="mt-1 text-lg font-semibold">
+                {summary.pendingApprovals}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                pending / {summary.totalApprovals} total
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Handoffs</p>
+              <p className="mt-1 text-lg font-semibold">
+                {summary.activeHandoffs}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                active / {summary.totalHandoffs} total
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Evidence</p>
+              <p className="mt-1 text-lg font-semibold">
+                {summary.evidenceItems}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {summary.previews} previews, {summary.logEvidence} logs
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-2">
       <section className="rounded-xl border bg-card">
         <div className="border-b px-4 py-3">
           <h2 className="text-sm font-medium">Pending Approvals</h2>
@@ -132,6 +184,7 @@ export function ControlPlanePanel({ workspaceId }: ControlPlanePanelProps) {
           )}
         </div>
       </section>
+      </div>
     </div>
   );
 }

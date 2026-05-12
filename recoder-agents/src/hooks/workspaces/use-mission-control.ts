@@ -6,10 +6,78 @@ import { dockerBackendApi, connectDockerSSE, type DockerSSEConnection } from '@/
 import { useAgentTeamStore, type AgentTeamMember } from '@/stores/agent-team-store';
 
 const missionControlKeys = {
+  snapshot: (wsId: string) => ['mission-control', 'snapshot', wsId] as const,
   fleet: (wsId: string) => ['mission-control', 'fleet', wsId] as const,
   pipeline: (wsId: string) => ['mission-control', 'pipeline', wsId] as const,
   metrics: (wsId: string) => ['mission-control', 'metrics', wsId] as const,
 };
+
+export interface MissionControlSummary {
+  totalAgents: number;
+  onlineAgents: number;
+  offlineAgents: number;
+  localBridgeSessions: number;
+  pairedBridgeSessions: number;
+  totalTasks: number;
+  activeTasks: number;
+  tasksByState: Record<string, number>;
+  pendingApprovals: number;
+  totalApprovals: number;
+  activeHandoffs: number;
+  totalHandoffs: number;
+  evidenceItems: number;
+  previews: number;
+  artifacts: number;
+  logEvidence: number;
+  runtimeEvidence: number;
+}
+
+export interface MissionControlSnapshot {
+  workspace: Record<string, unknown>;
+  summary: MissionControlSummary;
+  agents: AgentTeamMember[];
+  tasks: Record<string, unknown>[];
+  approvals: Record<string, unknown>[];
+  handoffs: Record<string, unknown>[];
+  bridgeSessions: Record<string, unknown>[];
+}
+
+function mapSnapshotAgents(input: Array<string | Record<string, unknown>>): AgentTeamMember[] {
+  return input.map((a) => ({
+    agentId: typeof a === 'string' ? a : (a.agentId as string),
+    name: typeof a === 'string' ? a : (a.name as string) ?? (a.agentId as string),
+    platform: typeof a === 'string' ? 'custom' : (a.platform as string) ?? 'custom',
+    status: typeof a === 'string' ? ('idle' as const) : ((a.status as AgentTeamMember['status']) ?? 'idle'),
+    skills: typeof a === 'string' ? [] : (a.skills as string[]) ?? (a.capabilities as string[]) ?? [],
+    isLocal: typeof a === 'string' ? false : (a.isLocal as boolean) ?? false,
+    capabilities: typeof a === 'string' ? [] : (a.capabilities as string[]) ?? [],
+    lastSeen: typeof a === 'string' ? undefined : (a.lastSeen as string | undefined),
+  }));
+}
+
+export function useControlPlaneSnapshot(wsId: string | null) {
+  const setAgents = useAgentTeamStore((s) => s.setAgents);
+
+  return useQuery({
+    queryKey: missionControlKeys.snapshot(wsId ?? ''),
+    queryFn: async () => {
+      const res = await dockerBackendApi.get<MissionControlSnapshot>(
+        `/api/a2a/workspaces/${wsId}/control-plane`,
+      );
+      if (res.success && res.data) {
+        const members = mapSnapshotAgents((res.data.agents as unknown as Array<string | Record<string, unknown>>) ?? []);
+        setAgents(members);
+        return {
+          ...res.data,
+          agents: members,
+        };
+      }
+      throw new Error(res.error?.message || 'Failed to fetch control-plane snapshot');
+    },
+    enabled: !!wsId,
+    refetchInterval: 5_000,
+  });
+}
 
 export function useAgentFleet(wsId: string | null) {
   const setAgents = useAgentTeamStore((s) => s.setAgents);
@@ -21,17 +89,7 @@ export function useAgentFleet(wsId: string | null) {
         `/api/a2a/workspaces/${wsId}/agents`,
       );
       if (res.success && res.data) {
-        // Map agent data to team members, using enriched info from bridge when available
-        const members: AgentTeamMember[] = (res.data.agents as unknown as Array<string | Record<string, unknown>>).map((a) => ({
-          agentId: typeof a === 'string' ? a : (a.agentId as string),
-          name: typeof a === 'string' ? a : (a.name as string) ?? (a.agentId as string),
-          platform: typeof a === 'string' ? 'custom' : (a.platform as string) ?? 'custom',
-          status: typeof a === 'string' ? ('idle' as const) : ((a.status as AgentTeamMember['status']) ?? 'idle'),
-          skills: typeof a === 'string' ? [] : (a.skills as string[]) ?? (a.capabilities as string[]) ?? [],
-          isLocal: typeof a === 'string' ? false : (a.isLocal as boolean) ?? false,
-          capabilities: typeof a === 'string' ? [] : (a.capabilities as string[]) ?? [],
-          lastSeen: typeof a === 'string' ? undefined : (a.lastSeen as string | undefined),
-        }));
+        const members = mapSnapshotAgents(res.data.agents as unknown as Array<string | Record<string, unknown>>);
         setAgents(members);
         return members;
       }

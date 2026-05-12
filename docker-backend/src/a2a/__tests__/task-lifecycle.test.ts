@@ -1038,6 +1038,10 @@ describe('Full lifecycle integration', () => {
         text: 'Done',
         data: {
           filesChanged: ['src/app.tsx', 'README.md'],
+          stdout: 'dev server booted',
+          stderr: 'warning: warm cache',
+          gitStatus: 'M src/app.tsx',
+          gitBranch: 'feature/evidence',
         },
         artifacts: [
           {
@@ -1064,6 +1068,9 @@ describe('Full lifecycle integration', () => {
         expect.objectContaining({ kind: 'preview', ref: 'https://preview.recoder.xyz/run-123' }),
         expect.objectContaining({ kind: 'artifact', ref: 'artifact-1' }),
         expect.objectContaining({ kind: 'file-change', ref: 'src/app.tsx' }),
+        expect.objectContaining({ kind: 'log', ref: 'stdout' }),
+        expect.objectContaining({ kind: 'log', ref: 'stderr' }),
+        expect.objectContaining({ kind: 'runtime', ref: 'git:feature/evidence' }),
       ]),
     );
   });

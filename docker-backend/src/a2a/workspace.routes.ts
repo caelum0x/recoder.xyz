@@ -36,6 +36,7 @@ import { getAgentRegistryService } from './agent-registry.service';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { buildTaskRunSummary } from './run-context.service';
 import { createLogger } from '../logger';
+import { listBridgeSessionsForBinding } from '../a2a-gateway';
 
 const logger = createLogger('a2a-workspace-routes');
 
@@ -102,6 +103,152 @@ function mapDelegationToHandoffRecord(delegation: DelegationRequest, workspaceId
     context: delegation.metadata ? { ...delegation.metadata } : {},
     status: mapDelegationStatus(delegation.status),
     createdAt: delegation.createdAt,
+  };
+}
+
+type WorkspaceHandoffRecord = ReturnType<typeof mapDelegationToHandoffRecord>;
+
+async function buildWorkspaceAgentRows(workspaceId: string) {
+  const agentIds = getWorkspaceService().listAgents(workspaceId);
+  if (!agentIds) return null;
+
+  const bridge = getAgentBridgeService();
+  const registry = getAgentRegistryService();
+  return agentIds.map((agentId) => {
+    const connected = bridge.getAgent(agentId);
+    const sessions = bridge.getSessionsForAgent(agentId);
+    const registryAgent = registry.getWithHealth(agentId);
+    const bridgeCapabilities = Array.from(new Set(sessions.flatMap((session) => session.capabilities)));
+    const skillNames = registryAgent?.card.skills.map((skill) => skill.name) ?? [];
+    const status = connected
+      ? connected.status
+      : registryAgent?.health.online
+        ? 'online'
+        : 'offline';
+    return {
+      agentId,
+      name: registryAgent?.identity.name ?? agentId,
+      platform: registryAgent?.identity.platform ?? 'custom',
+      status,
+      isLocal: sessions.length > 0,
+      capabilities: bridgeCapabilities,
+      skills: skillNames,
+      lastSeen: connected?.lastHeartbeat ?? registryAgent?.health.lastHeartbeat ?? '',
+      connectedSessionCount: sessions.length,
+      registry: registryAgent
+        ? {
+            online: registryAgent.health.online,
+            lastHeartbeat: registryAgent.health.lastHeartbeat,
+            reconnectCount: registryAgent.lifecycle.reconnectCount,
+            registrationCount: registryAgent.lifecycle.registrationCount,
+          }
+        : null,
+    };
+  });
+}
+
+async function buildWorkspaceTaskRows(workspaceId: string, limit = 200) {
+  const rawTasks = getTaskLifecycleService().list({
+    workspace_id: workspaceId,
+    limit,
+  });
+  return Promise.all(rawTasks.map((task) => buildTaskRunSummary(task)));
+}
+
+function buildWorkspaceApprovalRows(workspaceId: string) {
+  return getApprovalGateService().listByWorkspace(workspaceId);
+}
+
+function buildWorkspaceHandoffRows(workspaceId: string, activeOnly = false) {
+  const activeStatuses: DelegationStatus[] = ['pending', 'accepted', 'in-progress'];
+  const rawDelegations = getDelegationChainService().list({
+    statuses: activeOnly ? activeStatuses : undefined,
+  });
+
+  return rawDelegations
+    .map((delegation) => {
+      const delegationWorkspaceId = inferWorkspaceIdForDelegation(delegation);
+      return delegationWorkspaceId === workspaceId
+        ? mapDelegationToHandoffRecord(delegation, delegationWorkspaceId)
+        : null;
+    })
+    .filter((value): value is WorkspaceHandoffRecord => value !== null);
+}
+
+async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
+  const ws = getWorkspaceService().get(wsId);
+  if (!ws) return null;
+
+  const [agents, tasks, bridgeSessions] = await Promise.all([
+    buildWorkspaceAgentRows(ws.workspaceId),
+    buildWorkspaceTaskRows(ws.workspaceId),
+    listBridgeSessionsForBinding({ workspaceId: ws.workspaceId }),
+  ]);
+  if (!agents) return null;
+
+  const approvals = buildWorkspaceApprovalRows(ws.workspaceId);
+  const handoffs = buildWorkspaceHandoffRows(ws.workspaceId);
+
+  const tasksByState = tasks.reduce<Record<string, number>>((acc, task) => {
+    acc[task.state] = (acc[task.state] || 0) + 1;
+    return acc;
+  }, {});
+
+  const summary = tasks.reduce(
+    (acc, task) => {
+      acc.totalTasks += 1;
+      if (task.state === 'working' || task.state === 'input-required') {
+        acc.activeTasks += 1;
+      }
+      acc.evidenceItems += typeof task.runtime?.evidenceCount === 'number' ? task.runtime.evidenceCount : 0;
+      acc.previews += typeof task.runtime?.previewCount === 'number' ? task.runtime.previewCount : 0;
+      acc.artifacts += typeof task.runtime?.artifactCount === 'number' ? task.runtime.artifactCount : 0;
+      acc.logEvidence += typeof task.runtime?.logCount === 'number' ? task.runtime.logCount : 0;
+      acc.runtimeEvidence += typeof task.runtime?.runtimeCount === 'number' ? task.runtime.runtimeCount : 0;
+      return acc;
+    },
+    {
+      totalAgents: agents.length,
+      onlineAgents: agents.filter((agent) => agent.status !== 'offline').length,
+      offlineAgents: agents.filter((agent) => agent.status === 'offline').length,
+      localBridgeSessions: agents.reduce((sum, agent) => sum + agent.connectedSessionCount, 0),
+      pairedBridgeSessions: bridgeSessions.length,
+      totalTasks: 0,
+      activeTasks: 0,
+      tasksByState,
+      pendingApprovals: approvals.filter((approval) => approval.status === 'pending' || approval.status === 'escalated').length,
+      totalApprovals: approvals.length,
+      activeHandoffs: handoffs.filter((handoff) => handoff.status === 'active' || handoff.status === 'accepted').length,
+      totalHandoffs: handoffs.length,
+      evidenceItems: 0,
+      previews: 0,
+      artifacts: 0,
+      logEvidence: 0,
+      runtimeEvidence: 0,
+    },
+  );
+
+  return {
+    workspace: ws,
+    summary,
+    agents,
+    tasks,
+    approvals,
+    handoffs,
+    bridgeSessions: bridgeSessions.map((session) => ({
+      bridgeId: session.bridgeId,
+      scope: session.scope || null,
+      agentId: session.agentId || null,
+      agentName: session.agentName || null,
+      agentPlatform: session.agentPlatform || null,
+      workspaceId: session.workspaceId || null,
+      projectId: session.projectId || null,
+      capabilities: session.capabilities || [],
+      metadata: session.metadata || null,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      heartbeat: session.heartbeat,
+    })),
   };
 }
 
@@ -283,50 +430,43 @@ workspaceRouter.delete('/:wsId/agents/:agentId', (req: Request, res: Response) =
 
 workspaceRouter.get('/:wsId/agents', (req: Request, res: Response) => {
   try {
-    const agentIds = getWorkspaceService().listAgents(req.params.wsId);
-    if (!agentIds) {
+    buildWorkspaceAgentRows(req.params.wsId).then((agents) => {
+      if (!agents) {
+        sendError(res, 404, buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Workspace not found: ${req.params.wsId}`,
+        }));
+        return;
+      }
+
+      sendSuccess(res, { agents, total: agents.length });
+    }).catch((err: any) => {
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: err.message,
+      }));
+    });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/control-plane — Unified workspace control-plane snapshot ──
+
+workspaceRouter.get('/:wsId/control-plane', async (req: Request, res: Response) => {
+  try {
+    const snapshot = await buildWorkspaceControlPlaneSnapshot(req.params.wsId);
+    if (!snapshot) {
       return sendError(res, 404, buildA2AError({
         code: A2AErrorCodeEnum.TaskNotFound,
         message: `Workspace not found: ${req.params.wsId}`,
       }));
     }
 
-    // Enrich agent IDs with bridge connection status
-    const bridge = getAgentBridgeService();
-    const registry = getAgentRegistryService();
-    const agents = agentIds.map((agentId) => {
-      const connected = bridge.getAgent(agentId);
-      const sessions = bridge.getSessionsForAgent(agentId);
-      const registryAgent = registry.getWithHealth(agentId);
-      const bridgeCapabilities = Array.from(new Set(sessions.flatMap((session) => session.capabilities)));
-      const skillNames = registryAgent?.card.skills.map((skill) => skill.name) ?? [];
-      const status = connected
-        ? connected.status
-        : registryAgent?.health.online
-          ? 'online'
-          : 'offline';
-      return {
-        agentId,
-        name: registryAgent?.identity.name ?? agentId,
-        platform: registryAgent?.identity.platform ?? 'custom',
-        status,
-        isLocal: sessions.length > 0,
-        capabilities: bridgeCapabilities,
-        skills: skillNames,
-        lastSeen: connected?.lastHeartbeat ?? registryAgent?.health.lastHeartbeat ?? '',
-        connectedSessionCount: sessions.length,
-        registry: registryAgent
-          ? {
-              online: registryAgent.health.online,
-              lastHeartbeat: registryAgent.health.lastHeartbeat,
-              reconnectCount: registryAgent.lifecycle.reconnectCount,
-              registrationCount: registryAgent.lifecycle.registrationCount,
-            }
-          : null,
-      };
-    });
-
-    sendSuccess(res, { agents, total: agents.length });
+    sendSuccess(res, snapshot);
   } catch (err: any) {
     sendError(res, 500, buildA2AError({
       code: A2AErrorCodeEnum.InternalError,
@@ -373,11 +513,7 @@ workspaceRouter.get('/:wsId/tasks', async (req: Request, res: Response) => {
       }));
     }
 
-    const rawTasks = getTaskLifecycleService().list({
-      workspace_id: ws.workspaceId,
-      limit: Number(req.query.limit || 200),
-    });
-    const tasks = await Promise.all(rawTasks.map((task) => buildTaskRunSummary(task)));
+    const tasks = await buildWorkspaceTaskRows(ws.workspaceId, Number(req.query.limit || 200));
     sendSuccess(res, { tasks, total: tasks.length });
   } catch (err: any) {
     sendError(res, 500, buildA2AError({
@@ -402,7 +538,7 @@ workspaceRouter.get('/:wsId/approvals', (req: Request, res: Response) => {
     const statusQuery = String(req.query.status || '').trim().toLowerCase();
     const approvals = statusQuery === 'pending'
       ? getApprovalGateService().listPending(ws.workspaceId)
-      : getApprovalGateService().listByWorkspace(ws.workspaceId);
+      : buildWorkspaceApprovalRows(ws.workspaceId);
 
     sendSuccess(res, { approvals, total: approvals.length });
   } catch (err: any) {
@@ -426,19 +562,7 @@ workspaceRouter.get('/:wsId/handoffs', (req: Request, res: Response) => {
     }
 
     const requestedStatus = String(req.query.status || '').trim().toLowerCase();
-    const activeStatuses: DelegationStatus[] = ['pending', 'accepted', 'in-progress'];
-    const rawDelegations = getDelegationChainService().list({
-      statuses: requestedStatus === 'active' ? activeStatuses : undefined,
-    });
-
-    const handoffs = rawDelegations
-      .map((delegation) => {
-        const workspaceId = inferWorkspaceIdForDelegation(delegation);
-        return workspaceId === ws.workspaceId
-          ? mapDelegationToHandoffRecord(delegation, workspaceId)
-          : null;
-      })
-      .filter(Boolean);
+    const handoffs = buildWorkspaceHandoffRows(ws.workspaceId, requestedStatus === 'active');
 
     sendSuccess(res, { handoffs, total: handoffs.length });
   } catch (err: any) {

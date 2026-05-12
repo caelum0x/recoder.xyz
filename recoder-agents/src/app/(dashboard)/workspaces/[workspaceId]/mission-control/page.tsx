@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useAgentFleet, useTaskPipeline, useSLOMetrics } from '@/hooks/workspaces/use-mission-control';
+import { useControlPlaneSnapshot, useSLOMetrics } from '@/hooks/workspaces/use-mission-control';
 import { AgentFleetOverview } from '@/components/workspaces/mission-control/agent-fleet-overview';
 import { TaskPipelineView } from '@/components/workspaces/mission-control/task-pipeline-view';
 import { SLODashboard } from '@/components/workspaces/mission-control/slo-dashboard';
@@ -12,8 +12,7 @@ export default function MissionControlPage() {
   const params = useParams();
   const wsId = params.workspaceId as string;
 
-  useAgentFleet(wsId);
-  const { data: tasks } = useTaskPipeline(wsId);
+  const { data: snapshot } = useControlPlaneSnapshot(wsId);
   const { data: metrics } = useSLOMetrics(wsId);
 
   return (
@@ -32,10 +31,10 @@ export default function MissionControlPage() {
       <AgentFleetOverview />
 
       {/* Task Pipeline */}
-      <TaskPipelineView tasks={(tasks as any[]) ?? []} />
+      <TaskPipelineView tasks={(snapshot?.tasks as any[]) ?? []} />
 
       {/* Control-plane state */}
-      <ControlPlanePanel workspaceId={wsId} />
+      <ControlPlanePanel workspaceId={wsId} summary={snapshot?.summary ?? null} />
 
       {/* Activity Timeline */}
       <ActivityTimeline workspaceId={wsId} />

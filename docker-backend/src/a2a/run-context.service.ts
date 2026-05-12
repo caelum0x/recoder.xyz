@@ -36,6 +36,12 @@ function collectFilesChanged(evidence: TaskEvidenceItem[]): string[] {
     .filter((value): value is string => typeof value === 'string' && value.length > 0);
 }
 
+function readMetadata(item: TaskEvidenceItem): Record<string, unknown> | null {
+  return item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+    ? (item.metadata as Record<string, unknown>)
+    : null;
+}
+
 export async function buildTaskRunContext(task: TaskEnvelope) {
   const service = getTaskLifecycleService();
   const transitionsResult = service.getTaskHistory(task.id);
@@ -67,6 +73,13 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const preview = task.result?.preview ?? [];
   const artifacts = task.result?.artifacts ?? [];
   const filesChanged = collectFilesChanged(evidence);
+  const logEvidence = evidence.filter((item) => item.kind === 'log');
+  const runtimeEvidence = evidence.filter((item) => item.kind === 'runtime');
+  const gitEvidence = runtimeEvidence.find((item) => {
+    const metadata = readMetadata(item);
+    return Boolean(metadata?.gitStatus || metadata?.gitBranch || metadata?.cloneUrl);
+  });
+  const gitMetadata = gitEvidence ? readMetadata(gitEvidence) : null;
 
   return {
     task,
@@ -111,6 +124,20 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
       evidenceCount: evidence.length,
       previewCount: preview.length,
       artifactCount: artifacts.length,
+      logCount: logEvidence.length,
+      runtimeCount: runtimeEvidence.length,
+      logs: logEvidence.map((item) => ({
+        label: item.label,
+        ref: item.ref || null,
+        excerpt: typeof readMetadata(item)?.excerpt === 'string' ? readMetadata(item)?.excerpt : null,
+      })),
+      git: gitMetadata
+        ? {
+            branch: typeof gitMetadata.gitBranch === 'string' ? gitMetadata.gitBranch : null,
+            status: typeof gitMetadata.gitStatus === 'string' ? gitMetadata.gitStatus : null,
+            cloneUrl: typeof gitMetadata.cloneUrl === 'string' ? gitMetadata.cloneUrl : null,
+          }
+        : null,
     },
   };
 }

@@ -31,6 +31,8 @@ interface Task {
     evidenceCount?: number;
     previewCount?: number;
     artifactCount?: number;
+    logCount?: number;
+    runtimeCount?: number;
     filesChanged?: string[];
   };
   priority?: string;
@@ -110,6 +112,11 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                             {task.assignee.registry.online ? 'online' : 'offline'}
                           </span>
                         )}
+                        {((task.assignee?.localBridgeSessions?.length ?? 0) + (task.assignee?.pairedBridgeSessions?.length ?? 0)) > 0 && (
+                          <span className="text-[10px] rounded bg-cyan-100 px-1 py-0.5 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400">
+                            bridge:{(task.assignee?.localBridgeSessions?.length ?? 0) + (task.assignee?.pairedBridgeSessions?.length ?? 0)}
+                          </span>
+                        )}
                         {task.approval && (
                           <span className="text-[10px] rounded bg-purple-100 px-1 py-0.5 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
                             approval:{task.approval.status}
@@ -128,6 +135,11 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                         {typeof task.runtime?.previewCount === 'number' && task.runtime.previewCount > 0 && (
                           <span className="text-[10px] rounded bg-emerald-100 px-1 py-0.5 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                             previews:{task.runtime.previewCount}
+                          </span>
+                        )}
+                        {typeof task.runtime?.logCount === 'number' && task.runtime.logCount > 0 && (
+                          <span className="text-[10px] rounded bg-slate-100 px-1 py-0.5 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400">
+                            logs:{task.runtime.logCount}
                           </span>
                         )}
                       </div>
