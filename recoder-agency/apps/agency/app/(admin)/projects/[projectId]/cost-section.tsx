@@ -6,6 +6,7 @@ import {
 	addCostEntry,
 	deleteCostEntry,
 	updateProjectBudget,
+	updateProjectBudgetAndRequestGovernance,
 } from "./cost-actions";
 
 interface CostEntry {
@@ -225,6 +226,16 @@ export function CostSection({
 							className="rounded-lg bg-primary px-3 py-1 text-xs text-white hover:bg-primary/90 transition-colors"
 						>
 							Save
+						</button>
+						<button
+							formAction={async (formData) => {
+								await updateProjectBudgetAndRequestGovernance(formData);
+								setShowBudgetForm(false);
+							}}
+							type="submit"
+							className="rounded-lg border border-border px-3 py-1 text-xs text-text hover:bg-bg-hover transition-colors"
+						>
+							Save + Governance Run
 						</button>
 						<button
 							type="button"
