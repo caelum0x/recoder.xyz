@@ -1,13 +1,12 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { clients, db, deliverables, projects, quotes } from "@/db";
+import { clients, db, deliverables, projects, quotes, workspaces } from "@/db";
 import {
 	copilotToolDefinitions,
 	executeTool,
 } from "@/lib/agency/copilot-tools";
 import {
-	getRecoderTaskContext,
-	summarizeRecoderTaskContexts,
+	buildRecoderProjectControlSummary,
 } from "@/lib/agency/recoder-control-plane";
 import { requireAdminRole } from "@/services/teams";
 
@@ -133,18 +132,27 @@ export async function POST(req: Request) {
 			: "## No quote linked",
 	].join("\n");
 
-	const projectRunContexts = await Promise.all(
-		projectDeliverables.map((deliverable) => getRecoderTaskContext(deliverable.taskId)),
-	);
-	const projectRunSummary = summarizeRecoderTaskContexts(projectRunContexts);
+	const projectWorkspace = project.workspaceDbId
+		? await db.query.workspaces.findFirst({
+				where: eq(workspaces.dbId, project.workspaceDbId),
+			})
+		: null;
+	const projectRunSummary = await buildRecoderProjectControlSummary({
+		workspaceId: projectWorkspace?.id ?? null,
+		taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
+	});
 	const controlPlaneContext = [
 		`## Shared Control Plane`,
+		`Summary source: ${projectRunSummary.source}`,
 		`Linked runs: ${projectRunSummary.totalTasks}`,
 		`Pending approvals: ${projectRunSummary.pendingApprovals}`,
 		`Active handoffs: ${projectRunSummary.activeHandoffs}`,
 		`Online agents: ${projectRunSummary.onlineAgents}`,
 		`Evidence refs: ${projectRunSummary.evidenceCount}`,
 		`Preview refs: ${projectRunSummary.previewCount}`,
+		`Artifact refs: ${projectRunSummary.artifactCount}`,
+		`Log refs: ${projectRunSummary.logCount}`,
+		`Bridge sessions: ${projectRunSummary.pairedBridgeSessions}/${projectRunSummary.localBridgeSessions}`,
 		`Task states: ${
 			Object.entries(projectRunSummary.states)
 				.map(([state, count]) => `${state}=${count}`)

@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { DatabaseIcon, DownloadIcon } from "lucide-react";
 import Link from "next/link";
-import { alertSubscriptions, db, deliverables, projects } from "@/db";
+import { alertSubscriptions, db, deliverables, projects, workspaces } from "@/db";
 import {
 	type DeliveryOpsFilters,
 	fetchDeliveryOpsData,
@@ -9,8 +9,7 @@ import {
 	toDeliveryOpsSearchParams,
 } from "@/lib/agency/delivery-ops";
 import {
-	getRecoderTaskContext,
-	summarizeRecoderTaskContexts,
+	buildRecoderProjectControlSummary,
 	type RecoderProjectControlSummary,
 } from "@/lib/agency/recoder-control-plane";
 import { getTeamCapacitySnapshot } from "@/lib/agency/team-capacity";
@@ -115,6 +114,25 @@ export default async function DeliveryOpsPage({
 		]),
 	);
 
+	const projectWorkspaceRows = projectIdsNeedingSummary.length === 0
+		? []
+		: await db
+				.select({
+					projectId: projects.id,
+					workspaceId: workspaces.id,
+				})
+				.from(projects)
+				.leftJoin(workspaces, eq(projects.workspaceDbId, workspaces.dbId))
+				.where(
+					and(
+						eq(projects.teamDbId, team.dbId),
+						inArray(projects.id, projectIdsNeedingSummary),
+					),
+				);
+	const workspaceIdByProjectId = Object.fromEntries(
+		projectWorkspaceRows.map((row) => [row.projectId, row.workspaceId]),
+	) as Record<string, string | null>;
+
 	const controlPlaneByProjectId = projectIdsNeedingSummary.length === 0
 		? {}
 		: Object.fromEntries(
@@ -133,12 +151,13 @@ export default async function DeliveryOpsPage({
 									eq(projects.id, projectId),
 								),
 							);
-						const contexts = await Promise.all(
-							projectDeliverables.map((deliverable) =>
-								getRecoderTaskContext(deliverable.taskId),
-							),
-						);
-						return [projectId, summarizeRecoderTaskContexts(contexts)];
+						return [
+							projectId,
+							await buildRecoderProjectControlSummary({
+								workspaceId: workspaceIdByProjectId[projectId] ?? null,
+								taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
+							}),
+						];
 					}),
 				),
 			) as Record<string, RecoderProjectControlSummary>;
@@ -166,6 +185,16 @@ export default async function DeliveryOpsPage({
 				<span className="rounded bg-slate-500/10 px-2 py-0.5 text-slate-300">
 					evidence:{summary.evidenceCount}
 				</span>
+				{summary.logCount > 0 ? (
+					<span className="rounded bg-zinc-500/10 px-2 py-0.5 text-zinc-300">
+						logs:{summary.logCount}
+					</span>
+				) : null}
+				{summary.pairedBridgeSessions > 0 || summary.localBridgeSessions > 0 ? (
+					<span className="rounded bg-sky-500/10 px-2 py-0.5 text-sky-300">
+						sessions:{summary.pairedBridgeSessions}/{summary.localBridgeSessions}
+					</span>
+				) : null}
 			</div>
 		);
 	};
