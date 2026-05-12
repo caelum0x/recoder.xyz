@@ -675,6 +675,76 @@ export async function requestProjectGovernanceRun(
 	redirect(`/projects/${project.id}?governanceTaskId=${encodeURIComponent(created.taskId)}`);
 }
 
+export async function requestProjectBrowserRun(
+	projectId: string,
+	formData: FormData,
+) {
+	const [team, user] = await Promise.all([
+		requireAdminRole(),
+		getCurrentUser(),
+	]);
+	const goal = String(formData.get("goal") ?? "").trim();
+
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+	if (!project.workspaceDbId) {
+		throw new Error("Project has no linked workspace for shared browser runs");
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		throw new Error("Linked workspace not found");
+	}
+
+	const prompt = [
+		`Create a browser-task run for "${project.name}".`,
+		`Project status: ${project.status}.`,
+		project.brief ? `Project brief:\n${project.brief.slice(0, 2500)}` : null,
+		goal ? `Browser goal:\n${goal}` : null,
+		"Use browser-facing capabilities to inspect, navigate, validate, or collect information relevant to this project. Return concrete findings, links, and recommended next actions.",
+	].filter(Boolean).join("\n\n");
+
+	const created = await createRecoderTask({
+		workspaceId: workspace.id,
+		threadId: `agency-browser-${project.id}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt,
+		autoRoute: true,
+		routingHints: {
+			runtimeCategory: "visual",
+			requiredCapabilities: ["web-interface"],
+			preferredCapabilities: ["design", "ui"],
+			preferredPlatform: "recoder_web",
+		},
+		metadata: {
+			projectId: project.id,
+			projectDbId: project.dbId,
+			browserRun: {
+				goal: goal || null,
+				requestedByUserDbId: user.dbId,
+				requestedAt: new Date().toISOString(),
+				source: "agency.admin.project-browser",
+			},
+		},
+	});
+
+	revalidatePath(`/projects/${project.id}`);
+	if (!created?.taskId) {
+		redirect(`/projects/${project.id}?browserRequested=error`);
+	}
+	redirect(`/projects/${project.id}?browserTaskId=${encodeURIComponent(created.taskId)}`);
+}
+
 export async function saveProjectRoutingPolicy(
 	projectId: string,
 	formData: FormData,
