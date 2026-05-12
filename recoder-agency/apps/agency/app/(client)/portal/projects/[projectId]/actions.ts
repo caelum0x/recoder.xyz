@@ -18,7 +18,7 @@ import {
 	annotateRecoderTaskMetadata,
 	buildRecoderProjectControlSummary,
 	buildRecoderProjectDeliveryPackage,
-	createRecoderTask,
+	createAgencyDeliverableRevisionRun,
 } from "@/lib/agency/recoder-control-plane";
 import {
 	normalizeProjectStatus,
@@ -107,35 +107,6 @@ async function attachClientReviewToRun(input: {
 	});
 }
 
-function buildRevisionRoutingHints(
-	deliverableType: string | null | undefined,
-): Record<string, unknown> {
-	switch (deliverableType) {
-		case "design":
-			return {
-				runtimeCategory: "visual",
-				requiredCapabilities: ["web-interface"],
-				preferredCapabilities: ["design", "ui"],
-				preferredPlatform: "recoder_web",
-			};
-		case "document":
-			return {
-				runtimeCategory: "documentation",
-				requiredCapabilities: ["code-review"],
-				preferredCapabilities: ["documentation"],
-				preferredPlatform: "claude_code",
-			};
-		case "code":
-		default:
-			return {
-				runtimeCategory: "implementation",
-				requiredCapabilities: ["code-generation"],
-				preferredCapabilities: ["testing"],
-				preferredPlatform: "codex",
-			};
-	}
-}
-
 async function createRevisionFollowUpTask(input: {
 	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
 	deliverable: {
@@ -161,41 +132,15 @@ async function createRevisionFollowUpTask(input: {
 		return null;
 	}
 
-	const prompt = [
-		`Client requested revisions for deliverable "${input.deliverable.name}".`,
-		`Project: ${input.project.name}.`,
-		`Deliverable type: ${input.deliverable.type ?? "other"}.`,
-		`Feedback: ${input.feedback}.`,
-		input.deliverable.content
-			? `Current deliverable content:\n${input.deliverable.content.slice(0, 2000)}`
-			: null,
-	].filter(Boolean).join("\n\n");
-
-	const created = await createRecoderTask({
+	const created = await createAgencyDeliverableRevisionRun({
 		workspaceId: workspace.id,
-		threadId: `agency-revision-${input.deliverable.id}-${Date.now()}`,
-		requester: {
-			agentId: "recoder-agency",
-			platform: "recoder_agency",
-			name: "Recoder Agency",
-		},
-		prompt,
-		autoRoute: true,
-		routingHints: buildRevisionRoutingHints(input.deliverable.type),
-		metadata: {
-			projectId: input.project.id,
-			projectDbId: input.project.dbId,
-			deliverableId: input.deliverable.id,
-			deliverableDbId: input.deliverable.dbId,
-			deliverableType: input.deliverable.type,
-			revisionRequest: {
-				source: input.source,
-				reviewerUserDbId: input.reviewerUserDbId,
-				feedback: input.feedback,
-				previousTaskId: input.deliverable.taskId ?? null,
-				requestedAt: new Date().toISOString(),
-			},
-		},
+		projectId: input.project.id,
+		projectDbId: input.project.dbId,
+		projectName: input.project.name,
+		deliverable: input.deliverable,
+		feedback: input.feedback,
+		source: input.source,
+		reviewerUserDbId: input.reviewerUserDbId,
 	});
 
 	if (!created?.taskId) {
