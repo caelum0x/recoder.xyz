@@ -1,13 +1,12 @@
 import { eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { clients, db, deliverables, projects, quotes } from "@/db";
+import { clients, db, deliverables, projects, quotes, workspaces } from "@/db";
 import {
 	copilotToolDefinitions,
 	executeTool,
 } from "@/lib/agency/copilot-tools";
 import {
-	getRecoderTaskContext,
-	summarizeRecoderTaskContexts,
+	buildRecoderProjectControlSummary,
 } from "@/lib/agency/recoder-control-plane";
 import { requireCurrentTeamRole } from "@/services/teams";
 
@@ -164,24 +163,38 @@ export async function POST(req: Request) {
 	const projectDbIdToPublicId = new Map(
 		allProjects.map((project) => [project.dbId, project.id] as const),
 	);
+	const projectWorkspaceRows = allProjects.length === 0
+		? []
+		: await db
+				.select({
+					projectId: projects.id,
+					workspaceId: workspaces.id,
+				})
+				.from(projects)
+				.leftJoin(workspaces, eq(projects.workspaceDbId, workspaces.dbId))
+				.where(inArray(projects.id, allProjects.map((project) => project.id)));
+	const workspaceIdByProjectId = Object.fromEntries(
+		projectWorkspaceRows.map((row) => [row.projectId, row.workspaceId]),
+	) as Record<string, string | null>;
+
 	const controlPlaneSummaries = await Promise.all(
 		allProjects.map(async (project) => {
-			const contexts = await Promise.all(
-				allDeliverables
-					.filter((deliverable) => deliverable.projectDbId === project.dbId)
-					.map((deliverable) => getRecoderTaskContext(deliverable.taskId)),
-			);
 			return {
 				projectId: project.id,
 				projectName: project.name,
-				summary: summarizeRecoderTaskContexts(contexts),
+				summary: await buildRecoderProjectControlSummary({
+					workspaceId: workspaceIdByProjectId[project.id] ?? null,
+					taskIds: allDeliverables
+						.filter((deliverable) => deliverable.projectDbId === project.dbId)
+						.map((deliverable) => deliverable.taskId),
+				}),
 			};
 		}),
 	);
 	const controlPlaneContext = [
 		`### Shared Control Plane`,
 		...controlPlaneSummaries.map(({ projectId, projectName, summary }) =>
-			`- ${projectName} (${projectId}) runs=${summary.totalTasks} approvals=${summary.pendingApprovals} handoffs=${summary.activeHandoffs} onlineAgents=${summary.onlineAgents} evidence=${summary.evidenceCount}`,
+			`- ${projectName} (${projectId}) source=${summary.source} runs=${summary.totalTasks} approvals=${summary.pendingApprovals} handoffs=${summary.activeHandoffs} onlineAgents=${summary.onlineAgents} evidence=${summary.evidenceCount} artifacts=${summary.artifactCount} logs=${summary.logCount} sessions=${summary.pairedBridgeSessions}/${summary.localBridgeSessions}`,
 		),
 	].join("\n");
 

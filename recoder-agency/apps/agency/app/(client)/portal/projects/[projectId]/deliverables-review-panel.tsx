@@ -433,7 +433,24 @@ export function DeliverablesReviewPanel({
 									evidence:{controlPlane.runtime.evidenceCount}
 								</span>
 							) : null}
+							{typeof controlPlane.runtime?.logCount === "number" &&
+							controlPlane.runtime.logCount > 0 ? (
+								<span className="rounded bg-zinc-500/10 px-2 py-0.5 text-zinc-300">
+									logs:{controlPlane.runtime.logCount}
+								</span>
+							) : null}
+							{typeof controlPlane.runtime?.artifactCount === "number" &&
+							controlPlane.runtime.artifactCount > 0 ? (
+								<span className="rounded bg-indigo-500/10 px-2 py-0.5 text-indigo-300">
+									artifacts:{controlPlane.runtime.artifactCount}
+								</span>
+							) : null}
 						</div>
+						{controlPlane.runtime?.git?.branch ? (
+							<p className="mt-2 text-[11px] text-text-muted">
+								git branch: {controlPlane.runtime.git.branch}
+							</p>
+						) : null}
 						{previewUrl ? (
 							<a
 								href={previewUrl}
