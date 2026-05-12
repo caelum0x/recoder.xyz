@@ -394,6 +394,13 @@ export default async function ProjectDetailPage({
 						Open Workflow
 					</Link>
 				)}
+				<Link
+					href={`/projects/${project.id}/delivery-package`}
+					className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-text hover:bg-bg-hover transition-colors"
+				>
+					<ExternalLinkIcon className="size-3.5" />
+					Export Delivery Package
+				</Link>
 			</div>
 
 			{project.brief && (
