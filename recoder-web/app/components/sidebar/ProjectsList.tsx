@@ -209,7 +209,7 @@ function CreateProjectModal({ onClose, onCreated, userId }: { onClose: () => voi
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-recoder-elements-bg-depth-1/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-recoder-elements-background-depth-2 rounded-lg p-6 w-96 max-w-full" onClick={e => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-4 text-recoder-elements-textPrimary">Create Project</h2>
         <form onSubmit={handleCreate} className="space-y-4">
@@ -255,7 +255,7 @@ function CreateProjectModal({ onClose, onCreated, userId }: { onClose: () => voi
             <button
               type="submit"
               disabled={submitting || !name.trim()}
-              className="px-4 py-2 text-sm bg-orange-500 text-white rounded hover:bg-orange-500Hover disabled:opacity-50"
+              className="px-4 py-2 text-sm bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text rounded hover:bg-recoder-elements-button-primary-backgroundHover disabled:opacity-50"
             >
               {submitting ? 'Creating...' : 'Create'}
             </button>

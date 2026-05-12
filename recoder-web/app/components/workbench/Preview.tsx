@@ -1,7 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { workbenchStore } from '~/lib/stores/workbench';
-import { streamingStore } from '~/lib/stores/streaming';
 import { PortDropdown } from './PortDropdown';
 import { DeviceFrame } from './DeviceFrame';
 import { PreviewToolbar } from './PreviewToolbar';
@@ -60,7 +59,6 @@ export const Preview = memo(() => {
 
   // Runtime error state for ErrorBanner
   const [runtimeErrors, setRuntimeErrors] = useState<RuntimeError[]>([]);
-  const streamingState = useStore(streamingStore);
 
   // Loading / timeout state
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
@@ -442,82 +440,6 @@ export const Preview = memo(() => {
     return () => window.removeEventListener('message', handleRuntimeError);
   }, []);
   // ---------- End runtime error capture ----------
-
-  // ---------- Auto-fix for runtime errors ----------
-  // Trigger auto-fix when runtime errors are detected (debounced)
-  const runtimeErrorFixRef = useRef<NodeJS.Timeout | null>(null);
-  const lastFixedRuntimeErrorRef = useRef<string>('');
-  
-  useEffect(() => {
-    // Only trigger if we have errors and not currently streaming
-    if (runtimeErrors.length === 0 || streamingState.isStreaming) {
-      return;
-    }
-
-    // Clear any pending fix
-    if (runtimeErrorFixRef.current) {
-      clearTimeout(runtimeErrorFixRef.current);
-    }
-
-    // Debounce the fix trigger
-    runtimeErrorFixRef.current = setTimeout(() => {
-      // Check if these are the same errors we already tried to fix
-      const errorHash = runtimeErrors.map(e => e.message).join('|');
-      if (errorHash === lastFixedRuntimeErrorRef.current) {
-        logger.info('[Preview] Skipping auto-fix - same runtime errors as last attempt');
-        return;
-      }
-      
-      lastFixedRuntimeErrorRef.current = errorHash;
-      
-      // Format errors for AI
-      const errorDetails = runtimeErrors.map((error, index) => {
-        let detail = `Runtime Error ${index + 1}: ${error.message}`;
-        if (error.filename) {
-          detail += `\nFile: ${error.filename}`;
-          if (error.lineno) {
-            detail += `:${error.lineno}`;
-            if (error.colno) detail += `:${error.colno}`;
-          }
-        }
-        if (error.stack) {
-          detail += `\n\nStack trace:\n${error.stack}`;
-        }
-        return detail;
-      }).join('\n\n---\n\n');
-
-      const prompt = `[AUTO-FIX] Fix these runtime errors blocking the preview:\n\n${errorDetails}\n\nPlease fix all errors above. The app crashed with these errors at runtime.`;
-      
-      logger.info('[Preview] Triggering auto-fix for runtime errors:', runtimeErrors.length);
-      
-      window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
-        detail: {
-          prompt,
-          auto: true,
-          errors: runtimeErrors.map((e, i) => ({
-            id: `runtime-${Date.now()}-${i}`,
-            type: 'runtime' as const,
-            severity: 'error' as const,
-            message: e.message,
-            shortMessage: e.message.substring(0, 100),
-            filePath: e.filename,
-            line: e.lineno,
-            column: e.colno,
-            source: 'runtime' as const,
-            rawError: e.stack || e.message,
-            timestamp: e.timestamp,
-          })),
-        }
-      }));
-    }, 2000); // 2 second debounce
-    
-    return () => {
-      if (runtimeErrorFixRef.current) {
-        clearTimeout(runtimeErrorFixRef.current);
-      }
-    };
-  }, [runtimeErrors, streamingState.isStreaming]);
-  // ---------- End auto-fix for runtime errors ----------
 
   // ---------- Visual editing ----------
   // Listen for postMessage events from the iframe for visual editing
@@ -1314,7 +1236,7 @@ export const Preview = memo(() => {
                       errors={runtimeErrors}
                       onDismiss={dismissRuntimeErrors}
                       onRetry={retryPreview}
-                      isStreaming={streamingState.isStreaming}
+                      isStreaming={false}
                     />
                   </div>
                 </div>

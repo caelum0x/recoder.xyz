@@ -24,6 +24,9 @@ exports.getDaytonaClient = getDaytonaClient;
 exports.isDaytonaConfigured = isDaytonaConfigured;
 const logger_js_1 = require("./logger.js");
 const logger = (0, logger_js_1.createLogger)('daytona-client');
+function shellQuoteSingle(value) {
+    return `'${value.replace(/'/g, "'\\''")}'`;
+}
 // ──────────────────────────── Client ────────────────────────────
 class DaytonaClient {
     baseUrl;
@@ -33,6 +36,7 @@ class DaytonaClient {
     defaultSnapshot;
     timeoutMs;
     _toolboxProxyUrl;
+    workDirCache = new Map();
     constructor(config) {
         this.baseUrl = (config?.baseUrl || process.env.DAYTONA_SERVER_URL || 'http://localhost:3900/api').replace(/\/$/, '');
         this.apiKey = config?.apiKey || process.env.DAYTONA_API_KEY || '';
@@ -218,6 +222,21 @@ class DaytonaClient {
     async getSandbox(sandboxId) {
         return this.request('GET', `/sandbox/${sandboxId}`);
     }
+    rememberWorkDir(sandboxId, workDir) {
+        if (!workDir)
+            return;
+        this.workDirCache.set(sandboxId, workDir);
+    }
+    async getWorkDir(sandboxId) {
+        const cached = this.workDirCache.get(sandboxId);
+        if (cached) {
+            return cached;
+        }
+        const result = await this.toolboxRequest('GET', sandboxId, '/work-dir');
+        const workDir = result?.dir || '/home/daytona';
+        this.workDirCache.set(sandboxId, workDir);
+        return workDir;
+    }
     /**
      * List all sandboxes.
      */
@@ -267,14 +286,16 @@ class DaytonaClient {
         // Short commands: inline sh -c (fast, no temp file overhead)
         // Long commands: write to temp file then execute (avoids JSON.stringify mangling)
         if (fullCommand.length < 500) {
-            execCmd = `sh -c ${JSON.stringify(fullCommand)}`;
+            execCmd = `sh -c ${shellQuoteSingle(fullCommand)}`;
         }
         else {
             // Encode command as base64 and decode in the sandbox to avoid any escaping issues
             const b64 = Buffer.from(fullCommand, 'utf-8').toString('base64');
             const tmpScript = `/tmp/_cmd_${Date.now()}.sh`;
-            // printf the base64 (no shell escaping needed for base64 chars) then decode and run
-            execCmd = `printf '%s' '${b64}' | base64 -d > ${tmpScript} && sh ${tmpScript}; __e=$?; rm -f ${tmpScript}; exit $__e`;
+            // The toolbox endpoint executes argv directly, not through a shell.
+            // Wrap the bootstrap in `sh -c` so pipes, redirects, and `&&` work.
+            const shellScript = `printf '%s' '${b64}' | base64 -d > ${tmpScript} && sh ${tmpScript}; __e=$?; rm -f ${tmpScript}; exit $__e`;
+            execCmd = `sh -c ${JSON.stringify(shellScript)}`;
         }
         const payload = {
             command: execCmd,
@@ -439,28 +460,30 @@ class DaytonaClient {
      * For very large files (>50KB of content = ~68KB base64), we chunk the base64
      * into a temp file first, then decode in a separate call.
      */
+    async rawShellExec(sandboxId, cmd, timeoutSecs = 30) {
+        const shCmd = `sh -c ${JSON.stringify(cmd)}`;
+        const result = await this.toolboxRequest('POST', sandboxId, '/process/execute', { command: shCmd, timeout: timeoutSecs }, timeoutSecs * 1000 + 5000);
+        return {
+            output: result?.result || '',
+            exitCode: result?.exitCode ?? result?.code ?? 0,
+        };
+    }
     async uploadFileExec(sandboxId, filePath, content) {
         const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
         const safePath = absPath.replace(/'/g, "'\\''");
         const b64Content = Buffer.from(content, 'utf-8').toString('base64');
-        // Helper: call Daytona API directly (no double-encoding via execCommand)
-        const rawExec = async (cmd, timeoutSecs = 30) => {
-            const shCmd = `sh -c ${JSON.stringify(cmd)}`;
-            const result = await this.toolboxRequest('POST', sandboxId, '/process/execute', { command: shCmd, timeout: timeoutSecs }, timeoutSecs * 1000 + 5000);
-            return {
-                output: result?.result || '',
-                exitCode: result?.exitCode ?? result?.code ?? 0,
-            };
-        };
         // Create parent directory
         const dir = absPath.substring(0, absPath.lastIndexOf('/'));
         if (dir) {
-            await rawExec(`mkdir -p '${dir.replace(/'/g, "'\\''")}'`, 10);
+            const mkdirResult = await this.rawShellExec(sandboxId, `mkdir -p '${dir.replace(/'/g, "'\\''")}'`, 10);
+            if (mkdirResult.exitCode !== 0) {
+                throw new Error(`Parent directory create failed for ${absPath} (exit ${mkdirResult.exitCode}): ${mkdirResult.output}`);
+            }
         }
         // For files up to ~40KB base64 (fits in a single printf argument)
         const SINGLE_LIMIT = 40000;
         if (b64Content.length <= SINGLE_LIMIT) {
-            const r = await rawExec(`printf '%s' '${b64Content}' | base64 -d > '${safePath}'`);
+            const r = await this.rawShellExec(sandboxId, `printf '%s' '${b64Content}' | base64 -d > '${safePath}'`);
             if (r.exitCode !== 0) {
                 throw new Error(`File write to ${absPath} failed (exit ${r.exitCode}): ${r.output}`);
             }
@@ -472,13 +495,13 @@ class DaytonaClient {
         for (let i = 0; i < b64Content.length; i += CHUNK) {
             const chunk = b64Content.slice(i, i + CHUNK);
             const op = i === 0 ? '>' : '>>';
-            const r = await rawExec(`printf '%s' '${chunk}' ${op} '${tmpFile}'`);
+            const r = await this.rawShellExec(sandboxId, `printf '%s' '${chunk}' ${op} '${tmpFile}'`);
             if (r.exitCode !== 0) {
                 throw new Error(`File write chunk failed at offset ${i} for ${absPath}: ${r.output}`);
             }
         }
         // Decode and move to target
-        const r = await rawExec(`base64 -d < '${tmpFile}' > '${safePath}' && rm -f '${tmpFile}'`);
+        const r = await this.rawShellExec(sandboxId, `base64 -d < '${tmpFile}' > '${safePath}' && rm -f '${tmpFile}'`);
         if (r.exitCode !== 0) {
             throw new Error(`File decode failed for ${absPath} (exit ${r.exitCode}): ${r.output}`);
         }
@@ -489,7 +512,7 @@ class DaytonaClient {
      */
     async downloadFileExec(sandboxId, filePath) {
         const absPath = filePath.startsWith('/') ? filePath : `/home/daytona/${filePath}`;
-        const result = await this.execCommand(sandboxId, `cat '${absPath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 30 });
+        const result = await this.rawShellExec(sandboxId, `cat '${absPath.replace(/'/g, "'\\''")}'`, 30);
         if (result.exitCode !== 0) {
             throw new Error(`File read from ${absPath} failed (exit ${result.exitCode}): ${result.output}`);
         }
@@ -506,7 +529,7 @@ class DaytonaClient {
             `if [ ! -d '${escaped}' ]; then exit 0; fi`,
             `find '${escaped}' -maxdepth 1 -mindepth 1 -printf '%f\\t%y\\n' 2>/dev/null || true`,
         ].join('; ');
-        const result = await this.execCommand(sandboxId, cmd, { timeoutSecs: 20 });
+        const result = await this.rawShellExec(sandboxId, cmd, 20);
         if (result.exitCode !== 0) {
             throw new Error(`File list for ${dirPath} failed (exit ${result.exitCode}): ${result.output}`);
         }
@@ -543,8 +566,17 @@ class DaytonaClient {
      */
     async createSession(sandboxId, sessionName) {
         const sessionId = sessionName || `session-${Date.now()}`;
-        const result = await this.toolboxRequest('POST', sandboxId, '/process/session', { sessionId, name: sessionId });
-        return result?.sessionId || result?.id || sessionId;
+        try {
+            const result = await this.toolboxRequest('POST', sandboxId, '/process/session', { sessionId, name: sessionId });
+            return result?.sessionId || result?.id || sessionId;
+        }
+        catch (err) {
+            const msg = err?.message || '';
+            if (msg.includes('409') || msg.includes('conflict: session already exists')) {
+                return sessionId;
+            }
+            throw err;
+        }
     }
     /**
      * Execute a command within an existing session.
@@ -552,9 +584,14 @@ class DaytonaClient {
      *
      * POST /{sandboxId}/toolbox/process/session/{sessionId}/exec
      */
-    async execInSession(sandboxId, sessionId, command) {
+    async execInSession(sandboxId, sessionId, command, options) {
+        const payload = {
+            command,
+            runAsync: options?.runAsync ?? true,
+            ...(options?.suppressInputEcho ? { suppressInputEcho: true } : {}),
+        };
         try {
-            const result = await this.toolboxRequest('POST', sandboxId, `/process/session/${sessionId}/exec`, { command });
+            const result = await this.toolboxRequest('POST', sandboxId, `/process/session/${sessionId}/exec`, payload);
             return { cmdId: result?.cmdId || result?.id || result?.commandId || '' };
         }
         catch (err) {
@@ -564,7 +601,7 @@ class DaytonaClient {
                 logger.warn({ sandboxId, sessionId, error: msg }, 'Session dead, recreating...');
                 try {
                     await this.createSession(sandboxId, sessionId);
-                    const retry = await this.toolboxRequest('POST', sandboxId, `/process/session/${sessionId}/exec`, { command });
+                    const retry = await this.toolboxRequest('POST', sandboxId, `/process/session/${sessionId}/exec`, payload);
                     return { cmdId: retry?.cmdId || retry?.id || retry?.commandId || '' };
                 }
                 catch (retryErr) {
@@ -581,10 +618,16 @@ class DaytonaClient {
      * GET /{sandboxId}/toolbox/process/session/{sessionId}/command/{cmdId}/logs
      */
     async getSessionLogs(sandboxId, sessionId, cmdId) {
-        const path = cmdId
-            ? `/process/session/${sessionId}/command/${cmdId}/logs`
-            : `/process/session/${sessionId}/logs`;
-        const result = await this.toolboxRequest('GET', sandboxId, path);
+        let effectiveCmdId = cmdId;
+        if (!effectiveCmdId) {
+            const session = await this.toolboxRequest('GET', sandboxId, `/process/session/${sessionId}`);
+            const commands = Array.isArray(session?.commands) ? session.commands : [];
+            effectiveCmdId = commands[commands.length - 1]?.id;
+            if (!effectiveCmdId) {
+                return '';
+            }
+        }
+        const result = await this.toolboxRequest('GET', sandboxId, `/process/session/${sessionId}/command/${effectiveCmdId}/logs`);
         return result?.logs || result?.output || result?.result || '';
     }
     /**

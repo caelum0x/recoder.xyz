@@ -95,6 +95,35 @@ function getEnv(context?: LoaderFunctionArgs['context'] | ActionFunctionArgs['co
   return ((context as any)?.cloudflare?.env || process.env) as Record<string, string | undefined>;
 }
 
+function hasBrowserAuth(request: Request): boolean {
+  return Boolean(request.headers.get('Cookie') || request.headers.get('Authorization'));
+}
+
+function buildBrowserProxyHeaders(
+  request: Request,
+  contentType?: string,
+): Headers {
+  const headers = new Headers({
+    Accept: 'application/json',
+  });
+
+  const cookie = request.headers.get('Cookie');
+  if (cookie) {
+    headers.set('Cookie', cookie);
+  }
+
+  const authorization = request.headers.get('Authorization');
+  if (authorization) {
+    headers.set('Authorization', authorization);
+  }
+
+  if (contentType) {
+    headers.set('Content-Type', contentType);
+  }
+
+  return headers;
+}
+
 export async function loader({ request, context }: LoaderFunctionArgs) {
   try {
     const url = new URL(request.url);
@@ -148,12 +177,40 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         logger.warn('Hub project list request failed', {
           status: response.status,
         });
-        return json({ projects: [], error: 'Project snapshots unavailable' }, { status: response.status });
+        if (response.status < 500 && response.status !== 404 && response.status !== 405) {
+          return json({ projects: [], error: 'Project snapshots unavailable' }, { status: response.status });
+        }
       } catch (error) {
         logger.warn('Hub project list request threw', {
           error: error instanceof Error ? error.message : String(error),
         });
-        return json({ projects: [], error: 'Project snapshots unavailable' }, { status: 502 });
+      }
+    }
+
+    if (userId && hasBrowserAuth(request)) {
+      try {
+        const hubUrl = new URL('/api/projects', hubBaseUrl);
+        hubUrl.searchParams.set('limit', '100');
+
+        const response = await fetch(hubUrl.toString(), {
+          headers: buildBrowserProxyHeaders(request),
+        });
+
+        if (response.ok) {
+          const payload = await response.json() as { success?: boolean; data?: HubProjectListItem[] };
+          const projects = Array.isArray(payload.data)
+            ? payload.data.map((project) => mapHubProjectToLegacyShape(project, userId))
+            : [];
+          return json({ projects, error: null });
+        }
+
+        logger.warn('Browser-auth hub project list request failed', {
+          status: response.status,
+        });
+      } catch (error) {
+        logger.warn('Browser-auth hub project list request threw', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 
@@ -269,21 +326,77 @@ export async function action({ request, context }: ActionFunctionArgs) {
           } | null;
 
           if (!response.ok || !payload?.data) {
-            return json(
-              { error: payload?.error || 'Failed to create project' },
-              { status: response.status || 500 }
-            );
+            logger.warn('Hub project create request returned non-success payload', {
+              status: response.status,
+              error: payload?.error || null,
+            });
+            if (response.status < 500 && response.status !== 404 && response.status !== 405) {
+              return json(
+                { error: payload?.error || 'Failed to create project' },
+                { status: response.status || 500 }
+              );
+            }
+          } else {
+            return json({
+              success: true,
+              project: mapHubProjectToLegacyShape(payload.data, userId),
+            });
           }
-
-          return json({
-            success: true,
-            project: mapHubProjectToLegacyShape(payload.data, userId),
-          });
         } catch (error) {
           logger.warn('Hub project create request threw', {
             error: error instanceof Error ? error.message : String(error),
           });
-          return json({ error: 'Failed to create project' }, { status: 502 });
+        }
+      }
+
+      if (hasBrowserAuth(request)) {
+        try {
+          const pathname = '/api/projects';
+          const bodyString = JSON.stringify({
+            name,
+            description,
+            type,
+            framework,
+            language,
+            isPrivate,
+            userId,
+            templateId,
+            starterPath,
+          });
+
+          const response = await fetch(new URL(pathname, hubBaseUrl).toString(), {
+            method: 'POST',
+            headers: buildBrowserProxyHeaders(request, 'application/json'),
+            body: bodyString,
+          });
+
+          const payload = await response.json().catch(() => null) as {
+            success?: boolean;
+            data?: HubProjectListItem;
+            error?: string;
+          } | null;
+
+          if (response.ok && payload?.data) {
+            return json({
+              success: true,
+              project: mapHubProjectToLegacyShape(payload.data, userId),
+            });
+          }
+
+          if (response.status < 500) {
+            return json(
+              { error: payload?.error || 'Failed to create project' },
+              { status: response.status || 400 }
+            );
+          }
+
+          logger.warn('Browser-auth hub project create request failed', {
+            status: response.status,
+          });
+        } catch (error) {
+          logger.warn('Browser-auth hub project create request threw', {
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
 

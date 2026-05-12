@@ -31,7 +31,6 @@ import { AgentPanel } from '~/components/agent/AgentPanel';
 import { agentSessionActive } from '~/lib/stores/agent-session';
 import { useLSPDiagnostics } from '~/lib/hooks/useLSPDiagnostics';
 import { useFileWatcher } from '~/lib/hooks/useFileWatcher';
-import { useAutoErrorFix } from '~/lib/hooks/useAutoErrorFix';
 import { createScopedLogger } from '~/utils/logger';
 const logger = createScopedLogger('Workbench');
 
@@ -103,14 +102,6 @@ export const Workbench = memo(({ chatStarted, isStreaming }: WorkspaceProps) => 
       // Preview will auto-refresh via the recoder:file-changed event
       logger.info('[Workbench] File change detected, preview will refresh');
     },
-  });
-
-  // Auto-fix build errors - automatically sends errors to AI for fixing (no UI)
-  useAutoErrorFix({
-    enabled: !!projectId && containerReady,
-    isStreaming: !!isStreaming,
-    debounceMs: 3000,
-    maxAttempts: 10,
   });
 
   // Kill container on tab close to prevent container leaks

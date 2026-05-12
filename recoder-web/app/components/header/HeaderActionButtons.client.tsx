@@ -558,7 +558,7 @@ function GoLiveButton() {
             <div className="flex gap-2 mt-2">
               <button
                 onClick={handleUpdate}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-amber-500 text-black hover:bg-amber-400 transition-colors"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-recoder-elements-button-primary-background text-recoder-elements-button-primary-text hover:bg-recoder-elements-button-primary-backgroundHover transition-colors"
               >
                 <div className="i-ph:arrow-clockwise" />
                 Update
@@ -747,8 +747,8 @@ function Button({ active = false, disabled = false, children, onClick, title }: 
     }
     if (active) {
       return {
-        backgroundColor: '#F79009',
-        color: '#ffffff',
+        backgroundColor: 'var(--recoder-elements-button-primary-background)',
+        color: 'var(--recoder-elements-button-primary-text)',
       };
     }
     return {

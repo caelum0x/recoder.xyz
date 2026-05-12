@@ -15586,6 +15586,7 @@ const codingRuntimeSelectionByProject = new Map<string, {
 
 app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
+  const { getCodingRuntimeHistoryService } = await import('./coding-runtime-history.js');
   const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt, executionMode } = req.body;
   if (!projectId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId required'));
   let resolvedRuntimeType = runtimeType;
@@ -15630,6 +15631,15 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
     classification: autoSelection?.classification,
     routeDecision: autoSelection?.routeDecision,
   });
+  getCodingRuntimeHistoryService().recordSessionSelection({
+    projectId,
+    runtimeType: resolvedRuntimeType,
+    requestedRuntimeType: runtimeType,
+    sandboxId: resolvedSandboxId,
+    executionMode,
+    prompt: typeof prompt === 'string' ? prompt : undefined,
+    autoSelection,
+  });
 
   sendSuccess(res, {
     ...session,
@@ -15640,6 +15650,7 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
 
 app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
+  const { getCodingRuntimeHistoryService } = await import('./coding-runtime-history.js');
   const { projectId, prompt, runtimeType, agent, enableCompletionLoop, maxIterations, backoffMs } = req.body;
   if (!projectId || !prompt) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
   const selection = codingRuntimeSelectionByProject.get(projectId);
@@ -15674,6 +15685,19 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
       maxIterations: typeof maxIterations === 'number' ? maxIterations : 3,
       backoffMs: typeof backoffMs === 'number' ? backoffMs : 1000,
     });
+    getCodingRuntimeHistoryService().recordPromptRun({
+      projectId,
+      runtimeType: resolvedRuntimeType,
+      requestedRuntimeType: typeof runtimeType === 'string' ? runtimeType : 'session-default',
+      prompt,
+      agent,
+      autoSelection,
+      completionLoop: {
+        enabled: true,
+        completed: outcome.completed,
+        iterations: outcome.iterations,
+      },
+    });
 
     return sendSuccess(res, {
       ...outcome.result,
@@ -15686,10 +15710,37 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
   }
 
   const result = await runtime.sendPrompt(promptParams);
+  getCodingRuntimeHistoryService().recordPromptRun({
+    projectId,
+    runtimeType: resolvedRuntimeType,
+    requestedRuntimeType: typeof runtimeType === 'string' ? runtimeType : 'session-default',
+    prompt,
+    agent,
+    autoSelection,
+    completionLoop: {
+      enabled: false,
+    },
+  });
   sendSuccess(res, {
     ...result,
     selectedRuntime: resolvedRuntimeType,
     autoSelection,
+  });
+}));
+
+app.get('/api/coding-runtime/history/:projectId', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getCodingRuntimeHistoryService } = await import('./coding-runtime-history.js');
+  const projectId = String(req.params.projectId || '').trim();
+  if (!projectId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId required'));
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
+  const historyService = getCodingRuntimeHistoryService();
+
+  sendSuccess(res, {
+    projectId,
+    entries: historyService.listProjectHistory(projectId, limit),
+    total: historyService.getProjectHistoryCount(projectId),
+    activeSelection: codingRuntimeSelectionByProject.get(projectId) ?? null,
   });
 }));
 

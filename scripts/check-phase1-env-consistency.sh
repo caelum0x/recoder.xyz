@@ -23,6 +23,8 @@ DOCKER_ENV_FILES=(
   "$REPO_ROOT/docker-backend/.env"
   "$REPO_ROOT/docker-backend/.env.production"
   "$REPO_ROOT/docker-backend/.env.example"
+  "$REPO_ROOT/.env.production"
+  "$REPO_ROOT/.env"
 )
 
 first_existing_file() {
@@ -149,4 +151,23 @@ echo "docker env: $DOCKER_ENV"
 echo "queue backend: $QUEUE_BACKEND"
 echo "redis url configured: $( [[ -n "$REDIS_URL_VALUE" ]] && echo true || echo false )"
 echo "INTERNAL_SERVICE_KEY consistency: ok"
+
+APP_MAIN_SITE_INTERNAL_URL="$(read_env_value "$APP_ENV" "MAIN_SITE_INTERNAL_URL")"
+WEB_MAIN_SITE_INTERNAL_URL="$(read_env_value "$WEB_ENV" "MAIN_SITE_INTERNAL_URL")"
+DOCKER_MAIN_SITE_INTERNAL_URL="$(read_env_value "$DOCKER_ENV" "MAIN_SITE_INTERNAL_URL")"
+
+if [[ -n "$WEB_MAIN_SITE_INTERNAL_URL" && -n "$DOCKER_MAIN_SITE_INTERNAL_URL" && "$WEB_MAIN_SITE_INTERNAL_URL" != "$DOCKER_MAIN_SITE_INTERNAL_URL" ]]; then
+  echo "MAIN_SITE_INTERNAL_URL mismatch between recoder-web and docker-backend" >&2
+  echo "web:    $WEB_MAIN_SITE_INTERNAL_URL" >&2
+  echo "docker: $DOCKER_MAIN_SITE_INTERNAL_URL" >&2
+  exit 1
+fi
+
+if [[ -n "$APP_MAIN_SITE_INTERNAL_URL" && -n "$DOCKER_MAIN_SITE_INTERNAL_URL" && "$APP_MAIN_SITE_INTERNAL_URL" != "$DOCKER_MAIN_SITE_INTERNAL_URL" ]]; then
+  echo "MAIN_SITE_INTERNAL_URL mismatch between app and docker-backend" >&2
+  echo "app:    $APP_MAIN_SITE_INTERNAL_URL" >&2
+  echo "docker: $DOCKER_MAIN_SITE_INTERNAL_URL" >&2
+  exit 1
+fi
+
 echo "Env consistency check passed."

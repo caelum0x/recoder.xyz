@@ -29,6 +29,7 @@ exports.daytonaDeleteSandbox = daytonaDeleteSandbox;
 exports.daytonaGetLogs = daytonaGetLogs;
 const daytona_client_js_1 = require("./daytona-client.js");
 const logger_js_1 = require("./logger.js");
+const daytona_runtime_js_1 = require("./daytona-runtime.js");
 const logger = (0, logger_js_1.createLogger)('daytona-file-ops');
 const DAYTONA_DEV_SERVER_PORTS = [5173, 5174, 5175, 5176, 5177, 5178, 5179, 5180, 3000, 3001, 4173, 4174, 8080, 8081];
 function looksLikeDirectoryListing(body, contentType) {
@@ -88,59 +89,42 @@ async function cleanupDaytonaDevServerProcesses(sandboxId, projectId) {
     }
     await dc.execCommand(sandboxId, buildDaytonaDevServerCleanupCommand(), { timeoutSecs: 15 });
 }
-// ── Auto-wake helper ──
-// All file operations must wake stopped sandboxes before proceeding.
-// Without this, file reads/writes fail silently after Daytona's auto-stop
-// timer expires (30 min for Python sandboxes, 12h for docker-backend ones).
+// ── State check helper ──
+// Daytona file operations should fail fast when the sandbox is not already
+// running. Do not auto-wake sandboxes as part of ordinary file traffic.
 async function ensureRunningBeforeOp(sandboxId) {
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    try {
-        const sandbox = await dc.getSandbox(sandboxId);
-        if (sandbox.state === 'started' || sandbox.state === 'running')
-            return;
-        logger.info({ sandboxId: sandboxId.slice(0, 12), state: sandbox.state }, 'Daytona: sandbox stopped, auto-waking for file op');
-        const result = await ensureDaytonaSandboxRunning(sandboxId);
-        if (!result.running) {
-            throw new Error(`Sandbox ${sandboxId} could not be woken: ${result.error ?? 'unknown'}`);
-        }
+    const sandbox = await dc.getSandbox(sandboxId);
+    if (sandbox.state === 'started' || sandbox.state === 'running') {
+        return;
     }
-    catch (err) {
-        // If getSandbox itself fails (network issue), let the caller retry
-        if (err.message?.includes('could not be woken'))
-            throw err;
-        logger.debug({ sandboxId: sandboxId.slice(0, 12), err: err.message }, 'Daytona: pre-op sandbox check failed (will retry in op)');
+    throw new Error(`Sandbox ${sandboxId} is not running (state: ${sandbox.state})`);
+}
+async function resolveDaytonaWorkspaceRoot(sandboxId) {
+    const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    try {
+        return await dc.getWorkDir(sandboxId);
+    }
+    catch {
+        return daytona_runtime_js_1.DAYTONA_WORKSPACE_ROOT;
     }
 }
 // ── File operations ──
 // These operations use the native Toolbox filesystem API via DaytonaClient,
 // which automatically falls back to exec-based commands if native endpoints fail.
-// All operations call ensureRunningBeforeOp() first to auto-wake stopped sandboxes.
+// All operations call ensureRunningBeforeOp() first to fail fast on stopped sandboxes.
 /**
  * Write a file into a Daytona sandbox.
- * The file path should be relative to /home/daytona (e.g. "src/App.tsx").
+ * The file path should be relative to /workspace (e.g. "src/App.tsx").
  * Uses the native Toolbox filesystem API with exec-based fallback.
  */
 async function daytonaWriteFile(sandboxId, relativePath, content) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    const fullPath = `/home/daytona/${relativePath}`;
+    const workspaceRoot = await resolveDaytonaWorkspaceRoot(sandboxId);
+    const fullPath = `${workspaceRoot}/${relativePath}`;
     logger.info({ sandboxId: sandboxId.slice(0, 12), path: relativePath }, 'Daytona: writing file');
-    // Retry up to 3 times with backoff for transient Daytona API failures
-    let lastError = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-            await dc.uploadFile(sandboxId, fullPath, content);
-            return;
-        }
-        catch (err) {
-            lastError = err;
-            logger.warn({ sandboxId: sandboxId.slice(0, 12), path: relativePath, attempt, error: err.message }, 'Daytona: file write attempt failed');
-            if (attempt < 3) {
-                await new Promise(r => setTimeout(r, attempt * 500));
-            }
-        }
-    }
-    throw lastError;
+    await dc.uploadFile(sandboxId, fullPath, content);
 }
 /**
  * Write multiple files into a Daytona sandbox in parallel batches.
@@ -153,7 +137,8 @@ async function daytonaWriteFiles(sandboxId, files) {
     const BATCH = 10;
     for (let i = 0; i < files.length; i += BATCH) {
         const batch = files.slice(i, i + BATCH);
-        const results = await Promise.allSettled(batch.map(f => dc.uploadFile(sandboxId, `/home/daytona/${f.path}`, f.content)));
+        const workspaceRoot = await resolveDaytonaWorkspaceRoot(sandboxId);
+        const results = await Promise.allSettled(batch.map(f => dc.uploadFile(sandboxId, `${workspaceRoot}/${f.path}`, f.content)));
         results.forEach((r, idx) => {
             if (r.status === 'rejected') {
                 failed.push({ path: batch[idx].path, error: r.reason?.message || 'write failed' });
@@ -170,7 +155,8 @@ async function daytonaWriteFiles(sandboxId, files) {
 async function daytonaReadFile(sandboxId, relativePath) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    const fullPath = `/home/daytona/${relativePath}`;
+    const workspaceRoot = await resolveDaytonaWorkspaceRoot(sandboxId);
+    const fullPath = `${workspaceRoot}/${relativePath}`;
     return dc.downloadFile(sandboxId, fullPath);
 }
 /**
@@ -180,13 +166,14 @@ async function daytonaReadFile(sandboxId, relativePath) {
 async function daytonaDeleteFile(sandboxId, relativePath) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    const fullPath = `/home/daytona/${relativePath}`;
+    const workspaceRoot = await resolveDaytonaWorkspaceRoot(sandboxId);
+    const fullPath = `${workspaceRoot}/${relativePath}`;
     try {
         await dc.deleteFileNative(sandboxId, fullPath);
     }
     catch (nativeErr) {
         logger.warn({ sandboxId: sandboxId.slice(0, 12), path: relativePath, error: nativeErr.message }, 'Native filesystem delete failed, falling back to exec-based delete');
-        await dc.execCommand(sandboxId, `rm -rf '/home/daytona/${relativePath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
+        await dc.execCommand(sandboxId, `rm -rf '${workspaceRoot}/${relativePath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
     }
 }
 /**
@@ -196,18 +183,19 @@ async function daytonaDeleteFile(sandboxId, relativePath) {
 async function daytonaRenameFile(sandboxId, oldRelPath, newRelPath) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    const workspaceRoot = await resolveDaytonaWorkspaceRoot(sandboxId);
     const dir = newRelPath.substring(0, newRelPath.lastIndexOf('/'));
     // Create target directory via native API with exec fallback
     if (dir) {
         try {
-            await dc.createDirectoryNative(sandboxId, `/home/daytona/${dir}`);
+            await dc.createDirectoryNative(sandboxId, `${workspaceRoot}/${dir}`);
         }
         catch {
-            await dc.execCommand(sandboxId, `mkdir -p '/home/daytona/${dir.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
+            await dc.execCommand(sandboxId, `mkdir -p '${workspaceRoot}/${dir.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
         }
     }
     // mv still requires exec — no native rename/move endpoint
-    await dc.execCommand(sandboxId, `mv '/home/daytona/${oldRelPath.replace(/'/g, "'\\''")}' '/home/daytona/${newRelPath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
+    await dc.execCommand(sandboxId, `mv '${workspaceRoot}/${oldRelPath.replace(/'/g, "'\\''")}' '${workspaceRoot}/${newRelPath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
 }
 /**
  * Create a directory inside a Daytona sandbox.
@@ -216,12 +204,13 @@ async function daytonaRenameFile(sandboxId, oldRelPath, newRelPath) {
 async function daytonaCreateFolder(sandboxId, relativePath) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    const workspaceRoot = await resolveDaytonaWorkspaceRoot(sandboxId);
     try {
-        await dc.createDirectoryNative(sandboxId, `/home/daytona/${relativePath}`);
+        await dc.createDirectoryNative(sandboxId, `${workspaceRoot}/${relativePath}`);
     }
     catch (nativeErr) {
         logger.warn({ sandboxId: sandboxId.slice(0, 12), path: relativePath, error: nativeErr.message }, 'Native filesystem mkdir failed, falling back to exec-based mkdir');
-        await dc.execCommand(sandboxId, `mkdir -p '/home/daytona/${relativePath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
+        await dc.execCommand(sandboxId, `mkdir -p '${workspaceRoot}/${relativePath.replace(/'/g, "'\\''")}'`, { timeoutSecs: 10 });
     }
 }
 /**
@@ -229,21 +218,22 @@ async function daytonaCreateFolder(sandboxId, relativePath) {
  * Uses the native Toolbox filesystem API, falling back to exec-based find.
  * Returns a list of absolute paths (matching the Docker find-based output).
  */
-async function daytonaListFiles(sandboxId, dirPath = '/home/daytona') {
+async function daytonaListFiles(sandboxId, dirPath) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    const effectiveDirPath = dirPath || await resolveDaytonaWorkspaceRoot(sandboxId);
     // Try native filesystem list first
     try {
-        const entries = await dc.listFilesNative(sandboxId, dirPath);
+        const entries = await dc.listFilesNative(sandboxId, effectiveDirPath);
         // Convert DaytonaFileInfo entries to absolute paths matching the find-based format
-        const absDir = dirPath.endsWith('/') ? dirPath.slice(0, -1) : dirPath;
+        const absDir = effectiveDirPath.endsWith('/') ? effectiveDirPath.slice(0, -1) : effectiveDirPath;
         return entries.map(e => `${absDir}/${e.name}`);
     }
     catch (nativeErr) {
-        logger.warn({ sandboxId: sandboxId.slice(0, 12), dirPath, error: nativeErr.message }, 'Native filesystem list failed, falling back to exec-based find');
+        logger.warn({ sandboxId: sandboxId.slice(0, 12), dirPath: effectiveDirPath, error: nativeErr.message }, 'Native filesystem list failed, falling back to exec-based find');
         // Fallback to exec-based find — POSIX sh compatible (no grouping parens
         // that break in dash/sh). Two separate finds produce the same result.
-        const result = await dc.execCommand(sandboxId, `find '${dirPath}' -maxdepth 2 -type f 2>/dev/null; find '${dirPath}' -maxdepth 2 -type d 2>/dev/null`, { timeoutSecs: 15 });
+        const result = await dc.execCommand(sandboxId, `find '${effectiveDirPath}' -maxdepth 2 -type f 2>/dev/null; find '${effectiveDirPath}' -maxdepth 2 -type d 2>/dev/null`, { timeoutSecs: 15 });
         return result.output.split('\n').filter(Boolean);
     }
 }
@@ -262,13 +252,14 @@ async function daytonaExec(sandboxId, command, options) {
 }
 /**
  * Execute a background command (like a dev server) in a Daytona sandbox.
- * The process is daemonized with nohup/setsid so it outlives the request.
+ * The process is daemonized with nohup so it outlives the request.
+ * This intentionally uses the same direct exec pattern that was verified
+ * working in the live sandbox, instead of the Daytona session-based path.
  */
-async function daytonaExecBackground(sandboxId, command, cwd = '/home/daytona', options) {
+async function daytonaExecBackground(sandboxId, command, cwd, options) {
     await ensureRunningBeforeOp(sandboxId);
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    const safeCmd = command.replace(/`/g, '\\`');
-    const safeCwd = cwd.replace(/'/g, "'\\''");
+    const effectiveCwd = cwd || await resolveDaytonaWorkspaceRoot(sandboxId);
     if (!options?.skipCleanup) {
         try {
             await cleanupDaytonaDevServerProcesses(sandboxId, options?.projectId);
@@ -277,15 +268,15 @@ async function daytonaExecBackground(sandboxId, command, cwd = '/home/daytona', 
             // Non-fatal — proceed with starting the new process
         }
     }
-    const script = [
-        `cd '${safeCwd}'`,
-        `: > /tmp/dev.log`,
-        `BROWSER=none nohup sh -lc ${JSON.stringify(safeCmd)} >/tmp/dev.log 2>&1 < /dev/null &`,
-        `CHILD_PID=$!`,
-        `echo "$CHILD_PID" >/tmp/dev.pid`,
-        `sleep 2`,
-    ].join(' && ');
-    await dc.execCommand(sandboxId, script, { timeoutSecs: 10 });
+    if (options?.projectId) {
+        const sessionId = buildDaytonaDevServerSessionId(options.projectId);
+        const tmpScript = `/tmp/${sessionId}.sh`;
+        const b64 = Buffer.from(command, 'utf-8').toString('base64');
+        await dc.createSession(sandboxId, sessionId);
+        await dc.execInSession(sandboxId, sessionId, `printf '%s' '${b64}' | base64 -d > '${tmpScript}' && chmod +x '${tmpScript}' && cd '${effectiveCwd.replace(/'/g, "'\\''")}' && sh '${tmpScript}'`, { runAsync: true });
+        return;
+    }
+    await dc.execCommand(sandboxId, `sh -lc ${JSON.stringify(command)}`, { cwd: effectiveCwd, timeoutSecs: 15 });
 }
 // ── Workspace state ──
 /**
@@ -293,10 +284,11 @@ async function daytonaExecBackground(sandboxId, command, cwd = '/home/daytona', 
  */
 async function daytonaGetWorkspaceState(sandboxId, previewUrl) {
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
+    const workspaceRoot = await resolveDaytonaWorkspaceRoot(sandboxId);
     // File count
     let fileCount = 0;
     try {
-        const countResult = await dc.execCommand(sandboxId, 'find /home/daytona -type f -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | wc -l', { timeoutSecs: 15 });
+        const countResult = await dc.execCommand(sandboxId, `find ${workspaceRoot} -type f -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | wc -l`, { timeoutSecs: 15 });
         fileCount = parseInt(countResult.output.trim(), 10) || 0;
     }
     catch (err) {
@@ -305,7 +297,7 @@ async function daytonaGetWorkspaceState(sandboxId, previewUrl) {
     // package.json
     let hasPackageJson = false;
     try {
-        const pkgResult = await dc.execCommand(sandboxId, 'test -f /home/daytona/package.json && echo "yes" || echo "no"', { timeoutSecs: 5 });
+        const pkgResult = await dc.execCommand(sandboxId, `test -f ${workspaceRoot}/package.json && echo "yes" || echo "no"`, { timeoutSecs: 5 });
         hasPackageJson = pkgResult.output.includes('yes');
     }
     catch { }
@@ -349,26 +341,6 @@ async function ensureDaytonaSandboxRunning(sandboxId) {
         const sandbox = await dc.getOrStartSandbox(sandboxId, 30000);
         const isRunning = sandbox.state === 'started' || sandbox.state === 'running';
         const wasRestarted = ['stopped', 'archived', 'archiving'].includes(initialState);
-        // After restarting a stopped sandbox, all processes (including dev server) are gone.
-        // Auto-restart the dev server if package.json exists and has a dev script.
-        if (isRunning && wasRestarted) {
-            logger.info({ sandboxId }, 'Daytona: sandbox was restarted, checking if dev server needs restart');
-            try {
-                await dc.execCommand(sandboxId, 'test -L /workspace || ln -sf /home/daytona /workspace', { timeoutSecs: 10 });
-                const checkResult = await dc.execCommand(sandboxId, 'test -f /home/daytona/package.json && grep -q \'"dev"\' /home/daytona/package.json && echo HAS_DEV || echo NO_DEV', { timeoutSecs: 5 });
-                if (checkResult.output?.includes('HAS_DEV')) {
-                    // Check if dev server is already running on any common port
-                    const portCheck = await dc.execCommand(sandboxId, 'for p in 5173 5174 5175 5176 5177 5178 3000 3001; do curl -sf http://localhost:$p > /dev/null 2>&1 && echo "FOUND:$p" && exit 0; done; echo "NONE"', { timeoutSecs: 5 });
-                    if (portCheck.output?.includes('NONE')) {
-                        logger.info({ sandboxId }, 'Daytona: dev server not running after restart, auto-starting');
-                        await daytonaExecBackground(sandboxId, 'npm run dev -- --host 0.0.0.0', '/home/daytona');
-                    }
-                }
-            }
-            catch (devErr) {
-                logger.warn({ sandboxId, err: devErr.message }, 'Daytona: dev server auto-restart failed (non-fatal)');
-            }
-        }
         return { running: isRunning, restarted: wasRestarted };
     }
     catch (err) {
@@ -392,10 +364,25 @@ async function daytonaDeleteSandbox(sandboxId) {
 /**
  * Get logs from a Daytona sandbox (dev server logs).
  */
-async function daytonaGetLogs(sandboxId, tail = 100) {
+async function daytonaGetLogs(sandboxId, tail = 100, projectId) {
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
     try {
         const result = await dc.execCommand(sandboxId, `tail -n ${tail} /tmp/dev.log 2>/dev/null || echo "(no dev server logs)"`, { timeoutSecs: 10 });
+        if (result.output.trim() && !result.output.includes('(no dev server logs)')) {
+            return result.output;
+        }
+        const sessionId = projectId ? buildDaytonaDevServerSessionId(projectId) : null;
+        if (sessionId) {
+            try {
+                const logs = await dc.getSessionLogs(sandboxId, sessionId);
+                if (logs.trim()) {
+                    return logs;
+                }
+            }
+            catch {
+                // ignore
+            }
+        }
         return result.output;
     }
     catch (err) {

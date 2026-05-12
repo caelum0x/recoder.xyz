@@ -3,11 +3,29 @@ import type { PortalFeature } from "@repo/backend/prisma/client";
 import { env } from "@/env";
 import { database } from "@/lib/database";
 
-function toAbsoluteUrl(pathname: string, baseValue: string | undefined, fallback: string): URL {
+function normalizeBaseUrl(baseValue: string | undefined, fallback: string): string {
   try {
-    return new URL(pathname, baseValue || fallback);
+    return new URL(baseValue || fallback).toString();
   } catch {
-    return new URL(pathname, fallback);
+    try {
+      return new URL(fallback).toString();
+    } catch {
+      return fallback.startsWith("http") ? fallback : `https://${fallback}`;
+    }
+  }
+}
+
+function toAbsoluteUrl(
+  pathname: string,
+  baseValue: string | undefined,
+  fallback: string
+): URL {
+  const normalizedBaseUrl = normalizeBaseUrl(baseValue, fallback);
+
+  try {
+    return new URL(pathname, normalizedBaseUrl);
+  } catch {
+    return new URL(pathname, normalizeBaseUrl(undefined, fallback));
   }
 }
 
@@ -34,7 +52,7 @@ export const getPortalUrl = async (
     env.RECODER_PM_PORTAL_URL,
     "https://pm.recoder.xyz/portal"
   );
-  portalUrl.hostname = [portal.slug, portalUrl.hostname].join(".");
+  portalUrl.hostname = [portal.slug, portalUrl.hostname].filter(Boolean).join(".");
 
   return portalUrl.toString();
 };
