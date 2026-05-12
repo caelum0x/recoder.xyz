@@ -17,7 +17,7 @@ import {
 } from "@/db";
 import { fetchCurrentTeam } from "@/services/teams";
 import { createChangeOrder } from "./change-order-actions";
-import { requestProjectHandoff } from "../actions";
+import { requestProjectHandoff, requestProjectPlanningRun } from "../actions";
 import { CostSection } from "./cost-section";
 import { DeliverableSection } from "./deliverable-section";
 import { InvoiceSection } from "./invoice-section";
@@ -82,6 +82,8 @@ export default async function ProjectDetailPage({
 		endDate?: string;
 		handoffTaskId?: string;
 		handoffRequested?: string;
+		planningTaskId?: string;
+		planningRequested?: string;
 	}>;
 }) {
 	const { projectId } = await params;
@@ -151,6 +153,8 @@ export default async function ProjectDetailPage({
 	const normalizedEndDate = parsedEndDate ? toIsoDate(parsedEndDate) : "";
 	const handoffTaskId = query.handoffTaskId?.trim() ?? "";
 	const handoffRequested = query.handoffRequested?.trim() ?? "";
+	const planningTaskId = query.planningTaskId?.trim() ?? "";
+	const planningRequested = query.planningRequested?.trim() ?? "";
 	if (parsedStartDate) {
 		transitionWhere.push(
 			gte(projectStatusTransitions.createdAt, parsedStartDate),
@@ -210,6 +214,12 @@ export default async function ProjectDetailPage({
 		}
 		if (handoffRequested) {
 			params.set("handoffRequested", handoffRequested);
+		}
+		if (planningTaskId) {
+			params.set("planningTaskId", planningTaskId);
+		}
+		if (planningRequested) {
+			params.set("planningRequested", planningRequested);
 		}
 		params.set("pageSize", String(pageSize));
 		params.set("page", String(currentPage));
@@ -433,6 +443,16 @@ export default async function ProjectDetailPage({
 					Project handoff request was submitted, but no shared run was created.
 				</div>
 			) : null}
+			{planningTaskId ? (
+				<div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-sm text-indigo-200">
+					Project planning run created: <span className="font-medium">{planningTaskId}</span>
+				</div>
+			) : null}
+			{planningRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project planning request was submitted, but no shared run was created.
+				</div>
+			) : null}
 
 			<div className="rounded-xl border border-border bg-background p-4">
 				<h2 className="text-sm font-medium text-text-muted mb-3">
@@ -529,6 +549,32 @@ export default async function ProjectDetailPage({
 						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
 					>
 						Create Project Handoff Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Planning Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared planning/product run in the linked workspace
+					</span>
+				</div>
+				<form
+					action={requestProjectPlanningRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<textarea
+						name="note"
+						rows={3}
+						placeholder="Optional planning focus, scope question, or risk area"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Planning Run
 					</button>
 				</form>
 			</div>

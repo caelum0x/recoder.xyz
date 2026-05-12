@@ -525,3 +525,73 @@ export async function requestProjectHandoff(
 	}
 	redirect(`/projects/${project.id}?handoffTaskId=${encodeURIComponent(created.taskId)}`);
 }
+
+export async function requestProjectPlanningRun(
+	projectId: string,
+	formData: FormData,
+) {
+	const [team, user] = await Promise.all([
+		requireAdminRole(),
+		getCurrentUser(),
+	]);
+	const note = String(formData.get("note") ?? "").trim();
+
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+	if (!project.workspaceDbId) {
+		throw new Error("Project has no linked workspace for shared planning");
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		throw new Error("Linked workspace not found");
+	}
+
+	const prompt = [
+		`Create a planning run for "${project.name}".`,
+		`Project status: ${project.status}.`,
+		project.brief ? `Project brief:\n${project.brief.slice(0, 2500)}` : null,
+		note ? `Planning focus:\n${note}` : null,
+		"Produce a concrete plan with risks, dependencies, sequencing, approval points, and recommended next actions for delivery.",
+	].filter(Boolean).join("\n\n");
+
+	const created = await createRecoderTask({
+		workspaceId: workspace.id,
+		threadId: `agency-planning-${project.id}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt,
+		autoRoute: true,
+		routingHints: {
+			runtimeCategory: "documentation",
+			requiredCapabilities: ["code-review"],
+			preferredCapabilities: ["documentation"],
+			preferredPlatform: "claude_code",
+		},
+		metadata: {
+			projectId: project.id,
+			projectDbId: project.dbId,
+			planningRun: {
+				note: note || null,
+				requestedByUserDbId: user.dbId,
+				requestedAt: new Date().toISOString(),
+				source: "agency.admin.project-planning",
+			},
+		},
+	});
+
+	revalidatePath(`/projects/${project.id}`);
+	if (!created?.taskId) {
+		redirect(`/projects/${project.id}?planningRequested=error`);
+	}
+	redirect(`/projects/${project.id}?planningTaskId=${encodeURIComponent(created.taskId)}`);
+}
