@@ -18,6 +18,7 @@ import {
 import { createProjectFromPlaybook as createProjectFromPlaybookHelper } from "@/lib/agency/playbook-actions";
 import { applyProjectTransitionWithAudit } from "@/lib/agency/project-transition";
 import { createRecoderTask } from "@/lib/agency/recoder-control-plane";
+import { resolveModelRoutingPolicyForWorkspace } from "@/lib/agency/model-routing";
 import {
 	deliveryProjectStatusLabels,
 	getAllowedProjectStatusTransitions,
@@ -594,4 +595,81 @@ export async function requestProjectPlanningRun(
 		redirect(`/projects/${project.id}?planningRequested=error`);
 	}
 	redirect(`/projects/${project.id}?planningTaskId=${encodeURIComponent(created.taskId)}`);
+}
+
+export async function requestProjectGovernanceRun(
+	projectId: string,
+	formData: FormData,
+) {
+	const [team, user] = await Promise.all([
+		requireAdminRole(),
+		getCurrentUser(),
+	]);
+	const note = String(formData.get("note") ?? "").trim();
+
+	const project = await db.query.projects.findFirst({
+		where: and(eq(projects.id, projectId), eq(projects.teamDbId, team.dbId)),
+	});
+	if (!project) {
+		throw new Error("Project not found");
+	}
+	if (!project.workspaceDbId) {
+		throw new Error("Project has no linked workspace for shared governance");
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		throw new Error("Linked workspace not found");
+	}
+
+	const policy = await resolveModelRoutingPolicyForWorkspace(workspace.id);
+
+	const prompt = [
+		`Run a governance and policy audit for "${project.name}".`,
+		`Project status: ${project.status}.`,
+		`Budget warning threshold: ${project.costWarningThresholdPct}%`,
+		`Budget hard-stop threshold: ${project.costHardStopThresholdPct}% (${project.costHardStopEnabled ? "enabled" : "disabled"})`,
+		policy
+			? `Routing policy: ${policy.name} (preferred=${policy.preferredModelId}${policy.fallbackModelId ? `, fallback=${policy.fallbackModelId}` : ""}${policy.costCeilingCentsPerGeneration != null ? `, cost ceiling cents=${policy.costCeilingCentsPerGeneration}` : ""})`
+			: "Routing policy: none configured",
+		note ? `Governance focus:\n${note}` : null,
+		"Audit approvals, handoffs, routing policy, cost guardrails, and open governance risks. Recommend concrete operator actions and retention/audit follow-up.",
+	].filter(Boolean).join("\n\n");
+
+	const created = await createRecoderTask({
+		workspaceId: workspace.id,
+		threadId: `agency-governance-${project.id}-${Date.now()}`,
+		requester: {
+			agentId: "recoder-agency",
+			platform: "recoder_agency",
+			name: "Recoder Agency",
+		},
+		prompt,
+		autoRoute: true,
+		routingHints: {
+			runtimeCategory: "documentation",
+			requiredCapabilities: ["code-review"],
+			preferredCapabilities: ["documentation"],
+			preferredPlatform: "claude_code",
+		},
+		metadata: {
+			projectId: project.id,
+			projectDbId: project.dbId,
+			governanceRun: {
+				note: note || null,
+				requestedByUserDbId: user.dbId,
+				requestedAt: new Date().toISOString(),
+				source: "agency.admin.project-governance",
+				routingPolicyDbId: policy?.dbId ?? null,
+			},
+		},
+	});
+
+	revalidatePath(`/projects/${project.id}`);
+	if (!created?.taskId) {
+		redirect(`/projects/${project.id}?governanceRequested=error`);
+	}
+	redirect(`/projects/${project.id}?governanceTaskId=${encodeURIComponent(created.taskId)}`);
 }
