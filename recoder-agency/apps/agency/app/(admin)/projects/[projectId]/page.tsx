@@ -19,6 +19,7 @@ import { fetchCurrentTeam } from "@/services/teams";
 import { createChangeOrder } from "./change-order-actions";
 import {
 	deleteProjectRoutingPolicy,
+	requestProjectBrowserRun,
 	requestProjectGovernanceRun,
 	requestProjectHandoff,
 	requestProjectPlanningRun,
@@ -93,6 +94,8 @@ export default async function ProjectDetailPage({
 		planningRequested?: string;
 		governanceTaskId?: string;
 		governanceRequested?: string;
+		browserTaskId?: string;
+		browserRequested?: string;
 	}>;
 }) {
 	const { projectId } = await params;
@@ -166,6 +169,8 @@ export default async function ProjectDetailPage({
 	const planningRequested = query.planningRequested?.trim() ?? "";
 	const governanceTaskId = query.governanceTaskId?.trim() ?? "";
 	const governanceRequested = query.governanceRequested?.trim() ?? "";
+	const browserTaskId = query.browserTaskId?.trim() ?? "";
+	const browserRequested = query.browserRequested?.trim() ?? "";
 	if (parsedStartDate) {
 		transitionWhere.push(
 			gte(projectStatusTransitions.createdAt, parsedStartDate),
@@ -237,6 +242,12 @@ export default async function ProjectDetailPage({
 		}
 		if (governanceRequested) {
 			params.set("governanceRequested", governanceRequested);
+		}
+		if (browserTaskId) {
+			params.set("browserTaskId", browserTaskId);
+		}
+		if (browserRequested) {
+			params.set("browserRequested", browserRequested);
 		}
 		params.set("pageSize", String(pageSize));
 		params.set("page", String(currentPage));
@@ -481,6 +492,16 @@ export default async function ProjectDetailPage({
 			{governanceRequested === "error" ? (
 				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
 					Project governance request was submitted, but no shared run was created.
+				</div>
+			) : null}
+			{browserTaskId ? (
+				<div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+					Project browser run created: <span className="font-medium">{browserTaskId}</span>
+				</div>
+			) : null}
+			{browserRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project browser request was submitted, but no shared run was created.
 				</div>
 			) : null}
 
@@ -740,6 +761,32 @@ export default async function ProjectDetailPage({
 						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
 					>
 						Create Governance Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Browser Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared browser-task run in the linked workspace
+					</span>
+				</div>
+				<form
+					action={requestProjectBrowserRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<textarea
+						name="goal"
+						rows={3}
+						placeholder="Optional browser goal, validation task, or research target"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Browser Run
 					</button>
 				</form>
 			</div>
