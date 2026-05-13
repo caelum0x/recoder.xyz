@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, GitBranch, Loader2, Copy, FileDiff, FolderTree, Eye } from 'lucide-react';
 import { dockerBackendApi } from '@/lib/docker-backend-api';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -32,6 +32,13 @@ interface TaskContextData {
       worktreePath?: string | null;
       changedFiles?: string[];
     } | null;
+    handoff?: {
+      status?: string | null;
+      intent?: string | null;
+      reviewTarget?: string | null;
+      reviewPath?: string | null;
+      assignedBy?: string | null;
+    } | null;
     merge?: {
       status?: string | null;
       branchName?: string | null;
@@ -62,6 +69,7 @@ function findDiffArtifact(artifacts: TaskArtifact[] | undefined): TaskArtifact |
 }
 
 export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialogProps) {
+  const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ['mission-control', 'task-context', taskId ?? ''],
     queryFn: async () => {
@@ -84,6 +92,43 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
       toast.error(`Failed to copy ${label.toLowerCase()}`);
     }
   };
+
+  const updateReviewMutation = useMutation({
+    mutationFn: async (input: {
+      reason: string;
+      metadataPatch: Record<string, unknown>;
+      successMessage: string;
+    }) => {
+      if (!taskId) {
+        throw new Error('Task ID is required');
+      }
+
+      const res = await dockerBackendApi.post(
+        `/api/a2a/tasks/${taskId}/metadata`,
+        {
+          metadataPatch: input.metadataPatch,
+          reason: input.reason,
+          triggeredBy: 'recoder-agents-mission-control',
+        },
+      );
+
+      if (!res.success) {
+        throw new Error(res.error?.message || 'Failed to update task review state');
+      }
+
+      return input.successMessage;
+    },
+    onSuccess: async (message) => {
+      toast.success(message);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['mission-control', 'task-context', taskId ?? ''] }),
+        queryClient.invalidateQueries({ queryKey: ['mission-control'] }),
+      ]);
+    },
+    onError: (mutationError) => {
+      toast.error(mutationError instanceof Error ? mutationError.message : 'Failed to update review state');
+    },
+  });
 
   const diffArtifact = findDiffArtifact(data?.runtime?.artifacts);
   const changedFiles = data?.review?.worktree?.changedFiles?.length
@@ -152,6 +197,14 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                     <span className="text-muted-foreground">Suggested action:</span>{' '}
                     <span>{data.review?.merge?.suggestedAction ?? '—'}</span>
                   </div>
+                  <div>
+                    <span className="text-muted-foreground">Review status:</span>{' '}
+                    <span>{data.review?.handoff?.status ?? '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Merge status:</span>{' '}
+                    <span>{data.review?.merge?.status ?? '—'}</span>
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
@@ -171,6 +224,58 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                   >
                     <FolderTree className="mr-1 h-3.5 w-3.5" />
                     Copy path
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={updateReviewMutation.isPending}
+                    onClick={() =>
+                      updateReviewMutation.mutate({
+                        reason: 'Mission Control marked review as accepted',
+                        successMessage: 'Review marked accepted',
+                        metadataPatch: {
+                          handoff: {
+                            ...(data.review?.handoff ?? {}),
+                            status: 'review-accepted',
+                          },
+                          merge: {
+                            ...(data.review?.merge ?? {}),
+                            status: 'ready-to-merge',
+                            suggestedAction: 'merge-worktree-branch',
+                          },
+                        },
+                      })
+                    }
+                  >
+                    {updateReviewMutation.isPending ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    Mark review accepted
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={updateReviewMutation.isPending}
+                    onClick={() =>
+                      updateReviewMutation.mutate({
+                        reason: 'Mission Control requested merge handoff',
+                        successMessage: 'Merge requested',
+                        metadataPatch: {
+                          merge: {
+                            ...(data.review?.merge ?? {}),
+                            status: 'merge-requested',
+                            suggestedAction: 'merge-worktree-branch',
+                          },
+                        },
+                      })
+                    }
+                  >
+                    {updateReviewMutation.isPending ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    Request merge
                   </Button>
                 </div>
               </section>
