@@ -81,6 +81,11 @@ export default async function DeliveryOpsPage({
 		reworkThreshold?: string;
 		minRiskScore?: string;
 		hasForcedOnly?: string;
+		reviewStatus?: string;
+		mergeStatus?: string;
+		hasBranchOnly?: string;
+		hasPreviewOnly?: string;
+		reviewSort?: string;
 		preset?: string;
 		opsRunMode?: string;
 		opsRunCount?: string;
@@ -93,6 +98,11 @@ export default async function DeliveryOpsPage({
 		? params.opsRunMode
 		: "";
 	const opsRunCount = Number.parseInt(params.opsRunCount ?? "", 10);
+	const reviewStatusFilter = String(params.reviewStatus ?? "").trim();
+	const mergeStatusFilter = String(params.mergeStatus ?? "").trim();
+	const hasBranchOnly = params.hasBranchOnly === "1" || params.hasBranchOnly === "true";
+	const hasPreviewOnly = params.hasPreviewOnly === "1" || params.hasPreviewOnly === "true";
+	const reviewSort = String(params.reviewSort ?? "latest_event_desc").trim();
 	const [data, capacity, teamAlertSubscriptions] = await Promise.all([
 		fetchDeliveryOpsData(team.dbId, filters),
 		getTeamCapacitySnapshot(team.dbId),
@@ -232,7 +242,40 @@ export default async function DeliveryOpsPage({
 				};
 			}),
 		)
-	).filter((item): item is NonNullable<typeof item> => item !== null);
+	)
+		.filter((item): item is NonNullable<typeof item> => item !== null)
+		.filter((item) => {
+			if (reviewStatusFilter && item.reviewStatus !== reviewStatusFilter) {
+				return false;
+			}
+			if (mergeStatusFilter && item.mergeStatus !== mergeStatusFilter) {
+				return false;
+			}
+			if (hasBranchOnly && !item.branchName) {
+				return false;
+			}
+			if (hasPreviewOnly && !item.previewUrl) {
+				return false;
+			}
+			return true;
+		})
+		.sort((a, b) => {
+			const latestA = a.reviewHistory[a.reviewHistory.length - 1]?.at ?? "";
+			const latestB = b.reviewHistory[b.reviewHistory.length - 1]?.at ?? "";
+			switch (reviewSort) {
+				case "branch_asc":
+					return (a.branchName ?? "").localeCompare(b.branchName ?? "");
+				case "merge_status":
+					return (a.mergeStatus ?? "").localeCompare(b.mergeStatus ?? "");
+				case "review_status":
+					return (a.reviewStatus ?? "").localeCompare(b.reviewStatus ?? "");
+				case "latest_event_asc":
+					return latestA.localeCompare(latestB);
+				case "latest_event_desc":
+				default:
+					return latestB.localeCompare(latestA);
+			}
+		});
 
 	const renderControlPlaneSummary = (projectId: string) => {
 		const summary = controlPlaneByProjectId[projectId];
@@ -556,6 +599,102 @@ export default async function DeliveryOpsPage({
 						{reviewQueue.length} item(s) in current filtered project set
 					</span>
 				</div>
+				<form
+					method="get"
+					className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-5"
+				>
+					<input type="hidden" name="windowDays" value={filters.windowDays} />
+					<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+					<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+					<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+					{filters.hasForcedOnly ? (
+						<input type="hidden" name="hasForcedOnly" value="1" />
+					) : null}
+					<div>
+						<label className="mb-1 block text-xs text-text-muted">
+							Review status
+						</label>
+						<select
+							name="reviewStatus"
+							defaultValue={reviewStatusFilter}
+							className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="">All</option>
+							<option value="review-ready">review-ready</option>
+							<option value="review-accepted">review-accepted</option>
+						</select>
+					</div>
+					<div>
+						<label className="mb-1 block text-xs text-text-muted">
+							Merge status
+						</label>
+						<select
+							name="mergeStatus"
+							defaultValue={mergeStatusFilter}
+							className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="">All</option>
+							<option value="merge-requested">merge-requested</option>
+							<option value="ready-to-merge">ready-to-merge</option>
+						</select>
+					</div>
+					<div>
+						<label className="mb-1 block text-xs text-text-muted">
+							Sort
+						</label>
+						<select
+							name="reviewSort"
+							defaultValue={reviewSort}
+							className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="latest_event_desc">Latest event desc</option>
+							<option value="latest_event_asc">Latest event asc</option>
+							<option value="branch_asc">Branch</option>
+							<option value="merge_status">Merge status</option>
+							<option value="review_status">Review status</option>
+						</select>
+					</div>
+					<div className="flex items-center gap-2 self-end pb-2">
+						<input
+							id="hasBranchOnly"
+							name="hasBranchOnly"
+							type="checkbox"
+							value="1"
+							defaultChecked={hasBranchOnly}
+							className="size-4 rounded border border-border bg-background"
+						/>
+						<label htmlFor="hasBranchOnly" className="text-xs text-text-muted">
+							Branch only
+						</label>
+					</div>
+					<div className="flex items-center gap-2 self-end pb-2">
+						<input
+							id="hasPreviewOnly"
+							name="hasPreviewOnly"
+							type="checkbox"
+							value="1"
+							defaultChecked={hasPreviewOnly}
+							className="size-4 rounded border border-border bg-background"
+						/>
+						<label htmlFor="hasPreviewOnly" className="text-xs text-text-muted">
+							Preview only
+						</label>
+					</div>
+					<div className="md:col-span-5 flex items-center gap-2">
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+						>
+							Apply queue filters
+						</button>
+						<Link
+							href={`/delivery-ops?${toDeliveryOpsSearchParams(filters).toString()}`}
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm text-text hover:bg-bg-hover transition-colors"
+						>
+							Reset queue filters
+						</Link>
+					</div>
+				</form>
 				{reviewQueue.length === 0 ? (
 					<p className="text-sm text-text-muted">
 						No review-ready or merge-requested deliverables in the current risk set.
