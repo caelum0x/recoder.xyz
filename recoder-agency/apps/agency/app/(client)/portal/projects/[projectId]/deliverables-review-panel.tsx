@@ -445,10 +445,20 @@ export function DeliverablesReviewPanel({
 									artifacts:{controlPlane.runtime.artifactCount}
 								</span>
 							) : null}
+							{controlPlane.review?.merge?.status ? (
+								<span className="rounded bg-orange-500/10 px-2 py-0.5 text-orange-300">
+									merge:{controlPlane.review.merge.status}
+								</span>
+							) : null}
 						</div>
 						{controlPlane.runtime?.git?.branch ? (
 							<p className="mt-2 text-[11px] text-text-muted">
 								git branch: {controlPlane.runtime.git.branch}
+							</p>
+						) : null}
+						{controlPlane.review?.worktree?.branchName ? (
+							<p className="mt-1 text-[11px] text-text-muted">
+								review branch: {controlPlane.review.worktree.branchName}
 							</p>
 						) : null}
 						{previewUrl ? (
