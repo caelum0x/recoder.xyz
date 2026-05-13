@@ -48,6 +48,75 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function extractTaskRun(
+  task: TaskEnvelope,
+  transitions: TaskStateTransition[],
+  reviewHistory: Array<{
+    at: string | null;
+    type: string | null;
+    actor: string | null;
+    status: string | null;
+    note: string | null;
+    branchName: string | null;
+    baseBranch: string | null;
+    reviewTarget: string | null;
+    reviewPath: string | null;
+    suggestedAction: string | null;
+  }>,
+  runtime: {
+    evidenceCount: number;
+    previewCount: number;
+    artifactCount: number;
+    logCount: number;
+    runtimeCount: number;
+    git: {
+      branch: string | null;
+      status: string | null;
+      cloneUrl: string | null;
+    } | null;
+  },
+) {
+  const startedAt =
+    transitions.find((transition) => transition.to === 'working')?.transitioned_at ??
+    null;
+  const terminalTransition =
+    [...transitions]
+      .reverse()
+      .find((transition) =>
+        transition.to === 'completed' ||
+        transition.to === 'failed' ||
+        transition.to === 'cancelled',
+      ) ?? null;
+  const metadata = readRecord(task.metadata);
+  const resultData = readRecord(task.result?.data);
+
+  return {
+    taskId: task.id,
+    state: task.state,
+    startedAt,
+    completedAt: terminalTransition?.transitioned_at ?? null,
+    exitCode:
+      typeof resultData?.exitCode === 'number'
+        ? resultData.exitCode
+        : typeof metadata?.exitCode === 'number'
+          ? metadata.exitCode
+          : null,
+    assigneeAgentId: task.assignee.agent_id,
+    branch:
+      runtime.git?.branch ??
+      (typeof metadata?.worktree === 'object' && metadata?.worktree !== null
+        ? (metadata.worktree as Record<string, unknown>).branchName as string | undefined
+        : undefined) ??
+      null,
+    reviewReady: reviewHistory.some((entry) => entry.type === 'review.accepted'),
+    mergeRequested: reviewHistory.some((entry) => entry.type === 'merge.requested'),
+    artifactCount: runtime.artifactCount,
+    previewCount: runtime.previewCount,
+    logCount: runtime.logCount,
+    evidenceCount: runtime.evidenceCount,
+  };
+}
+
 function summarizeTaskPrompt(task: TaskEnvelope): string {
   const payload = Array.isArray(task.payload) ? task.payload[0] : task.payload;
   const payloadRecord =
@@ -222,14 +291,6 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
     task,
     transitions,
     audit,
-    timeline: buildTaskTimeline({
-      task,
-      transitions,
-      artifacts,
-      preview,
-      filesChanged,
-      reviewHistory,
-    }),
     links: {
       ...(approval ? { approval } : {}),
       ...(delegation ? { delegation } : {}),
@@ -319,6 +380,33 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
           }
         : null,
     },
+    run: extractTaskRun(
+      task,
+      transitions,
+      reviewHistory,
+      {
+        evidenceCount: evidence.length,
+        previewCount: preview.length,
+        artifactCount: artifacts.length,
+        logCount: logEvidence.length,
+        runtimeCount: runtimeEvidence.length,
+        git: gitMetadata
+          ? {
+              branch: typeof gitMetadata.gitBranch === 'string' ? gitMetadata.gitBranch : null,
+              status: typeof gitMetadata.gitStatus === 'string' ? gitMetadata.gitStatus : null,
+              cloneUrl: typeof gitMetadata.cloneUrl === 'string' ? gitMetadata.cloneUrl : null,
+            }
+          : null,
+      },
+    ),
+    timeline: buildTaskTimeline({
+      task,
+      transitions,
+      artifacts,
+      preview,
+      filesChanged,
+      reviewHistory,
+    }),
   };
 }
 
