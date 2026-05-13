@@ -42,6 +42,12 @@ function readMetadata(item: TaskEvidenceItem): Record<string, unknown> | null {
     : null;
 }
 
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 export async function buildTaskRunContext(task: TaskEnvelope) {
   const service = getTaskLifecycleService();
   const transitionsResult = service.getTaskHistory(task.id);
@@ -80,6 +86,9 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
     return Boolean(metadata?.gitStatus || metadata?.gitBranch || metadata?.cloneUrl);
   });
   const gitMetadata = gitEvidence ? readMetadata(gitEvidence) : null;
+  const worktreeMetadata = readRecord(task.metadata?.worktree);
+  const handoffMetadata = readRecord(task.metadata?.handoff);
+  const mergeMetadata = readRecord(task.metadata?.merge);
 
   return {
     task,
@@ -115,6 +124,40 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
         expiresAt: session.expiresAt,
         heartbeat: session.heartbeat,
       })),
+    },
+    review: {
+      worktree: worktreeMetadata
+        ? {
+            isolated: worktreeMetadata.isolated === true,
+            reviewReady: worktreeMetadata.reviewReady === true,
+            branchName: typeof worktreeMetadata.branchName === 'string' ? worktreeMetadata.branchName : null,
+            baseBranch: typeof worktreeMetadata.baseBranch === 'string' ? worktreeMetadata.baseBranch : null,
+            worktreePath: typeof worktreeMetadata.worktreePath === 'string' ? worktreeMetadata.worktreePath : null,
+            changedFiles: Array.isArray(worktreeMetadata.changedFiles)
+              ? worktreeMetadata.changedFiles.filter((value): value is string => typeof value === 'string')
+              : [],
+          }
+        : null,
+      handoff: handoffMetadata
+        ? {
+            status: typeof handoffMetadata.status === 'string' ? handoffMetadata.status : null,
+            intent: typeof handoffMetadata.intent === 'string' ? handoffMetadata.intent : null,
+            reviewTarget: typeof handoffMetadata.reviewTarget === 'string' ? handoffMetadata.reviewTarget : null,
+            reviewPath: typeof handoffMetadata.reviewPath === 'string' ? handoffMetadata.reviewPath : null,
+            assignedBy: typeof handoffMetadata.assignedBy === 'string' ? handoffMetadata.assignedBy : null,
+          }
+        : null,
+      merge: mergeMetadata
+        ? {
+            status: typeof mergeMetadata.status === 'string' ? mergeMetadata.status : null,
+            branchName: typeof mergeMetadata.branchName === 'string' ? mergeMetadata.branchName : null,
+            baseBranch: typeof mergeMetadata.baseBranch === 'string' ? mergeMetadata.baseBranch : null,
+            suggestedAction: typeof mergeMetadata.suggestedAction === 'string' ? mergeMetadata.suggestedAction : null,
+            changedFiles: Array.isArray(mergeMetadata.changedFiles)
+              ? mergeMetadata.changedFiles.filter((value): value is string => typeof value === 'string')
+              : [],
+          }
+        : null,
     },
     runtime: {
       evidence,
@@ -182,6 +225,7 @@ export async function buildTaskRunSummary(task: TaskEnvelope) {
           toAgentId: context.links.delegation.toAgentId,
         }
       : null,
+    review: context.review,
     assignee: context.assignee,
     runtime: context.runtime,
     transitionCount: context.transitions.length,
