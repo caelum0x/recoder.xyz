@@ -249,7 +249,31 @@ describe('A2A workspace routes', () => {
       assignee: { agent_id: 'agent-b', platform: 'codex' },
       connector: { connector_id: 'codex-ctx', platform: 'codex', protocol: 'jsonrpc' },
       payload: { kind: 'text', text: 'Add pricing page' },
-      metadata: { previewUrl: 'https://preview.recoder.xyz/context' },
+      metadata: {
+        previewUrl: 'https://preview.recoder.xyz/context',
+        worktree: {
+          isolated: true,
+          branchName: 'recoder/add-pricing-page-123',
+          baseBranch: 'main',
+          worktreePath: '/tmp/recoder-space-123',
+          reviewReady: true,
+          changedFiles: ['app/pricing/page.tsx'],
+        },
+        handoff: {
+          status: 'review-ready',
+          intent: 'review',
+          reviewTarget: 'recoder/add-pricing-page-123',
+          reviewPath: '/tmp/recoder-space-123',
+          assignedBy: 'agent-b',
+        },
+        merge: {
+          status: 'pending-review',
+          branchName: 'recoder/add-pricing-page-123',
+          baseBranch: 'main',
+          suggestedAction: 'review-worktree-branch',
+          changedFiles: ['app/pricing/page.tsx'],
+        },
+      },
     });
     expect(created.ok).toBe(true);
 
@@ -273,6 +297,16 @@ describe('A2A workspace routes', () => {
     expect(body.data.recentTasks[0]).toMatchObject({
       prompt: 'Add pricing page',
       workspace_id: workspace.workspaceId,
+      review: {
+        worktree: {
+          isolated: true,
+          branchName: 'recoder/add-pricing-page-123',
+        },
+        merge: {
+          status: 'pending-review',
+          suggestedAction: 'review-worktree-branch',
+        },
+      },
     });
     expect(body.data.pendingApprovals).toHaveLength(1);
     expect(body.data.activeHandoffs).toHaveLength(1);

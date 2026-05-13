@@ -289,6 +289,7 @@ function buildWorkspaceContextPackageFromSnapshot(
       updatedAt: task.updatedAt,
       approvalStatus: task.approval?.status ?? null,
       handoffStatus: task.handoff?.status ?? null,
+      review: task.review ?? null,
       runtime: task.runtime ?? null,
     })),
     pendingApprovals: snapshot.approvals
