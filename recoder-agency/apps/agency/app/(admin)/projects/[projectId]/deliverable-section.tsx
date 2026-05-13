@@ -362,6 +362,25 @@ export function DeliverableSection({
 												worktree path: {controlPlane.review.worktree.worktreePath}
 											</p>
 										) : null}
+										{controlPlane.review?.history?.length ? (
+											<div className="mt-2 rounded-md border border-border/60 bg-background/70 px-2 py-2">
+												<p className="text-[11px] font-medium text-text-muted">
+													review history
+												</p>
+												<div className="mt-1 space-y-1">
+													{controlPlane.review.history.slice(-3).reverse().map((entry, index) => (
+														<p
+															key={`${entry.at ?? "entry"}-${index}`}
+															className="text-[11px] text-text-muted"
+														>
+															{entry.type ?? "review.event"}
+															{entry.branchName ? ` • ${entry.branchName}` : ""}
+															{entry.status ? ` • ${entry.status}` : ""}
+														</p>
+													))}
+												</div>
+											</div>
+										) : null}
 										{previewUrl ? (
 											<a
 												href={previewUrl}

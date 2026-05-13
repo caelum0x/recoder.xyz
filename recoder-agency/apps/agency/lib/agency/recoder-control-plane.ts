@@ -49,6 +49,18 @@ export interface RecoderTaskContext {
 			suggestedAction?: string | null;
 			changedFiles?: string[];
 		} | null;
+		history?: Array<{
+			at?: string | null;
+			type?: string | null;
+			actor?: string | null;
+			status?: string | null;
+			note?: string | null;
+			branchName?: string | null;
+			baseBranch?: string | null;
+			reviewTarget?: string | null;
+			reviewPath?: string | null;
+			suggestedAction?: string | null;
+		}>;
 	};
 	assignee?: {
 		name?: string;
