@@ -96,6 +96,13 @@ export interface RecoderTaskContext {
 			cloneUrl?: string | null;
 		} | null;
 	};
+	timeline?: Array<{
+		at?: string | null;
+		type?: string | null;
+		title?: string | null;
+		detail?: string | null;
+		files?: string[];
+	}>;
 }
 
 export interface RecoderProjectControlSummary {
