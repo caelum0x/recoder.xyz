@@ -137,6 +137,55 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+function emitReviewLifecycleEvents(input: {
+  taskId: string;
+  workspaceId: string;
+  metadataPatch: Record<string, unknown>;
+  triggeredBy: string;
+}): void {
+  const review = readRecord(input.metadataPatch.handoff);
+  const merge = readRecord(input.metadataPatch.merge);
+  const now = new Date().toISOString();
+  const bus = getA2AEventBus();
+
+  if (review?.status === 'review-accepted') {
+    bus.publish({
+      id: `evt_${Date.now()}_review_${input.taskId}`,
+      type: A2AEventType.ReviewAccepted,
+      timestamp: now,
+      taskId: input.taskId,
+      workspaceId: input.workspaceId,
+      data: {
+        taskId: input.taskId,
+        status: review.status,
+        intent: typeof review.intent === 'string' ? review.intent : null,
+        reviewTarget: typeof review.reviewTarget === 'string' ? review.reviewTarget : null,
+        reviewPath: typeof review.reviewPath === 'string' ? review.reviewPath : null,
+        assignedBy: typeof review.assignedBy === 'string' ? review.assignedBy : input.triggeredBy,
+      },
+    });
+  }
+
+  if (merge?.status === 'merge-requested') {
+    bus.publish({
+      id: `evt_${Date.now()}_merge_${input.taskId}`,
+      type: A2AEventType.MergeRequested,
+      timestamp: now,
+      taskId: input.taskId,
+      workspaceId: input.workspaceId,
+      data: {
+        taskId: input.taskId,
+        status: merge.status,
+        branchName: typeof merge.branchName === 'string' ? merge.branchName : null,
+        baseBranch: typeof merge.baseBranch === 'string' ? merge.baseBranch : null,
+        suggestedAction:
+          typeof merge.suggestedAction === 'string' ? merge.suggestedAction : null,
+        requestedBy: input.triggeredBy,
+      },
+    });
+  }
+}
+
 async function resolveAutoRouteAssignee(input: {
   workspaceId: string;
   payload: unknown;
@@ -604,6 +653,13 @@ taskLifecycleRouter.post(
         sendError(res, result.httpStatus, result.error);
         return;
       }
+
+      emitReviewLifecycleEvents({
+        taskId,
+        workspaceId: result.data.workspace_id,
+        metadataPatch,
+        triggeredBy,
+      });
 
       sendSuccess(res, result.data);
     } catch (err) {

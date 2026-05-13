@@ -75,6 +75,8 @@ export const A2AEventType = {
   HandoffCompleted: 'handoff.completed',
   DelegationCreated: 'delegation.created',
   DelegationCompleted: 'delegation.completed',
+  ReviewAccepted: 'review.accepted',
+  MergeRequested: 'merge.requested',
 
   // Approval events
   ApprovalRequested: 'approval.requested',
@@ -148,6 +150,8 @@ export const HANDOFF_EVENT_TYPES = new Set<string>([
   A2AEventType.HandoffCompleted,
   A2AEventType.DelegationCreated,
   A2AEventType.DelegationCompleted,
+  A2AEventType.ReviewAccepted,
+  A2AEventType.MergeRequested,
 ]);
 
 /** All approval event types. */

@@ -72,6 +72,8 @@ exports.A2AEventType = {
     HandoffCompleted: 'handoff.completed',
     DelegationCreated: 'delegation.created',
     DelegationCompleted: 'delegation.completed',
+    ReviewAccepted: 'review.accepted',
+    MergeRequested: 'merge.requested',
     // Approval events
     ApprovalRequested: 'approval.requested',
     ApprovalGranted: 'approval.granted',
@@ -133,6 +135,8 @@ exports.HANDOFF_EVENT_TYPES = new Set([
     exports.A2AEventType.HandoffCompleted,
     exports.A2AEventType.DelegationCreated,
     exports.A2AEventType.DelegationCompleted,
+    exports.A2AEventType.ReviewAccepted,
+    exports.A2AEventType.MergeRequested,
 ]);
 /** All approval event types. */
 exports.APPROVAL_EVENT_TYPES = new Set([
