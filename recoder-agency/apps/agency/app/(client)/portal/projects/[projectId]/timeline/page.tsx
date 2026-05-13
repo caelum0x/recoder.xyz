@@ -158,6 +158,12 @@ export default async function TimelinePage({
 				controlPlane.links?.delegation
 					? `handoff ${controlPlane.links.delegation.status}`
 					: null,
+				controlPlane.review?.merge?.status
+					? `merge ${controlPlane.review.merge.status}`
+					: null,
+				controlPlane.review?.worktree?.branchName
+					? `branch ${controlPlane.review.worktree.branchName}`
+					: null,
 				typeof controlPlane.runtime?.evidenceCount === "number"
 					? `evidence ${controlPlane.runtime.evidenceCount}`
 					: null,
