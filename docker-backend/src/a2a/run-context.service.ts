@@ -89,6 +89,26 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const worktreeMetadata = readRecord(task.metadata?.worktree);
   const handoffMetadata = readRecord(task.metadata?.handoff);
   const mergeMetadata = readRecord(task.metadata?.merge);
+  const reviewHistory = Array.isArray(task.metadata?.reviewHistory)
+    ? task.metadata.reviewHistory
+        .filter((entry): entry is Record<string, unknown> => Boolean(readRecord(entry)))
+        .map((entry) => {
+          const record = readRecord(entry)!;
+          return {
+            at: typeof record.at === 'string' ? record.at : null,
+            type: typeof record.type === 'string' ? record.type : null,
+            actor: typeof record.actor === 'string' ? record.actor : null,
+            status: typeof record.status === 'string' ? record.status : null,
+            note: typeof record.note === 'string' ? record.note : null,
+            branchName: typeof record.branchName === 'string' ? record.branchName : null,
+            baseBranch: typeof record.baseBranch === 'string' ? record.baseBranch : null,
+            reviewTarget: typeof record.reviewTarget === 'string' ? record.reviewTarget : null,
+            reviewPath: typeof record.reviewPath === 'string' ? record.reviewPath : null,
+            suggestedAction:
+              typeof record.suggestedAction === 'string' ? record.suggestedAction : null,
+          };
+        })
+    : [];
 
   return {
     task,
@@ -158,6 +178,7 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
               : [],
           }
         : null,
+      history: reviewHistory,
     },
     runtime: {
       evidence,

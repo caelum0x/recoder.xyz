@@ -46,6 +46,18 @@ interface TaskContextData {
       suggestedAction?: string | null;
       changedFiles?: string[];
     } | null;
+    history?: Array<{
+      at?: string | null;
+      type?: string | null;
+      actor?: string | null;
+      status?: string | null;
+      note?: string | null;
+      branchName?: string | null;
+      baseBranch?: string | null;
+      reviewTarget?: string | null;
+      reviewPath?: string | null;
+      suggestedAction?: string | null;
+    }>;
   } | null;
   runtime?: {
     filesChanged?: string[];
@@ -334,6 +346,47 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                     </span>
                   ))}
                 </div>
+              )}
+            </section>
+
+            <section className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <GitBranch className="h-4 w-4" />
+                Review History
+              </div>
+              {data.review?.history?.length ? (
+                <div className="space-y-2">
+                  {data.review.history.map((entry, index) => (
+                    <div key={`${entry.at ?? 'entry'}-${index}`} className="rounded-md bg-muted/40 p-3 text-xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded bg-muted px-2 py-0.5 font-medium">
+                          {entry.type ?? 'review.event'}
+                        </span>
+                        {entry.status ? (
+                          <span className="rounded bg-orange-500/10 px-2 py-0.5 text-orange-300">
+                            {entry.status}
+                          </span>
+                        ) : null}
+                        {entry.at ? (
+                          <span className="text-muted-foreground">
+                            {new Date(entry.at).toLocaleString()}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 space-y-1 text-muted-foreground">
+                        {entry.actor ? <p>actor: {entry.actor}</p> : null}
+                        {entry.branchName ? <p>branch: {entry.branchName}</p> : null}
+                        {entry.baseBranch ? <p>base: {entry.baseBranch}</p> : null}
+                        {entry.reviewTarget ? <p>target: {entry.reviewTarget}</p> : null}
+                        {entry.reviewPath ? <p className="break-all">path: {entry.reviewPath}</p> : null}
+                        {entry.suggestedAction ? <p>action: {entry.suggestedAction}</p> : null}
+                        {entry.note ? <p>{entry.note}</p> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No review history entries yet.</p>
               )}
             </section>
 
