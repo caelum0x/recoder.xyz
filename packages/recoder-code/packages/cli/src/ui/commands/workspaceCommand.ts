@@ -74,6 +74,54 @@ interface WorkspaceContextPackage {
   }>;
 }
 
+interface WorkspaceTaskRow {
+  id: string;
+  prompt?: string;
+  state?: string;
+  assignee_agent_id?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  approval?: {
+    status?: string;
+  } | null;
+  handoff?: {
+    status?: string;
+  } | null;
+  review?: {
+    merge?: {
+      status?: string | null;
+      branchName?: string | null;
+    } | null;
+    worktree?: {
+      branchName?: string | null;
+    } | null;
+  } | null;
+}
+
+interface TaskContextLogEntry {
+  label?: string;
+  excerpt?: string | null;
+}
+
+interface TaskContextTimelineEntry {
+  at?: string | null;
+  type?: string | null;
+  title?: string | null;
+  detail?: string | null;
+}
+
+interface TaskContextResponse {
+  task: {
+    id: string;
+    state: string;
+  };
+  runtime?: {
+    logCount?: number;
+    logs?: TaskContextLogEntry[];
+  };
+  timeline?: TaskContextTimelineEntry[];
+}
+
 export const workspaceCommand: SlashCommand = {
   name: 'workspace',
   description: 'Manage Recoder Space connections',
@@ -256,6 +304,259 @@ export const workspaceCommand: SlashCommand = {
             type: 'message',
             messageType: 'error',
             content: `Failed to join workspace: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace tasks
+    // -----------------------------------------------------------------------
+    {
+      name: 'tasks',
+      description: 'List tasks in the current Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      action: async (): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const bridge = getBridge();
+        const workspaceId = bridge.getWorkspaceId();
+        if (!workspaceId) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not connected to a Recoder Space. Run /workspace join <id> first.',
+          };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/workspaces/${encodeURIComponent(workspaceId)}/tasks`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to fetch tasks (${response.status}): ${errText}`,
+            };
+          }
+
+          const raw = await response.json();
+          const tasks: WorkspaceTaskRow[] = raw.data?.tasks || raw.tasks || [];
+
+          if (!tasks.length) {
+            return {
+              type: 'message',
+              messageType: 'info',
+              content: 'No tasks found in the current Recoder Space.',
+            };
+          }
+
+          const lines: string[] = [
+            'Recoder Space Tasks',
+            '',
+          ];
+
+          for (const task of tasks.slice(0, 12)) {
+            const prompt = String(task.prompt || task.id).replace(/\s+/g, ' ').slice(0, 60);
+            const state = String(task.state || 'unknown');
+            const assignee = String(task.assignee_agent_id || 'unassigned');
+            const suffix = [
+              task.approval?.status ? `approval:${task.approval.status}` : null,
+              task.handoff?.status ? `handoff:${task.handoff.status}` : null,
+              task.review?.merge?.status ? `merge:${task.review.merge.status}` : null,
+            ]
+              .filter(Boolean)
+              .join(' ');
+            lines.push(`- ${task.id} [${state}] ${prompt}`);
+            lines.push(`  assignee=${assignee}${suffix ? ` ${suffix}` : ''}`);
+          }
+
+          lines.push('');
+          lines.push('Use /workspace claim <task-id> to claim a task.');
+          lines.push('Use /workspace logs <task-id> to inspect timeline and logs.');
+
+          return { type: 'message', messageType: 'info', content: lines.join('\n') };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to list tasks: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace claim <task-id>
+    // -----------------------------------------------------------------------
+    {
+      name: 'claim',
+      description: 'Claim a task in the current Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const taskId = args?.trim();
+        if (!taskId) {
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: 'Usage: /workspace claim <task-id>',
+          };
+        }
+
+        const bridge = getBridge();
+        const sessionId = bridge.getSessionId();
+        if (!sessionId) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'No active bridge session. Reconnect with /workspace join <id> first.',
+          };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/claim`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                session_id: sessionId,
+                agent_id: bridge.getAgentId(),
+              }),
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to claim task (${response.status}): ${errText}`,
+            };
+          }
+
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: `Claimed task ${taskId} as ${bridge.getAgentId()}.`,
+          };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to claim task: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace logs <task-id>
+    // -----------------------------------------------------------------------
+    {
+      name: 'logs',
+      description: 'Show task logs and timeline for a Recoder Space task',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const taskId = args?.trim();
+        if (!taskId) {
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: 'Usage: /workspace logs <task-id>',
+          };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/context`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to fetch task context (${response.status}): ${errText}`,
+            };
+          }
+
+          const raw = await response.json();
+          const context: TaskContextResponse = raw.data || raw;
+          const lines: string[] = [
+            `Task ${context.task.id} [${context.task.state}]`,
+            '',
+            'Timeline:',
+          ];
+
+          for (const entry of (context.timeline || []).slice(-12)) {
+            const at = entry.at ? new Date(entry.at).toLocaleString() : 'unknown-time';
+            const title = entry.title || entry.type || 'event';
+            lines.push(`- ${at} ${title}${entry.detail ? ` :: ${entry.detail}` : ''}`);
+          }
+
+          if (context.runtime?.logs?.length) {
+            lines.push('');
+            lines.push('Logs:');
+            for (const log of context.runtime.logs) {
+              lines.push(`- ${log.label || 'log'}: ${log.excerpt || '(empty)'}`);
+            }
+          }
+
+          return { type: 'message', messageType: 'info', content: lines.join('\n') };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to fetch task logs: ${msg}`,
           };
         }
       },
