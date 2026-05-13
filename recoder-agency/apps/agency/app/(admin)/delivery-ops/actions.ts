@@ -14,6 +14,7 @@ import {
 	workspaces,
 } from "@/db";
 import {
+	annotateRecoderTaskMetadata,
 	fetchDeliveryOpsData,
 	parseDeliveryOpsFilters,
 	toDeliveryOpsSearchParams,
@@ -286,4 +287,49 @@ export async function createDeliveryOpsBrowserRuns(formData: FormData) {
 
 export async function createDeliveryOpsComputerUseRuns(formData: FormData) {
 	await createDeliveryOpsRuns("computer-use", formData);
+}
+
+export async function markDeliveryOpsReviewAccepted(formData: FormData) {
+	const taskId = String(formData.get("taskId") ?? "").trim();
+	if (!taskId) {
+		throw new Error("Task ID is required");
+	}
+
+	await annotateRecoderTaskMetadata({
+		taskId,
+		metadataPatch: {
+			handoff: {
+				status: "review-accepted",
+			},
+			merge: {
+				status: "ready-to-merge",
+				suggestedAction: "merge-worktree-branch",
+			},
+		},
+		reason: "Delivery Ops marked review as accepted",
+		triggeredBy: "recoder-agency-delivery-ops",
+	});
+
+	revalidatePath("/delivery-ops");
+}
+
+export async function requestDeliveryOpsMerge(formData: FormData) {
+	const taskId = String(formData.get("taskId") ?? "").trim();
+	if (!taskId) {
+		throw new Error("Task ID is required");
+	}
+
+	await annotateRecoderTaskMetadata({
+		taskId,
+		metadataPatch: {
+			merge: {
+				status: "merge-requested",
+				suggestedAction: "merge-worktree-branch",
+			},
+		},
+		reason: "Delivery Ops requested merge",
+		triggeredBy: "recoder-agency-delivery-ops",
+	});
+
+	revalidatePath("/delivery-ops");
 }
