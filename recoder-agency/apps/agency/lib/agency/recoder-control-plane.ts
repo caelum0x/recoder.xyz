@@ -188,6 +188,20 @@ export interface RecoderProjectDeliveryPackage {
 		workspaceId?: string | null;
 	};
 	summary: RecoderProjectControlSummary;
+	reviewSummary: {
+		reviewReadyCount: number;
+		mergeRequestedCount: number;
+		readyToMergeCount: number;
+		branches: string[];
+		latestEvents: Array<{
+			deliverableId: string;
+			deliverableName: string;
+			at?: string | null;
+			type?: string | null;
+			status?: string | null;
+			branchName?: string | null;
+		}>;
+	};
 	deliverables: RecoderDeliveryPackageDeliverable[];
 }
 
@@ -585,6 +599,37 @@ export async function buildRecoderProjectDeliveryPackage(input: {
 		};
 	});
 
+	const reviewSummary = {
+		reviewReadyCount: deliverables.filter(
+			(deliverable) => deliverable.controlPlane.reviewStatus === "review-ready",
+		).length,
+		mergeRequestedCount: deliverables.filter(
+			(deliverable) => deliverable.controlPlane.mergeStatus === "merge-requested",
+		).length,
+		readyToMergeCount: deliverables.filter(
+			(deliverable) => deliverable.controlPlane.mergeStatus === "ready-to-merge",
+		).length,
+		branches: Array.from(
+			new Set(
+				deliverables
+					.map((deliverable) => deliverable.controlPlane.reviewBranch)
+					.filter((value): value is string => Boolean(value)),
+			),
+		),
+		latestEvents: deliverables
+			.flatMap((deliverable) =>
+				deliverable.controlPlane.reviewHistory.slice(-1).map((entry) => ({
+					deliverableId: deliverable.deliverableId,
+					deliverableName: deliverable.name,
+					at: entry.at ?? null,
+					type: entry.type ?? null,
+					status: entry.status ?? null,
+					branchName: entry.branchName ?? null,
+				})),
+			)
+			.sort((a, b) => (b.at ?? "").localeCompare(a.at ?? "")),
+	};
+
 	return {
 		generatedAt: new Date().toISOString(),
 		project: {
@@ -593,6 +638,7 @@ export async function buildRecoderProjectDeliveryPackage(input: {
 			workspaceId: input.workspaceId ?? null,
 		},
 		summary,
+		reviewSummary,
 		deliverables,
 	};
 }
