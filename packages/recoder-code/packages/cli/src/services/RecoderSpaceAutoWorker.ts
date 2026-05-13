@@ -1,14 +1,17 @@
+import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import type { AgentBridgeService, TaskAssignment } from './AgentBridgeService.js';
+import { createTwoFilesPatch } from 'diff';
 
 const DOCKER_BACKEND_URL = process.env['DOCKER_BACKEND_URL'] || 'http://localhost:3100';
 const MAX_OUTPUT_CHARS = 24_000;
 const MAX_PROGRESS_OUTPUT_CHARS = 600;
 const MODEL_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_SNAPSHOT_FILE_BYTES = 512 * 1024;
 
 interface CommandResult {
   command: string[];
@@ -31,6 +34,16 @@ interface RepoArtifacts {
   finalStatus: string;
   diff: string;
   changedFiles: string;
+}
+
+interface RepoFileSnapshot {
+  path: string;
+  hash: string;
+  content?: string;
+}
+
+interface RepoSnapshot {
+  files: Map<string, RepoFileSnapshot>;
 }
 
 function truncate(text: string, max = MAX_OUTPUT_CHARS): string {
@@ -142,17 +155,112 @@ async function runCommand(command: string[], cwd: string, timeoutMs = 30_000): P
   });
 }
 
-async function captureRepoArtifacts(cwd: string): Promise<RepoArtifacts> {
-  const baseline = await runCommand(['git', 'status', '--short'], cwd, 15_000);
-  const diff = await runCommand(['git', 'diff', '--no-ext-diff', '--', '.'], cwd, 30_000);
-  const changedFiles = await runCommand(['git', 'diff', '--name-only', '--', '.'], cwd, 15_000);
-  const finalStatus = await runCommand(['git', 'status', '--short'], cwd, 15_000);
+function shouldSkipRepoPath(filePath: string): boolean {
+  return (
+    filePath.startsWith('.recoder/') ||
+    filePath.startsWith('.git/') ||
+    filePath.includes('/.recoder/') ||
+    filePath.includes('/.git/')
+  );
+}
+
+function hashBuffer(buffer: Buffer): string {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+function isProbablyText(buffer: Buffer): boolean {
+  return !buffer.includes(0);
+}
+
+function captureRepoSnapshot(cwd: string): RepoSnapshot {
+  const files = new Map<string, RepoFileSnapshot>();
+
+  const list = spawnSyncUtf8(['git', 'ls-files', '-co', '--exclude-standard', '-z'], cwd);
+  const paths = list.stdout
+    .split('\0')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .filter((entry) => !shouldSkipRepoPath(entry));
+
+  for (const relativePath of paths) {
+    const absolutePath = path.join(cwd, relativePath);
+    if (!existsSync(absolutePath)) continue;
+    const stat = statSync(absolutePath);
+    if (!stat.isFile()) continue;
+
+    const buffer = readFileSync(absolutePath);
+    const snapshot: RepoFileSnapshot = {
+      path: relativePath,
+      hash: hashBuffer(buffer),
+    };
+
+    if (buffer.byteLength <= MAX_SNAPSHOT_FILE_BYTES && isProbablyText(buffer)) {
+      snapshot.content = buffer.toString('utf8');
+    }
+
+    files.set(relativePath, snapshot);
+  }
+
+  return { files };
+}
+
+function spawnSyncUtf8(command: string[], cwd: string): { stdout: string; stderr: string; exitCode: number } {
+  const child = spawnSync(command[0], command.slice(1), {
+    cwd,
+    env: process.env,
+    encoding: 'utf8',
+  });
+  return {
+    stdout: child.stdout || '',
+    stderr: child.stderr || '',
+    exitCode: child.status ?? 1,
+  };
+}
+
+function buildTaskScopedDiff(before: RepoSnapshot, after: RepoSnapshot) {
+  const changedFiles = new Set<string>([
+    ...before.files.keys(),
+    ...after.files.keys(),
+  ]);
+
+  const changedPaths: string[] = [];
+  const patches: string[] = [];
+
+  for (const filePath of changedFiles) {
+    const previous = before.files.get(filePath);
+    const next = after.files.get(filePath);
+    const previousHash = previous?.hash ?? null;
+    const nextHash = next?.hash ?? null;
+    if (previousHash === nextHash) continue;
+
+    changedPaths.push(filePath);
+
+    if (previous?.content === undefined && next?.content === undefined) {
+      continue;
+    }
+
+    if (!previous) {
+      patches.push(
+        createTwoFilesPatch('/dev/null', filePath, '', next?.content ?? '', '', '', { context: 3 }),
+      );
+      continue;
+    }
+
+    if (!next) {
+      patches.push(
+        createTwoFilesPatch(filePath, '/dev/null', previous.content ?? '', '', '', '', { context: 3 }),
+      );
+      continue;
+    }
+
+    patches.push(
+      createTwoFilesPatch(filePath, filePath, previous.content ?? '', next.content ?? '', '', '', { context: 3 }),
+    );
+  }
 
   return {
-    baselineStatus: baseline.stdout || baseline.stderr,
-    finalStatus: finalStatus.stdout || finalStatus.stderr,
-    diff: diff.stdout || diff.stderr,
-    changedFiles: changedFiles.stdout || changedFiles.stderr,
+    changedPaths,
+    diff: patches.filter(Boolean).join('\n'),
   };
 }
 
@@ -357,8 +465,18 @@ export function installRecoderSpaceAutoWorker(
         await sleep(150);
         bridge.sendProgress(assignment.taskId, 15, 'Launching model-driven local Recoder Code worker');
 
+        const baselineStatus = await runCommand(['git', 'status', '--short'], process.cwd(), 15_000);
+        const beforeSnapshot = captureRepoSnapshot(process.cwd());
         const modelRun = await runModelDrivenTask(assignment, bridge);
-        const repoArtifacts = await captureRepoArtifacts(process.cwd());
+        const afterSnapshot = captureRepoSnapshot(process.cwd());
+        const finalStatus = await runCommand(['git', 'status', '--short'], process.cwd(), 15_000);
+        const taskScoped = buildTaskScopedDiff(beforeSnapshot, afterSnapshot);
+        const repoArtifacts: RepoArtifacts = {
+          baselineStatus: baselineStatus.stdout || baselineStatus.stderr,
+          finalStatus: finalStatus.stdout || finalStatus.stderr,
+          diff: taskScoped.diff,
+          changedFiles: taskScoped.changedPaths.join('\n'),
+        };
         const artifacts = writeArtifacts(
           assignment.taskId,
           assignment.prompt,
