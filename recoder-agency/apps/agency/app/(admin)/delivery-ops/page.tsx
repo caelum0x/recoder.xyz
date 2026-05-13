@@ -22,6 +22,8 @@ import {
 	createDeliveryOpsPlanningRuns,
 	createAlertSubscription,
 	deleteAlertSubscription,
+	markDeliveryOpsReviewAccepted,
+	requestDeliveryOpsMerge,
 	saveCapacitySettings,
 	toggleAlertSubscription,
 } from "./actions";
@@ -561,16 +563,18 @@ export default async function DeliveryOpsPage({
 				) : (
 					<div className="space-y-2">
 						{reviewQueue.map((item) => (
-							<Link
+							<div
 								key={`${item.projectId}-${item.deliverableId}`}
-								href={`/projects/${item.projectId}`}
-								className="block rounded-lg border border-border/70 bg-bg-hover/20 p-3 hover:bg-bg-hover transition-colors"
+								className="rounded-lg border border-border/70 bg-bg-hover/20 p-3"
 							>
 								<div className="flex flex-wrap items-center justify-between gap-2">
 									<div>
-										<p className="text-sm font-medium text-text">
+										<Link
+											href={`/projects/${item.projectId}`}
+											className="text-sm font-medium text-text hover:text-primary transition-colors"
+										>
 											{item.projectName}
-										</p>
+										</Link>
 										<p className="text-xs text-text-muted">
 											{item.deliverableName} • {item.deliverableStatus.replaceAll("_", " ")}
 										</p>
@@ -601,7 +605,37 @@ export default async function DeliveryOpsPage({
 										</p>
 									) : null}
 								</div>
-							</Link>
+								<div className="mt-3 flex flex-wrap gap-2">
+									<form action={markDeliveryOpsReviewAccepted}>
+										<input type="hidden" name="taskId" value={item.taskId} />
+										<button
+											type="submit"
+											className="rounded-lg border border-border px-3 py-1.5 text-[11px] font-medium text-text hover:bg-bg-hover transition-colors"
+										>
+											Mark review accepted
+										</button>
+									</form>
+									<form action={requestDeliveryOpsMerge}>
+										<input type="hidden" name="taskId" value={item.taskId} />
+										<button
+											type="submit"
+											className="rounded-lg border border-border px-3 py-1.5 text-[11px] font-medium text-text hover:bg-bg-hover transition-colors"
+										>
+											Request merge
+										</button>
+									</form>
+									{item.previewUrl ? (
+										<a
+											href={item.previewUrl}
+											target="_blank"
+											rel="noreferrer"
+											className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-[11px] font-medium text-text hover:bg-bg-hover transition-colors"
+										>
+											Open preview
+										</a>
+									) : null}
+								</div>
+							</div>
 						))}
 					</div>
 				)}
