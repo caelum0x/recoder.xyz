@@ -256,4 +256,57 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     expect(Array.isArray(state.jsonData.data.assignee.pairedBridgeSessions)).toBe(true);
     expect(state.jsonData.data.runtime.evidenceCount).toBe(0);
   });
+
+  it('appends review history entries when review metadata is updated', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_review_history',
+      thread_id: 'thread_review_history',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Review task' },
+      metadata: {},
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const req = makeReq({
+      method: 'POST',
+      params: { taskId: created.data.id },
+      body: {
+        metadataPatch: {
+          handoff: {
+            status: 'review-accepted',
+            intent: 'review',
+            reviewTarget: 'recoder/task-branch',
+          },
+          merge: {
+            status: 'merge-requested',
+            branchName: 'recoder/task-branch',
+            baseBranch: 'main',
+            suggestedAction: 'merge-worktree-branch',
+          },
+        },
+        reason: 'Mission Control accepted review and requested merge',
+        triggeredBy: 'recoder-agents-mission-control',
+      },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/metadata', 'post', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.success).toBe(true);
+    expect(Array.isArray(state.jsonData.data.metadata.reviewHistory)).toBe(true);
+    expect(state.jsonData.data.metadata.reviewHistory).toHaveLength(2);
+    expect(state.jsonData.data.metadata.reviewHistory[0]).toMatchObject({
+      type: 'review.accepted',
+      actor: 'recoder-agents-mission-control',
+    });
+    expect(state.jsonData.data.metadata.reviewHistory[1]).toMatchObject({
+      type: 'merge.requested',
+      branchName: 'recoder/task-branch',
+    });
+  });
 });
