@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import type { AgentBridgeService, TaskAssignment } from './AgentBridgeService.js';
 import { createTwoFilesPatch } from 'diff';
+import { branchExists, createWorktree, generateBranchName, getGitInfo } from '../parallel/git-utils.js';
 
 const DOCKER_BACKEND_URL = process.env['DOCKER_BACKEND_URL'] || 'http://localhost:3100';
 const MAX_OUTPUT_CHARS = 24_000;
@@ -34,6 +36,13 @@ interface RepoArtifacts {
   finalStatus: string;
   diff: string;
   changedFiles: string;
+}
+
+interface ExecutionWorkspace {
+  cwd: string;
+  branchName: string | null;
+  baseBranch: string | null;
+  isolated: boolean;
 }
 
 interface RepoFileSnapshot {
@@ -93,6 +102,39 @@ function buildWorkerPrompt(assignment: TaskAssignment, bridge: AgentBridgeServic
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+async function prepareExecutionWorkspace(assignment: TaskAssignment): Promise<ExecutionWorkspace> {
+  const sourceCwd = process.cwd();
+  const gitInfo = await getGitInfo(sourceCwd);
+  if (!gitInfo.isRepo || !gitInfo.branch) {
+    return {
+      cwd: sourceCwd,
+      branchName: null,
+      baseBranch: null,
+      isolated: false,
+    };
+  }
+
+  const requestedBranch = assignment.worktreeBranch?.trim();
+  const branchName = requestedBranch || generateBranchName(assignment.prompt);
+  const safeBranchSegment = branchName.replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 80) || 'task';
+  const worktreePath = path.join(
+    os.tmpdir(),
+    `recoder-space-${safeBranchSegment}-${assignment.taskId.slice(0, 8)}`,
+  );
+
+  if (!existsSync(worktreePath)) {
+    const alreadyExists = await branchExists(sourceCwd, branchName);
+    await createWorktree(sourceCwd, worktreePath, branchName, !alreadyExists);
+  }
+
+  return {
+    cwd: worktreePath,
+    branchName,
+    baseBranch: gitInfo.branch,
+    isolated: true,
+  };
 }
 
 async function runCommand(command: string[], cwd: string, timeoutMs = 30_000): Promise<CommandResult> {
@@ -270,6 +312,7 @@ function writeArtifacts(
   context: Record<string, unknown>,
   modelRun: ModelRunResult,
   repoArtifacts: RepoArtifacts,
+  executionWorkspace: ExecutionWorkspace,
 ) {
   const artifactDir = path.join(process.cwd(), '.recoder', 'artifacts', taskId);
   mkdirSync(artifactDir, { recursive: true });
@@ -285,7 +328,11 @@ function writeArtifacts(
     '',
     `- Task ID: ${taskId}`,
     `- Prompt: ${prompt}`,
-    `- Working Directory: ${process.cwd()}`,
+    `- Source Working Directory: ${process.cwd()}`,
+    `- Execution Directory: ${executionWorkspace.cwd}`,
+    `- Isolated Worktree: ${executionWorkspace.isolated ? 'yes' : 'no'}`,
+    executionWorkspace.branchName ? `- Execution Branch: ${executionWorkspace.branchName}` : '',
+    executionWorkspace.baseBranch ? `- Base Branch: ${executionWorkspace.baseBranch}` : '',
     `- Model Exit Code: ${modelRun.exitCode}`,
     `- Duration (ms): ${modelRun.durationMs}`,
     '',
@@ -358,6 +405,7 @@ async function claimTask(token: string, bridge: AgentBridgeService, taskId: stri
 async function runModelDrivenTask(
   assignment: TaskAssignment,
   bridge: AgentBridgeService,
+  executionWorkspace: ExecutionWorkspace,
 ): Promise<ModelRunResult> {
   const cliEntry = resolveCliEntryPath();
   const prompt = buildWorkerPrompt(assignment, bridge);
@@ -374,7 +422,7 @@ async function runModelDrivenTask(
   return new Promise((resolve) => {
     const startedAt = Date.now();
     const child = spawn(command[0], command.slice(1), {
-      cwd: process.cwd(),
+      cwd: executionWorkspace.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
@@ -463,13 +511,17 @@ export function installRecoderSpaceAutoWorker(
 
         bridge.sendProgress(assignment.taskId, 10, 'Claimed task in current Recoder Space');
         await sleep(150);
-        bridge.sendProgress(assignment.taskId, 15, 'Launching model-driven local Recoder Code worker');
+        const executionWorkspace = await prepareExecutionWorkspace(assignment);
+        const workspaceMessage = executionWorkspace.isolated
+          ? `Launching model-driven worker in isolated worktree ${executionWorkspace.branchName}`
+          : 'Launching model-driven worker in current checkout';
+        bridge.sendProgress(assignment.taskId, 15, workspaceMessage);
 
-        const baselineStatus = await runCommand(['git', 'status', '--short'], process.cwd(), 15_000);
-        const beforeSnapshot = captureRepoSnapshot(process.cwd());
-        const modelRun = await runModelDrivenTask(assignment, bridge);
-        const afterSnapshot = captureRepoSnapshot(process.cwd());
-        const finalStatus = await runCommand(['git', 'status', '--short'], process.cwd(), 15_000);
+        const baselineStatus = await runCommand(['git', 'status', '--short'], executionWorkspace.cwd, 15_000);
+        const beforeSnapshot = captureRepoSnapshot(executionWorkspace.cwd);
+        const modelRun = await runModelDrivenTask(assignment, bridge, executionWorkspace);
+        const afterSnapshot = captureRepoSnapshot(executionWorkspace.cwd);
+        const finalStatus = await runCommand(['git', 'status', '--short'], executionWorkspace.cwd, 15_000);
         const taskScoped = buildTaskScopedDiff(beforeSnapshot, afterSnapshot);
         const repoArtifacts: RepoArtifacts = {
           baselineStatus: baselineStatus.stdout || baselineStatus.stderr,
@@ -483,6 +535,7 @@ export function installRecoderSpaceAutoWorker(
           assignment.context,
           modelRun,
           repoArtifacts,
+          executionWorkspace,
         );
 
         const changedFiles = repoArtifacts.changedFiles
@@ -499,6 +552,10 @@ export function installRecoderSpaceAutoWorker(
           data: {
             source: 'recoder-space-model-worker',
             workspaceId: bridge.getWorkspaceId(),
+            executionPath: executionWorkspace.cwd,
+            executionBranch: executionWorkspace.branchName,
+            baseBranch: executionWorkspace.baseBranch,
+            isolatedWorktree: executionWorkspace.isolated,
             exitCode: modelRun.exitCode,
             durationMs: modelRun.durationMs,
             changedFiles,
