@@ -159,6 +159,8 @@ export function useActivityTimeline(
         'message.new': forward,
         'handoff.initiated': forward,
         'handoff.completed': forward,
+        'review.accepted': forward,
+        'merge.requested': forward,
         'approval.requested': forward,
         'approval.granted': forward,
         'approval.rejected': forward,

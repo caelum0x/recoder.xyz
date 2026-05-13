@@ -30,6 +30,8 @@ const EVENT_ICONS: Record<string, typeof MessageSquare> = {
   'task.failed': XCircle,
   'handoff.initiated': ArrowRight,
   'handoff.completed': ArrowRight,
+  'review.accepted': CheckCircle,
+  'merge.requested': GitBranch,
   'approval.requested': ShieldCheck,
   'approval.granted': ShieldCheck,
   'approval.rejected': ShieldCheck,
@@ -44,6 +46,8 @@ const EVENT_COLORS: Record<string, string> = {
   'task.completed': 'text-green-500',
   'task.failed': 'text-red-500',
   'handoff.initiated': 'text-amber-500',
+  'review.accepted': 'text-lime-500',
+  'merge.requested': 'text-orange-500',
   'approval.requested': 'text-purple-500',
   'agent.online': 'text-green-500',
   'agent.offline': 'text-gray-400',
@@ -78,7 +82,7 @@ export function ActivityTimeline({ workspaceId, maxEvents = 50 }: ActivityTimeli
     ? events.filter((e) => e.type.startsWith(filter))
     : events;
 
-  const filters = ['all', 'task', 'message', 'handoff', 'approval', 'agent'];
+  const filters = ['all', 'task', 'message', 'handoff', 'review', 'merge', 'approval', 'agent'];
 
   return (
     <div>
@@ -155,6 +159,10 @@ function getEventDescription(event: TimelineEvent): string {
       return `Handoff: ${data.from} → ${data.to}`;
     case 'handoff.completed':
       return `Handoff completed: ${data.from} → ${data.to}`;
+    case 'review.accepted':
+      return `Review accepted for ${data.reviewTarget ?? data.taskId ?? 'task'}`;
+    case 'merge.requested':
+      return `Merge requested for ${data.branchName ?? data.taskId ?? 'task'}`;
     case 'approval.requested':
       return `Approval requested for ${data.action ?? 'action'}`;
     case 'approval.granted':
