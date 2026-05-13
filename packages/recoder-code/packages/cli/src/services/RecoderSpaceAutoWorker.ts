@@ -402,6 +402,56 @@ async function claimTask(token: string, bridge: AgentBridgeService, taskId: stri
   }
 }
 
+async function publishReviewMetadata(
+  token: string,
+  taskId: string,
+  assignment: TaskAssignment,
+  bridge: AgentBridgeService,
+  executionWorkspace: ExecutionWorkspace,
+  changedFiles: string[],
+): Promise<void> {
+  const metadataPatch = {
+    worktree: {
+      isolated: executionWorkspace.isolated,
+      branchName: executionWorkspace.branchName,
+      baseBranch: executionWorkspace.baseBranch,
+      worktreePath: executionWorkspace.cwd,
+      taskId,
+      reviewReady: true,
+      changedFiles,
+    },
+    handoff: {
+      status: 'review-ready',
+      intent: 'review',
+      prompt: assignment.prompt,
+      reviewTarget: executionWorkspace.branchName,
+      reviewPath: executionWorkspace.cwd,
+      assignedBy: bridge.getAgentId(),
+      workspaceId: bridge.getWorkspaceId(),
+    },
+    merge: {
+      status: 'pending-review',
+      branchName: executionWorkspace.branchName,
+      baseBranch: executionWorkspace.baseBranch,
+      changedFiles,
+      suggestedAction: executionWorkspace.branchName ? 'review-worktree-branch' : 'review-task-artifacts',
+    },
+  };
+
+  await fetch(`${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/metadata`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      metadataPatch,
+      triggeredBy: bridge.getAgentId(),
+      reason: 'Publish Recoder Space review and merge metadata',
+    }),
+  });
+}
+
 async function runModelDrivenTask(
   assignment: TaskAssignment,
   bridge: AgentBridgeService,
@@ -546,6 +596,15 @@ export function installRecoderSpaceAutoWorker(
           modelRun.exitCode === 0
             ? `Model-driven Recoder Code worker completed task: ${assignment.prompt}`
             : `Model-driven Recoder Code worker exited with code ${modelRun.exitCode} for task: ${assignment.prompt}`;
+
+        await publishReviewMetadata(
+          token,
+          assignment.taskId,
+          assignment,
+          bridge,
+          executionWorkspace,
+          changedFiles,
+        );
 
         bridge.completeTask(assignment.taskId, {
           text: summary,
