@@ -27,6 +27,7 @@ import {
   type TaskAgentRef,
   type TaskConnectorInfo,
   type TaskResult,
+  type TaskArtifact,
   type TaskErrorInfo,
   type TaskPreviewLink,
   type TaskEvidenceItem,
@@ -488,6 +489,12 @@ export interface TransitionTaskInput {
 
 export interface UpdateTaskMetadataInput {
   metadataPatch: Record<string, unknown>;
+  triggeredBy?: string;
+  reason?: string;
+}
+
+export interface AppendTaskArtifactsInput {
+  artifacts: TaskArtifact[];
   triggeredBy?: string;
   reason?: string;
 }
@@ -1120,6 +1127,84 @@ export class TaskLifecycleService {
         metadata: {
           reason: input.reason || 'Task metadata updated',
           metadata_patch: input.metadataPatch,
+        },
+        now,
+      }),
+    );
+
+    return { ok: true, data: updated };
+  }
+
+  /**
+   * Append artifacts to an existing task result without changing state.
+   * This supports post-run artifact uploads from Space-native CLI workflows
+   * and other control-plane surfaces that need to enrich a task over time.
+   */
+  appendTaskArtifacts(
+    taskId: string,
+    input: AppendTaskArtifactsInput,
+  ): ServiceResult<TaskEnvelope> {
+    const envelope = this.store.get(taskId);
+    if (!envelope) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    if (input.artifacts.length === 0) {
+      return { ok: true, data: envelope };
+    }
+
+    const existingResult = envelope.result ?? {};
+    const mergedArtifacts = new Map<string, TaskArtifact>();
+
+    for (const artifact of existingResult.artifacts ?? []) {
+      mergedArtifacts.set(artifact.key, artifact);
+    }
+    for (const artifact of input.artifacts) {
+      mergedArtifacts.set(artifact.key, artifact);
+    }
+
+    const now = new Date().toISOString();
+    const updated: TaskEnvelope = {
+      ...envelope,
+      updated_at: now,
+      result: enrichTaskResult(envelope, {
+        ...existingResult,
+        artifacts: [...mergedArtifacts.values()],
+      }),
+    };
+
+    this.store.set(taskId, updated);
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: input.triggeredBy || 'artifact-api',
+          name: input.triggeredBy || 'artifact-api',
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: input.reason || 'Task artifacts appended',
+          artifact_count: input.artifacts.length,
+          artifact_keys: input.artifacts.map((artifact) => artifact.key),
         },
         now,
       }),
