@@ -62,11 +62,27 @@ function collectPreviewLinks(
   metadata?: Record<string, unknown>,
 ): TaskPreviewLink[] {
   const links = [...(result.preview ?? [])];
-  const candidates: Array<{ url: unknown; source?: string }> = [
-    { url: result.data?.previewUrl, source: 'result.data.previewUrl' },
-    { url: (result.data?.preview as Record<string, unknown> | undefined)?.url, source: 'result.data.preview' },
-    { url: ((result.data?.raw as Record<string, unknown> | undefined)?.previewUrl), source: 'result.data.raw.previewUrl' },
-    { url: metadata?.previewUrl, source: 'task.metadata.previewUrl' },
+  const candidates: Array<{ url: unknown; source?: string; createdAt?: unknown }> = [
+    {
+      url: result.data?.previewUrl,
+      source: 'result.data.previewUrl',
+      createdAt: (result.data as Record<string, unknown> | undefined)?.previewCreatedAt,
+    },
+    {
+      url: (result.data?.preview as Record<string, unknown> | undefined)?.url,
+      source: 'result.data.preview',
+      createdAt: (result.data?.preview as Record<string, unknown> | undefined)?.createdAt,
+    },
+    {
+      url: ((result.data?.raw as Record<string, unknown> | undefined)?.previewUrl),
+      source: 'result.data.raw.previewUrl',
+      createdAt: (result.data?.raw as Record<string, unknown> | undefined)?.previewCreatedAt,
+    },
+    {
+      url: metadata?.previewUrl,
+      source: 'task.metadata.previewUrl',
+      createdAt: metadata?.previewCreatedAt,
+    },
   ];
 
   for (const candidate of candidates) {
@@ -75,6 +91,10 @@ function collectPreviewLinks(
     links.push({
       url: candidate.url,
       source: candidate.source,
+      metadata:
+        typeof candidate.createdAt === 'string' && candidate.createdAt
+          ? { createdAt: candidate.createdAt }
+          : undefined,
     });
   }
 

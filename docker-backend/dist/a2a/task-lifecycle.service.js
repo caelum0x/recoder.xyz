@@ -34,10 +34,26 @@ const logger = (0, logger_1.createLogger)('a2a-task-lifecycle');
 function collectPreviewLinks(result, metadata) {
     const links = [...(result.preview ?? [])];
     const candidates = [
-        { url: result.data?.previewUrl, source: 'result.data.previewUrl' },
-        { url: result.data?.preview?.url, source: 'result.data.preview' },
-        { url: (result.data?.raw?.previewUrl), source: 'result.data.raw.previewUrl' },
-        { url: metadata?.previewUrl, source: 'task.metadata.previewUrl' },
+        {
+            url: result.data?.previewUrl,
+            source: 'result.data.previewUrl',
+            createdAt: result.data?.previewCreatedAt,
+        },
+        {
+            url: result.data?.preview?.url,
+            source: 'result.data.preview',
+            createdAt: result.data?.preview?.createdAt,
+        },
+        {
+            url: (result.data?.raw?.previewUrl),
+            source: 'result.data.raw.previewUrl',
+            createdAt: result.data?.raw?.previewCreatedAt,
+        },
+        {
+            url: metadata?.previewUrl,
+            source: 'task.metadata.previewUrl',
+            createdAt: metadata?.previewCreatedAt,
+        },
     ];
     for (const candidate of candidates) {
         if (typeof candidate.url !== 'string' || candidate.url.trim() === '')
@@ -47,6 +63,9 @@ function collectPreviewLinks(result, metadata) {
         links.push({
             url: candidate.url,
             source: candidate.source,
+            metadata: typeof candidate.createdAt === 'string' && candidate.createdAt
+                ? { createdAt: candidate.createdAt }
+                : undefined,
         });
     }
     return links;
