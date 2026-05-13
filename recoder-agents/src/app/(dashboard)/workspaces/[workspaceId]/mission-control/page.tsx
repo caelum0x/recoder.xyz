@@ -43,7 +43,10 @@ export default function MissionControlPage() {
       <ControlPlanePanel workspaceId={wsId} summary={snapshot?.summary ?? null} />
 
       {/* Activity Timeline */}
-      <ActivityTimeline workspaceId={wsId} />
+      <ActivityTimeline
+        workspaceId={wsId}
+        onTaskClick={(taskId) => setSelectedTaskId(taskId)}
+      />
 
       <TaskDetailDialog
         taskId={selectedTaskId}

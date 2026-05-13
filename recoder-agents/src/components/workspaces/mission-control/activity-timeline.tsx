@@ -19,6 +19,7 @@ interface TimelineEvent {
   id: string;
   type: string;
   timestamp: string;
+  taskId: string | null;
   data: Record<string, unknown>;
 }
 
@@ -56,9 +57,10 @@ const EVENT_COLORS: Record<string, string> = {
 interface ActivityTimelineProps {
   workspaceId: string | null;
   maxEvents?: number;
+  onTaskClick?: (taskId: string) => void;
 }
 
-export function ActivityTimeline({ workspaceId, maxEvents = 50 }: ActivityTimelineProps) {
+export function ActivityTimeline({ workspaceId, maxEvents = 50, onTaskClick }: ActivityTimelineProps) {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [filter, setFilter] = useState<string | null>(null);
 
@@ -68,6 +70,12 @@ export function ActivityTimeline({ workspaceId, maxEvents = 50 }: ActivityTimeli
         id: (event.id as string) ?? String(Date.now()),
         type: (event.type as string) ?? 'unknown',
         timestamp: (event.timestamp as string) ?? new Date().toISOString(),
+        taskId:
+          typeof event.taskId === 'string'
+            ? event.taskId
+            : typeof (event.data as Record<string, unknown> | undefined)?.taskId === 'string'
+              ? ((event.data as Record<string, unknown>).taskId as string)
+              : null,
         data: (event.data as Record<string, unknown>) ?? event,
       };
 
@@ -113,7 +121,11 @@ export function ActivityTimeline({ workspaceId, maxEvents = 50 }: ActivityTimeli
           </p>
         ) : (
           filteredEvents.map((event) => (
-            <TimelineEventItem key={event.id} event={event} />
+            <TimelineEventItem
+              key={event.id}
+              event={event}
+              onTaskClick={onTaskClick}
+            />
           ))
         )}
       </div>
@@ -121,7 +133,13 @@ export function ActivityTimeline({ workspaceId, maxEvents = 50 }: ActivityTimeli
   );
 }
 
-function TimelineEventItem({ event }: { event: TimelineEvent }) {
+function TimelineEventItem({
+  event,
+  onTaskClick,
+}: {
+  event: TimelineEvent;
+  onTaskClick?: (taskId: string) => void;
+}) {
   const Icon = EVENT_ICONS[event.type] ?? Zap;
   const color = EVENT_COLORS[event.type] ?? 'text-muted-foreground';
   const time = new Date(event.timestamp).toLocaleTimeString([], {
@@ -131,13 +149,26 @@ function TimelineEventItem({ event }: { event: TimelineEvent }) {
   });
 
   const description = getEventDescription(event);
+  const isClickable = !!event.taskId && !!onTaskClick;
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/30 transition-colors">
+    <button
+      type="button"
+      className={cn(
+        'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors hover:bg-muted/30',
+        isClickable ? 'cursor-pointer' : 'cursor-default',
+      )}
+      onClick={() => {
+        if (event.taskId && onTaskClick) {
+          onTaskClick(event.taskId);
+        }
+      }}
+      disabled={!isClickable}
+    >
       <Icon className={cn('h-3.5 w-3.5 shrink-0', color)} />
       <span className="text-xs flex-1 truncate">{description}</span>
       <span className="text-[10px] text-muted-foreground shrink-0">{time}</span>
-    </div>
+    </button>
   );
 }
 
