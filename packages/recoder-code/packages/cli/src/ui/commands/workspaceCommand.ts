@@ -10,6 +10,7 @@
  *   /workspace approve <approval-id> - Grant a pending approval
  *   /workspace reject <approval-id> - Reject a pending approval
  *   /workspace artifact <task-id> <file-path> - Attach a local artifact to a task
+ *   /workspace artifacts <task-id> - List task artifacts
  *   /workspace create <prompt> - Create a task in the current Recoder Space
  *   /workspace timeline <task-id> - Show the canonical task timeline
  *   /workspace leave   - Disconnect from current workspace
@@ -142,6 +143,11 @@ interface TaskContextResponse {
   runtime?: {
     logCount?: number;
     logs?: TaskContextLogEntry[];
+    artifacts?: Array<{
+      key?: string;
+      artifact_type?: string;
+      path?: string;
+    }>;
   };
   timeline?: TaskContextTimelineEntry[];
 }
@@ -1022,6 +1028,84 @@ export const workspaceCommand: SlashCommand = {
     },
 
     // -----------------------------------------------------------------------
+    // /workspace artifacts <task-id>
+    // -----------------------------------------------------------------------
+    {
+      name: 'artifacts',
+      description: 'List artifacts attached to a Recoder Space task',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const taskId = args?.trim();
+        if (!taskId) {
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: 'Usage: /workspace artifacts <task-id>',
+          };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/context`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to fetch task context (${response.status}): ${errText}`,
+            };
+          }
+
+          const raw = await response.json();
+          const context: TaskContextResponse = raw.data || raw;
+          const artifacts = context.runtime?.artifacts || [];
+
+          if (!artifacts.length) {
+            return {
+              type: 'message',
+              messageType: 'info',
+              content: `No artifacts attached to task ${taskId}.`,
+            };
+          }
+
+          const lines: string[] = [`Task ${context.task.id} artifacts`, ''];
+          for (const artifact of artifacts) {
+            lines.push(
+              `- ${artifact.key || 'artifact'} [${artifact.artifact_type || 'unknown'}]${artifact.path ? ` ${artifact.path}` : ''}`,
+            );
+          }
+
+          return { type: 'message', messageType: 'info', content: lines.join('\n') };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to fetch artifacts: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
     // /workspace artifact <task-id> <file-path>
     // -----------------------------------------------------------------------
     {
@@ -1496,6 +1580,7 @@ export const workspaceCommand: SlashCommand = {
         '  /workspace claim ..   - Claim a task',
         '  /workspace logs ..    - Show task logs and timeline',
         '  /workspace artifact . - Attach a local artifact to a task',
+        '  /workspace artifacts  - List task artifacts',
         '  /workspace timeline . - Show canonical task timeline',
         '  /workspace create ... - Create a task in the current space',
         '  /workspace context    - Show space context',
