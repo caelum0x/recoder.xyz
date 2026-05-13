@@ -8,6 +8,7 @@
  *   /workspace approve <approval-id> - Grant a pending approval
  *   /workspace reject <approval-id> - Reject a pending approval
  *   /workspace create <prompt> - Create a task in the current Recoder Space
+ *   /workspace timeline <task-id> - Show the canonical task timeline
  *   /workspace leave   - Disconnect from current workspace
  *   /workspace status  - Show connection status and online agents
  *   /workspace context - Show the Recoder Space context package
@@ -776,6 +777,75 @@ export const workspaceCommand: SlashCommand = {
     },
 
     // -----------------------------------------------------------------------
+    // /workspace timeline <task-id>
+    // -----------------------------------------------------------------------
+    {
+      name: 'timeline',
+      description: 'Show the canonical timeline for a Recoder Space task',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const taskId = args?.trim();
+        if (!taskId) {
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: 'Usage: /workspace timeline <task-id>',
+          };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/context`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to fetch task context (${response.status}): ${errText}`,
+            };
+          }
+
+          const raw = await response.json();
+          const context: TaskContextResponse = raw.data || raw;
+          const lines: string[] = [`Task ${context.task.id} [${context.task.state}]`, '', 'Timeline:'];
+
+          for (const entry of context.timeline || []) {
+            const at = entry.at ? new Date(entry.at).toLocaleString() : 'unknown-time';
+            const title = entry.title || entry.type || 'event';
+            lines.push(`- ${at} ${title}${entry.detail ? ` :: ${entry.detail}` : ''}`);
+          }
+
+          return { type: 'message', messageType: 'info', content: lines.join('\n') };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to fetch task timeline: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
     // /workspace create <prompt>
     // -----------------------------------------------------------------------
     {
@@ -1150,6 +1220,7 @@ export const workspaceCommand: SlashCommand = {
         '  /workspace tasks      - List tasks in the current space',
         '  /workspace claim ..   - Claim a task',
         '  /workspace logs ..    - Show task logs and timeline',
+        '  /workspace timeline . - Show canonical task timeline',
         '  /workspace create ... - Create a task in the current space',
         '  /workspace context    - Show space context',
         '  /workspace leave      - Disconnect from workspace',
