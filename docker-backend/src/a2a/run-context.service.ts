@@ -134,8 +134,12 @@ function buildTaskTimeline(input: {
 
   if (input.artifacts && input.artifacts.length > 0) {
     for (const artifact of input.artifacts) {
+      const artifactMetadata = readRecord(artifact.metadata);
       timeline.push({
-        at: input.task.updated_at,
+        at:
+          typeof artifactMetadata?.createdAt === 'string'
+            ? artifactMetadata.createdAt
+            : input.task.updated_at,
         type: `artifact.${artifact.artifact_type}`,
         title: `Artifact: ${artifact.artifact_type}`,
         detail: artifact.key,
