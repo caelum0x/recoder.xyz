@@ -19,6 +19,30 @@ interface Task {
     status: string;
     toAgentId?: string;
   } | null;
+  review?: {
+    worktree?: {
+      isolated?: boolean;
+      reviewReady?: boolean;
+      branchName?: string | null;
+      baseBranch?: string | null;
+      worktreePath?: string | null;
+      changedFiles?: string[];
+    } | null;
+    handoff?: {
+      status?: string | null;
+      intent?: string | null;
+      reviewTarget?: string | null;
+      reviewPath?: string | null;
+      assignedBy?: string | null;
+    } | null;
+    merge?: {
+      status?: string | null;
+      branchName?: string | null;
+      baseBranch?: string | null;
+      suggestedAction?: string | null;
+      changedFiles?: string[];
+    } | null;
+  } | null;
   assignee?: {
     name?: string;
     registry?: {
@@ -127,6 +151,16 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                             handoff:{task.handoff.status}
                           </span>
                         )}
+                        {task.review?.merge?.status && (
+                          <span className="text-[10px] rounded bg-orange-100 px-1 py-0.5 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                            merge:{task.review.merge.status}
+                          </span>
+                        )}
+                        {task.review?.worktree?.reviewReady && (
+                          <span className="text-[10px] rounded bg-lime-100 px-1 py-0.5 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400">
+                            review-ready
+                          </span>
+                        )}
                         {typeof task.runtime?.evidenceCount === 'number' && task.runtime.evidenceCount > 0 && (
                           <span className="text-[10px] rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                             evidence:{task.runtime.evidenceCount}
@@ -143,6 +177,16 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                           </span>
                         )}
                       </div>
+                      {task.review?.worktree?.branchName && (
+                        <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                          review branch: {task.review.worktree.branchName}
+                        </p>
+                      )}
+                      {task.review?.merge?.suggestedAction && (
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          action: {task.review.merge.suggestedAction}
+                        </p>
+                      )}
                     </button>
                   ))
                 )}
