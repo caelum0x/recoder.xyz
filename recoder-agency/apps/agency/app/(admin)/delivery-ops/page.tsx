@@ -10,6 +10,7 @@ import {
 } from "@/lib/agency/delivery-ops";
 import {
 	buildRecoderProjectControlSummary,
+	getRecoderTaskContext,
 	type RecoderProjectControlSummary,
 } from "@/lib/agency/recoder-control-plane";
 import { getTeamCapacitySnapshot } from "@/lib/agency/team-capacity";
@@ -171,6 +172,65 @@ export default async function DeliveryOpsPage({
 					}),
 				),
 			) as Record<string, RecoderProjectControlSummary>;
+
+	const reviewQueueDeliverables = projectIdsNeedingSummary.length === 0
+		? []
+		: await db
+				.select({
+					projectId: projects.id,
+					projectName: projects.name,
+					deliverableId: deliverables.id,
+					deliverableName: deliverables.name,
+					deliverableStatus: deliverables.status,
+					taskId: deliverables.taskId,
+				})
+				.from(deliverables)
+				.innerJoin(projects, eq(deliverables.projectDbId, projects.dbId))
+				.where(
+					and(
+						eq(projects.teamDbId, team.dbId),
+						inArray(projects.id, projectIdsNeedingSummary),
+					),
+				);
+
+	const reviewQueue = (
+		await Promise.all(
+			reviewQueueDeliverables.map(async (deliverable) => {
+				const context = await getRecoderTaskContext(deliverable.taskId);
+				if (!context) return null;
+
+				const reviewStatus = context.review?.handoff?.status ?? null;
+				const mergeStatus = context.review?.merge?.status ?? null;
+				const branchName =
+					context.review?.worktree?.branchName ??
+					context.review?.merge?.branchName ??
+					null;
+
+				const isInQueue =
+					reviewStatus === "review-ready" ||
+					reviewStatus === "review-accepted" ||
+					mergeStatus === "merge-requested" ||
+					mergeStatus === "ready-to-merge";
+
+				if (!isInQueue) return null;
+
+				return {
+					projectId: deliverable.projectId,
+					projectName: deliverable.projectName,
+					deliverableId: deliverable.deliverableId,
+					deliverableName: deliverable.deliverableName,
+					deliverableStatus: deliverable.deliverableStatus,
+					taskId: context.task.id,
+					taskState: context.task.state,
+					reviewStatus,
+					mergeStatus,
+					branchName,
+					previewUrl: context.task.result?.preview?.[0]?.url ?? null,
+					reviewHistory: context.review?.history ?? [],
+				};
+			}),
+		)
+	).filter((item): item is NonNullable<typeof item> => item !== null);
 
 	const renderControlPlaneSummary = (projectId: string) => {
 		const summary = controlPlaneByProjectId[projectId];
@@ -483,6 +543,68 @@ export default async function DeliveryOpsPage({
 						{filters.reworkThreshold} times.
 					</p>
 				</div>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4">
+				<div className="mb-3 flex items-center justify-between gap-3">
+					<h2 className="text-sm font-medium text-text-muted">
+						Review Queue
+					</h2>
+					<span className="text-xs text-text-muted">
+						{reviewQueue.length} item(s) in current filtered project set
+					</span>
+				</div>
+				{reviewQueue.length === 0 ? (
+					<p className="text-sm text-text-muted">
+						No review-ready or merge-requested deliverables in the current risk set.
+					</p>
+				) : (
+					<div className="space-y-2">
+						{reviewQueue.map((item) => (
+							<Link
+								key={`${item.projectId}-${item.deliverableId}`}
+								href={`/projects/${item.projectId}`}
+								className="block rounded-lg border border-border/70 bg-bg-hover/20 p-3 hover:bg-bg-hover transition-colors"
+							>
+								<div className="flex flex-wrap items-center justify-between gap-2">
+									<div>
+										<p className="text-sm font-medium text-text">
+											{item.projectName}
+										</p>
+										<p className="text-xs text-text-muted">
+											{item.deliverableName} • {item.deliverableStatus.replaceAll("_", " ")}
+										</p>
+									</div>
+									<div className="flex flex-wrap items-center gap-2 text-[11px]">
+										<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+											task:{item.taskId}
+										</span>
+										{item.reviewStatus ? (
+											<span className="rounded bg-lime-500/10 px-2 py-0.5 text-lime-300">
+												review:{item.reviewStatus}
+											</span>
+										) : null}
+										{item.mergeStatus ? (
+											<span className="rounded bg-orange-500/10 px-2 py-0.5 text-orange-300">
+												merge:{item.mergeStatus}
+											</span>
+										) : null}
+									</div>
+								</div>
+								<div className="mt-2 space-y-1 text-[11px] text-text-muted">
+									<p>task state: {item.taskState}</p>
+									{item.branchName ? <p>branch: {item.branchName}</p> : null}
+									{item.previewUrl ? <p>preview: {item.previewUrl}</p> : null}
+									{item.reviewHistory.length ? (
+										<p>
+											latest: {item.reviewHistory[item.reviewHistory.length - 1]?.type ?? "review.event"}
+										</p>
+									) : null}
+								</div>
+							</Link>
+						))}
+					</div>
+				)}
 			</div>
 
 			<div className="rounded-xl border border-border bg-background p-4">
