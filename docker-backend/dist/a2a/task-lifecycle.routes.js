@@ -171,6 +171,39 @@ function emitReviewLifecycleEvents(input) {
         });
     }
 }
+function buildReviewHistoryEntries(input) {
+    const review = readRecord(input.metadataPatch.handoff);
+    const merge = readRecord(input.metadataPatch.merge);
+    const now = new Date().toISOString();
+    const entries = [];
+    if (review?.status === 'review-accepted') {
+        entries.push({
+            at: now,
+            type: 'review.accepted',
+            taskId: input.taskId,
+            actor: input.triggeredBy,
+            status: review.status,
+            intent: typeof review.intent === 'string' ? review.intent : null,
+            reviewTarget: typeof review.reviewTarget === 'string' ? review.reviewTarget : null,
+            reviewPath: typeof review.reviewPath === 'string' ? review.reviewPath : null,
+            note: input.reason,
+        });
+    }
+    if (merge?.status === 'merge-requested') {
+        entries.push({
+            at: now,
+            type: 'merge.requested',
+            taskId: input.taskId,
+            actor: input.triggeredBy,
+            status: merge.status,
+            branchName: typeof merge.branchName === 'string' ? merge.branchName : null,
+            baseBranch: typeof merge.baseBranch === 'string' ? merge.baseBranch : null,
+            suggestedAction: typeof merge.suggestedAction === 'string' ? merge.suggestedAction : null,
+            note: input.reason,
+        });
+    }
+    return entries;
+}
 async function resolveAutoRouteAssignee(input) {
     const workspace = (0, workspace_service_1.getWorkspaceService)().get(input.workspaceId);
     if (!workspace) {
@@ -544,8 +577,28 @@ exports.taskLifecycleRouter.post('/:taskId/metadata', (req, res) => {
             }));
             return;
         }
-        const result = (0, task_lifecycle_service_1.getTaskLifecycleService)().updateTaskMetadata(taskId, {
+        const taskResult = (0, task_lifecycle_service_1.getTaskLifecycleService)().getTask(taskId);
+        if (!taskResult.ok) {
+            sendError(res, taskResult.httpStatus, taskResult.error);
+            return;
+        }
+        const historyEntries = buildReviewHistoryEntries({
+            taskId,
             metadataPatch,
+            triggeredBy,
+            reason,
+        });
+        const existingHistory = Array.isArray(taskResult.data.metadata?.reviewHistory)
+            ? taskResult.data.metadata?.reviewHistory.filter((entry) => Boolean(entry))
+            : [];
+        const metadataPatchWithHistory = historyEntries.length > 0
+            ? {
+                ...metadataPatch,
+                reviewHistory: [...existingHistory, ...historyEntries].slice(-50),
+            }
+            : metadataPatch;
+        const result = (0, task_lifecycle_service_1.getTaskLifecycleService)().updateTaskMetadata(taskId, {
+            metadataPatch: metadataPatchWithHistory,
             reason,
             triggeredBy,
         });
@@ -556,7 +609,7 @@ exports.taskLifecycleRouter.post('/:taskId/metadata', (req, res) => {
         emitReviewLifecycleEvents({
             taskId,
             workspaceId: result.data.workspace_id,
-            metadataPatch,
+            metadataPatch: metadataPatchWithHistory,
             triggeredBy,
         });
         sendSuccess(res, result.data);
