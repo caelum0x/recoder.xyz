@@ -123,8 +123,12 @@ function buildTaskTimeline(input: {
 
   if ((input.preview ?? []).length > 0) {
     for (const preview of input.preview ?? []) {
+      const previewMetadata = readRecord(preview.metadata);
       timeline.push({
-        at: input.task.updated_at,
+        at:
+          typeof previewMetadata?.createdAt === 'string'
+            ? previewMetadata.createdAt
+            : input.task.updated_at,
         type: 'preview.attached',
         title: 'Preview attached',
         detail: preview.url,
