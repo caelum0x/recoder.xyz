@@ -1,4 +1,4 @@
-import type { TaskEnvelope, TaskEvidenceItem } from '@recoder/shared/a2a';
+import type { TaskEnvelope, TaskEvidenceItem, TaskStateTransition } from '@recoder/shared/a2a';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { getApprovalGateService } from './approval-gate.service';
 import { getDelegationChainService } from './delegation-chain.service';
@@ -46,6 +46,106 @@ function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function summarizeTaskPrompt(task: TaskEnvelope): string {
+  const payload = Array.isArray(task.payload) ? task.payload[0] : task.payload;
+  const payloadRecord =
+    payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as unknown as Record<string, unknown>)
+      : null;
+  return typeof payloadRecord?.text === 'string' ? payloadRecord.text : '';
+}
+
+function buildTaskTimeline(input: {
+  task: TaskEnvelope;
+  transitions: TaskStateTransition[];
+  artifacts: NonNullable<TaskEnvelope['result']>['artifacts'];
+  preview: NonNullable<TaskEnvelope['result']>['preview'];
+  filesChanged: string[];
+  reviewHistory: Array<{
+    at: string | null;
+    type: string | null;
+    actor: string | null;
+    status: string | null;
+    note: string | null;
+    branchName: string | null;
+    baseBranch: string | null;
+    reviewTarget: string | null;
+    reviewPath: string | null;
+    suggestedAction: string | null;
+  }>;
+}) {
+  const timeline: Array<Record<string, unknown>> = [];
+  const prompt = summarizeTaskPrompt(input.task);
+
+  timeline.push({
+    at: input.task.created_at,
+    type: 'task.created',
+    title: 'Task created',
+    detail: prompt || input.task.id,
+  });
+
+  timeline.push({
+    at: input.task.created_at,
+    type: 'agent.assigned',
+    title: 'Agent assigned',
+    detail: input.task.assignee.name ?? input.task.assignee.agent_id,
+  });
+
+  for (const transition of input.transitions) {
+    timeline.push({
+      at: transition.transitioned_at,
+      type: `task.${transition.to}`,
+      title: `Task ${transition.to}`,
+      detail: transition.reason ?? transition.triggered_by ?? null,
+    });
+  }
+
+  for (const reviewEvent of input.reviewHistory) {
+    timeline.push({
+      at: reviewEvent.at,
+      type: reviewEvent.type ?? 'review.event',
+      title: reviewEvent.type ?? 'review.event',
+      detail: reviewEvent.branchName ?? reviewEvent.reviewTarget ?? reviewEvent.note ?? null,
+    });
+  }
+
+  if (input.filesChanged.length > 0) {
+    timeline.push({
+      at: input.task.updated_at,
+      type: 'files.changed',
+      title: 'Files changed',
+      detail: `${input.filesChanged.length} file(s)`,
+      files: input.filesChanged,
+    });
+  }
+
+  if ((input.preview ?? []).length > 0) {
+    for (const preview of input.preview ?? []) {
+      timeline.push({
+        at: input.task.updated_at,
+        type: 'preview.attached',
+        title: 'Preview attached',
+        detail: preview.url,
+      });
+    }
+  }
+
+  if (input.artifacts && input.artifacts.length > 0) {
+    for (const artifact of input.artifacts) {
+      timeline.push({
+        at: input.task.updated_at,
+        type: `artifact.${artifact.artifact_type}`,
+        title: `Artifact: ${artifact.artifact_type}`,
+        detail: artifact.key,
+      });
+    }
+  }
+
+  return timeline
+    .filter((entry) => typeof entry.at === 'string' && entry.at)
+    .sort((a, b) => String(a.at).localeCompare(String(b.at)));
 }
 
 export async function buildTaskRunContext(task: TaskEnvelope) {
@@ -114,6 +214,14 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
     task,
     transitions,
     audit,
+    timeline: buildTaskTimeline({
+      task,
+      transitions,
+      artifacts,
+      preview,
+      filesChanged,
+      reviewHistory,
+    }),
     links: {
       ...(approval ? { approval } : {}),
       ...(delegation ? { delegation } : {}),

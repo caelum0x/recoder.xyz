@@ -23,6 +23,13 @@ interface TaskContextData {
       preview?: Array<{ url: string }>;
     } | null;
   };
+  timeline?: Array<{
+    at?: string | null;
+    type?: string | null;
+    title?: string | null;
+    detail?: string | null;
+    files?: string[];
+  }>;
   review?: {
     worktree?: {
       isolated?: boolean;
@@ -330,6 +337,48 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                 )}
               </section>
             </div>
+
+            <section className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <GitBranch className="h-4 w-4" />
+                Task Timeline
+              </div>
+              {data.timeline?.length ? (
+                <div className="space-y-2">
+                  {data.timeline.map((entry, index) => (
+                    <div
+                      key={`${entry.at ?? "entry"}-${entry.type ?? "type"}-${index}`}
+                      className="rounded-md bg-muted/40 p-3 text-xs"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded bg-muted px-2 py-0.5 font-medium">
+                          {entry.title ?? entry.type ?? "timeline.event"}
+                        </span>
+                        {entry.at ? (
+                          <span className="text-muted-foreground">
+                            {new Date(entry.at).toLocaleString()}
+                          </span>
+                        ) : null}
+                      </div>
+                      {entry.detail ? (
+                        <p className="mt-2 text-muted-foreground">{entry.detail}</p>
+                      ) : null}
+                      {entry.files?.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {entry.files.map((file) => (
+                            <span key={file} className="rounded bg-background px-2 py-1 font-mono">
+                              {file}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No timeline entries yet.</p>
+              )}
+            </section>
 
             <section className="rounded-lg border p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
