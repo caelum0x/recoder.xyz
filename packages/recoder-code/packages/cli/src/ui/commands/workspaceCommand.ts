@@ -4,6 +4,9 @@
  * Subcommands:
  *   /workspace list    - List available workspaces
  *   /workspace join <id> - Connect to a workspace via AgentBridgeService
+ *   /workspace approvals - List pending approvals in the current Recoder Space
+ *   /workspace approve <approval-id> - Grant a pending approval
+ *   /workspace reject <approval-id> - Reject a pending approval
  *   /workspace create <prompt> - Create a task in the current Recoder Space
  *   /workspace leave   - Disconnect from current workspace
  *   /workspace status  - Show connection status and online agents
@@ -120,6 +123,15 @@ interface TaskContextResponse {
     logs?: TaskContextLogEntry[];
   };
   timeline?: TaskContextTimelineEntry[];
+}
+
+interface WorkspaceApprovalRow {
+  approvalId: string;
+  requestingAgentId?: string;
+  targetAgentId?: string;
+  action?: string;
+  status?: string;
+  createdAt?: string;
 }
 
 export const workspaceCommand: SlashCommand = {
@@ -304,6 +316,207 @@ export const workspaceCommand: SlashCommand = {
             type: 'message',
             messageType: 'error',
             content: `Failed to join workspace: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace approvals
+    // -----------------------------------------------------------------------
+    {
+      name: 'approvals',
+      description: 'List pending approvals in the current Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      action: async (): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const bridge = getBridge();
+        const workspaceId = bridge.getWorkspaceId();
+        if (!workspaceId) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not connected to a Recoder Space. Run /workspace join <id> first.',
+          };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/workspaces/${encodeURIComponent(workspaceId)}/approvals?status=pending`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to fetch approvals (${response.status}): ${errText}`,
+            };
+          }
+
+          const raw = await response.json();
+          const approvals: WorkspaceApprovalRow[] = raw.data?.approvals || raw.approvals || [];
+
+          if (!approvals.length) {
+            return {
+              type: 'message',
+              messageType: 'info',
+              content: 'No pending approvals in the current Recoder Space.',
+            };
+          }
+
+          const lines: string[] = ['Recoder Space Approvals', ''];
+          for (const approval of approvals.slice(0, 12)) {
+            const approvalId = String(approval.approvalId || 'unknown');
+            const status = String(approval.status || 'pending');
+            const action = String(approval.action || 'action');
+            const requester = String(approval.requestingAgentId || 'unknown');
+            const target = String(approval.targetAgentId || 'unknown');
+            lines.push(`- ${approvalId} [${status}] ${action}`);
+            lines.push(`  from=${requester} to=${target}`);
+          }
+
+          lines.push('');
+          lines.push('Use /workspace approve <approval-id> to grant.');
+          lines.push('Use /workspace reject <approval-id> to reject.');
+          return { type: 'message', messageType: 'info', content: lines.join('\n') };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to list approvals: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace approve <approval-id>
+    // -----------------------------------------------------------------------
+    {
+      name: 'approve',
+      description: 'Grant a pending approval in the current Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const approvalId = args?.trim();
+        if (!approvalId) {
+          return { type: 'message', messageType: 'info', content: 'Usage: /workspace approve <approval-id>' };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/approvals/${encodeURIComponent(approvalId)}/grant`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                resolvedBy: getBridge().getAgentId(),
+              }),
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to grant approval (${response.status}): ${errText}`,
+            };
+          }
+
+          return { type: 'message', messageType: 'info', content: `Granted approval ${approvalId}.` };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to grant approval: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace reject <approval-id>
+    // -----------------------------------------------------------------------
+    {
+      name: 'reject',
+      description: 'Reject a pending approval in the current Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const approvalId = args?.trim();
+        if (!approvalId) {
+          return { type: 'message', messageType: 'info', content: 'Usage: /workspace reject <approval-id>' };
+        }
+
+        try {
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/approvals/${encodeURIComponent(approvalId)}/reject`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                resolvedBy: getBridge().getAgentId(),
+              }),
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to reject approval (${response.status}): ${errText}`,
+            };
+          }
+
+          return { type: 'message', messageType: 'info', content: `Rejected approval ${approvalId}.` };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to reject approval: ${msg}`,
           };
         }
       },
@@ -931,6 +1144,12 @@ export const workspaceCommand: SlashCommand = {
         'Commands:',
         '  /workspace list       - List available workspaces',
         '  /workspace join <id>  - Connect to a workspace',
+        '  /workspace approvals  - List pending approvals',
+        '  /workspace approve .. - Grant an approval',
+        '  /workspace reject ..  - Reject an approval',
+        '  /workspace tasks      - List tasks in the current space',
+        '  /workspace claim ..   - Claim a task',
+        '  /workspace logs ..    - Show task logs and timeline',
         '  /workspace create ... - Create a task in the current space',
         '  /workspace context    - Show space context',
         '  /workspace leave      - Disconnect from workspace',
