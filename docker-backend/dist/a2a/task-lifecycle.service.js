@@ -835,6 +835,71 @@ class TaskLifecycleService {
         }));
         return { ok: true, data: updated };
     }
+    /**
+     * Append artifacts to an existing task result without changing state.
+     * This supports post-run artifact uploads from Space-native CLI workflows
+     * and other control-plane surfaces that need to enrich a task over time.
+     */
+    appendTaskArtifacts(taskId, input) {
+        const envelope = this.store.get(taskId);
+        if (!envelope) {
+            return {
+                ok: false,
+                httpStatus: 404,
+                error: (0, a2a_1.buildA2AError)({
+                    code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
+                    message: `Task not found: ${taskId}`,
+                    details: { task_id: taskId },
+                }),
+            };
+        }
+        if (input.artifacts.length === 0) {
+            return { ok: true, data: envelope };
+        }
+        const existingResult = envelope.result ?? {};
+        const mergedArtifacts = new Map();
+        for (const artifact of existingResult.artifacts ?? []) {
+            mergedArtifacts.set(artifact.key, artifact);
+        }
+        for (const artifact of input.artifacts) {
+            mergedArtifacts.set(artifact.key, artifact);
+        }
+        const now = new Date().toISOString();
+        const updated = {
+            ...envelope,
+            updated_at: now,
+            result: enrichTaskResult(envelope, {
+                ...existingResult,
+                artifacts: [...mergedArtifacts.values()],
+            }),
+        };
+        this.store.set(taskId, updated);
+        this.emitAudit((0, a2a_1.createAuditEvent)({
+            id: generateId('evt'),
+            event_type: a2a_1.AuditEventTypeEnum.TaskProgress,
+            severity: a2a_1.AuditSeverityEnum.Info,
+            actor: {
+                kind: a2a_1.AuditActorKindEnum.System,
+                id: input.triggeredBy || 'artifact-api',
+                name: input.triggeredBy || 'artifact-api',
+            },
+            target: {
+                kind: a2a_1.AuditTargetKindEnum.Task,
+                id: taskId,
+            },
+            trace_id: updated.trace_id,
+            workspace_id: updated.workspace_id,
+            thread_id: updated.thread_id,
+            task_id: taskId,
+            metadata: {
+                reason: input.reason || 'Task artifacts appended',
+                artifact_count: input.artifacts.length,
+                artifact_keys: input.artifacts.map((artifact) => artifact.key),
+            },
+            now,
+        }));
+        return { ok: true, data: updated };
+    }
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
