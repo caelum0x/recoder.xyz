@@ -2,6 +2,8 @@
 
 import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/lib/toast';
 
 interface Task {
   id: string;
@@ -77,6 +79,20 @@ const COLUMNS = [
 ];
 
 export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) {
+  const copyToClipboard = async (label: string, value: string | null | undefined) => {
+    if (!value) {
+      toast.error(`No ${label.toLowerCase()} available`);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Failed to copy ${label.toLowerCase()}`);
+    }
+  };
+
   const groupedTasks: Record<string, Task[]> = {};
   for (const col of COLUMNS) {
     groupedTasks[col.key] = [];
@@ -112,10 +128,18 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                   <p className="text-[10px] text-muted-foreground text-center py-3">Empty</p>
                 ) : (
                   colTasks.map((task) => (
-                    <button
+                    <div
                       key={task.id}
-                      className="w-full text-left p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors"
+                      className="w-full rounded-md bg-muted/50 p-2 text-left transition-colors hover:bg-muted"
                       onClick={() => onTaskClick?.(task.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          onTaskClick?.(task.id);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <p className="text-xs truncate">{task.prompt ?? task.id}</p>
                       <div className="mt-1 flex flex-wrap gap-1">
@@ -187,7 +211,39 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                           action: {task.review.merge.suggestedAction}
                         </p>
                       )}
-                    </button>
+                      {task.review?.worktree?.branchName || task.review?.worktree?.worktreePath ? (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {task.review?.worktree?.branchName ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-[10px]"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void copyToClipboard('Review branch', task.review?.worktree?.branchName);
+                              }}
+                            >
+                              Copy branch
+                            </Button>
+                          ) : null}
+                          {task.review?.worktree?.worktreePath ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-6 px-2 text-[10px]"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void copyToClipboard('Worktree path', task.review?.worktree?.worktreePath);
+                              }}
+                            >
+                              Copy path
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   ))
                 )}
               </div>
