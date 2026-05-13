@@ -34,6 +34,7 @@ import { ProjectTransitionHistory } from "./project-transition-history";
 import { RetryClientTransitionPanel } from "./retry-client-transition-panel";
 import {
 	buildRecoderProjectControlSummary,
+	buildRecoderProjectDeliveryPackage,
 	getRecoderTaskContext,
 	type RecoderTaskContext,
 } from "@/lib/agency/recoder-control-plane";
@@ -419,6 +420,21 @@ export default async function ProjectDetailPage({
 		workspaceId: projectWorkspace?.id ?? null,
 		taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
 	});
+	const deliveryPackage = await buildRecoderProjectDeliveryPackage({
+		projectId: project.id,
+		projectName: project.name,
+		workspaceId: projectWorkspace?.id ?? null,
+		deliverables: projectDeliverables.map((deliverable) => ({
+			id: deliverable.id,
+			name: deliverable.name,
+			status: deliverable.status,
+			type: deliverable.type,
+			taskId: deliverable.taskId,
+			fileKey: deliverable.fileKey,
+			milestoneLabel: deliverable.milestoneLabel,
+			content: deliverable.content,
+		})),
+	});
 
 	return (
 		<div className="space-y-6">
@@ -597,6 +613,69 @@ export default async function ProjectDetailPage({
 						</span>
 					) : null}
 				</div>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4">
+				<h2 className="mb-3 text-sm font-medium text-text-muted">
+					Review Summary
+				</h2>
+				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Review ready</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.reviewReadyCount}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Merge requested</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.mergeRequestedCount}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Ready to merge</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.readyToMergeCount}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Branches</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.branches.length}
+						</p>
+					</div>
+				</div>
+				<div className="mt-3 flex flex-wrap gap-2">
+					{deliveryPackage.reviewSummary.branches.slice(0, 6).map((branch) => (
+						<span
+							key={branch}
+							className="inline-flex items-center rounded-full bg-orange-500/10 px-2 py-0.5 text-[11px] text-orange-300"
+						>
+							{branch}
+						</span>
+					))}
+				</div>
+				{deliveryPackage.reviewSummary.latestEvents.length ? (
+					<div className="mt-4 rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] font-medium text-text-muted">
+							Latest review events
+						</p>
+						<div className="mt-2 space-y-1">
+							{deliveryPackage.reviewSummary.latestEvents.slice(0, 5).map((entry, index) => (
+								<p
+									key={`${entry.deliverableId}-${entry.at ?? "event"}-${index}`}
+									className="text-[11px] text-text-muted"
+								>
+									<span className="text-text">{entry.deliverableName}</span>
+									{": "}
+									{entry.type ?? "review.event"}
+									{entry.branchName ? ` • ${entry.branchName}` : ""}
+									{entry.status ? ` • ${entry.status}` : ""}
+								</p>
+							))}
+						</div>
+					</div>
+				) : null}
 			</div>
 
 			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
