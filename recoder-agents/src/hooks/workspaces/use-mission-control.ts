@@ -154,6 +154,7 @@ export function useActivityTimeline(
       {
         'task.submitted': forward,
         'task.started': forward,
+        'artifact.attached': forward,
         'task.completed': forward,
         'task.failed': forward,
         'message.new': forward,

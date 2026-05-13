@@ -805,6 +805,21 @@ taskLifecycleRouter.post(
         return;
       }
 
+      getA2AEventBus().publish({
+        id: `evt_${Date.now()}_artifact_${taskId}`,
+        type: A2AEventType.ArtifactAttached,
+        timestamp: new Date().toISOString(),
+        taskId,
+        workspaceId: result.data.workspace_id,
+        data: {
+          taskId,
+          artifactCount: artifacts.length,
+          artifactKeys: artifacts.map((artifact) => artifact.key),
+          triggeredBy,
+          reason,
+        },
+      });
+
       sendSuccess(res, result.data);
     } catch (err) {
       logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/artifacts');

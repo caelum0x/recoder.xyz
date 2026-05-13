@@ -11,6 +11,7 @@ import {
   UserMinus,
   Zap,
   GitBranch,
+  FileDiff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useActivityTimeline } from '@/hooks/workspaces/use-mission-control';
@@ -27,6 +28,7 @@ const EVENT_ICONS: Record<string, typeof MessageSquare> = {
   'message.new': MessageSquare,
   'task.submitted': Zap,
   'task.started': Zap,
+  'artifact.attached': FileDiff,
   'task.completed': CheckCircle,
   'task.failed': XCircle,
   'handoff.initiated': ArrowRight,
@@ -45,6 +47,7 @@ const EVENT_ICONS: Record<string, typeof MessageSquare> = {
 const EVENT_COLORS: Record<string, string> = {
   'message.new': 'text-blue-500',
   'task.completed': 'text-green-500',
+  'artifact.attached': 'text-indigo-500',
   'task.failed': 'text-red-500',
   'handoff.initiated': 'text-amber-500',
   'review.accepted': 'text-lime-500',
@@ -180,6 +183,8 @@ function getEventDescription(event: TimelineEvent): string {
       return `Task submitted: ${(data.prompt as string)?.slice(0, 60) ?? event.id}`;
     case 'task.started':
       return `Task started by ${data.assignee_agent_id ?? 'agent'}`;
+    case 'artifact.attached':
+      return `Artifacts attached: ${Array.isArray(data.artifactKeys) ? data.artifactKeys.join(', ') : data.taskId ?? 'task'}`;
     case 'task.completed':
       return `Task completed by ${data.assignee_agent_id ?? 'agent'}`;
     case 'task.failed':
