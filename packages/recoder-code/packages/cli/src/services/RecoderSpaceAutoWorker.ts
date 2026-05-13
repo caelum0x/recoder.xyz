@@ -316,6 +316,7 @@ function writeArtifacts(
 ) {
   const artifactDir = path.join(process.cwd(), '.recoder', 'artifacts', taskId);
   mkdirSync(artifactDir, { recursive: true });
+  const createdAt = new Date().toISOString();
 
   const reportPath = path.join(artifactDir, 'report.md');
   const outputPath = path.join(artifactDir, 'model-output.txt');
@@ -579,6 +580,7 @@ export function installRecoderSpaceAutoWorker(
           diff: taskScoped.diff,
           changedFiles: taskScoped.changedPaths.join('\n'),
         };
+        const artifactCreatedAt = new Date().toISOString();
         const artifacts = writeArtifacts(
           assignment.taskId,
           assignment.prompt,
@@ -627,6 +629,7 @@ export function installRecoderSpaceAutoWorker(
               mime_type: 'text/markdown',
               content: artifacts.report.content,
               path: artifacts.report.path,
+              metadata: { createdAt: artifactCreatedAt },
             },
             {
               key: `${assignment.taskId}-model-output.txt`,
@@ -634,6 +637,7 @@ export function installRecoderSpaceAutoWorker(
               mime_type: 'text/plain',
               content: artifacts.output.content,
               path: artifacts.output.path,
+              metadata: { createdAt: artifactCreatedAt },
             },
             {
               key: `${assignment.taskId}-git.diff`,
@@ -641,6 +645,7 @@ export function installRecoderSpaceAutoWorker(
               mime_type: 'text/x-diff',
               content: artifacts.diff.content,
               path: artifacts.diff.path,
+              metadata: { createdAt: artifactCreatedAt },
             },
             {
               key: `${assignment.taskId}-git-status.txt`,
@@ -648,6 +653,7 @@ export function installRecoderSpaceAutoWorker(
               mime_type: 'text/plain',
               content: artifacts.status.content,
               path: artifacts.status.path,
+              metadata: { createdAt: artifactCreatedAt },
             },
             {
               key: `${assignment.taskId}-changed-files.txt`,
@@ -655,6 +661,7 @@ export function installRecoderSpaceAutoWorker(
               mime_type: 'text/plain',
               content: artifacts.changedFiles.content,
               path: artifacts.changedFiles.path,
+              metadata: { createdAt: artifactCreatedAt },
             },
           ],
         });
