@@ -381,6 +381,24 @@ export function DeliverableSection({
 												</div>
 											</div>
 										) : null}
+										{controlPlane.timeline?.length ? (
+											<div className="mt-2 rounded-md border border-border/60 bg-background/70 px-2 py-2">
+												<p className="text-[11px] font-medium text-text-muted">
+													task timeline
+												</p>
+												<div className="mt-1 space-y-1">
+													{controlPlane.timeline.slice(-3).reverse().map((entry, index) => (
+														<p
+															key={`${entry.at ?? "timeline"}-${index}`}
+															className="text-[11px] text-text-muted"
+														>
+															{entry.title ?? entry.type ?? "timeline.event"}
+															{entry.detail ? ` • ${entry.detail}` : ""}
+														</p>
+													))}
+												</div>
+											</div>
+										) : null}
 										{previewUrl ? (
 											<a
 												href={previewUrl}
