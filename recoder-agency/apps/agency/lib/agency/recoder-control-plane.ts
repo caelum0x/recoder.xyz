@@ -26,6 +26,30 @@ export interface RecoderTaskContext {
 			toAgentId?: string;
 		};
 	};
+	review?: {
+		worktree?: {
+			isolated?: boolean;
+			reviewReady?: boolean;
+			branchName?: string | null;
+			baseBranch?: string | null;
+			worktreePath?: string | null;
+			changedFiles?: string[];
+		} | null;
+		handoff?: {
+			status?: string | null;
+			intent?: string | null;
+			reviewTarget?: string | null;
+			reviewPath?: string | null;
+			assignedBy?: string | null;
+		} | null;
+		merge?: {
+			status?: string | null;
+			branchName?: string | null;
+			baseBranch?: string | null;
+			suggestedAction?: string | null;
+			changedFiles?: string[];
+		} | null;
+	};
 	assignee?: {
 		name?: string;
 		registry?: {
@@ -121,6 +145,10 @@ export interface RecoderDeliveryPackageDeliverable {
 		previewUrls: string[];
 		filesChanged: string[];
 		gitBranch?: string | null;
+		reviewBranch?: string | null;
+		reviewPath?: string | null;
+		reviewStatus?: string | null;
+		mergeStatus?: string | null;
 		logExcerpts: string[];
 		evidenceCount: number;
 		artifactCount: number;
@@ -517,6 +545,10 @@ export async function buildRecoderProjectDeliveryPackage(input: {
 				previewUrls: context?.task.result?.preview?.map((preview) => preview.url) ?? [],
 				filesChanged: context?.runtime?.filesChanged ?? [],
 				gitBranch: context?.runtime?.git?.branch ?? null,
+				reviewBranch: context?.review?.worktree?.branchName ?? context?.review?.merge?.branchName ?? null,
+				reviewPath: context?.review?.worktree?.worktreePath ?? context?.review?.handoff?.reviewPath ?? null,
+				reviewStatus: context?.review?.handoff?.status ?? null,
+				mergeStatus: context?.review?.merge?.status ?? null,
 				logExcerpts:
 					context?.runtime?.logs
 						?.map((log) => log.excerpt ?? "")
