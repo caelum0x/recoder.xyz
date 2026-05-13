@@ -309,4 +309,48 @@ describe('taskLifecycleRouter bridge dispatch', () => {
       branchName: 'recoder/task-branch',
     });
   });
+
+  it('appends task artifacts via route', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_artifacts',
+      thread_id: 'thread_artifacts',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Artifact task' },
+      metadata: {},
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const req = makeReq({
+      method: 'POST',
+      params: { taskId: created.data.id },
+      body: {
+        artifacts: [
+          {
+            key: 'manual-report.md',
+            artifact_type: 'report',
+            mime_type: 'text/markdown',
+            content: '# Manual report',
+            path: '.recoder/artifacts/manual-report.md',
+          },
+        ],
+        reason: 'Manual artifact upload',
+        triggeredBy: 'recoder-code-cli',
+      },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/artifacts', 'post', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.success).toBe(true);
+    expect(state.jsonData.data.result.artifacts).toHaveLength(1);
+    expect(state.jsonData.data.result.artifacts[0]).toMatchObject({
+      key: 'manual-report.md',
+      artifact_type: 'report',
+    });
+  });
 });

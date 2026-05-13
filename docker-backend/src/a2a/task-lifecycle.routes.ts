@@ -23,6 +23,7 @@ import {
   A2AErrorCodeEnum,
   buildA2AError,
   type A2AError,
+  type TaskArtifact,
   type TaskEnvelope,
   type TaskRoutingHints,
 } from '@recoder/shared/a2a';
@@ -135,6 +136,35 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function parseTaskArtifacts(value: unknown): TaskArtifact[] | null {
+  if (!Array.isArray(value)) return null;
+  const artifacts: TaskArtifact[] = [];
+
+  for (const item of value) {
+    const record = readRecord(item);
+    if (!record) return null;
+    if (
+      typeof record.key !== 'string' ||
+      typeof record.artifact_type !== 'string' ||
+      typeof record.mime_type !== 'string' ||
+      typeof record.content !== 'string'
+    ) {
+      return null;
+    }
+
+    artifacts.push({
+      key: record.key,
+      artifact_type: record.artifact_type as TaskArtifact['artifact_type'],
+      mime_type: record.mime_type,
+      content: record.content,
+      ...(typeof record.path === 'string' ? { path: record.path } : {}),
+      ...(readRecord(record.metadata) ? { metadata: readRecord(record.metadata) } : {}),
+    });
+  }
+
+  return artifacts;
 }
 
 function emitReviewLifecycleEvents(input: {
@@ -732,6 +762,55 @@ taskLifecycleRouter.post(
       sendError(res, 500, buildA2AError({
         code: A2AErrorCodeEnum.InternalError,
         message: 'Internal server error while updating task metadata',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/artifacts -- Append artifacts to a task result
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/artifacts',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const artifacts = parseTaskArtifacts(req.body?.artifacts);
+      const reason =
+        typeof req.body?.reason === 'string' && req.body.reason.trim().length > 0
+          ? req.body.reason.trim()
+          : 'Task artifacts appended';
+      const triggeredBy =
+        typeof req.body?.triggeredBy === 'string' && req.body.triggeredBy.trim().length > 0
+          ? req.body.triggeredBy.trim()
+          : 'external-client';
+
+      if (!artifacts) {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.InvalidEnvelope,
+          message: 'artifacts must be an array of TaskArtifact objects',
+        }));
+        return;
+      }
+
+      const result = getTaskLifecycleService().appendTaskArtifacts(taskId, {
+        artifacts,
+        triggeredBy,
+        reason,
+      });
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      sendSuccess(res, result.data);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/artifacts');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while appending task artifacts',
       }));
     }
   },

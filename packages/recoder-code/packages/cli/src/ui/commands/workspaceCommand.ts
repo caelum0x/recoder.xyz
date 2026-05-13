@@ -7,6 +7,7 @@
  *   /workspace approvals - List pending approvals in the current Recoder Space
  *   /workspace approve <approval-id> - Grant a pending approval
  *   /workspace reject <approval-id> - Reject a pending approval
+ *   /workspace artifact <task-id> <file-path> - Attach a local artifact to a task
  *   /workspace create <prompt> - Create a task in the current Recoder Space
  *   /workspace timeline <task-id> - Show the canonical task timeline
  *   /workspace leave   - Disconnect from current workspace
@@ -20,6 +21,8 @@ import { RecoderAuthService } from '../../services/RecoderAuthService.js';
 import { AgentBridgeService } from '../../services/AgentBridgeService.js';
 import { installRecoderSpaceAutoWorker } from '../../services/RecoderSpaceAutoWorker.js';
 import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import mime from 'mime-types';
 
 const DOCKER_BACKEND_URL = process.env['DOCKER_BACKEND_URL'] || 'http://localhost:3100';
 
@@ -133,6 +136,14 @@ interface WorkspaceApprovalRow {
   action?: string;
   status?: string;
   createdAt?: string;
+}
+
+interface ArtifactInputRow {
+  key: string;
+  artifact_type: 'patch' | 'file' | 'plan' | 'report' | 'log' | 'custom';
+  mime_type: string;
+  content: string;
+  path?: string;
 }
 
 export const workspaceCommand: SlashCommand = {
@@ -846,6 +857,103 @@ export const workspaceCommand: SlashCommand = {
     },
 
     // -----------------------------------------------------------------------
+    // /workspace artifact <task-id> <file-path>
+    // -----------------------------------------------------------------------
+    {
+      name: 'artifact',
+      description: 'Attach a local file artifact to a Recoder Space task',
+      kind: CommandKind.BUILT_IN,
+      action: async (_context, args): Promise<MessageActionReturn> => {
+        const token = await authService.getAccessToken();
+        if (!token) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: 'Not authenticated. Please run /recoder-login first.',
+          };
+        }
+
+        const parts = args?.trim().split(/\s+/) ?? [];
+        const taskId = parts[0];
+        const filePath = parts.slice(1).join(' ').trim();
+        if (!taskId || !filePath) {
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: 'Usage: /workspace artifact <task-id> <file-path>',
+          };
+        }
+
+        if (!existsSync(filePath)) {
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `File not found: ${filePath}`,
+          };
+        }
+
+        try {
+          const content = readFileSync(filePath, 'utf8');
+          const mimeType = mime.lookup(filePath) || 'text/plain';
+          const artifactType: ArtifactInputRow['artifact_type'] =
+            filePath.endsWith('.diff') || filePath.endsWith('.patch')
+              ? 'patch'
+              : filePath.endsWith('.md')
+                ? 'report'
+                : filePath.endsWith('.log')
+                  ? 'log'
+                  : 'file';
+
+          const artifact: ArtifactInputRow = {
+            key: filePath.split('/').pop() || `artifact-${Date.now()}`,
+            artifact_type: artifactType,
+            mime_type: String(mimeType),
+            content,
+            path: filePath,
+          };
+
+          const response = await fetch(
+            `${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/artifacts`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                artifacts: [artifact],
+                reason: 'Artifact attached from Recoder Code CLI',
+                triggeredBy: getBridge().getAgentId(),
+              }),
+            },
+          );
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => 'Unknown error');
+            return {
+              type: 'message',
+              messageType: 'error',
+              content: `Failed to attach artifact (${response.status}): ${errText}`,
+            };
+          }
+
+          return {
+            type: 'message',
+            messageType: 'info',
+            content: `Attached artifact ${artifact.key} to task ${taskId}.`,
+          };
+        } catch (error: unknown) {
+          const msg = error instanceof Error ? error.message : 'Unknown error';
+          return {
+            type: 'message',
+            messageType: 'error',
+            content: `Failed to attach artifact: ${msg}`,
+          };
+        }
+      },
+    },
+
+    // -----------------------------------------------------------------------
     // /workspace create <prompt>
     // -----------------------------------------------------------------------
     {
@@ -1220,6 +1328,7 @@ export const workspaceCommand: SlashCommand = {
         '  /workspace tasks      - List tasks in the current space',
         '  /workspace claim ..   - Claim a task',
         '  /workspace logs ..    - Show task logs and timeline',
+        '  /workspace artifact . - Attach a local artifact to a task',
         '  /workspace timeline . - Show canonical task timeline',
         '  /workspace create ... - Create a task in the current space',
         '  /workspace context    - Show space context',
