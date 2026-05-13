@@ -4,6 +4,8 @@
  * Subcommands:
  *   /workspace list    - List available workspaces
  *   /workspace join <id> - Connect to a workspace via AgentBridgeService
+ *   /workspace run start <task-id> - Start backend task execution
+ *   /workspace run logs <task-id> - Show run status and logs
  *   /workspace approvals - List pending approvals in the current Recoder Space
  *   /workspace approve <approval-id> - Grant a pending approval
  *   /workspace reject <approval-id> - Reject a pending approval
@@ -121,6 +123,21 @@ interface TaskContextResponse {
   task: {
     id: string;
     state: string;
+  };
+  run?: {
+    taskId?: string;
+    state?: string;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    exitCode?: number | null;
+    assigneeAgentId?: string;
+    branch?: string | null;
+    reviewReady?: boolean;
+    mergeRequested?: boolean;
+    artifactCount?: number;
+    previewCount?: number;
+    logCount?: number;
+    evidenceCount?: number;
   };
   runtime?: {
     logCount?: number;
@@ -331,6 +348,154 @@ export const workspaceCommand: SlashCommand = {
           };
         }
       },
+    },
+
+    // -----------------------------------------------------------------------
+    // /workspace run
+    // -----------------------------------------------------------------------
+    {
+      name: 'run',
+      description: 'Run-oriented commands for the current Recoder Space',
+      kind: CommandKind.BUILT_IN,
+      subCommands: [
+        {
+          name: 'start',
+          description: 'Start backend execution for a task',
+          kind: CommandKind.BUILT_IN,
+          action: async (_context, args): Promise<MessageActionReturn> => {
+            const token = await authService.getAccessToken();
+            if (!token) {
+              return {
+                type: 'message',
+                messageType: 'error',
+                content: 'Not authenticated. Please run /recoder-login first.',
+              };
+            }
+
+            const taskId = args?.trim();
+            if (!taskId) {
+              return {
+                type: 'message',
+                messageType: 'info',
+                content: 'Usage: /workspace run start <task-id>',
+              };
+            }
+
+            try {
+              const response = await fetch(
+                `${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/execute`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({}),
+                },
+              );
+
+              if (!response.ok) {
+                const errText = await response.text().catch(() => 'Unknown error');
+                return {
+                  type: 'message',
+                  messageType: 'error',
+                  content: `Failed to start run (${response.status}): ${errText}`,
+                };
+              }
+
+              return {
+                type: 'message',
+                messageType: 'info',
+                content: `Started backend run for task ${taskId}.`,
+              };
+            } catch (error: unknown) {
+              const msg = error instanceof Error ? error.message : 'Unknown error';
+              return {
+                type: 'message',
+                messageType: 'error',
+                content: `Failed to start run: ${msg}`,
+              };
+            }
+          },
+        },
+        {
+          name: 'logs',
+          description: 'Show run status and logs for a task',
+          kind: CommandKind.BUILT_IN,
+          action: async (_context, args): Promise<MessageActionReturn> => {
+            const token = await authService.getAccessToken();
+            if (!token) {
+              return {
+                type: 'message',
+                messageType: 'error',
+                content: 'Not authenticated. Please run /recoder-login first.',
+              };
+            }
+
+            const taskId = args?.trim();
+            if (!taskId) {
+              return {
+                type: 'message',
+                messageType: 'info',
+                content: 'Usage: /workspace run logs <task-id>',
+              };
+            }
+
+            try {
+              const response = await fetch(
+                `${DOCKER_BACKEND_URL}/api/a2a/tasks/${encodeURIComponent(taskId)}/context`,
+                {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                },
+              );
+
+              if (!response.ok) {
+                const errText = await response.text().catch(() => 'Unknown error');
+                return {
+                  type: 'message',
+                  messageType: 'error',
+                  content: `Failed to fetch run context (${response.status}): ${errText}`,
+                };
+              }
+
+              const raw = await response.json();
+              const context: TaskContextResponse = raw.data || raw;
+              const lines: string[] = [
+                `Run ${context.run?.taskId ?? context.task.id} [${context.run?.state ?? context.task.state}]`,
+                '',
+                `startedAt=${context.run?.startedAt ?? '—'}`,
+                `completedAt=${context.run?.completedAt ?? '—'}`,
+                `exitCode=${context.run?.exitCode ?? '—'}`,
+                `branch=${context.run?.branch ?? '—'}`,
+                `reviewReady=${context.run?.reviewReady ? 'yes' : 'no'}`,
+                `mergeRequested=${context.run?.mergeRequested ? 'yes' : 'no'}`,
+                `artifacts=${context.run?.artifactCount ?? 0} previews=${context.run?.previewCount ?? 0} logs=${context.run?.logCount ?? 0}`,
+              ];
+
+              if (context.runtime?.logs?.length) {
+                lines.push('');
+                lines.push('Logs:');
+                for (const log of context.runtime.logs) {
+                  lines.push(`- ${log.label || 'log'}: ${log.excerpt || '(empty)'}`);
+                }
+              }
+
+              return { type: 'message', messageType: 'info', content: lines.join('\n') };
+            } catch (error: unknown) {
+              const msg = error instanceof Error ? error.message : 'Unknown error';
+              return {
+                type: 'message',
+                messageType: 'error',
+                content: `Failed to fetch run logs: ${msg}`,
+              };
+            }
+          },
+        },
+      ],
     },
 
     // -----------------------------------------------------------------------
@@ -1322,6 +1487,8 @@ export const workspaceCommand: SlashCommand = {
         'Commands:',
         '  /workspace list       - List available workspaces',
         '  /workspace join <id>  - Connect to a workspace',
+        '  /workspace run start  - Start backend task execution',
+        '  /workspace run logs   - Show run status and logs',
         '  /workspace approvals  - List pending approvals',
         '  /workspace approve .. - Grant an approval',
         '  /workspace reject ..  - Reject an approval',
