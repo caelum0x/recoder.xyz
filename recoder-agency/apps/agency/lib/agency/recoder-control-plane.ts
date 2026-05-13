@@ -161,6 +161,18 @@ export interface RecoderDeliveryPackageDeliverable {
 		reviewPath?: string | null;
 		reviewStatus?: string | null;
 		mergeStatus?: string | null;
+		reviewHistory: Array<{
+			at?: string | null;
+			type?: string | null;
+			actor?: string | null;
+			status?: string | null;
+			note?: string | null;
+			branchName?: string | null;
+			baseBranch?: string | null;
+			reviewTarget?: string | null;
+			reviewPath?: string | null;
+			suggestedAction?: string | null;
+		}>;
 		logExcerpts: string[];
 		evidenceCount: number;
 		artifactCount: number;
@@ -561,6 +573,7 @@ export async function buildRecoderProjectDeliveryPackage(input: {
 				reviewPath: context?.review?.worktree?.worktreePath ?? context?.review?.handoff?.reviewPath ?? null,
 				reviewStatus: context?.review?.handoff?.status ?? null,
 				mergeStatus: context?.review?.merge?.status ?? null,
+				reviewHistory: context?.review?.history ?? [],
 				logExcerpts:
 					context?.runtime?.logs
 						?.map((log) => log.excerpt ?? "")
