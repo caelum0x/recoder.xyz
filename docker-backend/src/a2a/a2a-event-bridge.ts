@@ -103,6 +103,95 @@ function readEvidenceMetadata(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function deriveMetadataPatchLifecycleEvents(
+  auditEvent: AuditEvent,
+  task: TaskEnvelope,
+): Array<{
+  eventType: string;
+  actorId: string | null;
+  state: string;
+  detail: Record<string, unknown>;
+}> {
+  if (auditEvent.event_type !== 'task.progress') return [];
+
+  const metadata = toRecord(auditEvent.metadata);
+  const metadataPatch = toRecord(metadata?.metadata_patch);
+  if (!metadataPatch) return [];
+
+  const actorId =
+    typeof auditEvent.actor?.id === 'string' && auditEvent.actor.id.trim().length > 0
+      ? auditEvent.actor.id
+      : null;
+  const derived: Array<{
+    eventType: string;
+    actorId: string | null;
+    state: string;
+    detail: Record<string, unknown>;
+  }> = [];
+
+  const approval = toRecord(metadataPatch.approval);
+  if (approval) {
+    derived.push({
+      eventType: 'task.approval.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...approval,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const handoff = toRecord(metadataPatch.handoff);
+  if (handoff) {
+    const handoffStatus =
+      typeof handoff.status === 'string' && handoff.status.trim().length > 0
+        ? handoff.status
+        : null;
+    derived.push({
+      eventType: handoffStatus === 'review-accepted' ? 'review.accepted' : 'task.handoff.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...handoff,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const merge = toRecord(metadataPatch.merge);
+  if (merge) {
+    const mergeStatus =
+      typeof merge.status === 'string' && merge.status.trim().length > 0
+        ? merge.status
+        : null;
+    derived.push({
+      eventType: mergeStatus === 'merge-requested' ? 'merge.requested' : 'task.merge.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...merge,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const routing = toRecord(metadataPatch.routing);
+  if (routing) {
+    derived.push({
+      eventType: 'task.routing.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...routing,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  return derived;
+}
+
 function extractTaskEvidence(task: TaskEnvelope): Array<{
   kind: string;
   label: string;
@@ -148,6 +237,16 @@ async function projectAuditEventToControlPlaneHistory(
         auditEventType: auditEvent.event_type,
         ...(toRecord(auditEvent.metadata) ?? {}),
       },
+    });
+  }
+
+  for (const event of deriveMetadataPatchLifecycleEvents(auditEvent, task)) {
+    await gateway.appendTaskScopedControlPlaneLifecycleEvent({
+      taskId: task.id,
+      eventType: event.eventType,
+      actorId: event.actorId,
+      state: event.state,
+      detail: event.detail,
     });
   }
 

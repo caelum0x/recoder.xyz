@@ -196,4 +196,116 @@ describe('A2A control-plane task projection', () => {
     expect(body.timeline.some((entry: any) => entry.type === 'task.completed')).toBe(true);
     expect(body.timeline.some((entry: any) => entry.type === 'evidence.attached')).toBe(true);
   });
+
+  it('projects metadata patch milestones into orchestration history', async () => {
+    const orchestrate = await fetch(`${baseUrl}/api/a2a/orchestrate`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        mode: 'codex_only',
+        bridgeId: 'bridge-default',
+        envelope: {
+          messageId: 'msg-control-plane-metadata',
+          threadId: 'thread-control-plane-metadata',
+          intent: 'execute',
+          from: { id: 'pm', platform: 'recoder_pm' },
+          to: { id: 'codex', platform: 'codex' },
+          payload: [{ kind: 'text', text: 'route then review' }],
+          metadata: {
+            workspaceId: 'ws-control-plane-metadata',
+            traceId: 'trace-control-plane-metadata',
+          },
+        },
+      }),
+    });
+    expect(orchestrate.status).toBe(202);
+
+    const lifecycle = getTaskLifecycleService();
+    const created = lifecycle.createTask({
+      workspace_id: 'ws-control-plane-metadata',
+      thread_id: 'thread-control-plane-metadata',
+      trace_id: 'trace-control-plane-metadata',
+      requester: {
+        agent_id: 'recoder_pm',
+        platform: 'recoder_pm',
+      },
+      assignee: {
+        agent_id: 'codex',
+        platform: 'codex',
+      },
+      connector: {
+        connector_id: 'codex:codex',
+        platform: 'codex',
+        protocol: 'a2a',
+      },
+      payload: [{ kind: 'text', text: 'metadata projection task' }],
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const taskId = created.data.id;
+    const updated = lifecycle.updateTaskMetadata(taskId, {
+      metadataPatch: {
+        approval: {
+          approvalId: 'approval-metadata-1',
+          status: 'pending',
+          action: 'review',
+        },
+        handoff: {
+          status: 'review-accepted',
+          intent: 'review',
+          reviewTarget: 'src/editor.ts',
+        },
+        merge: {
+          status: 'merge-requested',
+          branchName: 'feat/control-plane',
+          baseBranch: 'main',
+        },
+        routing: {
+          runtimeCategory: 'code',
+          selectedBy: 'capability-matcher',
+        },
+      },
+      triggeredBy: 'recoder-pm',
+      reason: 'Metadata milestone projection',
+    });
+    expect(updated.ok).toBe(true);
+
+    await waitFor(async () => {
+      const history = await fetch(
+        `${baseUrl}/api/a2a/orchestrate/thread-control-plane-metadata/trace-control-plane-metadata/history`,
+        {
+          headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
+        },
+      );
+      if (history.status !== 200) return false;
+      const body = await history.json();
+      const eventTypes = body.lifecycle.map((entry: any) => entry.eventType);
+      return (
+        eventTypes.includes('task.approval.updated') &&
+        eventTypes.includes('review.accepted') &&
+        eventTypes.includes('merge.requested') &&
+        eventTypes.includes('task.routing.updated')
+      );
+    });
+
+    const history = await fetch(
+      `${baseUrl}/api/a2a/orchestrate/thread-control-plane-metadata/trace-control-plane-metadata/history`,
+      {
+        headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
+      },
+    );
+    expect(history.status).toBe(200);
+    const body = await history.json();
+    expect(body.ok).toBe(true);
+    expect(body.lifecycle.some((entry: any) => entry.eventType === 'task.approval.updated')).toBe(true);
+    expect(body.lifecycle.some((entry: any) => entry.eventType === 'review.accepted')).toBe(true);
+    expect(body.lifecycle.some((entry: any) => entry.eventType === 'merge.requested')).toBe(true);
+    expect(body.lifecycle.some((entry: any) => entry.eventType === 'task.routing.updated')).toBe(true);
+  });
 });
