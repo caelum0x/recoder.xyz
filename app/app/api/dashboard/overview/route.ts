@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 export async function GET(request: NextRequest) {
   try {
@@ -87,6 +88,23 @@ export async function GET(request: NextRequest) {
       take: 10
     });
 
+    const spacesCount = await prisma.projects.count({
+      where: {
+        userId: user.id,
+        type: 'space',
+      },
+    });
+
+    const connectedAgentsCount = await prisma.agents.count({
+      where: {
+        userId: user.id,
+        status: { in: ['active', 'connected', 'running', 'online'] },
+      },
+    });
+
+    const normalizedPlan = normalizeCommercialPlan(user.subscriptionPlan || 'free');
+    const entitlements = getCommercialEntitlements(normalizedPlan);
+
     const usageHistory = user.usage_records.map(u => ({
       date: u.timestamp.toISOString().split('T')[0],
       requests: 1,
@@ -113,7 +131,8 @@ export async function GET(request: NextRequest) {
           id: user.id,
           email: user.email,
           name: user.name,
-          plan: user.subscriptionPlan || 'free',
+          plan: normalizedPlan,
+          entitlements,
           createdAt: user.createdAt,
           emailVerified: user.emailVerified,
           avatar: user.image
@@ -125,7 +144,11 @@ export async function GET(request: NextRequest) {
           costThisMonth: monthlyUsage._sum.cost || 0,
           activeApiKeys: user.api_keys.length,
           quotaUsed: user.quota?.sessionsUsedToday || 0,
-          quotaLimit: user.quota?.sessionsPerDay || 0
+          quotaLimit: user.quota?.sessionsPerDay || 0,
+          spacesUsed: spacesCount,
+          spacesLimit: entitlements.workspaces,
+          connectedAgentsUsed: connectedAgentsCount,
+          connectedAgentsLimit: entitlements.connectedAgents,
         },
         usageByModel: usageByModel.map(item => ({
           model: item.model || 'unknown',
@@ -145,6 +168,11 @@ export async function GET(request: NextRequest) {
           used: user.quota?.sessionsUsedToday || 0,
           limit: user.quota?.sessionsPerDay || 0,
           resetDate: user.quota?.periodEnd || new Date()
+        },
+        activation: {
+          spacesCreated: spacesCount,
+          connectedAgents: connectedAgentsCount,
+          nextStep: spacesCount === 0 ? 'create-space' : connectedAgentsCount === 0 ? 'connect-agent' : 'ship-first-loop',
         }
       }
     });

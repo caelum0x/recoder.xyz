@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCLIAuth } from '@/lib/middleware/cli-auth-middleware';
 import { prisma } from '@/lib/prisma';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 /**
  * GET /api/cli/quota
@@ -9,6 +10,9 @@ import { prisma } from '@/lib/prisma';
  */
 export const GET = withCLIAuth(async (request: NextRequest, context) => {
   try {
+    const normalizedPlan = normalizeCommercialPlan(context.plan);
+    const entitlements = getCommercialEntitlements(normalizedPlan);
+
     // Get user quota
     const quota = await prisma.user_quota.findUnique({
       where: { userId: context.userId },
@@ -40,6 +44,11 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
           tokensPerSession: newQuota.tokensPerSession,
           periodEnd: newQuota.periodEnd,
           isUnlimited: context.plan === 'enterprise',
+        },
+        commercial: {
+          plan: normalizedPlan,
+          entitlements,
+          activationMilestone: 'connect-agent',
         },
         canMakeRequest: true,
       });
@@ -76,10 +85,15 @@ export const GET = withCLIAuth(async (request: NextRequest, context) => {
         periodEnd: quota.periodEnd,
         isUnlimited: context.plan === 'enterprise',
       },
+      commercial: {
+        plan: normalizedPlan,
+        entitlements,
+        activationMilestone: 'connect-agent',
+      },
       canMakeRequest,
       message: canMakeRequest
         ? 'Quota available'
-        : 'Daily quota exceeded. Upgrade your plan or wait for reset.',
+        : 'Legacy session quota exceeded. Your paid plan value now scales with Spaces, connected agents, approvals, retention, and preview capacity.',
     });
   } catch (error) {
     return NextResponse.json(

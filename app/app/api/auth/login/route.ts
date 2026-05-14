@@ -14,6 +14,7 @@ import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
 import { traceRequest } from '@/lib/tracing-middleware';
 import { z } from 'zod';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
@@ -169,6 +170,8 @@ export async function POST(request: NextRequest) {
 
     // Get quota info (quota is now a single object, not array)
     const quota = user.quota || null;
+    const normalizedPlan = normalizeCommercialPlan(user.subscriptionPlan || user.subscription || 'free');
+    const entitlements = getCommercialEntitlements(normalizedPlan);
 
     // Create response with cookie
     const response = NextResponse.json({
@@ -177,7 +180,8 @@ export async function POST(request: NextRequest) {
         id: user.id,
         email: user.email,
         name: user.name,
-        plan: user.subscription,
+        plan: normalizedPlan,
+        entitlements,
         apiKeyStatus,
         quota: quota ? {
           remaining: quota.sessionsPerDay - quota.sessionsUsedToday,
