@@ -1413,6 +1413,28 @@ async function getOrchestrationState(input: { threadId: string; traceId: string 
   return JSON.parse(hit.value) as Record<string, unknown>;
 }
 
+export async function getOrchestrationHistorySummary(input: {
+  threadId: string;
+  traceId: string;
+}): Promise<Record<string, unknown> | null> {
+  const state = await getOrchestrationState(input);
+  if (!state) return null;
+  const history = buildOrchestrationHistoryPayload({
+    threadId: input.threadId,
+    traceId: input.traceId,
+    state,
+    cursor: 0,
+    limit: 1,
+  });
+  return {
+    historyVersion: history.historyVersion,
+    workspaceId: history.workspaceId,
+    threadId: history.threadId,
+    traceId: history.traceId,
+    summary: history.summary,
+  };
+}
+
 async function upsertOrchestrationStateRecord(input: {
   threadId: string;
   traceId: string;
