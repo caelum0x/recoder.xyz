@@ -5,6 +5,7 @@ import { getDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
 import { getAgentBridgeService } from './agent-bridge.service';
 import { listBridgeSessionsForBinding } from '../a2a-gateway';
+import { getApproval as getPolicyApproval } from '../policy/approval-store.js';
 
 function extractApprovalId(task: TaskEnvelope): string | undefined {
   const direct = task.metadata?.approval as Record<string, unknown> | undefined;
@@ -27,6 +28,42 @@ function extractDelegationId(task: TaskEnvelope): string | undefined {
     return handoff.delegationId;
   }
   return undefined;
+}
+
+function resolveApprovalLink(task: TaskEnvelope) {
+  const approvalId = extractApprovalId(task);
+  if (!approvalId) return null;
+
+  const gateApproval = getApprovalGateService().get(approvalId);
+  if (gateApproval) {
+    return {
+      approvalId: gateApproval.approvalId,
+      status: gateApproval.status,
+      action: gateApproval.action,
+      targetAgentId: gateApproval.targetAgentId,
+      requestedBy: gateApproval.requestingAgentId,
+      resolvedBy: gateApproval.resolvedBy ?? null,
+      resolvedAt: gateApproval.resolvedAt ?? null,
+      createdAt: gateApproval.createdAt,
+      source: 'approval-gate' as const,
+    };
+  }
+
+  const policyApproval = getPolicyApproval(approvalId);
+  if (!policyApproval) return null;
+
+  return {
+    approvalId: policyApproval.id,
+    status: policyApproval.status,
+    action: policyApproval.action,
+    resource: policyApproval.resource,
+    grantedBy: policyApproval.granted_by,
+    grantedAt: policyApproval.granted_at,
+    expiresAt: policyApproval.expires_at,
+    resolvedBy: policyApproval.revoked_by,
+    resolvedAt: policyApproval.revoked_at,
+    source: 'policy' as const,
+  };
 }
 
 function collectFilesChanged(evidence: TaskEvidenceItem[]): string[] {
@@ -231,9 +268,8 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const transitions = transitionsResult.ok ? transitionsResult.data : [];
   const audit = service.getRecentAuditEventsForTask(task.id, 100);
 
-  const approvalId = extractApprovalId(task);
   const delegationId = extractDelegationId(task);
-  const approval = approvalId ? getApprovalGateService().get(approvalId) : undefined;
+  const approval = resolveApprovalLink(task);
   const delegation = delegationId ? getDelegationChainService().getDelegation(delegationId) : undefined;
   const delegationChain = delegationId ? getDelegationChainService().getChain(delegationId) : undefined;
 
@@ -444,6 +480,8 @@ export async function buildTaskRunSummary(task: TaskEnvelope) {
           status: context.links.approval.status,
           action: context.links.approval.action,
           resolvedBy: context.links.approval.resolvedBy,
+          source: context.links.approval.source,
+          grantedBy: 'grantedBy' in context.links.approval ? context.links.approval.grantedBy : null,
         }
       : null,
     handoff: context.links.delegation
