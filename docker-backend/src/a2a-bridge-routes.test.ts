@@ -279,6 +279,49 @@ describe('A2A bridge routes', () => {
     expect(reusedSessions[0].capabilities).toEqual(['plan', 'execute']);
     expect(reusedSessions[0].normalizedCapabilities).toEqual(['execute', 'plan']);
     expect(reusedSessions[0].metadata).toEqual({ reconnectCount: 1 });
+
+    const registryAgent = getAgentRegistryService().getWithHealth('codex-agent-reuse');
+    expect(registryAgent?.card.skills.map((skill) => skill.id)).toEqual(['execute', 'plan']);
+    expect(registryAgent?.lifecycle.registrationCount).toBe(2);
+    expect(registryAgent?.lifecycle.reconnectCount).toBe(1);
+  });
+
+  it('prefers registry-backed identity over stale bridge session metadata in session visibility', async () => {
+    const workspace = createWorkspace(['codex-agent-visibility'], 'proj-visibility');
+    const pair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-visibility',
+        agentId: 'codex-agent-visibility',
+        agentName: 'Stale Bridge Alias',
+        agentPlatform: 'codex',
+        workspaceId: workspace.workspaceId,
+        projectId: workspace.projectId,
+        capabilities: ['plan'],
+      }),
+    });
+    expect(pair.status).toBe(201);
+
+    getAgentRegistryService().selfRegister({
+      agentId: 'codex-agent-visibility',
+      name: 'Canonical Registry Agent',
+      platform: 'codex',
+      tags: ['canonical'],
+      skills: [{ id: 'execute', name: 'execute', description: 'execute', tags: ['execute'] }],
+    });
+
+    const sessions = await fetch(`${baseUrl}/api/a2a/bridge/sessions`, {
+      headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
+    });
+    expect(sessions.status).toBe(200);
+    const sessionsBody = await sessions.json();
+    const session = sessionsBody.sessions.find((row: any) => row.bridgeId === 'bridge-visibility');
+    expect(session.agentName).toBe('Canonical Registry Agent');
+    expect(session.agentPlatform).toBe('codex');
   });
 
   it('rejects bridge session registry binding when an existing agent platform conflicts', async () => {

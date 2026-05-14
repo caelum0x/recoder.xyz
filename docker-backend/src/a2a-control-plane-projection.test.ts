@@ -308,4 +308,85 @@ describe('A2A control-plane task projection', () => {
     expect(body.lifecycle.some((entry: any) => entry.eventType === 'merge.requested')).toBe(true);
     expect(body.lifecycle.some((entry: any) => entry.eventType === 'task.routing.updated')).toBe(true);
   });
+
+  it('projects task claim ownership into orchestration history', async () => {
+    const orchestrate = await fetch(`${baseUrl}/api/a2a/orchestrate`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        mode: 'codex_only',
+        bridgeId: 'bridge-default',
+        envelope: {
+          messageId: 'msg-control-plane-claim',
+          threadId: 'thread-control-plane-claim',
+          intent: 'execute',
+          from: { id: 'pm', platform: 'recoder_pm' },
+          to: { id: 'codex', platform: 'codex' },
+          payload: [{ kind: 'text', text: 'claim the task' }],
+          metadata: {
+            workspaceId: 'ws-control-plane-claim',
+            traceId: 'trace-control-plane-claim',
+          },
+        },
+      }),
+    });
+    expect(orchestrate.status).toBe(202);
+
+    const lifecycle = getTaskLifecycleService();
+    const created = lifecycle.createTask({
+      workspace_id: 'ws-control-plane-claim',
+      thread_id: 'thread-control-plane-claim',
+      trace_id: 'trace-control-plane-claim',
+      requester: {
+        agent_id: 'recoder_pm',
+        platform: 'recoder_pm',
+      },
+      assignee: {
+        agent_id: 'codex',
+        platform: 'codex',
+      },
+      connector: {
+        connector_id: 'codex:codex',
+        platform: 'codex',
+        protocol: 'a2a',
+      },
+      payload: [{ kind: 'text', text: 'claim ownership task' }],
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) {
+      throw new Error(created.error.message);
+    }
+
+    const claim = lifecycle.claimTask(created.data.id, 'bridge-session-claim-1', 'codex');
+    expect(claim.ok).toBe(true);
+
+    await waitFor(async () => {
+      const history = await fetch(
+        `${baseUrl}/api/a2a/orchestrate/thread-control-plane-claim/trace-control-plane-claim/history`,
+        {
+          headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
+        },
+      );
+      if (history.status !== 200) return false;
+      const body = await history.json();
+      return body.lifecycle.some((entry: any) => entry.eventType === 'task.claimed');
+    });
+
+    const history = await fetch(
+      `${baseUrl}/api/a2a/orchestrate/thread-control-plane-claim/trace-control-plane-claim/history`,
+      {
+        headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
+      },
+    );
+    expect(history.status).toBe(200);
+    const body = await history.json();
+    const claimEvent = body.lifecycle.find((entry: any) => entry.eventType === 'task.claimed');
+    expect(claimEvent).toBeTruthy();
+    expect(claimEvent.detail.agentId).toBe('codex');
+    expect(typeof claimEvent.detail.sessionId).toBe('string');
+    expect(claimEvent.detail.sessionId.length).toBeGreaterThan(0);
+  });
 });
