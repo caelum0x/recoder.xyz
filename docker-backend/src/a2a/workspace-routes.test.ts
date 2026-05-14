@@ -322,6 +322,7 @@ describe('A2A workspace routes', () => {
     });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
+    expect(getTaskLifecycleService().claimTask(created.data.id, 'bridge-session-context', 'agent-b').ok).toBe(true);
 
     const orchestrate = await fetch(`${baseUrl}/api/a2a/orchestrate`, {
       method: 'POST',
@@ -368,6 +369,10 @@ describe('A2A workspace routes', () => {
     expect(body.data.recentTasks[0]).toMatchObject({
       prompt: 'Add pricing page',
       workspace_id: workspace.workspaceId,
+      claim: {
+        sessionId: 'bridge-session-context',
+        agentId: 'agent-b',
+      },
       review: {
         worktree: {
           isolated: true,

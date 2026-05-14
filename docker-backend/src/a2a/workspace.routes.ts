@@ -200,6 +200,9 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
       if (task.state === 'working' || task.state === 'input-required') {
         acc.activeTasks += 1;
       }
+      if (task.claim) {
+        acc.claimedTasks += 1;
+      }
       acc.evidenceItems += typeof task.runtime?.evidenceCount === 'number' ? task.runtime.evidenceCount : 0;
       acc.previews += typeof task.runtime?.previewCount === 'number' ? task.runtime.previewCount : 0;
       acc.artifacts += typeof task.runtime?.artifactCount === 'number' ? task.runtime.artifactCount : 0;
@@ -220,6 +223,7 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
       unhealthyPairedBridgeSessions: bridgeSessions.filter((session) => !session.registry.online).length,
       totalTasks: 0,
       activeTasks: 0,
+      claimedTasks: 0,
       tasksByState,
       pendingApprovals: approvals.filter((approval) => approval.status === 'pending' || approval.status === 'escalated').length,
       totalApprovals: approvals.length,
@@ -298,6 +302,7 @@ function buildWorkspaceContextPackageFromSnapshot(
       assignee_agent_id: task.assignee_agent_id,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
+      claim: task.claim ?? null,
       approvalStatus: task.approval?.status ?? null,
       handoffStatus: task.handoff?.status ?? null,
       review: task.review ?? null,

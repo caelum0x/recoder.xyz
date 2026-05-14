@@ -1267,15 +1267,47 @@ export class TaskLifecycleService {
       return { ok: true, data: envelope };
     }
 
+    const claimedAt = new Date().toISOString();
+    const claim = { sessionId, agentId, claimedAt };
     const updated: TaskEnvelope = {
       ...envelope,
+      updated_at: claimedAt,
       metadata: {
         ...envelope.metadata,
-        claimedBy: { sessionId, agentId, claimedAt: new Date().toISOString() },
+        claimedBy: claim,
       },
     };
     this.store.set(taskId, updated);
     logger.info({ task_id: taskId, sessionId, agentId }, 'task claimed');
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: agentId,
+          name: agentId,
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: 'Task claimed',
+          metadata_patch: {
+            claimedBy: claim,
+          },
+        },
+        now: claimedAt,
+      }),
+    );
+
     return { ok: true, data: updated };
   }
 

@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import Redis from 'ioredis';
 import {
   buildInvalidA2AEnvelopeErrorResponse,
+  type RecoderAgentSkill,
   type A2AEnvelopeValidationIssue,
   type RecoderA2AEnvelope,
 } from '@recoder/shared/a2a';
@@ -283,6 +284,41 @@ function normalizePlatform(value: unknown): GatewayAgentPlatform {
 
 function normalizeCapabilities(value: unknown): string[] {
   return Array.from(new Set(asStringArray(value))).sort((a, b) => a.localeCompare(b));
+}
+
+function buildBridgeCapabilitySkills(capabilities: string[]): RecoderAgentSkill[] {
+  return capabilities.map((capability) => ({
+    id: capability,
+    name: capability,
+    description: capability,
+    tags: [capability, 'bridge-capability'],
+  }));
+}
+
+function stripBridgeManagedTags(tags: string[]): string[] {
+  return tags.filter((tag) => (
+    tag !== 'bridge' &&
+    !tag.startsWith('bridge:') &&
+    !tag.startsWith('workspace:') &&
+    !tag.startsWith('project:') &&
+    !tag.startsWith('capability:')
+  ));
+}
+
+function stripBridgeManagedSkills(
+  skills: RecoderAgentSkill[],
+  existingTags: string[],
+): RecoderAgentSkill[] {
+  const previousCapabilityIds = new Set(
+    existingTags
+      .filter((tag) => tag.startsWith('capability:'))
+      .map((tag) => tag.slice('capability:'.length)),
+  );
+
+  return skills.filter((skill) => {
+    if (previousCapabilityIds.has(skill.id)) return false;
+    return !skill.tags.includes('bridge-capability');
+  });
 }
 
 function buildBridgeDurableIdentity(input: {
@@ -2281,6 +2317,10 @@ export async function listBridgeSessionsForBinding(input: {
       const registryAgent = session.agentId ? getAgentRegistryService().getWithHealth(session.agentId) : undefined;
       return {
         ...session,
+        agentName: registryAgent?.identity.name || session.agentName || null,
+        agentPlatform: registryAgent
+          ? normalizePlatform(registryAgent.identity.platform)
+          : session.agentPlatform || null,
         heartbeat: await getBridgeHeartbeat(session.bridgeId),
         registry: registryAgent
           ? {
@@ -2531,6 +2571,18 @@ function reconcileBridgeSessionRegistryBinding(input: {
   const registry = getAgentRegistryService();
   const existing = registry.get(input.agentId);
   const desiredPlatform = input.agentPlatform || 'custom';
+  const normalizedCapabilities = normalizeCapabilities(input.capabilities);
+  const bridgeTags = Array.from(
+    new Set(
+      [
+        'bridge',
+        `bridge:${input.bridgeId}`,
+        ...(input.workspaceId ? [`workspace:${input.workspaceId}`] : []),
+        ...(input.projectId ? [`project:${input.projectId}`] : []),
+        ...normalizedCapabilities.map((capability) => `capability:${capability}`),
+      ].filter(Boolean),
+    ),
+  );
 
   if (existing) {
     if (existing.identity.platform !== desiredPlatform) {
@@ -2540,33 +2592,36 @@ function reconcileBridgeSessionRegistryBinding(input: {
         error: `Agent platform mismatch for ${input.agentId}`,
       };
     }
-    registry.recordHeartbeat(input.agentId);
+
+    registry.register({
+      identity: {
+        ...existing.identity,
+        name: input.agentName || existing.identity.name,
+      },
+      card: {
+        ...existing.card,
+        name: input.agentName || existing.card.name,
+        skills: [
+          ...stripBridgeManagedSkills(existing.card.skills, existing.tags),
+          ...buildBridgeCapabilitySkills(normalizedCapabilities),
+        ],
+      },
+      protocol: existing.protocol,
+      tier: existing.tier,
+      tags: [
+        ...stripBridgeManagedTags(existing.tags),
+        ...bridgeTags,
+      ],
+    });
     return { ok: true };
   }
-
-  const tags = Array.from(
-    new Set(
-      [
-        'bridge',
-        `bridge:${input.bridgeId}`,
-        ...(input.workspaceId ? [`workspace:${input.workspaceId}`] : []),
-        ...(input.projectId ? [`project:${input.projectId}`] : []),
-        ...input.capabilities.map((capability) => `capability:${capability}`),
-      ].filter(Boolean),
-    ),
-  );
 
   registry.selfRegister({
     agentId: input.agentId,
     name: input.agentName || input.agentId,
     platform: desiredPlatform,
-    tags,
-    skills: input.capabilities.map((capability) => ({
-      id: capability,
-      name: capability,
-      description: capability,
-      tags: [capability],
-    })),
+    tags: bridgeTags,
+    skills: buildBridgeCapabilitySkills(normalizedCapabilities),
   });
 
   return { ok: true };
@@ -2821,8 +2876,8 @@ router.get('/bridge/sessions', async (req: Request, res: Response) => {
         durableIdentity: session.durableIdentity,
         scope: session.scope || null,
         agentId: session.agentId || null,
-        agentName: session.agentName || registryAgent?.identity.name || null,
-        agentPlatform: session.agentPlatform || registryAgent?.identity.platform || null,
+        agentName: registryAgent?.identity.name || session.agentName || null,
+        agentPlatform: registryAgent?.identity.platform || session.agentPlatform || null,
         workspaceId: session.workspaceId || null,
         projectId: session.projectId || null,
         issuedBy: session.issuedBy,

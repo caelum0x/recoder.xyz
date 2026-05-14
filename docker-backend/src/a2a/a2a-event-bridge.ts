@@ -189,6 +189,19 @@ function deriveMetadataPatchLifecycleEvents(
     });
   }
 
+  const claimedBy = toRecord(metadataPatch.claimedBy);
+  if (claimedBy) {
+    derived.push({
+      eventType: 'task.claimed',
+      actorId,
+      state: task.state,
+      detail: {
+        ...claimedBy,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
   return derived;
 }
 

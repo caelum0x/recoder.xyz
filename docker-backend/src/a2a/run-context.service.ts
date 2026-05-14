@@ -85,6 +85,27 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function readClaim(task: TaskEnvelope) {
+  const claimedBy = readRecord(task.metadata?.claimedBy);
+  if (!claimedBy) return null;
+
+  const sessionId =
+    typeof claimedBy.sessionId === 'string' && claimedBy.sessionId.trim().length > 0
+      ? claimedBy.sessionId
+      : null;
+  const agentId =
+    typeof claimedBy.agentId === 'string' && claimedBy.agentId.trim().length > 0
+      ? claimedBy.agentId
+      : null;
+  const claimedAt =
+    typeof claimedBy.claimedAt === 'string' && claimedBy.claimedAt.trim().length > 0
+      ? claimedBy.claimedAt
+      : null;
+
+  if (!sessionId && !agentId && !claimedAt) return null;
+  return { sessionId, agentId, claimedAt };
+}
+
 function extractTaskRun(
   task: TaskEnvelope,
   transitions: TaskStateTransition[],
@@ -295,6 +316,7 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const evidence = task.result?.evidence ?? [];
   const preview = task.result?.preview ?? [];
   const artifacts = task.result?.artifacts ?? [];
+  const claim = readClaim(task);
   const filesChanged = collectFilesChanged(evidence);
   const logEvidence = evidence.filter((item) => item.kind === 'log');
   const runtimeEvidence = evidence.filter((item) => item.kind === 'runtime');
@@ -335,6 +357,9 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
       ...(approval ? { approval } : {}),
       ...(delegation ? { delegation } : {}),
       ...(delegationChain ? { delegationChain } : {}),
+    },
+    ownership: {
+      claim,
     },
     assignee: {
       agentId: task.assignee.agent_id,
@@ -490,6 +515,7 @@ export async function buildTaskRunSummary(task: TaskEnvelope) {
     createdAt: task.created_at,
     updatedAt: task.updated_at,
     metadata: task.metadata ?? {},
+    claim: context.ownership.claim,
     approval: context.links.approval
       ? {
           approvalId: context.links.approval.approvalId,
