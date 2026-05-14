@@ -11,6 +11,8 @@ import { nanoid } from 'nanoid';
 import { getApiKeyStatus } from '@/lib/api-key-resolver';
 import { logger } from '@/lib/logger';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { formatCommercialQuotaResponse } from '@/lib/commercial-quota';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
@@ -123,6 +125,9 @@ export async function POST(request: NextRequest) {
 
     // Get quota info
     const quota = user.quota || null;
+    const normalizedPlan = normalizeCommercialPlan(user.subscriptionPlan || user.subscription || 'free');
+    const entitlements = getCommercialEntitlements(normalizedPlan);
+    const quotaResponse = quota ? formatCommercialQuotaResponse(quota, normalizedPlan) : null;
 
     return NextResponse.json({
       success: true,
@@ -130,12 +135,13 @@ export async function POST(request: NextRequest) {
         id: user.id,
         email: user.email,
         name: user.name,
-        plan: user.subscription,
+        plan: normalizedPlan,
+        entitlements,
         apiKeyStatus,
-        quota: quota ? {
-          remaining: quota.sessionsPerDay - quota.sessionsUsedToday,
-          limit: quota.sessionsPerDay,
-          tokensPerSession: quota.tokensPerSession,
+        quota: quotaResponse ? {
+          remaining: quotaResponse.legacy.remaining,
+          limit: quotaResponse.legacy.limit,
+          tokensPerSession: quotaResponse.legacy.tokensPerSession,
           resetDate: quota.periodEnd.toISOString()
         } : null
       },

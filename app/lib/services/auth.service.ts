@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword, generateSecureToken } from '../crypto';
 import { sendWelcomeEmail, sendVerificationEmail, sendPasswordResetEmail } from '../email';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
+import { buildCommercialQuotaCreateData } from '@/lib/commercial-quota';
 
 export class AuthService {
   /**
@@ -42,25 +43,8 @@ export class AuthService {
         },
       });
 
-      // Create user quota based on plan
-      const quotaConfig = this.getQuotaConfig(plan);
-      const now = new Date();
-      const endOfDay = new Date(now);
-      endOfDay.setHours(23, 59, 59, 999);
-
       await prisma.user_quota.create({
-        data: {
-          id: crypto.randomUUID(),
-          userId: user.id,
-          sessionsPerDay: quotaConfig.sessionsPerDay,
-          sessionsUsedToday: 0,
-          tokensPerSession: quotaConfig.tokensPerSession,
-          requestsLimit: quotaConfig.requestsLimit || 1000,
-          requestsUsed: 0,
-          periodStart: now,
-          periodEnd: endOfDay,
-          updatedAt: new Date(),
-        },
+        data: buildCommercialQuotaCreateData(user.id, plan, 'day'),
       });
 
       // Create default user preferences
@@ -484,22 +468,8 @@ export class AuthService {
           },
         });
 
-        // Create user quota
-        const now = new Date();
-        const endOfDay = new Date(now);
-        endOfDay.setHours(23, 59, 59, 999);
-
         await prisma.user_quota.create({
-          data: {
-            id: crypto.randomUUID(),
-            userId: user.id,
-            sessionsPerDay: 6,
-            sessionsUsedToday: 0,
-            tokensPerSession: 10000,
-            periodStart: now,
-            periodEnd: endOfDay,
-            updatedAt: new Date(),
-          },
+          data: buildCommercialQuotaCreateData(user.id, 'free', 'day'),
         });
 
         // Create default preferences
@@ -607,38 +577,6 @@ export class AuthService {
   }
 
   // Helper methods
-
-  private getQuotaConfig(plan: string) {
-    const configs: Record<string, any> = {
-      free: {
-        sessionsPerDay: 6,
-        tokensPerSession: 10000,
-        monthlyLimit: null,
-      },
-      weekly: {
-        sessionsPerDay: 10,
-        tokensPerSession: 30000,
-        monthlyLimit: 5000,
-      },
-      monthly: {
-        sessionsPerDay: 15,
-        tokensPerSession: 50000,
-        monthlyLimit: 10000,
-      },
-      pro: {
-        sessionsPerDay: 20,
-        tokensPerSession: 100000,
-        monthlyLimit: 50000,
-      },
-      enterprise: {
-        sessionsPerDay: 100,
-        tokensPerSession: 500000,
-        monthlyLimit: 500000,
-      },
-    };
-
-    return configs[plan] || configs.free;
-  }
 
   private extractDevice(userAgent?: string): string | undefined {
     if (!userAgent) return undefined;

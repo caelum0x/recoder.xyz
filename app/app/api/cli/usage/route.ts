@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCLIAuth } from '@/lib/middleware/cli-auth-middleware';
 import { prisma } from '@/lib/prisma';
+import { isPriceyModel } from '@/lib/pricing-config';
 
 /**
  * POST /api/cli/usage
@@ -39,7 +40,7 @@ export const POST = withCLIAuth(async (request: NextRequest, context) => {
         success,
         errorMessage,
         platform: 'cli',
-        isPriceyModel: ['claude-3-5-sonnet', 'gpt-4', 'claude-opus'].includes(model || ''),
+        isPriceyModel: isPriceyModel(model || ''),
       },
     });
 

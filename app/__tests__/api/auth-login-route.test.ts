@@ -343,7 +343,12 @@ describe('/api/auth/login route', () => {
     expect(json.user.id).toBe('u1');
     expect(json.user.email).toBe('user@example.com');
     expect(json.user.name).toBe('Test User');
-    expect(json.user.plan).toBe('pro-monthly');
+    expect(json.user.plan).toBe('monthly');
+    expect(json.user.entitlements).toMatchObject({
+      workspaces: 10,
+      connectedAgents: 5,
+      previewDeploysPerMonth: 50,
+    });
     expect(json.user.apiKeyStatus).toEqual({ hasKey: true, source: 'platform' });
 
     // Quota

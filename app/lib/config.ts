@@ -3,6 +3,8 @@
  * Handles environment-specific URLs and settings
  */
 
+import { getCommercialEntitlements, normalizeCommercialPlan } from './plan-entitlements';
+
 export const config = {
   // Environment
   env: process.env.NODE_ENV || 'development',
@@ -150,9 +152,9 @@ export const config = {
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
   },
 
-  // Session-Based Usage Model (No token/cost display to users)
+  // Legacy runtime usage controls. Commercial plan value is sourced from
+  // pricing-config through getPlanDetails below.
   usage: {
-    // Daily session limits per plan
     sessionsPerDay: {
       free: 6,
       weekly: 10,
@@ -366,17 +368,19 @@ export function isFreeModel(model: string): boolean {
 }
 
 /**
- * Get session limit for a plan
+ * Get legacy runtime session limit for a plan
  */
 export function getSessionLimit(plan: keyof typeof config.usage.sessionsPerDay): number {
-  return config.usage.sessionsPerDay[plan] || config.usage.sessionsPerDay.free;
+  const entitlements = getCommercialEntitlements(normalizeCommercialPlan(plan));
+  return entitlements.sessionsPerDay;
 }
 
 /**
- * Get pricey token limit per session for a plan
+ * Get legacy pricey-model runtime budget for a plan
  */
 export function getTokenLimit(plan: keyof typeof config.usage.priceyTokensPerSession): number {
-  return config.usage.priceyTokensPerSession[plan] || config.usage.priceyTokensPerSession.free;
+  const entitlements = getCommercialEntitlements(normalizeCommercialPlan(plan));
+  return entitlements.tokensPerSessionPricey;
 }
 
 /**
@@ -390,10 +394,19 @@ export function requiresOwnApiKey(plan: keyof typeof config.plans): boolean {
  * Get plan details
  */
 export function getPlanDetails(plan: keyof typeof config.plans) {
+  const entitlements = getCommercialEntitlements(normalizeCommercialPlan(plan));
+
   return {
     ...config.plans[plan],
     sessionsPerDay: getSessionLimit(plan),
     priceyTokensPerSession: getTokenLimit(plan),
+    entitlements,
+    workspaces: entitlements.workspaces,
+    connectedAgents: entitlements.connectedAgents,
+    artifactRetentionDays: entitlements.artifactRetentionDays,
+    previewDeploysPerMonth: entitlements.previewDeploysPerMonth,
+    approvalWorkflows: entitlements.approvalWorkflows,
+    governance: entitlements.governance,
   };
 }
 
