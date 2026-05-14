@@ -14,6 +14,7 @@ import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
 import { extractAttribution } from '@/lib/attribution';
 import { generateReferralCode } from '@/lib/referral';
+import { buildCommercialQuotaCreateData } from '@/lib/commercial-quota';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
@@ -80,26 +81,8 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Create user quota
-    const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-
     await prisma.user_quota.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        sessionsPerDay: 6,
-        sessionsUsedToday: 0,
-        tokensPerSession: 10000,
-        periodStart: now,
-        periodEnd: endOfDay,
-        lastResetAt: now,
-        requestsLimit: 1000,
-        requestsUsed: 0,
-        createdAt: now,
-        updatedAt: now,
-      }
+      data: buildCommercialQuotaCreateData(user.id, 'free', 'day'),
     });
 
     // Send temporary password email

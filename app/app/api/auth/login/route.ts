@@ -15,6 +15,7 @@ import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
 import { traceRequest } from '@/lib/tracing-middleware';
 import { z } from 'zod';
 import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
+import { formatCommercialQuotaResponse } from '@/lib/commercial-quota';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
@@ -172,6 +173,7 @@ export async function POST(request: NextRequest) {
     const quota = user.quota || null;
     const normalizedPlan = normalizeCommercialPlan(user.subscriptionPlan || user.subscription || 'free');
     const entitlements = getCommercialEntitlements(normalizedPlan);
+    const quotaResponse = quota ? formatCommercialQuotaResponse(quota, normalizedPlan) : null;
 
     // Create response with cookie
     const response = NextResponse.json({
@@ -183,10 +185,10 @@ export async function POST(request: NextRequest) {
         plan: normalizedPlan,
         entitlements,
         apiKeyStatus,
-        quota: quota ? {
-          remaining: quota.sessionsPerDay - quota.sessionsUsedToday,
-          limit: quota.sessionsPerDay,
-          tokensPerSession: quota.tokensPerSession,
+        quota: quotaResponse ? {
+          remaining: quotaResponse.legacy.remaining,
+          limit: quotaResponse.legacy.limit,
+          tokensPerSession: quotaResponse.legacy.tokensPerSession,
           resetDate: quota.periodEnd.toISOString()
         } : null
       },

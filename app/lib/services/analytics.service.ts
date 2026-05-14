@@ -6,6 +6,8 @@
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
+import { formatCommercialQuotaResponse } from '@/lib/commercial-quota';
+import { normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 export class AnalyticsService {
   /**
@@ -110,10 +112,17 @@ export class AnalyticsService {
         },
       });
 
+      const user = await prisma.users.findUnique({
+        where: { id: userId },
+        select: { subscriptionPlan: true, subscription: true },
+      });
+      const normalizedPlan = normalizeCommercialPlan(user?.subscriptionPlan || user?.subscription || 'free');
+
       // Get user quota
       const quota = await prisma.user_quota.findUnique({
         where: { userId },
       });
+      const quotaResponse = quota ? formatCommercialQuotaResponse(quota, normalizedPlan) : null;
 
       return {
         success: true,
@@ -136,12 +145,11 @@ export class AnalyticsService {
           },
           quota: quota
             ? {
-                sessionsPerDay: quota.sessionsPerDay,
+                ...quotaResponse?.legacy,
                 sessionsUsed: quota.sessionsUsedToday,
-                sessionsRemaining: quota.sessionsPerDay - quota.sessionsUsedToday,
-                tokensPerSession: quota.tokensPerSession,
                 monthlyLimit: quota.requestsLimit,
                 monthlyUsed: quota.requestsUsed,
+                commercial: quotaResponse?.commercial,
               }
             : null,
         },
@@ -337,6 +345,11 @@ export class AnalyticsService {
    */
   async getQuotaStatus(userId: string) {
     try {
+      const user = await prisma.users.findUnique({
+        where: { id: userId },
+        select: { subscriptionPlan: true, subscription: true },
+      });
+      const normalizedPlan = normalizeCommercialPlan(user?.subscriptionPlan || user?.subscription || 'free');
       const quota = await prisma.user_quota.findUnique({
         where: { userId },
       });
@@ -345,20 +358,21 @@ export class AnalyticsService {
         return { success: false, message: 'Quota not found' };
       }
 
-      const percentUsed = (quota.sessionsUsedToday / quota.sessionsPerDay) * 100;
+      const quotaResponse = formatCommercialQuotaResponse(quota, normalizedPlan);
+      const percentUsed = quotaResponse.legacy.isUnlimited ? 0 : (quota.sessionsUsedToday / quota.sessionsPerDay) * 100;
       const isNearLimit = percentUsed >= 80;
       const isAtLimit = percentUsed >= 100;
 
       return {
         success: true,
         quota: {
-          sessionsPerDay: quota.sessionsPerDay,
+          ...quotaResponse.legacy,
           sessionsUsed: quota.sessionsUsedToday,
-          sessionsRemaining: Math.max(0, quota.sessionsPerDay - quota.sessionsUsedToday),
           percentUsed: Math.round(percentUsed),
           isNearLimit,
           isAtLimit,
           resetsAt: quota.periodEnd,
+          commercial: quotaResponse.commercial,
         },
       };
     } catch (error: any) {
