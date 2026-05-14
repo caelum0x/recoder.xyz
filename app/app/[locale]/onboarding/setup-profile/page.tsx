@@ -98,13 +98,13 @@ export default function SetupProfilePage() {
       sessionStorage.setItem('onboarding_profile', JSON.stringify(formData));
       trackEvent(AnalyticsEvents.CTA_CLICKED, {
         ctaLabel: 'Continue from setup profile',
-        destination: '/onboarding/setup-api-key',
+        destination: '/onboarding/choose-plan',
         location: 'onboarding_setup_profile',
         source: 'onboarding',
       });
       
       // Navigate to next step
-      router.push('/onboarding/setup-api-key');
+      router.push('/onboarding/choose-plan');
     } catch (error) {
       console.error('Error saving profile:', error);
     } finally {

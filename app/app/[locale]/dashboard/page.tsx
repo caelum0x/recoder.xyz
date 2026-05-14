@@ -10,7 +10,7 @@ import {
   ArrowRight, CheckCircle, Sparkles, TrendingUp,
   BarChart3, FolderOpen,
   MessageCircle, Terminal, Zap, Bot, Workflow,
-  Database, Server, ExternalLink, Activity, AlertCircle, Clock, Settings
+  Database, Server, ExternalLink, Activity, AlertCircle, Clock, Settings, Layers3
 } from 'lucide-react';
 import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
@@ -49,6 +49,27 @@ interface AppActivity {
   error?: string;
 }
 
+interface SpacesSummary {
+  plan: string;
+  activation: {
+    hasSpace: boolean;
+    hasConnectedAgent: boolean;
+    hasShippingLoop: boolean;
+    nextStep: string;
+  };
+  usage: {
+    spacesUsed: number;
+    connectedAgentsUsed: number;
+    previewOrDeployProjects: number;
+  };
+  entitlements: {
+    workspaces: number;
+    connectedAgents: number;
+    artifactRetentionDays: number;
+    previewDeploysPerMonth: number;
+  };
+}
+
 const appDisplayNames: Record<string, string> = {
   agents: 'Agents',
   agency: 'Agency',
@@ -69,6 +90,7 @@ function DashboardContent() {
   const [serviceHealth, setServiceHealth] = useState<Record<string, ServiceHealthEntry>>({});
   const [platformActivity, setPlatformActivity] = useState<AppActivity[]>([]);
   const [platformActivityLoading, setPlatformActivityLoading] = useState(true);
+  const [spacesSummary, setSpacesSummary] = useState<SpacesSummary | null>(null);
   const redirectToSignIn = () => {
     const currentPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}`
@@ -123,6 +145,17 @@ function DashboardContent() {
       .finally(() => setPlatformActivityLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetch('/api/spaces')
+      .then(r => r.json())
+      .then((payload: { success?: boolean; data?: SpacesSummary }) => {
+        if (payload.success && payload.data) {
+          setSpacesSummary(payload.data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   if (isPending) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -167,6 +200,63 @@ function DashboardContent() {
                 <Settings className="w-4 h-4 text-gray-400" />
                 <span>Settings</span>
               </Link>
+          </div>
+        </div>
+
+        <div className="mb-12 rounded-[2rem] border border-orange-500/20 bg-gradient-to-r from-orange-500/10 via-white/[0.03] to-purple-500/10 p-8">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-black/30 px-4 py-2 text-sm text-orange-300 mb-5">
+                <Layers3 className="h-4 w-4" />
+                Primary signed-in path
+              </div>
+              <h2 className="text-3xl font-bold mb-4">Create your first Space and prove one shipping loop</h2>
+              <p className="text-lg text-gray-300">
+                The main path after signup should be: create a Space, connect an agent, then make task -&gt; artifact -&gt; PR -&gt; preview -&gt; approval visible before handoff.
+              </p>
+
+              <div className="mt-6 grid gap-3 md:grid-cols-3">
+                {[
+                  {
+                    title: 'Create a Space',
+                    complete: spacesSummary?.activation.hasSpace === true,
+                  },
+                  {
+                    title: 'Connect an agent',
+                    complete: spacesSummary?.activation.hasConnectedAgent === true,
+                  },
+                  {
+                    title: 'Ship the loop',
+                    complete: spacesSummary?.activation.hasShippingLoop === true,
+                  },
+                ].map((step) => (
+                  <div key={step.title} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <div className={`text-sm font-medium ${step.complete ? 'text-green-300' : 'text-white'}`}>{step.title}</div>
+                    <div className="mt-2 text-xs text-gray-500">{step.complete ? 'Completed' : 'Next milestone'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:min-w-[320px] rounded-2xl border border-white/10 bg-black/30 p-6">
+              <div className="text-sm uppercase tracking-[0.2em] text-gray-500 mb-3">Current capacity</div>
+              <div className="space-y-3 text-sm text-gray-300">
+                <div className="flex justify-between"><span>Plan</span><span className="capitalize">{spacesSummary?.plan || 'free'}</span></div>
+                <div className="flex justify-between"><span>Spaces</span><span>{spacesSummary?.usage.spacesUsed ?? 0} / {spacesSummary?.entitlements.workspaces ?? 1}</span></div>
+                <div className="flex justify-between"><span>Connected agents</span><span>{spacesSummary?.usage.connectedAgentsUsed ?? 0} / {spacesSummary?.entitlements.connectedAgents ?? 1}</span></div>
+                <div className="flex justify-between"><span>Preview deploys</span><span>{spacesSummary?.entitlements.previewDeploysPerMonth ?? 3}/month</span></div>
+              </div>
+              <div className="mt-6 flex flex-col gap-3">
+                <Link href="/dashboard/spaces" className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 font-medium text-black hover:bg-orange-400">
+                  Create your first Space
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link href="/agents" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-5 py-3 hover:bg-white/[0.04]">
+                  Connect an agent
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
 

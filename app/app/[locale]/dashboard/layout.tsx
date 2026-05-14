@@ -5,13 +5,14 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSession, signOut } from '@/lib/session-provider';
 import {
   LayoutDashboard, Key, FolderOpen, BarChart3, Settings, LogOut,
-  User, ChevronDown, Terminal, Sparkles, Cpu
+  User, ChevronDown, Terminal, Sparkles, Cpu, Layers3
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MobileNav } from '@/app/components/MobileNav';
 
 const sidebarLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/spaces', label: 'Spaces', icon: Layers3 },
   { href: '/dashboard/api-keys', label: 'Developer Keys', icon: Key },
   { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
   { href: '/dashboard/usage', label: 'Usage', icon: BarChart3 },
