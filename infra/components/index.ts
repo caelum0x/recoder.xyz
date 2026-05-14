@@ -4,3 +4,5 @@ export const COMMON_TAGS = {
   ManagedBy: "pulumi",
   "map-migrated": "migDTKWJGT6A7",
 } as const;
+
+export { buildRecoderEdgeScaffold, type RecoderEdgeScaffoldConfig } from "./edge";

@@ -15573,8 +15573,10 @@ app.use('/api/daytona/lsp', authenticateRequest, daytonaLspRouter);
 // Unified activity feed + dashboard metrics
 import { activityFeedRouter } from './unified-activity-feed.js';
 import { dashboardRouter } from './unified-dashboard.js';
+import { edgeRouter } from './edge/edge.routes.js';
 app.use('/api/a2a/activity', activityFeedRouter);
 app.use('/api/a2a/dashboard', dashboardRouter);
+app.use('/api/edge', edgeRouter);
 
 // ── Coding Runtime API ──────────────────────────────────────────────────────
 // Deep coding mode: start/prompt/dispose sessions via runtime adapters

@@ -202,6 +202,19 @@ function deriveMetadataPatchLifecycleEvents(
     });
   }
 
+  const deploymentPreview = toRecord(metadataPatch.deploymentPreview);
+  if (deploymentPreview) {
+    derived.push({
+      eventType: 'deploy.preview.created',
+      actorId,
+      state: task.state,
+      detail: {
+        ...deploymentPreview,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
   return derived;
 }
 
