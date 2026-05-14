@@ -45,7 +45,7 @@ export function ControlPlanePanel({ workspaceId, summary = null }: ControlPlaneP
                 {summary.pairedBridgeSessions}
               </p>
               <p className="text-xs text-muted-foreground">
-                paired / {summary.localBridgeSessions} local
+                {summary.healthyPairedBridgeSessions ?? 0} healthy / {summary.localBridgeSessions} local
               </p>
             </div>
             <div className="rounded-lg border p-3">
@@ -72,7 +72,7 @@ export function ControlPlanePanel({ workspaceId, summary = null }: ControlPlaneP
                 {summary.evidenceItems}
               </p>
               <p className="text-xs text-muted-foreground">
-                {summary.previews} previews, {summary.logEvidence} logs
+                {summary.previews} previews, {summary.logEvidence} logs, {summary.runtimeEvidence} runtime
               </p>
             </div>
           </div>

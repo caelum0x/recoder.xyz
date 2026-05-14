@@ -311,15 +311,18 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
       localBridgeSessions,
       pairedBridgeSessions: pairedBridgeSessions.map((session) => ({
         bridgeId: session.bridgeId,
+        durableIdentity: session.durableIdentity,
         scope: session.scope || null,
         agentName: session.agentName || null,
         agentPlatform: session.agentPlatform || null,
         workspaceId: session.workspaceId || null,
         projectId: session.projectId || null,
         capabilities: session.capabilities || [],
+        normalizedCapabilities: session.capabilities || [],
         createdAt: session.createdAt,
         expiresAt: session.expiresAt,
         heartbeat: session.heartbeat,
+        registry: session.registry,
       })),
     },
     review: {

@@ -36,7 +36,7 @@ import { getAgentRegistryService } from './agent-registry.service';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { buildTaskRunSummary } from './run-context.service';
 import { createLogger } from '../logger';
-import { listBridgeSessionsForBinding } from '../a2a-gateway';
+import { appendTaskScopedControlPlaneLifecycleEvent, listBridgeSessionsForBinding } from '../a2a-gateway';
 
 const logger = createLogger('a2a-workspace-routes');
 
@@ -213,6 +213,8 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
       offlineAgents: agents.filter((agent) => agent.status === 'offline').length,
       localBridgeSessions: agents.reduce((sum, agent) => sum + agent.connectedSessionCount, 0),
       pairedBridgeSessions: bridgeSessions.length,
+      healthyPairedBridgeSessions: bridgeSessions.filter((session) => session.registry.online).length,
+      unhealthyPairedBridgeSessions: bridgeSessions.filter((session) => !session.registry.online).length,
       totalTasks: 0,
       activeTasks: 0,
       tasksByState,
@@ -237,6 +239,7 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
     handoffs,
     bridgeSessions: bridgeSessions.map((session) => ({
       bridgeId: session.bridgeId,
+      durableIdentity: session.durableIdentity,
       scope: session.scope || null,
       agentId: session.agentId || null,
       agentName: session.agentName || null,
@@ -244,10 +247,12 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
       workspaceId: session.workspaceId || null,
       projectId: session.projectId || null,
       capabilities: session.capabilities || [],
+      normalizedCapabilities: session.capabilities || [],
       metadata: session.metadata || null,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
       heartbeat: session.heartbeat,
+      registry: session.registry,
     })),
   };
 }
@@ -321,12 +326,15 @@ function buildWorkspaceContextPackageFromSnapshot(
       })),
     bridgeSessions: snapshot.bridgeSessions.map((session) => ({
       bridgeId: session.bridgeId,
+      durableIdentity: session.durableIdentity,
       agentId: session.agentId,
       agentName: session.agentName,
       agentPlatform: session.agentPlatform,
       workspaceId: session.workspaceId,
       projectId: session.projectId,
       capabilities: session.capabilities,
+      normalizedCapabilities: session.normalizedCapabilities,
+      registry: session.registry,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
     })),
@@ -717,6 +725,18 @@ workspaceRouter.post('/:wsId/handoffs', (req: Request, res: Response) => {
         channelId: ws.defaultChannelId,
         sourceTaskId: taskId,
         intent: intent === 'delegate' || intent === 'review' ? intent : 'handoff',
+      },
+    });
+    void appendTaskScopedControlPlaneLifecycleEvent({
+      taskId,
+      eventType: 'handoff.initiated',
+      actorId: toAgentId,
+      state: 'working',
+      detail: {
+        delegationId: delegation.delegationId,
+        intent: intent === 'delegate' || intent === 'review' ? intent : 'handoff',
+        fromAgentId,
+        toAgentId,
       },
     });
 

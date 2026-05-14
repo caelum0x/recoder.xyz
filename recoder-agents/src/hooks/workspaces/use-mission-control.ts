@@ -18,6 +18,8 @@ export interface MissionControlSummary {
   offlineAgents: number;
   localBridgeSessions: number;
   pairedBridgeSessions: number;
+  healthyPairedBridgeSessions?: number;
+  unhealthyPairedBridgeSessions?: number;
   totalTasks: number;
   activeTasks: number;
   tasksByState: Record<string, number>;
@@ -155,16 +157,21 @@ export function useActivityTimeline(
         'task.submitted': forward,
         'task.started': forward,
         'artifact.attached': forward,
+        'evidence.attached': forward,
         'task.completed': forward,
         'task.failed': forward,
+        'task.input-required': forward,
         'message.new': forward,
         'handoff.initiated': forward,
+        'handoff.accepted': forward,
         'handoff.completed': forward,
+        'handoff.declined': forward,
         'review.accepted': forward,
         'merge.requested': forward,
         'approval.requested': forward,
         'approval.granted': forward,
         'approval.rejected': forward,
+        'approval.escalated': forward,
         'agent.online': forward,
         'agent.offline': forward,
       },

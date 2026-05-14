@@ -28,16 +28,21 @@ const EVENT_ICONS: Record<string, typeof MessageSquare> = {
   'message.new': MessageSquare,
   'task.submitted': Zap,
   'task.started': Zap,
+  'task.input-required': ShieldCheck,
   'artifact.attached': FileDiff,
+  'evidence.attached': FileDiff,
   'task.completed': CheckCircle,
   'task.failed': XCircle,
   'handoff.initiated': ArrowRight,
+  'handoff.accepted': ArrowRight,
   'handoff.completed': ArrowRight,
+  'handoff.declined': XCircle,
   'review.accepted': CheckCircle,
   'merge.requested': GitBranch,
   'approval.requested': ShieldCheck,
   'approval.granted': ShieldCheck,
   'approval.rejected': ShieldCheck,
+  'approval.escalated': ShieldCheck,
   'agent.online': UserPlus,
   'agent.offline': UserMinus,
   'worktree.created': GitBranch,
@@ -46,13 +51,18 @@ const EVENT_ICONS: Record<string, typeof MessageSquare> = {
 
 const EVENT_COLORS: Record<string, string> = {
   'message.new': 'text-blue-500',
+  'task.input-required': 'text-amber-500',
   'task.completed': 'text-green-500',
   'artifact.attached': 'text-indigo-500',
+  'evidence.attached': 'text-indigo-500',
   'task.failed': 'text-red-500',
   'handoff.initiated': 'text-amber-500',
+  'handoff.accepted': 'text-cyan-500',
+  'handoff.declined': 'text-red-500',
   'review.accepted': 'text-lime-500',
   'merge.requested': 'text-orange-500',
   'approval.requested': 'text-purple-500',
+  'approval.escalated': 'text-fuchsia-500',
   'agent.online': 'text-green-500',
   'agent.offline': 'text-gray-400',
 };
@@ -183,8 +193,12 @@ function getEventDescription(event: TimelineEvent): string {
       return `Task submitted: ${(data.prompt as string)?.slice(0, 60) ?? event.id}`;
     case 'task.started':
       return `Task started by ${data.assignee_agent_id ?? 'agent'}`;
+    case 'task.input-required':
+      return `Task waiting for approval or input`;
     case 'artifact.attached':
       return `Artifacts attached: ${Array.isArray(data.artifactKeys) ? data.artifactKeys.join(', ') : data.taskId ?? 'task'}`;
+    case 'evidence.attached':
+      return `Evidence updated for ${data.taskId ?? 'task'}`;
     case 'task.completed':
       return `Task completed by ${data.assignee_agent_id ?? 'agent'}`;
     case 'task.failed':
@@ -193,8 +207,12 @@ function getEventDescription(event: TimelineEvent): string {
       return `${data.senderId ?? 'Agent'}: ${((data.text as string) ?? '').slice(0, 60)}`;
     case 'handoff.initiated':
       return `Handoff: ${data.from} → ${data.to}`;
+    case 'handoff.accepted':
+      return `Handoff accepted: ${data.from ?? 'agent'} → ${data.to ?? 'agent'}`;
     case 'handoff.completed':
       return `Handoff completed: ${data.from} → ${data.to}`;
+    case 'handoff.declined':
+      return `Handoff declined: ${data.from ?? 'agent'} → ${data.to ?? 'agent'}`;
     case 'review.accepted':
       return `Review accepted for ${data.reviewTarget ?? data.taskId ?? 'task'}`;
     case 'merge.requested':
@@ -205,6 +223,8 @@ function getEventDescription(event: TimelineEvent): string {
       return `Approval granted by ${data.resolvedBy ?? 'user'}`;
     case 'approval.rejected':
       return `Approval rejected by ${data.resolvedBy ?? 'user'}`;
+    case 'approval.escalated':
+      return `Approval escalated for ${data.action ?? 'action'}`;
     case 'agent.online':
       return `${data.agentId ?? 'Agent'} came online`;
     case 'agent.offline':
