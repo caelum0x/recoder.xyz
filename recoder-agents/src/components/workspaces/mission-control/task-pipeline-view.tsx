@@ -51,7 +51,11 @@ interface Task {
       online: boolean;
     } | null;
     localBridgeSessions?: Array<unknown>;
-    pairedBridgeSessions?: Array<unknown>;
+    pairedBridgeSessions?: Array<{
+      registry?: {
+        online: boolean;
+      } | null;
+    }>;
   };
   runtime?: {
     evidenceCount?: number;
@@ -163,6 +167,11 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                         {((task.assignee?.localBridgeSessions?.length ?? 0) + (task.assignee?.pairedBridgeSessions?.length ?? 0)) > 0 && (
                           <span className="text-[10px] rounded bg-cyan-100 px-1 py-0.5 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400">
                             bridge:{(task.assignee?.localBridgeSessions?.length ?? 0) + (task.assignee?.pairedBridgeSessions?.length ?? 0)}
+                          </span>
+                        )}
+                        {(task.assignee?.pairedBridgeSessions?.some((session) => session?.registry?.online === true) ?? false) && (
+                          <span className="text-[10px] rounded bg-emerald-100 px-1 py-0.5 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            paired-healthy
                           </span>
                         )}
                         {task.approval && (

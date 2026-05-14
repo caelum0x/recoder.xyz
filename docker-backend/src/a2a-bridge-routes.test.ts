@@ -142,6 +142,7 @@ describe('A2A bridge routes', () => {
     expect(pairBody.workspaceId).toBe(workspace.workspaceId);
     expect(pairBody.projectId).toBe('proj-agent-1');
     expect(pairBody.capabilities).toEqual(['plan', 'execute']);
+    expect(pairBody.normalizedCapabilities).toEqual(['execute', 'plan']);
     expect(pairBody.metadata).toEqual({ sessionOwner: 'codex' });
     expect(getAgentRegistryService().get('codex-agent-1')?.identity.platform).toBe('codex');
 
@@ -262,7 +263,9 @@ describe('A2A bridge routes', () => {
     const secondBody = await secondPair.json();
     expect(secondBody.reused).toBe(true);
     expect(secondBody.token).toBe(firstBody.token);
+    expect(secondBody.durableIdentity).toBe(firstBody.durableIdentity);
     expect(secondBody.capabilities).toEqual(['plan', 'execute']);
+    expect(secondBody.normalizedCapabilities).toEqual(['execute', 'plan']);
     expect(secondBody.metadata).toEqual({ reconnectCount: 1 });
 
     const sessions = await fetch(`${baseUrl}/api/a2a/bridge/sessions`, {
@@ -272,7 +275,9 @@ describe('A2A bridge routes', () => {
     const sessionsBody = await sessions.json();
     const reusedSessions = sessionsBody.sessions.filter((s: any) => s.bridgeId === 'bridge-reuse');
     expect(reusedSessions).toHaveLength(1);
+    expect(reusedSessions[0].durableIdentity).toBe(firstBody.durableIdentity);
     expect(reusedSessions[0].capabilities).toEqual(['plan', 'execute']);
+    expect(reusedSessions[0].normalizedCapabilities).toEqual(['execute', 'plan']);
     expect(reusedSessions[0].metadata).toEqual({ reconnectCount: 1 });
   });
 
@@ -362,6 +367,45 @@ describe('A2A bridge routes', () => {
     const body = await pair.json();
     expect(body.ok).toBe(false);
     expect(body.error).toContain('projectId mismatch');
+  });
+
+  it('rejects conflicting durable identity claims across bridge sessions', async () => {
+    const workspace = createWorkspace(['agent-conflict'], 'proj-conflict-identity');
+    const otherWorkspace = createWorkspace(['agent-conflict'], 'proj-conflict-identity');
+    const firstPair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-conflict-a',
+        agentId: 'agent-conflict',
+        agentPlatform: 'codex',
+        workspaceId: workspace.workspaceId,
+        projectId: workspace.projectId,
+      }),
+    });
+    expect(firstPair.status).toBe(201);
+
+    const secondPair = await fetch(`${baseUrl}/api/a2a/bridge/pair`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        bridgeId: 'bridge-conflict-b',
+        agentId: 'agent-conflict',
+        agentPlatform: 'codex',
+        workspaceId: otherWorkspace.workspaceId,
+        projectId: workspace.projectId,
+      }),
+    });
+    expect(secondPair.status).toBe(409);
+    const body = await secondPair.json();
+    expect(body.error).toContain('Conflicting workspace claim');
+    expect(body.a2aError.code).toBe('INVALID_STATE_TRANSITION');
   });
 
   it('filters bridge dequeue by token scope claim', async () => {
@@ -615,7 +659,7 @@ describe('A2A bridge routes', () => {
     expect(singleBody.ok).toBe(true);
     expect(singleBody.bridgeId).toBe('bridge-default');
     expect(singleBody.heartbeat.agentId).toBe('codex-agent-heartbeat');
-    expect(singleBody.heartbeat.workspaceId).toBe('ws-heartbeat');
+    expect(singleBody.heartbeat.workspaceId).toBe(workspace.workspaceId);
     expect(singleBody.heartbeat.projectId).toBe('proj-heartbeat');
     expect(getAgentRegistryService().getWithHealth('codex-agent-heartbeat')?.health.online).toBe(true);
 
@@ -695,6 +739,78 @@ describe('A2A bridge routes', () => {
     const stateBody = await state.json();
     expect(stateBody.ok).toBe(true);
     expect(stateBody.state.threadId).toBe('thread-orch-state');
+  });
+
+  it('records bridge result lifecycle and evidence in orchestration history', async () => {
+    const orchestrate = await fetch(`${baseUrl}/api/a2a/orchestrate`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        mode: 'codex_only',
+        bridgeId: 'bridge-default',
+        envelope: {
+          messageId: 'msg-orch-history',
+          threadId: 'thread-orch-history',
+          intent: 'execute',
+          from: { id: 'web', platform: 'recoder_web' },
+          to: { id: 'codex', platform: 'codex' },
+          payload: [{ kind: 'text', text: 'collect bridge evidence' }],
+          metadata: { traceId: 'trace-orch-history', workspaceId: 'ws-orch-history' },
+        },
+      }),
+    });
+    expect(orchestrate.status).toBe(202);
+
+    const next = await fetch(`${baseUrl}/api/a2a/bridge/jobs/next`, {
+      headers: {
+        authorization: 'Bearer bridge-token',
+        'x-recoder-a2a-bridge-id': 'bridge-default',
+      },
+    });
+    expect(next.status).toBe(200);
+    const job = await next.json();
+
+    const result = await fetch(`${baseUrl}/api/a2a/bridge/jobs/${job.jobId}/result`, {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer bridge-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        ok: true,
+        previewUrl: 'https://preview.recoder.xyz/orch-history',
+        gitStatus: 'M src/kernel.ts',
+        resultEnvelope: {
+          messageId: 'msg-orch-history-result',
+          threadId: 'thread-orch-history',
+          intent: 'tool_result',
+          from: { id: 'codex', platform: 'codex' },
+          to: { id: 'web', platform: 'recoder_web' },
+          payload: [{ kind: 'text', text: 'done' }],
+          metadata: {
+            workspaceId: 'ws-orch-history',
+            traceId: 'trace-orch-history',
+          },
+        },
+      }),
+    });
+    expect(result.status).toBe(200);
+
+    const history = await fetch(`${baseUrl}/api/a2a/orchestrate/thread-orch-history/trace-orch-history/history`, {
+      headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
+    });
+    expect(history.status).toBe(200);
+    const body = await history.json();
+    expect(body.ok).toBe(true);
+    expect(body.workspaceId).toBe('ws-orch-history');
+    expect(body.summary.lifecycleCount).toBeGreaterThanOrEqual(3);
+    expect(body.summary.evidenceCount).toBeGreaterThanOrEqual(2);
+    expect(body.lifecycle.some((entry: any) => entry.eventType === 'bridge.result.accepted')).toBe(true);
+    expect(body.evidence.some((entry: any) => entry.kind === 'preview')).toBe(true);
+    expect(body.evidence.some((entry: any) => entry.kind === 'runtime')).toBe(true);
   });
 
   it('rejects orchestration by policy when intent is not allowlisted', async () => {
