@@ -17,6 +17,9 @@ import { buildDaytonaCommandScript, buildDaytonaInstallCommand } from './daytona
 import { rewritePreviewBody, shouldRewritePreviewBody } from './preview-rewrite.js';
 import { updateShareTarget } from './zrok-preview.js';
 import { buildInternalServiceHeaders } from './public-api/byok-provider-keys.js';
+import { getPreviewDeploymentService } from './edge/preview-deployment.service.js';
+import { verifyPreviewAccessToken } from './edge/preview-access.js';
+import { applyEdgeSecurityHeaders, checkEdgeSlidingWindowLimit, getEdgeSecurityPolicy } from './edge/edge-security.js';
 
 const docker = new Docker();
 const autoStartAttempts = new Map<string, number>();
@@ -1104,7 +1107,70 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     });
   });
 
-  app.use('/preview/:projectId', async (req, res, next) => {
+  async function authorizePreviewRequest(req: any, res: any, projectId: string): Promise<boolean> {
+    const latestDeployment = getPreviewDeploymentService().getLatestByProject(projectId);
+    const securityPolicy = getEdgeSecurityPolicy();
+    const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+    const limit = checkEdgeSlidingWindowLimit(
+      `preview:${projectId}:${clientIp}`,
+      securityPolicy.previewRateLimitPerMinute,
+      60_000,
+    );
+
+    if (!limit.allowed) {
+      res.status(429).send(friendlyPreviewPage(
+        projectId,
+        `Preview rate limit exceeded. Try again in ${Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000))} seconds.`,
+      ));
+      return false;
+    }
+
+    const protectionMode = latestDeployment?.protectionMode || 'public';
+    if (protectionMode === 'public') {
+      return true;
+    }
+
+    const routeToken =
+      typeof req.params?.previewAccessToken === 'string' && req.params.previewAccessToken.trim().length > 0
+        ? req.params.previewAccessToken.trim()
+        : null;
+    const queryToken =
+      typeof req.query?.preview_access_token === 'string' && req.query.preview_access_token.trim().length > 0
+        ? req.query.preview_access_token.trim()
+        : null;
+    const headerToken =
+      typeof req.headers['x-recoder-preview-token'] === 'string' && req.headers['x-recoder-preview-token'].trim().length > 0
+        ? req.headers['x-recoder-preview-token'].trim()
+        : null;
+    const previewToken = routeToken || queryToken || headerToken;
+
+    if (!previewToken) {
+      res.status(403).send(friendlyPreviewPage(
+        projectId,
+        'This preview is protected. Use the protected preview link issued by Recoder.',
+      ));
+      return false;
+    }
+
+    const verification = verifyPreviewAccessToken(previewToken, {
+      projectId,
+      deploymentId: latestDeployment?.id,
+    });
+
+    if (!verification.ok) {
+      res.status(403).send(friendlyPreviewPage(projectId, verification.error));
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleProjectPreviewRoute(
+    req: any,
+    res: any,
+    next: any,
+    proxyPrefix: string,
+  ) {
     const projectId = getValidatedPreviewProjectId(req.params.projectId);
     if (!projectId) {
       return res
@@ -1121,6 +1187,13 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
+    applyEdgeSecurityHeaders(res, {
+      privatePreview: typeof req.params?.previewAccessToken === 'string' && req.params.previewAccessToken.length > 0,
+    });
+
+    if (!await authorizePreviewRequest(req, res, projectId)) {
+      return;
+    }
 
     if (!entry) {
       console.warn(`[Preview] Request for unknown project: ${projectId}`);
@@ -1204,7 +1277,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
         // Proxy inline — no redirect to docker.recoder.xyz (avoids X-Frame-Options cross-origin block)
         console.log(`[Preview] Daytona preview ready, proxying inline for ${projectId}`);
         const subPath = getProxySubPath(req);
-        return handleSandboxPreview(req, res, containers, subPath, `${DOCKER_PUBLIC_URL}/preview/${projectId}`);
+        return handleSandboxPreview(req, res, containers, subPath, proxyPrefix);
       }
 
       // Dev server not running — try to auto-start
@@ -1380,7 +1453,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
                 ? (req as any).url.split('?')[0].replace(/^\/+/, '')
                 : '';
               const modifiedBody = rewritePreviewBody(body, {
-                proxyPrefix: `${DOCKER_PUBLIC_URL}/preview/${projectId}`,
+                proxyPrefix,
                 contentType,
                 requestPath,
                 errorCaptureScript: ERROR_CAPTURE_SCRIPT,
@@ -1448,6 +1521,24 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     }
 
     return proxy(req, res, next);
+  }
+
+  app.use('/preview/:projectId', async (req, res, next) => {
+    return handleProjectPreviewRoute(
+      req,
+      res,
+      next,
+      `${DOCKER_PUBLIC_URL}/preview/${encodeURIComponent(req.params.projectId)}`,
+    );
+  });
+
+  app.use('/preview-access/:previewAccessToken/:projectId', async (req, res, next) => {
+    return handleProjectPreviewRoute(
+      req,
+      res,
+      next,
+      `${DOCKER_PUBLIC_URL}/preview-access/${encodeURIComponent(req.params.previewAccessToken)}/${encodeURIComponent(req.params.projectId)}`,
+    );
   });
 
   // Helper: proxy request to Daytona sandbox dev server port
@@ -1585,6 +1676,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     if (!projectId) {
       return res.status(400).json({ error: 'Invalid sandbox project ID' });
     }
+    const latestDeployment = getPreviewDeploymentService().getLatestByProject(projectId);
 
     let entry = containers.get(projectId);
     if (!entry) {
@@ -1630,11 +1722,25 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       const port = entry?.port || 5173;
       const preview = await getDaytonaPreviewAccess(entry!, port);
       (entry as any).daytonaPreviewUrl = preview.url;
-      return res.json({ url: preview.url, port, daytona: true, signed: preview.signed });
+      return res.json({
+        url: latestDeployment?.protectedPreviewUrl || preview.url,
+        baseUrl: preview.url,
+        protectedUrl: latestDeployment?.protectedPreviewUrl || null,
+        edgeHost: latestDeployment?.edgeHost || null,
+        port,
+        daytona: true,
+        signed: preview.signed,
+      });
     }
     const port = entry?.port || 0;
     const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
-    res.json({ url: `${baseUrl}/preview/${projectId}`, port });
+    res.json({
+      url: latestDeployment?.protectedPreviewUrl || `${baseUrl}/preview/${projectId}`,
+      baseUrl: `${baseUrl}/preview/${projectId}`,
+      protectedUrl: latestDeployment?.protectedPreviewUrl || null,
+      edgeHost: latestDeployment?.edgeHost || null,
+      port,
+    });
   });
 
   // Sandbox preview proxy — forwards requests to Daytona sandbox dev server
@@ -1646,12 +1752,20 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       return res.status(400).json({ error: 'Invalid sandbox project ID' });
     }
 
+    if (!await authorizePreviewRequest(req, res, projectId)) {
+      return;
+    }
+
     return handleSandboxPreview(req, res, containers, '', `/api/sandbox-preview/${projectId}`);
   });
   app.all('/api/sandbox-preview/:projectId/*', async (req, res) => {
     const projectId = getValidatedPreviewProjectId(req.params.projectId);
     if (!projectId) {
       return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
+    if (!await authorizePreviewRequest(req, res, projectId)) {
+      return;
     }
 
     const subPath = getProxySubPath(req);

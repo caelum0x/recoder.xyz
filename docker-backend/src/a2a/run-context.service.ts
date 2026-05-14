@@ -328,6 +328,7 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const worktreeMetadata = readRecord(task.metadata?.worktree);
   const handoffMetadata = readRecord(task.metadata?.handoff);
   const mergeMetadata = readRecord(task.metadata?.merge);
+  const deploymentPreviewMetadata = readRecord(task.metadata?.deploymentPreview);
   const reviewHistory = Array.isArray(task.metadata?.reviewHistory)
     ? task.metadata.reviewHistory
         .filter((entry): entry is Record<string, unknown> => Boolean(readRecord(entry)))
@@ -424,6 +425,48 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
           }
         : null,
       history: reviewHistory,
+    },
+    delivery: {
+      previewDeployment: deploymentPreviewMetadata
+        ? {
+            deploymentId:
+              typeof deploymentPreviewMetadata.deploymentId === 'string'
+                ? deploymentPreviewMetadata.deploymentId
+                : null,
+            projectId:
+              typeof deploymentPreviewMetadata.projectId === 'string'
+                ? deploymentPreviewMetadata.projectId
+                : null,
+            protectionMode:
+              typeof deploymentPreviewMetadata.protectionMode === 'string'
+                ? deploymentPreviewMetadata.protectionMode
+                : null,
+            protectedPreviewUrl:
+              typeof deploymentPreviewMetadata.protectedPreviewUrl === 'string'
+                ? deploymentPreviewMetadata.protectedPreviewUrl
+                : null,
+            basePreviewUrl:
+              typeof deploymentPreviewMetadata.basePreviewUrl === 'string'
+                ? deploymentPreviewMetadata.basePreviewUrl
+                : null,
+            edgeHost:
+              typeof deploymentPreviewMetadata.edgeHost === 'string'
+                ? deploymentPreviewMetadata.edgeHost
+                : null,
+            branchName:
+              typeof deploymentPreviewMetadata.branchName === 'string'
+                ? deploymentPreviewMetadata.branchName
+                : null,
+            prUrl:
+              typeof deploymentPreviewMetadata.prUrl === 'string'
+                ? deploymentPreviewMetadata.prUrl
+                : null,
+            prNumber:
+              typeof deploymentPreviewMetadata.prNumber === 'number'
+                ? deploymentPreviewMetadata.prNumber
+                : null,
+          }
+        : null,
     },
     runtime: {
       evidence,
@@ -534,6 +577,7 @@ export async function buildTaskRunSummary(task: TaskEnvelope) {
         }
       : null,
     review: context.review,
+    delivery: context.delivery,
     assignee: context.assignee,
     runtime: context.runtime,
     controlPlane: context.controlPlane

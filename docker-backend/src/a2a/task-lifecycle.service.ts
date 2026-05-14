@@ -499,6 +499,12 @@ export interface AppendTaskArtifactsInput {
   reason?: string;
 }
 
+export interface AppendTaskPreviewInput {
+  preview: TaskPreviewLink[];
+  triggeredBy?: string;
+  reason?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Service result types
 // ---------------------------------------------------------------------------
@@ -1205,6 +1211,84 @@ export class TaskLifecycleService {
           reason: input.reason || 'Task artifacts appended',
           artifact_count: input.artifacts.length,
           artifact_keys: input.artifacts.map((artifact) => artifact.key),
+        },
+        now,
+      }),
+    );
+
+    return { ok: true, data: updated };
+  }
+
+  appendTaskPreview(
+    taskId: string,
+    input: AppendTaskPreviewInput,
+  ): ServiceResult<TaskEnvelope> {
+    const envelope = this.store.get(taskId);
+    if (!envelope) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    if (input.preview.length === 0) {
+      return { ok: true, data: envelope };
+    }
+
+    const existingResult = envelope.result ?? {};
+    const mergedPreview = new Map<string, TaskPreviewLink>();
+    for (const preview of existingResult.preview ?? []) {
+      mergedPreview.set(preview.url, preview);
+    }
+    for (const preview of input.preview) {
+      mergedPreview.set(preview.url, preview);
+    }
+
+    const now = new Date().toISOString();
+    const updated: TaskEnvelope = {
+      ...envelope,
+      updated_at: now,
+      result: enrichTaskResult(envelope, {
+        ...existingResult,
+        preview: [...mergedPreview.values()],
+      }),
+    };
+
+    this.store.set(taskId, updated);
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: input.triggeredBy || 'preview-api',
+          name: input.triggeredBy || 'preview-api',
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: input.reason || 'Task preview attached',
+          preview_urls: input.preview.map((preview) => preview.url),
+          metadata_patch: {
+            preview: input.preview.map((preview) => ({
+              url: preview.url,
+              label: preview.label || null,
+              source: preview.source || null,
+            })),
+          },
         },
         now,
       }),

@@ -32,6 +32,7 @@ import { taskLifecycleRouter } from '../task-lifecycle.routes';
 import { getTaskLifecycleService, resetTaskLifecycleService } from '../task-lifecycle.service';
 import { getApprovalGateService, resetApprovalGateService } from '../approval-gate.service';
 import { getDelegationChainService, resetDelegationChainService } from '../delegation-chain.service';
+import { resetPreviewDeploymentService } from '../../edge/preview-deployment.service';
 
 type MockReq = EventEmitter & {
   method: string;
@@ -129,6 +130,7 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     resetTaskLifecycleService();
     resetApprovalGateService();
     resetDelegationChainService();
+    resetPreviewDeploymentService();
     vi.clearAllMocks();
     mocks.bridgeAgent.status = 'online';
     mocks.bridge.getAgent.mockReturnValue(mocks.bridgeAgent);
@@ -351,6 +353,54 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     expect(state.jsonData.data.result.artifacts[0]).toMatchObject({
       key: 'manual-report.md',
       artifact_type: 'report',
+    });
+  });
+
+  it('creates a protected preview deployment and attaches it to the task', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_preview_deploy',
+      thread_id: 'thread_preview_deploy',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Preview deploy task' },
+      metadata: {},
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const req = makeReq({
+      method: 'POST',
+      params: { taskId: created.data.id },
+      body: {
+        projectId: 'project-preview-123',
+        branchName: 'feature/preview',
+        prNumber: 42,
+        prUrl: 'https://github.com/recoder/recoder.xyz/pull/42',
+        createdBy: 'recoder-agents',
+        protectionMode: 'signed',
+      },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/preview-deploy', 'post', req, res);
+
+    expect(state.statusCode).toBe(201);
+    expect(state.jsonData.success).toBe(true);
+    expect(state.jsonData.data.previewDeployment).toMatchObject({
+      projectId: 'project-preview-123',
+      protectionMode: 'signed',
+      branchName: 'feature/preview',
+      prNumber: 42,
+    });
+    expect(state.jsonData.data.previewDeployment.protectedPreviewUrl).toContain('/preview-access/');
+    expect(state.jsonData.data.task.result.artifacts.some((artifact: any) => artifact.key.includes('preview-deployment:'))).toBe(true);
+    expect(state.jsonData.data.task.result.evidence.some((item: any) => item.kind === 'preview')).toBe(true);
+    expect(state.jsonData.data.task.metadata.deploymentPreview).toMatchObject({
+      projectId: 'project-preview-123',
+      protectionMode: 'signed',
+      prNumber: 42,
     });
   });
 });
