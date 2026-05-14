@@ -1,3 +1,26 @@
+# Current Status, 2026-05-14
+
+This is broad backlog material. The active paid-user launch checklist now lives in `docs/remaining.md`; current execution sequencing lives in `docs/plan.md`.
+
+Recent shipped baseline:
+
+- Spaces are the primary signed-in conversion path.
+- Connecting an agent is the activation milestone.
+- Commercial limits now align around workspaces, connected agents, approvals, artifact retention, and preview deploy capacity.
+- Legacy session/token quota fields remain only as compatibility outputs derived from commercial entitlements.
+- Preview deploy artifacts, private preview access, and the `recoder-edge` scaffold exist in code.
+
+Near-term remaining work before paid users:
+
+1. Instrument the lead-to-signup-to-activation funnel.
+2. Connect GitHub repos and make PRs first-class run artifacts.
+3. Show task -> artifact -> PR -> preview -> approval on the main timeline.
+4. Move PM and Agency ingress fully onto shared A2A envelope normalization.
+5. Roll out live preview/edge routing, private access, TLS/DNS, and WAF/rate-limit enforcement.
+6. Unblock full Hetzner deploy by landing or resolving missing Daytona backend sources.
+
+Everything below is retained as broader product and infrastructure backlog context.
+
 If you want to build something that feels like “open-source Cloudflare at 90% capability,” the realistic path is:
 Core Architecture
 Users

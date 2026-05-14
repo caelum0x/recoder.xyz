@@ -1,6 +1,6 @@
 # Recoder Spaces Platform Status and Agent Control-Plane Plan
 
-Last updated: 2026-05-12
+Last updated: 2026-05-14
 
 ## Goal
 
@@ -13,6 +13,26 @@ Recoder Spaces is the workspace where humans and AI agents build, coordinate, re
 The product thesis is: one workspace, many agents, controlled delivery. The core product is a shared task room where humans, coding agents, PM agents, review agents, deployment agents, browser agents, and later desktop agents work together through tasks, artifacts, approvals, logs, and audit trails.
 
 Recoder should compete on orchestration, governance, and delivery reliability rather than model quality. The control plane owns agent identity, workflow state, approval state, and orchestration history. Daytona sandboxes and other runners stay execution substrates.
+
+## Current Shipped Baseline
+
+The current implementation has moved the app away from session/token-era commercial logic and toward the paid Spaces model.
+
+- `Create your first Space` is now the primary signed-in conversion path.
+- `Connect an agent` is now the first activation milestone.
+- The dashboard and Spaces surfaces expose the task -> artifact -> PR -> preview -> approval path as the main product loop.
+- Auth, billing, CLI quota/proxy, user quota, usage tracking, analytics, plan config, and docs examples now derive legacy quota fields from shared commercial entitlements.
+- Commercial entitlements now center on Spaces, connected agents, approval workflows, artifact retention, and preview deploy capacity.
+- Preview deploy artifacts and private preview access attach to the control-plane model as run/task evidence.
+- `recoder-edge` exists as an in-repo scaffold for preview routing, private preview access, and public-route security policy.
+
+## Current Paid-User Launch Gate
+
+The remaining near-term goal is not more roadmap breadth. It is a complete paid-user loop:
+
+`signup -> choose plan -> create Space -> connect agent -> connect repo -> task -> artifact -> PR -> preview -> approval -> upgrade/retain`
+
+Use [remaining.md](/Users/arhansubasi/recoder.xyz/docs/remaining.md:1) as the current checklist for what still blocks paid subscribed users.
 
 ## Strategy
 
@@ -581,3 +601,28 @@ Coding task format:
 - The strongest wedge remains: one workspace, many agents, controlled delivery.
 - BYOK/BYOA continues to be a strategic advantage because Recoder governs agents instead of reselling inference.
 - A future Phase 5 should only be declared once the current Phase 4 runtime classes are proven end to end and the next product boundary is explicit.
+
+## Roadmap-To-Code Status
+
+The previous roadmap-to-code handoff is now incorporated into this document and [remaining.md](/Users/arhansubasi/recoder.xyz/docs/remaining.md:1).
+
+Completed from that handoff:
+
+- shared bridge identity reconciliation and registry-first session visibility
+- preview deploy artifacts and protected preview access
+- `recoder-edge` scaffold for preview routing and route security policy
+- signed-in Space creation as the primary conversion path
+- connected agent records as the activation milestone
+- commercial entitlement enforcement for Spaces and connected agents
+- commercial quota compatibility across auth, billing, CLI, user quota, usage, analytics, and plan config
+
+Still active:
+
+- move PM and Agency ingress onto the shared A2A envelope normalization path
+- connect GitHub repos and make PRs first-class artifacts
+- make the task -> artifact -> PR -> preview -> approval loop visible from shared run history
+- instrument the lead-to-signup-to-activation funnel
+- activate live edge/preview routing, DNS/TLS, private preview hosts, and WAF/rate-limit policy
+- unblock full Hetzner deploy by resolving missing Daytona backend sources
+
+Use `bd ready --json` for the executable issue list instead of adding markdown TODOs here.
