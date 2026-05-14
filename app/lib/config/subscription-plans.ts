@@ -67,8 +67,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
       'Advanced analytics'
     ],
     limits: {
-      sessionsPerDay: 50,
-      tokensPerSession: 100000,
+      sessionsPerDay: 15,
+      tokensPerSession: 50000,
       requests: 50000,
       tokens: 50000000,
       workspaces: 10,
@@ -91,8 +91,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
       'Annual billing'
     ],
     limits: {
-      sessionsPerDay: 50,
-      tokensPerSession: 100000,
+      sessionsPerDay: 15,
+      tokensPerSession: 50000,
       requests: 50000,
       tokens: 50000000,
       workspaces: 10,
@@ -120,8 +120,8 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
       'High-capacity workflow operations'
     ],
     limits: {
-      sessionsPerDay: 1000,
-      tokensPerSession: 500000,
+      sessionsPerDay: 999,
+      tokensPerSession: 999999,
       requests: 1000000,
       tokens: 1000000000,
       workspaces: 999,
