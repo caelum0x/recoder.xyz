@@ -17,6 +17,12 @@ export interface PlanDefinition {
     tokensPerSession: number;
     requests: number;
     tokens: number;
+    workspaces: number;
+    connectedAgents: number;
+    artifactRetentionDays: number;
+    previewDeploysPerMonth: number;
+    approvalWorkflows: 'single' | 'shared' | 'advanced' | 'custom';
+    governance: 'basic' | 'team' | 'advanced' | 'enterprise';
   };
 }
 
@@ -37,7 +43,13 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
       sessionsPerDay: 6,
       tokensPerSession: 10000,
       requests: 1000,
-      tokens: 1000000
+      tokens: 1000000,
+      workspaces: 1,
+      connectedAgents: 1,
+      artifactRetentionDays: 7,
+      previewDeploysPerMonth: 3,
+      approvalWorkflows: 'single',
+      governance: 'basic',
     }
   },
   'pro-monthly': {
@@ -48,16 +60,23 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     interval: 'month',
     features: [
       'Everything in Free',
-      'Platform API keys (no key needed)',
+      'More Spaces and connected agents',
+      'Shared approvals and artifact history',
+      'Preview deployment workflows',
       'Priority support',
-      'Advanced analytics',
-      '50x more usage'
+      'Advanced analytics'
     ],
     limits: {
       sessionsPerDay: 50,
       tokensPerSession: 100000,
       requests: 50000,
-      tokens: 50000000
+      tokens: 50000000,
+      workspaces: 10,
+      connectedAgents: 5,
+      artifactRetentionDays: 30,
+      previewDeploysPerMonth: 50,
+      approvalWorkflows: 'shared',
+      governance: 'team',
     }
   },
   'pro-yearly': {
@@ -75,7 +94,13 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
       sessionsPerDay: 50,
       tokensPerSession: 100000,
       requests: 50000,
-      tokens: 50000000
+      tokens: 50000000,
+      workspaces: 10,
+      connectedAgents: 5,
+      artifactRetentionDays: 30,
+      previewDeploysPerMonth: 50,
+      approvalWorkflows: 'shared',
+      governance: 'team',
     }
   },
   'enterprise': {
@@ -86,18 +111,25 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     interval: 'month',
     features: [
       'Everything in Pro',
-      'Dedicated API keys',
-      'White-label options',
+      'Advanced governance and retention',
+      'Client-safe delivery and approvals',
+      'Custom routing and audit controls',
       'SLA guarantee',
       'Custom integrations',
       'Priority support 24/7',
-      '1M requests/month'
+      'High-capacity workflow operations'
     ],
     limits: {
       sessionsPerDay: 1000,
       tokensPerSession: 500000,
       requests: 1000000,
-      tokens: 1000000000
+      tokens: 1000000000,
+      workspaces: 999,
+      connectedAgents: 999,
+      artifactRetentionDays: 365,
+      previewDeploysPerMonth: 999,
+      approvalWorkflows: 'custom',
+      governance: 'enterprise',
     }
   }
 };
