@@ -87,20 +87,24 @@ describe('/api/billing/plans route', () => {
     }
   });
 
-  it('each plan limits has sessionsPerDay, tokensPerSession, requests, tokens', async () => {
+  it('each plan limits has workspace-centric commercial fields', async () => {
     const { GET } = await import('@/app/api/billing/plans/route');
     const response = await GET(req('http://localhost/api/billing/plans'));
     const json = await response.json();
 
     for (const plan of json.plans) {
-      expect(plan.limits).toHaveProperty('sessionsPerDay');
-      expect(plan.limits).toHaveProperty('tokensPerSession');
-      expect(plan.limits).toHaveProperty('requests');
-      expect(plan.limits).toHaveProperty('tokens');
-      expect(typeof plan.limits.sessionsPerDay).toBe('number');
-      expect(typeof plan.limits.tokensPerSession).toBe('number');
-      expect(typeof plan.limits.requests).toBe('number');
-      expect(typeof plan.limits.tokens).toBe('number');
+      expect(plan.limits).toHaveProperty('workspaces');
+      expect(plan.limits).toHaveProperty('connectedAgents');
+      expect(plan.limits).toHaveProperty('artifactRetentionDays');
+      expect(plan.limits).toHaveProperty('previewDeploysPerMonth');
+      expect(plan.limits).toHaveProperty('approvalWorkflows');
+      expect(plan.limits).toHaveProperty('governance');
+      expect(typeof plan.limits.workspaces).toBe('number');
+      expect(typeof plan.limits.connectedAgents).toBe('number');
+      expect(typeof plan.limits.artifactRetentionDays).toBe('number');
+      expect(typeof plan.limits.previewDeploysPerMonth).toBe('number');
+      expect(typeof plan.limits.approvalWorkflows).toBe('string');
+      expect(typeof plan.limits.governance).toBe('string');
     }
   });
 
