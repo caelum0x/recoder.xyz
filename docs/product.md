@@ -1,6 +1,6 @@
 # Recoder Product Narrative
 
-Last updated: 2026-05-12
+Last updated: 2026-05-14
 
 ## What Recoder Is
 
@@ -14,6 +14,16 @@ The sharpest public framing is:
 - MCP gives agents tools.
 - A2A lets agents talk.
 - Recoder gives agents a workspace to ship software with humans in the loop.
+
+## Current Product State
+
+The active product path is now:
+
+`create Space -> connect agent -> create task -> attach artifact -> attach PR -> attach preview -> approve`
+
+The commercial model should be described as Spaces, connected agents, approvals, artifact retention, and preview deploy capacity. Legacy session or token limits may still appear in compatibility APIs, but they are no longer the product story.
+
+For what still blocks paid subscribed users, see [remaining.md](/Users/arhansubasi/recoder.xyz/docs/remaining.md:1).
 
 ## Positioning
 
@@ -254,10 +264,13 @@ Recoder should not price itself like a token wrapper. Charge for:
 
 Suggested packaging:
 
-- Free: 1 Space, local runner, limited history
-- Pro: more Spaces, more agents, GitHub integration, approvals
-- Agency: client portals, reports, deliverables, launch packs
-- Team and Enterprise later
+- Free: 1 Space, 1 connected agent, limited artifact history, limited preview deploys
+- Weekly/Monthly: more Spaces, more connected agents, shared approvals, longer retention, more preview deploys
+- Pro: advanced approvals, higher agent capacity, admin controls, priority workflow support
+- Agency: client portals, delivery packages, reports, launch packs
+- Team and Enterprise later: governance, custom retention, audit, SSO, and security policy
+
+The next commercial proof is not a pricing page alone. It is a user hitting a real plan boundary while shipping through the Space loop.
 
 ## What To Cut From The Public Story
 

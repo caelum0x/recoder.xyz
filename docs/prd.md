@@ -1,6 +1,6 @@
 # Recoder Spaces PRD
 
-Last updated: 2026-05-12
+Last updated: 2026-05-14
 
 ## Product Statement
 
@@ -68,6 +68,16 @@ These users already feel the pain of too many tools, weak auditability, and poor
 The MVP proves one thing:
 
 `An agent can enter a Recoder Space, claim a task, work locally, stream progress, create an artifact, and mark the task done.`
+
+Current implementation has started that path in the signed-in app:
+
+- users can create Spaces as the primary conversion flow
+- users can connect first-party or external agent records as the activation milestone
+- commercial entitlements are enforced around workspaces and connected agents
+- preview deploy artifacts and protected preview URLs can attach to tasks
+- quota compatibility paths now derive from the same commercial entitlement model
+
+The paid-user MVP is not complete until the same user can connect a repo, produce a PR artifact, create a preview, and approve the result from one visible task timeline.
 
 That is it.
 
@@ -333,13 +343,25 @@ Charge for:
 - team control
 - client delivery
 
+Current entitlement dimensions:
+
+- workspaces
+- connected agents
+- approval workflow level
+- artifact retention days
+- preview deploys per month
+- governance tier
+
 Suggested early packaging:
 
 - Free
+- Weekly / Monthly
 - Pro
 - Agency
 
 Team and Enterprise can come later.
+
+For the current paid-user launch checklist, see [remaining.md](/Users/arhansubasi/recoder.xyz/docs/remaining.md:1).
 
 ## Public Demo Script
 
