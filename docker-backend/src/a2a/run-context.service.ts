@@ -4,7 +4,7 @@ import { getApprovalGateService } from './approval-gate.service';
 import { getDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
 import { getAgentBridgeService } from './agent-bridge.service';
-import { listBridgeSessionsForBinding } from '../a2a-gateway';
+import { getOrchestrationHistorySummary, listBridgeSessionsForBinding } from '../a2a-gateway';
 import { getApproval as getPolicyApproval } from '../policy/approval-store.js';
 
 function extractApprovalId(task: TaskEnvelope): string | undefined {
@@ -272,6 +272,10 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const approval = resolveApprovalLink(task);
   const delegation = delegationId ? getDelegationChainService().getDelegation(delegationId) : undefined;
   const delegationChain = delegationId ? getDelegationChainService().getChain(delegationId) : undefined;
+  const orchestration = await getOrchestrationHistorySummary({
+    threadId: task.thread_id,
+    traceId: task.trace_id,
+  });
 
   const registryAgent = getAgentRegistryService().getWithHealth(task.assignee.agent_id);
   const localBridgeSessions = getAgentBridgeService().getSessionsForAgent(task.assignee.agent_id).map((session) => ({
@@ -419,6 +423,18 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
           }
         : null,
     },
+    controlPlane: orchestration
+      ? {
+          historyVersion:
+            typeof orchestration.historyVersion === 'string' ? orchestration.historyVersion : null,
+          workspaceId:
+            typeof orchestration.workspaceId === 'string' ? orchestration.workspaceId : null,
+          summary:
+            orchestration.summary && typeof orchestration.summary === 'object'
+              ? (orchestration.summary as Record<string, unknown>)
+              : null,
+        }
+      : null,
     run: extractTaskRun(
       task,
       transitions,
@@ -494,6 +510,31 @@ export async function buildTaskRunSummary(task: TaskEnvelope) {
     review: context.review,
     assignee: context.assignee,
     runtime: context.runtime,
+    controlPlane: context.controlPlane
+      ? {
+          historyVersion: context.controlPlane.historyVersion,
+          workspaceId: context.controlPlane.workspaceId,
+          mode:
+            typeof context.controlPlane.summary?.mode === 'string'
+              ? context.controlPlane.summary.mode
+              : null,
+          lifecycleCount:
+            typeof context.controlPlane.summary?.lifecycleCount === 'number'
+              ? context.controlPlane.summary.lifecycleCount
+              : 0,
+          evidenceCount:
+            typeof context.controlPlane.summary?.evidenceCount === 'number'
+              ? context.controlPlane.summary.evidenceCount
+              : 0,
+          totalTimelineCount:
+            typeof context.controlPlane.summary?.totalTimelineCount === 'number'
+              ? context.controlPlane.summary.totalTimelineCount
+              : 0,
+          successfulAgents: Array.isArray(context.controlPlane.summary?.successfulAgents)
+            ? context.controlPlane.summary.successfulAgents
+            : [],
+        }
+      : null,
     transitionCount: context.transitions.length,
     auditCount: context.audit.length,
   };

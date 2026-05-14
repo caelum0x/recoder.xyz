@@ -205,6 +205,9 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
       acc.artifacts += typeof task.runtime?.artifactCount === 'number' ? task.runtime.artifactCount : 0;
       acc.logEvidence += typeof task.runtime?.logCount === 'number' ? task.runtime.logCount : 0;
       acc.runtimeEvidence += typeof task.runtime?.runtimeCount === 'number' ? task.runtime.runtimeCount : 0;
+      acc.orchestrationRuns += task.controlPlane ? 1 : 0;
+      acc.orchestrationLifecycleEvents += typeof task.controlPlane?.lifecycleCount === 'number' ? task.controlPlane.lifecycleCount : 0;
+      acc.orchestrationEvidenceItems += typeof task.controlPlane?.evidenceCount === 'number' ? task.controlPlane.evidenceCount : 0;
       return acc;
     },
     {
@@ -227,6 +230,9 @@ async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
       artifacts: 0,
       logEvidence: 0,
       runtimeEvidence: 0,
+      orchestrationRuns: 0,
+      orchestrationLifecycleEvents: 0,
+      orchestrationEvidenceItems: 0,
     },
   );
 
@@ -296,6 +302,7 @@ function buildWorkspaceContextPackageFromSnapshot(
       handoffStatus: task.handoff?.status ?? null,
       review: task.review ?? null,
       runtime: task.runtime ?? null,
+      controlPlane: task.controlPlane ?? null,
     })),
     pendingApprovals: snapshot.approvals
       .filter((approval) => approval.status === 'pending' || approval.status === 'escalated')
