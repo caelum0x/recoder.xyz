@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CLIAuthService } from '../services/cli-auth.service';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 /**
  * Middleware to validate CLI authentication
@@ -113,76 +114,24 @@ export function withCLIAuth(
  * Get plan features and limits
  */
 export function getPlanFeatures(plan: string) {
-  const plans: Record<string, any> = {
-    free: {
-      name: 'Free',
-      sessionsPerDay: 6,
-      tokensPerSession: 10000,
-      models: ['free-models'],
-      features: {
-        basicCodeGeneration: true,
-        advancedModels: false,
-        prioritySupport: false,
-        teamCollaboration: false,
-      },
-    },
-    weekly: {
-      name: 'Weekly',
-      price: 9.99,
-      sessionsPerDay: 20,
-      tokensPerSession: 30000,
-      models: ['all-models'],
-      features: {
-        basicCodeGeneration: true,
-        advancedModels: true,
-        prioritySupport: false,
-        teamCollaboration: false,
-      },
-    },
-    monthly: {
-      name: 'Monthly',
-      price: 29.99,
-      sessionsPerDay: 50,
-      tokensPerSession: 50000,
-      models: ['all-models'],
-      features: {
-        basicCodeGeneration: true,
-        advancedModels: true,
-        prioritySupport: true,
-        teamCollaboration: false,
-      },
-    },
-    pro: {
-      name: 'Pro',
-      price: 99.99,
-      sessionsPerDay: 100,
-      tokensPerSession: 100000,
-      models: ['all-models', 'premium-models'],
-      features: {
-        basicCodeGeneration: true,
-        advancedModels: true,
-        prioritySupport: true,
-        teamCollaboration: true,
-        customModels: true,
-      },
-    },
-    enterprise: {
-      name: 'Enterprise',
-      price: 'Custom',
-      sessionsPerDay: -1, // Unlimited
-      tokensPerSession: -1, // Unlimited
-      models: ['all-models', 'premium-models', 'custom-models'],
-      features: {
-        basicCodeGeneration: true,
-        advancedModels: true,
-        prioritySupport: true,
-        teamCollaboration: true,
-        customModels: true,
-        dedicatedSupport: true,
-        sla: true,
-      },
+  const normalizedPlan = normalizeCommercialPlan(plan);
+  const entitlements = getCommercialEntitlements(normalizedPlan);
+
+  return {
+    name: normalizedPlan,
+    workspaces: entitlements.workspaces,
+    connectedAgents: entitlements.connectedAgents,
+    artifactRetentionDays: entitlements.artifactRetentionDays,
+    previewDeploysPerMonth: entitlements.previewDeploysPerMonth,
+    approvalWorkflows: entitlements.approvalWorkflows,
+    governance: entitlements.governance,
+    features: {
+      basicCodeGeneration: true,
+      advancedModels: normalizedPlan !== 'free',
+      prioritySupport: normalizedPlan === 'monthly' || normalizedPlan === 'pro' || normalizedPlan === 'enterprise',
+      teamCollaboration: entitlements.connectedAgents > 1,
+      customModels: normalizedPlan === 'pro' || normalizedPlan === 'enterprise',
+      dedicatedSupport: normalizedPlan === 'enterprise',
     },
   };
-
-  return plans[plan] || plans.free;
 }
