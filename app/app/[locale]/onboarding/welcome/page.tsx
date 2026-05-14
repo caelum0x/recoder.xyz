@@ -142,8 +142,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">1</span>
                 </div>
                 <div>
-                  <div className="font-medium">Tell us about your workflow</div>
-                  <div className="text-sm text-gray-400">Your role and the kind of software work you want agents to execute</div>
+                  <div className="font-medium">Choose the plan for your first workflow</div>
+                  <div className="text-sm text-gray-400">Start free or move into a paid Space if you already know you need more capacity</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -151,8 +151,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">2</span>
                 </div>
                 <div>
-                  <div className="font-medium">Connect your provider and agent</div>
-                  <div className="text-sm text-gray-400">Add OpenRouter, OpenAI, Anthropic, or Google, then move into the external-agent workflow</div>
+                  <div className="font-medium">Create your first Space and connect an agent</div>
+                  <div className="text-sm text-gray-400">Make external-agent connection the first activation milestone, not a hidden later step</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -160,8 +160,8 @@ export default function WelcomePage() {
                   <Check className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="font-medium">Run one real task</div>
-                  <div className="text-sm text-gray-400">Use the dashboard and project surfaces to prove the loop across task, runtime, preview, and handoff</div>
+                  <div className="font-medium">Run one real task with visible delivery proof</div>
+                  <div className="text-sm text-gray-400">Task, artifact, PR, preview, and approval should all be visible before you call the loop real</div>
                 </div>
               </div>
             </div>
@@ -177,8 +177,8 @@ export default function WelcomePage() {
               Skip for now
             </Link>
             <Link
-              href="/onboarding/setup-profile"
-              onClick={() => trackEvent(AnalyticsEvents.CTA_CLICKED, { ctaLabel: 'Get Started', destination: '/onboarding/setup-profile', location: 'onboarding_welcome', source: 'onboarding' })}
+              href="/onboarding/choose-plan"
+              onClick={() => trackEvent(AnalyticsEvents.CTA_CLICKED, { ctaLabel: 'Get Started', destination: '/onboarding/choose-plan', location: 'onboarding_welcome', source: 'onboarding' })}
               className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
             >
               <span>Get Started</span>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,8 +29,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const plan = user.subscription || 'free';
+    const plan = normalizeCommercialPlan(user.subscriptionPlan || user.subscription || 'free');
     const isPremium = plan !== 'free';
+    const entitlements = getCommercialEntitlements(plan);
 
     const quota = await prisma.user_quota.findUnique({
       where: { userId: user.id }
@@ -66,8 +68,12 @@ export async function GET(request: NextRequest) {
           limit: newQuota.sessionsPerDay,
           periodStart: newQuota.periodStart,
           periodEnd: newQuota.periodEnd,
-          lastResetAt: newQuota.lastResetAt
-        }
+          lastResetAt: newQuota.lastResetAt,
+        },
+        commercial: {
+          plan,
+          entitlements,
+        },
       });
     }
 
@@ -98,8 +104,12 @@ export async function GET(request: NextRequest) {
           limit: updatedQuota.sessionsPerDay,
           periodStart: updatedQuota.periodStart,
           periodEnd: updatedQuota.periodEnd,
-          lastResetAt: updatedQuota.lastResetAt
-        }
+          lastResetAt: updatedQuota.lastResetAt,
+        },
+        commercial: {
+          plan,
+          entitlements,
+        },
       });
     }
 
@@ -113,8 +123,12 @@ export async function GET(request: NextRequest) {
         limit: quota.sessionsPerDay,
         periodStart: quota.periodStart,
         periodEnd: quota.periodEnd,
-        lastResetAt: quota.lastResetAt
-      }
+        lastResetAt: quota.lastResetAt,
+      },
+      commercial: {
+        plan,
+        entitlements,
+      },
     });
   } catch (error) {
     logger.error('Get quota error:', { error: error instanceof Error ? error.message : String(error) });
