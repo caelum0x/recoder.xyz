@@ -19,6 +19,24 @@ import { getAgentMessagingService } from './agent-messaging.service';
 import { getDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
 import { getTaskLifecycleService } from './task-lifecycle.service';
+import { appendTaskScopedControlPlaneLifecycleEvent } from '../a2a-gateway';
+
+function mapDelegationStatusToLifecycleEvent(status: string): string {
+  switch (status) {
+    case 'accepted':
+      return 'handoff.accepted';
+    case 'completed':
+      return 'handoff.completed';
+    case 'rejected':
+    case 'failed':
+    case 'cancelled':
+      return 'handoff.declined';
+    case 'pending':
+    case 'in-progress':
+    default:
+      return 'handoff.initiated';
+  }
+}
 
 function syncDelegationToTaskMetadata(
   delegation: { delegationId: string; toAgentId: string; status: string; metadata?: Record<string, string>; error?: string; result?: string },
@@ -41,6 +59,26 @@ function syncDelegationToTaskMetadata(
     },
     triggeredBy: 'workflow-messaging',
     reason,
+  });
+
+  void appendTaskScopedControlPlaneLifecycleEvent({
+    taskId: sourceTaskId,
+    eventType: mapDelegationStatusToLifecycleEvent(delegation.status),
+    actorId: delegation.toAgentId,
+    state:
+      delegation.status === 'completed'
+        ? 'completed'
+        : delegation.status === 'rejected' || delegation.status === 'failed' || delegation.status === 'cancelled'
+          ? 'failed'
+          : 'working',
+    detail: {
+      delegationId: delegation.delegationId,
+      targetAgentId: delegation.toAgentId,
+      status: delegation.status,
+      intent: delegation.metadata?.intent || 'handoff',
+      ...(delegation.error ? { error: delegation.error } : {}),
+      ...(delegation.result ? { result: delegation.result } : {}),
+    },
   });
 }
 

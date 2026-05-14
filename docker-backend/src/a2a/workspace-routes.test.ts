@@ -11,10 +11,12 @@ import { resetCollaborationSvc } from './collaboration.service';
 import { getTaskLifecycleService, resetTaskLifecycleService } from './task-lifecycle.service';
 
 describe('A2A workspace routes', () => {
+  const realFetch = globalThis.fetch;
   let server: any;
   let baseUrl = '';
 
   beforeEach(async () => {
+    globalThis.fetch = realFetch;
     resetWorkspaceService();
     resetApprovalGateService();
     resetDelegationChainService();
@@ -35,6 +37,7 @@ describe('A2A workspace routes', () => {
   });
 
   afterEach(async () => {
+    globalThis.fetch = realFetch;
     resetApprovalGateService();
     resetDelegationChainService();
     resetAgentRegistryService();
