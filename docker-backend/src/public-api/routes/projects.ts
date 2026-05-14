@@ -35,6 +35,8 @@ import {
 import { fetchUserByokProviderKeys, getAvailableProviders, SUPPORTED_PROVIDERS, type AIProviderKeys } from '../byok-provider-keys.js';
 import { type ClaimedPromptTask, promptTaskQueue } from '../prompt-task-queue.js';
 import { createLogger } from '../../logger.js';
+import { getPreviewDeploymentService } from '../../edge/preview-deployment.service.js';
+import { getTaskLifecycleService } from '../../a2a/task-lifecycle.service.js';
 
 // ==================== Types ====================
 
@@ -300,6 +302,12 @@ function toPromptTaskResponse(record: PromptTaskRecord) {
     result: record.result,
     error: record.error,
   };
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 /**
@@ -1340,6 +1348,107 @@ router.get(
 );
 
 // ==================== POST /v1/projects/:id/publish - Publish Project ====================
+
+router.post(
+  '/:id/preview',
+  ...standardMiddleware,
+  requireRouteRateLimit('projectPreviewDeploy'),
+  requireScope('projects:write', 'admin'),
+  asyncApiHandler(async (req: AuthenticatedApiRequest, res) => {
+    const routeIds = parseRouteIdsOrSendError(req, res);
+    if (!routeIds) return;
+    const { id } = routeIds;
+    const project = getProjectForApiKey(id, req.apiKeyId!);
+
+    if (!project) {
+      sendApiError(res, {
+        code: 'PROJECT_NOT_FOUND',
+        message: 'Project not found or access denied',
+      }, req.requestId);
+      return;
+    }
+
+    const body = readRecord(req.body) ?? {};
+    const createdBy = req.userId || req.apiKeyId || 'public-api';
+    const protectionMode =
+      body.protectionMode === 'public' || body.protectionMode === 'private' || body.protectionMode === 'signed'
+        ? body.protectionMode
+        : undefined;
+
+    const deployment = getPreviewDeploymentService().create({
+      projectId: id,
+      taskId: typeof body.taskId === 'string' ? body.taskId : undefined,
+      prUrl: typeof body.prUrl === 'string' ? body.prUrl : undefined,
+      prNumber: typeof body.prNumber === 'number' ? body.prNumber : undefined,
+      branchName: typeof body.branchName === 'string' ? body.branchName : undefined,
+      protectionMode,
+      createdBy,
+      metadata: readRecord(body.metadata),
+    });
+
+    if (typeof body.taskId === 'string' && body.taskId.trim().length > 0) {
+      const taskId = body.taskId.trim();
+      const previewUpdate = getTaskLifecycleService().appendTaskPreview(taskId, {
+        preview: [{
+          url: deployment.protectedPreviewUrl,
+          label: 'Protected preview deployment',
+          source: 'public-project-preview',
+          metadata: {
+            deploymentId: deployment.id,
+            projectId: deployment.projectId,
+            basePreviewUrl: deployment.basePreviewUrl,
+            edgeHost: deployment.edgeHost,
+            protectionMode: deployment.protectionMode,
+          },
+        }],
+        triggeredBy: createdBy,
+        reason: 'Public API preview deployment attached',
+      });
+
+      if (previewUpdate.ok) {
+        void getTaskLifecycleService().appendTaskArtifacts(taskId, {
+          artifacts: [{
+            key: deployment.artifactKey,
+            artifact_type: 'custom',
+            mime_type: 'application/json',
+            content: JSON.stringify({
+              type: 'deployment_preview',
+              deploymentId: deployment.id,
+              projectId: deployment.projectId,
+              protectedPreviewUrl: deployment.protectedPreviewUrl,
+              basePreviewUrl: deployment.basePreviewUrl,
+            }, null, 2),
+            path: `.recoder/artifacts/${deployment.id}.json`,
+            metadata: {
+              type: 'deployment_preview',
+              deploymentId: deployment.id,
+              previewUrl: deployment.protectedPreviewUrl,
+            },
+          }],
+          triggeredBy: createdBy,
+          reason: 'Public API preview deployment artifact attached',
+        });
+
+        void getTaskLifecycleService().updateTaskMetadata(taskId, {
+          metadataPatch: {
+            deploymentPreview: {
+              deploymentId: deployment.id,
+              projectId: deployment.projectId,
+              basePreviewUrl: deployment.basePreviewUrl,
+              protectedPreviewUrl: deployment.protectedPreviewUrl,
+              protectionMode: deployment.protectionMode,
+              edgeHost: deployment.edgeHost,
+            },
+          },
+          triggeredBy: createdBy,
+          reason: 'Public API preview deployment registered',
+        });
+      }
+    }
+
+    sendApiSuccess(res, deployment, req.requestId!, 201);
+  })
+);
 
 router.post(
   '/:id/publish',

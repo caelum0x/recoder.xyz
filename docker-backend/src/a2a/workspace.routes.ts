@@ -306,6 +306,7 @@ function buildWorkspaceContextPackageFromSnapshot(
       approvalStatus: task.approval?.status ?? null,
       handoffStatus: task.handoff?.status ?? null,
       review: task.review ?? null,
+      delivery: task.delivery ?? null,
       runtime: task.runtime ?? null,
       controlPlane: task.controlPlane ?? null,
     })),
