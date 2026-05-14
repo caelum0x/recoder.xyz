@@ -12,6 +12,12 @@ export interface PlanLimits {
   tokensPerSessionPricey: number;
   freeModelsUnlimited: true;
   teamMembers: number;
+  workspaces: number;
+  connectedAgents: number;
+  artifactRetentionDays: number;
+  previewDeploysPerMonth: number;
+  approvalWorkflows: 'single' | 'shared' | 'advanced' | 'custom';
+  governance: 'basic' | 'team' | 'advanced' | 'enterprise';
 }
 
 export interface PlanFeatures {
@@ -85,6 +91,12 @@ export const PLANS: Record<PlanId, Plan> = {
       tokensPerSessionPricey: 10000,
       freeModelsUnlimited: true,
       teamMembers: 1,
+      workspaces: 1,
+      connectedAgents: 1,
+      artifactRetentionDays: 7,
+      previewDeploysPerMonth: 3,
+      approvalWorkflows: 'single',
+      governance: 'basic',
     },
     features: {
       requiresApiKey: true,
@@ -112,6 +124,12 @@ export const PLANS: Record<PlanId, Plan> = {
       tokensPerSessionPricey: 30000,
       freeModelsUnlimited: true,
       teamMembers: 3,
+      workspaces: 3,
+      connectedAgents: 3,
+      artifactRetentionDays: 14,
+      previewDeploysPerMonth: 15,
+      approvalWorkflows: 'shared',
+      governance: 'team',
     },
     features: {
       requiresApiKey: true,
@@ -145,6 +163,12 @@ export const PLANS: Record<PlanId, Plan> = {
       tokensPerSessionPricey: 50000,
       freeModelsUnlimited: true,
       teamMembers: 5,
+      workspaces: 10,
+      connectedAgents: 5,
+      artifactRetentionDays: 30,
+      previewDeploysPerMonth: 50,
+      approvalWorkflows: 'shared',
+      governance: 'team',
     },
     features: {
       requiresApiKey: true,
@@ -179,6 +203,12 @@ export const PLANS: Record<PlanId, Plan> = {
       tokensPerSessionPricey: 100000,
       freeModelsUnlimited: true,
       teamMembers: 10,
+      workspaces: 25,
+      connectedAgents: 10,
+      artifactRetentionDays: 90,
+      previewDeploysPerMonth: 150,
+      approvalWorkflows: 'advanced',
+      governance: 'advanced',
     },
     features: {
       requiresApiKey: true,
@@ -214,6 +244,12 @@ export const PLANS: Record<PlanId, Plan> = {
       tokensPerSessionPricey: 999999,
       freeModelsUnlimited: true,
       teamMembers: 999,
+      workspaces: 999,
+      connectedAgents: 999,
+      artifactRetentionDays: 365,
+      previewDeploysPerMonth: 999,
+      approvalWorkflows: 'custom',
+      governance: 'enterprise',
     },
     features: {
       requiresApiKey: true,
@@ -322,8 +358,11 @@ export function getNextPlan(currentPlan: PlanId): PlanId | null {
  */
 export function getLimitDescription(planId: PlanId): string {
   const limits = getPlanLimits(planId);
-  
-  return `${limits.sessionsPerDay} sessions/day with ${(limits.tokensPerSessionPricey / 1000).toFixed(0)}k tokens per session for premium models. Free models have unlimited usage.`;
+  const workspaceLabel = limits.workspaces >= 999 ? 'unlimited workspaces' : `${limits.workspaces} workspace${limits.workspaces === 1 ? '' : 's'}`;
+  const agentLabel = limits.connectedAgents >= 999 ? 'unlimited connected agents' : `${limits.connectedAgents} connected agent${limits.connectedAgents === 1 ? '' : 's'}`;
+  const previewLabel = limits.previewDeploysPerMonth >= 999 ? 'unlimited preview deploys' : `${limits.previewDeploysPerMonth} preview deploys/month`;
+
+  return `${workspaceLabel}, ${agentLabel}, ${previewLabel}, and ${limits.artifactRetentionDays} days of artifact history.`;
 }
 
 /**

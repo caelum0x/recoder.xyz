@@ -129,9 +129,10 @@ function PlanCard({ plan }: { plan: Plan }) {
             'Custom capacity, governance, and retention'
           ) : (
             <>
-              {plan.limits.sessionsPerDay} runs/day &middot;{' '}
-              {(plan.limits.tokensPerSessionPricey / 1000).toFixed(0)}k premium-model tokens/run &middot;{' '}
-              {plan.limits.teamMembers === 1 ? '1 connected builder seat' : `${plan.limits.teamMembers} connected builder seats`}
+              {plan.limits.workspaces} workspace{plan.limits.workspaces === 1 ? '' : 's'} &middot;{' '}
+              {plan.limits.connectedAgents === 1 ? '1 connected agent' : `${plan.limits.connectedAgents} connected agents`} &middot;{' '}
+              {plan.limits.previewDeploysPerMonth} preview deploys/month &middot;{' '}
+              {plan.limits.artifactRetentionDays} days history
             </>
           )}
         </p>
@@ -253,8 +254,8 @@ export default function PricingPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
+                'Task room + artifact timeline',
                 'Runtime + preview workflow',
-                'Task state and artifact history',
                 'BYOK provider support',
                 'Project management layer',
                 'Git-aware execution surfaces',
