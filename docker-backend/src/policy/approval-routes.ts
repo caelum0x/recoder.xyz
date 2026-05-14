@@ -15,6 +15,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger.js';
+import type { Approval } from './types.js';
 import {
   createApproval,
   getApprovalsByTask,
@@ -35,6 +36,7 @@ import {
 import { getTaskLifecycleService } from '../a2a/task-lifecycle.service.js';
 import { getA2ASloMetrics } from '../a2a/slo-metrics.js';
 import { getApprovalGateService } from '../a2a/approval-gate.service.js';
+import { appendTaskScopedControlPlaneLifecycleEvent } from '../a2a-gateway.js';
 
 const logger = createLogger('policy:approval-routes');
 
@@ -47,6 +49,51 @@ export const approvalRouter = Router();
 interface AuthenticatedApprovalRequest extends Request {
   userId?: string;
   sessionId?: string;
+}
+
+function syncPolicyApprovalToTaskMetadata(approval: Approval, reason: string): void {
+  const taskResult = getTaskLifecycleService().getTask(approval.task_id);
+  if (!taskResult.ok) {
+    return;
+  }
+
+  getTaskLifecycleService().updateTaskMetadata(approval.task_id, {
+    metadataPatch: {
+      approval: {
+        approvalId: approval.id,
+        status: approval.status,
+        action: approval.action,
+        resource: approval.resource,
+        grantedBy: approval.granted_by,
+        grantedAt: approval.granted_at,
+        expiresAt: approval.expires_at,
+        revokedAt: approval.revoked_at,
+        revokedBy: approval.revoked_by,
+        source: 'policy',
+      },
+    },
+    triggeredBy: approval.revoked_by || approval.granted_by,
+    reason,
+  });
+}
+
+function appendPolicyApprovalLifecycleEvent(
+  approval: Approval,
+  eventType: string,
+  actorId: string,
+): void {
+  void appendTaskScopedControlPlaneLifecycleEvent({
+    taskId: approval.task_id,
+    eventType,
+    actorId,
+    detail: {
+      approvalId: approval.id,
+      action: approval.action,
+      resource: approval.resource,
+      status: approval.status,
+      source: 'policy',
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +196,8 @@ approvalRouter.post('/', (req: AuthenticatedApprovalRequest, res: Response) => {
 
     // Emit audit event
     emitApprovalCreatedAudit(approval);
+    syncPolicyApprovalToTaskMetadata(approval, 'Policy approval created');
+    appendPolicyApprovalLifecycleEvent(approval, 'policy.approval.created', approval.granted_by);
 
     logger.info(
       {
@@ -278,6 +327,8 @@ approvalRouter.post('/:taskId/revoke', (req: AuthenticatedApprovalRequest, res: 
 
       if (revoked) {
         emitApprovalRevokedAudit(revoked, revokedBy);
+        syncPolicyApprovalToTaskMetadata(revoked, 'Policy approval revoked');
+        appendPolicyApprovalLifecycleEvent(revoked, 'policy.approval.revoked', revokedBy);
 
         logger.info(
           { approvalId, taskId, revokedBy },
@@ -305,10 +356,15 @@ approvalRouter.post('/:taskId/revoke', (req: AuthenticatedApprovalRequest, res: 
     // Emit audit events for each revoked approval
     for (const approval of activeApprovals) {
       // Re-fetch to get updated status
-      emitApprovalRevokedAudit(
-        { ...approval, status: 'revoked' as const, revoked_at: new Date().toISOString(), revoked_by: revokedBy },
-        revokedBy,
-      );
+      const revokedApproval = {
+        ...approval,
+        status: 'revoked' as const,
+        revoked_at: new Date().toISOString(),
+        revoked_by: revokedBy,
+      };
+      emitApprovalRevokedAudit(revokedApproval, revokedBy);
+      syncPolicyApprovalToTaskMetadata(revokedApproval, 'All policy approvals revoked for task');
+      appendPolicyApprovalLifecycleEvent(revokedApproval, 'policy.approval.revoked', revokedBy);
     }
 
     logger.info(
