@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import express from 'express';
 import { workspaceRouter } from './workspace.routes';
 import { workflowMessagingRouter } from './workflow-messaging.routes';
+import { a2aRouter, __resetA2ATestState } from '../a2a-gateway';
 import { getWorkspaceService, resetWorkspaceService } from './workspace.service';
 import { getApprovalGateService, resetApprovalGateService } from './approval-gate.service';
 import { getDelegationChainService, resetDelegationChainService } from './delegation-chain.service';
@@ -17,6 +18,14 @@ describe('A2A workspace routes', () => {
 
   beforeEach(async () => {
     globalThis.fetch = realFetch;
+    process.env.RECODER_A2A_ADMIN_TOKEN = 'admin-token';
+    process.env.RECODER_A2A_ENABLE_CODEX = 'true';
+    process.env.RECODER_A2A_ENABLE_BRIDGE_FALLBACK = 'true';
+    process.env.RECODER_A2A_CODEX_BASE_URL = '';
+    process.env.RECODER_A2A_ORCH_ALLOWED_INTENTS = 'plan,execute,handoff,tool_call';
+    delete process.env.RECODER_A2A_REDIS_URL;
+    delete process.env.REDIS_URL;
+    __resetA2ATestState();
     resetWorkspaceService();
     resetApprovalGateService();
     resetDelegationChainService();
@@ -26,6 +35,7 @@ describe('A2A workspace routes', () => {
 
     const app = express();
     app.use('/api/a2a', express.text({ type: 'application/json' }));
+    app.use('/api/a2a', a2aRouter);
     app.use('/api/a2a/workspaces', workspaceRouter);
     app.use('/api/a2a', workflowMessagingRouter);
 
@@ -38,6 +48,7 @@ describe('A2A workspace routes', () => {
 
   afterEach(async () => {
     globalThis.fetch = realFetch;
+    __resetA2ATestState();
     resetApprovalGateService();
     resetDelegationChainService();
     resetAgentRegistryService();
@@ -193,6 +204,31 @@ describe('A2A workspace routes', () => {
     );
     expect(completed.ok).toBe(true);
 
+    const orchestrate = await fetch(`${baseUrl}/api/a2a/orchestrate`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        mode: 'codex_only',
+        bridgeId: 'bridge-default',
+        envelope: {
+          messageId: 'msg-ws-control-plane',
+          threadId: 'thread-control-plane',
+          intent: 'execute',
+          from: { id: 'agent-1', platform: 'codex' },
+          to: { id: 'agent-2', platform: 'codex' },
+          payload: [{ kind: 'text', text: 'workspace summary' }],
+          metadata: {
+            workspaceId: workspace.workspaceId,
+            traceId: created.data.trace_id,
+          },
+        },
+      }),
+    });
+    expect(orchestrate.status).toBe(202);
+
     const response = await fetch(`${baseUrl}/api/a2a/workspaces/${workspace.workspaceId}/control-plane`);
     expect(response.status).toBe(200);
     const body = await response.json();
@@ -206,11 +242,17 @@ describe('A2A workspace routes', () => {
       logEvidence: 2,
       runtimeEvidence: 1,
       previews: 1,
+      orchestrationRuns: 1,
     });
     expect(body.data.tasks[0].runtime).toMatchObject({
       evidenceCount: 6,
       logCount: 2,
       runtimeCount: 1,
+    });
+    expect(body.data.tasks[0].controlPlane).toMatchObject({
+      mode: 'codex_only',
+      lifecycleCount: expect.any(Number),
+      evidenceCount: expect.any(Number),
     });
   });
 
@@ -279,6 +321,32 @@ describe('A2A workspace routes', () => {
       },
     });
     expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const orchestrate = await fetch(`${baseUrl}/api/a2a/orchestrate`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-recoder-a2a-admin-token': 'admin-token',
+      },
+      body: JSON.stringify({
+        mode: 'codex_only',
+        bridgeId: 'bridge-default',
+        envelope: {
+          messageId: 'msg-context-control-plane',
+          threadId: 'thread-context',
+          intent: 'execute',
+          from: { id: 'agent-a', platform: 'codex' },
+          to: { id: 'agent-b', platform: 'codex' },
+          payload: [{ kind: 'text', text: 'Add pricing page' }],
+          metadata: {
+            workspaceId: workspace.workspaceId,
+            traceId: created.data.trace_id,
+          },
+        },
+      }),
+    });
+    expect(orchestrate.status).toBe(202);
 
     const response = await fetch(`${baseUrl}/api/a2a/workspaces/${workspace.workspaceId}/context`);
     expect(response.status).toBe(200);
@@ -309,6 +377,9 @@ describe('A2A workspace routes', () => {
           status: 'pending-review',
           suggestedAction: 'review-worktree-branch',
         },
+      },
+      controlPlane: {
+        mode: 'codex_only',
       },
     });
     expect(body.data.pendingApprovals).toHaveLength(1);
