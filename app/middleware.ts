@@ -17,6 +17,8 @@ const PAYLOAD_CMS_PREFIX = '/cms';
 const ONBOARDING_COMPLETED_COOKIE = 'onboarding_completed';
 /** Cookie name set when user explicitly skips onboarding. */
 const ONBOARDING_SKIPPED_COOKIE = 'onboarding_skipped';
+const CANONICAL_HOST = 'recoder.xyz';
+const LEGACY_WWW_HOST = 'www.recoder.xyz';
 
 /** Paths that should never trigger the onboarding redirect. */
 const ONBOARDING_BYPASS_PREFIXES = [
@@ -79,6 +81,12 @@ async function checkOnboardingStatus(request: NextRequest): Promise<boolean | nu
 }
 
 export default async function middleware(request: NextRequest) {
+  if (request.nextUrl.hostname === LEGACY_WWW_HOST) {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.hostname = CANONICAL_HOST;
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
+
   const nextActionId = request.headers.get('next-action');
   if (request.method === 'POST' && nextActionId) {
     const isPlausibleActionId = /^[A-Za-z0-9_-]{20,}$/.test(nextActionId);
