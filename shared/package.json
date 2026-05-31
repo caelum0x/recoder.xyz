@@ -22,8 +22,6 @@
       "import": "./src/a2a/schemas/index.ts",
       "default": "./src/a2a/schemas/index.js"
     },
-    "./a2a/types": "./src/a2a/types.ts",
-    "./a2a/error-contract": "./src/a2a/error-contract.ts",
     "./constants": "./src/constants/upload-limits.ts",
     "./errors": "./src/errors/index.ts",
     "./opencode-client": "./src/opencode-client.ts"
