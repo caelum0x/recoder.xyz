@@ -22,7 +22,6 @@
       "import": "./src/a2a/schemas/index.ts",
       "default": "./src/a2a/schemas/index.js"
     },
-    "./a2a/ingress": "./src/a2a/ingress/index.ts",
     "./constants": "./src/constants/upload-limits.ts",
     "./errors": "./src/errors/index.ts",
     "./opencode-client": "./src/opencode-client.ts"
