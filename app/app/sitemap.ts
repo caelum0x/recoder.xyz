@@ -55,7 +55,7 @@ const corePages: SitemapPage[] = [
 const blogPostPages: SitemapPage[] = [
   { path: '/blog/introducing-recoder-xyz',   changeFrequency: 'monthly',  priority: 0.6 },
   { path: '/blog/why-we-built-byok',         changeFrequency: 'monthly',  priority: 0.6 },
-  { path: '/blog/cli-web-ide-cross-platform',changeFrequency: 'monthly',  priority: 0.6 },
+  { path: '/blog/cli-spaces-cross-platform',  changeFrequency: 'monthly',  priority: 0.6 },
 ];
 
 // ── Platform pages ────────────────────────────────────────────────────────

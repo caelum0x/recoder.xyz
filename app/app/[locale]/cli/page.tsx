@@ -71,7 +71,7 @@ export default function CLIPage() {
   const webCliFeatures = [
     {
       icon: Globe,
-      title: "Start in Web IDE",
+      title: "Start in Spaces",
       description: "Build projects visually with AI assistance in your browser"
     },
     {
@@ -131,7 +131,7 @@ export default function CLIPage() {
     },
     {
       command: 'recoder web list',
-      description: "List all your Web IDE projects"
+      description: "List all your Spaces projects"
     },
     {
       command: 'recoder web download <urlId>',
@@ -169,7 +169,7 @@ export default function CLIPage() {
             </h1>
 
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              The only AI coding platform with <span className="text-orange-500 font-semibold">seamless Web IDE + CLI sync</span>. Start in browser, continue in terminal.
+              The only AI coding platform with <span className="text-orange-500 font-semibold">seamless Spaces + CLI sync</span>. Start in browser, continue in terminal.
             </p>
 
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 max-w-2xl mx-auto">

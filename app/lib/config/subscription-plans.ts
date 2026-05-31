@@ -34,7 +34,7 @@ export const SUBSCRIPTION_PLANS: Record<string, PlanDefinition> = {
     currency: 'USD',
     interval: 'month',
     features: [
-      'Access to web.recoder.xyz',
+      'Access to recoder.xyz/dashboard',
       'Access to recoder-code CLI',
       'All AI models',
       'Must provide own OpenRouter API key'

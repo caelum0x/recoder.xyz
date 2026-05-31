@@ -8,7 +8,7 @@
     "gettingStarted": "Getting Started",
     "faq": "FAQ",
     "docs": "Documentation",
-    "launchWebIDE": "Launch Web IDE",
+    "launchSpaces": "Open Spaces",
     "learnMore": "Learn More"
   },
   "home": {
@@ -21,7 +21,7 @@
     "cta": "Get Started Free",
     "installCli": "Install CLI",
     "features": {
-      "webIde": "Web IDE",
+      "webIde": "Spaces",
       "webIdeDesc": "Code in your browser with AI assistance",
       "cli": "Terminal CLI",
       "cliDesc": "Code locally with the same AI power",

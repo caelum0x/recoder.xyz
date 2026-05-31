@@ -24,6 +24,6 @@ describe('SiteHeader', () => {
     expect(screen.getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe('/agents');
     expect(screen.queryByText('Security')).toBeNull();
     expect(screen.queryByText('Pricing')).toBeNull();
-    expect(screen.queryByText('Launch Web IDE')).toBeNull();
+    expect(screen.queryByText('Open Spaces')).toBeNull();
   });
 });

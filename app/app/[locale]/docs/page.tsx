@@ -52,12 +52,12 @@ export default function DocsPage() {
       ]
     },
     {
-      title: 'CLI & Web IDE',
+      title: 'CLI & Spaces',
       description: 'Execution lanes for runtime work, preview, and terminal-driven agent control',
       icon: Terminal,
       articles: [
         { title: 'CLI Overview', href: '/docs/cli', status: 'available' },
-        { title: 'Web IDE + CLI Sync', href: '/docs/web-cli-sync', status: 'available' },
+        { title: 'Spaces + CLI Sync', href: '/docs/web-cli-sync', status: 'available' },
         { title: 'Supported Models', href: '/docs/models', status: 'available' }
       ]
     },

@@ -78,7 +78,7 @@ const comparisonData: ComparisonRow[] = [
     windsurfSupport: 'no',
   },
   {
-    feature: 'Web IDE',
+    feature: 'Spaces',
     recoder: 'Yes',
     cursor: 'No (desktop only)',
     replit: 'Yes',
@@ -196,7 +196,7 @@ const differentiators: Differentiator[] = [
     icon: Layers,
     title: 'All-in-One Platform',
     description:
-      'Web IDE, CLI tool, multi-agent workflows via Agency, built-in project management with PM, and cloud deployment. Replace multiple subscriptions with a single platform that covers the entire development lifecycle.',
+      'Spaces, CLI tool, multi-agent workflows via Agency, built-in project management with PM, and cloud deployment. Replace multiple subscriptions with a single platform that covers the entire development lifecycle.',
     gradient: 'from-blue-500 to-cyan-600',
   },
   {
@@ -336,7 +336,7 @@ export default function AlternativesPage() {
           </h1>
           <p className="text-lg sm:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
             The open, multi-model AI development platform. Access 40+ models,
-            bring your own API keys, and build with a CLI, Web IDE, and
+            bring your own API keys, and build with a CLI, Spaces, and
             multi-agent workflows &mdash; all in one place.
           </p>
         </div>
