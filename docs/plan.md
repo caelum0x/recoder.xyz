@@ -337,6 +337,8 @@ The runtime issues below are still real. They stay documented because they may m
 
 ### Active Runtime Blockers
 
+> 2026-05-31 root cause (recoder-g69j / gm8z): The Daytona control plane is down at the core. `daytona-api-1` is crash-looping (44,901 restarts) on `getaddrinfo EAI_AGAIN db` — it cannot resolve/reach its Postgres `db` container, which is not in the running compose set. Consequently `daytona-proxy-1` is unhealthy (cannot reach `http://api:3000/api/config`) and no sandboxes can be created or recovered, which is exactly why build-mode chat returns 200 but docker-backend reports "Container not found". FIX (infra, pending owner approval): bring up the missing Daytona `db` service via the Daytona docker-compose, verify `daytona-api` health, then re-run the Web IDE verifier. Until then, blockers #1–#4 below cannot be cleared because the runtime substrate itself is unavailable.
+
 #### 1. Build-mode runtime can still end without responding preview proof
 
 Symptoms:
