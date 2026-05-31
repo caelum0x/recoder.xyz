@@ -201,3 +201,13 @@ export {
   validateA2AError,
   isValidA2AError,
 } from './validation';
+
+// ---------------------------------------------------------------------------
+// SDK helpers: Inbound ingress normalization (shared entrypoint for consumers)
+// ---------------------------------------------------------------------------
+
+export {
+  type NormalizeInboundEnvelopeOptions,
+  type NormalizeInboundEnvelopeResult,
+  normalizeInboundEnvelope,
+} from './ingress';
