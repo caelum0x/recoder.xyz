@@ -242,7 +242,6 @@ interface CreateSandboxResponse {
   message?: string;
   error?: string;
   details?: string;
-  provider?: string;
   canRetry?: boolean;
 }
 

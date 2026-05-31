@@ -15519,6 +15519,92 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
             const msg = data?.message || data?.errors?.[0]?.message || 'Failed to create pull request';
             return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.SERVICE_UNAVAILABLE, msg));
         }
+        const taskId = typeof req.body?.taskId === 'string' ? req.body.taskId.trim() : '';
+        let taskAttachment = { attached: false };
+        if (taskId) {
+            const lifecycle = (0, index_js_5.getTaskLifecycleService)();
+            const taskResult = lifecycle.getTask(taskId);
+            if (!taskResult.ok) {
+                taskAttachment = { attached: false, taskId, error: taskResult.error.message };
+            }
+            else {
+                const createdBy = typeof req.body?.createdBy === 'string' && req.body.createdBy.trim()
+                    ? req.body.createdBy.trim()
+                    : req.userId;
+                const prArtifact = {
+                    key: `github-pr-${data.number}`,
+                    artifact_type: 'custom',
+                    mime_type: 'application/json',
+                    content: JSON.stringify({
+                        type: 'github_pull_request',
+                        number: data.number,
+                        url: data.html_url,
+                        state: data.state,
+                        title: data.title,
+                        head: data.head?.ref,
+                        base: data.base?.ref,
+                        draft: data.draft,
+                        repo: parsed,
+                    }),
+                    path: `.recoder/artifacts/github-pr-${data.number}.json`,
+                    metadata: {
+                        type: 'github_pull_request',
+                        projectId,
+                        prUrl: data.html_url,
+                        prNumber: data.number,
+                        state: data.state,
+                        head: data.head?.ref,
+                        base: data.base?.ref,
+                        repo: `${parsed.owner}/${parsed.repo}`,
+                    },
+                };
+                const artifactUpdate = lifecycle.appendTaskArtifacts(taskId, {
+                    artifacts: [prArtifact],
+                    triggeredBy: createdBy,
+                    reason: 'GitHub pull request artifact attached',
+                });
+                const metadataUpdate = artifactUpdate.ok
+                    ? lifecycle.updateTaskMetadata(taskId, {
+                        metadataPatch: {
+                            githubPullRequest: {
+                                projectId,
+                                repo: `${parsed.owner}/${parsed.repo}`,
+                                prUrl: data.html_url,
+                                prNumber: data.number,
+                                state: data.state,
+                                title: data.title,
+                                head: data.head?.ref,
+                                base: data.base?.ref,
+                                draft: data.draft,
+                            },
+                        },
+                        triggeredBy: createdBy,
+                        reason: 'GitHub pull request registered',
+                    })
+                    : artifactUpdate;
+                if (!metadataUpdate.ok) {
+                    taskAttachment = { attached: false, taskId, error: metadataUpdate.error.message };
+                }
+                else {
+                    taskAttachment = { attached: true, taskId };
+                    (0, index_js_5.getA2AEventBus)().publish({
+                        id: `evt_${Date.now()}_github_pr_${taskId}_${data.number}`,
+                        type: index_js_5.A2AEventType.ArtifactAttached,
+                        timestamp: new Date().toISOString(),
+                        taskId,
+                        workspaceId: taskResult.data.workspace_id,
+                        data: {
+                            taskId,
+                            projectId,
+                            prUrl: data.html_url,
+                            prNumber: data.number,
+                            repo: `${parsed.owner}/${parsed.repo}`,
+                            triggeredBy: createdBy,
+                        },
+                    });
+                }
+            }
+        }
         (0, index_js_11.sendSuccess)(res, {
             pullRequest: {
                 number: data.number,
@@ -15531,6 +15617,7 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
                 createdAt: data.created_at,
             },
             repo: parsed,
+            taskAttachment,
         });
     }
     catch (err) {
