@@ -205,7 +205,7 @@ recoder_sandbox_exec({
   completeEnvelope,
   emitTaskSubmitted,
   validateTaskEnvelope,
-} from 'recoder-a2a-sdk';
+} from '@recoder/a2a-sdk';
 
 // 1. Create task envelope
 const envelope = buildCodexEnvelope({

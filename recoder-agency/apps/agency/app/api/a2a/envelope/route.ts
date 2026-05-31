@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import {
 	type LegacyInboundEnvelope,
 	validateInboundA2AEnvelope,
-} from "recoder-a2a-sdk/ingress";
+} from "@recoder/a2a-sdk/ingress";
 import {
 	checkAndStoreEnvelopeIdempotency,
 	handleA2AIntent,

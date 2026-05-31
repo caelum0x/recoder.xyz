@@ -29,7 +29,7 @@ export default function SDKReferencePage() {
           {/* Install */}
           <section className="mb-12">
             <pre className="bg-zinc-900 rounded-lg p-4 text-sm font-mono text-green-400 overflow-x-auto">
-              npm install recoder-a2a-sdk
+              npm install @recoder/a2a-sdk
             </pre>
           </section>
 
@@ -55,7 +55,7 @@ export default function SDKReferencePage() {
   checkConnectorTransition,
   isConnectorTerminalState,
   TaskStateEnum,
-} from 'recoder-a2a-sdk';
+} from '@recoder/a2a-sdk';
 
 // Map Codex native state to canonical
 const canonical = mapCodexState('completed');
@@ -88,7 +88,7 @@ const ok = checkConnectorTransition('codex', 'in_progress', 'completed');
   mapHttpError,
   wrapUnknownError,
   A2AErrorCodeEnum,
-} from 'recoder-a2a-sdk';
+} from '@recoder/a2a-sdk';
 
 // Map a Codex-specific error
 const err = mapCodexError({
@@ -121,7 +121,7 @@ const unknown = wrapUnknownError(someError);`}
   completeEnvelope,
   failEnvelope,
   startEnvelope,
-} from 'recoder-a2a-sdk';
+} from '@recoder/a2a-sdk';
 
 // Create a new task envelope for a Codex connector
 const envelope = buildCodexEnvelope({
@@ -154,7 +154,7 @@ const done = completeEnvelope(started, {
   emitTaskCompleted,
   emitConnectorHealth,
   emitPolicyChecked,
-} from 'recoder-a2a-sdk';
+} from '@recoder/a2a-sdk';
 
 // Emit when a task is submitted
 const event = emitTaskSubmitted({
@@ -187,7 +187,7 @@ emitConnectorHealth({
   isValidTaskEnvelope,
   assertTaskEnvelope,
   validateAuditEvent,
-} from 'recoder-a2a-sdk';
+} from '@recoder/a2a-sdk';
 
 // Validate returns { valid, issues }
 const result = validateTaskEnvelope(data);

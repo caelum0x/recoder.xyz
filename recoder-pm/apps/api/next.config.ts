@@ -9,6 +9,10 @@ let nextConfig: NextConfig = withBackend(
     ...config,
     ...(process.env.DOCKER === "1" ? { output: "standalone" } : {}),
 
+    // The @recoder/a2a-sdk "./ingress" export resolves to raw TS source
+    // (src/ingress-contract/index.ts), so it must be transpiled by the app.
+    transpilePackages: [...(config.transpilePackages || []), "@recoder/a2a-sdk"],
+
     eslint: { ignoreDuringBuilds: true },
     typescript: { ignoreBuildErrors: true },
 

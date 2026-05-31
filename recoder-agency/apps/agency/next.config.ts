@@ -35,7 +35,7 @@ const pdfiumTracingConfig = {
 const nextConfig: NextConfig = {
 	output: "standalone",
 	typescript: { ignoreBuildErrors: true },
-	transpilePackages: ["@recoder/auth"],
+	transpilePackages: ["@recoder/auth", "@recoder/a2a-sdk"],
 	turbopack: {
 		root: join(projectDir, "../../"),
 	},
