@@ -17,15 +17,16 @@ Shipped from the recent coding lane:
 - Subscription limits now align around workspaces, connected agents, approvals, artifact retention, and preview deploy capacity.
 - Legacy session/token quota fields remain only as compatibility outputs derived from the same commercial entitlement model.
 - Preview deploy artifacts, private preview access, and the recoder-edge scaffold exist in code.
+- Funnel analytics: lead-capture submit/success/failure + lead->signup conversion events, plus an admin KPI Lead Funnel section (leads, converted, conversion rate, by-source). Shipped via recoder-krxl; deployed to recoder-app and verified at the API layer.
+- Shared A2A ingress foundation: normalizeInboundEnvelope() and adaptLegacyEnvelopeToTaskEnvelope() in packages/a2a-sdk (recoder-9s5j), so PM/Agency can normalize legacy envelopes onto the canonical TaskEnvelope without a breaking wire change.
 
 Remaining paid-user blockers:
 
-- Funnel analytics from homepage/signup through first Space, first agent, first task, first artifact, first approval, and plan upgrade.
 - GitHub repo connection, task-to-branch mapping, PR artifact creation, review/check sync, and issue/task linking.
 - A real task timeline showing task -> artifact -> PR -> preview -> approval from shared run history.
-- PM and Agency approval/handoff flows reading and writing the shared run record through the canonical A2A envelope path.
+- PM and Agency approval/handoff: wire recoder-a2a-sdk into recoder-pm/recoder-agency and replace their local envelope parsers with normalizeInboundEnvelope(adaptLegacyEnvelopeToTaskEnvelope(...)). SDK foundation landed; consumer wiring pending (gated on deploy reconciliation below).
 - Live edge/preview rollout with DNS, TLS, protected preview hosts, rate limits, WAF hooks, and production deployment verification.
-- Hetzner deploy unblock for the Daytona backend source gap.
+- Hetzner deploy unblock for the Daytona backend source gap, and reconciliation of the local<->prod git divergence that currently blocks clean deploys (recoder-okcz).
 
 Everything below is preserved backlog material.
 
