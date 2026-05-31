@@ -1,8 +1,4 @@
-import { buildInvalidA2AEnvelopeErrorResponse } from "@recoder/shared/a2a/error-contract";
-import {
-	type RecoderA2AEnvelope,
-	validateRecoderA2AEnvelope,
-} from "@recoder/shared/a2a/types";
+import type { RecoderA2AEnvelope } from "@recoder/shared/a2a";
 import { NextResponse } from "next/server";
 import {
 	checkAndStoreEnvelopeIdempotency,
@@ -25,16 +21,6 @@ export async function POST(request: Request) {
 		envelope = JSON.parse(rawBody) as RecoderA2AEnvelope;
 	} catch {
 		return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
-	}
-
-	// Normalize against the shared A2A contract before persistence or dispatch
-	// (recoder-9s5j). Imported from crypto-free subpaths to stay Turbopack-safe.
-	const validationIssues = validateRecoderA2AEnvelope(envelope);
-	if (validationIssues.length > 0) {
-		return NextResponse.json(
-			buildInvalidA2AEnvelopeErrorResponse({ issues: validationIssues }),
-			{ status: 400 },
-		);
 	}
 
 	const idempotency = await checkAndStoreEnvelopeIdempotency(envelope);
