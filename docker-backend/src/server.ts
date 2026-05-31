@@ -64,7 +64,7 @@ import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
-import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService, disposeTaskLifecycleService } from './a2a/index.js';
+import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
 import { memoryRouter } from './a2a/memory.routes.js';
 import { codeSearchRouter } from './a2a/code-search.routes.js';
@@ -93,7 +93,7 @@ import { approvalRouter } from './policy/index.js';
 import { startA2AIntentWorker } from './a2a-intent-worker.js';
 import { startAgentWorkers } from './a2a-agent-workers.js';
 import { wireAutonomousRouting } from './a2a/autonomous-routing.service.js';
-import type { RedisBackedPersistenceAdapter } from '@recoder/shared/a2a';
+import type { RedisBackedPersistenceAdapter, TaskArtifact } from '@recoder/shared/a2a';
 import {
   fetchUserByokProviderKeys,
   buildInternalServiceHeaders,
@@ -18122,6 +18122,93 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, msg));
     }
 
+    const taskId = typeof req.body?.taskId === 'string' ? req.body.taskId.trim() : '';
+    let taskAttachment: { attached: boolean; taskId?: string; error?: string } = { attached: false };
+    if (taskId) {
+      const lifecycle = getTaskLifecycleService();
+      const taskResult = lifecycle.getTask(taskId);
+      if (!taskResult.ok) {
+        taskAttachment = { attached: false, taskId, error: taskResult.error.message };
+      } else {
+        const createdBy = typeof req.body?.createdBy === 'string' && req.body.createdBy.trim()
+          ? req.body.createdBy.trim()
+          : req.userId;
+        const prArtifact: TaskArtifact = {
+          key: `github-pr-${data.number}`,
+          artifact_type: 'custom',
+          mime_type: 'application/json',
+          content: JSON.stringify({
+            type: 'github_pull_request',
+            number: data.number,
+            url: data.html_url,
+            state: data.state,
+            title: data.title,
+            head: data.head?.ref,
+            base: data.base?.ref,
+            draft: data.draft,
+            repo: parsed,
+          }),
+          path: `.recoder/artifacts/github-pr-${data.number}.json`,
+          metadata: {
+            type: 'github_pull_request',
+            projectId,
+            prUrl: data.html_url,
+            prNumber: data.number,
+            state: data.state,
+            head: data.head?.ref,
+            base: data.base?.ref,
+            repo: `${parsed.owner}/${parsed.repo}`,
+          },
+        };
+
+        const artifactUpdate = lifecycle.appendTaskArtifacts(taskId, {
+          artifacts: [prArtifact],
+          triggeredBy: createdBy,
+          reason: 'GitHub pull request artifact attached',
+        });
+        const metadataUpdate = artifactUpdate.ok
+          ? lifecycle.updateTaskMetadata(taskId, {
+              metadataPatch: {
+                githubPullRequest: {
+                  projectId,
+                  repo: `${parsed.owner}/${parsed.repo}`,
+                  prUrl: data.html_url,
+                  prNumber: data.number,
+                  state: data.state,
+                  title: data.title,
+                  head: data.head?.ref,
+                  base: data.base?.ref,
+                  draft: data.draft,
+                },
+              },
+              triggeredBy: createdBy,
+              reason: 'GitHub pull request registered',
+            })
+          : artifactUpdate;
+
+        if (!metadataUpdate.ok) {
+          taskAttachment = { attached: false, taskId, error: metadataUpdate.error.message };
+        } else {
+          taskAttachment = { attached: true, taskId };
+          getA2AEventBus().publish({
+            id: `evt_${Date.now()}_github_pr_${taskId}_${data.number}`,
+            type: A2AEventType.ArtifactAttached,
+            timestamp: new Date().toISOString(),
+            taskId,
+            workspaceId: taskResult.data.workspace_id,
+            data: {
+              taskId,
+              projectId,
+              prUrl: data.html_url,
+              prNumber: data.number,
+              repo: `${parsed.owner}/${parsed.repo}`,
+              triggeredBy: createdBy,
+            },
+          });
+        }
+      }
+    }
+
     sendSuccess(res, {
       pullRequest: {
         number: data.number,
@@ -18134,6 +18221,7 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
         createdAt: data.created_at,
       },
       repo: parsed,
+      taskAttachment,
     });
   } catch (err: any) {
     sendError(res, createError(ErrorCode.INTERNAL_ERROR, err.message));

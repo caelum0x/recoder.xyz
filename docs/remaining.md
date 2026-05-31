@@ -51,6 +51,7 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 6. Deploy unblock.
    Resolve the Daytona backend source gap that blocks full Hetzner deploys from this branch. This maps to ready issue `recoder-okcz`.
+   - 2026-05-31 update: the Daytona control plane and runner are recovered on Hetzner. `daytona-api`, proxy, db, redis, dex, minio, registry, and runner are healthy; a disposable sandbox create reached `started` and was destroyed. This item now means branch/deploy reconciliation, not missing Daytona infra.
 
 7. Production traffic and abuse controls.
    Add Cloudflare/CrowdSec/open-appsec style mitigation rules after real traffic signals are instrumented. This maps to ready issues `recoder-a9rp` and `recoder-rbc2`.

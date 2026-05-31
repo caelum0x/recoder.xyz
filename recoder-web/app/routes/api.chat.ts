@@ -1022,10 +1022,10 @@ IMPORTANT:
         anthropic: projectAnthropicKey,
         google: projectGoogleKey,
       };
+      const backendModel = resolveBackendCompatibleModel(model, providerKeys as Record<string, string | null>);
 
       try {
         const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
-        const backendModel = resolveBackendCompatibleModel(model, providerKeys as Record<string, string | null>);
 
         if (hasKeys) {
           const beforeMutation = await readRuntimeMutationSnapshot(
