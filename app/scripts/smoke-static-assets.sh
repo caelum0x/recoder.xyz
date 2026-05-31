@@ -134,7 +134,7 @@ check_service() {
 
 check_service "app (hub)"          "https://recoder.xyz/"
 check_service "frontend"            "https://frontend.recoder.xyz/"
-check_service "web"                "https://web.recoder.xyz/"
+check_service "web"                "/dashboard/"
 check_service "docker-backend"     "https://api.recoder.xyz/health"
 check_service "backend (Python)"   "https://backend.recoder.xyz/v1/health"
 check_service "pm"                 "https://pm.recoder.xyz/"

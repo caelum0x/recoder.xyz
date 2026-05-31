@@ -6,7 +6,7 @@ Last updated: 2026-05-14
 
 Recoder is the workspace where humans and AI agents build, coordinate, review, and deploy software together.
 
-`Recoder Spaces` is the center of the product. Agents, Web IDE, CLI, PM, Agency, deploys, and future modules are not separate products. They are surfaces inside one shared workspace.
+`Recoder Spaces` is the center of the product. Agents, CLI, PM, Agency, deploys, and future modules are not separate products. They are surfaces inside one shared workspace.
 
 The sharpest public framing is:
 
@@ -98,15 +98,6 @@ The operator surface inside a Space.
 - task assignment
 - session visibility
 - run activity
-
-### Recoder Web IDE
-
-The browser coding surface inside a Space.
-
-- repo and file work
-- runtime launch
-- previews
-- coding loops connected back to the same task and artifact model
 
 ### Recoder PM
 

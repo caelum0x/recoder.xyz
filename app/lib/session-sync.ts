@@ -47,7 +47,7 @@ export class SessionSyncManager {
   // Generate sync URLs for cross-platform access
   generateSyncUrls(syncToken: string): string[] {
     const domains = [
-      'web.recoder.xyz',        // Recoder Web IDE
+      'recoder.xyz/dashboard',        // Recoder Spaces
       'agents.recoder.xyz',     // Recoder Agents
       'frontend.recoder.xyz',   // Legacy alias for agents
       'agency.recoder.xyz',     // AI agent workflows
@@ -157,7 +157,7 @@ export class SessionSyncManager {
   ): Promise<{ success: boolean; syncedDomains: string[] }> {
     const recoderDomains = [
       'recoder.xyz',
-      'web.recoder.xyz',
+      'recoder.xyz/dashboard',
       'agents.recoder.xyz',
       'frontend.recoder.xyz',
       'agency.recoder.xyz',
@@ -213,7 +213,7 @@ export class SessionSyncManager {
   async logoutAcrossDomains(userId: string, currentDomain: string): Promise<void> {
     const recoderDomains = [
       'recoder.xyz',
-      'web.recoder.xyz',
+      'recoder.xyz/dashboard',
       'agents.recoder.xyz',
       'frontend.recoder.xyz',
       'agency.recoder.xyz',

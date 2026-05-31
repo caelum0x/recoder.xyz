@@ -30,7 +30,7 @@ const stories = [
   {
     title: 'Startup founder shipping landing pages and demos',
     summary: 'A founder signs in, connects OpenRouter, prototypes in the browser, then hands follow-up tasks to Agents as the scope grows.',
-    stack: ['Sign in', 'BYOK', 'Web IDE', 'Agents'],
+    stack: ['Sign in', 'BYOK', 'Spaces', 'Agents'],
   },
   {
     title: 'Product team connecting roadmap work to implementation',

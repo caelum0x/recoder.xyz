@@ -40,7 +40,7 @@ export default function WebCLISyncGuidePage() {
             <div className="grid md:grid-cols-3 gap-6 items-center">
               <div className="flex flex-col items-center text-center p-6 rounded-xl bg-black/30 border border-white/10">
                 <Globe className="w-12 h-12 text-blue-400 mb-3" />
-                <h3 className="font-bold text-white mb-2">Web IDE</h3>
+                <h3 className="font-bold text-white mb-2">Spaces</h3>
                 <p className="text-sm text-gray-400">
                   Quick prototyping, visual editing, instant preview
                 </p>
@@ -214,7 +214,7 @@ export default function WebCLISyncGuidePage() {
                       1
                     </div>
                     <div className="flex-1">
-                      <p className="text-white font-semibold mb-1">Create project in Web IDE</p>
+                      <p className="text-white font-semibold mb-1">Create project in Spaces</p>
                       <p className="text-sm text-gray-400">
                         Go to <Link href="/dashboard" className="text-orange-500 hover:text-orange-400 underline">dashboard</Link>,
                         click "New Project", build your initial prototype with AI assistance.
@@ -267,7 +267,7 @@ export default function WebCLISyncGuidePage() {
                         <span className="text-green-400">recoder push</span>
                       </div>
                       <p className="text-sm text-gray-400 mt-2">
-                        Your changes are now visible in the Web IDE! Chat history preserved.
+                        Your changes are now visible in the Spaces! Chat history preserved.
                       </p>
                     </div>
                   </div>
@@ -324,7 +324,7 @@ export default function WebCLISyncGuidePage() {
                       </div>
                       <p className="text-sm text-gray-400 mt-2">
                         The <code className="px-2 py-1 rounded bg-black/30 text-orange-400">--open</code> flag
-                        automatically opens the Web IDE with live preview!
+                        automatically opens the Spaces with live preview!
                       </p>
                     </div>
                   </div>
@@ -360,7 +360,7 @@ export default function WebCLISyncGuidePage() {
                   <div className="p-5 rounded-xl bg-black/30 border border-white/10">
                     <h4 className="font-semibold text-white mb-3 flex items-center space-x-2">
                       <Globe className="w-5 h-5 text-blue-400" />
-                      <span>Use Web IDE For:</span>
+                      <span>Use Spaces For:</span>
                     </h4>
                     <ul className="space-y-2 text-sm text-gray-400">
                       <li className="flex items-start space-x-2">
@@ -411,7 +411,7 @@ export default function WebCLISyncGuidePage() {
                 <div className="mt-6 p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
                   <p className="text-sm text-gray-400">
                     <strong className="text-orange-400">Pro Tip:</strong> Keep both open! Edit in your terminal
-                    with VSCode, push changes, then instantly see the preview in Web IDE. Best of both worlds.
+                    with VSCode, push changes, then instantly see the preview in Spaces. Best of both worlds.
                   </p>
                 </div>
               </div>
@@ -517,7 +517,7 @@ export default function WebCLISyncGuidePage() {
                   <span>✅ DO: Leverage Both for Learning</span>
                 </h3>
                 <p className="text-sm text-gray-400">
-                  Use Web IDE to experiment and learn, then pull locally to see the full project structure and understand the architecture.
+                  Use Spaces to experiment and learn, then pull locally to see the full project structure and understand the architecture.
                 </p>
               </div>
 
@@ -527,7 +527,7 @@ export default function WebCLISyncGuidePage() {
                   <span>❌ DON'T: Forget to Pull Before Editing</span>
                 </h3>
                 <p className="text-sm text-gray-400">
-                  If you made changes in the web IDE, run <code className="px-2 py-1 rounded bg-black/30 text-red-400">recoder pull</code> before
+                  If you made changes in the Spaces, run <code className="px-2 py-1 rounded bg-black/30 text-red-400">recoder pull</code> before
                   editing locally to avoid conflicts.
                 </p>
               </div>
@@ -619,7 +619,7 @@ export default function WebCLISyncGuidePage() {
                 className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors group"
               >
                 <h3 className="font-semibold mb-2 group-hover:text-orange-500 transition-colors">
-                  Try Web IDE →
+                  Try Spaces →
                 </h3>
                 <p className="text-sm text-gray-400">
                   Start a project in the browser

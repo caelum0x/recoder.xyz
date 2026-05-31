@@ -48,18 +48,6 @@ export const RECODER_SERVICES: RecoderService[] = [
     internal: false,
   },
   {
-    id: 'web',
-    label: 'Recoder Web',
-    description: 'Temporarily deactivated',
-    productionUrl: RECODER_ECOSYSTEM_URLS.web,
-    devUrl: 'http://localhost:5173',
-    port: 5173,
-    healthPath: '/',
-    healthResponseType: 'html',
-    showInSwitcher: false,
-    internal: false,
-  },
-  {
     id: 'api',
     label: 'Recoder API',
     description: 'Unified API gateway & task engine',
@@ -167,13 +155,13 @@ export function getMonitoredServices(): RecoderService[] {
   return RECODER_SERVICES.filter(s => s.healthPath !== '');
 }
 
-// ── Legacy helpers (backward compat) ──
+// ── Compatibility helpers for older callers ──
 
-export function getRecoderWebUrl(): string {
-  if (process.env.RECODER_WEB_URL) {
-    return process.env.RECODER_WEB_URL;
+export function getSpacesUrl(): string {
+  if (process.env.SPACES_URL) {
+    return process.env.SPACES_URL;
   }
-  return getServiceUrl('web');
+  return `${getServiceUrl('app')}/dashboard/spaces`;
 }
 
 export function getRecoderChatUrl(): string {
@@ -190,19 +178,19 @@ export function getMainSiteUrl(): string {
   return getServiceUrl('app');
 }
 
-export function getWebIdeUrl(path: string = ''): string {
-  const baseUrl = getRecoderWebUrl();
+export function getSpacesPathUrl(path: string = ''): string {
+  const baseUrl = getSpacesUrl();
   return path ? `${baseUrl}${path}` : baseUrl;
 }
 
-export function getRecoderWebUrlClient(): string {
+export function getSpacesUrlClient(): string {
   if (typeof window === 'undefined') {
-    return getRecoderWebUrl();
+    return getSpacesUrl();
   }
 
-  if (process.env.NEXT_PUBLIC_RECODER_WEB_URL) {
-    return process.env.NEXT_PUBLIC_RECODER_WEB_URL;
+  if (process.env.NEXT_PUBLIC_SPACES_URL) {
+    return process.env.NEXT_PUBLIC_SPACES_URL;
   }
 
-  return getServiceUrlClient('web');
+  return `${getServiceUrlClient('app')}/dashboard/spaces`;
 }

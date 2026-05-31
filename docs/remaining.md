@@ -48,12 +48,12 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 5. Live preview and edge rollout.
    Activate preview host routing, TLS/DNS, private preview access, rate limits, WAF hooks, and production rollout for the in-repo edge scaffold. This maps to ready issue `recoder-zvss`.
-   - 2026-05-31 update: production origin routing for `web.recoder.xyz` and `docker.recoder.xyz` is healthy, but Cloudflare currently blocks automated/public verifier access to those hosts and the stored e2e auth cookie is expired. Track the verifier access/auth fix in `recoder-cwgt`.
+   - 2026-05-31 update: the retired browser coding host now redirects to the dashboard. The remaining preview/edge work should attach evidence to Spaces/shared run history, not revive the retired app.
 
 6. Deploy hygiene.
    Resolve the local<->prod git divergence that still makes full Hetzner deploys risky from this branch. This maps to issue `recoder-js56`.
    - 2026-05-31 update: the Daytona control plane and runner are recovered on Hetzner. `daytona-api`, proxy, db, redis, dex, minio, registry, and runner are healthy; a disposable sandbox create reached `started` and was destroyed.
-   - 2026-05-31 update: `docker-backend` and `recoder-web` were targeted-deployed from this branch and are healthy in production. The remaining work is deploy hygiene/reconciliation, not missing Daytona infra or blocked targeted deploys.
+   - 2026-05-31 update: `docker-backend` is healthy in production and the retired browser coding container/image has been removed. The remaining work is deploy hygiene/reconciliation, not missing Daytona infra.
 
 7. Production traffic and abuse controls.
    Add Cloudflare/CrowdSec/open-appsec style mitigation rules after real traffic signals are instrumented. This maps to ready issues `recoder-a9rp` and `recoder-rbc2`.

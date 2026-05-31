@@ -109,11 +109,11 @@ export default function LearnPage() {
       href: 'https://agency.recoder.xyz'
     },
     {
-      title: 'Web IDE',
+      title: 'Spaces',
       description: 'Browser surface for projects, previews, and fast AI-assisted iteration.',
       icon: Code,
       level: 'Intermediate',
-      href: 'https://web.recoder.xyz'
+      href: '/dashboard'
     },
     {
       title: 'Customer Workflows',

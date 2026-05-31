@@ -111,7 +111,7 @@ These are surfaces and layers around one workspace, not separate flagship produc
 ## Sequencing Decision
 
 - The active launch wedge is not broad chat or generic IDE usage. It is the shared task room for coding agents.
-- `recoder-web` and `docker-backend` remain important runtime integrations, but they are not the current category-defining gate for the roadmap.
+- `retired browser coding app` and `docker-backend` remain important runtime integrations, but they are not the current category-defining gate for the roadmap.
 - Their unresolved runtime issues remain documented below as deferred Phase 1 backlog.
 - Those runtime issues should not block Phase 2 or later control-plane work unless a hard dependency appears.
 - The active execution lane starts with shared A2A contracts, durable agent identity, PM approvals and handoffs, shared workspace ownership, and cross-surface run history inside Recoder Spaces that Agency can consume next.
@@ -126,7 +126,7 @@ These are surfaces and layers around one workspace, not separate flagship produc
 | Agency | `agency.recoder.xyz` | Previously verified on key authenticated routes. It is the Phase 3 consumer of shared control-plane primitives for delivery packaging, client approval loops, and artifact-backed handoff. |
 | Shared A2A control plane | `packages/a2a-sdk`, `tools/a2a-interop` | Active implementation lane. Canonical envelope, validation, error taxonomy, state mapping, signed ingress expectations, bridge contracts, orchestration history, and session visibility live here. |
 | API Backend | `api.recoder.xyz` | No new public API blocker beyond control-plane and runtime coordination. |
-| Web IDE | `web.recoder.xyz` | Deferred runtime-backlog surface. First-turn authenticated build requests reach the coding runtime, but preview proof is still not reliable enough to trust the lane end to end. |
+| Spaces | `retired browser coding host` | Deferred runtime-backlog surface. First-turn authenticated build requests reach the coding runtime, but preview proof is still not reliable enough to trust the lane end to end. |
 | Docker Backend | `docker.recoder.xyz` | Deferred runtime-backlog surface. Daytona preview routing is explicit and signed preview flow is live, but build-mode runtime and preview responsiveness remain the main backend risk. |
 | Docs | `docs.recoder.xyz` | Live. |
 
@@ -227,7 +227,7 @@ The stack should read from inside out: protocol, workspace, runner, outcome.
 - `recoder-agency` is the outcome-layer consumer in Phase 3, packaging the same run, artifact, approval, and handoff primitives for client-facing delivery workflows.
 - Agent execution and workflow orchestration stay outside the sandbox. The sandbox exposes capabilities and evidence, but it does not own platform identity, approval state, or run history.
 - Sandbox git status, filesystem mutation checks, process-session logs, and preview linkage should feed the shared history model as evidence attachments rather than creating separate hidden runtime truth stores.
-- `recoder-web` and `docker-backend` remain runtime integrations, not the organizing center of the near-term platform plan.
+- `retired browser coding app` and `docker-backend` remain runtime integrations, not the organizing center of the near-term platform plan.
 - Sandboxes and previews remain runtime details that can attach evidence to the control plane later; they are not the current sequencing wedge.
 
 ## Upstream Intake Rules
@@ -321,7 +321,7 @@ Coding task format:
 | Attach runtime evidence without making runtime proof the sequencing gate | shared run history plus runtime evidence adapters | Link Daytona process sessions, file mutations, preview URLs, and later screenshots into the same run history as optional evidence objects instead of separate parallel histories. | A run can reference process logs, mutation evidence, preview linkage, or desktop artifacts in one history model, while Phase 2 still proceeds without requiring fresh end-to-end browser preview proof. | Depends on stable artifact linkage and deferred runtime adapters. |
 | Normalize git and log evidence into run history | runtime evidence adapters plus orchestration history | Treat sandbox git status, branch state, clone provenance, stdout, and stderr streams as standard evidence types for run auditing and handoff. | A run history can explain not just who approved or handed off a task, but also which repo state, branch state, and streamed execution logs were attached to that decision. | Depends on stable artifact schemas and consistent evidence ingestion. |
 | Expose shared workspace and run state in Agents | `recoder-agents` operator UI and backend data hooks | Make Agents the operator surface for workspace membership, agent status, session health, approvals, handoffs, and run visibility. | The Agents surface can show workspace membership, run status, approvals, handoffs, and recent activity from the same underlying control-plane history used by PM. | Depends on the shared history and session contract being exposed consistently. |
-| Route by capability, workspace policy, assignee identity, and protocol intent | orchestration and assignment logic across control-plane surfaces | Stop assuming `recoder-web` runtime selection is the primary routing dimension. | The same workspace can assign work based on agent capability, policy, assignee identity, and A2A intent, with runtime lane choice preserved only as secondary execution metadata when relevant. | Depends on accurate registry metadata and stable control-plane ownership semantics. |
+| Route by capability, workspace policy, assignee identity, and protocol intent | orchestration and assignment logic across control-plane surfaces | Stop assuming `retired browser coding app` runtime selection is the primary routing dimension. | The same workspace can assign work based on agent capability, policy, assignee identity, and A2A intent, with runtime lane choice preserved only as secondary execution metadata when relevant. | Depends on accurate registry metadata and stable control-plane ownership semantics. |
 
 ## Deferred Runtime Context
 
@@ -329,7 +329,7 @@ The runtime issues below are still real. They stay documented because they may m
 
 ### Verified Working Paths
 
-- `web.recoder.xyz/api/create-sandbox` can return `200`.
+- `retired browser coding host/api/create-sandbox` can return `200`.
 - `docker.recoder.xyz/api/container` can create or recover a Daytona-backed project mapping.
 - first-turn browser build requests now emit `/api/chat`.
 - Daytona preview health can return signed preview URLs for the candidate ports.
@@ -344,7 +344,7 @@ The runtime issues below are still real. They stay documented because they may m
 > RESOLVED 2026-05-31 (control plane): recreated the daytona stack network (`docker compose down` removed the corrupted `daytona_daytona-network`; `up -d` rebuilt it) with a temp swapfile + prod OOM-shielding. Inter-container TCP now works (api→db:5432 and api→redis:6379 both CONNECT OK, were TIMEOUT). Brought up the missing services in dependency order — db, redis, dex, registry, **minio** (api had a fatal `EAI_AGAIN minio` S3 error), api, proxy. **daytona-api is now healthy and `:3900/api/config` returns 200**; proxy is healthy too. Production (recoder-app/agents/pm/agency) stayed up throughout; temp swap removed and OOM shields reset afterward.
 >
 >
-> RESOLVED 2026-05-31 (runner and sandbox creation): built the missing `dist/libs/computer-use-amd64` artifact in a Go container, rebuilt `daytona-runner-custom:latest` from `/root/daytona/apps/runner/Dockerfile`, patched the runner compose entrypoint to use `/usr/local/bin/dockerd-entrypoint.sh & /usr/local/bin/daytona-runner`, and started `daytona-runner-1` healthy on `:3003`. The API/runner path is verified end to end: a disposable admin API key created a Daytona sandbox from `daytonaio/sandbox:0.5.0-slim`, the runner completed the `CREATE_SANDBOX` job, the sandbox reached `started`, and cleanup destroyed the sandbox and removed verifier API keys. Also corrected the freshly seeded Personal organization per-sandbox quotas from `0` to the configured defaults so valid sandbox creates are not forbidden. Remaining runtime work is now product-lane proof: rerun the Web IDE build verifier and fix any app-level mutation/preview issues it exposes.
+> RESOLVED 2026-05-31 (runner and sandbox creation): built the missing `dist/libs/computer-use-amd64` artifact in a Go container, rebuilt `daytona-runner-custom:latest` from `/root/daytona/apps/runner/Dockerfile`, patched the runner compose entrypoint to use `/usr/local/bin/dockerd-entrypoint.sh & /usr/local/bin/daytona-runner`, and started `daytona-runner-1` healthy on `:3003`. The API/runner path is verified end to end: a disposable admin API key created a Daytona sandbox from `daytonaio/sandbox:0.5.0-slim`, the runner completed the `CREATE_SANDBOX` job, the sandbox reached `started`, and cleanup destroyed the sandbox and removed verifier API keys. Also corrected the freshly seeded Personal organization per-sandbox quotas from `0` to the configured defaults so valid sandbox creates are not forbidden. Remaining runtime work is now product-lane proof: rerun the Spaces build verifier and fix any app-level mutation/preview issues it exposes.
 
 #### 1. Build-mode runtime can still end without responding preview proof
 
@@ -356,7 +356,7 @@ Symptoms:
 
 Current implementation areas:
 
-- `recoder-web` build and deep-coding routing
+- `retired browser coding app` build and deep-coding routing
 - `docker-backend` sandbox-local coding runtime and dev-server bootstrap
 - Daytona preview health and port-probing path
 
@@ -375,8 +375,8 @@ Symptoms:
 
 Current implementation areas:
 
-- `recoder-web` build-mode backend routing
-- `recoder-web` coding-runtime executor
+- `retired browser coding app` build-mode backend routing
+- `retired browser coding app` coding-runtime executor
 - `docker-backend` Pi and sandbox-local Opencode runtime adapters
 
 Required outcome:
@@ -395,7 +395,7 @@ Current implementation areas:
 
 - `docker-backend` Pi runtime adapter
 - `docker-backend` sandbox-local OpenCode bootstrap path
-- `recoder-web` build-mode backend routing
+- `retired browser coding app` build-mode backend routing
 
 Required outcome:
 
@@ -411,8 +411,8 @@ Symptoms:
 
 Current implementation areas:
 
-- `recoder-web` build-mode backend routing
-- `recoder-web` coding-runtime compatibility handling
+- `retired browser coding app` build-mode backend routing
+- `retired browser coding app` coding-runtime compatibility handling
 - `docker-backend` Pi and Opencode adapters
 
 Required outcome:
@@ -433,8 +433,8 @@ Required outcome:
 ### Deferred Runtime Architecture
 
 - Browser-facing auth starts at `app`.
-- `recoder-web` remains the only browser-facing coding surface.
-- `recoder-web` owns the user-facing chat and runtime entry path.
+- `retired browser coding app` remains the only browser-facing coding surface.
+- `retired browser coding app` owns the user-facing chat and runtime entry path.
 - `docker-backend` provides the coding runtime, preview, and file-operation control path for Daytona-backed execution.
 - Sandboxes are disposable execution state, not persistence.
 - Browser preview uses direct signed Daytona preview URLs for iframe-safe access.
@@ -454,7 +454,7 @@ Deferred runtime work is only complete when the evidence shows:
 
 #### Coding / process execution
 
-- Daytona process execution is the main coding runtime substrate for `recoder-web` to `docker-backend` coding runs.
+- Daytona process execution is the main coding runtime substrate for `retired browser coding app` to `docker-backend` coding runs.
 - Recoder implementation work:
   - standardize command execution and runtime session ownership in the existing coding-runtime path
   - standardize long-running session handling for coding loops, dev servers, and verifier flows
@@ -490,11 +490,11 @@ Deferred runtime work is only complete when the evidence shows:
 
 Outcome:
 
-- `web.recoder.xyz` build and deep-coding stay on the Daytona-backed runtime lane and can complete a real two-turn coding task with verified mutation and preview proof.
+- `retired browser coding host` build and deep-coding stay on the Daytona-backed runtime lane and can complete a real two-turn coding task with verified mutation and preview proof.
 
 Status:
 
-- Deferred for now. Keep these tasks available as runtime backlog, but do not treat final `recoder-web` preview proof as the current sequencing gate.
+- Deferred for now. Keep these tasks available as runtime backlog, but do not treat final `retired browser coding app` preview proof as the current sequencing gate.
 
 Coding task format:
 
@@ -506,11 +506,11 @@ Coding task format:
 
 | Task name | Target subsystem | Intended outcome | Proof of completion | Blocker or dependency |
 | --- | --- | --- | --- | --- |
-| Eliminate transport dead ends | `recoder-web` chat/runtime path and `docker-backend` coding-runtime transport | Remove opaque success-looking responses and replace them with recoverable runtime errors or working fallback behavior. | Live verifier shows no opaque `"fetch failed"` response or hidden session-start hang. | Depends on stable runtime error propagation across existing chat and coding-runtime surfaces. |
-| Enforce runtime-lane-only build mode | `recoder-web` chat routing and backend runtime selection | Keep build and deep-coding on the Daytona-backed runtime lane for successful production runs. | Two-turn verifier shows `Pi` first or sandbox-local `Opencode` fallback; no hidden legacy action-runner path appears in logs or artifacts for success cases. | May require bypassing generic runtime routing and legacy XML-oriented prompt paths. |
-| Require real file mutation for success | `recoder-web` coding-runtime executor and `docker-backend` file-operation verification paths | Mark runs successful only when sandbox file changes are observable. | Sandbox file diff or file-state check proves mutation on both initial and follow-up edit turns. | Depends on trustworthy file read and list verification. |
-| Prefer Pi before Opencode in build mode | `recoder-web` build-mode backend routing | Use `Pi` as the first coding backend for build and deep-coding, with sandbox-local `Opencode` only as fallback. | The first browser build request reaches `Pi`, and fallback to sandbox-local `Opencode` happens only on explicit failure or no mutation proof. | Depends on stable provider-key wiring and direct sandbox mutation checks. |
-| Make browser-created sandboxes non-empty | Web IDE container bootstrap and starter seeding | Ensure browser-created Daytona workspaces contain the starter files before runtime edits begin. | Fresh browser-created projects expose starter entry files through the file API before the first build prompt. | Depends on removing `skipInit` from the Web IDE container bootstrap path. |
+| Eliminate transport dead ends | `retired browser coding app` chat/runtime path and `docker-backend` coding-runtime transport | Remove opaque success-looking responses and replace them with recoverable runtime errors or working fallback behavior. | Live verifier shows no opaque `"fetch failed"` response or hidden session-start hang. | Depends on stable runtime error propagation across existing chat and coding-runtime surfaces. |
+| Enforce runtime-lane-only build mode | `retired browser coding app` chat routing and backend runtime selection | Keep build and deep-coding on the Daytona-backed runtime lane for successful production runs. | Two-turn verifier shows `Pi` first or sandbox-local `Opencode` fallback; no hidden legacy action-runner path appears in logs or artifacts for success cases. | May require bypassing generic runtime routing and legacy XML-oriented prompt paths. |
+| Require real file mutation for success | `retired browser coding app` coding-runtime executor and `docker-backend` file-operation verification paths | Mark runs successful only when sandbox file changes are observable. | Sandbox file diff or file-state check proves mutation on both initial and follow-up edit turns. | Depends on trustworthy file read and list verification. |
+| Prefer Pi before Opencode in build mode | `retired browser coding app` build-mode backend routing | Use `Pi` as the first coding backend for build and deep-coding, with sandbox-local `Opencode` only as fallback. | The first browser build request reaches `Pi`, and fallback to sandbox-local `Opencode` happens only on explicit failure or no mutation proof. | Depends on stable provider-key wiring and direct sandbox mutation checks. |
+| Make browser-created sandboxes non-empty | Spaces container bootstrap and starter seeding | Ensure browser-created Daytona workspaces contain the starter files before runtime edits begin. | Fresh browser-created projects expose starter entry files through the file API before the first build prompt. | Depends on removing `skipInit` from the Spaces container bootstrap path. |
 | Turn preview health into a required proof gate | Daytona preview probing and dev-server bootstrap | Do not accept build-mode success until preview health reports a responding port. | Direct probe shows file mutation plus at least one responding preview port, or the run fails explicitly. | Depends on signed-preview probing and dev-server start/recovery reliability. |
 | Stabilize sandbox-local fallback lane | `docker-backend` sandbox-local OpenCode bootstrap path | Make sandbox-local execution reliable enough to use when `Pi` fails or times out. | Fallback path starts within the expected timeout window and completes a real mutation-backed run. | Blocked by current sandbox-local bootstrap speed, startup errors, and preview bring-up failures. |
 | Reduce host-level false negatives | deploy and verifier environment on the Daytona host | Prevent disk pressure from masquerading as runtime regressions. | Verifier failures correlate to app/runtime bugs rather than host exhaustion during repeated runs. | Depends on host cleanup and capacity discipline outside the chat/runtime code path. |
@@ -602,7 +602,7 @@ Coding task format:
 - This is an operational status document plus an implementation backlog, not a ticket tracker.
 - Use `bd` for detailed issue tracking and discovered follow-up work.
 - Production evidence wins over stale notes.
-- `recoder-web` and `docker-backend` are deferred backlog surfaces here, not silently removed.
+- `retired browser coding app` and `docker-backend` are deferred backlog surfaces here, not silently removed.
 - Fresh browser-preview proof is not the current prerequisite for control-plane execution unless a concrete dependency appears later.
 - Runtime-specific routing is secondary to capability, workspace policy, assignee identity, and protocol intent.
 - `net::ERR_BLOCKED_BY_ADBLOCKER` is not treated as a product bug.
@@ -632,6 +632,6 @@ Still active:
 - make the task -> artifact -> PR -> preview -> approval loop visible from shared run history
 - instrument the lead-to-signup-to-activation funnel
 - activate live edge/preview routing, DNS/TLS, private preview hosts, and WAF/rate-limit policy
-- keep Hetzner deploy hygiene clean now that targeted `docker-backend` + `recoder-web` deploys work; reconcile local<->prod git divergence before relying on full deploys
+- keep Hetzner deploy hygiene clean now that targeted `docker-backend` + `retired browser coding app` deploys work; reconcile local<->prod git divergence before relying on full deploys
 
 Use `bd ready --json` for the executable issue list instead of adding markdown TODOs here.

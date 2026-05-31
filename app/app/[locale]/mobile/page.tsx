@@ -31,7 +31,7 @@ export default function MobileAppPage() {
           </div>
           <p className="text-gray-400 leading-relaxed mb-6">
             The Recoder desktop app is built with Electron and gives you a native
-            experience on macOS, Windows, and Linux. It wraps the full Web IDE with
+            experience on macOS, Windows, and Linux. It wraps the full Spaces with
             system-level integrations like file access and notifications.
           </p>
           <Link

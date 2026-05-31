@@ -1,7 +1,7 @@
 {
   "name": "Recoder.xyz - AI Coding Platform",
   "short_name": "Recoder",
-  "description": "FREE AI Coding Platform with seamless Web IDE + CLI Sync. Access 40+ AI models including Claude, GPT-4, and Gemini.",
+  "description": "FREE AI Coding Platform with seamless Spaces + CLI Sync. Access 40+ AI models including Claude, GPT-4, and Gemini.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",

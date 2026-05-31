@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     'BYOK AI',
     'AI developer workflow',
     'agent development platform',
-    'web IDE CLI sync',
+    'Spaces CLI sync',
     'AI code generator',
     'multi-AI platform',
     'GPT-4 coding',
