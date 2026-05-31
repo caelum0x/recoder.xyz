@@ -20,6 +20,11 @@ Shipped from the recent coding lane:
 - Funnel analytics: lead-capture submit/success/failure + lead->signup conversion events, plus an admin KPI Lead Funnel section (leads, converted, conversion rate, by-source). Shipped via recoder-krxl; deployed to recoder-app and verified at the API layer.
 - Shared A2A ingress foundation: normalizeInboundEnvelope() and adaptLegacyEnvelopeToTaskEnvelope() in packages/a2a-sdk (recoder-9s5j), so PM/Agency can normalize legacy envelopes onto the canonical TaskEnvelope without a breaking wire change.
 
+Shipped 2026-05-31 (infra/control-plane lane):
+
+- Platform activity feed (unified dashboard aggregator): fixed cross-app `/api/platform/activity` self-calls that were 403'd at the Cloudflare edge (server-to-server calls, UA `node`, hit Bot Fight Mode's managed challenge). Apps now call each other over internal loopback (AGENTS/AGENCY/PM_ACTIVITY_URL) authenticated by a shared INTERNAL_SERVICE_KEY; agents/agency/pm endpoints all return 200. agents now surfaces real thread data (254 threads) via a service-account session token wired into RECODER_ADMIN_API_KEY. recoder-agency + recoder-pm rebuilt; recoder.xyz hot-patched (no rebuild of the auth-critical surface). Committed/pushed f82ac1b1.
+- recoder-rbc2 (production traffic / abuse analysis): analyzed Cloudflare traffic for the suspected "Finland" abuse signal. Conclusion: NOT abuse — it was the platform's own Hetzner-Helsinki server self-polling across subdomains and getting 403'd (source IPv6 2a01:4f9:c013:9cb6::1 = prod box). No WAF block warranted (blocking FI would self-block production). Analysis half of rbc2 is done; the 403 root cause was fixed (above). Edge mitigation rules stay deferred until a real external abuse signal appears.
+
 Remaining paid-user blockers:
 
 - GitHub repo connection, task-to-branch mapping, PR artifact creation, review/check sync, and issue/task linking.
