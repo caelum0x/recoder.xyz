@@ -632,6 +632,6 @@ Still active:
 - make the task -> artifact -> PR -> preview -> approval loop visible from shared run history
 - instrument the lead-to-signup-to-activation funnel
 - activate live edge/preview routing, DNS/TLS, private preview hosts, and WAF/rate-limit policy
-- unblock full Hetzner deploy by resolving missing Daytona backend sources
+- keep Hetzner deploy hygiene clean now that targeted `docker-backend` + `recoder-web` deploys work; reconcile local<->prod git divergence before relying on full deploys
 
 Use `bd ready --json` for the executable issue list instead of adding markdown TODOs here.
