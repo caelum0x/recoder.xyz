@@ -6,7 +6,7 @@ import { useSession, signOut } from '@/lib/session-provider';
 import { LaunchWebIDEButton } from '@/app/components/LaunchWebIDEButton';
 import {
   LayoutDashboard, Key, FolderOpen, BarChart3, Settings, LogOut,
-  User, ChevronDown, Globe, Terminal, Sparkles, Cpu
+  User, ChevronDown, Globe, Terminal, Sparkles, Cpu, GitPullRequest
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MobileNav } from '@/app/components/MobileNav';
@@ -15,6 +15,7 @@ const sidebarLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/api-keys', label: 'Developer Keys', icon: Key },
   { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
+  { href: '/dashboard/pull-requests', label: 'Pull Requests', icon: GitPullRequest },
   { href: '/dashboard/usage', label: 'Usage', icon: BarChart3 },
   { href: '/dashboard/analytics', label: 'Analytics', icon: Cpu },
 ];
