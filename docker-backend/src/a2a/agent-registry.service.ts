@@ -25,6 +25,10 @@ import type {
   RecoderAgentSkill,
 } from '@recoder/shared/a2a';
 import { createLogger } from '../logger';
+import {
+  loadA2ADurableIdentities,
+  saveA2ADurableIdentities,
+} from './a2a-persistence';
 
 const logger = createLogger('a2a-agent-registry');
 
@@ -79,6 +83,25 @@ export interface ReconcileSessionInput {
   workspaceId?: string;
   projectId?: string;
   capabilities?: string[];
+  /**
+   * Whether the caller is admin-level (e.g. authenticated with the admin
+   * token rather than only a bridge token). Non-admin callers are forbidden
+   * from claiming an `agentId` that collides with a pre-registered default
+   * agent (see {@link RESERVED_DEFAULT_AGENT_IDS}). Defaults to `false` so the
+   * untrusted bridge/heartbeat path is locked down unless explicitly trusted.
+   */
+  callerIsAdmin?: boolean;
+}
+
+/** Raised when a reconcile attempts to claim a reserved default agent id. */
+export class ReservedAgentIdError extends Error {
+  constructor(public readonly agentId: string) {
+    super(
+      `agentId "${agentId}" collides with a pre-registered default agent and ` +
+        `cannot be claimed by a non-admin caller`,
+    );
+    this.name = 'ReservedAgentIdError';
+  }
 }
 
 export interface ReconcileSessionResult {
@@ -313,6 +336,15 @@ export const DEFAULT_AGENTS: DefaultAgentConfig[] = [
   },
 ];
 
+/**
+ * Ids of the pre-registered default agents. Reconciling against any of these
+ * from an untrusted (non-admin) caller is rejected so a leaked/valid bridge
+ * token cannot hijack or shadow a core platform agent (e.g. 'recoder-agency').
+ */
+export const RESERVED_DEFAULT_AGENT_IDS: ReadonlySet<string> = new Set(
+  DEFAULT_AGENTS.map((agent) => agent.id),
+);
+
 // ---------------------------------------------------------------------------
 // Heartbeat configuration
 // ---------------------------------------------------------------------------
@@ -346,6 +378,25 @@ export class AgentRegistryService {
 
   constructor(registry?: InMemoryAgentRegistry) {
     this.registry = registry ?? new InMemoryAgentRegistry();
+    // Hydrate durable identities from disk so firstSeenAt / reconnectCount /
+    // workspace membership survive a restart and reconnect-safety holds.
+    try {
+      const hydrated = loadA2ADurableIdentities();
+      for (const [agentId, identity] of hydrated) {
+        this.durableIdentities.set(agentId, identity);
+      }
+    } catch (error) {
+      logger.warn({ error }, 'Failed to hydrate durable agent identities');
+    }
+  }
+
+  /** Persist the durable-identity map to disk (best-effort). */
+  private persistDurableIdentities(): void {
+    try {
+      saveA2ADurableIdentities(this.durableIdentities);
+    } catch (error) {
+      logger.warn({ error }, 'Failed to persist durable agent identities');
+    }
   }
 
   // -- Registration ---------------------------------------------------------
@@ -390,7 +441,9 @@ export class AgentRegistryService {
     const deleted = this.registry.unregister(agentId);
     if (deleted) {
       this.heartbeats.delete(agentId);
-      this.durableIdentities.delete(agentId);
+      if (this.durableIdentities.delete(agentId)) {
+        this.persistDurableIdentities();
+      }
       logger.info({ agentId }, 'Agent unregistered');
     }
     return deleted;
@@ -501,6 +554,20 @@ export class AgentRegistryService {
       throw new Error('reconcileSession requires a non-empty agentId');
     }
 
+    // SECURITY: bind the claimed agentId to the caller's trust level. The
+    // bridge/heartbeat path lets any holder of a valid bridge token supply an
+    // arbitrary agentId; without this guard such a caller could register a
+    // phantom agent under a core platform id (e.g. 'recoder-agency') and shadow
+    // the real default. Only admin-level callers may (re)claim a reserved
+    // default agent id; everyone else is rejected before any upsert.
+    if (
+      !input.callerIsAdmin &&
+      RESERVED_DEFAULT_AGENT_IDS.has(agentId) &&
+      !this.durableIdentities.has(agentId)
+    ) {
+      throw new ReservedAgentIdError(agentId);
+    }
+
     const nowIso = new Date().toISOString();
     const existingAgent = this.registry.get(agentId);
     const existingDurable = this.durableIdentities.get(agentId);
@@ -575,6 +642,9 @@ export class AgentRegistryService {
       capabilities,
     };
     this.durableIdentities.set(agentId, durable);
+    // Persist so reconnect-safety (firstSeenAt / reconnectCount / workspaceIds)
+    // survives a process restart.
+    this.persistDurableIdentities();
 
     logger.info(
       {

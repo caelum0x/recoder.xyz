@@ -12,10 +12,36 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Mock durable-identity persistence with an in-memory backing store so the
+// service hydrates/persists deterministically without touching the data/ dir.
+// `__durableStore` is the shared backing array used to simulate the JSON file.
+// ---------------------------------------------------------------------------
+vi.mock('../a2a-persistence', () => {
+  const store = {
+    entries: [] as [string, unknown][],
+  };
+  return {
+    __durableStore: store,
+    loadA2ADurableIdentities: vi.fn(() => new Map(store.entries)),
+    saveA2ADurableIdentities: vi.fn((identities: Map<string, unknown>) => {
+      store.entries = [...identities.entries()];
+    }),
+  };
+});
+
+// Typed access to the mocked store / spies.
+import * as a2aPersistence from '../a2a-persistence';
+const durableStore = (a2aPersistence as unknown as {
+  __durableStore: { entries: [string, unknown][] };
+}).__durableStore;
+
 import {
   AgentRegistryService,
   getAgentRegistryService,
   resetAgentRegistryService,
+  ReservedAgentIdError,
   DEFAULT_AGENTS,
   type RegisterAgentInput,
   type SelfRegisterInput,
@@ -106,6 +132,7 @@ describe('AgentRegistryService', () => {
 
   beforeEach(() => {
     resetAgentRegistryService();
+    durableStore.entries = [];
     service = new AgentRegistryService();
   });
 
@@ -444,6 +471,118 @@ describe('AgentRegistryService', () => {
 
     it('throws on empty agentId', () => {
       expect(() => service.reconcileSession({ agentId: '   ' })).toThrow();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Durable identity persistence (round-trip across restart)
+  // -----------------------------------------------------------------------
+
+  describe('durable identity persistence', () => {
+    it('persists durable identities so they survive a restart', () => {
+      service.reconcileSession({
+        agentId: 'bridge-agent',
+        name: 'Bridge Agent',
+        platform: 'codex',
+        workspaceId: 'ws-1',
+        capabilities: ['code-generation'],
+      });
+      service.reconcileSession({ agentId: 'bridge-agent', workspaceId: 'ws-2' });
+
+      const original = service.getDurableIdentity('bridge-agent');
+      expect(original).toBeDefined();
+      expect(original!.reconnectCount).toBe(1);
+      expect(original!.workspaceIds).toEqual(['ws-1', 'ws-2']);
+
+      // Simulate a process restart: a fresh service must hydrate from the
+      // persisted store (mocked in-memory) without re-running reconcile.
+      const restarted = new AgentRegistryService();
+      const hydrated = restarted.getDurableIdentity('bridge-agent');
+      expect(hydrated).toBeDefined();
+      expect(hydrated!.firstSeenAt).toBe(original!.firstSeenAt);
+      expect(hydrated!.reconnectCount).toBe(original!.reconnectCount);
+      expect(hydrated!.workspaceIds).toEqual(['ws-1', 'ws-2']);
+      expect(hydrated!.capabilities).toEqual(['code-generation']);
+    });
+
+    it('continues the reconnect chain after a restart instead of resetting', () => {
+      const first = service.reconcileSession({ agentId: 'bridge-agent', platform: 'codex' });
+      service.reconcileSession({ agentId: 'bridge-agent' }); // reconnectCount -> 1
+
+      const restarted = new AgentRegistryService();
+      const afterRestart = restarted.reconcileSession({ agentId: 'bridge-agent' });
+
+      // The in-memory registry entry is rebuilt on restart (so `isNew` is true),
+      // but reconnect-safety still holds: the firstSeenAt anchor is preserved and
+      // the reconnectCount keeps climbing from the hydrated durable identity
+      // rather than resetting to zero.
+      expect(afterRestart.durable.firstSeenAt).toBe(first.durable.firstSeenAt);
+      expect(afterRestart.durable.reconnectCount).toBe(2);
+    });
+
+    it('removes the durable identity from the persisted store on unregister', () => {
+      service.reconcileSession({ agentId: 'bridge-agent', platform: 'codex' });
+      expect(durableStore.entries.some(([id]) => id === 'bridge-agent')).toBe(true);
+
+      service.unregister('bridge-agent');
+      expect(durableStore.entries.some(([id]) => id === 'bridge-agent')).toBe(false);
+
+      // A restart must not resurrect the removed identity.
+      const restarted = new AgentRegistryService();
+      expect(restarted.getDurableIdentity('bridge-agent')).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Reserved default-agent id collision (security)
+  // -----------------------------------------------------------------------
+
+  describe('reserved agentId collision', () => {
+    const reservedId = DEFAULT_AGENTS[0].id; // e.g. 'recoder-web'
+
+    it('rejects a non-admin caller claiming a reserved default agent id', () => {
+      expect(() =>
+        service.reconcileSession({ agentId: reservedId, platform: 'codex' }),
+      ).toThrow(ReservedAgentIdError);
+      // No phantom registry entry should have been created.
+      expect(service.getDurableIdentity(reservedId)).toBeUndefined();
+    });
+
+    it('rejects every pre-registered default agent id for non-admin callers', () => {
+      for (const config of DEFAULT_AGENTS) {
+        expect(() =>
+          service.reconcileSession({ agentId: config.id }),
+        ).toThrow(ReservedAgentIdError);
+      }
+    });
+
+    it('allows an admin-level caller to claim a reserved default agent id', () => {
+      const result = service.reconcileSession({
+        agentId: reservedId,
+        platform: 'recoder_web',
+        callerIsAdmin: true,
+      });
+      expect(result.agent.identity.id).toBe(reservedId);
+      expect(service.getDurableIdentity(reservedId)).toBeDefined();
+    });
+
+    it('allows subsequent non-admin reconnects once the identity is owned', () => {
+      // Admin claims it first (creates durable identity)...
+      service.reconcileSession({
+        agentId: reservedId,
+        platform: 'recoder_web',
+        callerIsAdmin: true,
+      });
+      // ...then a non-admin heartbeat for the already-owned id is permitted.
+      const result = service.reconcileSession({ agentId: reservedId });
+      expect(result.isNew).toBe(false);
+      expect(result.durable.reconnectCount).toBe(1);
+    });
+
+    it('does not reject non-reserved external agent ids', () => {
+      expect(() =>
+        service.reconcileSession({ agentId: 'external-coding-agent', platform: 'codex' }),
+      ).not.toThrow();
     });
   });
 
@@ -967,6 +1106,7 @@ describe('Agent Registry Workflow', () => {
 
   beforeEach(() => {
     resetAgentRegistryService();
+    durableStore.entries = [];
     service = new AgentRegistryService();
   });
 

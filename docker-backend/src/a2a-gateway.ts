@@ -7,8 +7,10 @@ import {
 } from '@recoder/shared/a2a';
 import {
   getAgentRegistryService,
+  ReservedAgentIdError,
   type ReconcileSessionInput,
 } from './a2a/agent-registry.service';
+import type { RecoderAgentPlatform } from '@recoder/shared/a2a';
 
 const router = Router();
 
@@ -1873,14 +1875,41 @@ function asStringArray(value: unknown): string[] {
 }
 
 /**
+ * Extract an allowlist-validated platform from the bridge body, if present.
+ *
+ * Only returns a platform when the body explicitly supplies one that passes the
+ * `VALID_RECORDER_PLATFORMS` allowlist. Returning `undefined` (rather than
+ * coercing to `'custom'`) lets the registry preserve an existing agent's
+ * platform on reconnect and apply its own first-pairing default, so a legit
+ * external agent is never silently downgraded to `'custom'`.
+ */
+function extractValidatedPlatform(body: Record<string, unknown>): RecoderAgentPlatform | undefined {
+  const raw = asString(body.platform).trim();
+  if (!raw) return undefined;
+  if (!VALID_RECORDER_PLATFORMS.has(raw)) return undefined;
+  return raw as RecoderAgentPlatform;
+}
+
+/**
  * Reconcile a (re)connecting bridge/external agent against the durable agent
  * registry so it keeps a stable identity, accumulated workspace membership,
  * and live session health without creating duplicate registry entries.
  *
+ * SECURITY: `callerIsAdmin` binds the trust level of the caller to the
+ * reconcile. The untrusted bridge token (`/bridge/heartbeat`) passes `false`,
+ * so it cannot claim an `agentId` that collides with a pre-registered default
+ * agent (e.g. 'recoder-agency'); the admin-authenticated pairing path
+ * (`/bridge/pair`) passes `true`. A reserved-id collision surfaces via
+ * `ReservedAgentIdError` so callers can reject the request explicitly rather
+ * than silently succeeding.
+ *
  * No-op (returns null) when the payload carries no stable `agentId`.
+ *
+ * @throws {ReservedAgentIdError} when a non-admin caller claims a reserved id.
  */
 function reconcileBridgeAgentSession(
   body: Record<string, unknown>,
+  options: { callerIsAdmin: boolean },
 ): ReturnType<ReturnType<typeof getAgentRegistryService>['reconcileSession']> | null {
   const agentId = String(body.agentId || '').trim();
   if (!agentId) return null;
@@ -1888,17 +1917,26 @@ function reconcileBridgeAgentSession(
   const input: ReconcileSessionInput = {
     agentId,
     name: typeof body.name === 'string' ? body.name : undefined,
+    // Allowlist-validated passthrough so legit external agents keep their real
+    // platform instead of being silently dropped to 'custom'.
+    platform: extractValidatedPlatform(body),
     url: typeof body.url === 'string' ? body.url : undefined,
     workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
     projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
     capabilities: asStringArray(body.capabilities),
+    callerIsAdmin: options.callerIsAdmin,
   };
 
   try {
     return getAgentRegistryService().reconcileSession(input);
-  } catch {
-    // Reconciliation is best-effort: a malformed agentId must not break the
-    // bridge pairing / heartbeat acknowledgement path.
+  } catch (error) {
+    if (error instanceof ReservedAgentIdError) {
+      // Propagate so the route can reject with 403 instead of silently
+      // upserting a phantom agent under a reserved default id.
+      throw error;
+    }
+    // Otherwise reconciliation is best-effort: a malformed agentId must not
+    // break the bridge pairing / heartbeat acknowledgement path.
     return null;
   }
 }
@@ -2012,8 +2050,12 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
   await storeBridgeSession(session);
 
   // Reconnect-safe reconciliation: keep durable identity + workspace membership
-  // for the paired agent without creating duplicate registry entries.
-  const reconciled = reconcileBridgeAgentSession(parsedBody as Record<string, unknown>);
+  // for the paired agent without creating duplicate registry entries. This path
+  // is admin-authenticated (verifyAdminToken above), so it may claim reserved
+  // default agent ids.
+  const reconciled = reconcileBridgeAgentSession(parsedBody as Record<string, unknown>, {
+    callerIsAdmin: true,
+  });
   if (reconciled) {
     await emitAuditEvent('bridge_agent_reconciled', {
       bridgeId: session.bridgeId,
@@ -2202,7 +2244,21 @@ router.post('/bridge/heartbeat', async (req: Request, res: Response) => {
 
   // Refresh durable identity last-seen / health and capabilities on heartbeat
   // for any agent that identifies itself, reusing its existing registry entry.
-  const reconciled = reconcileBridgeAgentSession(parsedBody as Record<string, unknown>);
+  // This path is authenticated only with a bridge token (non-admin), so it must
+  // NOT be allowed to claim a reserved default agent id — reject with 403 if it
+  // tries, instead of upserting a phantom/shadow agent.
+  let reconciled: ReturnType<typeof reconcileBridgeAgentSession>;
+  try {
+    reconciled = reconcileBridgeAgentSession(parsedBody as Record<string, unknown>, {
+      callerIsAdmin: false,
+    });
+  } catch (error) {
+    if (error instanceof ReservedAgentIdError) {
+      res.status(403).json({ ok: false, error: error.message });
+      return;
+    }
+    throw error;
+  }
 
   await emitAuditEvent('bridge_heartbeat', {
     bridgeId,
