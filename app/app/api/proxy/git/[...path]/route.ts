@@ -74,8 +74,19 @@ async function proxyRequest(
     }
 
     const path = pathSegments.join('/');
-    const search = request.nextUrl.search || '';
-    const url = `${BACKEND_URL}/api/git/${path}${search}`;
+
+    // The GitHub PAT arrives in the `x-github-token` header so it never appears
+    // in a browser-visible URL or client-side proxy access logs. We forward it
+    // to docker-backend as a server-side `?token=` query param (the backend git
+    // routes read `req.query.token`). This conversion happens only here, on the
+    // server, so the token is never exposed in a URL the browser can see.
+    const githubToken = request.headers.get('x-github-token');
+    const searchParams = new URLSearchParams(request.nextUrl.searchParams);
+    if (githubToken && !searchParams.has('token')) {
+      searchParams.set('token', githubToken);
+    }
+    const search = searchParams.toString();
+    const url = `${BACKEND_URL}/api/git/${path}${search ? `?${search}` : ''}`;
 
     let body: string | undefined;
     if (method !== 'GET') {
