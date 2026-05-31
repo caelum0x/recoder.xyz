@@ -37,11 +37,8 @@ export function LeadCaptureForm({
 
     setError('');
     setStatus('submitting');
-    trackEvent(AnalyticsEvents.CTA_CLICKED, {
-      ctaLabel: 'Lead Capture Submit',
-      destination: '/api/newsletter/subscribe',
-      location: source,
-      source: 'homepage',
+    trackEvent(AnalyticsEvents.LEAD_CAPTURE_SUBMITTED, {
+      leadSource: source,
     });
 
     try {
@@ -65,19 +62,21 @@ export function LeadCaptureForm({
 
       setStatus('success');
       setEmail('');
-      trackEvent(AnalyticsEvents.CTA_CLICKED, {
-        ctaLabel: 'Lead Capture Success',
-        destination: '/api/newsletter/subscribe',
-        location: source,
-        source: 'homepage',
+      trackEvent(AnalyticsEvents.LEAD_CAPTURE_SUCCEEDED, {
+        leadSource: source,
+        reactivated: Boolean(payload?.alreadySubscribed),
       });
     } catch (submitError) {
       setStatus('idle');
-      setError(
+      const reason =
         submitError instanceof Error
           ? submitError.message
-          : 'Failed to subscribe. Please try again.'
-      );
+          : 'Failed to subscribe. Please try again.';
+      setError(reason);
+      trackEvent(AnalyticsEvents.LEAD_CAPTURE_FAILED, {
+        leadSource: source,
+        reason,
+      });
     }
   };
 
