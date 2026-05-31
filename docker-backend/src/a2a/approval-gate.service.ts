@@ -192,6 +192,15 @@ export class ApprovalGateService {
   }
 
   /**
+   * List all approval requests (any status) for a workspace. Used by
+   * read-only projections such as the task timeline aggregator, which need
+   * resolved approvals as well as pending ones.
+   */
+  listForWorkspace(workspaceId: string): ApprovalRequest[] {
+    return [...this.requests.values()].filter((r) => r.workspaceId === workspaceId);
+  }
+
+  /**
    * Register a callback for when an approval is resolved.
    */
   onResolved(approvalId: string, callback: ApprovalCallback): void {

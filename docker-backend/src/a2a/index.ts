@@ -44,6 +44,15 @@ export {
   type RedisTaskStoreOptions,
 } from './redis-task-store';
 
+// Task timeline read-model
+export {
+  buildTaskTimeline,
+  type TimelineEvent,
+  type TimelineEventType,
+  type TimelineEventStatus,
+  type TaskTimeline,
+} from './task-timeline.service';
+
 // Routes
 export { taskLifecycleRouter } from './task-lifecycle.routes';
 
