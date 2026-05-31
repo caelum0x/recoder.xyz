@@ -5,6 +5,10 @@ import {
   type A2AEnvelopeValidationIssue,
   type RecoderA2AEnvelope,
 } from '@recoder/shared/a2a';
+import {
+  getAgentRegistryService,
+  type ReconcileSessionInput,
+} from './a2a/agent-registry.service';
 
 const router = Router();
 
@@ -1863,6 +1867,42 @@ function newBridgeSessionToken(): string {
     .join('');
 }
 
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+/**
+ * Reconcile a (re)connecting bridge/external agent against the durable agent
+ * registry so it keeps a stable identity, accumulated workspace membership,
+ * and live session health without creating duplicate registry entries.
+ *
+ * No-op (returns null) when the payload carries no stable `agentId`.
+ */
+function reconcileBridgeAgentSession(
+  body: Record<string, unknown>,
+): ReturnType<ReturnType<typeof getAgentRegistryService>['reconcileSession']> | null {
+  const agentId = String(body.agentId || '').trim();
+  if (!agentId) return null;
+
+  const input: ReconcileSessionInput = {
+    agentId,
+    name: typeof body.name === 'string' ? body.name : undefined,
+    url: typeof body.url === 'string' ? body.url : undefined,
+    workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
+    projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
+    capabilities: asStringArray(body.capabilities),
+  };
+
+  try {
+    return getAgentRegistryService().reconcileSession(input);
+  } catch {
+    // Reconciliation is best-effort: a malformed agentId must not break the
+    // bridge pairing / heartbeat acknowledgement path.
+    return null;
+  }
+}
+
 router.post('/bridge/jobs', async (req: Request, res: Response) => {
   const auth = verifyAdminToken(req);
   if (!auth.ok) {
@@ -1970,6 +2010,20 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     issuedBy: String((parsedBody as any).issuedBy || 'admin'),
   };
   await storeBridgeSession(session);
+
+  // Reconnect-safe reconciliation: keep durable identity + workspace membership
+  // for the paired agent without creating duplicate registry entries.
+  const reconciled = reconcileBridgeAgentSession(parsedBody as Record<string, unknown>);
+  if (reconciled) {
+    await emitAuditEvent('bridge_agent_reconciled', {
+      bridgeId: session.bridgeId,
+      agentId: reconciled.durable.agentId,
+      isNew: reconciled.isNew,
+      reconnectCount: reconciled.durable.reconnectCount,
+      workspaceIds: reconciled.durable.workspaceIds,
+    });
+  }
+
   res.status(201).json({
     ok: true,
     bridgeId: session.bridgeId,
@@ -1977,6 +2031,16 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     scope: session.scope || null,
     expiresAt: session.expiresAt,
     createdAt: session.createdAt,
+    agent: reconciled
+      ? {
+          agentId: reconciled.durable.agentId,
+          isNew: reconciled.isNew,
+          firstSeenAt: reconciled.durable.firstSeenAt,
+          reconnectCount: reconciled.durable.reconnectCount,
+          workspaceIds: reconciled.durable.workspaceIds,
+          online: reconciled.health.online,
+        }
+      : null,
   });
 });
 
@@ -2135,11 +2199,23 @@ router.post('/bridge/heartbeat', async (req: Request, res: Response) => {
 
   const bridgeId = String(req.header('x-recoder-a2a-bridge-id') || (parsedBody as any).bridgeId || process.env.RECODER_A2A_BRIDGE_DEFAULT_ID || 'default').trim();
   await storeBridgeHeartbeat({ bridgeId, payload: parsedBody as Record<string, unknown> });
+
+  // Refresh durable identity last-seen / health and capabilities on heartbeat
+  // for any agent that identifies itself, reusing its existing registry entry.
+  const reconciled = reconcileBridgeAgentSession(parsedBody as Record<string, unknown>);
+
   await emitAuditEvent('bridge_heartbeat', {
     bridgeId,
     capabilities: (parsedBody as any).capabilities || null,
+    agentId: reconciled?.durable.agentId || null,
   });
-  res.status(200).json({ ok: true, bridgeId });
+  res.status(200).json({
+    ok: true,
+    bridgeId,
+    agent: reconciled
+      ? { agentId: reconciled.durable.agentId, online: reconciled.health.online }
+      : null,
+  });
 });
 
 router.get('/bridge/heartbeats', async (req: Request, res: Response) => {

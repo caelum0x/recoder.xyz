@@ -324,6 +324,130 @@ describe('AgentRegistryService', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Reconnect-safe session reconciliation
+  // -----------------------------------------------------------------------
+
+  describe('reconcileSession', () => {
+    it('registers a brand-new agent on first pairing', () => {
+      const result = service.reconcileSession({
+        agentId: 'bridge-agent',
+        name: 'Bridge Agent',
+        platform: 'codex',
+        workspaceId: 'ws-1',
+        capabilities: ['code-generation'],
+      });
+
+      expect(result.isNew).toBe(true);
+      expect(result.agent.identity.id).toBe('bridge-agent');
+      expect(result.durable.firstSeenAt).toBeTruthy();
+      expect(result.durable.reconnectCount).toBe(0);
+      expect(result.durable.workspaceIds).toEqual(['ws-1']);
+      expect(result.durable.capabilities).toEqual(['code-generation']);
+      expect(result.health.online).toBe(true);
+      expect(service.list()).toHaveLength(1);
+    });
+
+    it('does not duplicate the registry entry on reconnect', () => {
+      service.reconcileSession({ agentId: 'bridge-agent', name: 'Bridge Agent', platform: 'codex' });
+      service.reconcileSession({ agentId: 'bridge-agent' });
+      service.reconcileSession({ agentId: 'bridge-agent' });
+
+      expect(service.list()).toHaveLength(1);
+    });
+
+    it('preserves firstSeenAt and increments reconnectCount across reconnects', () => {
+      const first = service.reconcileSession({
+        agentId: 'bridge-agent',
+        name: 'Bridge Agent',
+        platform: 'codex',
+      });
+      const second = service.reconcileSession({ agentId: 'bridge-agent' });
+      const third = service.reconcileSession({ agentId: 'bridge-agent' });
+
+      expect(second.durable.firstSeenAt).toBe(first.durable.firstSeenAt);
+      expect(third.durable.firstSeenAt).toBe(first.durable.firstSeenAt);
+      expect(first.durable.reconnectCount).toBe(0);
+      expect(second.durable.reconnectCount).toBe(1);
+      expect(third.durable.reconnectCount).toBe(2);
+    });
+
+    it('reuses the existing identity on reconnect even if payload omits/changes it', () => {
+      service.reconcileSession({
+        agentId: 'bridge-agent',
+        name: 'Original Name',
+        platform: 'codex',
+      });
+      // Reconnect with a different platform/name — identity must stay stable.
+      const result = service.reconcileSession({
+        agentId: 'bridge-agent',
+        name: 'New Name',
+        platform: 'claude_code',
+      });
+
+      expect(result.isNew).toBe(false);
+      expect(result.agent.identity.name).toBe('Original Name');
+      expect(result.agent.identity.platform).toBe('codex');
+    });
+
+    it('accumulates workspace membership without duplicates', () => {
+      service.reconcileSession({ agentId: 'bridge-agent', platform: 'codex', workspaceId: 'ws-1' });
+      service.reconcileSession({ agentId: 'bridge-agent', workspaceId: 'ws-2' });
+      const result = service.reconcileSession({ agentId: 'bridge-agent', workspaceId: 'ws-1' });
+
+      expect(result.durable.workspaceIds).toEqual(['ws-1', 'ws-2']);
+    });
+
+    it('refreshes last-seen / health on reconnect after going stale', () => {
+      service.reconcileSession({ agentId: 'bridge-agent', platform: 'codex' });
+      // Force the heartbeat stale.
+      const staleTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      (service as any).heartbeats.set('bridge-agent', staleTime);
+      expect(service.getHealth('bridge-agent').online).toBe(false);
+
+      const result = service.reconcileSession({ agentId: 'bridge-agent' });
+      expect(result.health.online).toBe(true);
+      expect(service.getHealth('bridge-agent').online).toBe(true);
+    });
+
+    it('updates capabilities only when new ones are reported', () => {
+      service.reconcileSession({
+        agentId: 'bridge-agent',
+        platform: 'codex',
+        capabilities: ['a', 'b'],
+      });
+      // Reconnect without capabilities — should retain prior ones.
+      const retained = service.reconcileSession({ agentId: 'bridge-agent' });
+      expect(retained.durable.capabilities).toEqual(['a', 'b']);
+
+      // Reconnect with new capabilities — should replace.
+      const replaced = service.reconcileSession({
+        agentId: 'bridge-agent',
+        capabilities: ['c'],
+      });
+      expect(replaced.durable.capabilities).toEqual(['c']);
+    });
+
+    it('exposes durable identity through getWithHealth', () => {
+      service.reconcileSession({ agentId: 'bridge-agent', platform: 'codex', workspaceId: 'ws-1' });
+      const withHealth = service.getWithHealth('bridge-agent');
+      expect(withHealth).toBeDefined();
+      expect(withHealth!.durable).toBeDefined();
+      expect(withHealth!.durable!.workspaceIds).toEqual(['ws-1']);
+    });
+
+    it('clears durable identity on unregister', () => {
+      service.reconcileSession({ agentId: 'bridge-agent', platform: 'codex' });
+      expect(service.getDurableIdentity('bridge-agent')).toBeDefined();
+      service.unregister('bridge-agent');
+      expect(service.getDurableIdentity('bridge-agent')).toBeUndefined();
+    });
+
+    it('throws on empty agentId', () => {
+      expect(() => service.reconcileSession({ agentId: '   ' })).toThrow();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Self-registration
   // -----------------------------------------------------------------------
 
