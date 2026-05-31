@@ -18,9 +18,9 @@ export const config = {
          process.env.NEXT_PUBLIC_SITE_URL ||
          (process.env.NODE_ENV === 'production' ? 'https://recoder.xyz' : 'http://localhost:3000'),
 
-    // Bolt-like IDE app
-    app: process.env.NEXT_PUBLIC_WEB_APP_URL ||
-         (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
+    // Spaces dashboard
+    app: process.env.NEXT_PUBLIC_SPACES_URL ||
+         (process.env.NODE_ENV === 'production' ? '/dashboard/spaces' : 'http://localhost:3000/dashboard/spaces'),
 
     // Docker backend API gateway
     api: process.env.NEXT_PUBLIC_API_URL ||

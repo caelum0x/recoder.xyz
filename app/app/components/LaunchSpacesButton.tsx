@@ -5,19 +5,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Globe, Key, AlertCircle, X } from 'lucide-react';
 import { useSession } from '@/lib/session-provider';
-import { getRecoderWebUrlClient } from '@/lib/config/platforms';
+import { getSpacesUrlClient } from '@/lib/config/platforms';
 
-interface LaunchWebIDEButtonProps {
+interface LaunchSpacesButtonProps {
   className?: string;
   showIcon?: boolean;
   children?: React.ReactNode;
 }
 
-export function LaunchWebIDEButton({
+export function LaunchSpacesButton({
   className = "px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors flex items-center space-x-2",
   showIcon = true,
   children
-}: LaunchWebIDEButtonProps) {
+}: LaunchSpacesButtonProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const [showModal, setShowModal] = useState(false);
@@ -26,12 +26,12 @@ export function LaunchWebIDEButton({
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
 
-    const webIdeUrl = getRecoderWebUrlClient();
+    const spacesUrl = getSpacesUrlClient();
 
     // Check 1: User must be logged in
     if (!session?.user) {
-      // Redirect to sign-in with the Web IDE as the post-login destination
-      router.push(`/auth/signin?redirect=${encodeURIComponent(webIdeUrl)}`);
+      // Redirect to sign-in with the Spaces as the post-login destination
+      router.push(`/auth/signin?redirect=${encodeURIComponent(spacesUrl)}`);
       return;
     }
 
@@ -43,14 +43,14 @@ export function LaunchWebIDEButton({
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          platform: 'web',
-          redirect: webIdeUrl,
+          platform: 'spaces',
+          redirect: spacesUrl,
         }),
       });
 
       if (response.ok) {
         const data = await response.json() as { bridgeUrl?: string; redirectUrl?: string };
-        window.location.href = data.bridgeUrl || data.redirectUrl || webIdeUrl;
+        window.location.href = data.bridgeUrl || data.redirectUrl || spacesUrl;
         return;
       }
     } catch {
@@ -59,7 +59,7 @@ export function LaunchWebIDEButton({
       setLoading(false);
     }
 
-    window.location.href = webIdeUrl;
+    window.location.href = spacesUrl;
   };
 
   return (
@@ -70,7 +70,7 @@ export function LaunchWebIDEButton({
         disabled={loading}
       >
         {showIcon && <Globe className="w-4 h-4" />}
-        <span>{loading ? 'Loading...' : (children || 'Launch Web IDE')}</span>
+        <span>{loading ? 'Loading...' : (children || 'Open Spaces')}</span>
       </button>
 
       {/* API Key Required Modal */}
@@ -92,7 +92,7 @@ export function LaunchWebIDEButton({
               <div>
                 <h2 className="text-3xl font-bold mb-2">API Key Required</h2>
                 <p className="text-gray-400">
-                  Before using the Web IDE, you need to add your AI provider API key.
+                  Before using the Spaces, you need to add your AI provider API key.
                 </p>
               </div>
 
@@ -108,7 +108,7 @@ export function LaunchWebIDEButton({
 
               <div className="space-y-3">
                 <Link
-                  href="/settings/ai-providers?redirect=web-ide"
+                  href="/settings/ai-providers?redirect=spaces"
                   onClick={() => setShowModal(false)}
                   className="block w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all"
                 >

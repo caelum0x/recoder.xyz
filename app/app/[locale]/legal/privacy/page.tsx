@@ -141,7 +141,7 @@ export default function PrivacyPolicyPage() {
                 API keys are only accessed when:
               </p>
               <ul className="list-disc list-inside space-y-2 text-gray-300 mb-4">
-                <li>You initiate an AI request through the web IDE or CLI</li>
+                <li>You initiate an AI request through the Spaces or CLI</li>
                 <li>The system needs to make API calls to third-party providers on your behalf</li>
                 <li>You explicitly request to view or delete your keys</li>
               </ul>

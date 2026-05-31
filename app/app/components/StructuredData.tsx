@@ -76,7 +76,7 @@ export function WebApplicationSchema() {
   const schema = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
-    name: 'Recoder Web IDE',
+    name: 'Recoder Spaces',
     applicationCategory: 'DeveloperApplication',
     browserRequirements: 'Requires JavaScript. Requires HTML5.',
     offers: {
@@ -86,7 +86,7 @@ export function WebApplicationSchema() {
       description: 'Bring your own provider keys and run software work in the browser runtime lane with preview capture.',
     },
     description: 'Browser runtime lane for connected coding agents with live preview, code execution, and artifact capture.',
-    url: 'https://web.recoder.xyz',
+    url: '/dashboard',
     screenshot: 'https://recoder.xyz/og-image.png',
   };
 
@@ -223,7 +223,7 @@ export function RecoderAgencySchema() {
 export function RecoderWebSchema() {
   return (
     <PlatformServiceSchema
-      name="Recoder Web IDE"
+      name="Recoder Spaces"
       description="Browser runtime lane with preview, logs, terminal access, and artifact capture for connected external coding agents."
       url="https://recoder.xyz/platform/web"
       applicationCategory="DeveloperApplication"

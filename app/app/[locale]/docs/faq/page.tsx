@@ -84,8 +84,8 @@ export default function FAQPage() {
       icon: Zap,
       questions: [
         {
-          q: 'What\'s the difference between Web IDE and Terminal CLI?',
-          a: 'Web IDE runs in your browser - perfect for quick projects with no setup. Terminal CLI runs locally with full file system access - perfect for serious development. The magic? They sync! Start a project in Web IDE, download to your local machine with CLI, edit locally, and push changes back. Best of both worlds!'
+          q: 'What\'s the difference between Spaces and Terminal CLI?',
+          a: 'Spaces runs in your browser - perfect for quick projects with no setup. Terminal CLI runs locally with full file system access - perfect for serious development. The magic? They sync! Start a project in Spaces, download to your local machine with CLI, edit locally, and push changes back. Best of both worlds!'
         },
         {
           q: 'How many AI models can I use?',
@@ -93,15 +93,15 @@ export default function FAQPage() {
         },
         {
           q: 'Can I use Recoder offline?',
-          a: 'The Terminal CLI works offline for file operations, but AI features require internet connection (to reach AI providers). Web IDE requires internet connection. Your files are stored locally with CLI, so you can continue working offline and sync when back online.'
+          a: 'The Terminal CLI works offline for file operations, but AI features require internet connection (to reach AI providers). Spaces requires internet connection. Your files are stored locally with CLI, so you can continue working offline and sync when back online.'
         },
         {
           q: 'Is there a usage limit?',
           a: 'No limits from Recoder! Your only limit is your API provider\'s rate limits and your budget. Most providers have generous rate limits (e.g., OpenRouter allows thousands of requests per day). You\'re in full control.'
         },
         {
-          q: 'Can I sync projects between Web IDE and CLI?',
-          a: 'Yes! This is our unique value proposition. Create a project in Web IDE, use the CLI to download it locally, edit on your machine, and push changes back. Or start locally with CLI and open in Web IDE. Seamless workflow!'
+          q: 'Can I sync projects between Spaces and CLI?',
+          a: 'Yes! This is our unique value proposition. Create a project in Spaces, use the CLI to download it locally, edit on your machine, and push changes back. Or start locally with CLI and open in Spaces. Seamless workflow!'
         }
       ]
     },

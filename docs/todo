@@ -24,18 +24,17 @@ Shipped 2026-05-31 (infra/control-plane lane):
 
 - Platform activity feed (unified dashboard aggregator): fixed cross-app `/api/platform/activity` self-calls that were 403'd at the Cloudflare edge (server-to-server calls, UA `node`, hit Bot Fight Mode's managed challenge). Apps now call each other over internal loopback (AGENTS/AGENCY/PM_ACTIVITY_URL) authenticated by a shared INTERNAL_SERVICE_KEY; agents/agency/pm endpoints all return 200. agents now surfaces real thread data (254 threads) via a service-account session token wired into RECODER_ADMIN_API_KEY. recoder-agency + recoder-pm rebuilt; recoder.xyz hot-patched (no rebuild of the auth-critical surface). Committed/pushed f82ac1b1.
 - recoder-rbc2 (production traffic / abuse analysis): analyzed Cloudflare traffic for the suspected "Finland" abuse signal. Conclusion: NOT abuse — it was the platform's own Hetzner-Helsinki server self-polling across subdomains and getting 403'd (source IPv6 2a01:4f9:c013:9cb6::1 = prod box). No WAF block warranted (blocking FI would self-block production). Analysis half of rbc2 is done; the 403 root cause was fixed (above). Edge mitigation rules stay deferred until a real external abuse signal appears. CLOSED in bd.
-- recoder-g69j / recoder-minf (Daytona runtime lane): build-mode 200s with "Container not found" traced to the Daytona control plane being down, then the runner image being gone. RESOLVED 2026-05-31: recreated the daytona network, brought db/redis/dex/registry/minio/api/proxy up healthy, built the missing `dist/libs/computer-use-amd64` artifact, rebuilt `daytona-runner-custom:latest`, fixed the runner entrypoint, corrected zeroed Personal org per-sandbox quotas, and verified a real sandbox create from `daytonaio/sandbox:0.5.0-slim` reached `started`. The disposable verifier sandbox and API keys were removed. Remaining g69j work is no longer infra recovery; rerun the Web IDE build verifier and fix app-level file mutation/preview proof if it still fails.
-- GitHub PRs as first-class artifacts (in progress, production code deployed): added docker-backend routes `POST /api/git/:projectId/pull-request` (open a PR from the project branch), `GET /api/git/:projectId/pull-requests` (list), and `GET /api/git/:projectId/pull-request/:number` (PR detail + review state + CI check-run state). The create route now optionally attaches the PR as an A2A task artifact and task metadata when a `taskId` is supplied. recoder-web GitPanel now has a PR tab with open/list/refresh controls and optional A2A task ID wiring. Deployed `docker-backend` + `recoder-web` on Hetzner 2026-05-31; both containers are healthy, backend `/health` returns 200, and web root returns 302 locally. REMAINING: verify a real task -> artifact -> PR appears in shared run history.
-- Web IDE verifier access (recoder-cwgt): after deploy, the live verifier is blocked before runtime proof by Cloudflare edge policy and stale verifier auth. Public `web.recoder.xyz` / `docker.recoder.xyz` are challenged/refused at Cloudflare, while direct-origin nginx probes work (`web` 302 auth gate, `docker /health` 200). Direct-origin `/api/create-sandbox` reaches the app but returns `401 Invalid or expired session` from the stored e2e cookie. Refresh verifier auth and add a narrow Cloudflare bypass/allow rule before rerunning mutation + preview + task-artifact proof.
+- recoder-g69j / recoder-minf (Daytona runtime lane): build-mode 200s with "Container not found" traced to the Daytona control plane being down, then the runner image being gone. RESOLVED 2026-05-31: recreated the daytona network, brought db/redis/dex/registry/minio/api/proxy up healthy, built the missing `dist/libs/computer-use-amd64` artifact, rebuilt `daytona-runner-custom:latest`, fixed the runner entrypoint, corrected zeroed Personal org per-sandbox quotas, and verified a real sandbox create from `daytonaio/sandbox:0.5.0-slim` reached `started`. The disposable verifier sandbox and API keys were removed. Product decision 2026-05-31: the retired browser coding app is not a paid-user launch gate.
+- GitHub PRs as first-class artifacts (in progress, production code deployed): added docker-backend routes `POST /api/git/:projectId/pull-request` (open a PR from the project branch), `GET /api/git/:projectId/pull-requests` (list), and `GET /api/git/:projectId/pull-request/:number` (PR detail + review state + CI check-run state). The create route now optionally attaches the PR as an A2A task artifact and task metadata when a `taskId` is supplied. Product decision 2026-05-31: surface PR artifacts through the main dashboard/Spaces/shared run history, not the retired browser coding app. REMAINING: verify a real task -> artifact -> PR appears in shared run history.
+- Retired browser coding app cleanup: production container/image removed, deploy service removed, and the old subdomain redirects to `recoder.xyz/dashboard`. The old verifier/auth task is no longer a paid-user launch blocker.
 
 Remaining paid-user blockers:
 
 - Verify GitHub repo connection, task-to-branch mapping, PR artifact creation, review/check sync, and issue/task linking against the deployed PR artifact flow.
-- Refresh Web IDE verifier auth and Cloudflare verifier access (recoder-cwgt), then rerun the live build/mutation/preview proof.
 - A real task timeline showing task -> artifact -> PR -> preview -> approval from shared run history.
 - PM and Agency approval/handoff: wire recoder-a2a-sdk into recoder-pm/recoder-agency and replace their local envelope parsers with normalizeInboundEnvelope(adaptLegacyEnvelopeToTaskEnvelope(...)). SDK foundation landed; consumer wiring pending (gated on deploy reconciliation below).
 - Live edge/preview rollout with DNS, TLS, protected preview hosts, rate limits, WAF hooks, and production deployment verification.
-- Hetzner deploy hygiene: targeted deploy is now unblocked for `docker-backend` + `recoder-web`, but local<->prod git divergence still needs cleanup so future full deploys do not require scoped checkout/build handling (recoder-js56).
+- Hetzner deploy hygiene: targeted deploy is now unblocked for `docker-backend` and the main app path, but local<->prod git divergence still needs cleanup so future full deploys do not require scoped checkout/build handling (recoder-js56).
 
 Everything below is preserved backlog material.
 
@@ -930,7 +929,7 @@ That’s significantly more differentiated.
 Your current public positioning already hints at this:
 
 	•	Agents
-	•	Web IDE
+	•	Spaces
 	•	PM
 	•	Agency
 	•	CLI
@@ -956,7 +955,7 @@ then suddenly:
 	•	PM makes sense
 	•	Agency makes sense
 	•	A2A makes sense
-	•	Web IDE makes sense
+	•	Spaces makes sense
 	•	deployment makes sense
 	•	BYOK makes sense
 
@@ -2678,7 +2677,7 @@ Recoder is the operating workspace where humans and agents build, coordinate, re
 Yes. Here is the detailed roadmap I would use.
 The core product should become:
 Recoder Spaces: the workspace/control plane where humans and any AI agent work together, communicate through A2A/MCP, produce artifacts, and ship software.
-This fits what Recoder already says publicly: your site already presents Agents, Web IDE, CLI, PM, Agency, BYOK, A2A/MCP, and the “bring your own keys / keep control” message.  Your recoder-code repo is also already a strong base: it has CLI, core, MCP support, provider abstraction, file/shell/git tools, agent templates, and VS Code companion structure.
+This fits what Recoder already says publicly: your site already presents Agents, Spaces, CLI, PM, Agency, BYOK, A2A/MCP, and the “bring your own keys / keep control” message.  Your recoder-code repo is also already a strong base: it has CLI, core, MCP support, provider abstraction, file/shell/git tools, agent templates, and VS Code companion structure.
 So the roadmap is not “build another Claude Code.”It is:
 turn Recoder Code + A2A into the operating workspace for Claude Code, Codex, Recoder Code, OpenClaw, OpenHands, Cline, OpenCode, Aider, local agents, agency agents, PM agents, and deployment agents.
 
@@ -2982,7 +2981,7 @@ You already have recoder-code. Keep it.
 I would structure repos like this:
 recoder-code
 recoder-a2a
-recoder-spaces
+Spaces
 recoder-runner
 recoder-deploy
 recoder-edge
@@ -3016,7 +3015,7 @@ approval messages
 deployment events
 permissions
 audit logs
-recoder-spaces
+Spaces
 Main web app/control room.
 Work on:
 spaces
@@ -3088,7 +3087,7 @@ Phase 0 — Reposition Recoder around Spaces
 Timeline: immediate.
 Current site says “one system, five working surfaces.” That is good, but the new narrative should be stronger:
 Old:
-Agents, Web IDE, CLI, PM, Agency
+Agents, Spaces, CLI, PM, Agency
 
 New:
 Spaces where humans and AI agents build, coordinate, and deploy software together.
@@ -4282,10 +4281,10 @@ Use this exact order:
 The north star should stay simple:
 Recoder is the workspace where humans and AI agents build, coordinate, review, and deploy software together — without Recoder owning the model cost.
 Yes — you are right. A lot of the ideas should not become separate little SaaS apps. They should become modules inside Recoder.xyz.
-Recoder already has the right umbrella: Agents + Web IDE + CLI + PM + Agency workflows in one system, with BYOK/model choice and A2A/MCP positioning. That means the bigger opportunity is not “LaunchKit AI standalone.” It is:
+Recoder already has the right umbrella: Agents + Spaces + CLI + PM + Agency workflows in one system, with BYOK/model choice and A2A/MCP positioning. That means the bigger opportunity is not “LaunchKit AI standalone.” It is:
 Recoder = AI operating system from idea → code → launch → client delivery
 That is much more unicorn-style than 20 small products.
-Recoder’s public site already says it combines agents, Web IDE, CLI, PM, and agency workflows, and its product surfaces include AI agents, browser IDE, project management, agency/client delivery, and CLI. (Recoder) Its open-source CLI also supports multiple AI providers, BYOK, agents, file/shell/git/web tools, and MCP integrations. (GitHub)
+Recoder’s public site already says it combines agents, Spaces, CLI, PM, and agency workflows, and its product surfaces include AI agents, browser IDE, project management, agency/client delivery, and CLI. (Recoder) Its open-source CLI also supports multiple AI providers, BYOK, agents, file/shell/git/web tools, and MCP integrations. (GitHub)
 So the real strategy should be:
 Do not build LaunchKit AI as a separate app. Build “Recoder Launch” as a paid Recoder module.
 
@@ -4576,7 +4575,7 @@ changelog
 release notes
 integration guide
 Why it fits Recoder
-The code is already inside the Web IDE/CLI environment.
+The code is already inside the Spaces/CLI environment.
 Recoder should not just write code. It should prepare the project for real users.
 Target customers
 developer tools
@@ -4627,7 +4626,7 @@ Cursor	Best AI coding/editor workflow	Mostly developer/editor focused, less clie
 Replit	Browser IDE, hosting, app publishing	Can become expensive/credit-based for larger workflows; less agency-delivery specific
 Lovable	Fast no-code/vibe app generation	Less technical control and less full delivery workflow
 Devin	Autonomous software engineering agent	More expensive/agent-work focused, less self-serve agency/product launch OS
-Recoder	BYOK, agents, Web IDE, CLI, PM, agency workflows	Needs sharper positioning and paid modules
+Recoder	BYOK, agents, Spaces, CLI, PM, agency workflows	Needs sharper positioning and paid modules
 Recoder should not say:
 “We are another AI coding tool.”
 It should say:
@@ -4754,7 +4753,7 @@ That is the path from “small SaaS idea” to a real platform.
 You’re not delusional. You’re actually closer than the previous roadmap made it sound.
 But there is one real danger:
 You already have many of the pieces. The risk is not lack of ideas.The risk is turning Recoder into 8 half-overlapping products instead of one obvious operating system.
-From the public site, Recoder already claims the core bundle: Agents, Web IDE, CLI, PM, Agency workflows, BYOK, A2A/MCP, and model-cost control. The homepage literally says Recoder gives users “agents, a Web IDE, CLI, PM, and agency workflows in one system,” with BYOK and A2A/MCP readiness. (Recoder) The platform page also presents Recoder Agents, Web, PM, and Agency as the four current services. (Recoder)
+From the public site, Recoder already claims the core bundle: Agents, Spaces, CLI, PM, Agency workflows, BYOK, A2A/MCP, and model-cost control. The homepage literally says Recoder gives users “agents, a Spaces, CLI, PM, and agency workflows in one system,” with BYOK and A2A/MCP readiness. (Recoder) The platform page also presents Recoder Agents, Web, PM, and Agency as the four current services. (Recoder)
 So the answer is:
 No, you’re not delusional. You already have the skeleton.But you need consolidation, not more random expansion.
 
@@ -4764,7 +4763,7 @@ Area	Do you already have it?	My read
 AI coding CLI	Yes	recoder-code already positions itself as terminal + IDE AI dev toolkit with provider support, agents, tools, MCP, BYOK, and VS Code companion. (GitHub)
 BYOK / cost control	Yes	This is already a major public message: bring your own OpenRouter, Anthropic, OpenAI, or Google keys and keep provider cost visibility. (Recoder)
 Agent dashboard	Yes	Recoder Agents is already presented as multi-turn agents, tool execution, templates, and monitoring. (Recoder)
-Web IDE	Yes	Public site describes browser IDE, live preview, built-in terminal, AI code generation, and one-click deploy. (Recoder)
+Spaces	Yes	Public site describes browser IDE, live preview, built-in terminal, AI code generation, and one-click deploy. (Recoder)
 PM product	Yes	Recoder PM is already described as AI-first project management with PRDs, sprint automation, progress insights, RICE scoring, and feedback analysis. (Recoder)
 Agency product	Yes	Recoder Agency is already positioned around client delivery and AI agent workflows. (Recoder)
 A2A/MCP angle	Yes	The site already says Claude Code, Codex, Cursor, and MCP-compatible tools can talk to Recoder agents through recoder-a2a, with discovery, secure handoff, permissions, audit logging, SSE, and WebSocket streaming. (Recoder)
@@ -4773,7 +4772,7 @@ So the big missing thing is not another product idea.
 The big missing thing is:
 A single center object: Recoder Space.
 Right now, the public story can feel like:
-Agents + Web IDE + PM + Agency + CLI + A2A.
+Agents + Spaces + PM + Agency + CLI + A2A.
 It needs to feel like:
 One Recoder Space where agents, humans, tasks, code, clients, deployments, and marketing outputs all live.
 
@@ -4924,7 +4923,7 @@ GTM Radar for SaaS builders and AI agencies using Recoder.
 The Better Product Architecture
 Instead of this:
 Recoder Agents
-Recoder Web
+Recoder Spaces
 Recoder CLI
 Recoder PM
 Recoder Agency
@@ -4950,7 +4949,7 @@ Plan → Build → Review → Deploy → Announce → Report
 Map your products into that:
 Step	Recoder module
 Plan	Recoder PM
-Build	Recoder Code / Agents / Web IDE
+Build	Recoder Code / Agents / Spaces
 Review	Agent timeline / PR review / approvals
 Deploy	Recoder Deploy
 Announce	Recoder Launch

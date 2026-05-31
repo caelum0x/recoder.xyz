@@ -19,15 +19,15 @@ export default function FAQPage() {
     },
     {
       q: 'How do I get started?',
-      a: 'Sign up with Google or GitHub, add your API key in Settings → AI Providers, then launch the Web IDE or download the CLI. That\'s it!'
+      a: 'Sign up with Google or GitHub, add your API key in Settings → AI Providers, then launch the Spaces or download the CLI. That\'s it!'
     },
     {
       q: 'Is my code private?',
       a: 'Yes. Your code is processed by the AI provider you choose. We don\'t store your code on our servers. For maximum privacy, use local models with Ollama.'
     },
     {
-      q: 'What\'s the difference between Web IDE and CLI?',
-      a: 'Web IDE is a browser-based code editor - great for quick edits and working from any device. CLI is a terminal tool that integrates with your local development environment.'
+      q: 'What\'s the difference between Spaces and CLI?',
+      a: 'Spaces is a browser-based code editor - great for quick edits and working from any device. CLI is a terminal tool that integrates with your local development environment.'
     },
     {
       q: 'Can I use Recoder for commercial projects?',

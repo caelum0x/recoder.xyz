@@ -45,7 +45,7 @@ export default function WorkflowsPage() {
          |         A2A Task Router             |
          +-----+-------+-------+------+-------+
                |       |       |      |
-          Agents    PM     Agency   Web IDE
+          Agents    PM     Agency   Spaces
     agents.xyz  pm.xyz  agency.xyz  web.xyz`}
               </pre>
             </div>

@@ -240,7 +240,7 @@ export default function PlanPage() {
                 <div className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-gray-300">
-                    You get full access to every service — Agents, Web IDE, PM, Agency, and CLI — completely free during beta.
+                    You get full access to every service — Agents, Spaces, PM, Agency, and CLI — completely free during beta.
                   </p>
                 </div>
               </div>

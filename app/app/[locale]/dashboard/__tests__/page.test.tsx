@@ -13,8 +13,8 @@ vi.mock('@/lib/session-provider', () => ({
   useSession: mockUseSession,
 }));
 
-vi.mock('@/app/components/LaunchWebIDEButton', () => ({
-  LaunchWebIDEButton: mockLaunchWebIdeButton,
+vi.mock('@/app/components/LaunchSpacesButton', () => ({
+  LaunchSpacesButton: mockLaunchWebIdeButton,
 }));
 
 const originalFetch = global.fetch;
