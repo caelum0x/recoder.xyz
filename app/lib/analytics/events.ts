@@ -14,6 +14,12 @@ export const AnalyticsEvents = {
   // ---- Acquisition / marketing ----
   CTA_CLICKED: 'cta_clicked',
 
+  // ---- Lead capture (top of funnel, pre-signup) ----
+  LEAD_CAPTURE_SUBMITTED: 'lead_capture_submitted',
+  LEAD_CAPTURE_SUCCEEDED: 'lead_capture_succeeded',
+  LEAD_CAPTURE_FAILED: 'lead_capture_failed',
+  LEAD_CONVERTED_TO_SIGNUP: 'lead_converted_to_signup',
+
   // ---- Auth funnel ----
   SIGNUP_STARTED: 'signup_started',
   LOGIN_STARTED: 'login_started',
@@ -80,6 +86,20 @@ export interface CTAEventProperties extends BaseEventProperties {
   destination?: string;
 }
 
+/** Lead-capture funnel properties (newsletter / pre-signup email capture). */
+export interface LeadCaptureEventProperties extends BaseEventProperties {
+  /** Where the lead form was rendered, e.g. "homepage_hero_lead_capture". */
+  leadSource?: string;
+  /** True when a previously-unsubscribed lead was reactivated. */
+  reactivated?: boolean;
+  /** True when the lead email already matched a registered user at capture time. */
+  matchedExistingUser?: boolean;
+  /** Signup method (LEAD_CONVERTED_TO_SIGNUP only). */
+  method?: 'email' | 'google' | 'github' | 'cli';
+  /** Failure reason (LEAD_CAPTURE_FAILED only). */
+  reason?: string;
+}
+
 /** Auth funnel properties. */
 export interface AuthEventProperties extends BaseEventProperties {
   method?: 'email' | 'google' | 'github' | 'cli';
@@ -132,8 +152,16 @@ export interface PageViewEventProperties extends BaseEventProperties {
 // ---------------------------------------------------------------------------
 
 export type EventPropertiesMap = {
-  // Auth
+  // Acquisition
   [AnalyticsEvents.CTA_CLICKED]: CTAEventProperties;
+
+  // Lead capture
+  [AnalyticsEvents.LEAD_CAPTURE_SUBMITTED]: LeadCaptureEventProperties;
+  [AnalyticsEvents.LEAD_CAPTURE_SUCCEEDED]: LeadCaptureEventProperties;
+  [AnalyticsEvents.LEAD_CAPTURE_FAILED]: LeadCaptureEventProperties;
+  [AnalyticsEvents.LEAD_CONVERTED_TO_SIGNUP]: LeadCaptureEventProperties;
+
+  // Auth
   [AnalyticsEvents.SIGNUP_STARTED]: AuthEventProperties;
   [AnalyticsEvents.LOGIN_STARTED]: AuthEventProperties;
   [AnalyticsEvents.SIGNUP_COMPLETED]: AuthEventProperties;

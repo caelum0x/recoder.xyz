@@ -108,6 +108,34 @@ export async function POST(request: NextRequest) {
       source: attribution.acquisitionSource,
     });
 
+    // Lead -> signup conversion: if this email was captured as a lead, link it
+    // to the new user and record the conversion. Best-effort; never blocks signup.
+    try {
+      const lead = await prisma.newsletter_subscribers.findUnique({
+        where: { email },
+        select: { id: true, source: true, userId: true },
+      });
+      if (lead) {
+        if (!lead.userId) {
+          await prisma.newsletter_subscribers.update({
+            where: { id: lead.id },
+            data: { userId: user.id, updatedAt: new Date() },
+          });
+        }
+        trackServerEvent(AnalyticsEvents.LEAD_CONVERTED_TO_SIGNUP, {
+          method: 'email',
+          userId: user.id,
+          leadSource: lead.source ?? undefined,
+          matchedExistingUser: Boolean(lead.userId),
+        });
+      }
+    } catch (conversionError) {
+      logger.warn('Lead-to-signup conversion tracking failed', {
+        route: 'auth/signup-email',
+        error: conversionError instanceof Error ? conversionError.message : String(conversionError),
+      });
+    }
+
     // In development, include the temp password for testing
     const isDev = process.env.NODE_ENV === 'development';
     const showTestData = isDev || process.env.SHOW_TEST_CREDENTIALS === 'true';
