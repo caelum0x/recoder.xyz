@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@recoder/shared": "file:../../../shared",
+    "recoder-a2a-sdk": "file:../../../packages/a2a-sdk",
     "@repo/atlassian": "workspace:*",
     "@repo/backend": "workspace:*",
     "@repo/canny": "workspace:*",

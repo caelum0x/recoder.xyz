@@ -42,6 +42,12 @@
 			"types": "./dist/validation.d.ts",
 			"import": "./dist/validation.mjs",
 			"require": "./dist/validation.js"
+		},
+		"./ingress": {
+			"types": "./dist/ingress-contract/index.d.ts",
+			"import": "./src/ingress-contract/index.ts",
+			"require": "./dist/ingress-contract/index.js",
+			"default": "./dist/ingress-contract/index.js"
 		}
 	},
 	"files": ["dist"],

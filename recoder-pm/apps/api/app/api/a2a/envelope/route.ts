@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+  type LegacyInboundEnvelope,
+  validateInboundA2AEnvelope,
+} from "recoder-a2a-sdk/ingress";
+import {
   buildInvalidA2AEnvelopeError,
   checkAndStoreEnvelopeIdempotency,
   handleA2AIntent,
@@ -46,6 +50,20 @@ export async function POST(request: Request) {
   const connectorId = String((envelope as Record<string, unknown>).from
     ? ((envelope as Record<string, unknown>).from as Record<string, unknown>).id ?? "unknown"
     : "unknown");
+
+  // Validate against the shared canonical A2A contract (recoder-9s5j) before
+  // idempotency/intent dispatch. The legacy camelCase wire shape is adapted onto
+  // the canonical TaskEnvelope and normalized; on failure we return the canonical
+  // A2AError from the shared taxonomy instead of a surface-local error shape.
+  const workspaceId = String(
+    (envelope.metadata?.workspaceId as string | undefined) ?? envelope.threadId,
+  );
+  const validation = validateInboundA2AEnvelope(envelope as unknown as LegacyInboundEnvelope, {
+    workspaceId,
+  });
+  if (!validation.ok) {
+    return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });
+  }
 
   trackPmInteropEvent(PmInteropEvents.CONNECTOR_INVOKED, {
     connector_id: connectorId,

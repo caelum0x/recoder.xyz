@@ -42,6 +42,7 @@
 		"@recoder/design-tokens": "file:../../../packages/design-tokens",
 		"@recoder/shared": "file:../../../shared",
 		"@recoder/auth": "file:../../../packages/auth",
+		"recoder-a2a-sdk": "file:../../../packages/a2a-sdk",
 		"@aws-sdk/client-s3": "catalog:",
 		"@embedpdf/pdfium": "catalog:",
 		"@recoder-internal/ui": "workspace:*",
