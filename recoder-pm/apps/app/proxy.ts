@@ -12,9 +12,10 @@ export const config = {
      * - _next/image (image optimization)
      * - favicon.ico, icons, manifest, images
      * - api/auth/* (auth endpoints must remain open)
+     * - api/platform/* (internal service-to-service endpoints, key-gated in-route)
      * - auth/* (auth confirmation callbacks)
      * - sign-in, sign-up (public pages)
      */
-    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$|api/auth|auth|sign-in|sign-up).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$|api/auth|api/platform|auth|sign-in|sign-up).*)",
   ],
 };
