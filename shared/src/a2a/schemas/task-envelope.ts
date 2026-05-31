@@ -182,6 +182,17 @@ export interface TaskAgentRef {
 // ---------------------------------------------------------------------------
 
 /**
+ * A canonical link to a deployed preview produced by a task execution
+ * (e.g. a Daytona preview URL or a published web build).
+ */
+export interface TaskPreviewLink {
+  /** The preview URL. */
+  url: string;
+  /** Optional human-readable label for the preview. */
+  label?: string;
+}
+
+/**
  * The result of a completed (or failed) task.
  * Only present when the task reaches a terminal state.
  */
@@ -192,6 +203,8 @@ export interface TaskResult {
   data?: Record<string, unknown>;
   /** Artifacts produced during execution (patches, files, reports). */
   artifacts?: TaskArtifact[];
+  /** Canonical preview links produced during execution. */
+  preview?: TaskPreviewLink[];
 }
 
 /**

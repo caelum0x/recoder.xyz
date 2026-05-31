@@ -83,6 +83,29 @@ describe('buildTaskTimeline', () => {
     expect(byType('approval')[0].status).toBe('success');
   });
 
+  it('emits one preview event per canonical result.preview link', () => {
+    const envelope = baseEnvelope({
+      result: {
+        preview: [
+          { url: 'https://preview.example.com/a', label: 'Staging' },
+          { url: 'https://preview.example.com/b' },
+        ],
+      },
+      // A loosely-typed fallback URL that must be ignored when canonical
+      // preview links are present.
+      metadata: { previewUrl: 'https://legacy.example.com/should-be-ignored' },
+    });
+
+    const timeline = buildTaskTimeline(envelope);
+    const previews = timeline.events.filter((e) => e.type === 'preview');
+
+    expect(previews).toHaveLength(2);
+    expect(previews[0]).toMatchObject({ url: 'https://preview.example.com/a', title: 'Staging' });
+    expect(previews[1]).toMatchObject({ url: 'https://preview.example.com/b', title: 'Preview deployed' });
+    // The legacy metadata fallback must not also fire.
+    expect(previews.some((p) => p.url === 'https://legacy.example.com/should-be-ignored')).toBe(false);
+  });
+
   it('emits a minimal timeline for a freshly created task', () => {
     const envelope = baseEnvelope({ state: 'submitted', history: [], updated_at: '2026-01-01T00:00:00.000Z' });
     const timeline = buildTaskTimeline(envelope);

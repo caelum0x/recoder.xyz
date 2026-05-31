@@ -347,7 +347,7 @@ taskLifecycleRouter.get(
         return;
       }
 
-      const approvals = getApprovalGateService().listForWorkspace(result.data.workspace_id);
+      const approvals = getApprovalGateService().listForTask(result.data.workspace_id, result.data.id);
       const timeline = buildTaskTimeline(result.data, approvals);
 
       sendSuccess(res, timeline);

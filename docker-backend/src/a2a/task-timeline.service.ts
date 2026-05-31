@@ -221,19 +221,39 @@ export function buildTaskTimeline(
     });
   }
 
-  // --- preview event -----------------------------------------------------
-  const previewUrl =
-    firstUrl(envelope.metadata, PREVIEW_URL_KEYS) ??
-    firstUrl(envelope.result?.data, PREVIEW_URL_KEYS);
-  if (previewUrl) {
+  // --- preview events ----------------------------------------------------
+  // Canonical preview links live on result.preview (TaskPreviewLink[]). Emit
+  // one event per entry, mirroring collectPreviewLinks() on the lifecycle side.
+  for (const [i, link] of (envelope.result?.preview ?? []).entries()) {
+    if (!link || typeof link.url !== 'string' || link.url.trim().length === 0) {
+      continue;
+    }
     events.push({
-      id: `${envelope.id}:preview`,
+      id: `${envelope.id}:preview:${i}`,
       type: 'preview',
-      title: 'Preview deployed',
+      title: link.label ?? 'Preview deployed',
       timestamp: envelope.updated_at,
-      url: previewUrl,
+      url: link.url,
       status: 'success',
     });
+  }
+
+  // Legacy / loosely-typed fallback: a single preview URL embedded on metadata
+  // or result.data. Only emitted when no canonical preview links are present.
+  if ((envelope.result?.preview ?? []).length === 0) {
+    const previewUrl =
+      firstUrl(envelope.metadata, PREVIEW_URL_KEYS) ??
+      firstUrl(envelope.result?.data, PREVIEW_URL_KEYS);
+    if (previewUrl) {
+      events.push({
+        id: `${envelope.id}:preview`,
+        type: 'preview',
+        title: 'Preview deployed',
+        timestamp: envelope.updated_at,
+        url: previewUrl,
+        status: 'success',
+      });
+    }
   }
 
   // --- approval events ---------------------------------------------------

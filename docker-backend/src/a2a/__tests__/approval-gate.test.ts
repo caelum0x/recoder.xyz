@@ -358,6 +358,49 @@ describe('approval-gate.service', () => {
 
       expect(svc.listPending('ws_1')).toHaveLength(1);
     });
+
+    it('listForTask filters approvals to a single task and never leaks others', async () => {
+      const svc = await freshService();
+
+      svc.createRequest({
+        workspaceId: 'ws_1', requestingAgentId: 'a', targetAgentId: 'b',
+        action: 'merge:pr', details: { sourceTaskId: 'task_a' },
+      });
+      svc.createRequest({
+        workspaceId: 'ws_1', requestingAgentId: 'a', targetAgentId: 'b',
+        action: 'deploy', details: { taskId: 'task_a' },
+      });
+      svc.createRequest({
+        workspaceId: 'ws_1', requestingAgentId: 'a', targetAgentId: 'b',
+        action: 'other', details: { task_id: 'task_b' },
+      });
+      svc.createRequest({
+        workspaceId: 'ws_1', requestingAgentId: 'a', targetAgentId: 'b',
+        action: 'unrelated', details: {},
+      });
+
+      const forA = svc.listForTask('ws_1', 'task_a');
+      expect(forA.map((r) => r.action).sort()).toEqual(['deploy', 'merge:pr']);
+      // No approval belonging to another task (or with no task id) leaks through.
+      expect(forA.every((r) => r.action !== 'other' && r.action !== 'unrelated')).toBe(true);
+
+      expect(svc.listForTask('ws_1', 'task_b').map((r) => r.action)).toEqual(['other']);
+      expect(svc.listForTask('ws_1', 'task_missing')).toHaveLength(0);
+    });
+
+    it('extractApprovalTaskId reads the canonical key variants', async () => {
+      const { extractApprovalTaskId } = await import('../approval-gate.service');
+      const base = {
+        approvalId: 'approval_x', workspaceId: 'ws_1', requestingAgentId: 'a',
+        targetAgentId: 'b', action: 'x', status: 'pending' as const,
+        createdAt: new Date().toISOString(), timeoutMs: 1000,
+      };
+
+      expect(extractApprovalTaskId({ ...base, details: { sourceTaskId: 't1' } })).toBe('t1');
+      expect(extractApprovalTaskId({ ...base, details: { taskId: 't2' } })).toBe('t2');
+      expect(extractApprovalTaskId({ ...base, details: { task_id: 't3' } })).toBe('t3');
+      expect(extractApprovalTaskId({ ...base, details: {} })).toBeUndefined();
+    });
   });
 
   describe('persistence and recovery', () => {
