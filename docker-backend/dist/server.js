@@ -13291,8 +13291,10 @@ app.use('/api/daytona/lsp', authenticateRequest, daytona_lsp_js_1.daytonaLspRout
 // Unified activity feed + dashboard metrics
 const unified_activity_feed_js_1 = require("./unified-activity-feed.js");
 const unified_dashboard_js_1 = require("./unified-dashboard.js");
+const edge_routes_js_1 = require("./edge/edge.routes.js");
 app.use('/api/a2a/activity', unified_activity_feed_js_1.activityFeedRouter);
 app.use('/api/a2a/dashboard', unified_dashboard_js_1.dashboardRouter);
+app.use('/api/edge', edge_routes_js_1.edgeRouter);
 // ── Coding Runtime API ──────────────────────────────────────────────────────
 // Deep coding mode: start/prompt/dispose sessions via runtime adapters
 const codingRuntimeSelectionByProject = new Map();
@@ -15479,6 +15481,174 @@ app.delete('/api/git/:projectId/invitations/:invitationId', authenticateRequest,
         (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
+// ==================== GITHUB PULL REQUESTS (first-class PR artifacts) ====================
+// Make PRs first-class run artifacts: open a PR from the project's branch, list PRs,
+// and read PR review + CI check state. Reuses the same token used for push/pull.
+// POST /api/git/:projectId/pull-request - Open a GitHub PR for the project's branch
+app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectOwnership, async (req, res) => {
+    try {
+        const projectId = sanitizeProjectId(req.params.projectId);
+        const token = (req.body?.token || req.query.token);
+        if (!token)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+        const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+        if (!title)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'PR title required'));
+        const entry = await getOrRecoverContainer(projectId);
+        if (!entry)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.NOT_FOUND, 'Container not found'));
+        const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
+        const origin = remotes.find((r) => r.name === 'origin');
+        if (!origin)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.NOT_FOUND, 'No origin remote'));
+        const parsed = parseGitHubRemoteUrl(origin.url);
+        if (!parsed)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+        // Default head to the current branch; base defaults to 'main'.
+        const gitStatus = await git_operations_js_1.gitOperations.getStatus(entry.id);
+        const head = (typeof req.body?.head === 'string' && req.body.head.trim()) || gitStatus.branch;
+        if (!head)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'Could not determine head branch'));
+        const base = (typeof req.body?.base === 'string' && req.body.base.trim()) || 'main';
+        const prBody = typeof req.body?.body === 'string' ? req.body.body : '';
+        const draft = req.body?.draft === true;
+        const { status, data } = await githubApi('POST', `/repos/${parsed.owner}/${parsed.repo}/pulls`, token, {
+            title, head, base, body: prBody, draft,
+        });
+        if (status !== 201) {
+            const msg = data?.message || data?.errors?.[0]?.message || 'Failed to create pull request';
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.SERVICE_UNAVAILABLE, msg));
+        }
+        (0, index_js_11.sendSuccess)(res, {
+            pullRequest: {
+                number: data.number,
+                url: data.html_url,
+                state: data.state,
+                title: data.title,
+                head: data.head?.ref,
+                base: data.base?.ref,
+                draft: data.draft,
+                createdAt: data.created_at,
+            },
+            repo: parsed,
+        });
+    }
+    catch (err) {
+        (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.INTERNAL_ERROR, err.message));
+    }
+});
+// GET /api/git/:projectId/pull-requests - List PRs for the project repo
+app.get('/api/git/:projectId/pull-requests', authenticateRequest, verifyProjectOwnership, async (req, res) => {
+    try {
+        const projectId = sanitizeProjectId(req.params.projectId);
+        const token = req.query.token;
+        if (!token)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+        const state = (['open', 'closed', 'all'].includes(req.query.state) ? req.query.state : 'open');
+        const entry = await getOrRecoverContainer(projectId);
+        if (!entry)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.NOT_FOUND, 'Container not found'));
+        const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
+        const origin = remotes.find((r) => r.name === 'origin');
+        if (!origin)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.NOT_FOUND, 'No origin remote'));
+        const parsed = parseGitHubRemoteUrl(origin.url);
+        if (!parsed)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+        const { status, data } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/pulls?state=${state}&per_page=30`, token);
+        if (status !== 200) {
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
+        }
+        const pullRequests = (data || []).map((pr) => ({
+            number: pr.number,
+            url: pr.html_url,
+            state: pr.state,
+            title: pr.title,
+            head: pr.head?.ref,
+            base: pr.base?.ref,
+            draft: pr.draft,
+            author: pr.user?.login,
+            createdAt: pr.created_at,
+            updatedAt: pr.updated_at,
+        }));
+        (0, index_js_11.sendSuccess)(res, { pullRequests, repo: parsed });
+    }
+    catch (err) {
+        (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.INTERNAL_ERROR, err.message));
+    }
+});
+// GET /api/git/:projectId/pull-request/:number - PR detail with review + CI check state
+app.get('/api/git/:projectId/pull-request/:number', authenticateRequest, verifyProjectOwnership, async (req, res) => {
+    try {
+        const projectId = sanitizeProjectId(req.params.projectId);
+        const token = req.query.token;
+        if (!token)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+        const number = parseInt(req.params.number, 10);
+        if (!Number.isInteger(number) || number <= 0)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'Invalid PR number'));
+        const entry = await getOrRecoverContainer(projectId);
+        if (!entry)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.NOT_FOUND, 'Container not found'));
+        const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
+        const origin = remotes.find((r) => r.name === 'origin');
+        if (!origin)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.NOT_FOUND, 'No origin remote'));
+        const parsed = parseGitHubRemoteUrl(origin.url);
+        if (!parsed)
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+        const { status, data: pr } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/pulls/${number}`, token);
+        if (status !== 200) {
+            return (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.SERVICE_UNAVAILABLE, pr?.message || 'Pull request not found'));
+        }
+        // Review + CI check state (best-effort: don't fail the whole request if these error)
+        const headSha = pr.head?.sha;
+        const [reviewsRes, checksRes] = await Promise.all([
+            githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/pulls/${number}/reviews`, token).catch(() => ({ status: 0, data: null })),
+            headSha
+                ? githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/commits/${headSha}/check-runs`, token).catch(() => ({ status: 0, data: null }))
+                : Promise.resolve({ status: 0, data: null }),
+        ]);
+        const reviews = (reviewsRes.status === 200 && Array.isArray(reviewsRes.data) ? reviewsRes.data : []).map((r) => ({
+            user: r.user?.login,
+            state: r.state,
+            submittedAt: r.submitted_at,
+        }));
+        const checks = (checksRes.status === 200 && checksRes.data?.check_runs ? checksRes.data.check_runs : []).map((c) => ({
+            name: c.name,
+            status: c.status,
+            conclusion: c.conclusion,
+        }));
+        (0, index_js_11.sendSuccess)(res, {
+            pullRequest: {
+                number: pr.number,
+                url: pr.html_url,
+                state: pr.state,
+                title: pr.title,
+                body: pr.body,
+                head: pr.head?.ref,
+                base: pr.base?.ref,
+                draft: pr.draft,
+                merged: pr.merged,
+                mergeable: pr.mergeable,
+                mergeableState: pr.mergeable_state,
+                author: pr.user?.login,
+                createdAt: pr.created_at,
+                updatedAt: pr.updated_at,
+                additions: pr.additions,
+                deletions: pr.deletions,
+                changedFiles: pr.changed_files,
+            },
+            reviews,
+            checks,
+            repo: parsed,
+        });
+    }
+    catch (err) {
+        (0, index_js_11.sendError)(res, (0, index_js_11.createError)(index_js_11.ErrorCode.INTERNAL_ERROR, err.message));
+    }
+});
+startupInfo('routes.github-pull-requests', 'registered');
 startupInfo('routes.github-collaborators', 'registered');
 // ==================== DAYTONA SANDBOX INTEGRATION ====================
 // REST-based Daytona sandbox management for recoder-web projects.
