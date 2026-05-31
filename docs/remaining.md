@@ -54,6 +54,7 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 7. Production traffic and abuse controls.
    Add Cloudflare/CrowdSec/open-appsec style mitigation rules after real traffic signals are instrumented. This maps to ready issues `recoder-a9rp` and `recoder-rbc2`.
+   - 2026-05-31 (recoder-rbc2, analysis done): Investigated the suspected "Finland" abuse signal via Cloudflare analytics. It was NOT external abuse — it was the prod box (Hetzner Helsinki, IPv6 2a01:4f9:c013:9cb6::1) self-polling `/api/platform/activity` and getting 403'd by Bot Fight Mode. No mitigation rule added (a FI block would self-block production). The 403 root cause was fixed instead (internal loopback calls + INTERNAL_SERVICE_KEY). Real abuse-mitigation rules remain deferred until a genuine external signal appears.
 
 ## Deferred
 
