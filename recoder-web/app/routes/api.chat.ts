@@ -9,8 +9,6 @@ import {
 import type { Messages } from '~/lib/types/chat';
 import type { ChatMode } from '~/lib/stores/chat-mode';
 import { createScopedLogger } from '~/utils/logger';
-import { executeOpencodeChat } from '~/lib/.server/llm/opencode-exec';
-import { getSessionCookie, getUserApiKey } from '~/lib/.server/llm/user-api-key';
 
 const logger = createScopedLogger('Chat');
 
@@ -793,6 +791,7 @@ IMPORTANT:
 
     const themePrompt = await loadThemePromptFromDocker(dockerUrl, requestBody.projectId, dockerHeaders);
 
+    const { getSessionCookie, getUserApiKey } = await import('~/lib/.server/llm/user-api-key');
     const projectSessionCookie = requestBody.projectId ? getSessionCookie(request) : null;
     const [projectOpenrouterKey, projectOpenaiKey, projectAnthropicKey, projectGoogleKey] =
       requestBody.projectId
