@@ -56,6 +56,12 @@ export {
 // Routes
 export { taskLifecycleRouter } from './task-lifecycle.routes';
 
+// Approval -> task lifecycle wiring
+export {
+  wireApprovalToTaskLifecycle,
+  resetApprovalLifecycleWiring,
+} from './approval-lifecycle-wiring';
+
 // Middleware
 export {
   validateCreateTaskBody,

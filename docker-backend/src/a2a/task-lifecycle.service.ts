@@ -817,6 +817,409 @@ export class TaskLifecycleService {
   }
 
   // -----------------------------------------------------------------------
+  // PM lifecycle decisions (pause / resume / reject / handoff)
+  // -----------------------------------------------------------------------
+  //
+  // These methods make Project-Manager (PM) decisions first-class lifecycle
+  // transitions rather than downstream annotations. They map onto the
+  // canonical state machine:
+  //
+  //   pause   : working        -> input-required  (hold for approval/decision)
+  //   resume  : input-required  -> working         (decision granted, continue)
+  //   reject  : * (non-terminal)-> cancelled       (decision denied, terminate)
+  //   handoff : reassign assignee, preserving state / history / artifacts
+  //
+  // Pause/resume reuse the existing non-terminal `input-required` hold state so
+  // the change stays additive to the shared state machine. The richer PM
+  // semantics (pause reason, linked approval, prior assignee) are recorded in
+  // metadata + audit so they can be reconstructed without schema changes.
+
+  /**
+   * Pause a running task pending a PM approval or decision.
+   *
+   * Transitions `working` -> `input-required` (a non-terminal hold) and records
+   * the pause context (reason + optional linked approval id) in metadata under
+   * `pmLifecycle.pause`, leaving history/artifacts intact for later resume.
+   */
+  pauseTask(
+    taskId: string,
+    options: { reason?: string; triggeredBy?: string; approvalId?: string } = {},
+  ): ServiceResult<TaskEnvelope> {
+    const reason = options.reason || 'Paused pending PM approval';
+    const result = this.transitionTask(taskId, {
+      target_state: TaskStateEnum.InputRequired,
+      triggered_by: options.triggeredBy,
+      reason,
+    });
+    if (!result.ok) return result;
+
+    const now = new Date().toISOString();
+    const paused: TaskEnvelope = {
+      ...result.data,
+      metadata: {
+        ...result.data.metadata,
+        pmLifecycle: {
+          ...(this.readPmLifecycle(result.data)),
+          phase: 'paused',
+          pause: {
+            reason,
+            approvalId: options.approvalId,
+            pausedBy: options.triggeredBy ?? 'pm',
+            pausedAt: now,
+          },
+        },
+      },
+    };
+    this.store.set(taskId, paused);
+
+    this.emitPmAudit(paused, {
+      decision: 'pause',
+      reason,
+      triggeredBy: options.triggeredBy,
+      severity: AuditSeverityEnum.Warning,
+      extra: { approval_id: options.approvalId },
+      now,
+    });
+
+    logger.info({ task_id: taskId, approval_id: options.approvalId }, 'task paused (PM decision)');
+    return { ok: true, data: paused };
+  }
+
+  /**
+   * Resume a paused task after a PM approval/decision is granted.
+   *
+   * Transitions `input-required` -> `working` and clears the pause hold,
+   * preserving the audit trail of the pause/resume cycle.
+   */
+  resumeTask(
+    taskId: string,
+    options: { reason?: string; triggeredBy?: string } = {},
+  ): ServiceResult<TaskEnvelope> {
+    const existing = this.store.get(taskId);
+    if (!existing) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+    if (existing.state !== TaskStateEnum.InputRequired) {
+      return {
+        ok: false,
+        httpStatus: 422,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.InvalidStateTransition,
+          message: `Can only resume tasks in 'input-required' state; task ${taskId} is in '${existing.state}'`,
+          details: { task_id: taskId, current_state: existing.state },
+        }),
+      };
+    }
+
+    const reason = options.reason || 'Resumed after PM approval';
+    const result = this.transitionTask(taskId, {
+      target_state: TaskStateEnum.Working,
+      triggered_by: options.triggeredBy,
+      reason,
+    });
+    if (!result.ok) return result;
+
+    const now = new Date().toISOString();
+    const resumed: TaskEnvelope = {
+      ...result.data,
+      metadata: {
+        ...result.data.metadata,
+        pmLifecycle: {
+          ...this.readPmLifecycle(result.data),
+          phase: 'resumed',
+          pause: undefined,
+          resume: {
+            reason,
+            resumedBy: options.triggeredBy ?? 'pm',
+            resumedAt: now,
+          },
+        },
+      },
+    };
+    this.store.set(taskId, resumed);
+
+    this.emitPmAudit(resumed, {
+      decision: 'resume',
+      reason,
+      triggeredBy: options.triggeredBy,
+      severity: AuditSeverityEnum.Info,
+      now,
+    });
+
+    logger.info({ task_id: taskId }, 'task resumed (PM decision)');
+    return { ok: true, data: resumed };
+  }
+
+  /**
+   * Reject a task as a terminal PM decision.
+   *
+   * Transitions the task to `cancelled` (terminal) and records the rejection
+   * decision + reason in metadata under `pmLifecycle.reject`, distinct from a
+   * plain cancellation so consumers can tell a denied approval apart from an
+   * operator cancel.
+   */
+  rejectTask(
+    taskId: string,
+    options: { reason?: string; triggeredBy?: string; approvalId?: string } = {},
+  ): ServiceResult<TaskEnvelope> {
+    const reason = options.reason || 'Rejected by PM decision';
+    const result = this.transitionTask(taskId, {
+      target_state: TaskStateEnum.Cancelled,
+      triggered_by: options.triggeredBy,
+      reason,
+    });
+    if (!result.ok) return result;
+
+    const now = new Date().toISOString();
+    const rejected: TaskEnvelope = {
+      ...result.data,
+      metadata: {
+        ...result.data.metadata,
+        pmLifecycle: {
+          ...this.readPmLifecycle(result.data),
+          phase: 'rejected',
+          pause: undefined,
+          reject: {
+            reason,
+            approvalId: options.approvalId,
+            rejectedBy: options.triggeredBy ?? 'pm',
+            rejectedAt: now,
+          },
+        },
+      },
+    };
+    this.store.set(taskId, rejected);
+
+    this.emitPmAudit(rejected, {
+      decision: 'reject',
+      reason,
+      triggeredBy: options.triggeredBy,
+      severity: AuditSeverityEnum.Warning,
+      extra: { approval_id: options.approvalId },
+      now,
+    });
+
+    logger.info({ task_id: taskId, approval_id: options.approvalId }, 'task rejected (PM decision)');
+    return { ok: true, data: rejected };
+  }
+
+  /**
+   * Hand off a task to a new assignee while preserving ownership lineage,
+   * artifacts, and the full audit/history trail.
+   *
+   * The task's `state`, `history`, `result`, and `tags` are untouched; only
+   * the `assignee` is reassigned. The prior assignee and handoff reason are
+   * recorded in metadata under `pmLifecycle.handoffs` (append-only) so the
+   * complete chain of custody is auditable. A `task.progress` audit event with
+   * `decision: 'handoff'` is emitted.
+   */
+  handoffTask(
+    taskId: string,
+    newAssignee: TaskAgentRef,
+    options: { reason?: string; triggeredBy?: string } = {},
+  ): ServiceResult<TaskEnvelope> {
+    const existing = this.store.get(taskId);
+    if (!existing) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    if (isTerminalState(existing.state)) {
+      return {
+        ok: false,
+        httpStatus: 409,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskAlreadyTerminal,
+          message: `Cannot hand off task in terminal state '${existing.state}'`,
+          details: { task_id: taskId, current_state: existing.state },
+        }),
+      };
+    }
+
+    if (!newAssignee?.agent_id || !newAssignee?.platform) {
+      return {
+        ok: false,
+        httpStatus: 400,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.MissingEnvelopeField,
+          message: 'Handoff requires newAssignee.agent_id and newAssignee.platform',
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    const now = new Date().toISOString();
+    const reason = options.reason || 'Handed off by PM decision';
+    const priorAssignee = existing.assignee;
+    const pmLifecycle = this.readPmLifecycle(existing);
+    const priorHandoffs = Array.isArray(pmLifecycle.handoffs) ? pmLifecycle.handoffs : [];
+
+    const handed: TaskEnvelope = {
+      ...existing,
+      assignee: newAssignee,
+      updated_at: now,
+      // Preserve history/result/artifacts; append a chain-of-custody record.
+      metadata: {
+        ...existing.metadata,
+        // Clear any stale single-session claim so the new assignee can claim.
+        claimedBy: undefined,
+        pmLifecycle: {
+          ...pmLifecycle,
+          phase: 'handed-off',
+          handoffs: [
+            ...priorHandoffs,
+            {
+              from: { agent_id: priorAssignee.agent_id, platform: priorAssignee.platform },
+              to: { agent_id: newAssignee.agent_id, platform: newAssignee.platform },
+              reason,
+              handedOffBy: options.triggeredBy ?? 'pm',
+              handedOffAt: now,
+            },
+          ],
+        },
+      },
+    };
+    this.store.set(taskId, handed);
+
+    this.emitPmAudit(handed, {
+      decision: 'handoff',
+      reason,
+      triggeredBy: options.triggeredBy,
+      severity: AuditSeverityEnum.Info,
+      extra: {
+        from_assignee: priorAssignee.agent_id,
+        to_assignee: newAssignee.agent_id,
+      },
+      now,
+    });
+
+    logger.info(
+      { task_id: taskId, from: priorAssignee.agent_id, to: newAssignee.agent_id },
+      'task handed off (PM decision)',
+    );
+    return { ok: true, data: handed };
+  }
+
+  /**
+   * Drive a task's lifecycle from a resolved approval-gate decision.
+   *
+   * This is the wiring that makes "resolving an approval gate drive the task
+   * state": when an approval that paused a task is granted the task resumes;
+   * when it is rejected (or expires) the task is terminated. Idempotent and
+   * tolerant of tasks that are not currently paused.
+   */
+  resolveApprovalDecision(
+    taskId: string,
+    decision: 'granted' | 'rejected' | 'expired',
+    options: { reason?: string; triggeredBy?: string; approvalId?: string } = {},
+  ): ServiceResult<TaskEnvelope> {
+    const existing = this.store.get(taskId);
+    if (!existing) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    // Already terminal: nothing to drive (idempotent no-op success).
+    if (isTerminalState(existing.state)) {
+      return { ok: true, data: existing };
+    }
+
+    if (decision === 'granted') {
+      // Only resume if the task is actually paused; otherwise leave as-is.
+      if (existing.state === TaskStateEnum.InputRequired) {
+        return this.resumeTask(taskId, {
+          reason: options.reason || 'Approval granted',
+          triggeredBy: options.triggeredBy,
+        });
+      }
+      return { ok: true, data: existing };
+    }
+
+    // rejected or expired -> terminate the run.
+    return this.rejectTask(taskId, {
+      reason: options.reason || (decision === 'expired' ? 'Approval expired' : 'Approval rejected'),
+      triggeredBy: options.triggeredBy,
+      approvalId: options.approvalId,
+    });
+  }
+
+  /** Safely read the `pmLifecycle` metadata bag from an envelope. */
+  private readPmLifecycle(envelope: TaskEnvelope): Record<string, unknown> {
+    const bag = envelope.metadata?.pmLifecycle;
+    return bag && typeof bag === 'object' ? { ...(bag as Record<string, unknown>) } : {};
+  }
+
+  /** Emit an audit event for a PM lifecycle decision. */
+  private emitPmAudit(
+    envelope: TaskEnvelope,
+    input: {
+      decision: 'pause' | 'resume' | 'reject' | 'handoff';
+      reason?: string;
+      triggeredBy?: string;
+      severity: (typeof AuditSeverityEnum)[keyof typeof AuditSeverityEnum];
+      extra?: Record<string, unknown>;
+      now: string;
+    },
+  ): void {
+    const eventTypeByDecision = {
+      pause: AuditEventTypeEnum.TaskInputRequired,
+      resume: AuditEventTypeEnum.TaskStarted,
+      reject: AuditEventTypeEnum.TaskCancelled,
+      handoff: AuditEventTypeEnum.TaskProgress,
+    } as const;
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: eventTypeByDecision[input.decision],
+        severity: input.severity,
+        actor: {
+          kind: AuditActorKindEnum.User,
+          id: input.triggeredBy || 'pm',
+          name: input.triggeredBy || 'pm',
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: envelope.id,
+        },
+        trace_id: envelope.trace_id,
+        workspace_id: envelope.workspace_id,
+        thread_id: envelope.thread_id,
+        task_id: envelope.id,
+        metadata: {
+          pm_decision: input.decision,
+          to_state: envelope.state,
+          reason: input.reason,
+          ...(input.extra ?? {}),
+        },
+        now: input.now,
+      }),
+    );
+  }
+
+  // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
 

@@ -32,6 +32,18 @@ export interface CreateApprovalInput {
 type ApprovalCallback = (approval: ApprovalRequest) => void;
 
 /**
+ * Decision sink invoked whenever an approval reaches a resolved state
+ * (granted / rejected / expired). Used to drive the task lifecycle from an
+ * approval-gate resolution without creating an import cycle between the
+ * approval-gate and task-lifecycle services. Registered via
+ * {@link ApprovalGateService.onDecision}.
+ */
+export type ApprovalDecisionSink = (
+  approval: ApprovalRequest,
+  decision: 'granted' | 'rejected' | 'expired',
+) => void;
+
+/**
  * Extract the originating task id from an approval request's details bag.
  * Approval requests carry the source task id under one of several key
  * variants depending on which caller created them.
@@ -52,6 +64,7 @@ export class ApprovalGateService {
   private readonly requests: Map<string, ApprovalRequest>;
   private readonly timeouts = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly callbacks = new Map<string, ApprovalCallback[]>();
+  private readonly decisionSinks: ApprovalDecisionSink[] = [];
 
   constructor() {
     // Hydrate from disk and re-arm timeouts for still-pending requests
@@ -128,6 +141,7 @@ export class ApprovalGateService {
 
     // Fire callbacks
     this.fireCallbacks(approvalId, request);
+    this.fireDecision(request, 'granted');
 
     logger.info({ approvalId, resolvedBy }, 'approval granted');
     return request;
@@ -151,6 +165,8 @@ export class ApprovalGateService {
       data: { approval: request },
       workspaceId: request.workspaceId,
     });
+
+    this.fireDecision(request, 'rejected');
 
     logger.info({ approvalId, resolvedBy }, 'approval rejected');
     return request;
@@ -234,6 +250,28 @@ export class ApprovalGateService {
     this.callbacks.set(approvalId, existing);
   }
 
+  /**
+   * Register a global decision sink invoked for every resolved approval
+   * (granted / rejected / expired). Used to drive task-lifecycle transitions
+   * from approval-gate resolutions.
+   */
+  onDecision(sink: ApprovalDecisionSink): void {
+    this.decisionSinks.push(sink);
+  }
+
+  private fireDecision(
+    request: ApprovalRequest,
+    decision: 'granted' | 'rejected' | 'expired',
+  ): void {
+    for (const sink of this.decisionSinks) {
+      try {
+        sink(request, decision);
+      } catch (err) {
+        logger.error({ err, approvalId: request.approvalId, decision }, 'approval decision sink error');
+      }
+    }
+  }
+
   private expire(approvalId: string): void {
     const request = this.requests.get(approvalId);
     if (!request || (request.status !== 'pending' && request.status !== 'escalated')) return;
@@ -241,6 +279,8 @@ export class ApprovalGateService {
     request.status = 'expired';
     request.resolvedAt = new Date().toISOString();
     this.persist();
+
+    this.fireDecision(request, 'expired');
 
     logger.info({ approvalId }, 'approval expired');
   }

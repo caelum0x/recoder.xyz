@@ -14,6 +14,10 @@
  * | GET    | /:taskId/timeline             | Get unified task→artifact→pr→preview→approval timeline |
  * | GET    | /                             | List tasks with optional filters         |
  * | POST   | /:taskId/execute              | Execute a task via Pi/OpenCode agent     |
+ * | POST   | /:taskId/pause                | Pause a running task pending PM approval |
+ * | POST   | /:taskId/resume               | Resume a paused task after approval      |
+ * | POST   | /:taskId/reject               | Reject (terminate) a task via PM decision|
+ * | POST   | /:taskId/handoff              | Reassign a task to a new assignee        |
  *
  * All error responses use the canonical A2A error taxonomy from
  * `@recoder/shared/a2a/schemas`.
@@ -394,6 +398,160 @@ taskLifecycleRouter.post(
       sendError(res, 500, buildA2AError({
         code: A2AErrorCodeEnum.InternalError,
         message: 'Internal server error while claiming task',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/pause -- Pause a running task pending PM approval
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/pause',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { reason, triggered_by, approval_id } = req.body ?? {};
+
+      const service = getTaskLifecycleService();
+      const result = service.pauseTask(taskId, {
+        reason: typeof reason === 'string' ? reason : undefined,
+        triggeredBy: typeof triggered_by === 'string' ? triggered_by : undefined,
+        approvalId: typeof approval_id === 'string' ? approval_id : undefined,
+      });
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      sendSuccess(res, result.data);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/pause');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while pausing task',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/resume -- Resume a paused task after PM approval
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/resume',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { reason, triggered_by } = req.body ?? {};
+
+      const service = getTaskLifecycleService();
+      const result = service.resumeTask(taskId, {
+        reason: typeof reason === 'string' ? reason : undefined,
+        triggeredBy: typeof triggered_by === 'string' ? triggered_by : undefined,
+      });
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      sendSuccess(res, result.data);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/resume');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while resuming task',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/reject -- Reject (terminate) a task via PM decision
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/reject',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { reason, triggered_by, approval_id } = req.body ?? {};
+
+      const service = getTaskLifecycleService();
+      const result = service.rejectTask(taskId, {
+        reason: typeof reason === 'string' ? reason : undefined,
+        triggeredBy: typeof triggered_by === 'string' ? triggered_by : undefined,
+        approvalId: typeof approval_id === 'string' ? approval_id : undefined,
+      });
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      sendSuccess(res, result.data);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/reject');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while rejecting task',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/handoff -- Reassign a task to a new assignee
+// ---------------------------------------------------------------------------
+// Preserves task state, history, artifacts, and audit lineage while handing
+// ownership to a new assignee. Body: { assignee: TaskAgentRef, reason?, triggered_by? }.
+
+taskLifecycleRouter.post(
+  '/:taskId/handoff',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { assignee, reason, triggered_by } = req.body ?? {};
+
+      if (!assignee || typeof assignee !== 'object' ||
+          typeof assignee.agent_id !== 'string' || typeof assignee.platform !== 'string') {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.MissingEnvelopeField,
+          message: 'assignee.agent_id and assignee.platform are required for handoff',
+        }));
+        return;
+      }
+
+      const service = getTaskLifecycleService();
+      const result = service.handoffTask(
+        taskId,
+        {
+          agent_id: assignee.agent_id,
+          platform: assignee.platform,
+          name: typeof assignee.name === 'string' ? assignee.name : undefined,
+          instance_id: typeof assignee.instance_id === 'string' ? assignee.instance_id : undefined,
+        },
+        {
+          reason: typeof reason === 'string' ? reason : undefined,
+          triggeredBy: typeof triggered_by === 'string' ? triggered_by : undefined,
+        },
+      );
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      sendSuccess(res, result.data);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/handoff');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while handing off task',
       }));
     }
   },
