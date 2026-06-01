@@ -10,7 +10,7 @@
 
 import { v4 as uuid } from 'uuid';
 import Docker from 'dockerode';
-import { getCapabilityMatcher } from './capability-matcher.service';
+import { getAssignmentRouterService } from './assignment-router.service';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { getTaskResultAggregator } from './task-result-aggregator';
 import { getCollaborationSvc } from './collaboration.service';
@@ -95,25 +95,29 @@ export class MultiDispatchService {
     const routingReasons: Record<string, string> = {};
 
     if (request.autoRoute || (!request.agentIds?.length)) {
-      // Auto-route using capability matcher
-      const matcher = getCapabilityMatcher();
-      const matchResult = matcher.matchAgents({
-        requiredCapabilities: [],
-        preferredCapabilities: [],
-        tags: [],
-      });
+      // Auto-route by capability, workspace policy, assignee identity, and A2A
+      // intent — runtime lane (protocol/tier) is recorded as secondary metadata.
+      const router = getAssignmentRouterService();
+      const decision = router.routeWithPolicy(
+        {
+          requiredCapabilities: request.requiredCapabilities ?? [],
+          preferredCapabilities: request.preferredCapabilities ?? [],
+          ...(request.intent ? { intent: request.intent } : {}),
+        },
+        {
+          memberAgentIds: ws.memberAgentIds,
+          requireHealthy: request.requireHealthy ?? false,
+        },
+      );
 
-      // Filter to workspace members
-      const selectedMatches = matchResult.matches
-        .filter((m) => ws.memberAgentIds.includes(m.agentId))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, ws.settings.maxConcurrentTasks);
+      // Rank candidates (best first) and take up to the workspace concurrency cap.
+      const selectedCandidates = decision.candidates.slice(0, ws.settings.maxConcurrentTasks);
 
-      agentIds = selectedMatches.map((m) => m.agentId);
+      agentIds = selectedCandidates.map((c) => c.agentId);
 
       // Capture routing reasons for each selected agent
-      for (const m of selectedMatches) {
-        routingReasons[m.agentId] = m.reason;
+      for (const c of selectedCandidates) {
+        routingReasons[c.agentId] = c.reason;
       }
 
       if (agentIds.length === 0) {

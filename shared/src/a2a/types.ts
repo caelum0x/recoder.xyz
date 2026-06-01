@@ -416,6 +416,23 @@ export interface MultiDispatchRequest {
   aggregationStrategy?: AggregationStrategy;
   priority?: 'critical' | 'high' | 'normal' | 'low';
   worktreeIsolation?: boolean;
+  /**
+   * Capabilities the target agent(s) MUST have. Used by capability-driven
+   * auto-routing to restrict the candidate pool.
+   */
+  requiredCapabilities?: string[];
+  /** Capabilities that boost (but do not gate) candidate selection. */
+  preferredCapabilities?: string[];
+  /**
+   * A2A protocol intent for this dispatch (plan, execute, review, ...). Agents
+   * advertising support for the intent are preferred during auto-routing.
+   */
+  intent?: RecoderIntent;
+  /**
+   * When true, auto-routing only considers online/healthy agents. Defaults to
+   * the workspace policy / false.
+   */
+  requireHealthy?: boolean;
 }
 
 export type DispatchStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
