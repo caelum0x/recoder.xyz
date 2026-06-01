@@ -1,5 +1,5 @@
 {
-	"name": "recoder-a2a-sdk",
+	"name": "@recoder/a2a-sdk",
 	"version": "1.0.1",
 	"description": "Shared SDK helpers for A2A task state mapping, error taxonomy, envelope builders, and audit event emitters",
 	"license": "MIT",
@@ -42,6 +42,12 @@
 			"types": "./dist/validation.d.ts",
 			"import": "./dist/validation.mjs",
 			"require": "./dist/validation.js"
+		},
+		"./ingress": {
+			"types": "./dist/ingress-contract/index.d.ts",
+			"import": "./src/ingress-contract/index.ts",
+			"require": "./dist/ingress-contract/index.js",
+			"default": "./dist/ingress-contract/index.js"
 		}
 	},
 	"files": ["dist"],

@@ -17,6 +17,7 @@
     "a2a:worker": "node scripts/a2a-intent-worker.mjs"
   },
   "dependencies": {
+    "@recoder/a2a-sdk": "file:../../../packages/a2a-sdk",
     "@recoder/shared": "file:../../../shared",
     "@repo/atlassian": "workspace:*",
     "@repo/backend": "workspace:*",

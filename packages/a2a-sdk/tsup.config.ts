@@ -10,6 +10,7 @@ export default defineConfig([
 			"src/envelope-builders.ts",
 			"src/audit-helpers.ts",
 			"src/validation.ts",
+			"src/ingress-contract/index.ts",
 		],
 		format: ["cjs", "esm"],
 		dts: true,
