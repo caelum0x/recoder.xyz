@@ -15,6 +15,7 @@ import type { A2AWorkspace } from './workspace.service';
 import type { DispatchRecord, ApprovalRequest } from '@recoder/shared/a2a';
 import type { TaskEnvelope } from '@recoder/shared/a2a';
 import type { A2AEvent } from './a2a-event-bus';
+import type { AgentDurableIdentity } from './agent-registry.service';
 
 // ---------------------------------------------------------------------------
 // Store names (resolve to data/a2a-*.json)
@@ -25,6 +26,7 @@ const DISPATCHES_STORE = 'a2a-dispatches';
 const TASKS_STORE = 'a2a-tasks';
 const APPROVALS_STORE = 'a2a-approvals';
 const EVENTS_STORE = 'a2a-events';
+const DURABLE_IDENTITIES_STORE = 'a2a-durable-identities';
 
 /** Maximum number of recent events persisted to disk. */
 const MAX_PERSISTED_EVENTS = 1000;
@@ -129,4 +131,27 @@ export function saveA2AEvents(events: A2AEvent[]): void {
       ? events.slice(-MAX_PERSISTED_EVENTS)
       : events;
   debouncedSave(EVENTS_STORE, capped, DEBOUNCE_MS);
+}
+
+// ---------------------------------------------------------------------------
+// Durable agent identities (reconnect-safe firstSeenAt / reconnectCount /
+// workspace membership). Persisted so reconnect-safety survives restarts.
+// ---------------------------------------------------------------------------
+
+export function loadA2ADurableIdentities(): Map<string, AgentDurableIdentity> {
+  const entries = loadStore<[string, AgentDurableIdentity][]>(
+    DURABLE_IDENTITIES_STORE,
+    [],
+  );
+  try {
+    return new Map(entries);
+  } catch {
+    return new Map();
+  }
+}
+
+export function saveA2ADurableIdentities(
+  identities: Map<string, AgentDurableIdentity>,
+): void {
+  saveStore(DURABLE_IDENTITIES_STORE, [...identities.entries()]);
 }

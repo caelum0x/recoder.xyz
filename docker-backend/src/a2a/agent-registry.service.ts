@@ -25,6 +25,10 @@ import type {
   RecoderAgentSkill,
 } from '@recoder/shared/a2a';
 import { createLogger } from '../logger';
+import {
+  loadA2ADurableIdentities,
+  saveA2ADurableIdentities,
+} from './a2a-persistence';
 
 const logger = createLogger('a2a-agent-registry');
 
@@ -35,6 +39,77 @@ const logger = createLogger('a2a-agent-registry');
 export interface AgentHeartbeat {
   lastHeartbeat: string;
   online: boolean;
+}
+
+/**
+ * Durable identity + membership metadata that survives reconnects.
+ *
+ * Tracked separately from the (overwritable) registry card so that a
+ * reconnecting external/bridge agent keeps a stable identity, accumulated
+ * workspace membership, and a first-seen anchor instead of appearing as a
+ * brand-new registration each time it pairs.
+ */
+export interface AgentDurableIdentity {
+  /** Stable agent id this identity is keyed by. */
+  agentId: string;
+  /** First time this agent id was ever observed (ISO). */
+  firstSeenAt: string;
+  /** Most recent reconnect/pairing time (ISO). */
+  lastReconnectAt: string;
+  /** Number of times this agent has paired/reconnected after the first registration. */
+  reconnectCount: number;
+  /** Workspaces this agent is a member of (accumulated, de-duplicated). */
+  workspaceIds: string[];
+  /** Most recently reported capability identifiers. */
+  capabilities: string[];
+}
+
+/**
+ * Input for reconnect-safe session reconciliation.
+ *
+ * Carries the stable identity plus the live session context (workspace,
+ * project, capabilities) that a bridge/external agent reports on pairing or
+ * heartbeat.
+ */
+export interface ReconcileSessionInput {
+  agentId: string;
+  name?: string;
+  platform?: RecoderAgentPlatform;
+  url?: string;
+  description?: string;
+  version?: string;
+  tags?: string[];
+  skills?: RecoderAgentSkill[];
+  workspaceId?: string;
+  projectId?: string;
+  capabilities?: string[];
+  /**
+   * Whether the caller is admin-level (e.g. authenticated with the admin
+   * token rather than only a bridge token). Non-admin callers are forbidden
+   * from claiming an `agentId` that collides with a pre-registered default
+   * agent (see {@link RESERVED_DEFAULT_AGENT_IDS}). Defaults to `false` so the
+   * untrusted bridge/heartbeat path is locked down unless explicitly trusted.
+   */
+  callerIsAdmin?: boolean;
+}
+
+/** Raised when a reconcile attempts to claim a reserved default agent id. */
+export class ReservedAgentIdError extends Error {
+  constructor(public readonly agentId: string) {
+    super(
+      `agentId "${agentId}" collides with a pre-registered default agent and ` +
+        `cannot be claimed by a non-admin caller`,
+    );
+    this.name = 'ReservedAgentIdError';
+  }
+}
+
+export interface ReconcileSessionResult {
+  agent: RegisteredAgent;
+  durable: AgentDurableIdentity;
+  health: AgentHeartbeat;
+  /** True when this reconciliation created a brand-new registry entry. */
+  isNew: boolean;
 }
 
 export interface RegisterAgentInput {
@@ -58,6 +133,7 @@ export interface SelfRegisterInput {
 
 export interface AgentWithHealth extends RegisteredAgent {
   health: AgentHeartbeat;
+  durable?: AgentDurableIdentity;
 }
 
 interface LegacyRegisterAgentInput {
@@ -260,6 +336,15 @@ export const DEFAULT_AGENTS: DefaultAgentConfig[] = [
   },
 ];
 
+/**
+ * Ids of the pre-registered default agents. Reconciling against any of these
+ * from an untrusted (non-admin) caller is rejected so a leaked/valid bridge
+ * token cannot hijack or shadow a core platform agent (e.g. 'recoder-agency').
+ */
+export const RESERVED_DEFAULT_AGENT_IDS: ReadonlySet<string> = new Set(
+  DEFAULT_AGENTS.map((agent) => agent.id),
+);
+
 // ---------------------------------------------------------------------------
 // Heartbeat configuration
 // ---------------------------------------------------------------------------
@@ -269,6 +354,19 @@ const HEARTBEAT_TIMEOUT_MS = Number(
   process.env.RECODER_A2A_HEARTBEAT_TIMEOUT_MS || 5 * 60 * 1000,
 );
 
+/** Merge string lists preserving order, dropping empties and duplicates. */
+function mergeUnique(base: readonly string[], extra: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of [...base, ...extra]) {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -276,9 +374,29 @@ const HEARTBEAT_TIMEOUT_MS = Number(
 export class AgentRegistryService {
   private readonly registry: InMemoryAgentRegistry;
   private readonly heartbeats = new Map<string, string>();
+  private readonly durableIdentities = new Map<string, AgentDurableIdentity>();
 
   constructor(registry?: InMemoryAgentRegistry) {
     this.registry = registry ?? new InMemoryAgentRegistry();
+    // Hydrate durable identities from disk so firstSeenAt / reconnectCount /
+    // workspace membership survive a restart and reconnect-safety holds.
+    try {
+      const hydrated = loadA2ADurableIdentities();
+      for (const [agentId, identity] of hydrated) {
+        this.durableIdentities.set(agentId, identity);
+      }
+    } catch (error) {
+      logger.warn({ error }, 'Failed to hydrate durable agent identities');
+    }
+  }
+
+  /** Persist the durable-identity map to disk (best-effort). */
+  private persistDurableIdentities(): void {
+    try {
+      saveA2ADurableIdentities(this.durableIdentities);
+    } catch (error) {
+      logger.warn({ error }, 'Failed to persist durable agent identities');
+    }
   }
 
   // -- Registration ---------------------------------------------------------
@@ -323,6 +441,9 @@ export class AgentRegistryService {
     const deleted = this.registry.unregister(agentId);
     if (deleted) {
       this.heartbeats.delete(agentId);
+      if (this.durableIdentities.delete(agentId)) {
+        this.persistDurableIdentities();
+      }
       logger.info({ agentId }, 'Agent unregistered');
     }
     return deleted;
@@ -337,7 +458,17 @@ export class AgentRegistryService {
   getWithHealth(agentId: string): AgentWithHealth | undefined {
     const agent = this.registry.get(agentId);
     if (!agent) return undefined;
-    return { ...agent, health: this.getHealth(agentId) };
+    const durable = this.durableIdentities.get(agentId);
+    return {
+      ...agent,
+      health: this.getHealth(agentId),
+      ...(durable ? { durable } : {}),
+    };
+  }
+
+  /** Returns the durable identity record for an agent, if one exists. */
+  getDurableIdentity(agentId: string): AgentDurableIdentity | undefined {
+    return this.durableIdentities.get(agentId);
   }
 
   list(): RegisteredAgent[] {
@@ -398,6 +529,135 @@ export class AgentRegistryService {
       tier: defaults.tier,
       tags: input.tags || [],
     });
+  }
+
+  // -- Reconnect-safe session reconciliation --------------------------------
+
+  /**
+   * Reconcile a (re)connecting external/bridge agent against the durable
+   * registry.
+   *
+   * Keyed by the stable `agentId`, this:
+   * - upserts the registry entry instead of creating a duplicate;
+   * - reuses the existing identity/card on reconnect (so name/platform/url
+   *   stay stable even if the reconnect payload omits or changes them);
+   * - accumulates workspace membership and the latest reported capabilities;
+   * - refreshes the heartbeat / last-seen so health reflects the live session;
+   * - preserves a `firstSeenAt` anchor and increments `reconnectCount`.
+   *
+   * @returns the reconciled agent, its durable identity, live health, and
+   *          whether this call created a brand-new registry entry.
+   */
+  reconcileSession(input: ReconcileSessionInput): ReconcileSessionResult {
+    const agentId = input.agentId.trim();
+    if (!agentId) {
+      throw new Error('reconcileSession requires a non-empty agentId');
+    }
+
+    // SECURITY: bind the claimed agentId to the caller's trust level. The
+    // bridge/heartbeat path lets any holder of a valid bridge token supply an
+    // arbitrary agentId; without this guard such a caller could register a
+    // phantom agent under a core platform id (e.g. 'recoder-agency') and shadow
+    // the real default. Only admin-level callers may (re)claim a reserved
+    // default agent id; everyone else is rejected before any upsert.
+    if (
+      !input.callerIsAdmin &&
+      RESERVED_DEFAULT_AGENT_IDS.has(agentId) &&
+      !this.durableIdentities.has(agentId)
+    ) {
+      throw new ReservedAgentIdError(agentId);
+    }
+
+    const nowIso = new Date().toISOString();
+    const existingAgent = this.registry.get(agentId);
+    const existingDurable = this.durableIdentities.get(agentId);
+    const isNew = !existingAgent;
+
+    // Reuse existing identity on reconnect; fall back to platform defaults for
+    // a first-time pairing.
+    const platform: RecoderAgentPlatform =
+      existingAgent?.identity.platform ?? input.platform ?? 'custom';
+    const defaults = PLATFORM_DEFAULTS[platform];
+    const name = existingAgent?.identity.name ?? input.name ?? agentId;
+
+    const card: RecoderAgentCard = existingAgent
+      ? {
+          ...existingAgent.card,
+          // Allow optional refresh of mutable card fields on reconnect.
+          ...(input.description ? { description: input.description } : {}),
+          ...(input.version ? { version: input.version } : {}),
+          ...(input.url ? { url: input.url } : {}),
+          ...(input.skills && input.skills.length > 0 ? { skills: input.skills } : {}),
+        }
+      : {
+          name,
+          description: input.description || defaults.description,
+          protocolVersion: '0.3.0',
+          version: input.version || '1.0.0',
+          url: input.url || '',
+          skills: input.skills && input.skills.length > 0 ? input.skills : defaults.defaultSkills,
+          capabilities: { streaming: false, pushNotifications: false },
+          defaultInputModes: ['text'],
+          defaultOutputModes: ['text'],
+        };
+
+    const identity: RecoderAgentIdentity = existingAgent?.identity ?? {
+      id: agentId,
+      name,
+      platform,
+    };
+
+    const tags = existingAgent?.tags ?? input.tags ?? [];
+
+    const agent: RegisteredAgent = {
+      identity,
+      card,
+      protocol: existingAgent?.protocol ?? defaults.protocol,
+      tier: existingAgent?.tier ?? defaults.tier,
+      status: existingAgent?.status ?? 'supported',
+      tags,
+    };
+
+    // Upsert (overwrite same key — never duplicates).
+    this.registry.register(agent);
+    this.heartbeats.set(agentId, nowIso);
+
+    // Accumulate workspace membership without duplicates.
+    const workspaceIds = mergeUnique(
+      existingDurable?.workspaceIds ?? [],
+      input.workspaceId ? [input.workspaceId] : [],
+    );
+
+    const capabilities =
+      input.capabilities && input.capabilities.length > 0
+        ? mergeUnique([], input.capabilities)
+        : existingDurable?.capabilities ?? [];
+
+    const durable: AgentDurableIdentity = {
+      agentId,
+      firstSeenAt: existingDurable?.firstSeenAt ?? nowIso,
+      lastReconnectAt: nowIso,
+      reconnectCount: (existingDurable?.reconnectCount ?? 0) + (existingDurable ? 1 : 0),
+      workspaceIds,
+      capabilities,
+    };
+    this.durableIdentities.set(agentId, durable);
+    // Persist so reconnect-safety (firstSeenAt / reconnectCount / workspaceIds)
+    // survives a process restart.
+    this.persistDurableIdentities();
+
+    logger.info(
+      {
+        agentId,
+        isNew,
+        reconnectCount: durable.reconnectCount,
+        workspaceCount: workspaceIds.length,
+        projectId: input.projectId || null,
+      },
+      isNew ? 'Agent session registered' : 'Agent session reconciled on reconnect',
+    );
+
+    return { agent, durable, health: this.getHealth(agentId), isNew };
   }
 
   // -- Default agent registration -------------------------------------------
