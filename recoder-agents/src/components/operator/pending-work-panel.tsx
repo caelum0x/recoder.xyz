@@ -5,16 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { usePendingApprovals } from '@/hooks/workspaces/use-approvals';
 import { useActiveHandoffs } from '@/hooks/workspaces/use-handoffs';
-
-function formatRelative(iso: string | undefined): string {
-  if (!iso) return '';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(ms)) return '';
-  if (ms < 60_000) return 'just now';
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
-  return `${Math.floor(ms / 86_400_000)}d ago`;
-}
+import { formatRelative } from './format-relative';
 
 interface PendingWorkPanelProps {
   workspaceId: string | null;

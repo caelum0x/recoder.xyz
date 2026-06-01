@@ -7,10 +7,12 @@ import { dockerBackendApi } from '@/lib/docker-backend-api';
 // Types
 //
 // These mirror the docker-backend control-plane agent-registry wire shapes
-// (GET /api/a2a/agents and GET /api/a2a/agents/:agentId). They are declared
-// locally rather than imported from @recoder/shared/a2a because the frontend's
-// shared package does not expose the health/lifecycle projection
-// (AgentWithHealth) used by the registry's getWithHealth endpoint.
+// (GET /api/a2a/agents and GET /api/a2a/agents/:agentId). Both endpoints return
+// the AgentWithHealth projection (RegisteredAgent + heartbeat health + optional
+// durable identity): the list via discoverWithHealth(), the detail via
+// getWithHealth(). They are declared locally rather than imported from
+// @recoder/shared/a2a because that package does not expose the health/durable
+// projection used by the registry service.
 // ---------------------------------------------------------------------------
 
 export interface AgentIdentity {
@@ -44,24 +46,41 @@ export interface AgentCard {
   defaultOutputModes: string[];
 }
 
-/** Heartbeat-derived health, as projected by the registry. */
+/** Heartbeat-derived health, as projected by the registry (AgentHeartbeat). */
 export interface AgentHealth {
   /** ISO-8601 timestamp of the last heartbeat (empty string when never seen). */
   lastHeartbeat: string;
   online: boolean;
 }
 
-/** Durable lifecycle/identity metadata that survives reconnects. */
-export interface AgentLifecycle {
-  firstRegisteredAt: string;
-  lastRegisteredAt: string;
-  lastSeenAt: string;
+/**
+ * Durable identity + membership metadata that survives reconnects.
+ *
+ * Mirrors the docker-backend `AgentDurableIdentity` (agent-registry.service.ts)
+ * exactly — field names must match the wire shape or the UI renders blanks.
+ */
+export interface AgentDurableIdentity {
+  /** Stable agent id this identity is keyed by. */
+  agentId: string;
+  /** First time this agent id was ever observed (ISO). */
+  firstSeenAt: string;
+  /** Most recent reconnect/pairing time (ISO). */
+  lastReconnectAt: string;
+  /** Reconnects after the first registration. */
   reconnectCount: number;
-  registrationCount: number;
-  lastInstanceId?: string;
+  /** Workspaces this agent is a member of (accumulated, de-duplicated). */
+  workspaceIds: string[];
+  /** Most recently reported capability identifiers. */
+  capabilities: string[];
 }
 
-/** Full agent projection with durable identity + health (getWithHealth). */
+/**
+ * Full agent projection with heartbeat health + (optional) durable identity.
+ *
+ * Mirrors the docker-backend `AgentWithHealth` = RegisteredAgent + health +
+ * optional `durable`, as returned by both the discovery list (GET /) and the
+ * detail endpoint (GET /:agentId, getWithHealth).
+ */
 export interface AgentWithHealth {
   identity: AgentIdentity;
   card: AgentCard;
@@ -70,7 +89,7 @@ export interface AgentWithHealth {
   status: string;
   tags: string[];
   health: AgentHealth;
-  lifecycle: AgentLifecycle;
+  durable?: AgentDurableIdentity;
 }
 
 interface AgentDiscoveryResponse {
@@ -111,24 +130,6 @@ export function useAgentRegistry(filter?: { platform?: string }) {
     },
     refetchInterval: 10_000,
     staleTime: 5_000,
-  });
-}
-
-/**
- * Fetch a single agent's full projection (identity + card + health + lifecycle).
- */
-export function useAgentWithHealth(agentId: string | null) {
-  return useQuery({
-    queryKey: agentRegistryKeys.detail(agentId ?? ''),
-    queryFn: async () => {
-      const res = await dockerBackendApi.get<AgentWithHealth>(
-        `/api/a2a/agents/${encodeURIComponent(agentId as string)}`,
-      );
-      if (res.success && res.data) return res.data;
-      throw new Error(res.error?.message || 'Failed to fetch agent');
-    },
-    enabled: !!agentId,
-    refetchInterval: 10_000,
   });
 }
 
