@@ -79,6 +79,16 @@ export interface WorkspaceRoutingPolicy {
    * Defaults to false (health is a preference, not a hard gate).
    */
   requireHealthy?: boolean;
+  /**
+   * Opt-in escape hatch for an unrestricted candidate pool.
+   *
+   * SECURITY: by default an empty {@link memberAgentIds} list means "no
+   * eligible agents" (fail closed) — it does NOT open routing to every
+   * registered agent. Set this to `true` only when an unrestricted pool is
+   * genuinely intended (e.g. an admin/global dispatch), making the wildcard
+   * an explicit, auditable decision rather than a silent default.
+   */
+  allowUnrestrictedWhenEmpty?: boolean;
 }
 
 /** The selected runtime lane — recorded as secondary metadata only. */
@@ -254,6 +264,10 @@ export class AssignmentRouterService {
    */
   routeWithPolicy(task: RoutableTask, policy: WorkspaceRoutingPolicy): AssignmentDecision {
     const memberSet = new Set(policy.memberAgentIds);
+    // An empty membership pool means "no eligible agents" (fail closed) unless
+    // an unrestricted pool is explicitly opted into. This prevents a workspace
+    // with empty memberAgentIds from silently routing to every registered agent.
+    const unrestricted = memberSet.size === 0 && policy.allowUnrestrictedWhenEmpty === true;
 
     // --- 1. Explicit assignee override -------------------------------------
     if (task.assigneeAgentId) {
@@ -261,17 +275,27 @@ export class AssignmentRouterService {
     }
 
     // --- 2. Build the eligible candidate pool (policy membership) -----------
+    if (memberSet.size === 0 && !unrestricted) {
+      return {
+        agentId: null,
+        reason: 'Workspace has no member agents; routing is restricted to members.',
+        viaExplicitAssignee: false,
+        runtime: null,
+        health: null,
+        candidates: [],
+      };
+    }
+
     const eligible = this.registry
       .list()
-      .filter((agent) => memberSet.size === 0 || memberSet.has(agent.identity.id));
+      .filter((agent) => unrestricted || memberSet.has(agent.identity.id));
 
     if (eligible.length === 0) {
       return {
         agentId: null,
-        reason:
-          memberSet.size === 0
-            ? 'No agents registered.'
-            : 'No registered agents are members of the workspace.',
+        reason: unrestricted
+          ? 'No agents registered.'
+          : 'No registered agents are members of the workspace.',
         viaExplicitAssignee: false,
         runtime: null,
         health: null,
@@ -395,7 +419,11 @@ export class AssignmentRouterService {
       };
     }
 
-    if (memberSet.size > 0 && !memberSet.has(assigneeAgentId)) {
+    // Fail closed: an empty membership pool only permits an explicit assignee
+    // when the policy explicitly opts into an unrestricted pool. Otherwise an
+    // empty memberAgentIds would let any registered agent be assigned.
+    const unrestricted = memberSet.size === 0 && policy.allowUnrestrictedWhenEmpty === true;
+    if (!unrestricted && !memberSet.has(assigneeAgentId)) {
       return {
         agentId: null,
         reason: `Explicit assignee "${assigneeAgentId}" is not a member of the workspace.`,

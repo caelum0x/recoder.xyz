@@ -15,7 +15,7 @@
     "test:coverage": "vitest --coverage",
     "test:ui": "vitest --ui",
     "ci:preflight": "[ -x ./node_modules/.bin/vitest ] && [ -x ./node_modules/.bin/tsc ] || (echo 'Missing local devDependencies (vitest/tsc). Install dependencies when registry/lockfile is available.' >&2; exit 10)",
-    "ci:check": "pnpm run ci:preflight && vitest --run src/subagent-workflow.test.ts src/public-api/internal-auth-parity.test.ts src/public-api/byok-readiness.test.ts src/public-api/task-stream-protocol.test.ts src/resources/execution-limits.test.ts src/a2a/__tests__/a2a-routes.e2e.test.ts src/a2a/__tests__/sse-reconnect.e2e.test.ts src/a2a/__tests__/connector-chaos.test.ts src/a2a/__tests__/a2a-openapi-drift.test.ts src/a2a/__tests__/a2a-slo-metrics.test.ts src/__tests__/domain-manager.test.ts src/__tests__/git-operations-enhanced.test.ts src/__tests__/git-operations.test.ts",
+    "ci:check": "pnpm run ci:preflight && vitest --run src/subagent-workflow.test.ts src/public-api/internal-auth-parity.test.ts src/public-api/byok-readiness.test.ts src/public-api/task-stream-protocol.test.ts src/resources/execution-limits.test.ts src/a2a/__tests__/a2a-routes.e2e.test.ts src/a2a/__tests__/sse-reconnect.e2e.test.ts src/a2a/__tests__/connector-chaos.test.ts src/a2a/__tests__/a2a-openapi-drift.test.ts src/a2a/__tests__/a2a-slo-metrics.test.ts src/a2a/__tests__/assignment-router.test.ts src/__tests__/domain-manager.test.ts src/__tests__/git-operations-enhanced.test.ts src/__tests__/git-operations.test.ts",
     "ci:check:noninteractive": "CI=1 pnpm run ci:check",
     "ci:install-and-check": "pnpm run ci:check:noninteractive",
     "ci:install-and-check:local": "pnpm run ci:check:noninteractive"

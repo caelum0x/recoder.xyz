@@ -219,6 +219,46 @@ describe('AssignmentRouterService', () => {
       expect(decision.reason).toMatch(/members of the workspace/);
     });
 
+    it('fails closed when memberAgentIds is empty (no wildcard to all agents)', () => {
+      registerAgent(registry, 'a', 'A', 'custom', 'tier2', ['code-gen']);
+      registerAgent(registry, 'b', 'B', 'codex', 'tier1', ['code-gen', 'testing']);
+
+      const decision = router.routeWithPolicy(
+        { requiredCapabilities: ['code-gen'] },
+        policyFor(), // empty member set
+      );
+
+      expect(decision.agentId).toBeNull();
+      expect(decision.candidates).toHaveLength(0);
+      expect(decision.reason).toMatch(/no member agents/i);
+    });
+
+    it('rejects an explicit assignee when memberAgentIds is empty', () => {
+      registerAgent(registry, 'outsider', 'Outsider', 'custom', 'tier2', ['code-gen']);
+
+      const decision = router.routeWithPolicy(
+        { assigneeAgentId: 'outsider' },
+        policyFor(), // empty member set
+      );
+
+      expect(decision.agentId).toBeNull();
+      expect(decision.viaExplicitAssignee).toBe(true);
+      expect(decision.reason).toMatch(/not a member/);
+    });
+
+    it('opens routing to all agents only when allowUnrestrictedWhenEmpty is set', () => {
+      registerAgent(registry, 'a', 'A', 'custom', 'tier2', ['code-gen']);
+      registerAgent(registry, 'b', 'B', 'codex', 'tier1', ['code-gen', 'testing']);
+
+      const decision = router.routeWithPolicy(
+        { requiredCapabilities: ['code-gen'] },
+        { memberAgentIds: [], allowUnrestrictedWhenEmpty: true },
+      );
+
+      expect(decision.agentId).not.toBeNull();
+      expect(decision.candidates.length).toBeGreaterThan(0);
+    });
+
     it('route() fails closed for an unknown workspace', () => {
       registerAgent(registry, 'a', 'A', 'custom', 'tier2', ['code-gen']);
 
@@ -253,14 +293,10 @@ describe('AssignmentRouterService', () => {
       registerAgent(registry, 'offline', 'Offline', 'custom', 'tier2', ['code-gen']);
       registerAgent(registry, 'online', 'Online', 'custom', 'tier2', ['code-gen']);
 
-      // register() seeds a heartbeat; force 'offline' stale by clearing it.
-      // recordHeartbeat refreshes 'online' to now.
+      // register() seeds a heartbeat; refresh 'online' and force 'offline' stale
+      // via the public health API (deterministic, no private-field access).
       registry.recordHeartbeat('online');
-      // Simulate an offline agent: its last heartbeat is far in the past.
-      (registry as unknown as { heartbeats: Map<string, string> }).heartbeats.set(
-        'offline',
-        new Date(0).toISOString(),
-      );
+      registry.forceOffline('offline');
 
       const decision = router.routeWithPolicy(
         { requiredCapabilities: ['code-gen'] },
@@ -277,10 +313,7 @@ describe('AssignmentRouterService', () => {
 
     it('excludes offline agents when the policy requires healthy agents', () => {
       registerAgent(registry, 'offline', 'Offline', 'custom', 'tier2', ['code-gen']);
-      (registry as unknown as { heartbeats: Map<string, string> }).heartbeats.set(
-        'offline',
-        new Date(0).toISOString(),
-      );
+      registry.forceOffline('offline');
 
       const decision = router.routeWithPolicy(
         { requiredCapabilities: ['code-gen'] },
@@ -293,10 +326,7 @@ describe('AssignmentRouterService', () => {
 
     it('rejects an explicit offline assignee when health is required', () => {
       registerAgent(registry, 'offline', 'Offline', 'custom', 'tier2', ['code-gen']);
-      (registry as unknown as { heartbeats: Map<string, string> }).heartbeats.set(
-        'offline',
-        new Date(0).toISOString(),
-      );
+      registry.forceOffline('offline');
 
       const decision = router.routeWithPolicy(
         { assigneeAgentId: 'offline' },

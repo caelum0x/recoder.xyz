@@ -490,6 +490,26 @@ export class AgentRegistryService {
     return true;
   }
 
+  /**
+   * Force an agent into a stale/offline state by backdating its last
+   * heartbeat beyond the timeout window.
+   *
+   * Public, deterministic counterpart to {@link recordHeartbeat} for the
+   * offline direction: it lets tests (and any caller that legitimately needs
+   * to mark an agent stale) drive health state through a stable API instead of
+   * reaching into the private heartbeats map. Returns `false` when the agent
+   * is not registered.
+   */
+  forceOffline(agentId: string): boolean {
+    const agent = this.registry.get(agentId);
+    if (!agent) return false;
+    // Backdate one timeout window + 1s past the boundary so getHealth() and the
+    // HeartbeatTracker both report offline regardless of clock skew.
+    const staleMs = Date.now() - HEARTBEAT_TIMEOUT_MS - 1000;
+    this.heartbeats.set(agentId, new Date(staleMs).toISOString());
+    return true;
+  }
+
   getHealth(agentId: string): AgentHeartbeat {
     const lastHeartbeat = this.heartbeats.get(agentId);
     if (!lastHeartbeat) {

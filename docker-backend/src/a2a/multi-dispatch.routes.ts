@@ -74,6 +74,12 @@ multiDispatchRouter.post('/', async (req: Request, res: Response) => {
       aggregationStrategy: body.aggregationStrategy,
       priority: body.priority,
       worktreeIsolation: body.worktreeIsolation,
+      // Capability-routing inputs — without these the auto-router silently
+      // falls back to empty defaults and ignores caller-supplied routing intent.
+      requiredCapabilities: body.requiredCapabilities,
+      preferredCapabilities: body.preferredCapabilities,
+      intent: body.intent,
+      requireHealthy: body.requireHealthy,
     });
 
     sendSuccess(res, dispatch, 201);
