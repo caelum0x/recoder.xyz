@@ -15,6 +15,7 @@
  * | GET    | /:wsId/agents                  | List agents with health    |
  * | GET    | /:wsId/channels                | List channels              |
  * | GET    | /:wsId/tasks                   | List tasks                 |
+ * | GET    | /:wsId/run-history             | Unified run history (PM+Agents) |
  * | GET    | /:wsId/stream                  | SSE workspace event stream |
  */
 
@@ -30,6 +31,13 @@ import { getA2AEventBus } from './a2a-event-bus';
 import { multiDispatchRouter } from './multi-dispatch.routes';
 import { getWorktreeManagerService } from './worktree-manager.service';
 import { getAgentBridgeService } from './agent-bridge.service';
+import { getTaskLifecycleService } from './task-lifecycle.service';
+import { getApprovalGateService } from './approval-gate.service';
+import {
+  buildRunHistory,
+  type RunHistoryFilter,
+  type RunHistoryEntryType,
+} from './run-history.service';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-workspace-routes');
@@ -310,6 +318,83 @@ workspaceRouter.get('/:wsId/tasks', (req: Request, res: Response) => {
     sendError(res, 500, buildA2AError({
       code: A2AErrorCodeEnum.InternalError,
       message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/run-history — Unified run history (PM + Agents) ───────────
+//
+// Read-only aggregation that merges every task's timeline (lifecycle,
+// artifacts, PR, preview, approvals — via buildTaskTimeline) with the
+// workspace audit trail (decisions + logs) into one ordered, queryable
+// stream. Introduces no new storage; reuses the existing task-timeline
+// read-model, the audit trail, and the approval gate. Both PM and Agents
+// consume this endpoint identically.
+//
+// Query params:
+//   task_id  — restrict to a single run/task within the workspace
+//   types    — comma-separated entry types (task,artifact,pr,preview,
+//              approval,audit,decision)
+//   since    — ISO-8601 lower bound on entry timestamp
+//   limit    — cap on number of returned entries (newest-trimmed)
+
+const RUN_HISTORY_ENTRY_TYPES: readonly RunHistoryEntryType[] = [
+  'task',
+  'artifact',
+  'pr',
+  'preview',
+  'approval',
+  'audit',
+  'decision',
+];
+
+workspaceRouter.get('/:wsId/run-history', (req: Request, res: Response) => {
+  try {
+    const { wsId } = req.params;
+
+    const ws = getWorkspaceService().get(wsId);
+    if (!ws) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${wsId}`,
+      }));
+    }
+
+    const filter: RunHistoryFilter = {};
+    if (typeof req.query.task_id === 'string' && req.query.task_id.trim()) {
+      filter.taskId = req.query.task_id.trim();
+    }
+    if (typeof req.query.since === 'string' && req.query.since.trim()) {
+      filter.since = req.query.since.trim();
+    }
+    if (typeof req.query.limit === 'string') {
+      const parsed = parseInt(req.query.limit, 10);
+      if (!Number.isNaN(parsed) && parsed >= 0) {
+        filter.limit = Math.min(parsed, 5000);
+      }
+    }
+    if (typeof req.query.types === 'string' && req.query.types.trim()) {
+      const allowed = new Set<string>(RUN_HISTORY_ENTRY_TYPES);
+      const requested = req.query.types
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t): t is RunHistoryEntryType => allowed.has(t));
+      if (requested.length > 0) filter.types = requested;
+    }
+
+    const lifecycle = getTaskLifecycleService();
+    const envelopes = lifecycle.list({ workspace_id: wsId, limit: 1000 });
+    const approvals = getApprovalGateService().listForWorkspace(wsId);
+    const auditEvents = lifecycle.getRecentAuditEvents(5000);
+
+    const runHistory = buildRunHistory(wsId, envelopes, approvals, auditEvents, filter);
+
+    sendSuccess(res, runHistory);
+  } catch (err: any) {
+    logger.error({ err, wsId: req.params.wsId }, 'failed to build workspace run history');
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err?.message ?? 'Internal server error while building run history',
     }));
   }
 });
