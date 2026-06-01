@@ -47,6 +47,8 @@ import { createLogger } from '../logger';
 import { getRecentContext } from './memory-store';
 import { buildTaskTimeline } from './task-timeline.service';
 import { getApprovalGateService } from './approval-gate.service';
+import { getWorkspaceService } from './workspace.service';
+import { requireA2AAuth, authorizeWorkspaceAccess, type AuthedRequest } from './auth-guard';
 
 const logger = createLogger('a2a-task-routes');
 
@@ -115,6 +117,29 @@ function extractBridgeIntent(payload: unknown): string | undefined {
 
   const intent = (payload as Record<string, unknown>).intent;
   return typeof intent === 'string' && intent.trim() ? intent : undefined;
+}
+
+/**
+ * Verify the authenticated caller is authorized for the task's workspace.
+ *
+ * Admin actors are authorized for every workspace; agent actors must own or be
+ * a member of the workspace. If the task's workspace is unknown to the
+ * workspace registry it is treated as a legacy/un-scoped task and only admin
+ * actors are allowed through. On failure a canonical error response is written
+ * and `false` is returned (the caller must stop processing).
+ */
+function authorizeTaskWorkspace(req: AuthedRequest, res: Response, task: TaskEnvelope): boolean {
+  const ws = getWorkspaceService().get(task.workspace_id);
+  if (ws) {
+    return authorizeWorkspaceAccess(req, res, ws);
+  }
+  // No registered workspace: restrict mutation to admin actors only.
+  if (req.a2aActor?.kind === 'admin') return true;
+  sendError(res, 403, buildA2AError({
+    code: A2AErrorCodeEnum.AuthorizationDenied,
+    message: `Caller is not authorized for workspace ${task.workspace_id}`,
+  }));
+  return false;
 }
 
 async function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): Promise<void> {
@@ -409,12 +434,22 @@ taskLifecycleRouter.post(
 
 taskLifecycleRouter.post(
   '/:taskId/pause',
-  (req: Request, res: Response) => {
+  requireA2AAuth,
+  (req: AuthedRequest, res: Response) => {
     try {
       const { taskId } = req.params;
       const { reason, triggered_by, approval_id } = req.body ?? {};
 
       const service = getTaskLifecycleService();
+
+      // Load the task and authorize the caller for its workspace before mutating.
+      const existing = service.getTask(taskId);
+      if (!existing.ok) {
+        sendError(res, existing.httpStatus, existing.error);
+        return;
+      }
+      if (!authorizeTaskWorkspace(req, res, existing.data)) return;
+
       const result = service.pauseTask(taskId, {
         reason: typeof reason === 'string' ? reason : undefined,
         triggeredBy: typeof triggered_by === 'string' ? triggered_by : undefined,
@@ -443,12 +478,22 @@ taskLifecycleRouter.post(
 
 taskLifecycleRouter.post(
   '/:taskId/resume',
-  (req: Request, res: Response) => {
+  requireA2AAuth,
+  (req: AuthedRequest, res: Response) => {
     try {
       const { taskId } = req.params;
       const { reason, triggered_by } = req.body ?? {};
 
       const service = getTaskLifecycleService();
+
+      // Load the task and authorize the caller for its workspace before mutating.
+      const existing = service.getTask(taskId);
+      if (!existing.ok) {
+        sendError(res, existing.httpStatus, existing.error);
+        return;
+      }
+      if (!authorizeTaskWorkspace(req, res, existing.data)) return;
+
       const result = service.resumeTask(taskId, {
         reason: typeof reason === 'string' ? reason : undefined,
         triggeredBy: typeof triggered_by === 'string' ? triggered_by : undefined,
@@ -476,12 +521,22 @@ taskLifecycleRouter.post(
 
 taskLifecycleRouter.post(
   '/:taskId/reject',
-  (req: Request, res: Response) => {
+  requireA2AAuth,
+  (req: AuthedRequest, res: Response) => {
     try {
       const { taskId } = req.params;
       const { reason, triggered_by, approval_id } = req.body ?? {};
 
       const service = getTaskLifecycleService();
+
+      // Load the task and authorize the caller for its workspace before mutating.
+      const existing = service.getTask(taskId);
+      if (!existing.ok) {
+        sendError(res, existing.httpStatus, existing.error);
+        return;
+      }
+      if (!authorizeTaskWorkspace(req, res, existing.data)) return;
+
       const result = service.rejectTask(taskId, {
         reason: typeof reason === 'string' ? reason : undefined,
         triggeredBy: typeof triggered_by === 'string' ? triggered_by : undefined,
@@ -512,7 +567,8 @@ taskLifecycleRouter.post(
 
 taskLifecycleRouter.post(
   '/:taskId/handoff',
-  (req: Request, res: Response) => {
+  requireA2AAuth,
+  (req: AuthedRequest, res: Response) => {
     try {
       const { taskId } = req.params;
       const { assignee, reason, triggered_by } = req.body ?? {};
@@ -527,6 +583,15 @@ taskLifecycleRouter.post(
       }
 
       const service = getTaskLifecycleService();
+
+      // Load the task and authorize the caller for its workspace before mutating.
+      const existing = service.getTask(taskId);
+      if (!existing.ok) {
+        sendError(res, existing.httpStatus, existing.error);
+        return;
+      }
+      if (!authorizeTaskWorkspace(req, res, existing.data)) return;
+
       const result = service.handoffTask(
         taskId,
         {

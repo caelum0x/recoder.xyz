@@ -227,6 +227,24 @@ export interface LegacyTransitionTaskInput {
 // Transition input
 // ---------------------------------------------------------------------------
 
+/**
+ * Override for the audit event emitted by a transition. Used by PM lifecycle
+ * decisions to fold their richer context (User actor, PM event type, decision
+ * metadata) into the single transition audit event rather than emitting a
+ * second overlapping one.
+ */
+export interface TransitionAuditOverride {
+  eventType?: (typeof AuditEventTypeEnum)[keyof typeof AuditEventTypeEnum];
+  severity?: (typeof AuditSeverityEnum)[keyof typeof AuditSeverityEnum];
+  actor?: {
+    kind: (typeof AuditActorKindEnum)[keyof typeof AuditActorKindEnum];
+    id: string;
+    name?: string;
+  };
+  /** Extra metadata merged into the audit event's metadata bag. */
+  metadata?: Record<string, unknown>;
+}
+
 export interface TransitionTaskInput {
   /** Target state. */
   target_state: TaskState;
@@ -242,6 +260,20 @@ export interface TransitionTaskInput {
   tokensUsed?: number;
   /** Estimated cost in USD. Set when completing a task. */
   estimatedCostUsd?: number;
+  /**
+   * Shallow-merge patch applied to the envelope's `metadata` as part of this
+   * transition, persisted atomically with the state change (avoids a second
+   * `store.set`). Keys set to `undefined` are removed.
+   */
+  metadataPatch?: Record<string, unknown>;
+  /**
+   * Suppress the default System-actor transition audit event. PM lifecycle
+   * decisions set this together with {@link auditOverride} so exactly one
+   * coherent audit event is emitted per transition.
+   */
+  suppressBaseAudit?: boolean;
+  /** Override the audit event emitted for this transition. */
+  auditOverride?: TransitionAuditOverride;
 }
 
 // ---------------------------------------------------------------------------
@@ -645,6 +677,15 @@ export class TaskLifecycleService {
       }
     }
 
+    // 5b. Apply an optional metadata patch atomically with the transition so
+    // callers (e.g. PM lifecycle decisions) do not need a second store.set.
+    if (input.metadataPatch) {
+      updated = {
+        ...updated,
+        metadata: { ...updated.metadata, ...input.metadataPatch },
+      };
+    }
+
     // 6. Persist
     this.store.set(taskId, updated);
 
@@ -658,36 +699,41 @@ export class TaskLifecycleService {
       'task state transitioned',
     );
 
-    // 7. Emit audit event
-    const auditEventType = this.stateToAuditEventType(input.target_state);
-    const auditSeverity = this.stateToAuditSeverity(input.target_state);
-
-    this.emitAudit(
-      createAuditEvent({
-        id: generateId('evt'),
-        event_type: auditEventType,
-        severity: auditSeverity,
-        actor: {
-          kind: AuditActorKindEnum.System,
-          id: input.triggered_by || 'orchestrator',
-          name: input.triggered_by || 'orchestrator',
-        },
-        target: {
-          kind: AuditTargetKindEnum.Task,
-          id: taskId,
-        },
-        trace_id: updated.trace_id,
-        workspace_id: updated.workspace_id,
-        thread_id: updated.thread_id,
-        task_id: taskId,
-        metadata: {
-          from_state: existing.state,
-          to_state: input.target_state,
-          reason: input.reason,
-        },
-        now,
-      }),
-    );
+    // 7. Emit a single audit event for this transition.
+    //
+    // Callers may suppress the default System-actor event and supply an
+    // override (e.g. PM lifecycle decisions) so exactly one coherent audit
+    // event is produced per transition instead of two overlapping ones.
+    if (!input.suppressBaseAudit) {
+      const override = input.auditOverride;
+      this.emitAudit(
+        createAuditEvent({
+          id: generateId('evt'),
+          event_type: override?.eventType ?? this.stateToAuditEventType(input.target_state),
+          severity: override?.severity ?? this.stateToAuditSeverity(input.target_state),
+          actor: override?.actor ?? {
+            kind: AuditActorKindEnum.System,
+            id: input.triggered_by || 'orchestrator',
+            name: input.triggered_by || 'orchestrator',
+          },
+          target: {
+            kind: AuditTargetKindEnum.Task,
+            id: taskId,
+          },
+          trace_id: updated.trace_id,
+          workspace_id: updated.workspace_id,
+          thread_id: updated.thread_id,
+          task_id: taskId,
+          metadata: {
+            from_state: existing.state,
+            to_state: input.target_state,
+            reason: input.reason,
+            ...(override?.metadata ?? {}),
+          },
+          now,
+        }),
+      );
+    }
 
     return { ok: true, data: updated };
   }
@@ -846,20 +892,17 @@ export class TaskLifecycleService {
     options: { reason?: string; triggeredBy?: string; approvalId?: string } = {},
   ): ServiceResult<TaskEnvelope> {
     const reason = options.reason || 'Paused pending PM approval';
+    const now = new Date().toISOString();
+    const existing = this.store.get(taskId);
+
     const result = this.transitionTask(taskId, {
       target_state: TaskStateEnum.InputRequired,
       triggered_by: options.triggeredBy,
       reason,
-    });
-    if (!result.ok) return result;
-
-    const now = new Date().toISOString();
-    const paused: TaskEnvelope = {
-      ...result.data,
-      metadata: {
-        ...result.data.metadata,
+      // Fold the PM pause context into the single transition write + audit.
+      metadataPatch: {
         pmLifecycle: {
-          ...(this.readPmLifecycle(result.data)),
+          ...(existing ? this.readPmLifecycle(existing) : {}),
           phase: 'paused',
           pause: {
             reason,
@@ -869,20 +912,19 @@ export class TaskLifecycleService {
           },
         },
       },
-    };
-    this.store.set(taskId, paused);
-
-    this.emitPmAudit(paused, {
-      decision: 'pause',
-      reason,
-      triggeredBy: options.triggeredBy,
-      severity: AuditSeverityEnum.Warning,
-      extra: { approval_id: options.approvalId },
-      now,
+      auditOverride: this.pmAuditOverride({
+        decision: 'pause',
+        toState: TaskStateEnum.InputRequired,
+        reason,
+        triggeredBy: options.triggeredBy,
+        severity: AuditSeverityEnum.Warning,
+        extra: { approval_id: options.approvalId },
+      }),
     });
+    if (!result.ok) return result;
 
     logger.info({ task_id: taskId, approval_id: options.approvalId }, 'task paused (PM decision)');
-    return { ok: true, data: paused };
+    return { ok: true, data: result.data };
   }
 
   /**
@@ -920,20 +962,15 @@ export class TaskLifecycleService {
     }
 
     const reason = options.reason || 'Resumed after PM approval';
+    const now = new Date().toISOString();
     const result = this.transitionTask(taskId, {
       target_state: TaskStateEnum.Working,
       triggered_by: options.triggeredBy,
       reason,
-    });
-    if (!result.ok) return result;
-
-    const now = new Date().toISOString();
-    const resumed: TaskEnvelope = {
-      ...result.data,
-      metadata: {
-        ...result.data.metadata,
+      // Fold the PM resume context into the single transition write + audit.
+      metadataPatch: {
         pmLifecycle: {
-          ...this.readPmLifecycle(result.data),
+          ...this.readPmLifecycle(existing),
           phase: 'resumed',
           pause: undefined,
           resume: {
@@ -943,19 +980,18 @@ export class TaskLifecycleService {
           },
         },
       },
-    };
-    this.store.set(taskId, resumed);
-
-    this.emitPmAudit(resumed, {
-      decision: 'resume',
-      reason,
-      triggeredBy: options.triggeredBy,
-      severity: AuditSeverityEnum.Info,
-      now,
+      auditOverride: this.pmAuditOverride({
+        decision: 'resume',
+        toState: TaskStateEnum.Working,
+        reason,
+        triggeredBy: options.triggeredBy,
+        severity: AuditSeverityEnum.Info,
+      }),
     });
+    if (!result.ok) return result;
 
     logger.info({ task_id: taskId }, 'task resumed (PM decision)');
-    return { ok: true, data: resumed };
+    return { ok: true, data: result.data };
   }
 
   /**
@@ -971,44 +1007,38 @@ export class TaskLifecycleService {
     options: { reason?: string; triggeredBy?: string; approvalId?: string } = {},
   ): ServiceResult<TaskEnvelope> {
     const reason = options.reason || 'Rejected by PM decision';
+    const existing = this.store.get(taskId);
     const result = this.transitionTask(taskId, {
       target_state: TaskStateEnum.Cancelled,
       triggered_by: options.triggeredBy,
       reason,
-    });
-    if (!result.ok) return result;
-
-    const now = new Date().toISOString();
-    const rejected: TaskEnvelope = {
-      ...result.data,
-      metadata: {
-        ...result.data.metadata,
+      // Fold the PM reject context into the single transition write + audit.
+      metadataPatch: {
         pmLifecycle: {
-          ...this.readPmLifecycle(result.data),
+          ...(existing ? this.readPmLifecycle(existing) : {}),
           phase: 'rejected',
           pause: undefined,
           reject: {
             reason,
             approvalId: options.approvalId,
             rejectedBy: options.triggeredBy ?? 'pm',
-            rejectedAt: now,
+            rejectedAt: new Date().toISOString(),
           },
         },
       },
-    };
-    this.store.set(taskId, rejected);
-
-    this.emitPmAudit(rejected, {
-      decision: 'reject',
-      reason,
-      triggeredBy: options.triggeredBy,
-      severity: AuditSeverityEnum.Warning,
-      extra: { approval_id: options.approvalId },
-      now,
+      auditOverride: this.pmAuditOverride({
+        decision: 'reject',
+        toState: TaskStateEnum.Cancelled,
+        reason,
+        triggeredBy: options.triggeredBy,
+        severity: AuditSeverityEnum.Warning,
+        extra: { approval_id: options.approvalId },
+      }),
     });
+    if (!result.ok) return result;
 
     logger.info({ task_id: taskId, approval_id: options.approvalId }, 'task rejected (PM decision)');
-    return { ok: true, data: rejected };
+    return { ok: true, data: result.data };
   }
 
   /**
@@ -1169,6 +1199,44 @@ export class TaskLifecycleService {
   private readPmLifecycle(envelope: TaskEnvelope): Record<string, unknown> {
     const bag = envelope.metadata?.pmLifecycle;
     return bag && typeof bag === 'object' ? { ...(bag as Record<string, unknown>) } : {};
+  }
+
+  /**
+   * Build a {@link TransitionAuditOverride} for a PM lifecycle decision so the
+   * underlying transition emits a single, PM-attributed audit event (User actor,
+   * PM event type, `pm_decision` metadata) instead of the default System event
+   * plus a second overlapping PM event.
+   */
+  private pmAuditOverride(input: {
+    decision: 'pause' | 'resume' | 'reject' | 'handoff';
+    toState: TaskState;
+    reason?: string;
+    triggeredBy?: string;
+    severity: (typeof AuditSeverityEnum)[keyof typeof AuditSeverityEnum];
+    extra?: Record<string, unknown>;
+  }): TransitionAuditOverride {
+    const eventTypeByDecision = {
+      pause: AuditEventTypeEnum.TaskInputRequired,
+      resume: AuditEventTypeEnum.TaskStarted,
+      reject: AuditEventTypeEnum.TaskCancelled,
+      handoff: AuditEventTypeEnum.TaskProgress,
+    } as const;
+
+    return {
+      eventType: eventTypeByDecision[input.decision],
+      severity: input.severity,
+      actor: {
+        kind: AuditActorKindEnum.User,
+        id: input.triggeredBy || 'pm',
+        name: input.triggeredBy || 'pm',
+      },
+      metadata: {
+        pm_decision: input.decision,
+        to_state: input.toState,
+        reason: input.reason,
+        ...(input.extra ?? {}),
+      },
+    };
   }
 
   /** Emit an audit event for a PM lifecycle decision. */

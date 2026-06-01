@@ -26,9 +26,33 @@ vi.mock('../agent-bridge.service', () => ({
   getAgentBridgeService: () => mocks.bridge,
 }));
 
+// Avoid disk persistence noise for workspace / task stores in these tests.
+vi.mock('../a2a-persistence', () => ({
+  loadA2ATasks: () => new Map(),
+  saveA2ATasks: () => {},
+  saveA2ATasksImmediate: () => {},
+  loadA2AWorkspaces: () => new Map(),
+  saveA2AWorkspaces: () => {},
+  loadA2AApprovals: () => new Map(),
+  saveA2AApprovals: () => {},
+}));
+
+vi.mock('../a2a-event-bus', () => ({
+  getA2AEventBus: () => ({ publish: vi.fn(), subscribeWorkspace: vi.fn(), subscribeGlobal: vi.fn() }),
+  A2AEventType: { WorkspaceCreated: 'workspace.created' },
+}));
+
+vi.mock('../collaboration.service', () => ({
+  getCollaborationSvc: () => ({
+    createChannel: () => ({ id: 'chan_test' }),
+    listChannels: () => [],
+  }),
+}));
+
 import type { Router } from 'express';
 import { taskLifecycleRouter } from '../task-lifecycle.routes';
-import { resetTaskLifecycleService } from '../task-lifecycle.service';
+import { getTaskLifecycleService, resetTaskLifecycleService } from '../task-lifecycle.service';
+import { getWorkspaceService } from '../workspace.service';
 
 type MockReq = EventEmitter & {
   method: string;
@@ -36,6 +60,7 @@ type MockReq = EventEmitter & {
   params: Record<string, string>;
   query: Record<string, string>;
   headers: Record<string, string>;
+  header: (name: string) => string | undefined;
 };
 
 function makeReq(opts: {
@@ -50,7 +75,9 @@ function makeReq(opts: {
   emitter.body = opts.body ?? {};
   emitter.params = opts.params ?? {};
   emitter.query = opts.query ?? {};
-  emitter.headers = opts.headers ?? {};
+  const headers = opts.headers ?? {};
+  emitter.headers = headers;
+  emitter.header = (name: string) => headers[name.toLowerCase()] ?? headers[name];
   return emitter;
 }
 
@@ -188,5 +215,109 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     expect(state.statusCode).toBe(201);
     expect(mocks.bridge.sendToAgent).not.toHaveBeenCalled();
     expect(mocks.bridgeAgent.status).toBe('online');
+  });
+});
+
+describe('taskLifecycleRouter PM-decision auth + workspace authorization', () => {
+  const ADMIN_TOKEN = 'test-admin-token';
+  let taskId: string;
+  let workspaceId: string;
+
+  beforeEach(() => {
+    resetTaskLifecycleService();
+    vi.clearAllMocks();
+    process.env.RECODER_A2A_ADMIN_TOKEN = ADMIN_TOKEN;
+    delete process.env.RECODER_A2A_ADMIN_TOKEN_SCOPES;
+    delete process.env.RECODER_A2A_ADMIN_TOKEN_SCOPE;
+
+    // Create a workspace owned by a known agent, then a working task in it.
+    const ws = getWorkspaceService().create({
+      name: 'auth-ws',
+      projectId: 'proj_1',
+      ownerId: 'owner-agent',
+    });
+    workspaceId = ws.workspaceId;
+
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: workspaceId,
+      thread_id: 'thread_auth',
+      requester: { agent_id: 'owner-agent', platform: 'recoder_pm' },
+      assignee: { agent_id: 'codex', platform: 'codex' },
+      connector: { connector_id: 'c1', platform: 'codex', protocol: 'rest' },
+      payload: { kind: 'text', text: 'do work' },
+    });
+    if (!created.ok) throw new Error('failed to create task');
+    taskId = created.data.id;
+    service.startTask(taskId, 'owner-agent');
+  });
+
+  it('rejects an unauthenticated reject with 401', async () => {
+    const req = makeReq({ method: 'POST', params: { taskId }, body: { reason: 'nope' } });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/reject', 'post', req, res);
+
+    expect(state.statusCode).toBe(401);
+    expect(state.jsonData?.error?.code).toBe('AUTHENTICATION_FAILED');
+  });
+
+  it('rejects an unauthenticated handoff with 401', async () => {
+    const req = makeReq({
+      method: 'POST',
+      params: { taskId },
+      body: { assignee: { agent_id: 'claude', platform: 'claude_code' } },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/handoff', 'post', req, res);
+
+    expect(state.statusCode).toBe(401);
+  });
+
+  it('denies an authenticated agent that does not own the workspace (403)', async () => {
+    const req = makeReq({
+      method: 'POST',
+      params: { taskId },
+      headers: { authorization: 'Bearer agent-token', 'x-recoder-a2a-agent-id': 'intruder-agent' },
+      body: { reason: 'nope' },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/reject', 'post', req, res);
+
+    expect(state.statusCode).toBe(403);
+    expect(state.jsonData?.error?.code).toBe('AUTHORIZATION_DENIED');
+  });
+
+  it('allows the workspace owner agent to reject (200)', async () => {
+    const req = makeReq({
+      method: 'POST',
+      params: { taskId },
+      headers: { authorization: 'Bearer agent-token', 'x-recoder-a2a-agent-id': 'owner-agent' },
+      body: { reason: 'out of scope', triggered_by: 'owner-agent' },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/reject', 'post', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData?.success).toBe(true);
+    expect(state.jsonData?.data?.state).toBe('cancelled');
+  });
+
+  it('allows an admin-token caller to reject regardless of ownership (200)', async () => {
+    const req = makeReq({
+      method: 'POST',
+      params: { taskId },
+      headers: { 'x-recoder-a2a-admin-token': ADMIN_TOKEN },
+      body: { reason: 'admin override' },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/reject', 'post', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData?.data?.state).toBe('cancelled');
   });
 });

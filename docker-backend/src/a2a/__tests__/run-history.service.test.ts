@@ -187,4 +187,35 @@ describe('buildRunHistory', () => {
     expect(history.tasks).toEqual([]);
     expect(history.entries).toEqual([]);
   });
+
+  it('does not mutate the input arrays when building/ordering', () => {
+    const envelopes = [baseEnvelope()];
+    const snapshot = JSON.stringify(envelopes);
+    buildRunHistory('ws_1', envelopes);
+    expect(JSON.stringify(envelopes)).toBe(snapshot);
+  });
+
+  it('reports truncation meta when the limit drops entries', () => {
+    const env = baseEnvelope();
+    const unlimited = buildRunHistory('ws_1', [env]);
+    expect(unlimited.meta.truncated).toBe(false);
+    expect(unlimited.meta.returnedEntries).toBe(unlimited.entries.length);
+    expect(unlimited.meta.matchedEntries).toBe(unlimited.entries.length);
+
+    const limited = buildRunHistory('ws_1', [env], [], [], { limit: 1 });
+    expect(limited.meta.truncated).toBe(true);
+    expect(limited.meta.returnedEntries).toBe(1);
+    expect(limited.meta.matchedEntries).toBeGreaterThan(1);
+  });
+
+  it('surfaces caller-reported source fetch caps via meta.sourceCaps', () => {
+    const history = buildRunHistory('ws_1', [baseEnvelope()], [], [], {
+      sourceCaps: {
+        tasks: { limit: 1000, capped: false },
+        auditEvents: { limit: 5000, capped: true },
+      },
+    });
+    expect(history.meta.sourceCaps?.auditEvents).toEqual({ limit: 5000, capped: true });
+    expect(history.meta.sourceCaps?.tasks?.capped).toBe(false);
+  });
 });

@@ -38,6 +38,7 @@ import {
   type RunHistoryFilter,
   type RunHistoryEntryType,
 } from './run-history.service';
+import { requireA2AAuth, authorizeWorkspaceAccess, type AuthedRequest } from './auth-guard';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-workspace-routes');
@@ -348,7 +349,7 @@ const RUN_HISTORY_ENTRY_TYPES: readonly RunHistoryEntryType[] = [
   'decision',
 ];
 
-workspaceRouter.get('/:wsId/run-history', (req: Request, res: Response) => {
+workspaceRouter.get('/:wsId/run-history', requireA2AAuth, (req: AuthedRequest, res: Response) => {
   try {
     const { wsId } = req.params;
 
@@ -359,6 +360,9 @@ workspaceRouter.get('/:wsId/run-history', (req: Request, res: Response) => {
         message: `Workspace not found: ${wsId}`,
       }));
     }
+
+    // Only callers authorized for this workspace may read its run history.
+    if (!authorizeWorkspaceAccess(req, res, ws)) return;
 
     const filter: RunHistoryFilter = {};
     if (typeof req.query.task_id === 'string' && req.query.task_id.trim()) {
@@ -382,10 +386,22 @@ workspaceRouter.get('/:wsId/run-history', (req: Request, res: Response) => {
       if (requested.length > 0) filter.types = requested;
     }
 
+    // Upstream fetch caps. The task store has no workspace-scoped audit fetch,
+    // so audit events are fetched globally (newest 5000) and filtered to the
+    // workspace inside buildRunHistory. These caps are surfaced to the consumer
+    // via runHistory.meta.sourceCaps so a capped/incomplete fetch is detectable.
+    const TASK_FETCH_CAP = 1000;
+    const AUDIT_FETCH_CAP = 5000;
+
     const lifecycle = getTaskLifecycleService();
-    const envelopes = lifecycle.list({ workspace_id: wsId, limit: 1000 });
+    const envelopes = lifecycle.list({ workspace_id: wsId, limit: TASK_FETCH_CAP });
     const approvals = getApprovalGateService().listForWorkspace(wsId);
-    const auditEvents = lifecycle.getRecentAuditEvents(5000);
+    const auditEvents = lifecycle.getRecentAuditEvents(AUDIT_FETCH_CAP);
+
+    filter.sourceCaps = {
+      tasks: { limit: TASK_FETCH_CAP, capped: envelopes.length >= TASK_FETCH_CAP },
+      auditEvents: { limit: AUDIT_FETCH_CAP, capped: auditEvents.length >= AUDIT_FETCH_CAP },
+    };
 
     const runHistory = buildRunHistory(wsId, envelopes, approvals, auditEvents, filter);
 

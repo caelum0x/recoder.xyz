@@ -101,6 +101,33 @@ export interface RunHistoryTaskSummary {
   updatedAt: string;
 }
 
+/**
+ * Caps applied by the *caller* when fetching the upstream sources (task
+ * envelopes / audit events). Surfaced back to consumers so they can detect when
+ * the underlying fetch — not just the response `limit` — was capped and may
+ * therefore be incomplete.
+ */
+export interface RunHistorySourceCaps {
+  /** Max task envelopes fetched for the workspace, and whether the cap was hit. */
+  tasks?: { limit: number; capped: boolean };
+  /** Max audit events fetched, and whether the cap was hit. */
+  auditEvents?: { limit: number; capped: boolean };
+}
+
+/** Truncation / completeness indicators for a run-history projection. */
+export interface RunHistoryMeta {
+  /** Total merged entries before type/since/limit narrowing. */
+  totalEntries: number;
+  /** Entries after type/since narrowing but before the `limit` slice. */
+  matchedEntries: number;
+  /** Entries actually returned after the `limit` slice. */
+  returnedEntries: number;
+  /** True when the `limit` filter dropped entries from the response. */
+  truncated: boolean;
+  /** Upstream fetch caps applied by the caller, if any were reported. */
+  sourceCaps?: RunHistorySourceCaps;
+}
+
 /** The full unified run-history projection for a workspace / run. */
 export interface RunHistory {
   workspaceId: string;
@@ -108,6 +135,8 @@ export interface RunHistory {
   tasks: RunHistoryTaskSummary[];
   /** Ordered, merged history entries across all tasks (oldest first). */
   entries: RunHistoryEntry[];
+  /** Truncation / completeness indicators (caps, counts). */
+  meta: RunHistoryMeta;
 }
 
 /** Optional filters for narrowing a run-history projection. */
@@ -120,6 +149,12 @@ export interface RunHistoryFilter {
   since?: string;
   /** Cap the number of returned entries (newest-trimmed, ordering preserved). */
   limit?: number;
+  /**
+   * Caps the caller applied when fetching upstream sources (task envelopes /
+   * audit events). Reported back via {@link RunHistoryMeta.sourceCaps} so
+   * consumers can detect a capped/incomplete fetch.
+   */
+  sourceCaps?: RunHistorySourceCaps;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +285,8 @@ export function buildRunHistory(
   auditEvents: readonly AuditEvent[] = [],
   filter: RunHistoryFilter = {},
 ): RunHistory {
+  const sourceCaps = filter.sourceCaps;
+
   const scopedEnvelopes = envelopes.filter(
     (e) => e.workspace_id === workspaceId && (!filter.taskId || e.id === filter.taskId),
   );
@@ -295,7 +332,12 @@ export function buildRunHistory(
   }
 
   // --- ordering & filtering ----------------------------------------------
-  let ordered = entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  // Sort a copy: never mutate the accumulated `entries` array in place.
+  let ordered = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+  // Total merged entries before type/since/limit narrowing — used to surface a
+  // truncation indicator to consumers.
+  const totalBeforeFilters = ordered.length;
 
   if (filter.types && filter.types.length > 0) {
     const allowed = new Set<RunHistoryEntryType>(filter.types);
@@ -307,6 +349,9 @@ export function buildRunHistory(
     ordered = ordered.filter((e) => e.timestamp.localeCompare(since) >= 0);
   }
 
+  // Number of entries after type/since narrowing but before the limit slice.
+  const matchedEntries = ordered.length;
+
   if (typeof filter.limit === 'number' && filter.limit >= 0) {
     // Keep the most recent `limit` entries while preserving chronological order.
     ordered = ordered.slice(Math.max(0, ordered.length - filter.limit));
@@ -316,5 +361,14 @@ export function buildRunHistory(
     workspaceId,
     tasks: filter.taskId ? tasks.filter((t) => t.taskId === filter.taskId) : tasks,
     entries: ordered,
+    meta: {
+      totalEntries: totalBeforeFilters,
+      matchedEntries,
+      returnedEntries: ordered.length,
+      // True when the returned set is narrower than the matched set due to the
+      // `limit` filter — consumers can detect the cap and page/refine.
+      truncated: ordered.length < matchedEntries,
+      ...(sourceCaps ? { sourceCaps } : {}),
+    },
   };
 }
