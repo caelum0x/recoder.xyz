@@ -191,7 +191,10 @@ agentRegistryRouter.get(
       if (typeof req.query.status === 'string') query.status = req.query.status;
       if (typeof req.query.skillTag === 'string') query.skillTag = req.query.skillTag;
 
-      const agents = service.discover(query as any);
+      // Project heartbeat health + durable identity onto each agent so the
+      // operator UI renders real online/last-seen state instead of every agent
+      // defaulting to offline/never-seen (bare discover() omits health).
+      const agents = service.discoverWithHealth(query as any);
 
       sendSuccess(res, {
         agents,

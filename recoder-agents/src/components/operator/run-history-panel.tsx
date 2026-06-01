@@ -20,6 +20,7 @@ import {
   type TaskRun,
   type TimelineEventStatus,
 } from '@/hooks/operator/use-run-history';
+import { formatRelative } from './format-relative';
 
 const STATE_META: Record<string, { label: string; className: string; icon: React.FC<{ className?: string }>; spin?: boolean }> = {
   submitted: { label: 'Submitted', className: 'border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300', icon: Clock },
@@ -29,16 +30,6 @@ const STATE_META: Record<string, { label: string; className: string; icon: React
   failed: { label: 'Failed', className: 'border-red-200 bg-red-100 text-red-700 dark:border-red-800/50 dark:bg-red-950/40 dark:text-red-300', icon: XCircle },
   cancelled: { label: 'Cancelled', className: 'border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700/50 dark:bg-zinc-800/40 dark:text-zinc-300', icon: CircleSlash },
 };
-
-function formatRelative(iso: string | undefined): string {
-  if (!iso) return '';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(ms)) return '';
-  if (ms < 60_000) return 'just now';
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
-  return `${Math.floor(ms / 86_400_000)}d ago`;
-}
 
 const TIMELINE_STATUS_DOT: Record<TimelineEventStatus, string> = {
   pending: 'bg-amber-400',

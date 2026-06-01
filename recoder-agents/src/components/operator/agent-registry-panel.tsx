@@ -5,16 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useAgentRegistry, type AgentWithHealth } from '@/hooks/operator/use-agent-registry';
-
-function formatRelative(iso: string | undefined): string {
-  if (!iso) return 'never';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(ms)) return 'never';
-  if (ms < 60_000) return 'just now';
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
-  return `${Math.floor(ms / 86_400_000)}d ago`;
-}
+import { formatRelative } from './format-relative';
 
 function AgentRow({ agent }: { agent: AgentWithHealth }) {
   const online = agent.health?.online ?? false;
@@ -49,14 +40,14 @@ function AgentRow({ agent }: { agent: AgentWithHealth }) {
           <span className="text-muted-foreground/40">|</span>
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            seen {formatRelative(agent.health?.lastHeartbeat || agent.lifecycle?.lastSeenAt)}
+            seen {formatRelative(agent.health?.lastHeartbeat || agent.durable?.lastReconnectAt, 'never')}
           </span>
-          {(agent.lifecycle?.reconnectCount ?? 0) > 0 && (
+          {(agent.durable?.reconnectCount ?? 0) > 0 && (
             <>
               <span className="text-muted-foreground/40">|</span>
               <span className="flex items-center gap-1">
                 <RotateCw className="h-3 w-3" />
-                {agent.lifecycle.reconnectCount} reconnect{agent.lifecycle.reconnectCount === 1 ? '' : 's'}
+                {agent.durable.reconnectCount} reconnect{agent.durable.reconnectCount === 1 ? '' : 's'}
               </span>
             </>
           )}

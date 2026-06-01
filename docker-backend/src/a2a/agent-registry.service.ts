@@ -481,6 +481,26 @@ export class AgentRegistryService {
     return this.registry.discover(query);
   }
 
+  /**
+   * Discover agents, projecting heartbeat health and (when present) the
+   * durable identity onto each result.
+   *
+   * The plain {@link discover} returns bare {@link RegisteredAgent} records
+   * with no health/durable metadata, which makes every agent look offline and
+   * never-seen to a UI. Operator surfaces should use this variant so the list
+   * carries the same `health` + `durable` projection as {@link getWithHealth}.
+   */
+  discoverWithHealth(query: AgentDiscoveryQuery = {}): AgentWithHealth[] {
+    return this.registry.discover(query).map((agent) => {
+      const durable = this.durableIdentities.get(agent.identity.id);
+      return {
+        ...agent,
+        health: this.getHealth(agent.identity.id),
+        ...(durable ? { durable } : {}),
+      };
+    });
+  }
+
   // -- Health / Heartbeat ---------------------------------------------------
 
   recordHeartbeat(agentId: string): boolean {

@@ -123,6 +123,7 @@ export function useRunHistory(filter: RunHistoryFilter = {}) {
       throw new Error(res.error?.message || 'Failed to fetch run history');
     },
     refetchInterval: 5_000,
+    staleTime: 2_500,
   });
 }
 
