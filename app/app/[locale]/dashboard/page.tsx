@@ -265,6 +265,12 @@ function DashboardContent() {
               <p className="text-sm text-gray-400">View detailed usage statistics</p>
             </Link>
 
+            <Link href="/dashboard/runs" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
+              <Workflow className="w-8 h-8 text-orange-400 mb-3 group-hover:scale-110 transition-transform" />
+              <h3 className="font-bold mb-2">Run Timeline</h3>
+              <p className="text-sm text-gray-400">Trace task &rarr; artifact &rarr; PR &rarr; preview &rarr; approval</p>
+            </Link>
+
             <Link href="/docs" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 transition-all group">
               <TrendingUp className="w-8 h-8 text-green-500 mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold mb-2">Documentation</h3>

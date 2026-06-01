@@ -31,6 +31,19 @@ export interface CreateApprovalInput {
 
 type ApprovalCallback = (approval: ApprovalRequest) => void;
 
+/**
+ * Extract the originating task id from an approval request's details bag.
+ * Approval requests carry the source task id under one of several key
+ * variants depending on which caller created them.
+ */
+export function extractApprovalTaskId(approval: ApprovalRequest): string | undefined {
+  const details = approval.details;
+  if (!details || typeof details !== 'object') return undefined;
+  const bag = details as Record<string, unknown>;
+  const candidate = bag.sourceTaskId ?? bag.taskId ?? bag.task_id;
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -188,6 +201,27 @@ export class ApprovalGateService {
   listPending(workspaceId: string): ApprovalRequest[] {
     return [...this.requests.values()].filter(
       (r) => r.workspaceId === workspaceId && (r.status === 'pending' || r.status === 'escalated'),
+    );
+  }
+
+  /**
+   * List all approval requests (any status) for a workspace. Used by
+   * read-only projections such as the task timeline aggregator, which need
+   * resolved approvals as well as pending ones.
+   */
+  listForWorkspace(workspaceId: string): ApprovalRequest[] {
+    return [...this.requests.values()].filter((r) => r.workspaceId === workspaceId);
+  }
+
+  /**
+   * List approval requests (any status) for a single task within a workspace.
+   * Filters {@link listForWorkspace} down to approvals whose details bag
+   * references the given task id, so that read-only projections (e.g. the task
+   * timeline) never leak other tasks' approval records.
+   */
+  listForTask(workspaceId: string, taskId: string): ApprovalRequest[] {
+    return this.listForWorkspace(workspaceId).filter(
+      (r) => extractApprovalTaskId(r) === taskId,
     );
   }
 

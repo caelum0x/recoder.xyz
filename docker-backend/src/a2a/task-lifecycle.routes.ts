@@ -11,6 +11,7 @@
  * | PATCH  | /:taskId/transition           | Transition task to a new state           |
  * | GET    | /:taskId                      | Get a task with full envelope            |
  * | GET    | /:taskId/history              | Get transition history for a task        |
+ * | GET    | /:taskId/timeline             | Get unified task→artifact→pr→preview→approval timeline |
  * | GET    | /                             | List tasks with optional filters         |
  * | POST   | /:taskId/execute              | Execute a task via Pi/OpenCode agent     |
  *
@@ -40,6 +41,8 @@ import {
 } from './task-lifecycle.middleware';
 import { createLogger } from '../logger';
 import { getRecentContext } from './memory-store';
+import { buildTaskTimeline } from './task-timeline.service';
+import { getApprovalGateService } from './approval-gate.service';
 
 const logger = createLogger('a2a-task-routes');
 
@@ -310,6 +313,49 @@ taskLifecycleRouter.get(
       sendError(res, 500, buildA2AError({
         code: A2AErrorCodeEnum.InternalError,
         message: 'Internal server error while fetching task history',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /:taskId/timeline -- Unified task→artifact→pr→preview→approval timeline
+// ---------------------------------------------------------------------------
+// Read-only projection that surfaces the full product path for a task/run from
+// existing history (lifecycle transitions, result artifacts, embedded PR /
+// preview URLs, and approval-gate requests). No new storage is introduced.
+
+taskLifecycleRouter.get(
+  '/:taskId/timeline',
+  (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+
+      if (!taskId || taskId === 'undefined') {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.MissingEnvelopeField,
+          message: 'taskId parameter is required',
+        }));
+        return;
+      }
+
+      const service = getTaskLifecycleService();
+      const result = service.getTask(taskId);
+
+      if (!result.ok) {
+        sendError(res, result.httpStatus, result.error);
+        return;
+      }
+
+      const approvals = getApprovalGateService().listForTask(result.data.workspace_id, result.data.id);
+      const timeline = buildTaskTimeline(result.data, approvals);
+
+      sendSuccess(res, timeline);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in GET /api/a2a/tasks/:taskId/timeline');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while building task timeline',
       }));
     }
   },
