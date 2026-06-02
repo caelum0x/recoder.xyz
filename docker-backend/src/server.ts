@@ -16329,6 +16329,19 @@ app.get('/api/a2a/squads/:id/tasks', authenticateRequest, asyncHandler(async (re
   sendSuccess(res, { tasks: listSquadTasks(req.params.id) });
 }));
 
+// Per-agent run history: every squad-task assignment for one agent, newest
+// first, enriched with the squad name. Powers the agent drill-down beyond skills.
+app.get('/api/a2a/agents/:agentId/assignments', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getAgentAssignments } = await import('./a2a/squad-dispatch.service.js');
+  const { listSquads } = await import('./a2a/squad.service.js');
+  const nameById = new Map(listSquads(req.userId!).map((s) => [s.id, s.name]));
+  const assignments = getAgentAssignments(req.params.agentId).map((a) => ({
+    ...a,
+    squadName: nameById.get(a.squadId) ?? a.squadId,
+  }));
+  sendSuccess(res, { assignments });
+}));
+
 app.get('/api/a2a/squads/:id/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getSquadStats } = await import('./a2a/squad-dispatch.service.js');
   sendSuccess(res, getSquadStats(req.params.id));

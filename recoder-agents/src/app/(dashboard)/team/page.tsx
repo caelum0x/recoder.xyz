@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Network, Bot, Users, Activity, AlertTriangle, TrendingUp, ChevronDown, Trophy } from 'lucide-react';
+import { Network, Bot, Users, Activity, AlertTriangle, TrendingUp, ChevronDown, Trophy, History } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,10 @@ import {
   useCollabFeed,
   useCollabStream,
   useAgentSkills,
+  useAgentAssignments,
   useLeaderboard,
   type AgentPresence,
+  type AssignmentStatus,
 } from '@/hooks/use-squads';
 
 const AVAIL_STYLE: Record<AgentPresence['availability'], string> = {
@@ -257,6 +259,41 @@ function AgentSkillPanel({ agentId }: { agentId: string }) {
           </p>
         </div>
       )}
+      <AgentRunHistory agentId={agentId} />
+    </div>
+  );
+}
+
+const RUN_STATUS_STYLE: Record<AssignmentStatus, string> = {
+  queued: 'text-muted-foreground',
+  in_progress: 'text-blue-500',
+  completed: 'text-emerald-500',
+  failed: 'text-red-500',
+};
+
+function AgentRunHistory({ agentId }: { agentId: string }) {
+  const { data: runs, isLoading } = useAgentAssignments(agentId);
+
+  if (isLoading) return <Skeleton className="mt-3 h-6 w-full" />;
+  if (!runs || runs.length === 0) return null;
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <History className="h-3.5 w-3.5" />
+        Recent runs ({runs.length})
+      </div>
+      <ul className="flex max-h-40 flex-col gap-1 overflow-auto">
+        {runs.slice(0, 12).map((r) => (
+          <li key={r.squadTaskId} className="flex items-center justify-between gap-2 text-xs">
+            <span className="min-w-0">
+              <span className="text-muted-foreground">{r.squadName} · </span>
+              <span className="truncate">{r.task}</span>
+            </span>
+            <span className={cn('shrink-0 font-medium', RUN_STATUS_STYLE[r.status])}>{r.status}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
