@@ -7,3 +7,4 @@
 ^docker-backend/src/database/README\.md:
 ^docker-backend/src/database/__tests__/security\.test\.ts:
 ^internal-packages/workflow-designer-ui/.*/postgres-validation\.test\.ts:
+^packages/cli/src/generators/production-generator\.js:
