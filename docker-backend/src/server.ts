@@ -1914,6 +1914,79 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
   return undefined;
 }
 
+/**
+ * Provision a brand-new Daytona sandbox for a project that has none. This is a
+ * focused, headless version of the web-IDE container route's creation path —
+ * it intentionally omits the route's ownership-reservation and zrok extras so
+ * it can be called from non-HTTP flows (e.g. squad dispatch with
+ * `createSandbox`). The proven web-IDE route is left untouched; this is purely
+ * additive. Returns the registered ContainerEntry, or undefined if Daytona is
+ * not configured. Throws on creation failure so callers can report truthfully.
+ */
+async function provisionDaytonaSandboxForProject(
+  projectId: string,
+  userId: string,
+): Promise<ContainerEntry | undefined> {
+  if (!isDaytonaConfigured()) return undefined;
+
+  const dc = getDaytonaClient();
+  const sandbox = await dc.createSandbox({
+    labels: { projectId, userId, source: 'squad-dispatch' },
+    public: true,
+    resources: { disk: DAYTONA_WEB_IDE_DISK_GB },
+  });
+
+  // Wait for the sandbox to reach a running state before returning.
+  if (sandbox.state !== 'started' && sandbox.state !== 'running') {
+    try {
+      await dc.getOrStartSandbox(sandbox.id, 30000);
+    } catch (waitErr: any) {
+      logger.warn({ sandboxId: sandbox.id, err: waitErr?.message }, 'provisioned sandbox readiness wait failed, proceeding');
+    }
+  }
+
+  const workDir = await dc.getWorkDir(sandbox.id).catch(() => DAYTONA_WORKSPACE_ROOT);
+  dc.rememberWorkDir(sandbox.id, workDir);
+  if (workDir !== DAYTONA_WORKSPACE_ROOT) {
+    try {
+      await dc.execCommand(
+        sandbox.id,
+        `test -e ${DAYTONA_WORKSPACE_ROOT} || ln -sf '${workDir.replace(/'/g, "'\\''")}' ${DAYTONA_WORKSPACE_ROOT}`,
+        { timeoutSecs: 10 },
+      );
+    } catch (symlinkErr: any) {
+      logger.warn({ sandboxId: sandbox.id, workDir, err: symlinkErr?.message }, 'provisioned sandbox /workspace alias failed');
+    }
+  }
+
+  const defaultPort = 5173;
+  const preview = await getDaytonaPreviewAccess({ id: sandbox.id }, defaultPort).catch((err: any) => {
+    logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'provisioned sandbox preview fallback');
+    return { url: dc.getPreviewUrl(sandbox.id, defaultPort) } as { url: string };
+  });
+
+  const entry: ContainerEntry = {
+    id: sandbox.id,
+    lastActive: Date.now(),
+    port: defaultPort,
+    ptyPort: 0,
+    backgroundDev: false,
+    userId,
+    daytona: true,
+    daytonaPreviewUrl: preview.url,
+    daytonaDevSessionId: buildDaytonaDevServerSessionId(projectId),
+    daytonaWorkDir: workDir,
+  };
+  containers.set(projectId, entry);
+  daytonaSandboxIds.add(sandbox.id);
+  registerDaytonaId(sandbox.id);
+  registerUserContainer(userId, projectId);
+  persistContainers();
+
+  logger.info({ sandboxId: sandbox.id, projectId, source: 'squad-dispatch' }, 'provisioned new Daytona sandbox for project');
+  return entry;
+}
+
 // Track containers being created to prevent race conditions
 type ContainerCreationResult = { containerId: string; port: number; ptyPort: number; fromPool?: boolean };
 const creatingContainers = new Map<string, ContainerCreationEntry<ContainerCreationResult>>();
@@ -16249,7 +16322,7 @@ app.delete('/api/a2a/squads/:id/members/:memberId', authenticateRequest, asyncHa
 // ── Squad task dispatch (assign work to a team) ─────────────────────────────
 
 app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { task, strategy, projectId, execute } = req.body ?? {};
+  const { task, strategy, projectId, execute, createSandbox } = req.body ?? {};
   if (typeof task !== 'string' || !task.trim()) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'task (string) is required'));
   }
@@ -16282,10 +16355,22 @@ app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async
       } else {
         let state = runtime.getState(projectId);
         if (!state || state.status !== 'ready') {
-          const entry = await getOrRecoverContainer(projectId);
-          if (!entry) {
-            execution.reason = 'no sandbox for this project — open it once to provision one, then dispatch with execute';
-          } else {
+          let entry = await getOrRecoverContainer(projectId);
+          // Container-from-nothing: opt-in `createSandbox` provisions a fresh
+          // sandbox when the project has none, so dispatch can run end-to-end
+          // without first opening the project in the web IDE.
+          if (!entry && createSandbox === true) {
+            try {
+              entry = await provisionDaytonaSandboxForProject(projectId, req.userId!);
+              if (!entry) execution.reason = 'sandbox provisioning unavailable (Daytona not configured)';
+            } catch (provErr) {
+              execution.reason = 'sandbox provisioning failed';
+              logger.warn({ provErr, projectId }, 'squad dispatch sandbox provisioning failed');
+            }
+          }
+          if (!entry && !execution.reason) {
+            execution.reason = 'no sandbox for this project — dispatch with createSandbox:true to provision one, or open it in the IDE first';
+          } else if (entry) {
             await runtime.startSession({
               projectId,
               sandboxId: entry.id,

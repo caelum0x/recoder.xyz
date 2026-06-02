@@ -314,6 +314,7 @@ function DispatchPanel({ squadId }: { squadId: string }) {
   const [task, setTask] = useState('');
   const [strategy, setStrategy] = useState<DispatchStrategy>('all');
   const [projectId, setProjectId] = useState('');
+  const [createSandbox, setCreateSandbox] = useState(false);
 
   const handleDispatch = async () => {
     if (!task.trim()) {
@@ -324,7 +325,7 @@ function DispatchPanel({ squadId }: { squadId: string }) {
       const res = await dispatch.mutateAsync({
         task: task.trim(),
         strategy,
-        ...(projectId.trim() ? { projectId: projectId.trim(), execute: true } : {}),
+        ...(projectId.trim() ? { projectId: projectId.trim(), execute: true, createSandbox } : {}),
       });
       if (!projectId.trim()) {
         toast.success('Dispatched to squad');
@@ -363,6 +364,12 @@ function DispatchPanel({ squadId }: { squadId: string }) {
               placeholder="project id (optional — run on coding runtime)"
               className="h-9 w-64"
             />
+            {projectId.trim() && (
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Provision a fresh sandbox if the project has none">
+                <input type="checkbox" checked={createSandbox} onChange={(e) => setCreateSandbox(e.target.checked)} className="h-3.5 w-3.5" />
+                provision sandbox if missing
+              </label>
+            )}
             <Button onClick={handleDispatch} disabled={dispatch.isPending} className="ml-auto">
               {dispatch.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
               Dispatch
