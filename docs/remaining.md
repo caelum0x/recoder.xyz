@@ -15,6 +15,7 @@ Shipped through `recoder-7xqf`:
 - Legacy session and token quota fields still exist for compatibility, but auth, billing, CLI quota/proxy, user quota, usage tracking, analytics, and plan config now derive those fields from the same commercial entitlement model.
 - Preview deploy artifacts and private preview access are represented as run/task evidence instead of separate deploy-only state.
 - `recoder-edge` exists as a scaffold for preview routing and security policy, but live edge rollout is not complete.
+- 2026-06-02 update: an agent capability layer is wired into `docker-backend` (additive, fail-safe, surfaced at `GET /api/capabilities`): Qwen Code + Gemini CLI coding runtimes, E2B secure runner (`/api/e2b/*`), browser verification (`/api/browser/verify*`), mem0 memory (`/api/memory/mem0/*`), Context7 docs (`/api/context7/*`), and a workspace Workflows UI in recoder-agents. These are capability substrate; none change the paid-user launch gate below, which is still about the end-to-end Spaces loop.
 
 ## What Remains Before Paid Users
 

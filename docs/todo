@@ -2,6 +2,25 @@
 
 This file is raw backlog/reference material. Do not treat it as the current execution order by itself.
 
+## Shipped 2026-06-02 — Agent capability lane (vendored OSS integrations)
+
+All additive + fail-safe, unified under `GET /api/capabilities`:
+
+- Coding backends: Qwen Code + Gemini CLI sandbox-local runtime adapters (`a2a/cli-agent-runtime.service.ts`, registered in `coding-runtime.ts`, reachable via `/api/coding-runtime/*`, auto-routed test→Qwen / doc→Gemini, catalog via `getRuntimeCatalog()`).
+- E2B secure ephemeral runner: `e2b-client.ts`, `/api/e2b/{health,exec,run,sandbox/:id}` (dep `e2b`).
+- Browser self-verification: `browser-verify.ts`, `/api/browser/verify{,/ai,/health}` (Puppeteer + optional Stagehand).
+- mem0 agent memory: `mem0-client.ts`, `/api/memory/mem0/*` (dep `mem0ai`).
+- Context7 live library docs: `context7-client.ts`, `/api/context7/{health,resolve,docs,inject}`.
+- Workflows UI in recoder-agents: `/workflows`, `/workflows/[id]`, `/workflows/approvals` + nav.
+
+Vendored OSS (shallow, git-stripped, gitignored): qwen-code, gemini-cli, a2a-js, A2A, open-agents, agent-browser, stagehand, E2B, ziti, beads, mem0, context7, vllm, ollama, polar. Recoder-variant references to mine: pal-mcp-server, pi, openfang, GitNexus, ClawWork, multica.
+
+Backlog (mining the variants):
+- GitNexus → code knowledge graph / code intelligence for agents (next).
+- pal-mcp-server / pi → unified multi-model routing + agent toolkit patterns.
+- multica → managed-agents "teammates" task/skill patterns for Spaces.
+- ziti → zero-trust runner/tunnel layer; openfang → agent-OS patterns.
+
 Current source of truth:
 
 1. docs/plan.md for execution sequencing.
@@ -27,6 +46,17 @@ Shipped 2026-05-31 (infra/control-plane lane):
 - recoder-g69j / recoder-minf (Daytona runtime lane): build-mode 200s with "Container not found" traced to the Daytona control plane being down, then the runner image being gone. RESOLVED 2026-05-31: recreated the daytona network, brought db/redis/dex/registry/minio/api/proxy up healthy, built the missing `dist/libs/computer-use-amd64` artifact, rebuilt `daytona-runner-custom:latest`, fixed the runner entrypoint, corrected zeroed Personal org per-sandbox quotas, and verified a real sandbox create from `daytonaio/sandbox:0.5.0-slim` reached `started`. The disposable verifier sandbox and API keys were removed. Product decision 2026-05-31: the retired browser coding app is not a paid-user launch gate.
 - GitHub PRs as first-class artifacts (in progress, production code deployed): added docker-backend routes `POST /api/git/:projectId/pull-request` (open a PR from the project branch), `GET /api/git/:projectId/pull-requests` (list), and `GET /api/git/:projectId/pull-request/:number` (PR detail + review state + CI check-run state). The create route now optionally attaches the PR as an A2A task artifact and task metadata when a `taskId` is supplied. Product decision 2026-05-31: surface PR artifacts through the main dashboard/Spaces/shared run history, not the retired browser coding app. REMAINING: verify a real task -> artifact -> PR appears in shared run history.
 - Retired browser coding app cleanup: production container/image removed, deploy service removed, and the old subdomain redirects to `recoder.xyz/dashboard`. The old verifier/auth task is no longer a paid-user launch blocker.
+
+Multi-agent wave delivery 2026-06-01 (branch `wave-integration`, 8 features, 62 files, 16 commits, docker-backend tsc 0 errors): implemented + adversarially reviewed + fixed across 4 orchestrated workflow waves, each feature on its own branch then merged conflict-free:
+  - PR-artifact dashboard UI (recoder-eb0v): open/list/PR-status panel in the main app dashboard consuming the docker-backend PR routes; envelope-unwrap + PAT-in-header security fixes applied.
+  - Task timeline (#3): task→artifact→pr→preview→approval read-model (docker-backend buildTaskTimeline + GET /api/a2a/tasks/:taskId/timeline) + dashboard stepper; per-task approval scoping + canonical result.preview lane fixed.
+  - PM/Agency A2A ingress (recoder-9s5j): inbound envelopes validated via @recoder/a2a-sdk normalizeInboundEnvelope(adaptLegacyEnvelopeToTaskEnvelope(...)); avoided the 3 prior revert failure modes (crypto-free barrel, source-resolving subpath).
+  - Reconnect-safe agent registry/session: reconcileSession upsert keyed by stable agentId + durable identity persistence + reserved-agentId lockdown.
+  - PM approval/reject/pause/handoff as first-class run lifecycle transitions (docker-backend a2a) + new auth guard on those routes.
+  - Unified run history across PM and Agents (GET /api/a2a/workspaces/:wsId/run-history, authed) on top of the timeline read-model.
+  - Agents operator UI: read-only workspace/agent/run/approval state in recoder-agents, types reconciled to backend AgentDurableIdentity/with-health.
+  - Capability/policy/assignee/intent routing (AssignmentRouterService) wired into multi-dispatch.
+  STATUS: code complete + typecheck-clean on `wave-integration` (based on the recoder-web-removal snapshot); NOT yet merged to the deploy branch or build-gated (Next-app builds + pnpm install unverified offline). Filed [recoder-0zso] — systemic /api/a2a/* auth hardening (most routes unauthenticated, bridge tokens unverified) surfaced by the security review; larger than the feature work.
 
 Remaining paid-user blockers:
 

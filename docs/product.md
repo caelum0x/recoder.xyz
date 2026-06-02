@@ -23,6 +23,8 @@ The active product path is now:
 
 The commercial model should be described as Spaces, connected agents, approvals, artifact retention, and preview deploy capacity. Legacy session or token limits may still appear in compatibility APIs, but they are no longer the product story.
 
+Inside that workspace, agents now have a capability layer built on best-in-class open source (additive, fail-safe, discoverable via `/api/capabilities`): a choice of coding backends (OpenCode, Qwen Code, Gemini CLI, Codex, Claude Code), a secure throwaway runner (E2B), browser-based self-verification (Stagehand/Puppeteer), durable agent memory (mem0), and live library docs (Context7). The narrative stays "Recoder is the workplace" — these are the tools on the workbench, not separate products.
+
 For what still blocks paid subscribed users, see [remaining.md](/Users/arhansubasi/recoder.xyz/docs/remaining.md:1).
 
 ## Positioning

@@ -21,7 +21,14 @@ const logger = createLogger('coding-runtime');
 // Types
 // ---------------------------------------------------------------------------
 
-export type RuntimeType = 'native' | 'opencode' | 'codex' | 'claude-code' | 'omo';
+export type RuntimeType =
+  | 'native'
+  | 'opencode'
+  | 'codex'
+  | 'claude-code'
+  | 'omo'
+  | 'qwen-code'
+  | 'gemini-cli';
 
 export interface CodingSession {
   id: string;
@@ -87,6 +94,77 @@ export function getRuntime(type: RuntimeType): RuntimeAdapter | undefined {
  */
 export function listRuntimes(): RuntimeType[] {
   return Array.from(adapters.keys());
+}
+
+// ---------------------------------------------------------------------------
+// Runtime catalog (product-facing metadata)
+// ---------------------------------------------------------------------------
+
+export interface RuntimeCatalogEntry {
+  type: RuntimeType;
+  /** Product display name. */
+  label: string;
+  /** One-line description for pickers/tooltips. */
+  description: string;
+  /** Upstream open-source project this backend is built on, if any. */
+  basedOn?: string;
+  /** Whether the adapter is registered and selectable right now. */
+  available: boolean;
+}
+
+const RUNTIME_CATALOG: Record<RuntimeType, Omit<RuntimeCatalogEntry, 'available'>> = {
+  native: {
+    type: 'native',
+    label: 'Recoder Native',
+    description: 'Fast built-in XML/action pipeline — best for quick, well-scoped edits.',
+  },
+  opencode: {
+    type: 'opencode',
+    label: 'OpenCode',
+    description: 'Durable terminal coding agent with a broad tool surface.',
+    basedOn: 'anomalyco/opencode',
+  },
+  codex: {
+    type: 'codex',
+    label: 'Codex',
+    description: 'OpenAI Codex CLI agent for autonomous multi-step coding.',
+    basedOn: 'openai/codex',
+  },
+  'claude-code': {
+    type: 'claude-code',
+    label: 'Claude Code',
+    description: 'Anthropic Claude Code — strong at investigation and root-cause debugging.',
+  },
+  omo: {
+    type: 'omo',
+    label: 'OMO',
+    description: 'Lightweight, fast runtime for short, well-scoped tasks.',
+  },
+  'qwen-code': {
+    type: 'qwen-code',
+    label: 'Qwen Code',
+    description: 'Cost-efficient terminal coding agent powered by Qwen3-Coder.',
+    basedOn: 'QwenLM/qwen-code',
+  },
+  'gemini-cli': {
+    type: 'gemini-cli',
+    label: 'Gemini CLI',
+    description: 'Large-context terminal agent with generous throughput, ideal for docs and big refactors.',
+    basedOn: 'google-gemini/gemini-cli',
+  },
+};
+
+/**
+ * Product-facing catalog of coding runtimes, annotated with whether each is
+ * currently registered/selectable. Used by `/api/coding-runtime/runtimes` so
+ * UIs can render branded, described backend choices.
+ */
+export function getRuntimeCatalog(): RuntimeCatalogEntry[] {
+  const registered = new Set(listRuntimes());
+  return (Object.keys(RUNTIME_CATALOG) as RuntimeType[]).map((type) => ({
+    ...RUNTIME_CATALOG[type],
+    available: registered.has(type),
+  }));
 }
 
 type RuntimeProviderKey = keyof OmoProviderKeys;
@@ -687,6 +765,69 @@ export function createClaudeCodeAdapter(): RuntimeAdapter {
 }
 
 // ---------------------------------------------------------------------------
+// CLI agent adapters (Qwen Code / Gemini CLI) — sandbox-local terminal agents
+// ---------------------------------------------------------------------------
+
+function createCliAgentAdapter(kind: 'qwen-code' | 'gemini-cli'): RuntimeAdapter {
+  const cliSessions = new Map<string, CodingSession>();
+
+  return {
+    type: kind,
+
+    async startSession(params: StartSessionParams): Promise<CodingSession> {
+      const { startCliAgentSession } = await import('./cli-agent-runtime.service.js');
+      const session = await startCliAgentSession({
+        kind,
+        projectId: params.projectId,
+        sandboxId: params.sandboxId,
+        model: params.model,
+        provider: params.provider,
+        apiKey: params.apiKey,
+      });
+
+      const coding: CodingSession = {
+        id: session.id,
+        projectId: params.projectId,
+        sandboxId: params.sandboxId,
+        threadId: params.threadId,
+        runtimeType: kind,
+        status: session.status === 'ready' ? 'ready' : 'starting',
+        createdAt: session.createdAt,
+      };
+      cliSessions.set(params.projectId, coding);
+      return coding;
+    },
+
+    async sendPrompt(params: SendPromptParams): Promise<PromptResult> {
+      const { sendCliAgentPrompt } = await import('./cli-agent-runtime.service.js');
+      return sendCliAgentPrompt({
+        kind,
+        projectId: params.projectId,
+        prompt: params.prompt,
+      });
+    },
+
+    getState(projectId: string): CodingSession | undefined {
+      return cliSessions.get(projectId);
+    },
+
+    async dispose(projectId: string): Promise<void> {
+      const { disposeCliAgentSession } = await import('./cli-agent-runtime.service.js');
+      disposeCliAgentSession(kind, projectId);
+      cliSessions.delete(projectId);
+    },
+  };
+}
+
+export function createQwenCodeAdapter(): RuntimeAdapter {
+  return createCliAgentAdapter('qwen-code');
+}
+
+export function createGeminiCliAdapter(): RuntimeAdapter {
+  return createCliAgentAdapter('gemini-cli');
+}
+
+// ---------------------------------------------------------------------------
 // Auto-register on import
 // ---------------------------------------------------------------------------
 
@@ -695,3 +836,5 @@ registerRuntime(createOpenCodeAdapter());
 registerRuntime(createOmoAdapter());
 registerRuntime(createCodexAdapter());
 registerRuntime(createClaudeCodeAdapter());
+registerRuntime(createQwenCodeAdapter());
+registerRuntime(createGeminiCliAdapter());
