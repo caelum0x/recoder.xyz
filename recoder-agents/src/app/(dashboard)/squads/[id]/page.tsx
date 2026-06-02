@@ -36,6 +36,7 @@ import {
   type SquadTask,
 } from '@/hooks/use-squads';
 import { Send, Play, CheckCircle2, XCircle, Copy, Download } from 'lucide-react';
+import { useAgents } from '@/hooks/agents/use-agents';
 
 const AVAIL_STYLE: Record<AgentPresence['availability'], string> = {
   online: 'bg-emerald-500',
@@ -67,6 +68,7 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
     }
   };
 
+  const { data: agentsData } = useAgents();
   const [memberId, setMemberId] = useState('');
   const [kind, setKind] = useState<MemberKind>('agent');
   const [role, setRole] = useState('member');
@@ -189,7 +191,19 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
           <div className="mt-2 flex flex-col gap-2 rounded-md border border-dashed p-3 sm:flex-row sm:items-end">
             <div className="flex flex-1 flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground">Member id</label>
-              <Input value={memberId} onChange={(e) => setMemberId(e.target.value)} placeholder="agent id or user id" />
+              <Input
+                value={memberId}
+                onChange={(e) => setMemberId(e.target.value)}
+                placeholder={kind === 'agent' ? 'pick or type an agent id' : 'user id'}
+                list={kind === 'agent' ? 'squad-agent-options' : undefined}
+              />
+              {kind === 'agent' && (
+                <datalist id="squad-agent-options">
+                  {(agentsData?.agents ?? []).map((a) => (
+                    <option key={a.agent_id} value={a.agent_id}>{a.name}</option>
+                  ))}
+                </datalist>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground">Kind</label>
