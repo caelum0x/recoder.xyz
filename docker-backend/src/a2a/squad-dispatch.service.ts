@@ -213,6 +213,40 @@ export function listAllSquadTasks(squadIds?: readonly string[]): SquadTask[] {
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
+export interface AgentAssignment {
+  squadTaskId: string;
+  squadId: string;
+  task: string;
+  strategy: DispatchStrategy;
+  status: AssignmentStatus;
+  taskStatus: SquadTask['status'];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One agent's assignment history across every squad task it was dispatched to,
+ * newest first. Powers the per-agent run-history drill-down (beyond skills).
+ */
+export function getAgentAssignments(agentId: string, limit = 50): AgentAssignment[] {
+  const out: AgentAssignment[] = [];
+  for (const task of Object.values(getStore())) {
+    const a = task.assignments.find((x) => x.memberId === agentId);
+    if (!a) continue;
+    out.push({
+      squadTaskId: task.id,
+      squadId: task.squadId,
+      task: task.task,
+      strategy: task.strategy,
+      status: a.status,
+      taskStatus: task.status,
+      createdAt: task.createdAt,
+      updatedAt: a.updatedAt,
+    });
+  }
+  return out.sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1)).slice(0, limit);
+}
+
 export interface SquadStats {
   totalTasks: number;
   byStatus: Record<string, number>;

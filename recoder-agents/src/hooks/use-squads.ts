@@ -300,6 +300,29 @@ export function useAgentSkills(agentId: string | null) {
   });
 }
 
+export interface AgentAssignment {
+  squadTaskId: string;
+  squadId: string;
+  squadName: string;
+  task: string;
+  strategy: DispatchStrategy;
+  status: AssignmentStatus;
+  taskStatus: SquadTask['status'];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One agent's recent squad-task assignment history (run history beyond skills). */
+export function useAgentAssignments(agentId: string | null) {
+  return useQuery<AgentAssignment[]>({
+    queryKey: ['agent-assignments', agentId],
+    queryFn: async () =>
+      (await dx<{ assignments: AgentAssignment[] }>(`/a2a/agents/${encodeURIComponent(agentId!)}/assignments`)).assignments,
+    enabled: !!agentId,
+    staleTime: 10_000,
+  });
+}
+
 export interface LeaderboardEntry {
   agentId: string;
   score: number;
