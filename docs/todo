@@ -20,7 +20,7 @@ Source of truth order: plan.md (execution) → remaining.md (paid-user gate) →
 
 - Squad dispatch → coding-runtime execution: shipped incl. **session-on-demand** (opt-in `execute`+`projectId`; starts a session on the project's existing container when none is ready via getOrRecoverContainer+startSession, then runs; fire-and-forget). Still TODO — create a sandbox/container from nothing when the project has none (heavier container-creation flow), and a richer agent↔project mapping.
 - Workflow StepMode: `parallel` + `conditional` (then/else sub-step branches) steps shipped; Step Runner now supports step **reordering** + visual `{{_lastOutput}}` data-flow connectors. Still TODO — a squad-step node in the heavyweight **Giselle** visual designer (internal-packages/workflow-designer-ui), which has its own node-type system (recoder-agency product; larger, separate effort).
-- Per-agent drill-down beyond skills (run history). (Presence is already surfaced on squad cards, squad detail, the Team roster, and the cross-squad **task board** at `/squads/board` — board + squad detail refresh live via the collab SSE stream. The marketplace `/agents` list is a separate template-identity space, not A2A runtime presence, so it's intentionally excluded.)
+- ~~Per-agent drill-down beyond skills (run history).~~ Shipped — 'Recent runs' section in the Team-page agent panel (`GET /api/a2a/agents/:agentId/assignments`). Presence is surfaced on squad cards, squad detail, the Team roster, and the cross-squad **task board** (`/squads/board`) — board + squad detail refresh live via the collab SSE stream. The marketplace `/agents` list is a separate template-identity space, not A2A runtime presence, so it's intentionally excluded.
 
 ## Capability layer — follow-ups
 
