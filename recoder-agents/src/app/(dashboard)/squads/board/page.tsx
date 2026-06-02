@@ -261,6 +261,7 @@ function DispatchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   const [task, setTask] = useState('');
   const [strategy, setStrategy] = useState<DispatchStrategy>('all');
   const [projectId, setProjectId] = useState('');
+  const [createSandbox, setCreateSandbox] = useState(false);
 
   const handleDispatch = async () => {
     if (!squadId || !task.trim()) return;
@@ -269,7 +270,7 @@ function DispatchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
         squadId,
         task: task.trim(),
         strategy,
-        ...(projectId.trim() ? { projectId: projectId.trim(), execute: true } : {}),
+        ...(projectId.trim() ? { projectId: projectId.trim(), execute: true, createSandbox } : {}),
       });
       if (!projectId.trim()) {
         toast.success('Dispatched to squad');
@@ -325,7 +326,13 @@ function DispatchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Run on project <span className="font-normal">(optional)</span></label>
             <Input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="project id — executes the task on its coding runtime" />
-            <span className="text-[11px] text-muted-foreground">Leave blank to dispatch only. With a project id, the task runs on that project’s existing sandbox session.</span>
+            <span className="text-[11px] text-muted-foreground">Leave blank to dispatch only. With a project id, the task runs on that project’s sandbox session.</span>
+            {projectId.trim() && (
+              <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground" title="Provision a fresh sandbox if the project has none">
+                <input type="checkbox" checked={createSandbox} onChange={(e) => setCreateSandbox(e.target.checked)} className="h-3.5 w-3.5" />
+                provision sandbox if missing
+              </label>
+            )}
           </div>
         </div>
         <DialogFooter>

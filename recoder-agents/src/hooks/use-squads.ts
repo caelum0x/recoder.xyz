@@ -219,7 +219,7 @@ export function useAllSquadTasks() {
 export function useDispatchAnySquad() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ squadId, ...body }: { squadId: string; task: string; strategy?: DispatchStrategy; projectId?: string; execute?: boolean }) =>
+    mutationFn: ({ squadId, ...body }: { squadId: string; task: string; strategy?: DispatchStrategy; projectId?: string; execute?: boolean; createSandbox?: boolean }) =>
       dx<SquadTask>(`/a2a/squads/${squadId}/dispatch`, { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['squad-tasks'] });
@@ -244,7 +244,7 @@ export function useTransitionBoardAssignment() {
 export function useDispatchToSquad(squadId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { task: string; strategy?: DispatchStrategy; projectId?: string; execute?: boolean }) =>
+    mutationFn: (body: { task: string; strategy?: DispatchStrategy; projectId?: string; execute?: boolean; createSandbox?: boolean }) =>
       dx<SquadTask>(`/a2a/squads/${squadId}/dispatch`, { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['squad-tasks', squadId] });
