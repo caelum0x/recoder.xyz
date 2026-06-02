@@ -154,6 +154,12 @@ export interface SquadAssignment {
   updatedAt: string;
 }
 
+export interface ExecutionResult {
+  requested: boolean;
+  started: boolean;
+  reason?: string;
+}
+
 export interface SquadTask {
   id: string;
   squadId: string;
@@ -164,6 +170,10 @@ export interface SquadTask {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  // Present only on the dispatch response, not on listed tasks.
+  deliveredTo?: string[];
+  executed?: boolean;
+  execution?: ExecutionResult;
 }
 
 export interface SquadStats {

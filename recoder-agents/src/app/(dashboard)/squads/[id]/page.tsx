@@ -326,7 +326,14 @@ function DispatchPanel({ squadId }: { squadId: string }) {
         strategy,
         ...(projectId.trim() ? { projectId: projectId.trim(), execute: true } : {}),
       });
-      toast.success(res?.id && projectId.trim() ? 'Dispatched + queued for coding runtime' : 'Dispatched to squad');
+      if (!projectId.trim()) {
+        toast.success('Dispatched to squad');
+      } else if (res?.execution?.started) {
+        toast.success('Dispatched + running on coding runtime');
+      } else {
+        // Truthful: the squad got the task, but execution did not start.
+        toast.warning(`Dispatched — execution skipped: ${res?.execution?.reason ?? 'coding runtime unavailable'}`);
+      }
       setTask('');
     } catch {
       toast.error('Dispatch failed');
