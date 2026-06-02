@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ChevronLeft, Play, Plus, Trash2, Loader2, CheckCircle2, XCircle, Download, Upload } from 'lucide-react';
+import { ChevronLeft, Play, Plus, Trash2, Loader2, CheckCircle2, XCircle, Download, Upload, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -69,6 +69,14 @@ function RunnerInner() {
   const update = (i: number, patch: Partial<DraftStep>) =>
     setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
   const remove = (i: number) => setSteps((prev) => prev.filter((_, idx) => idx !== i));
+  const move = (i: number, dir: -1 | 1) =>
+    setSteps((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
 
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(steps, null, 2)], { type: 'application/json' });
@@ -129,7 +137,8 @@ function RunnerInner() {
 
       <div className="flex flex-col gap-3">
         {steps.map((s, i) => (
-          <Card key={i}>
+          <Fragment key={i}>
+          <Card>
             <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium">{i + 1}</span>
@@ -142,9 +151,17 @@ function RunnerInner() {
                 </select>
                 <Input value={s.name} onChange={(e) => update(i, { name: e.target.value })} className="h-8 w-40" />
               </div>
-              <Button size="sm" variant="ghost" onClick={() => remove(i)} disabled={steps.length === 1} aria-label="Remove step">
-                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-              </Button>
+              <div className="flex items-center gap-0.5">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move step up">
+                  <ArrowUp className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label="Move step down">
+                  <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => remove(i)} disabled={steps.length === 1} aria-label="Remove step">
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {s.type === 'squad' ? (
@@ -160,6 +177,13 @@ function RunnerInner() {
               )}
             </CardContent>
           </Card>
+          {i < steps.length - 1 && (
+            <div className="flex items-center justify-center gap-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <ArrowDown className="h-3 w-3" />
+              <span><code>{'{{_lastOutput}}'}</code> flows down</span>
+            </div>
+          )}
+          </Fragment>
         ))}
       </div>
 
