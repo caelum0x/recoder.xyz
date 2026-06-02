@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ChevronLeft, Play, Plus, Trash2, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { ChevronLeft, Play, Plus, Trash2, Loader2, CheckCircle2, XCircle, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,20 +38,61 @@ export default function WorkflowRunnerPage() {
   );
 }
 
+const STORAGE_KEY = 'recoder-step-runner-draft';
+
 function RunnerInner() {
   const run = useRunSteps();
   const searchParams = useSearchParams();
   const seedSquadId = searchParams.get('squadId');
-  const [steps, setSteps] = useState<DraftStep[]>(() =>
-    seedSquadId
-      ? [{ type: 'squad', name: 'squad-step', configText: JSON.stringify({ squadId: seedSquadId, task: '{{_lastOutput}}', strategy: 'all' }, null, 2) }]
-      : [newStep('squad')],
-  );
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [steps, setSteps] = useState<DraftStep[]>(() => {
+    if (seedSquadId) {
+      return [{ type: 'squad', name: 'squad-step', configText: JSON.stringify({ squadId: seedSquadId, task: '{{_lastOutput}}', strategy: 'all' }, null, 2) }];
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
+        if (Array.isArray(saved) && saved.length > 0) return saved as DraftStep[];
+      } catch { /* ignore */ }
+    }
+    return [newStep('squad')];
+  });
   const [result, setResult] = useState<RunStepsResult | null>(null);
+
+  // Persist the draft so a composed workflow survives reloads.
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(steps)); } catch { /* ignore */ }
+    }
+  }, [steps]);
 
   const update = (i: number, patch: Partial<DraftStep>) =>
     setSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
   const remove = (i: number) => setSteps((prev) => prev.filter((_, idx) => idx !== i));
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(steps, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'workflow-steps.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async (file: File) => {
+    try {
+      const data = JSON.parse(await file.text());
+      if (!Array.isArray(data) || data.length === 0) {
+        toast.error('Invalid steps file.');
+        return;
+      }
+      setSteps(data.map((s) => ({ type: s.type, name: String(s.name ?? `${s.type}-step`), configText: typeof s.configText === 'string' ? s.configText : JSON.stringify(s.config ?? {}, null, 2) })));
+      toast.success(`Loaded ${data.length} step(s)`);
+    } catch {
+      toast.error('Import failed — not valid steps JSON.');
+    }
+  };
 
   const handleRun = async () => {
     const parsed: { type: StepType; name: string; config: Record<string, unknown> }[] = [];
@@ -122,9 +163,22 @@ function RunnerInner() {
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={() => setSteps((prev) => [...prev, newStep('llm')])}>
           <Plus className="mr-1.5 h-4 w-4" /> Add step
+        </Button>
+        <Button variant="outline" onClick={handleExport} title="Download steps as JSON">
+          <Download className="mr-1.5 h-4 w-4" /> Export
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImport(f); e.target.value = ''; }}
+        />
+        <Button variant="outline" onClick={() => fileRef.current?.click()} title="Load steps from JSON">
+          <Upload className="mr-1.5 h-4 w-4" /> Import
         </Button>
         <Button onClick={handleRun} disabled={run.isPending} className="ml-auto">
           {run.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Play className="mr-1.5 h-4 w-4" />}
