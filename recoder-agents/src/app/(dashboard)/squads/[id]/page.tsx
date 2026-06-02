@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -29,6 +30,7 @@ import {
   useSquadStats,
   useDispatchToSquad,
   useTransitionAssignment,
+  useCollabStream,
   type AgentPresence,
   type MemberKind,
   type DispatchStrategy,
@@ -292,6 +294,23 @@ function DispatchPanel({ squadId }: { squadId: string }) {
   const { data: tasks } = useSquadTasks(squadId);
   const dispatch = useDispatchToSquad(squadId);
   const transition = useTransitionAssignment(squadId);
+  const qc = useQueryClient();
+
+  // Live refresh: reflect this squad's dispatch/assignment events (incl. those
+  // driven by other actors) the moment they cross the collab stream.
+  const { events } = useCollabStream(20);
+  const lastSeen = useRef<string | null>(null);
+  useEffect(() => {
+    const latest = events[0];
+    if (!latest || latest.at === lastSeen.current) return;
+    lastSeen.current = latest.at;
+    if (latest.squadId && latest.squadId !== squadId) return;
+    const a = latest.action ?? '';
+    if (a.startsWith('task_') || a.startsWith('assignment_')) {
+      qc.invalidateQueries({ queryKey: ['squad-tasks', squadId] });
+      qc.invalidateQueries({ queryKey: ['squad-stats', squadId] });
+    }
+  }, [events, qc, squadId]);
   const [task, setTask] = useState('');
   const [strategy, setStrategy] = useState<DispatchStrategy>('all');
   const [projectId, setProjectId] = useState('');
