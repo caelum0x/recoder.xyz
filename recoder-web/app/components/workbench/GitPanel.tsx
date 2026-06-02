@@ -18,7 +18,7 @@ interface GitPanelProps {
   onShowDiff?: (filePath: string, original: string, modified: string) => void;
 }
 
-type TabView = 'changes' | 'history';
+type TabView = 'changes' | 'history' | 'pullRequests';
 
 export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps) => {
   const projectId = useStore(workbenchStore.projectId);
@@ -27,6 +27,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   const git = useGit({ autoFetch: true });
 
   const [commitMessage, setCommitMessage] = useState('');
+  const [pullRequestTitle, setPullRequestTitle] = useState('');
   const [activeTab, setActiveTab] = useState<TabView>('changes');
   const [showGitHubConfig, setShowGitHubConfig] = useState(false);
   const [pushRejected, setPushRejected] = useState(false);
@@ -35,6 +36,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
     repo: string;
     branch: string;
     accessToken: string;
+    taskId?: string;
   } | null>(null);
 
   // Load GitHub config from localStorage
@@ -51,6 +53,9 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
   useEffect(() => {
     if (activeTab === 'history' && git.isGitRepo) {
       git.getHistory();
+    }
+    if (activeTab === 'pullRequests' && git.isGitRepo) {
+      git.listPullRequests({ token: gitHubConfig?.accessToken });
     }
   }, [activeTab, git.isGitRepo]);
 
@@ -115,6 +120,22 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
       git.getHistory();
     }
   }, [git.pull, gitHubConfig, activeTab, git.getHistory]);
+
+  const handleCreatePullRequest = useCallback(async () => {
+    const title = pullRequestTitle.trim() || `Update ${git.status?.branch || 'project'}`;
+    const pr = await git.createPullRequest({
+      title,
+      head: git.status?.branch || gitHubConfig?.branch,
+      base: gitHubConfig?.branch || 'main',
+      token: gitHubConfig?.accessToken,
+      taskId: gitHubConfig?.taskId?.trim() || undefined,
+    });
+    if (pr) {
+      setPullRequestTitle('');
+    } else {
+      setShowGitHubConfig(true);
+    }
+  }, [git.createPullRequest, git.status?.branch, gitHubConfig, pullRequestTitle]);
 
   // Discard with confirmation
   const handleDiscard = useCallback(async (paths: string[]) => {
@@ -243,6 +264,22 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
           )}
         >
           History
+        </button>
+        <button
+          onClick={() => setActiveTab('pullRequests')}
+          className={classNames(
+            'flex-1 px-3 py-2 text-xs font-medium transition-colors',
+            activeTab === 'pullRequests'
+              ? 'text-recoder-elements-textPrimary border-b-2 border-purple-500'
+              : 'text-recoder-elements-textTertiary hover:text-recoder-elements-textSecondary'
+          )}
+        >
+          PRs
+          {git.pullRequests.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded">
+              {git.pullRequests.length}
+            </span>
+          )}
         </button>
         <button
           onClick={git.refreshStatus}
@@ -475,6 +512,69 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
         />
       )}
 
+      {activeTab === 'pullRequests' && (
+        <div className="flex-1 overflow-auto">
+          <div className="px-3 py-2 border-b border-recoder-elements-borderColor">
+            <input
+              type="text"
+              value={pullRequestTitle}
+              onChange={(e) => setPullRequestTitle(e.target.value)}
+              placeholder={`Update ${git.status?.branch || 'branch'}`}
+              className="w-full px-2 py-1.5 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded mb-2 text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
+            />
+            <div className="flex gap-1">
+              <button
+                onClick={handleCreatePullRequest}
+                disabled={git.isLoading || !git.status?.branch}
+                className="flex-1 px-2 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded text-white"
+              >
+                <span className={classNames('mr-1', git.isLoading ? 'i-ph:spinner animate-spin' : 'i-ph:git-pull-request')} />
+                Open PR
+              </button>
+              <button
+                onClick={() => git.listPullRequests({ token: gitHubConfig?.accessToken })}
+                disabled={git.isLoading}
+                className="px-2 py-1.5 text-xs bg-recoder-elements-background-depth-3 hover:bg-recoder-elements-background-depth-2 text-recoder-elements-textSecondary rounded border border-recoder-elements-borderColor disabled:opacity-50"
+                title="Refresh pull requests"
+              >
+                <span className="i-ph:arrows-clockwise" />
+              </button>
+            </div>
+          </div>
+
+          {git.pullRequests.length === 0 ? (
+            <div className="px-3 py-4 text-center text-recoder-elements-textTertiary text-xs">
+              <span className="i-ph:git-pull-request text-purple-400 text-lg block mb-1" />
+              No open pull requests
+            </div>
+          ) : (
+            <div className="divide-y divide-recoder-elements-borderColor">
+              {git.pullRequests.map((pr) => (
+                <a
+                  key={pr.number}
+                  href={pr.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block px-3 py-2 hover:bg-recoder-elements-background-depth-2"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="i-ph:git-pull-request text-purple-400 shrink-0" />
+                    <span className="text-xs font-medium text-recoder-elements-textPrimary truncate">
+                      #{pr.number} {pr.title}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-[11px] text-recoder-elements-textTertiary">
+                    <span>{pr.state}</span>
+                    {pr.draft && <span>draft</span>}
+                    {pr.head && pr.base && <span className="truncate">{pr.head} {'->'} {pr.base}</span>}
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* GitHub Config Panel (inline) */}
       {showGitHubConfig && (
         <div className="border-t border-recoder-elements-borderColor p-3 bg-recoder-elements-background-depth-2">
@@ -496,7 +596,7 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
             value={gitHubConfig ? `${gitHubConfig.owner}/${gitHubConfig.repo}` : ''}
             onChange={(e) => {
               const [owner = '', repo = ''] = e.target.value.split('/');
-              const config = { owner, repo, branch: gitHubConfig?.branch || 'main', accessToken: gitHubConfig?.accessToken || '' };
+              const config = { owner, repo, branch: gitHubConfig?.branch || 'main', accessToken: gitHubConfig?.accessToken || '', taskId: gitHubConfig?.taskId };
               setGitHubConfig(config);
               localStorage.setItem('recoder-git-config', JSON.stringify(config));
             }}
@@ -507,7 +607,18 @@ export const GitPanel = memo(({ files, onFileSelect, onShowDiff }: GitPanelProps
             placeholder="GitHub token (ghp_...)"
             value={gitHubConfig?.accessToken || ''}
             onChange={(e) => {
-              const config = { owner: gitHubConfig?.owner || '', repo: gitHubConfig?.repo || '', branch: gitHubConfig?.branch || 'main', accessToken: e.target.value };
+              const config = { owner: gitHubConfig?.owner || '', repo: gitHubConfig?.repo || '', branch: gitHubConfig?.branch || 'main', accessToken: e.target.value, taskId: gitHubConfig?.taskId };
+              setGitHubConfig(config);
+              localStorage.setItem('recoder-git-config', JSON.stringify(config));
+            }}
+            className="w-full px-2 py-1 text-xs bg-recoder-elements-background-depth-3 border border-recoder-elements-borderColor rounded mb-2 text-recoder-elements-textPrimary placeholder:text-recoder-elements-textTertiary"
+          />
+          <input
+            type="text"
+            placeholder="A2A task ID (optional)"
+            value={gitHubConfig?.taskId || ''}
+            onChange={(e) => {
+              const config = { owner: gitHubConfig?.owner || '', repo: gitHubConfig?.repo || '', branch: gitHubConfig?.branch || 'main', accessToken: gitHubConfig?.accessToken || '', taskId: e.target.value };
               setGitHubConfig(config);
               localStorage.setItem('recoder-git-config', JSON.stringify(config));
             }}

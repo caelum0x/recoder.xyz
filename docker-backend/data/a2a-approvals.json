@@ -1,0 +1,40 @@
+[
+  [
+    "approval_2fe9e7b5ae224911",
+    {
+      "approvalId": "approval_2fe9e7b5ae224911",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mox8d45i0006b0a3"
+      },
+      "status": "pending",
+      "createdAt": "2026-05-08T18:10:18.823Z",
+      "timeoutMs": 10000
+    }
+  ],
+  [
+    "approval_4c4269eddfc348f9",
+    {
+      "approvalId": "approval_4c4269eddfc348f9",
+      "workspaceId": "ws_396701e31d454d63",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review the current task",
+        "channelId": "caf6ed39-ad19-4006-860f-9d598ddafbd5",
+        "threadId": "3f199e60-a6d0-4fdb-93ed-83a685f62e54",
+        "sourceTaskId": "task_mox8d93c00001559",
+        "handoffType": "delegate"
+      },
+      "status": "granted",
+      "createdAt": "2026-05-08T18:10:25.258Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-05-08T18:10:25.262Z",
+      "resolvedBy": "human-reviewer"
+    }
+  ]
+]

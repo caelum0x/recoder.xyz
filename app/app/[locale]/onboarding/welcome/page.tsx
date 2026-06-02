@@ -11,15 +11,15 @@ import { useSession } from '@/lib/session-provider';
 import Link from 'next/link';
 import { SiteHeader } from '@/components/SiteHeader';
 import { 
-  Terminal,
   Sparkles,
   Check,
   ArrowRight,
-  Zap,
   Shield,
-  Code2,
-  Globe
+  Bot,
+  Workflow,
+  Terminal,
 } from 'lucide-react';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -51,6 +51,13 @@ export default function WelcomePage() {
     }
   }, [session, isPending, router]);
 
+  useEffect(() => {
+    if (!loading && !isPending && session) {
+      trackEvent(AnalyticsEvents.ONBOARDING_STARTED, { step: 'welcome', source: 'onboarding' });
+      trackEvent(AnalyticsEvents.ONBOARDING_STEP_VIEWED, { step: 'welcome', source: 'onboarding' });
+    }
+  }, [loading, isPending, session]);
+
   if (loading || isPending) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -64,24 +71,24 @@ export default function WelcomePage() {
 
   const features = [
     {
-      icon: Zap,
-      title: 'Access 50+ AI Models',
-      description: 'Claude, GPT-4, Gemini, Llama, and more - all in one place',
+      icon: Bot,
+      title: 'Connect External Agents',
+      description: 'Bring Claude Code, Codex, or your own runtime into one shared execution system',
     },
     {
-      icon: Code2,
-      title: 'Multiple Platforms',
-      description: 'Web, CLI, VS Code extension, and API access',
+      icon: Terminal,
+      title: 'Run Real Software Work',
+      description: 'Use the runtime lane for code changes, preview, logs, and verification instead of chat-only demos',
     },
     {
       icon: Shield,
-      title: 'Production Ready',
-      description: 'Real, working code - not mock implementations',
+      title: 'Keep Human Control',
+      description: 'Approvals, artifacts, and handoff stay visible to your team before anything ships',
     },
     {
-      icon: Globe,
-      title: 'Enterprise Features',
-      description: 'Team collaboration, usage tracking, and analytics',
+      icon: Workflow,
+      title: 'Scale the Same Loop',
+      description: 'Start with one agent and expand into PM, approvals, and repeatable delivery workflows',
     },
   ];
 
@@ -100,10 +107,10 @@ export default function WelcomePage() {
               Welcome to Recoder!
             </h1>
             <p className="text-2xl text-gray-400 mb-4">
-              Let's get you set up in just a few steps
+              Set up the first agent-work loop
             </p>
             <p className="text-lg text-gray-500">
-              This will only take 2 minutes. We'll help you configure your account and choose the right plan.
+              This takes only a couple of minutes. We&apos;ll help you connect your provider keys, wire up an external agent, and reach a real software task fast.
             </p>
           </div>
 
@@ -135,8 +142,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">1</span>
                 </div>
                 <div>
-                  <div className="font-medium">Tell us about yourself</div>
-                  <div className="text-sm text-gray-400">Your role and how you'll use Recoder</div>
+                  <div className="font-medium">Choose the plan for your first workflow</div>
+                  <div className="text-sm text-gray-400">Start free or move into a paid Space if you already know you need more capacity</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -144,17 +151,8 @@ export default function WelcomePage() {
                   <span className="text-sm font-bold">2</span>
                 </div>
                 <div>
-                  <div className="font-medium">Choose your plan</div>
-                  <div className="text-sm text-gray-400">Free, Pro, or Enterprise - you can change anytime</div>
-                </div>
-              </div>
-              <div className="flex items-start space-x-4">
-                <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-sm font-bold">3</span>
-                </div>
-                <div>
-                  <div className="font-medium">Setup your API key (optional)</div>
-                  <div className="text-sm text-gray-400">Free users can use their own OpenRouter API key</div>
+                  <div className="font-medium">Create your first Space and connect an agent</div>
+                  <div className="text-sm text-gray-400">Make external-agent connection the first activation milestone, not a hidden later step</div>
                 </div>
               </div>
               <div className="flex items-start space-x-4">
@@ -162,8 +160,8 @@ export default function WelcomePage() {
                   <Check className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="font-medium">Start building!</div>
-                  <div className="text-sm text-gray-400">Access all platforms and start creating</div>
+                  <div className="font-medium">Run one real task with visible delivery proof</div>
+                  <div className="text-sm text-gray-400">Task, artifact, PR, preview, and approval should all be visible before you call the loop real</div>
                 </div>
               </div>
             </div>
@@ -173,12 +171,14 @@ export default function WelcomePage() {
           <div className="flex justify-center space-x-4">
             <Link
               href="/dashboard"
+              onClick={() => trackEvent(AnalyticsEvents.ONBOARDING_SKIPPED, { step: 'welcome', source: 'onboarding' })}
               className="px-6 py-3 border border-white/10 rounded-lg font-medium hover:bg-white/5 transition-all"
             >
               Skip for now
             </Link>
             <Link
-              href="/onboarding/setup-profile"
+              href="/onboarding/choose-plan"
+              onClick={() => trackEvent(AnalyticsEvents.CTA_CLICKED, { ctaLabel: 'Get Started', destination: '/onboarding/choose-plan', location: 'onboarding_welcome', source: 'onboarding' })}
               className="px-8 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center space-x-2"
             >
               <span>Get Started</span>

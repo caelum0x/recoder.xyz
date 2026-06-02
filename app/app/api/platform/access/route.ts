@@ -4,13 +4,13 @@ import { logger } from '@/lib/logger';
 import { findFallbackSessionByToken } from '@/lib/session-fallback';
 
 interface PlatformAccessRequest {
-  platform: 'web' | 'frontend' | 'studio' | 'pm' | 'agency' | 'cli' | 'extension';
+  platform: 'spaces' | 'frontend' | 'studio' | 'pm' | 'agency' | 'cli' | 'extension';
   userId?: string;
   redirect?: string;
 }
 
 const PLATFORM_URLS: Record<string, string> = {
-  web: process.env.RECODER_WEB_URL || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
+  spaces: process.env.SPACES_URL || '/dashboard/spaces',
   frontend: process.env.RECODER_FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://agents.recoder.xyz' : 'http://localhost:3001'),
   studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
   pm: process.env.RECODER_PM_URL || (process.env.NODE_ENV === 'production' ? 'https://pm.recoder.xyz' : 'http://localhost:3004'),
@@ -45,17 +45,10 @@ function extractSessionToken(cookieHeader: string): string {
   return '';
 }
 
-function buildBridgeUrl(platform: PlatformAccessRequest['platform'], sessionToken: string, redirectUrl: string): string {
+function buildBridgeUrl(platform: PlatformAccessRequest['platform'], redirectUrl: string): string {
   const accessUrl = PLATFORM_URLS[platform];
 
-  if (platform !== 'web') {
-    return redirectUrl;
-  }
-
-  const bridgeUrl = new URL('/auth/verify', accessUrl);
-  bridgeUrl.searchParams.set('token', sessionToken);
-  bridgeUrl.searchParams.set('redirect', redirectUrl);
-  return bridgeUrl.toString();
+  return redirectUrl || accessUrl;
 }
 
 export async function POST(request: NextRequest) {
@@ -118,7 +111,7 @@ export async function POST(request: NextRequest) {
       accessUrl: PLATFORM_URLS[platform],
       token: sessionToken,
       redirectUrl,
-      bridgeUrl: buildBridgeUrl(platform, sessionToken, redirectUrl),
+      bridgeUrl: buildBridgeUrl(platform, redirectUrl),
       message: `Access granted to Recoder ${platform.toUpperCase()}`,
       user: {
         id: session.user.id,

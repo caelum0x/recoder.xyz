@@ -3,7 +3,7 @@ import { SoftwareApplicationSchema, BreadcrumbSchema } from '@/app/components/St
 
 export const metadata: Metadata = {
   title: 'Recoder CLI - Terminal AI Coding Tool | Install recoder-code',
-  description: 'Terminal-first AI coding with 40+ models. Seamlessly sync with Web IDE. Download projects from browser, edit locally, sync back. 100% FREE beta with BYOK.',
+  description: 'Terminal-first AI coding with 40+ models. Seamlessly sync with Spaces. Download projects from browser, edit locally, sync back. 100% FREE beta with BYOK.',
   keywords: [
     'recoder CLI',
     'recoder-code npm',
@@ -20,14 +20,14 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: 'Recoder CLI - Terminal AI Coding Tool',
-    description: 'Seamlessly sync Web IDE + Terminal. Download projects, edit locally, push changes. 40+ AI models. 100% FREE.',
+    description: 'Seamlessly sync Spaces + CLI. Download projects, edit locally, push changes. 40+ AI models. 100% FREE.',
     url: 'https://recoder.xyz/cli',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Recoder CLI - Terminal AI Coding',
-    description: 'Web IDE + CLI sync. Download projects, edit locally. 40+ AI models. FREE.',
+    description: 'Spaces + CLI sync. Download projects, edit locally. 40+ AI models. FREE.',
   },
   alternates: {
     canonical: 'https://recoder.xyz/cli',

@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-import { COMMON_TAGS } from "../../components";
+import { COMMON_TAGS, buildRecoderEdgeScaffold } from "../../components";
 
 // ============================================================================
 // LIGHTSAIL INSTANCE (Imported from existing)
@@ -50,6 +50,11 @@ export const tunnelId = EXISTING_TUNNEL_ID;
 export const tunnelCname = `${EXISTING_TUNNEL_ID}.cfargotunnel.com`;
 
 export const apiEndpoint = "dev-api.recoder.xyz";
+export const edgeScaffold = buildRecoderEdgeScaffold({
+  backendOrigin: "http://recoder-dev:8000",
+  previewDomain: "preview.recoder.xyz",
+  provider: "traefik",
+});
 
 // Setup instructions
 export const setupInstructions = pulumi.interpolate`

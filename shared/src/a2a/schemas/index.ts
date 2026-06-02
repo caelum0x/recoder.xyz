@@ -49,6 +49,8 @@ export {
   type TaskAgentRef,
   type TaskResult,
   type TaskArtifact,
+  type TaskPreviewLink,
+  type TaskEvidenceItem,
   type TaskPolicySnapshot,
   type TaskErrorInfo,
   type TaskEnvelope,

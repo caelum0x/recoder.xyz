@@ -107,6 +107,30 @@ describe('opencode-client', () => {
     });
   });
 
+  describe('readFile', () => {
+    it('reads file content from /file/content and unwraps the content field', async () => {
+      const mockFetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: 'text',
+            content: 'export const ready = true;\n',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+      const client = createRecoderOpencodeClient({ baseUrl, fetchFn: mockFetch });
+
+      const content = await client.readFile('src/app.ts', '/workspace');
+
+      expect(content).toBe('export const ready = true;\n');
+      const call = mockFetch.mock.calls[0];
+      const url = new URL(call[0] as string);
+      expect(url.pathname).toBe('/file/content');
+      expect(url.searchParams.get('path')).toBe('src/app.ts');
+      expect(url.searchParams.get('directory')).toBe('/workspace');
+    });
+  });
+
   describe('basic auth', () => {
     it('adds Authorization header when password is set', async () => {
       const mockFetch = vi.fn().mockResolvedValue(

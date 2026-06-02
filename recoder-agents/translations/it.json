@@ -988,7 +988,8 @@
       "docs": "Documenti",
       "canvas": "Tela",
       "video": "Video",
-      "research": "Ricerca"
+      "research": "Ricerca",
+      "deep-coding": "Deep Coding"
     },
     "styles": {
       "photorealistic": "Fotorealistico",
@@ -1257,6 +1258,16 @@
         "7": "Investiga gli ultimi sviluppi nella terapia genica per malattie rare",
         "8": "Studia le strategie di prezzo delle aziende di successo di scatole di abbonamento D2C",
         "9": "Ricerca il panorama competitivo delle soluzioni di cybersecurity alimentate da AI"
+      },
+      "deep-coding": {
+        "0": "Refactor the auth module to use JWT refresh tokens with automatic rotation",
+        "1": "Fix the failing CI tests in the payment service and ensure all edge cases pass",
+        "2": "Add comprehensive error handling and retry logic to the API client layer",
+        "3": "Migrate the database schema from v2 to v3 with zero-downtime migration scripts",
+        "4": "Debug why the WebSocket connection drops after 30 seconds and implement reconnection",
+        "5": "Add TypeScript strict mode and fix all type errors across the shared packages",
+        "6": "Implement rate limiting middleware with Redis-backed sliding window counters",
+        "7": "Set up a complete test suite with unit, integration, and E2E coverage for the API"
       }
     }
   }

@@ -121,69 +121,138 @@ function buildProviderKeys(provider, apiKey, model) {
     return { [normalizedProvider]: apiKey };
 }
 const centralizedOpenCodeConfigs = new Map();
+const opencodeExecutionModeByProject = new Map();
+function shouldFallbackToLegacyOpencode(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|socket hang up|Bad Gateway|502|503|504|timed out/i.test(message);
+}
+async function startLegacyOpenCodeSession(params) {
+    const { startSession } = await Promise.resolve().then(() => __importStar(require('./opencode-connector.service.js')));
+    const session = await startSession(params);
+    opencodeExecutionModeByProject.set(params.projectId, 'legacy');
+    return {
+        id: session.id,
+        projectId: params.projectId,
+        sandboxId: params.sandboxId,
+        threadId: params.threadId,
+        runtimeType: 'opencode',
+        status: session.status === 'ready' ? 'ready' : 'starting',
+        createdAt: session.createdAt,
+    };
+}
+async function sendLegacyOpenCodePrompt(params) {
+    const { sendPrompt } = await Promise.resolve().then(() => __importStar(require('./opencode-connector.service.js')));
+    return sendPrompt(params);
+}
 // ---------------------------------------------------------------------------
 // OpenCode adapter
 // ---------------------------------------------------------------------------
 function createOpenCodeAdapter() {
-    const useCentralized = !!process.env.OPENCODE_SERVICE_URL;
+    const useCentralized = process.env.OPENCODE_MODE === 'centralized' && !!process.env.OPENCODE_SERVICE_URL;
     return {
         type: 'opencode',
         async startSession(params) {
-            if (useCentralized) {
-                const { getOrCreateSession } = await Promise.resolve().then(() => __importStar(require('./opencode-service-adapter.js')));
-                const session = await getOrCreateSession(params.projectId, {
-                    directory: '/workspace',
-                    title: `Project ${params.projectId}`,
-                });
-                centralizedOpenCodeConfigs.set(params.projectId, {
-                    model: params.model,
-                    providerKeys: buildProviderKeys(params.provider, params.apiKey, params.model),
-                });
-                return {
-                    id: session.id,
-                    projectId: params.projectId,
-                    sandboxId: params.sandboxId,
-                    threadId: params.threadId,
-                    runtimeType: 'opencode',
-                    status: 'ready',
-                    createdAt: new Date(session.time.created).toISOString(),
-                };
+            const forceSandboxLocal = params.executionMode === 'sandbox-local';
+            if (useCentralized && !forceSandboxLocal) {
+                try {
+                    const { getOrCreateSession } = await Promise.resolve().then(() => __importStar(require('./opencode-service-adapter.js')));
+                    const session = await getOrCreateSession(params.projectId, {
+                        directory: '/workspace',
+                        title: `Project ${params.projectId}`,
+                    });
+                    centralizedOpenCodeConfigs.set(params.projectId, {
+                        model: params.model,
+                        providerKeys: buildProviderKeys(params.provider, params.apiKey, params.model),
+                        sandboxId: params.sandboxId,
+                        provider: params.provider,
+                        apiKey: params.apiKey,
+                    });
+                    opencodeExecutionModeByProject.set(params.projectId, 'centralized');
+                    return {
+                        id: session.id,
+                        projectId: params.projectId,
+                        sandboxId: params.sandboxId,
+                        threadId: params.threadId,
+                        runtimeType: 'opencode',
+                        status: 'ready',
+                        createdAt: new Date(session.time.created).toISOString(),
+                    };
+                }
+                catch (error) {
+                    if (!shouldFallbackToLegacyOpencode(error)) {
+                        throw error;
+                    }
+                    logger.warn({ err: error, projectId: params.projectId }, 'Centralized OpenCode session start failed; falling back to sandbox-local OpenCode');
+                    centralizedOpenCodeConfigs.delete(params.projectId);
+                    return startLegacyOpenCodeSession(params);
+                }
             }
-            const { startSession } = await Promise.resolve().then(() => __importStar(require('./opencode-connector.service.js')));
-            const session = await startSession(params);
-            return {
-                id: session.id,
-                projectId: params.projectId,
-                sandboxId: params.sandboxId,
-                threadId: params.threadId,
-                runtimeType: 'opencode',
-                status: session.status === 'ready' ? 'ready' : 'starting',
-                createdAt: session.createdAt,
-            };
+            return startLegacyOpenCodeSession(params);
         },
         async sendPrompt(params) {
-            if (useCentralized) {
-                const { handleOpencodeServicePrompt } = await Promise.resolve().then(() => __importStar(require('./opencode-service-handler.js')));
+            const executionMode = opencodeExecutionModeByProject.get(params.projectId);
+            if (useCentralized && executionMode !== 'legacy') {
                 const runtimeConfig = centralizedOpenCodeConfigs.get(params.projectId);
-                const result = await handleOpencodeServicePrompt({
-                    projectId: params.projectId,
-                    prompt: params.prompt,
-                    model: runtimeConfig?.model,
-                    providerKeys: runtimeConfig?.providerKeys,
-                    directory: '/workspace',
-                });
-                const textParts = [result.text]
-                    .filter(Boolean);
-                return {
-                    messageId: result.raw?.info?.id || `opencode_${Date.now()}`,
-                    parts: textParts.map((t) => ({ type: 'text', content: t })),
-                };
+                try {
+                    const { handleOpencodeServicePrompt } = await Promise.resolve().then(() => __importStar(require('./opencode-service-handler.js')));
+                    const { createRecoderOpencodeClient } = await Promise.resolve().then(() => __importStar(require('@recoder/shared/opencode-client')));
+                    const { daytonaReadFile, daytonaWriteFile } = await Promise.resolve().then(() => __importStar(require('../daytona-file-ops.js')));
+                    const client = createRecoderOpencodeClient({
+                        baseUrl: process.env.OPENCODE_SERVICE_URL,
+                        password: process.env.OPENCODE_SERVER_PASSWORD,
+                        username: process.env.OPENCODE_SERVER_USERNAME,
+                    });
+                    const result = await handleOpencodeServicePrompt({
+                        projectId: params.projectId,
+                        prompt: params.prompt,
+                        model: runtimeConfig?.model,
+                        providerKeys: runtimeConfig?.providerKeys,
+                        directory: '/workspace',
+                        sandboxId: runtimeConfig?.sandboxId,
+                        readWorkspaceFile: async (path) => {
+                            const content = await client.readFile(path, '/workspace');
+                            return typeof content === 'string' ? content : JSON.stringify(content);
+                        },
+                        readSandboxFile: daytonaReadFile,
+                        writeSandboxFile: daytonaWriteFile,
+                    });
+                    if (!result.syncedFiles?.length) {
+                        throw new Error('Centralized OpenCode completed without detectable file sync');
+                    }
+                    const textParts = [
+                        result.text,
+                        result.syncedFiles.length ? `Files changed: ${result.syncedFiles.join(', ')}` : '',
+                    ].filter(Boolean);
+                    return {
+                        messageId: result.raw?.info?.id || `opencode_${Date.now()}`,
+                        parts: textParts.map((t) => ({ type: 'text', content: t })),
+                    };
+                }
+                catch (error) {
+                    if (!shouldFallbackToLegacyOpencode(error) && !/without detectable file sync/i.test(error instanceof Error ? error.message : String(error))) {
+                        throw error;
+                    }
+                    logger.warn({ err: error, projectId: params.projectId }, 'Centralized OpenCode prompt failed or produced no synced edits; falling back to sandbox-local OpenCode');
+                    if (!runtimeConfig?.sandboxId) {
+                        throw error;
+                    }
+                    await startLegacyOpenCodeSession({
+                        projectId: params.projectId,
+                        sandboxId: runtimeConfig.sandboxId,
+                        sandboxExecUrl: params.sandboxExecUrl,
+                        daytonaApiKey: params.daytonaApiKey,
+                        model: runtimeConfig.model,
+                        provider: runtimeConfig.provider,
+                        apiKey: runtimeConfig.apiKey,
+                    });
+                    return sendLegacyOpenCodePrompt(params);
+                }
             }
-            const { sendPrompt } = await Promise.resolve().then(() => __importStar(require('./opencode-connector.service.js')));
-            return sendPrompt(params);
+            return sendLegacyOpenCodePrompt(params);
         },
         getState(projectId) {
-            if (useCentralized) {
+            const executionMode = opencodeExecutionModeByProject.get(projectId);
+            if (useCentralized && executionMode !== 'legacy') {
                 // Dynamic import not usable in sync function — check session map
                 try {
                     const adapter = require('./opencode-service-adapter.js');
@@ -194,7 +263,7 @@ function createOpenCodeAdapter() {
                     return {
                         id: match.sessionId,
                         projectId,
-                        sandboxId: projectId,
+                        sandboxId: centralizedOpenCodeConfigs.get(projectId)?.sandboxId || projectId,
                         runtimeType: 'opencode',
                         status: 'ready',
                         createdAt: new Date().toISOString(),
@@ -223,14 +292,18 @@ function createOpenCodeAdapter() {
             }
         },
         async dispose(projectId) {
-            if (useCentralized) {
+            const executionMode = opencodeExecutionModeByProject.get(projectId);
+            if (useCentralized && executionMode !== 'legacy') {
                 const { disposeProjectSession } = await Promise.resolve().then(() => __importStar(require('./opencode-service-adapter.js')));
                 await disposeProjectSession(projectId);
                 centralizedOpenCodeConfigs.delete(projectId);
+                opencodeExecutionModeByProject.delete(projectId);
                 return;
             }
             const { disposeSession, getSession } = await Promise.resolve().then(() => __importStar(require('./opencode-connector.service.js')));
             const session = getSession(projectId);
+            opencodeExecutionModeByProject.delete(projectId);
+            centralizedOpenCodeConfigs.delete(projectId);
             if (!session)
                 return;
             await disposeSession({

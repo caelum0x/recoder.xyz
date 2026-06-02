@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withCLIAuth } from '@/lib/middleware/cli-auth-middleware';
 import { prisma } from '@/lib/prisma';
 import { resolveApiKey, ApiKeyResolverError } from '@/lib/api-key-resolver';
+import { ensureCommercialQuota, formatCommercialQuotaResponse } from '@/lib/commercial-quota';
+import { isPriceyModel } from '@/lib/pricing-config';
 
 /**
  * POST /api/cli/proxy
@@ -21,25 +23,21 @@ export const POST = withCLIAuth(
       }
 
       // Check quota
-      const quota = await prisma.user_quota.findUnique({
-        where: { userId: context.userId },
-      });
+      const quota = await ensureCommercialQuota(context.userId, context.plan, 'day');
+      const quotaResponse = formatCommercialQuotaResponse(quota, context.plan);
 
-      if (quota && context.plan !== 'enterprise') {
-        const sessionsRemaining = quota.sessionsPerDay - quota.sessionsUsedToday;
-        if (sessionsRemaining <= 0) {
+      if (!quotaResponse.canMakeRequest) {
           return NextResponse.json(
             {
               error: 'Quota exceeded',
-              message: 'Daily session limit reached',
+              message: 'Legacy runtime limit reached. Upgrade for more Spaces, connected agents, approvals, retention, and preview capacity.',
               quota: {
-                used: quota.sessionsUsedToday,
-                limit: quota.sessionsPerDay,
+                used: quotaResponse.legacy.sessionsUsedToday,
+                limit: quotaResponse.legacy.sessionsPerDay,
               },
             },
             { status: 429 }
           );
-        }
       }
 
       // BYOK: resolve the user's own API key
@@ -105,7 +103,7 @@ export const POST = withCLIAuth(
           duration,
           success: true,
           platform: 'cli',
-          isPriceyModel: ['claude-3-5-sonnet', 'gpt-4', 'claude-opus'].includes(model),
+          isPriceyModel: isPriceyModel(model),
         },
       });
 

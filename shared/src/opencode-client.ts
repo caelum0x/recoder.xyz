@@ -95,6 +95,12 @@ export interface ProviderAuth {
   [key: string]: unknown;
 }
 
+interface OpencodeFileContentResponse {
+  type?: string;
+  content?: string;
+  encoding?: string;
+}
+
 // ── Client ─────────────────────────────────────────────────────────
 
 export function createRecoderOpencodeClient(config: OpencodeClientConfig) {
@@ -303,8 +309,20 @@ export function createRecoderOpencodeClient(config: OpencodeClientConfig) {
     },
 
     /** Read a file */
-    async readFile(path: string, directory?: string): Promise<unknown> {
-      return request<unknown>('GET', `/file/${encodeURIComponent(path)}`, undefined, { directory });
+    async readFile(path: string, directory?: string): Promise<string> {
+      const normalizedPath = path.replace(/^\/+/, '');
+      const response = await request<OpencodeFileContentResponse>(
+        'GET',
+        `/file/content?path=${encodeURIComponent(normalizedPath)}`,
+        undefined,
+        { directory },
+      );
+
+      if (typeof response === 'string') {
+        return response;
+      }
+
+      return typeof response?.content === 'string' ? response.content : '';
     },
 
     // ── Server health ────────────────────────────────────────────

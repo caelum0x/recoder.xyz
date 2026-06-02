@@ -25,13 +25,60 @@ type CanvasProperties = {
   readonly editable?: boolean;
 };
 
-export const Canvas = ({
+let hasPatchedCanvasGetContext = false;
+
+function ensureCanvasReadbackPatch() {
+  if (
+    hasPatchedCanvasGetContext ||
+    typeof HTMLCanvasElement === "undefined"
+  ) {
+    return;
+  }
+
+  const canvasPrototype = HTMLCanvasElement.prototype as HTMLCanvasElement & {
+    getContext: typeof HTMLCanvasElement.prototype.getContext;
+  };
+  const originalGetContext = canvasPrototype.getContext;
+
+  const patchedGetContext = (function patchedGetContext(
+      this: HTMLCanvasElement,
+      contextId: string,
+      options?: unknown,
+    ) {
+    if (contextId === "2d") {
+      const nextOptions =
+        options && typeof options === "object"
+          ? { ...(options as Record<string, unknown>), willReadFrequently: true }
+          : { willReadFrequently: true };
+
+      return originalGetContext.call(
+        this,
+        "2d",
+        nextOptions as CanvasRenderingContext2DSettings,
+      );
+    }
+
+    return originalGetContext.call(
+      this,
+      contextId as Parameters<typeof originalGetContext>[0],
+      options as never,
+    );
+  }) as typeof HTMLCanvasElement.prototype.getContext;
+
+  canvasPrototype.getContext = patchedGetContext;
+  hasPatchedCanvasGetContext = true;
+}
+
+function CanvasBase({
   theme,
   defaultValue,
   onSave,
   autoFocus = true,
   editable = false,
-}: CanvasProperties) => {
+  zenModeEnabled = false,
+}: CanvasProperties & { readonly zenModeEnabled?: boolean }) {
+  ensureCanvasReadbackPatch();
+
   const lastSnapshot = useRef<CanvasState | null>(null);
 
   const handleChange: ExcalidrawProps["onChange"] = (
@@ -70,57 +117,14 @@ export const Canvas = ({
           },
         }}
         viewModeEnabled={!editable}
-        zenModeEnabled
+        zenModeEnabled={zenModeEnabled}
       />
     </div>
   );
-};
+}
 
-export const CanvasBeta = ({
-  theme,
-  defaultValue,
-  onSave,
-  autoFocus = true,
-  editable = false,
-}: CanvasProperties) => {
-  const lastSnapshot = useRef<CanvasState | null>(null);
-  const handleChange: ExcalidrawProps["onChange"] = (
-    elements,
-    _appState,
-    files
-  ) => {
-    const newSnapshot = structuredClone({ elements, files });
-    const isSame = deepEqual(lastSnapshot.current, newSnapshot);
+export const Canvas = (props: CanvasProperties) => (
+  <CanvasBase {...props} zenModeEnabled />
+);
 
-    if (!isSame) {
-      onSave?.(newSnapshot);
-      lastSnapshot.current = structuredClone(newSnapshot);
-    }
-  };
-
-  const debouncedHandleChange = useDebouncedCallback(handleChange, [], 500);
-
-  return (
-    <div className="not-prose relative flex flex-1 bg-background">
-      <CanvasBackground />
-      <Excalidraw
-        autoFocus={autoFocus}
-        initialData={{
-          ...defaultValue,
-          appState: {
-            viewBackgroundColor: "transparent",
-          },
-        }}
-        onChange={debouncedHandleChange}
-        theme={theme}
-        UIOptions={{
-          canvasActions: {
-            toggleTheme: false,
-            loadScene: false,
-          },
-        }}
-        viewModeEnabled={!editable}
-      />
-    </div>
-  );
-};
+export const CanvasBeta = (props: CanvasProperties) => <CanvasBase {...props} />;

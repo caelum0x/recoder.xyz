@@ -12,10 +12,7 @@ import { getOrCreateAnonymousId } from '~/utils/anonymous-id';
 import { getCurrentUserId } from '~/lib/stores/user';
 import { resetGlobalActionState, markNpmInstallComplete } from '~/lib/runtime/action-runner';
 import { normalizeTailwindToolchainPackageJson } from '~/lib/runtime/package-json-sanitizer';
-import { fetchProjectErrors } from '~/lib/hooks/useErrors';
-import { formatErrorsForAI } from '~/lib/services/auto-fix';
 import { isLikelySandboxProjectId, resolveSandboxProjectId } from '~/lib/services/sandbox-project-id';
-import { canAutoFix, setAutoFixing } from '~/lib/stores/errors';
 import { dockerPost, dockerGet, DOCKER_URL } from '~/lib/services/docker-api';
 import * as chatSessions from '~/lib/stores/chat-sessions';
 import type { ChatSessionMetadata } from '~/lib/stores/chat-sessions';
@@ -30,60 +27,6 @@ export { ensureContainerExists } from '~/lib/stores/workbench';
 // These are module-level to prevent race conditions between different instances
 let globalNpmInstallRunning = false;
 let globalNpmInstallPromise: Promise<void> | null = null;
-
-/**
- * 🔧 AUTO-FIX: Check for build errors and automatically trigger AI fix
- * Called after dev server starts to catch errors early
- */
-async function checkAndAutoFixErrors(projectId: string): Promise<void> {
-  if (!isLikelySandboxProjectId(projectId)) {
-    logger.warn('⚠️ [AutoFix] Skipping error check for invalid projectId:', projectId);
-    return;
-  }
-
-  // Wait a bit for dev server to fully initialize and show errors
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
-  try {
-    logger.info('🔍 [AutoFix] Checking for build errors...');
-    const errorResponse = await fetchProjectErrors(projectId);
-
-    if (!errorResponse) {
-      logger.info('✅ [AutoFix] No errors detected');
-      return;
-    }
-
-    const { errors, hasBlockingErrors } = errorResponse;
-
-    if (!hasBlockingErrors || errors.length === 0) {
-      logger.info('✅ [AutoFix] No blocking errors');
-      return;
-    }
-
-    // Check if we can still auto-fix (haven't exceeded max attempts)
-    if (!canAutoFix()) {
-      logger.warn('⚠️ [AutoFix] Max auto-fix attempts reached, skipping');
-      return;
-    }
-
-    logger.info(`🔧 [AutoFix] Found ${errors.length} errors, triggering automatic fix...`);
-
-    // Format errors for AI
-    const prompt = formatErrorsForAI(errors);
-
-    // Set auto-fixing state
-    setAutoFixing(true);
-
-    // Dispatch event to trigger AI fix (Chat.client.tsx listens for this)
-    window.dispatchEvent(new CustomEvent('recoder:fix-errors', {
-      detail: { prompt, automatic: true }
-    }));
-
-    logger.info('🚀 [AutoFix] Automatic fix triggered');
-  } catch (err) {
-    logger.error('❌ [AutoFix] Error checking for build errors:', err);
-  }
-}
 
 // 🔒 Global file restoration coordination - prevents duplicate restoration on HMR
 const fileRestorationPromises = new Map<string, Promise<boolean>>();
@@ -662,12 +605,6 @@ async function markContainerReady(projectId: string) {
     const { workbenchStore } = await import('~/lib/stores/workbench');
     workbenchStore.setContainerReady(true);
     logger.info('✅ [markContainerReady] Container marked as ready');
-
-    // 🔧 AUTO-FIX: Check for errors after dev server starts
-    // Run in background so we don't block the UI
-    checkAndAutoFixErrors(projectId).catch(err => {
-      logger.warn('⚠️ [AutoFix] Background error check failed:', err);
-    });
   } catch (e) {
     logger.warn('Could not set container ready:', e);
   }
@@ -1263,13 +1200,6 @@ export function useChatHistory() {
                     });
                   }
                 }
-
-                // Trigger auto-fix after restoration
-                setTimeout(() => {
-                  checkAndAutoFixErrors(resolvedProjectId).catch(err => {
-                    logger.warn('⚠️ [useChatHistory] Auto-fix failed:', err);
-                  });
-                }, 2000);
               } else {
                 logger.warn('⚠️ [useChatHistory] File restoration failed, skipping bun install');
                 // Reset flag even on failure — don't poison new messages

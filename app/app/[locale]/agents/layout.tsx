@@ -3,7 +3,7 @@ import { BreadcrumbSchema } from '@/app/components/StructuredData';
 
 export const metadata: Metadata = {
   title: 'AI Agents - Recoder.xyz | Autonomous Coding Agents',
-  description: 'Five specialized AI agent platforms for building, deploying, and managing autonomous coding agents. From browser-based IDEs to visual workflow designers.',
+  description: 'Five specialized AI agent platforms for building, deploying, and managing autonomous coding agents. From agent workspaces to visual workflow designers.',
   openGraph: {
     title: 'AI Agents - Recoder.xyz | Autonomous Coding Agents',
     description: 'Five specialized AI agent platforms for building, deploying, and managing autonomous coding agents.',

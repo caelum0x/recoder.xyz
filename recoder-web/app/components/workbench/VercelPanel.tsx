@@ -124,7 +124,7 @@ export function VercelPanel() {
             <button
               onClick={handleConnect}
               disabled={!tokenInput.trim() || isLoading}
-              className="w-full px-4 py-2 text-sm bg-black text-white rounded-md hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              className="w-full px-4 py-2 text-sm bg-recoder-elements-button-secondary-background text-recoder-elements-button-secondary-text rounded-md hover:bg-recoder-elements-button-secondary-backgroundHover disabled:opacity-50 transition-colors"
             >
               {isLoading ? 'Connecting...' : 'Connect Vercel'}
             </button>
@@ -211,7 +211,7 @@ export function VercelPanel() {
                   <button
                     onClick={handleCreateAndLink}
                     disabled={!newProjectName.trim() || isLoading}
-                    className="px-3 py-1.5 text-xs bg-black text-white rounded-md hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                    className="px-3 py-1.5 text-xs bg-recoder-elements-button-secondary-background text-recoder-elements-button-secondary-text rounded-md hover:bg-recoder-elements-button-secondary-backgroundHover disabled:opacity-50 transition-colors"
                   >
                     Create & Link
                   </button>
@@ -337,7 +337,7 @@ export function VercelPanel() {
           <button
             onClick={handleDeploy}
             disabled={isDeploying}
-            className="mt-4 px-4 py-1.5 text-xs bg-black text-white rounded-md hover:bg-gray-800 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            className="mt-4 px-4 py-1.5 text-xs bg-recoder-elements-button-secondary-background text-recoder-elements-button-secondary-text rounded-md hover:bg-recoder-elements-button-secondary-backgroundHover disabled:opacity-50 transition-colors flex items-center gap-1.5"
           >
             {isDeploying ? (
               <>

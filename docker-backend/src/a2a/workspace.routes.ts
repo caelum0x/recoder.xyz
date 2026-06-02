@@ -30,7 +30,13 @@ import { getA2AEventBus } from './a2a-event-bus';
 import { multiDispatchRouter } from './multi-dispatch.routes';
 import { getWorktreeManagerService } from './worktree-manager.service';
 import { getAgentBridgeService } from './agent-bridge.service';
+import { getApprovalGateService } from './approval-gate.service';
+import { getDelegationChainService, type DelegationRequest, type DelegationStatus } from './delegation-chain.service';
+import { getAgentRegistryService } from './agent-registry.service';
+import { getTaskLifecycleService } from './task-lifecycle.service';
+import { buildTaskRunSummary } from './run-context.service';
 import { createLogger } from '../logger';
+import { appendTaskScopedControlPlaneLifecycleEvent, listBridgeSessionsForBinding } from '../a2a-gateway';
 
 const logger = createLogger('a2a-workspace-routes');
 
@@ -56,6 +62,296 @@ function sendSuccess<T>(res: Response, data: T, statusCode = 200): void {
 function sendError(res: Response, httpStatus: number, error: A2AError): void {
   const response: ErrorResponse = { success: false, error };
   res.status(httpStatus).json(response);
+}
+
+function mapDelegationStatus(status: DelegationStatus): 'active' | 'accepted' | 'declined' | 'completed' {
+  switch (status) {
+    case 'accepted':
+      return 'accepted';
+    case 'completed':
+      return 'completed';
+    case 'rejected':
+    case 'failed':
+    case 'cancelled':
+      return 'declined';
+    case 'pending':
+    case 'in-progress':
+    default:
+      return 'active';
+  }
+}
+
+function inferWorkspaceIdForDelegation(delegation: DelegationRequest): string | null {
+  const directWorkspace = delegation.metadata?.workspaceId;
+  if (directWorkspace) return directWorkspace;
+
+  const channelId = delegation.metadata?.channelId;
+  if (!channelId) return null;
+
+  const workspace = getWorkspaceService().list().find((ws) => ws.defaultChannelId === channelId);
+  return workspace?.workspaceId || null;
+}
+
+function mapDelegationToHandoffRecord(delegation: DelegationRequest, workspaceId: string) {
+  return {
+    handoffId: delegation.delegationId,
+    workspaceId,
+    fromAgentId: delegation.fromAgentId,
+    toAgentId: delegation.toAgentId,
+    taskId: delegation.metadata?.sourceTaskId || delegation.metadata?.handoffSourceTaskId || '',
+    intent: ((delegation.metadata?.intent as 'handoff' | 'delegate' | 'review' | undefined) || 'handoff'),
+    context: delegation.metadata ? { ...delegation.metadata } : {},
+    status: mapDelegationStatus(delegation.status),
+    createdAt: delegation.createdAt,
+  };
+}
+
+type WorkspaceHandoffRecord = ReturnType<typeof mapDelegationToHandoffRecord>;
+
+async function buildWorkspaceAgentRows(workspaceId: string) {
+  const agentIds = getWorkspaceService().listAgents(workspaceId);
+  if (!agentIds) return null;
+
+  const bridge = getAgentBridgeService();
+  const registry = getAgentRegistryService();
+  return agentIds.map((agentId) => {
+    const connected = bridge.getAgent(agentId);
+    const sessions = bridge.getSessionsForAgent(agentId);
+    const registryAgent = registry.getWithHealth(agentId);
+    const bridgeCapabilities = Array.from(new Set(sessions.flatMap((session) => session.capabilities)));
+    const skillNames = registryAgent?.card.skills.map((skill) => skill.name) ?? [];
+    const status = connected
+      ? connected.status
+      : registryAgent?.health.online
+        ? 'online'
+        : 'offline';
+    return {
+      agentId,
+      name: registryAgent?.identity.name ?? agentId,
+      platform: registryAgent?.identity.platform ?? 'custom',
+      status,
+      isLocal: sessions.length > 0,
+      capabilities: bridgeCapabilities,
+      skills: skillNames,
+      lastSeen: connected?.lastHeartbeat ?? registryAgent?.health.lastHeartbeat ?? '',
+      connectedSessionCount: sessions.length,
+      registry: registryAgent
+        ? {
+            online: registryAgent.health.online,
+            lastHeartbeat: registryAgent.health.lastHeartbeat,
+            reconnectCount: registryAgent.lifecycle.reconnectCount,
+            registrationCount: registryAgent.lifecycle.registrationCount,
+          }
+        : null,
+    };
+  });
+}
+
+async function buildWorkspaceTaskRows(workspaceId: string, limit = 200) {
+  const rawTasks = getTaskLifecycleService().list({
+    workspace_id: workspaceId,
+    limit,
+  });
+  return Promise.all(rawTasks.map((task) => buildTaskRunSummary(task)));
+}
+
+function buildWorkspaceApprovalRows(workspaceId: string) {
+  return getApprovalGateService().listByWorkspace(workspaceId);
+}
+
+function buildWorkspaceHandoffRows(workspaceId: string, activeOnly = false) {
+  const activeStatuses: DelegationStatus[] = ['pending', 'accepted', 'in-progress'];
+  const rawDelegations = getDelegationChainService().list({
+    statuses: activeOnly ? activeStatuses : undefined,
+  });
+
+  return rawDelegations
+    .map((delegation) => {
+      const delegationWorkspaceId = inferWorkspaceIdForDelegation(delegation);
+      return delegationWorkspaceId === workspaceId
+        ? mapDelegationToHandoffRecord(delegation, delegationWorkspaceId)
+        : null;
+    })
+    .filter((value): value is WorkspaceHandoffRecord => value !== null);
+}
+
+async function buildWorkspaceControlPlaneSnapshot(wsId: string) {
+  const ws = getWorkspaceService().get(wsId);
+  if (!ws) return null;
+
+  const [agents, tasks, bridgeSessions] = await Promise.all([
+    buildWorkspaceAgentRows(ws.workspaceId),
+    buildWorkspaceTaskRows(ws.workspaceId),
+    listBridgeSessionsForBinding({ workspaceId: ws.workspaceId }),
+  ]);
+  if (!agents) return null;
+
+  const approvals = buildWorkspaceApprovalRows(ws.workspaceId);
+  const handoffs = buildWorkspaceHandoffRows(ws.workspaceId);
+
+  const tasksByState = tasks.reduce<Record<string, number>>((acc, task) => {
+    acc[task.state] = (acc[task.state] || 0) + 1;
+    return acc;
+  }, {});
+
+  const summary = tasks.reduce(
+    (acc, task) => {
+      acc.totalTasks += 1;
+      if (task.state === 'working' || task.state === 'input-required') {
+        acc.activeTasks += 1;
+      }
+      if (task.claim) {
+        acc.claimedTasks += 1;
+      }
+      acc.evidenceItems += typeof task.runtime?.evidenceCount === 'number' ? task.runtime.evidenceCount : 0;
+      acc.previews += typeof task.runtime?.previewCount === 'number' ? task.runtime.previewCount : 0;
+      acc.artifacts += typeof task.runtime?.artifactCount === 'number' ? task.runtime.artifactCount : 0;
+      acc.logEvidence += typeof task.runtime?.logCount === 'number' ? task.runtime.logCount : 0;
+      acc.runtimeEvidence += typeof task.runtime?.runtimeCount === 'number' ? task.runtime.runtimeCount : 0;
+      acc.orchestrationRuns += task.controlPlane ? 1 : 0;
+      acc.orchestrationLifecycleEvents += typeof task.controlPlane?.lifecycleCount === 'number' ? task.controlPlane.lifecycleCount : 0;
+      acc.orchestrationEvidenceItems += typeof task.controlPlane?.evidenceCount === 'number' ? task.controlPlane.evidenceCount : 0;
+      return acc;
+    },
+    {
+      totalAgents: agents.length,
+      onlineAgents: agents.filter((agent) => agent.status !== 'offline').length,
+      offlineAgents: agents.filter((agent) => agent.status === 'offline').length,
+      localBridgeSessions: agents.reduce((sum, agent) => sum + agent.connectedSessionCount, 0),
+      pairedBridgeSessions: bridgeSessions.length,
+      healthyPairedBridgeSessions: bridgeSessions.filter((session) => session.registry.online).length,
+      unhealthyPairedBridgeSessions: bridgeSessions.filter((session) => !session.registry.online).length,
+      totalTasks: 0,
+      activeTasks: 0,
+      claimedTasks: 0,
+      tasksByState,
+      pendingApprovals: approvals.filter((approval) => approval.status === 'pending' || approval.status === 'escalated').length,
+      totalApprovals: approvals.length,
+      activeHandoffs: handoffs.filter((handoff) => handoff.status === 'active' || handoff.status === 'accepted').length,
+      totalHandoffs: handoffs.length,
+      evidenceItems: 0,
+      previews: 0,
+      artifacts: 0,
+      logEvidence: 0,
+      runtimeEvidence: 0,
+      orchestrationRuns: 0,
+      orchestrationLifecycleEvents: 0,
+      orchestrationEvidenceItems: 0,
+    },
+  );
+
+  return {
+    workspace: ws,
+    summary,
+    agents,
+    tasks,
+    approvals,
+    handoffs,
+    bridgeSessions: bridgeSessions.map((session) => ({
+      bridgeId: session.bridgeId,
+      durableIdentity: session.durableIdentity,
+      scope: session.scope || null,
+      agentId: session.agentId || null,
+      agentName: session.agentName || null,
+      agentPlatform: session.agentPlatform || null,
+      workspaceId: session.workspaceId || null,
+      projectId: session.projectId || null,
+      capabilities: session.capabilities || [],
+      normalizedCapabilities: session.capabilities || [],
+      metadata: session.metadata || null,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      heartbeat: session.heartbeat,
+      registry: session.registry,
+    })),
+  };
+}
+
+function buildWorkspaceContextPackageFromSnapshot(
+  snapshot: NonNullable<Awaited<ReturnType<typeof buildWorkspaceControlPlaneSnapshot>>>,
+) {
+  return {
+    contextVersion: '2026-05-12',
+    workspace: {
+      workspaceId: snapshot.workspace.workspaceId,
+      name: snapshot.workspace.name,
+      projectId: snapshot.workspace.projectId,
+      ownerId: snapshot.workspace.ownerId,
+      defaultChannelId: snapshot.workspace.defaultChannelId,
+      settings: snapshot.workspace.settings,
+      createdAt: snapshot.workspace.createdAt,
+      updatedAt: snapshot.workspace.updatedAt,
+    },
+    summary: snapshot.summary,
+    agents: snapshot.agents.map((agent) => ({
+      agentId: agent.agentId,
+      name: agent.name,
+      platform: agent.platform,
+      status: agent.status,
+      capabilities: agent.capabilities,
+      skills: agent.skills,
+      lastSeen: agent.lastSeen,
+      connectedSessionCount: agent.connectedSessionCount,
+      isLocal: agent.isLocal,
+    })),
+    recentTasks: snapshot.tasks.slice(0, 20).map((task) => ({
+      id: task.id,
+      prompt: task.prompt,
+      state: task.state,
+      workspace_id: task.workspace_id,
+      assignee_agent_id: task.assignee_agent_id,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      claim: task.claim ?? null,
+      approvalStatus: task.approval?.status ?? null,
+      handoffStatus: task.handoff?.status ?? null,
+      review: task.review ?? null,
+      delivery: task.delivery ?? null,
+      runtime: task.runtime ?? null,
+      controlPlane: task.controlPlane ?? null,
+    })),
+    pendingApprovals: snapshot.approvals
+      .filter((approval) => approval.status === 'pending' || approval.status === 'escalated')
+      .map((approval) => ({
+        approvalId: approval.approvalId,
+        taskId:
+          typeof approval.details.sourceTaskId === 'string'
+            ? approval.details.sourceTaskId
+            : typeof approval.details.taskId === 'string'
+              ? approval.details.taskId
+              : null,
+        status: approval.status,
+        action: approval.action,
+        requester: approval.requestingAgentId,
+        target: approval.targetAgentId,
+        createdAt: approval.createdAt,
+      })),
+    activeHandoffs: snapshot.handoffs
+      .filter((handoff) => handoff.status === 'active' || handoff.status === 'accepted')
+      .map((handoff) => ({
+        handoffId: handoff.handoffId,
+        taskId: handoff.taskId,
+        fromAgentId: handoff.fromAgentId,
+        toAgentId: handoff.toAgentId,
+        intent: handoff.intent,
+        status: handoff.status,
+        createdAt: handoff.createdAt,
+      })),
+    bridgeSessions: snapshot.bridgeSessions.map((session) => ({
+      bridgeId: session.bridgeId,
+      durableIdentity: session.durableIdentity,
+      agentId: session.agentId,
+      agentName: session.agentName,
+      agentPlatform: session.agentPlatform,
+      workspaceId: session.workspaceId,
+      projectId: session.projectId,
+      capabilities: session.capabilities,
+      normalizedCapabilities: session.normalizedCapabilities,
+      registry: session.registry,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -236,28 +532,64 @@ workspaceRouter.delete('/:wsId/agents/:agentId', (req: Request, res: Response) =
 
 workspaceRouter.get('/:wsId/agents', (req: Request, res: Response) => {
   try {
-    const agentIds = getWorkspaceService().listAgents(req.params.wsId);
-    if (!agentIds) {
+    buildWorkspaceAgentRows(req.params.wsId).then((agents) => {
+      if (!agents) {
+        sendError(res, 404, buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Workspace not found: ${req.params.wsId}`,
+        }));
+        return;
+      }
+
+      sendSuccess(res, { agents, total: agents.length });
+    }).catch((err: any) => {
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: err.message,
+      }));
+    });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/control-plane — Unified workspace control-plane snapshot ──
+
+workspaceRouter.get('/:wsId/control-plane', async (req: Request, res: Response) => {
+  try {
+    const snapshot = await buildWorkspaceControlPlaneSnapshot(req.params.wsId);
+    if (!snapshot) {
       return sendError(res, 404, buildA2AError({
         code: A2AErrorCodeEnum.TaskNotFound,
         message: `Workspace not found: ${req.params.wsId}`,
       }));
     }
 
-    // Enrich agent IDs with bridge connection status
-    const bridge = getAgentBridgeService();
-    const agents = agentIds.map((agentId) => {
-      const connected = bridge.getAgent(agentId);
-      return {
-        agentId,
-        status: connected ? connected.status : 'offline',
-        isLocal: !!connected,
-        capabilities: connected?.capabilities ?? [],
-        lastSeen: connected?.lastHeartbeat,
-      };
-    });
+    sendSuccess(res, snapshot);
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
 
-    sendSuccess(res, { agents, total: agents.length });
+// ── GET /:wsId/context — Structured Recoder Space context package ───────
+
+workspaceRouter.get('/:wsId/context', async (req: Request, res: Response) => {
+  try {
+    const snapshot = await buildWorkspaceControlPlaneSnapshot(req.params.wsId);
+    if (!snapshot) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    sendSuccess(res, buildWorkspaceContextPackageFromSnapshot(snapshot));
   } catch (err: any) {
     sendError(res, 500, buildA2AError({
       code: A2AErrorCodeEnum.InternalError,
@@ -294,7 +626,7 @@ workspaceRouter.use('/:wsId/dispatch', multiDispatchRouter);
 
 // ── GET /:wsId/tasks — List tasks ───────────────────────────────────────
 
-workspaceRouter.get('/:wsId/tasks', (req: Request, res: Response) => {
+workspaceRouter.get('/:wsId/tasks', async (req: Request, res: Response) => {
   try {
     const ws = getWorkspaceService().get(req.params.wsId);
     if (!ws) {
@@ -304,8 +636,124 @@ workspaceRouter.get('/:wsId/tasks', (req: Request, res: Response) => {
       }));
     }
 
-    // Tasks are filtered by workspace_id in the task lifecycle service
-    sendSuccess(res, { tasks: [], total: 0 });
+    const tasks = await buildWorkspaceTaskRows(ws.workspaceId, Number(req.query.limit || 200));
+    sendSuccess(res, { tasks, total: tasks.length });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/approvals — List workspace approvals ─────────────────────
+
+workspaceRouter.get('/:wsId/approvals', (req: Request, res: Response) => {
+  try {
+    const ws = getWorkspaceService().get(req.params.wsId);
+    if (!ws) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    const statusQuery = String(req.query.status || '').trim().toLowerCase();
+    const approvals = statusQuery === 'pending'
+      ? getApprovalGateService().listPending(ws.workspaceId)
+      : buildWorkspaceApprovalRows(ws.workspaceId);
+
+    sendSuccess(res, { approvals, total: approvals.length });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── GET /:wsId/handoffs — List workspace handoffs ───────────────────────
+
+workspaceRouter.get('/:wsId/handoffs', (req: Request, res: Response) => {
+  try {
+    const ws = getWorkspaceService().get(req.params.wsId);
+    if (!ws) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    const requestedStatus = String(req.query.status || '').trim().toLowerCase();
+    const handoffs = buildWorkspaceHandoffRows(ws.workspaceId, requestedStatus === 'active');
+
+    sendSuccess(res, { handoffs, total: handoffs.length });
+  } catch (err: any) {
+    sendError(res, 500, buildA2AError({
+      code: A2AErrorCodeEnum.InternalError,
+      message: err.message,
+    }));
+  }
+});
+
+// ── POST /:wsId/handoffs — Create workspace handoff ─────────────────────
+
+workspaceRouter.post('/:wsId/handoffs', (req: Request, res: Response) => {
+  try {
+    const ws = getWorkspaceService().get(req.params.wsId);
+    if (!ws) {
+      return sendError(res, 404, buildA2AError({
+        code: A2AErrorCodeEnum.TaskNotFound,
+        message: `Workspace not found: ${req.params.wsId}`,
+      }));
+    }
+
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const fromAgentId = String(body?.fromAgentId || '').trim();
+    const toAgentId = String(body?.toAgentId || '').trim();
+    const taskId = String(body?.taskId || '').trim();
+    const intent = String(body?.intent || 'handoff').trim().toLowerCase();
+    const context = body?.context && typeof body.context === 'object' ? body.context : {};
+
+    if (!fromAgentId || !toAgentId || !taskId) {
+      return sendError(res, 400, buildA2AError({
+        code: A2AErrorCodeEnum.InvalidParams,
+        message: 'fromAgentId, toAgentId, and taskId are required',
+      }));
+    }
+
+    const prompt =
+      typeof (context as Record<string, unknown>).prompt === 'string' &&
+      (context as Record<string, unknown>).prompt
+        ? String((context as Record<string, unknown>).prompt)
+        : `Continue ${intent} for task ${taskId}`;
+
+    const delegation = getDelegationChainService().delegate({
+      fromAgentId,
+      toAgentId,
+      prompt,
+      metadata: {
+        workspaceId: ws.workspaceId,
+        projectId: ws.projectId,
+        channelId: ws.defaultChannelId,
+        sourceTaskId: taskId,
+        intent: intent === 'delegate' || intent === 'review' ? intent : 'handoff',
+      },
+    });
+    void appendTaskScopedControlPlaneLifecycleEvent({
+      taskId,
+      eventType: 'handoff.initiated',
+      actorId: toAgentId,
+      state: 'working',
+      detail: {
+        delegationId: delegation.delegationId,
+        intent: intent === 'delegate' || intent === 'review' ? intent : 'handoff',
+        fromAgentId,
+        toAgentId,
+      },
+    });
+
+    sendSuccess(res, mapDelegationToHandoffRecord(delegation, ws.workspaceId), 201);
   } catch (err: any) {
     sendError(res, 500, buildA2AError({
       code: A2AErrorCodeEnum.InternalError,

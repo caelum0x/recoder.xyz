@@ -31,6 +31,212 @@ const logger_1 = require("../logger");
 const data_hygiene_1 = require("./data-hygiene");
 const a2a_persistence_1 = require("./a2a-persistence");
 const logger = (0, logger_1.createLogger)('a2a-task-lifecycle');
+function collectPreviewLinks(result, metadata) {
+    const links = [...(result.preview ?? [])];
+    const candidates = [
+        {
+            url: result.data?.previewUrl,
+            source: 'result.data.previewUrl',
+            createdAt: result.data?.previewCreatedAt,
+        },
+        {
+            url: result.data?.preview?.url,
+            source: 'result.data.preview',
+            createdAt: result.data?.preview?.createdAt,
+        },
+        {
+            url: (result.data?.raw?.previewUrl),
+            source: 'result.data.raw.previewUrl',
+            createdAt: result.data?.raw?.previewCreatedAt,
+        },
+        {
+            url: metadata?.previewUrl,
+            source: 'task.metadata.previewUrl',
+            createdAt: metadata?.previewCreatedAt,
+        },
+    ];
+    for (const candidate of candidates) {
+        if (typeof candidate.url !== 'string' || candidate.url.trim() === '')
+            continue;
+        if (links.some((link) => link.url === candidate.url))
+            continue;
+        links.push({
+            url: candidate.url,
+            source: candidate.source,
+            metadata: typeof candidate.createdAt === 'string' && candidate.createdAt
+                ? { createdAt: candidate.createdAt }
+                : undefined,
+        });
+    }
+    return links;
+}
+function collectFilesChanged(result) {
+    const direct = result.data?.filesChanged;
+    if (Array.isArray(direct)) {
+        return direct.filter((item) => typeof item === 'string' && item.length > 0);
+    }
+    const rawFiles = result.data?.raw?.filesChanged;
+    if (Array.isArray(rawFiles)) {
+        return rawFiles.filter((item) => typeof item === 'string' && item.length > 0);
+    }
+    return [];
+}
+function readRecord(value) {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? value
+        : undefined;
+}
+function readString(value) {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+function readStringArray(value) {
+    if (Array.isArray(value)) {
+        return value
+            .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+            .filter(Boolean);
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+        return [value.trim()];
+    }
+    return [];
+}
+function toExcerpt(value, maxLength = 240) {
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    if (normalized.length <= maxLength)
+        return normalized;
+    return `${normalized.slice(0, maxLength - 3)}...`;
+}
+function collectLogEvidence(result) {
+    const data = readRecord(result.data);
+    const raw = readRecord(data?.raw);
+    const candidates = [
+        { stream: 'stdout', value: data?.stdout ?? raw?.stdout, label: 'stdout' },
+        { stream: 'stderr', value: data?.stderr ?? raw?.stderr, label: 'stderr' },
+        { stream: 'logs', value: data?.logs ?? raw?.logs, label: 'runtime logs' },
+    ];
+    const evidence = [];
+    for (const candidate of candidates) {
+        const entries = readStringArray(candidate.value);
+        if (entries.length === 0)
+            continue;
+        evidence.push({
+            kind: 'log',
+            label: candidate.label,
+            ref: candidate.stream,
+            metadata: {
+                stream: candidate.stream,
+                lineCount: entries.length,
+                excerpt: toExcerpt(entries.join('\n')),
+            },
+        });
+    }
+    return evidence;
+}
+function collectRuntimeEvidence(result) {
+    const data = readRecord(result.data);
+    const raw = readRecord(data?.raw);
+    const gitStatus = readString(data?.gitStatus) ??
+        readString(data?.git_status) ??
+        readString(raw?.gitStatus) ??
+        readString(raw?.git_status);
+    const gitBranch = readString(data?.gitBranch) ??
+        readString(data?.git_branch) ??
+        readString(raw?.gitBranch) ??
+        readString(raw?.git_branch);
+    const cloneUrl = readString(data?.cloneUrl) ??
+        readString(data?.clone_url) ??
+        readString(raw?.cloneUrl) ??
+        readString(raw?.clone_url);
+    const runtimeType = readString(data?.runtimeType) ??
+        readString(data?.runtime_type) ??
+        readString(raw?.runtimeType) ??
+        readString(raw?.runtime_type);
+    const sessionId = readString(data?.sessionId) ??
+        readString(data?.session_id) ??
+        readString(raw?.sessionId) ??
+        readString(raw?.session_id);
+    const sandboxId = readString(data?.sandboxId) ??
+        readString(data?.sandbox_id) ??
+        readString(raw?.sandboxId) ??
+        readString(raw?.sandbox_id);
+    const evidence = [];
+    if (gitStatus || gitBranch || cloneUrl) {
+        evidence.push({
+            kind: 'runtime',
+            label: gitBranch ? `Git state (${gitBranch})` : 'Git state',
+            ref: gitBranch ? `git:${gitBranch}` : 'git',
+            metadata: {
+                ...(gitStatus ? { gitStatus: toExcerpt(gitStatus) } : {}),
+                ...(gitBranch ? { gitBranch } : {}),
+                ...(cloneUrl ? { cloneUrl } : {}),
+            },
+        });
+    }
+    if (runtimeType || sessionId || sandboxId) {
+        evidence.push({
+            kind: 'runtime',
+            label: runtimeType ? `Runtime session (${runtimeType})` : 'Runtime session',
+            ref: sessionId || sandboxId || runtimeType || 'runtime',
+            metadata: {
+                ...(runtimeType ? { runtimeType } : {}),
+                ...(sessionId ? { sessionId } : {}),
+                ...(sandboxId ? { sandboxId } : {}),
+            },
+        });
+    }
+    return evidence;
+}
+function enrichTaskResult(envelope, result) {
+    const preview = collectPreviewLinks(result, envelope.metadata);
+    const filesChanged = collectFilesChanged(result);
+    const explicitEvidence = [...(result.evidence ?? [])];
+    const derivedEvidence = [
+        {
+            kind: 'trace',
+            label: 'Task trace',
+            ref: envelope.trace_id,
+            metadata: { taskId: envelope.id },
+        },
+        ...preview.map((link) => ({
+            kind: 'preview',
+            label: link.label || 'Preview URL',
+            ref: link.url,
+            metadata: {
+                ...(link.source ? { source: link.source } : {}),
+                ...(link.port != null ? { port: link.port } : {}),
+            },
+        })),
+        ...(result.artifacts ?? []).map((artifact) => ({
+            kind: artifact.artifact_type === 'log' ? 'log' : 'artifact',
+            label: artifact.path || artifact.key,
+            ref: artifact.key,
+            metadata: {
+                artifactType: artifact.artifact_type,
+                ...(artifact.path ? { path: artifact.path } : {}),
+            },
+        })),
+        ...filesChanged.map((path) => ({
+            kind: 'file-change',
+            label: path,
+            ref: path,
+        })),
+        ...collectLogEvidence(result),
+        ...collectRuntimeEvidence(result),
+    ];
+    const seen = new Set();
+    const evidence = [...explicitEvidence, ...derivedEvidence].filter((item) => {
+        const key = `${item.kind}:${item.ref || item.label}`;
+        if (seen.has(key))
+            return false;
+        seen.add(key);
+        return true;
+    });
+    return {
+        ...result,
+        ...(preview.length > 0 ? { preview } : {}),
+        evidence,
+    };
+}
 // ---------------------------------------------------------------------------
 // ID generation
 // ---------------------------------------------------------------------------
@@ -419,7 +625,7 @@ class TaskLifecycleService {
         }
         // 5. Attach result / error / cost data if provided
         if (input.result && input.target_state === a2a_1.TaskStateEnum.Completed) {
-            updated = { ...updated, result: input.result };
+            updated = { ...updated, result: enrichTaskResult(updated, input.result) };
         }
         if (input.error && input.target_state === a2a_1.TaskStateEnum.Failed) {
             updated = { ...updated, error: input.error };
@@ -575,6 +781,125 @@ class TaskLifecycleService {
             reason: reason || 'Additional input required',
         });
     }
+    /**
+     * Merge metadata into an existing task without changing its state.
+     * This is used for canonical run-context updates such as approvals,
+     * handoffs, routing decisions, and other lifecycle-adjacent state that
+     * should live on the task envelope itself.
+     */
+    updateTaskMetadata(taskId, input) {
+        const envelope = this.store.get(taskId);
+        if (!envelope) {
+            return {
+                ok: false,
+                httpStatus: 404,
+                error: (0, a2a_1.buildA2AError)({
+                    code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
+                    message: `Task not found: ${taskId}`,
+                    details: { task_id: taskId },
+                }),
+            };
+        }
+        const now = new Date().toISOString();
+        const updated = {
+            ...envelope,
+            updated_at: now,
+            metadata: {
+                ...(envelope.metadata ?? {}),
+                ...input.metadataPatch,
+            },
+        };
+        this.store.set(taskId, updated);
+        this.emitAudit((0, a2a_1.createAuditEvent)({
+            id: generateId('evt'),
+            event_type: a2a_1.AuditEventTypeEnum.TaskProgress,
+            severity: a2a_1.AuditSeverityEnum.Info,
+            actor: {
+                kind: a2a_1.AuditActorKindEnum.System,
+                id: input.triggeredBy || 'orchestrator',
+                name: input.triggeredBy || 'orchestrator',
+            },
+            target: {
+                kind: a2a_1.AuditTargetKindEnum.Task,
+                id: taskId,
+            },
+            trace_id: updated.trace_id,
+            workspace_id: updated.workspace_id,
+            thread_id: updated.thread_id,
+            task_id: taskId,
+            metadata: {
+                reason: input.reason || 'Task metadata updated',
+                metadata_patch: input.metadataPatch,
+            },
+            now,
+        }));
+        return { ok: true, data: updated };
+    }
+    /**
+     * Append artifacts to an existing task result without changing state.
+     * This supports post-run artifact uploads from Space-native CLI workflows
+     * and other control-plane surfaces that need to enrich a task over time.
+     */
+    appendTaskArtifacts(taskId, input) {
+        const envelope = this.store.get(taskId);
+        if (!envelope) {
+            return {
+                ok: false,
+                httpStatus: 404,
+                error: (0, a2a_1.buildA2AError)({
+                    code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
+                    message: `Task not found: ${taskId}`,
+                    details: { task_id: taskId },
+                }),
+            };
+        }
+        if (input.artifacts.length === 0) {
+            return { ok: true, data: envelope };
+        }
+        const existingResult = envelope.result ?? {};
+        const mergedArtifacts = new Map();
+        for (const artifact of existingResult.artifacts ?? []) {
+            mergedArtifacts.set(artifact.key, artifact);
+        }
+        for (const artifact of input.artifacts) {
+            mergedArtifacts.set(artifact.key, artifact);
+        }
+        const now = new Date().toISOString();
+        const updated = {
+            ...envelope,
+            updated_at: now,
+            result: enrichTaskResult(envelope, {
+                ...existingResult,
+                artifacts: [...mergedArtifacts.values()],
+            }),
+        };
+        this.store.set(taskId, updated);
+        this.emitAudit((0, a2a_1.createAuditEvent)({
+            id: generateId('evt'),
+            event_type: a2a_1.AuditEventTypeEnum.TaskProgress,
+            severity: a2a_1.AuditSeverityEnum.Info,
+            actor: {
+                kind: a2a_1.AuditActorKindEnum.System,
+                id: input.triggeredBy || 'artifact-api',
+                name: input.triggeredBy || 'artifact-api',
+            },
+            target: {
+                kind: a2a_1.AuditTargetKindEnum.Task,
+                id: taskId,
+            },
+            trace_id: updated.trace_id,
+            workspace_id: updated.workspace_id,
+            thread_id: updated.thread_id,
+            task_id: taskId,
+            metadata: {
+                reason: input.reason || 'Task artifacts appended',
+                artifact_count: input.artifacts.length,
+                artifact_keys: input.artifacts.map((artifact) => artifact.key),
+            },
+            now,
+        }));
+        return { ok: true, data: updated };
+    }
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
@@ -645,6 +970,16 @@ class TaskLifecycleService {
         if (normalizedLimit === 0)
             return [];
         return this.auditTrail.slice(-normalizedLimit).map((item) => item.event);
+    }
+    getRecentAuditEventsForTask(taskId, limit = 100) {
+        this.pruneAuditTrail();
+        const normalizedLimit = Math.max(0, Math.floor(limit));
+        if (normalizedLimit === 0)
+            return [];
+        return this.auditTrail
+            .filter((item) => item.event.task_id === taskId)
+            .slice(-normalizedLimit)
+            .map((item) => item.event);
     }
     stateToAuditEventType(state) {
         const map = {

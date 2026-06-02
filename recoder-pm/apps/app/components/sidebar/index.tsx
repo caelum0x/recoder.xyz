@@ -2,50 +2,15 @@
 
 import type { User } from "@repo/backend/auth";
 import { RecoderPmRole } from "@repo/backend/auth";
-import { authClient } from "@repo/backend/auth/client";
-import { getUserName } from "@repo/backend/auth/format";
 import type { Organization } from "@repo/backend/prisma/client";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@repo/design-system/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@repo/design-system/components/ui/dropdown-menu";
 import {
   Sidebar as SidebarComponent,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
 } from "@repo/design-system/components/ui/sidebar";
-import { handleError } from "@repo/design-system/lib/handle-error";
-import { cn } from "@repo/design-system/lib/utils";
-import {
-  ChevronsUpDown,
-  LifeBuoyIcon,
-  LogOut,
-  StarIcon,
-  UserCircleIcon,
-} from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AppSwitcher } from "@/components/app-switcher";
-import { OrganizationSwitcher } from "../../app/(organization)/components/organization-switcher";
 // biome-ignore lint/performance/noNamespaceImport: navigation module is designed for namespace access
 import * as navigation from "../../lib/navigation";
 import { SidebarItem } from "./sidebar-item";
@@ -56,58 +21,8 @@ type SidebarProps = {
 };
 
 export const Sidebar = ({ user, organization }: SidebarProps) => {
-  const router = useRouter();
-  const sidebar = useSidebar();
-
-  const handleSignOut = async () => {
-    try {
-      await authClient.signOut();
-      router.push("/sign-in");
-    } catch (error) {
-      handleError(error);
-    }
-  };
-
   return (
     <SidebarComponent collapsible="icon">
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem
-            className={cn("flex items-center gap-2", !!sidebar.open && "px-2")}
-          >
-            <div className="flex items-center gap-1.5">
-              <div className="flex aspect-square size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-sidebar-primary">
-                {!!organization.logoUrl && (
-                  <Image
-                    alt=""
-                    className="object-cover"
-                    height={32}
-                    src={organization.logoUrl}
-                    width={32}
-                  />
-                )}
-              </div>
-            </div>
-            <div
-              className={cn(
-                "flex flex-col leading-none",
-                !sidebar.open && "hidden"
-              )}
-            >
-              <span className="truncate font-medium text-sm">
-                {organization.name}
-              </span>
-              <span className="truncate text-muted-foreground text-xs">
-                @{organization.slug}
-              </span>
-            </div>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <OrganizationSwitcher />
-          </SidebarMenuItem>
-          {/* AppSwitcher is rendered in root layout — don't duplicate here */}
-        </SidebarMenu>
-      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="sr-only text-muted-foreground">
@@ -165,98 +80,6 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                  size="lg"
-                >
-                  <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage
-                      alt={getUserName(user)}
-                      src={user.user_metadata.image_url ?? ""}
-                    />
-                    <AvatarFallback className="rounded-lg">
-                      {getUserName(user).slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">
-                      {getUserName(user)}
-                    </span>
-                    <span className="truncate text-muted-foreground text-xs">
-                      {user.email}
-                    </span>
-                  </div>
-                  <ChevronsUpDown className="ml-auto size-4" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-                side="bottom"
-                sideOffset={4}
-              >
-                <DropdownMenuLabel className="p-0 font-normal">
-                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage
-                        alt={getUserName(user)}
-                        src={user.user_metadata.image_url ?? ""}
-                      />
-                      <AvatarFallback className="rounded-lg">
-                        {getUserName(user).slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">
-                        {getUserName(user)}
-                      </span>
-                      <span className="truncate text-muted-foreground text-xs">
-                        {user.email}
-                      </span>
-                    </div>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuGroup>
-                  <DropdownMenuItem className="flex items-center gap-2">
-                    <UserCircleIcon
-                      className="text-muted-foreground"
-                      size={16}
-                    />
-                    <Link href="/profile">Profile</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-center gap-2">
-                    <StarIcon className="text-muted-foreground" size={16} />
-                    <Link href="/welcome">Getting Started</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex items-center gap-2">
-                    <LifeBuoyIcon className="text-muted-foreground" size={16} />
-                    <a
-                      href="https://recoder.xyz/contact"
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      Support
-                    </a>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="flex items-center gap-2">
-                  <LogOut className="text-muted-foreground" size={16} />
-                  <button onClick={handleSignOut} type="button">
-                    Sign Out
-                  </button>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </SidebarComponent>
   );
 };

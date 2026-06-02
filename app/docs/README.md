@@ -10,7 +10,7 @@
 
 ### For Users
 - [Getting Started](./USER_GUIDE.md#getting-started)
-- [Web IDE Usage](./USER_GUIDE.md#using-the-web-ide)
+- [Spaces Usage](./USER_GUIDE.md#using-spaces)
 - [CLI Commands](./CLI.md)
 - [Troubleshooting](./USER_GUIDE.md#troubleshooting)
 

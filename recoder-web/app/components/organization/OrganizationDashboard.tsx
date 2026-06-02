@@ -969,7 +969,7 @@ const SettingsToggle = memo(({ label, description, checked, onChange, disabled }
     >
       <span
         className={classNames(
-          'absolute top-1 w-4 h-4 bg-white rounded-full transition-transform',
+          'absolute top-1 w-4 h-4 bg-zinc-200 rounded-full transition-transform',
           checked ? 'left-6' : 'left-1'
         )}
       />

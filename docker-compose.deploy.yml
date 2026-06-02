@@ -55,19 +55,13 @@ services:
       - RECODER_A2A_ENABLE_CONSUMER=true
       - RECODER_A2A_CONSUMER_SERVICE=recoder_backend
       - RECODER_A2A_CONSUME_UNTARGETED=true
-      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/plan
-      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
-      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/handoff
-      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/tool_call
-      - RECODER_A2A_DEFAULT_HANDLER_URL=http://recoder-web:5173/api/a2a/intents/execute
       - RECODER_A2A_CANVAS_HANDLER_URL=http://recoder-agents:3001/api/canvas/push
       - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
       # A2A gateway identity and security
       - RECODER_A2A_AGENT_ID=docker-backend
       - RECODER_A2A_ADMIN_TOKEN=${RECODER_A2A_ADMIN_TOKEN:-}
       - RECODER_A2A_BRIDGE_TOKEN=${RECODER_A2A_BRIDGE_TOKEN:-}
-      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-web:5173
-      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,recoder-agency,recoder-pm
+      - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,docker-backend,recoder-agency,recoder-pm
       - QDRANT_URL=http://qdrant:6333
       - MEILISEARCH_URL=http://meilisearch:7700
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-recoder_meili_dev_key}
@@ -153,58 +147,6 @@ services:
     networks:
       - recoder
 
-  recoder-web:
-    build:
-      context: .
-      dockerfile: recoder-web/Dockerfile
-    container_name: recoder-web
-    restart: unless-stopped
-    ports:
-      - "5173:5173"
-    env_file:
-      - ./recoder-web/.env
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - NODE_ENV=production
-      - PORT=5173
-      - DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
-      - VITE_DOCKER_BACKEND_URL=http://recoder-docker-backend:3100
-      - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main
-      - VITE_DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main
-      - MAIN_SITE_URL=https://recoder.xyz
-      - MAIN_SITE_INTERNAL_URL=http://host.docker.internal:3000
-      - VITE_MAIN_SITE_URL=https://recoder.xyz
-      - RECODER_A2A_SHARED_SECRET=${RECODER_A2A_SHARED_SECRET}
-      - RECODER_A2A_AGENT_ID=recoder-web
-      - RECODER_A2A_REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - RECODER_A2A_PLAN_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/plan
-      - RECODER_A2A_EXECUTE_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/execute
-      - RECODER_A2A_HANDOFF_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/handoff
-      - RECODER_A2A_TOOL_CALL_HANDLER_URL=http://recoder-docker-backend:3100/api/a2a/intent/tool_call
-      - RECODER_A2A_WORKER_TOKEN=${RECODER_A2A_WORKER_TOKEN}
-      - RECODER_A2A_EGRESS_ALLOWLIST=http://recoder-docker-backend:3100
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:5173/api/health',{redirect:'manual'}).then(r => process.exit(r.status < 400 ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
-    stop_grace_period: 30s
-    networks:
-      - recoder
-
   recoder-app:
     build:
       context: .
@@ -219,7 +161,7 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - NEXT_PUBLIC_APP_URL=https://recoder.xyz
-      - NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
+      - NEXT_PUBLIC_SPACES_URL=/dashboard/spaces
       - BACKEND_URL=http://recoder-docker-backend:3100
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main
       - AUTH_DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_main

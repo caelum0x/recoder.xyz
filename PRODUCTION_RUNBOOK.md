@@ -7,6 +7,11 @@ Canonical deployment path:
 - Supported production compose manifest: `docker-compose.deploy.yml`
 - Do not use `deploy.sh` or `scripts/deploy-production.sh` for production deploys
 
+Host disk-pressure preflight:
+- `scripts/check-hetzner-docker-disk-pressure.sh` runs during deploy preflight on the Hetzner host.
+- Automatic reclaim is limited to dangling Docker images, BuildKit cache, and journal vacuuming.
+- Do not delete active Docker volumes or shared-host app data unless ownership is verified first.
+
 This runbook contains the exact commands to bring the entire recoder.xyz ecosystem to production. All feature code is complete. Only config/ops steps remain.
 
 ---
@@ -44,7 +49,7 @@ This runbook contains the exact commands to bring the entire recoder.xyz ecosyst
 - `app` is the **auth authority** — its Postgres DB contains the Better Auth tables (`user`, `session`, `account`, `verification`).
 - `recoder-agency` and `recoder-pm` connect to app's auth DB via `AUTH_DATABASE_URL`.
 - All apps share the same `BETTER_AUTH_SECRET` and cookie config (prefix `recoder`, domain `.recoder.xyz`).
-- `app`, `recoder-web`, and `docker-backend` share `INTERNAL_SERVICE_KEY` for HMAC-SHA256 inter-service auth.
+- `app` and `docker-backend` share `INTERNAL_SERVICE_KEY` for HMAC-SHA256 inter-service auth.
 
 ---
 
@@ -129,7 +134,7 @@ All 4 tables must exist. If not, run the app once — Better Auth auto-creates t
 
 ---
 
-## Step 2: Main Branch Hardening (app + recoder-web + docker-backend)
+## Step 2: Main Branch Hardening (app + docker-backend)
 
 ### 2.1 Sync INTERNAL_SERVICE_KEY
 
@@ -139,7 +144,6 @@ pnpm run sync:internal-service-key
 
 # Option B: Manually set the same value in:
 #   app/.env.production        → INTERNAL_SERVICE_KEY=<value>
-#   recoder-web/.env.local     → INTERNAL_SERVICE_KEY=<value>
 #   docker-backend/.env        → INTERNAL_SERVICE_KEY=<value>
 ```
 
@@ -163,19 +167,7 @@ API_KEY_HASH_SALT=<from secrets.env>
 IDENTITY_TOKEN_SECRET=<from secrets.env>
 ```
 
-### 2.4 Decide billing mode
-
-In recoder-web's env (Vercel or `.env.local`):
-
-```bash
-# Keep disabled (safe default):
-BILLING_ACTIONS_ENABLED=false
-
-# Or enable after validating payment flow:
-BILLING_ACTIONS_ENABLED=true
-```
-
-### 2.5 Run Phase 1 smoke test
+### 2.4 Run Phase 1 smoke test
 
 ```bash
 BILLING_ACTIONS_ENABLED=false pnpm run smoke:phase1
@@ -208,13 +200,6 @@ POLAR_ACCESS_TOKEN=<from Polar dashboard>
 POLAR_PRO_PRODUCT_ID=<from Polar dashboard>
 POLAR_WEBHOOK_SECRET=<from Polar dashboard>
 POLAR_ORGANIZATION_ID=<from Polar dashboard>
-```
-
-### 3.3 Set integration vars
-
-```bash
-RECODER_WEB_URL=https://web.recoder.xyz
-RECODER_WEB_API_KEY=<generated API key for agency>
 ```
 
 ### 3.4 Set production security vars
@@ -426,7 +411,7 @@ pnpm -C apps/mobile install --lockfile-only
 | Domain | Service | Deploy | Status |
 |---|---|---|---|
 | `recoder.xyz` | app | Vercel | Running |
-| `web.recoder.xyz` | recoder-web | Cloudflare/Vercel | Running |
+| old browser coding host | dashboard redirect | Nginx | Retired |
 | `docker.recoder.xyz` | docker-backend | Docker | Running |
 | `agency.recoder.xyz` | recoder-agency | Docker | Config pending |
 | `pm.recoder.xyz` | recoder-pm | Docker+Nginx | Config pending |
@@ -436,7 +421,7 @@ pnpm -C apps/mobile install --lockfile-only
 | Shared Secret | Services |
 |---|---|
 | `BETTER_AUTH_SECRET` | app, agency, PM |
-| `INTERNAL_SERVICE_KEY` | app, recoder-web, docker-backend |
+| `INTERNAL_SERVICE_KEY` | app, docker-backend |
 | `AUTH_DATABASE_URL` | agency, PM (→ app's Postgres) |
 
 ---

@@ -12,6 +12,7 @@ import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 import { extractAttribution } from '@/lib/attribution';
 import { logger } from '@/lib/logger';
+import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
 import { z } from 'zod';
 
 const subscribeSchema = z.object({
@@ -108,6 +109,14 @@ export async function POST(request: NextRequest) {
     }
 
     logger.info('Newsletter subscription created', { route: 'api/newsletter/subscribe', email, source });
+
+    // Server-side funnel event (adblock-proof, independent of client gtag).
+    trackServerEvent(AnalyticsEvents.LEAD_CAPTURE_SUCCEEDED, {
+      leadSource: source,
+      reactivated: Boolean(existingSubscriber),
+      matchedExistingUser: Boolean(user?.id),
+      userId: user?.id,
+    });
 
     return NextResponse.json({
       success: true,

@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Check
 } from 'lucide-react';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 export default function SetupProfilePage() {
   const router = useRouter();
@@ -42,6 +43,12 @@ export default function SetupProfilePage() {
       setLoading(false);
     }
   }, [session, isPending, router]);
+
+  useEffect(() => {
+    if (!loading && !isPending && session) {
+      trackEvent(AnalyticsEvents.ONBOARDING_STEP_VIEWED, { step: 'setup_profile', source: 'onboarding' });
+    }
+  }, [loading, isPending, session]);
 
   const roles = [
     { id: 'developer', label: 'Developer', icon: Code2 },
@@ -89,6 +96,12 @@ export default function SetupProfilePage() {
     try {
       // Save profile data to session/localStorage for now
       sessionStorage.setItem('onboarding_profile', JSON.stringify(formData));
+      trackEvent(AnalyticsEvents.CTA_CLICKED, {
+        ctaLabel: 'Continue from setup profile',
+        destination: '/onboarding/choose-plan',
+        location: 'onboarding_setup_profile',
+        source: 'onboarding',
+      });
       
       // Navigate to next step
       router.push('/onboarding/choose-plan');

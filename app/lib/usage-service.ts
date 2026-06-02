@@ -6,6 +6,7 @@
 import { prisma } from './prisma';
 import { getPlanLimits, FREE_MODELS } from './plan-config';
 import crypto from 'crypto';
+import { ensureCommercialQuota } from '@/lib/commercial-quota';
 
 export interface ApiKeyInfo {
   apiKey: string;
@@ -100,20 +101,7 @@ export async function getQuotaStatus(userId: string): Promise<QuotaStatus> {
 
   const planLimits = getPlanLimits(user.subscriptionPlan);
 
-  // Get or create current quota period
-  let quota = user.quota;
-  if (!quota) {
-    quota = await prisma.user_quota.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId,
-        requestsLimit: planLimits.monthlyRequests,
-        requestsUsed: 0,
-        periodStart: new Date(),
-        periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-      },
-    });
-  }
+  const quota = await ensureCommercialQuota(userId, user.subscriptionPlan, 'month');
 
   // Check if quota exceeded
   const remaining = planLimits.monthlyRequests === -1
@@ -252,7 +240,7 @@ export async function getUsageSummary(userId: string): Promise<{
   }
 
   const planLimits = getPlanLimits(user.subscriptionPlan);
-  const quota = user.quota;
+  const quota = user.quota ?? await ensureCommercialQuota(userId, user.subscriptionPlan, 'month');
 
   if (!quota) {
     return {

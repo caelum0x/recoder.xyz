@@ -9,12 +9,13 @@ import {
 import type { Messages } from '~/lib/types/chat';
 import type { ChatMode } from '~/lib/stores/chat-mode';
 import { createScopedLogger } from '~/utils/logger';
-import { executeOpencodeChat } from '~/lib/.server/llm/opencode-exec';
-import { getSessionCookie, getUserApiKey } from '~/lib/.server/llm/user-api-key';
 
 const logger = createScopedLogger('Chat');
 
 const DEBUG_CHAT = process.env.NODE_ENV !== 'production' && process.env.DEBUG_CHAT === 'true';
+const BUILD_MODE_PI_TIMEOUT_MS = 20000;
+const BUILD_MODE_OPENCODE_TIMEOUT_MS = 45000;
+const BUILD_MODE_PREVIEW_TIMEOUT_MS = 30000;
 
 function chatDebug(message: string, meta?: unknown) {
   if (!DEBUG_CHAT) return;
@@ -70,6 +71,139 @@ function buildDirectPiPrompt(systemPrompt: string, messages: Messages): string {
     '--- Current request ---',
     lastUserText || '(no specific request)',
   ].join('\n');
+}
+
+function resolveBackendCompatibleModel(
+  model: string | undefined,
+  providerKeys: Record<string, string | null>,
+): string | undefined {
+  const normalizedModel = model?.trim().toLowerCase();
+  if (!normalizedModel) {
+    return undefined;
+  }
+
+  const requiredProvider =
+    normalizedModel.startsWith('openrouter/')
+      ? 'openrouter'
+      : normalizedModel.startsWith('openai/')
+        ? 'openai'
+        : normalizedModel.startsWith('anthropic/')
+          ? 'anthropic'
+          : normalizedModel.startsWith('google/') || normalizedModel.startsWith('gemini/')
+            ? 'google'
+            : undefined;
+
+  if (!requiredProvider) {
+    return undefined;
+  }
+
+  return providerKeys[requiredProvider] ? model : undefined;
+}
+
+const RUNTIME_MUTATION_CANDIDATE_FILES = [
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/main.tsx',
+  '/src/main.jsx',
+  '/src/index.css',
+  '/app/page.tsx',
+  '/index.html',
+  '/package.json',
+] as const;
+
+async function readRuntimeMutationSnapshot(
+  dockerUrl: string,
+  dockerHeaders: Record<string, string>,
+  projectId: string,
+): Promise<Record<string, string | null>> {
+  const entries = await Promise.all(
+    RUNTIME_MUTATION_CANDIDATE_FILES.map(async (path) => {
+      try {
+        const response = await fetch(
+          `${dockerUrl}/api/file/${encodeURIComponent(projectId)}?path=${encodeURIComponent(path)}`,
+          {
+            method: 'GET',
+            headers: dockerHeaders,
+          },
+        );
+
+        if (response.status === 404) {
+          return [path, null] as const;
+        }
+
+        const payload = await response.json().catch(async () => ({ content: await response.text() }));
+        if (payload && typeof payload === 'object' && 'content' in payload) {
+          return [path, typeof payload.content === 'string' ? payload.content : JSON.stringify(payload.content)] as const;
+        }
+
+        return [path, typeof payload === 'string' ? payload : JSON.stringify(payload)] as const;
+      } catch {
+        return [path, null] as const;
+      }
+    }),
+  );
+
+  return Object.fromEntries(entries);
+}
+
+function hasRuntimeMutation(
+  before: Record<string, string | null>,
+  after: Record<string, string | null>,
+): boolean {
+  return Object.keys(after).some((path) => before[path] !== after[path]);
+}
+
+async function ensureBuildPreviewReady(
+  dockerUrl: string,
+  dockerHeaders: Record<string, string>,
+  projectId: string,
+): Promise<{ ready: boolean; previewUrl?: string; port?: number | null }> {
+  const startResponse = await fetch(`${dockerUrl}/api/dev-server/start`, {
+    method: 'POST',
+    headers: dockerHeaders,
+    body: JSON.stringify({
+      projectId,
+      framework: 'vite',
+    }),
+  }).catch(() => null);
+
+  if (!startResponse?.ok) {
+    return { ready: false, port: null };
+  }
+
+  const deadline = Date.now() + BUILD_MODE_PREVIEW_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(
+        `${dockerUrl}/api/preview/${encodeURIComponent(projectId)}/health`,
+        {
+          method: 'GET',
+          headers: dockerHeaders,
+        },
+      );
+
+      if (response.ok) {
+        const payload = await response.json() as {
+          previewUrl?: string;
+          ports?: Array<{ port: number; responding?: boolean }>;
+        };
+        const responding = payload.ports?.find((entry) => entry.responding);
+        if (responding) {
+          return {
+            ready: true,
+            previewUrl: payload.previewUrl,
+            port: responding.port,
+          };
+        }
+      }
+    } catch {
+      // keep polling
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  return { ready: false, port: null };
 }
 
 export async function action(args: ActionFunctionArgs) {
@@ -326,6 +460,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
   // console.log(`[Chat API] Authenticated user: ${session.user.email}`);
 
   let messages: Messages;
+  let runtimeMessages: Messages;
   let provider: string = 'openrouter'; // Default provider
   let model: string | undefined;
   let requestBody: any;
@@ -394,6 +529,7 @@ Click here to get started: ${process.env.MAIN_SITE_URL || 'http://localhost:3000
     }
 
     messages = validation.sanitized as Messages;
+    runtimeMessages = JSON.parse(JSON.stringify(messages)) as Messages;
   } catch (error) {
     logger.error('Failed to parse request');
     chatDebug('parse request error', error instanceof Error ? error.message : String(error));
@@ -655,6 +791,7 @@ IMPORTANT:
 
     const themePrompt = await loadThemePromptFromDocker(dockerUrl, requestBody.projectId, dockerHeaders);
 
+    const { getSessionCookie, getUserApiKey } = await import('~/lib/.server/llm/user-api-key');
     const projectSessionCookie = requestBody.projectId ? getSessionCookie(request) : null;
     const [projectOpenrouterKey, projectOpenaiKey, projectAnthropicKey, projectGoogleKey] =
       requestBody.projectId
@@ -708,6 +845,18 @@ IMPORTANT:
     const { getWebToolCapabilityPrompt } = modesModule;
     const webToolCapabilityPrompt = getWebToolCapabilityPrompt(provider, model);
     let systemPrompt = baseSystemPrompt + chatModePrompt + webToolCapabilityPrompt + recoderContextPrompt + mcpToolsPrompt + clientMcpTools + projectContext + codeContext + frameworkSkillsPrompt + projectConfigPrompt + themePrompt + ragContextPrompt;
+    const runtimeSystemPrompt = [
+      'You are executing inside the Recoder Daytona coding runtime.',
+      'Edit the real project files in the sandbox workspace directly.',
+      'Do not emit recoderAction tags, recoderArtifact tags, XML, or action plans.',
+      'Do not describe hypothetical edits. Make the edits on disk and return only a concise plain-English summary.',
+      frameworkSkillsPrompt,
+      projectConfigPrompt,
+      themePrompt,
+      projectContext,
+      codeContext,
+      ragContextPrompt,
+    ].filter(Boolean).join('\n\n');
 
     if (
       requestBody.projectId &&
@@ -716,13 +865,37 @@ IMPORTANT:
       !requestBody.projectContext?.trim()
     ) {
       try {
-        const workspaceStateResponse = await fetch(
+        let workspaceStateResponse = await fetch(
           `${dockerUrl}/api/workspace-state/${encodeURIComponent(requestBody.projectId)}`,
           {
             method: 'GET',
             headers: dockerHeaders,
           },
         );
+
+        if (workspaceStateResponse.status === 404) {
+          const ensureContainerResponse = await fetch(
+            `${dockerUrl}/api/container`,
+            {
+              method: 'POST',
+              headers: dockerHeaders,
+              body: JSON.stringify({ projectId: requestBody.projectId }),
+            },
+          );
+
+          if (!ensureContainerResponse.ok) {
+            const details = await ensureContainerResponse.text().catch(() => '');
+            logger.warn(`Sandbox ensure failed for ${requestBody.projectId}: ${ensureContainerResponse.status} ${details.slice(0, 300)}`);
+          } else {
+            workspaceStateResponse = await fetch(
+              `${dockerUrl}/api/workspace-state/${encodeURIComponent(requestBody.projectId)}`,
+              {
+                method: 'GET',
+                headers: dockerHeaders,
+              },
+            );
+          }
+        }
 
         const workspaceState = workspaceStateResponse.ok
           ? await workspaceStateResponse.json() as { hasFiles?: boolean; hasPackageJson?: boolean }
@@ -764,10 +937,18 @@ IMPORTANT:
     // `cloneGitHub` when it can't diagnose the error, which blows away the
     // project and makes recovery impossible. Strip those action types from
     // the available actions for auto-fix turns only.
-    // ── Default project chat: prefer Pi, then OpenCode ──
-    // Pi is the more reliable live path for project creation/editing right now.
-    // Keep OpenCode as a fallback when Pi is unavailable.
-    if (requestBody.projectId) {
+    //
+    // Project-chat routing:
+    // - `build` mode must stay on the normal coding/action path so starter seeding,
+    //   file diffs, targeted edits, and follow-up preview-driven iterations work.
+    // - Non-build project chats can still prefer Pi, then OpenCode, as a lighter
+    //   direct-sandbox lane.
+    const shouldPreferPiProjectPath =
+      Boolean(requestBody.projectId) &&
+      requestBody.chatMode !== 'build' &&
+      requestBody.chatMode !== 'deep-coding';
+
+    if (shouldPreferPiProjectPath) {
       try {
         const providerKeys = {
           openrouter: projectOpenrouterKey,
@@ -828,19 +1009,166 @@ IMPORTANT:
           },
         });
       } catch (piError) {
-        // Pi unavailable — try OpenCode, then fall through to normal chat
         const message = piError instanceof Error ? piError.message : String(piError);
-        logger.warn(`Pi unavailable, trying OpenCode fallback: ${message}`);
+        logger.warn(`Pi unavailable on non-build project path: ${message}`);
+      }
+    }
 
-        try {
-          const opencodeStream = await executeOpencodeChat({
-            context,
-            request,
-            projectId: requestBody.projectId,
-            chatId: requestBody.chatId,
-            model,
-            systemPrompt,
-            messages,
+    if (requestBody.projectId && (chatMode === 'build' || chatMode === 'deep-coding')) {
+      const providerKeys = {
+        openrouter: projectOpenrouterKey,
+        openai: projectOpenaiKey,
+        anthropic: projectAnthropicKey,
+        google: projectGoogleKey,
+      };
+      const backendModel = resolveBackendCompatibleModel(model, providerKeys as Record<string, string | null>);
+
+      try {
+        const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
+
+        if (hasKeys) {
+          const beforeMutation = await readRuntimeMutationSnapshot(
+            dockerUrl,
+            createDockerProxyHeaders(request),
+            requestBody.projectId,
+          );
+          const piPrompt = buildDirectPiPrompt(runtimeSystemPrompt, runtimeMessages);
+          const piResponse = await fetch(`${dockerUrl}/api/pi/${encodeURIComponent(requestBody.projectId)}`, {
+            method: 'POST',
+            headers: createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              prompt: piPrompt,
+              model: backendModel,
+              providerKeys,
+            }),
+            signal: AbortSignal.timeout(BUILD_MODE_PI_TIMEOUT_MS),
+          });
+
+          if (piResponse.ok) {
+            const piResult = await piResponse.json() as {
+              success?: boolean;
+              text?: string;
+              error?: string;
+              filesChanged?: string[];
+            };
+            const afterMutation = await readRuntimeMutationSnapshot(
+              dockerUrl,
+              createDockerProxyHeaders(request),
+              requestBody.projectId,
+            );
+            const observedMutation = hasRuntimeMutation(beforeMutation, afterMutation);
+
+            if (piResult.success && ((piResult.filesChanged?.length || 0) > 0 || observedMutation)) {
+              let piText = piResult.text || 'Done.';
+              const changedPaths = (piResult.filesChanged?.length || 0) > 0
+                ? piResult.filesChanged!
+                : Object.keys(afterMutation).filter((path) => beforeMutation[path] !== afterMutation[path]);
+              piText += `\n\nFiles changed: ${changedPaths.join(', ')}`;
+              const preview = await ensureBuildPreviewReady(
+                dockerUrl,
+                createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+                requestBody.projectId,
+              );
+              if (preview.ready) {
+                piText += `\n\nPreview ready on port ${preview.port}.`;
+              } else {
+                piText += '\n\nWarning: files changed but preview is not responding yet.';
+              }
+
+              const piStream = new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(new TextEncoder().encode(piText));
+                  controller.close();
+                },
+              });
+
+              stream.switchSource(piStream);
+
+              return new Response(stream.readable, {
+                status: 200,
+                headers: {
+                  'Content-Type': 'text/plain; charset=utf-8',
+                },
+              });
+            }
+          }
+        }
+      } catch (piError) {
+        const message = piError instanceof Error ? piError.message : String(piError);
+        logger.warn(`Build-mode Pi attempt failed, falling back to sandbox-local OpenCode: ${message}`);
+      }
+
+      const hasKeys = Object.values(providerKeys).some((value) => typeof value === 'string' && value.length > 0);
+      if (!hasKeys) {
+        const failureStream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('Build mode requires a configured BYOK provider key for Pi or OpenCode.'));
+            controller.close();
+          },
+        });
+        stream.switchSource(failureStream);
+        return new Response(stream.readable, {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+          },
+        });
+      }
+
+      const beforeMutation = await readRuntimeMutationSnapshot(
+        dockerUrl,
+        createDockerProxyHeaders(request),
+        requestBody.projectId,
+      );
+
+      try {
+        const opencodeResponse = await fetch(`${dockerUrl}/api/opencode/${encodeURIComponent(requestBody.projectId)}`, {
+          method: 'POST',
+          headers: createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            prompt: buildDirectPiPrompt(runtimeSystemPrompt, runtimeMessages),
+            model: backendModel,
+            providerKeys,
+            forceSandboxLocal: true,
+          }),
+          signal: AbortSignal.timeout(BUILD_MODE_OPENCODE_TIMEOUT_MS),
+        });
+
+        const opencodeResult = await opencodeResponse.json().catch(async () => ({ text: await opencodeResponse.text() })) as {
+          success?: boolean;
+          text?: string;
+          error?: string;
+          syncedFiles?: string[];
+        };
+        const afterMutation = await readRuntimeMutationSnapshot(
+          dockerUrl,
+          createDockerProxyHeaders(request),
+          requestBody.projectId,
+        );
+        const observedMutation = hasRuntimeMutation(beforeMutation, afterMutation);
+
+        if (opencodeResponse.ok && opencodeResult.success !== false && ((opencodeResult.syncedFiles?.length || 0) > 0 || observedMutation)) {
+          let opencodeText = opencodeResult.text || 'Done.';
+          const changedPaths = (opencodeResult.syncedFiles?.length || 0) > 0
+            ? opencodeResult.syncedFiles!
+            : Object.keys(afterMutation).filter((path) => beforeMutation[path] !== afterMutation[path]);
+          opencodeText += `\n\nFiles changed: ${changedPaths.join(', ')}`;
+          const preview = await ensureBuildPreviewReady(
+            dockerUrl,
+            createDockerProxyHeaders(request, { 'Content-Type': 'application/json' }),
+            requestBody.projectId,
+          );
+          if (preview.ready) {
+            opencodeText += `\n\nPreview ready on port ${preview.port}.`;
+          } else {
+            opencodeText += '\n\nWarning: files changed but preview is not responding yet.';
+          }
+
+          const opencodeStream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(opencodeText));
+              controller.close();
+            },
           });
 
           stream.switchSource(opencodeStream);
@@ -851,28 +1179,19 @@ IMPORTANT:
               'Content-Type': 'text/plain; charset=utf-8',
             },
           });
-        } catch {
-          // Both Pi and OpenCode unavailable — fall through to normal chat
-          logger.warn('Both Pi and OpenCode unavailable, falling back to chat LLM');
         }
+      } catch (opencodeError) {
+        const message = opencodeError instanceof Error ? opencodeError.message : String(opencodeError);
+        logger.warn(`Build-mode sandbox-local OpenCode failed: ${message}`);
       }
-    }
 
-    if (chatMode === 'deep-coding') {
-      const { executeCodingRuntimeChat } = await import('~/lib/.server/llm/coding-runtime-exec');
-      const runtimeStream = await executeCodingRuntimeChat({
-        context,
-        request,
-        projectId: requestBody.projectId || '',
-        chatId: requestBody.chatId,
-        provider,
-        model,
-        systemPrompt,
-        messages,
+      const failureStream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('Build mode failed to produce any observable sandbox file mutation via Pi or sandbox-local OpenCode.'));
+          controller.close();
+        },
       });
-
-      stream.switchSource(runtimeStream);
-
+      stream.switchSource(failureStream);
       return new Response(stream.readable, {
         status: 200,
         headers: {
@@ -1042,6 +1361,10 @@ To use AI features with ${providerNames[provider] || provider}, please add your 
         if (editIntent) {
           // Route to different strategies based on intent type
           let strategyPrompt = '';
+          const isStarterLeafTarget = editIntent.targetFiles.some((file) =>
+            ['src/App.tsx', 'src/App.jsx', 'app/page.tsx', 'index.html', 'src/index.css'].includes(file)
+          );
+          const buildModeIsActive = requestBody.chatMode === 'build';
 
           switch (editIntent.type) {
             case EditType.FULL_REBUILD:
@@ -1098,6 +1421,28 @@ RULES:
 - For follow-up edits on existing files, prefer readFile includeLineHashes="true" and reuse lineRef/startLineRef/endLineRef on edit actions so stale edits are rejected
 - Only change what the user asked for — nothing else`;
               break;
+          }
+
+          if (buildModeIsActive) {
+            strategyPrompt += `
+
+BUILD MODE FOLLOW-UP RULES:
+- If a target file already exists, DO NOT invent oldString snippets.
+- Only emit str_replace when the oldString appears verbatim in the provided file context or in a prior readFile result.
+- If you do not have an exact oldString match, use readFile includeLineHashes="true" first, then use lineRef/startLineRef/endLineRef on the edit action.
+- For small leaf UI files such as src/App.tsx, app/page.tsx, index.html, or src/index.css, prefer a complete type="file" rewrite over brittle str_replace when the requested change is mostly visual/layout text changes.
+- Never rewrite config files unless the user explicitly asked for that file.
+`;
+          }
+
+          if (isStarterLeafTarget) {
+            strategyPrompt += `
+
+STARTER-BASED FILE SAFETY:
+- This looks like a starter-based leaf file.
+- Prefer replacing the full target component/page file with a coherent updated version instead of guessing two separate str_replace operations.
+- Do NOT target placeholder wrappers like <div className="App"> unless that exact text exists in the provided context.
+`;
           }
 
           messages.push({

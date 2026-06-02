@@ -14,6 +14,8 @@ const http_1 = __importDefault(require("http"));
 const auto_restore_js_1 = require("./auto-restore.js");
 const daytona_file_ops_js_1 = require("./daytona-file-ops.js");
 const daytona_client_js_1 = require("./daytona-client.js");
+const daytona_preview_js_1 = require("./daytona-preview.js");
+const daytona_runtime_js_1 = require("./daytona-runtime.js");
 const docker = new dockerode_1.default();
 // ── Expo public hostname (set by server.ts at startup) ──────────────
 let expoPublicHostname = process.env.PUBLIC_HOSTNAME || 'localhost';
@@ -30,44 +32,27 @@ function getDaytonaProxyPort() {
     }
     return parseInt(process.env.DAYTONA_PROXY_PORT || '4000', 10);
 }
-function getDaytonaPreviewHost(url, sandboxId, port) {
-    try {
-        return new URL(url).host;
-    }
-    catch {
-        return `${port}-${sandboxId}.sandbox.recoder.xyz`;
-    }
+async function getDaytonaWorkDir(sandboxId) {
+    return await (0, daytona_client_js_1.getDaytonaClient)().getWorkDir(sandboxId);
 }
-async function getDaytonaPreviewAccess(sandboxId, port) {
+async function ensureDaytonaDependencies(sandboxId) {
     const dc = (0, daytona_client_js_1.getDaytonaClient)();
-    try {
-        const preview = await dc.getPortPreviewUrl(sandboxId, port);
-        const url = preview?.url || dc.getPreviewUrl(sandboxId, port);
-        return {
-            url,
-            token: preview?.token,
-            host: getDaytonaPreviewHost(url, sandboxId, port),
-        };
+    const workDir = await getDaytonaWorkDir(sandboxId);
+    const packageJsonCheck = await dc.execCommand(sandboxId, `test -f ${workDir}/package.json && echo HAS_PACKAGE_JSON || echo NO_PACKAGE_JSON`, { timeoutSecs: 10 });
+    if (!packageJsonCheck.output.includes('HAS_PACKAGE_JSON')) {
+        return;
     }
-    catch {
-        const url = dc.getPreviewUrl(sandboxId, port);
-        return {
-            url,
-            host: getDaytonaPreviewHost(url, sandboxId, port),
-        };
+    const check = await dc.execCommand(sandboxId, `test -d ${workDir}/node_modules && echo HAS_NODE_MODULES || echo NO_NODE_MODULES`, { timeoutSecs: 10 });
+    if (check.output.includes('HAS_NODE_MODULES')) {
+        return;
     }
-}
-function buildDaytonaPreviewHeaders(preview) {
-    const headers = {
-        Host: preview.host,
-        'X-Daytona-Skip-Preview-Warning': 'true',
-        'X-Daytona-Disable-CORS': 'true',
-        'X-Forwarded-Host': preview.host,
-    };
-    if (preview.token) {
-        headers['X-Daytona-Preview-Token'] = preview.token;
+    const packageLockCheck = await dc.execCommand(sandboxId, `test -f ${workDir}/package-lock.json && echo HAS_PACKAGE_LOCK || echo NO_PACKAGE_LOCK`, { timeoutSecs: 10 });
+    const hasPackageLock = packageLockCheck.output.includes('HAS_PACKAGE_LOCK');
+    console.log(`[DevServer] Daytona node_modules missing for ${sandboxId.slice(0, 12)}, installing...`);
+    const install = await dc.execCommand(sandboxId, (0, daytona_runtime_js_1.buildDaytonaCommandScript)([(0, daytona_runtime_js_1.buildDaytonaInstallCommand)(hasPackageLock)], { cwd: workDir }), { timeoutSecs: 180 });
+    if (install.exitCode !== 0) {
+        throw new Error(`Daytona dependency install failed: ${install.output}`);
     }
-    return headers;
 }
 function looksLikeDirectoryListing(body, contentType) {
     if (!contentType.includes('text/html')) {
@@ -121,7 +106,9 @@ class DevServerManager {
      */
     async start(containerId, projectId, framework = 'vite', ports, options) {
         const isDaytona = options?.daytona === true;
-        const command = this.getStartCommand(framework);
+        const command = isDaytona
+            ? this.getDaytonaStartCommand(framework)
+            : this.getStartCommand(framework);
         console.log(`[DevServer] Starting ${framework} for project ${projectId} (${isDaytona ? 'Daytona' : 'Docker'})`);
         const exec = isDaytona
             ? (cmd) => this.daytonaExec(containerId, cmd)
@@ -139,13 +126,22 @@ class DevServerManager {
         }
         catch { }
         // Ensure workspace directory exists
-        const workDir = isDaytona ? '/home/daytona' : '/workspace';
+        const workDir = isDaytona ? await getDaytonaWorkDir(containerId) : '/workspace';
         await exec(`mkdir -p ${workDir}`);
         await exec('mkdir -p /tmp && : > /tmp/dev.log');
-        // Start the dev server in background
-        const startScript = `cd ${workDir} && BROWSER=none nohup ${command} > /tmp/dev.log 2>&1 &`;
         if (isDaytona) {
-            await (0, daytona_file_ops_js_1.daytonaExecBackground)(containerId, command, workDir, { skipCleanup: true, projectId });
+            await ensureDaytonaDependencies(containerId);
+        }
+        if (isDaytona) {
+            const sessionScript = (0, daytona_runtime_js_1.buildDaytonaCommandScript)([
+                ': > /tmp/dev.log',
+                `export BROWSER=none`,
+                `${command} 2>&1 | tee /tmp/dev.log`,
+            ], {
+                cwd: workDir,
+                includeNpx: framework === 'expo',
+            });
+            await (0, daytona_file_ops_js_1.daytonaExecBackground)(containerId, sessionScript, workDir, { skipCleanup: true, projectId });
             console.log('[DevServer] Started via Daytona background exec');
         }
         else {
@@ -242,8 +238,7 @@ class DevServerManager {
     async getLogs(containerId, projectId, tail = 100, source, isDaytona) {
         if (isDaytona) {
             try {
-                const result = await this.daytonaExec(containerId, `tail -n ${tail} /tmp/dev.log 2>/dev/null || echo "No logs found"`);
-                return result;
+                return await (0, daytona_file_ops_js_1.daytonaGetLogs)(containerId, tail, projectId);
             }
             catch {
                 return 'Failed to read logs (Daytona)';
@@ -358,7 +353,7 @@ class DevServerManager {
      */
     isRunning(projectId) {
         const info = this.servers.get(projectId);
-        return info?.status === 'running';
+        return info?.status === 'running' || info?.status === 'starting';
     }
     getStartCommand(framework) {
         const commands = {
@@ -389,6 +384,20 @@ class DevServerManager {
             java: 'mvn exec:java',
         };
         return commands[framework] || 'npm run dev -- --host 0.0.0.0';
+    }
+    getDaytonaStartCommand(framework) {
+        const commands = {
+            vite: `"${'$'}NPM_BIN" run dev -- --host 0.0.0.0 --port 5173`,
+            next: `"${'$'}NPM_BIN" run dev -- --hostname 0.0.0.0`,
+            react: `env HOST=0.0.0.0 PORT=3000 "${'$'}NPM_BIN" start`,
+            vue: `"${'$'}NPM_BIN" run serve`,
+            bun: `"${'$'}NPM_BIN" run dev`,
+            svelte: `"${'$'}NPM_BIN" run dev -- --host 0.0.0.0`,
+            sveltekit: `"${'$'}NPM_BIN" run dev -- --host 0.0.0.0`,
+            nuxt: `"${'$'}NPM_BIN" run dev`,
+            expo: `env REACT_NATIVE_PACKAGER_HOSTNAME=${expoPublicHostname} EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 BROWSER=none CI=1 "${'$'}NPX_BIN" expo start --host 0.0.0.0 --port 8081`,
+        };
+        return commands[framework] || `"${'$'}NPM_BIN" run dev -- --host 0.0.0.0`;
     }
     /**
      * Get the kill pattern for a framework's dev server process
@@ -451,45 +460,25 @@ class DevServerManager {
         return result.output;
     }
     async probeDaytonaPort(sandboxId, port) {
-        const proxyHost = getDaytonaProxyHost();
-        const proxyPort = getDaytonaProxyPort();
-        const preview = await getDaytonaPreviewAccess(sandboxId, port);
-        return await new Promise((resolve) => {
-            const req = http_1.default.request({
-                hostname: proxyHost,
-                port: proxyPort,
-                path: '/',
-                method: 'GET',
-                headers: {
-                    Accept: 'text/html,*/*',
-                    ...buildDaytonaPreviewHeaders(preview),
-                },
-                timeout: 4000,
-            }, (resp) => {
-                const status = resp.statusCode || 0;
-                const contentType = String(resp.headers['content-type'] || '');
-                let body = '';
-                resp.setEncoding('utf8');
-                resp.on('data', (chunk) => {
-                    if (body.length < 8192) {
-                        body += chunk.slice(0, 8192 - body.length);
-                    }
-                });
-                resp.on('end', () => {
-                    if (!(status >= 200 && status < 400)) {
-                        resolve(false);
-                        return;
-                    }
-                    resolve(!looksLikeDirectoryListing(body, contentType));
-                });
-            });
-            req.on('error', () => resolve(false));
-            req.on('timeout', () => {
-                req.destroy();
-                resolve(false);
-            });
-            req.end();
-        });
+        const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(sandboxId, port);
+        const response = await fetch(preview.url, {
+            method: 'GET',
+            headers: {
+                Accept: 'text/html,*/*',
+                'X-Daytona-Skip-Preview-Warning': 'true',
+                'X-Daytona-Disable-CORS': 'true',
+                ...(preview.token && !preview.signed
+                    ? { 'X-Daytona-Preview-Token': preview.token }
+                    : {}),
+            },
+            signal: AbortSignal.timeout(4000),
+        }).catch(() => null);
+        if (!response || !response.ok) {
+            return false;
+        }
+        const contentType = response.headers.get('content-type') || '';
+        const body = (await response.text().catch(() => '')).slice(0, 8192);
+        return !looksLikeDirectoryListing(body, contentType);
     }
     async waitForDaytonaReady(sandboxId, framework, maxWaitMs = 30000) {
         const startTime = Date.now();

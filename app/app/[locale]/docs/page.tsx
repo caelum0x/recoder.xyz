@@ -18,10 +18,10 @@ import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
   title: 'Documentation - Recoder.xyz',
-  description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+  description: 'Documentation for connecting external coding agents to Recoder and executing software work across runtime, preview, task state, and handoff.',
   openGraph: {
     title: 'Documentation - Recoder.xyz',
-    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, API reference, and more.',
+    description: 'Connect external coding agents, configure BYOK, and run the Recoder software execution loop.',
     url: 'https://recoder.xyz/docs',
     siteName: 'Recoder.xyz',
     images: [{ url: 'https://recoder.xyz/og-image.png', width: 1200, height: 630, alt: 'Recoder Documentation' }],
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Documentation - Recoder.xyz',
-    description: 'Comprehensive documentation for Recoder.xyz. Guides for the CLI, Web IDE, AI providers, and API reference.',
+    description: 'Connect external coding agents, configure BYOK, and run the Recoder software execution loop.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -42,7 +42,7 @@ export default function DocsPage() {
   const docSections = [
     {
       title: 'Getting Started',
-      description: 'Quick setup guides and first steps with Recoder',
+      description: 'Connect an external agent and run the flagship software execution loop',
       icon: Rocket,
       articles: [
         { title: 'Getting Started Guide', href: '/docs/getting-started', status: 'available' },
@@ -52,23 +52,32 @@ export default function DocsPage() {
       ]
     },
     {
-      title: 'CLI & Web IDE',
-      description: 'Terminal and web-based development tools',
+      title: 'CLI & Spaces',
+      description: 'Execution lanes for runtime work, preview, and terminal-driven agent control',
       icon: Terminal,
       articles: [
         { title: 'CLI Overview', href: '/docs/cli', status: 'available' },
-        { title: 'Web IDE + CLI Sync', href: '/docs/web-cli-sync', status: 'available' },
+        { title: 'Spaces + CLI Sync', href: '/docs/web-cli-sync', status: 'available' },
         { title: 'Supported Models', href: '/docs/models', status: 'available' }
       ]
     },
     {
       title: 'API Keys & Providers',
-      description: 'Configure AI model providers',
+      description: 'Bring your own provider keys and keep model choice under your control',
       icon: Code2,
       articles: [
         { title: 'OpenRouter Setup', href: '/docs/api-keys/openrouter', status: 'available' },
         { title: 'Anthropic Setup', href: '/docs/api-keys/anthropic', status: 'available' },
         { title: 'OpenAI Setup', href: '/docs/api-keys/openai', status: 'available' }
+      ]
+    },
+    {
+      title: 'Examples & Proof',
+      description: 'Reference workflows that show how Recoder captures execution truth',
+      icon: Boxes,
+      articles: [
+        { title: 'Customer Workflows', href: '/customers', status: 'available' },
+        { title: 'Learn Hub', href: '/learn', status: 'available' }
       ]
     },
     {
@@ -83,7 +92,7 @@ export default function DocsPage() {
     },
     {
       title: 'A2A (Agent-to-Agent)',
-      description: 'Connect AI tools through the A2A protocol',
+      description: 'Connect Claude Code, Codex, and custom agents through the bridge layer',
       icon: Network,
       articles: [
         { title: 'A2A Overview', href: '/docs/a2a', status: 'available' },
@@ -94,7 +103,7 @@ export default function DocsPage() {
     },
     {
       title: 'Platform',
-      description: 'Agents, PM, Agency — the Recoder ecosystem',
+      description: 'How each Recoder surface maps back to the same execution loop',
       icon: Boxes,
       articles: [
         { title: 'Agents Platform', href: '/platform/agents', status: 'available' },
@@ -105,10 +114,11 @@ export default function DocsPage() {
   ];
 
   const quickLinks = [
-    { title: 'Getting Started', href: '/docs/getting-started', icon: Rocket, description: 'Set up your account in 5 minutes' },
+    { title: 'Getting Started', href: '/docs/getting-started', icon: Rocket, description: 'Connect an agent and run a real software task' },
+    { title: 'Customer Workflows', href: '/customers', icon: FileText, description: 'See how teams use Recoder as execution infrastructure' },
     { title: 'FAQ', href: '/docs/faq', icon: BookOpen, description: 'Frequently asked questions' },
-    { title: 'Install CLI', href: '/cli', icon: Terminal, description: 'Get started with the command line' },
-    { title: 'Open Web Platform', href: '/platform/web', icon: Boxes, description: 'Launch the web interface' }
+    { title: 'Install CLI', href: '/cli', icon: Terminal, description: 'Add the terminal lane and MCP entrypoint' },
+    { title: 'Open Web Platform', href: '/platform/web', icon: Boxes, description: 'Inspect the runtime and preview lane' }
   ];
 
   return (
@@ -128,7 +138,7 @@ export default function DocsPage() {
             </span>
           </h1>
           <p className="text-xl text-gray-400 mb-12">
-            Everything you need to build production-ready applications with AI
+            Everything you need to connect external coding agents and execute software work with control
           </p>
 
           {/* Quick Links */}
@@ -237,19 +247,17 @@ export default function DocsPage() {
                 </p>
                 <div className="flex flex-col gap-2">
                   <a
-                    href="mailto:recoderxyz@gmail.com"
+                    href="mailto:support@recoder.xyz"
                     className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
                   >
                     Email Us
                   </a>
-                  <a
-                    href="https://twitter.com/recoderxyz"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    href="/contact"
                     className="inline-block px-6 py-2 border border-white/10 hover:border-white/20 rounded-lg transition-colors"
                   >
-                    Twitter
-                  </a>
+                    Contact Team
+                  </Link>
                 </div>
               </div>
             </div>

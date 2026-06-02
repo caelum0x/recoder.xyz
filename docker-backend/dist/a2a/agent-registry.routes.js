@@ -137,7 +137,7 @@ exports.agentRegistryRouter.get('/', agent_registry_middleware_1.validateDiscove
             query.status = req.query.status;
         if (typeof req.query.skillTag === 'string')
             query.skillTag = req.query.skillTag;
-        const agents = service.discover(query);
+        const agents = service.discoverWithHealth(query);
         sendSuccess(res, {
             agents,
             count: agents.length,

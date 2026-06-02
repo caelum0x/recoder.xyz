@@ -11,6 +11,10 @@ import {
 	users,
 } from "@/db";
 import { getClientForUser } from "@/lib/agency/get-client-for-user";
+import {
+	getRecoderTaskContext,
+	type RecoderTaskContext,
+} from "@/lib/agency/recoder-control-plane";
 import { getCurrentUser } from "@/lib/get-current-user";
 import { TimelineFilter } from "./timeline-filter";
 
@@ -18,6 +22,7 @@ type TimelineEntryType =
 	| "status_change"
 	| "deliverable"
 	| "approval"
+	| "run"
 	| "comment";
 
 interface TimelineEntry {
@@ -79,6 +84,7 @@ export default async function TimelinePage({
 		.select({
 			dbId: deliverables.dbId,
 			id: deliverables.id,
+			taskId: deliverables.taskId,
 			name: deliverables.name,
 			status: deliverables.status,
 			clientFeedback: deliverables.clientFeedback,
@@ -88,6 +94,15 @@ export default async function TimelinePage({
 		.from(deliverables)
 		.where(eq(deliverables.projectDbId, project.dbId))
 		.orderBy(desc(deliverables.updatedAt));
+
+	const controlPlaneByDeliverableId = Object.fromEntries(
+		await Promise.all(
+			projectDeliverables.map(async (deliverable) => [
+				deliverable.id,
+				await getRecoderTaskContext(deliverable.taskId),
+			]),
+		),
+	) as Record<string, RecoderTaskContext | null>;
 
 	// Fetch milestone approvals with actor names
 	const approvals = await db
@@ -130,6 +145,38 @@ export default async function TimelinePage({
 						? `Deliverable "${d.name}" approved`
 						: `Deliverable "${d.name}" changes requested`,
 				comment: d.clientFeedback,
+			});
+		}
+
+		const controlPlane = controlPlaneByDeliverableId[d.id];
+		if (controlPlane) {
+			const previewUrl = controlPlane.task.result?.preview?.[0]?.url ?? null;
+			const detailBits = [
+				controlPlane.links?.approval
+					? `approval ${controlPlane.links.approval.status}`
+					: null,
+				controlPlane.links?.delegation
+					? `handoff ${controlPlane.links.delegation.status}`
+					: null,
+				controlPlane.review?.merge?.status
+					? `merge ${controlPlane.review.merge.status}`
+					: null,
+				controlPlane.review?.worktree?.branchName
+					? `branch ${controlPlane.review.worktree.branchName}`
+					: null,
+				typeof controlPlane.runtime?.evidenceCount === "number"
+					? `evidence ${controlPlane.runtime.evidenceCount}`
+					: null,
+				previewUrl ? `preview ${previewUrl}` : null,
+			].filter(Boolean);
+
+			entries.push({
+				id: `run-${d.dbId}`,
+				type: "run",
+				timestamp: d.updatedAt,
+				actorName: controlPlane.assignee?.name ?? null,
+				description: `Shared run ${controlPlane.task.id} is ${formatStatus(controlPlane.task.state)}`,
+				comment: detailBits.length > 0 ? detailBits.join(" • ") : null,
 			});
 		}
 	}
@@ -258,6 +305,8 @@ function getDotColor(type: TimelineEntryType): string {
 			return "bg-purple-500";
 		case "approval":
 			return "bg-emerald-500";
+		case "run":
+			return "bg-cyan-500";
 		case "comment":
 			return "bg-gray-400";
 		default:
@@ -273,6 +322,8 @@ function getTypeBadge(type: TimelineEntryType): string {
 			return "bg-purple-500/10 text-purple-400";
 		case "approval":
 			return "bg-emerald-500/10 text-emerald-400";
+		case "run":
+			return "bg-cyan-500/10 text-cyan-400";
 		case "comment":
 			return "bg-gray-500/10 text-gray-400";
 		default:
@@ -288,6 +339,8 @@ function formatType(type: TimelineEntryType): string {
 			return "Deliverable";
 		case "approval":
 			return "Approval";
+		case "run":
+			return "Run";
 		case "comment":
 			return "Comment";
 		default:

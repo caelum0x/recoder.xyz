@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Sign Up FREE - Recoder.xyz | AI Coding Platform with BYOK',
-  description: 'Create your FREE account. No credit card required. Bring your own API key. Access 40+ AI models including Claude, GPT-4, Gemini. Web IDE + CLI sync.',
+  title: 'Create account | Recoder.xyz',
+  description: 'Create your Recoder account with GitHub or Google, then connect your provider keys and start building.',
   keywords: [
     'sign up free AI coding',
     'BYOK AI platform',
@@ -11,8 +11,8 @@ export const metadata: Metadata = {
     'Claude GPT-4 access',
   ],
   openGraph: {
-    title: 'Sign Up FREE - Recoder.xyz',
-    description: 'Join FREE beta. No credit card. BYOK. 40+ AI models. Web IDE + CLI.',
+    title: 'Create account | Recoder.xyz',
+    description: 'Join Recoder and start with a BYOK-first AI workflow.',
     url: 'https://recoder.xyz/auth/signup',
     type: 'website',
   },

@@ -33,8 +33,10 @@ import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
 import { getWorkspaceService } from './workspace.service';
 import { getCollaborationSvc } from './collaboration.service';
 import { getHeartbeatTracker } from './heartbeat-tracker.service';
+import { getTaskLifecycleService } from './task-lifecycle.service';
 import { createLogger } from '../logger';
 import { getRecentContext } from './memory-store';
+import { TaskStateEnum, type TaskArtifact, type TaskErrorInfo, type TaskResult } from '@recoder/shared/a2a';
 
 const logger = createLogger('agent-bridge');
 
@@ -61,6 +63,94 @@ export interface ConnectedAgent {
 interface BridgeMessage {
   type: string;
   [key: string]: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeBridgeArtifacts(value: unknown): TaskArtifact[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const artifacts = value
+    .map((artifact) => {
+      if (!isRecord(artifact)) return null;
+      if (
+        typeof artifact.key !== 'string' ||
+        typeof artifact.artifact_type !== 'string' ||
+        typeof artifact.mime_type !== 'string' ||
+        typeof artifact.content !== 'string'
+      ) {
+        return null;
+      }
+
+      return {
+        key: artifact.key,
+        artifact_type: artifact.artifact_type as TaskArtifact['artifact_type'],
+        mime_type: artifact.mime_type,
+        content: artifact.content,
+        ...(typeof artifact.path === 'string' ? { path: artifact.path } : {}),
+        ...(isRecord(artifact.metadata) ? { metadata: artifact.metadata } : {}),
+      } satisfies TaskArtifact;
+    })
+    .filter((artifact): artifact is TaskArtifact => artifact !== null);
+
+  return artifacts.length > 0 ? artifacts : undefined;
+}
+
+function normalizeBridgeTaskResult(value: unknown): TaskResult | undefined {
+  if (typeof value === 'string') {
+    return { text: value };
+  }
+
+  if (!isRecord(value)) return undefined;
+
+  const text = typeof value.text === 'string' ? value.text : undefined;
+  const data = isRecord(value.data) ? value.data : undefined;
+  const artifacts = normalizeBridgeArtifacts(value.artifacts);
+
+  if (!text && !data && !artifacts) return undefined;
+  return {
+    ...(text ? { text } : {}),
+    ...(data ? { data } : {}),
+    ...(artifacts ? { artifacts } : {}),
+  };
+}
+
+function normalizeBridgeTaskError(value: unknown): TaskErrorInfo {
+  if (typeof value === 'string') {
+    return {
+      code: 'BRIDGE_TASK_FAILED',
+      category: 'bridge',
+      message: value,
+      severity: 'medium',
+      retryable: true,
+    };
+  }
+
+  if (!isRecord(value)) {
+    return {
+      code: 'BRIDGE_TASK_FAILED',
+      category: 'bridge',
+      message: 'Task failed via bridge',
+      severity: 'medium',
+      retryable: true,
+    };
+  }
+
+  return {
+    code: typeof value.code === 'string' ? value.code : 'BRIDGE_TASK_FAILED',
+    category: typeof value.category === 'string' ? value.category : 'bridge',
+    message: typeof value.message === 'string' ? value.message : 'Task failed via bridge',
+    severity:
+      value.severity === 'low' ||
+      value.severity === 'medium' ||
+      value.severity === 'high' ||
+      value.severity === 'critical'
+        ? value.severity
+        : 'medium',
+    retryable: typeof value.retryable === 'boolean' ? value.retryable : true,
+    ...(isRecord(value.details) ? { details: value.details } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -448,11 +538,43 @@ export class AgentBridgeService {
 
       case 'task.progress': {
         if (!sessionId || !agentId) break;
+        if (agent) agent.status = 'working';
+        const taskId = msg.taskId as string;
+        const lifecycle = getTaskLifecycleService();
+        const existing = lifecycle.getTask(taskId);
+        if (existing.ok) {
+          if (existing.data.state === TaskStateEnum.Submitted || existing.data.state === TaskStateEnum.InputRequired) {
+            lifecycle.startTask(taskId, agentId);
+          }
+
+          const currentMetadata = isRecord(existing.data.metadata) ? existing.data.metadata : {};
+          const priorEvents = Array.isArray(currentMetadata.bridgeProgressEvents)
+            ? currentMetadata.bridgeProgressEvents.filter((entry) => isRecord(entry))
+            : [];
+          const progressEvent = {
+            at: new Date().toISOString(),
+            sessionId,
+            agentId,
+            progress: typeof msg.progress === 'number' ? msg.progress : null,
+            output: typeof msg.output === 'string' ? msg.output : null,
+          };
+          const nextEvents = [...priorEvents, progressEvent].slice(-20);
+
+          lifecycle.updateTaskMetadata(taskId, {
+            metadataPatch: {
+              bridgeProgress: progressEvent,
+              bridgeProgressEvents: nextEvents,
+            },
+            triggeredBy: agentId,
+            reason: 'Bridge task progress received',
+          });
+        }
+
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
           type: A2AEventType.TaskProgress,
           timestamp: new Date().toISOString(),
-          taskId: msg.taskId as string,
+          taskId,
           data: {
             agentId,
             sessionId,
@@ -466,11 +588,20 @@ export class AgentBridgeService {
       case 'task.complete': {
         if (!sessionId || !agentId) break;
         if (agent) agent.status = 'idle';
+        const taskId = msg.taskId as string;
+        const lifecycle = getTaskLifecycleService();
+        const existing = lifecycle.getTask(taskId);
+        if (existing.ok) {
+          if (existing.data.state === TaskStateEnum.Submitted || existing.data.state === TaskStateEnum.InputRequired) {
+            lifecycle.startTask(taskId, agentId);
+          }
+          lifecycle.completeTask(taskId, normalizeBridgeTaskResult(msg.result), agentId);
+        }
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
           type: A2AEventType.TaskCompleted,
           timestamp: new Date().toISOString(),
-          taskId: msg.taskId as string,
+          taskId,
           data: {
             agentId,
             sessionId,
@@ -483,11 +614,20 @@ export class AgentBridgeService {
       case 'task.failed': {
         if (!sessionId || !agentId) break;
         if (agent) agent.status = 'idle';
+        const taskId = msg.taskId as string;
+        const lifecycle = getTaskLifecycleService();
+        const existing = lifecycle.getTask(taskId);
+        if (existing.ok) {
+          if (existing.data.state === TaskStateEnum.Submitted || existing.data.state === TaskStateEnum.InputRequired) {
+            lifecycle.startTask(taskId, agentId);
+          }
+          lifecycle.failTask(taskId, normalizeBridgeTaskError(msg.error), agentId);
+        }
         getA2AEventBus().publish({
           id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
           type: A2AEventType.TaskFailed,
           timestamp: new Date().toISOString(),
-          taskId: msg.taskId as string,
+          taskId,
           data: {
             agentId,
             sessionId,

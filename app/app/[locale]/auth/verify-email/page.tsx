@@ -27,7 +27,7 @@ function VerifyEmailContent() {
       verifyEmail(token);
     } else {
       setStatus('info');
-      setMessage('Email verification is not required from this screen anymore. Sign in with GitHub or Google.');
+      setMessage('This page only works when you open a verification link from your email. If you reached it directly, go back and sign in with GitHub or Google.');
     }
   }, [token]);
 

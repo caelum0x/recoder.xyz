@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withCLIAuth } from '@/lib/middleware/cli-auth-middleware';
-import { prisma } from '@/lib/prisma';
+import { ensureCommercialQuota, formatCommercialQuotaResponse } from '@/lib/commercial-quota';
+import { normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 /**
  * GET /api/cli/quota
@@ -9,77 +10,20 @@ import { prisma } from '@/lib/prisma';
  */
 export const GET = withCLIAuth(async (request: NextRequest, context) => {
   try {
-    // Get user quota
-    const quota = await prisma.user_quota.findUnique({
-      where: { userId: context.userId },
-    });
-
-    if (!quota) {
-      // Create default quota if not exists
-      const now = new Date();
-      const endOfDay = new Date(now);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      const newQuota = await prisma.user_quota.create({
-        data: {
-          userId: context.userId,
-          sessionsPerDay: context.isPremium ? 50 : 6,
-          sessionsUsedToday: 0,
-          tokensPerSession: context.isPremium ? 50000 : 10000,
-          periodStart: now,
-          periodEnd: endOfDay,
-          lastResetAt: now,
-        },
-      });
-
-      return NextResponse.json({
-        quota: {
-          sessionsPerDay: newQuota.sessionsPerDay,
-          sessionsUsed: newQuota.sessionsUsedToday,
-          sessionsRemaining: newQuota.sessionsPerDay - newQuota.sessionsUsedToday,
-          tokensPerSession: newQuota.tokensPerSession,
-          periodEnd: newQuota.periodEnd,
-          isUnlimited: context.plan === 'enterprise',
-        },
-        canMakeRequest: true,
-      });
-    }
-
-    // Check if need to reset (new day)
-    const now = new Date();
-    if (now > quota.periodEnd) {
-      const endOfDay = new Date(now);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      await prisma.user_quota.update({
-        where: { id: quota.id },
-        data: {
-          sessionsUsedToday: 0,
-          periodStart: now,
-          periodEnd: endOfDay,
-          lastResetAt: now,
-        },
-      });
-
-      quota.sessionsUsedToday = 0;
-    }
-
-    const sessionsRemaining = quota.sessionsPerDay - quota.sessionsUsedToday;
-    const canMakeRequest = context.plan === 'enterprise' || sessionsRemaining > 0;
+    const normalizedPlan = normalizeCommercialPlan(context.plan);
+    const quota = await ensureCommercialQuota(context.userId, normalizedPlan, 'day');
+    const quotaResponse = formatCommercialQuotaResponse(quota, normalizedPlan);
 
     return NextResponse.json({
       quota: {
-        sessionsPerDay: quota.sessionsPerDay,
-        sessionsUsed: quota.sessionsUsedToday,
-        sessionsRemaining,
-        tokensPerSession: quota.tokensPerSession,
-        periodEnd: quota.periodEnd,
-        isUnlimited: context.plan === 'enterprise',
+        ...quotaResponse.legacy,
+        sessionsUsed: quotaResponse.legacy.sessionsUsedToday,
       },
-      canMakeRequest,
-      message: canMakeRequest
+      commercial: quotaResponse.commercial,
+      canMakeRequest: quotaResponse.canMakeRequest,
+      message: quotaResponse.canMakeRequest
         ? 'Quota available'
-        : 'Daily quota exceeded. Upgrade your plan or wait for reset.',
+        : 'Legacy runtime quota exceeded. Paid plan value now scales with Spaces, connected agents, approvals, retention, and preview capacity.',
     });
   } catch (error) {
     return NextResponse.json(

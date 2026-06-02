@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { userManager } from '@/lib/user-management';
 import { logger } from '@/lib/logger';
 import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 const apiRateLimiter = rateLimit(rateLimitConfigs.api);
 
@@ -37,17 +38,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const normalizedPlan = normalizeCommercialPlan(userWithQuota.subscriptionPlan || userWithQuota.subscription || 'free');
+    const entitlements = getCommercialEntitlements(normalizedPlan);
+
     return NextResponse.json({
       success: true,
       user: {
         id: userWithQuota.id,
         email: userWithQuota.email,
         name: userWithQuota.name,
-        subscriptionPlan: userWithQuota.subscriptionPlan,
+        subscriptionPlan: normalizedPlan,
         subscriptionStatus: userWithQuota.subscriptionStatus,
         hasOwnApiKey: userWithQuota.hasOwnApiKey,
         onboardingStep: userWithQuota.onboardingStep,
         createdAt: userWithQuota.createdAt,
+        entitlements,
         quota: userWithQuota.quota ? {
           sessionsPerDay: userWithQuota.quota.sessionsPerDay,
           sessionsUsedToday: userWithQuota.quota.sessionsUsedToday,

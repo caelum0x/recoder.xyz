@@ -12,6 +12,12 @@ export interface PlanLimits {
   tokensPerSessionPricey: number;
   freeModelsUnlimited: true;
   teamMembers: number;
+  workspaces: number;
+  connectedAgents: number;
+  artifactRetentionDays: number;
+  previewDeploysPerMonth: number;
+  approvalWorkflows: 'single' | 'shared' | 'advanced' | 'custom';
+  governance: 'basic' | 'team' | 'advanced' | 'enterprise';
 }
 
 export interface PlanFeatures {
@@ -79,20 +85,28 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Free',
     price: 0,
     period: 'forever',
-    description: 'Try Recoder with your own API key',
+    description: 'BYOK workspace for proving the first agent-work loop',
     limits: {
       sessionsPerDay: 6,
       tokensPerSessionPricey: 10000,
       freeModelsUnlimited: true,
       teamMembers: 1,
+      workspaces: 1,
+      connectedAgents: 1,
+      artifactRetentionDays: 7,
+      previewDeploysPerMonth: 3,
+      approvalWorkflows: 'single',
+      governance: 'basic',
     },
     features: {
       requiresApiKey: true,
       platformProvidesKey: false,
-      models: ['Bring your own OpenRouter key'],
+      models: ['Bring your own provider keys'],
       support: 'Community support',
       features: [
-        'Bring your own OpenRouter key',
+        'Bring your own provider keys',
+        '1 workspace for initial validation',
+        'Connected runtime and preview lane',
         'CLI + Web access',
         'Community support',
       ],
@@ -104,24 +118,30 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Weekly',
     price: 10,
     period: 'week',
-    description: 'Perfect for short-term projects',
+    description: 'BYOK workspace for short shipping cycles',
     limits: {
       sessionsPerDay: 10,
       tokensPerSessionPricey: 30000,
       freeModelsUnlimited: true,
       teamMembers: 3,
+      workspaces: 3,
+      connectedAgents: 3,
+      artifactRetentionDays: 14,
+      previewDeploysPerMonth: 15,
+      approvalWorkflows: 'shared',
+      governance: 'team',
     },
     features: {
-      requiresApiKey: false,
-      platformProvidesKey: true,
-      models: ['All AI models (Claude, GPT-4, Gemini)'],
+      requiresApiKey: true,
+      platformProvidesKey: false,
+      models: ['Bring your own provider keys'],
       support: 'Priority support',
       features: [
-        'No API key needed - we provide it',
-        'All AI models (Claude, GPT-4, Gemini)',
+        'Bring your own provider keys',
+        'Up to 3 connected builder seats',
+        'Shared run history and artifacts',
+        'Task + preview workflow',
         'Priority support',
-        'Team collaboration (3 members)',
-        'Advanced features',
       ],
     },
     paddle: {
@@ -137,24 +157,30 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Monthly',
     price: 20,
     period: 'month',
-    description: 'Best for individual developers',
+    description: 'BYOK team workspace with shared approvals',
     limits: {
       sessionsPerDay: 15,
       tokensPerSessionPricey: 50000,
       freeModelsUnlimited: true,
       teamMembers: 5,
+      workspaces: 10,
+      connectedAgents: 5,
+      artifactRetentionDays: 30,
+      previewDeploysPerMonth: 50,
+      approvalWorkflows: 'shared',
+      governance: 'team',
     },
     features: {
-      requiresApiKey: false,
-      platformProvidesKey: true,
-      models: ['All AI models (Claude, GPT-4, Gemini)'],
+      requiresApiKey: true,
+      platformProvidesKey: false,
+      models: ['Bring your own provider keys'],
       support: 'Priority support',
       features: [
-        'No API key needed - we provide it',
-        'All AI models (Claude, GPT-4, Gemini)',
+        'Bring your own provider keys',
+        'Up to 5 connected builder seats',
+        'Shared approvals and handoff',
+        'Longer artifact retention',
         'Priority support',
-        'Team collaboration (5 members)',
-        'Advanced features',
         'API access',
       ],
     },
@@ -171,27 +197,32 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Pro',
     price: 100,
     period: 'month',
-    description: 'For power users and teams',
+    description: 'Control plane for active agent teams',
     limits: {
       sessionsPerDay: 20,
       tokensPerSessionPricey: 100000,
       freeModelsUnlimited: true,
       teamMembers: 10,
+      workspaces: 25,
+      connectedAgents: 10,
+      artifactRetentionDays: 90,
+      previewDeploysPerMonth: 150,
+      approvalWorkflows: 'advanced',
+      governance: 'advanced',
     },
     features: {
-      requiresApiKey: false,
-      platformProvidesKey: true,
-      models: ['All AI models + Beta access'],
+      requiresApiKey: true,
+      platformProvidesKey: false,
+      models: ['Bring your own provider keys'],
       support: 'Priority support + Slack',
       features: [
-        'No API key needed - we provide it',
-        'All AI models + Beta access',
+        'Bring your own provider keys',
+        'Up to 10 connected builder seats',
+        'Admin controls and audit trails',
+        'Priority workflow support',
         'Priority support + Slack',
-        'Team collaboration (10 members)',
-        'Advanced features',
         'API access',
-        'Custom AI models',
-        'Dedicated account manager',
+        'Custom integrations',
       ],
     },
     paddle: {
@@ -207,22 +238,29 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Enterprise',
     price: 0, // Custom pricing
     period: 'month',
-    description: 'Custom solutions for large teams',
+    description: 'Custom governance for large agent teams',
     limits: {
       sessionsPerDay: 999,
       tokensPerSessionPricey: 999999,
       freeModelsUnlimited: true,
       teamMembers: 999,
+      workspaces: 999,
+      connectedAgents: 999,
+      artifactRetentionDays: 365,
+      previewDeploysPerMonth: 999,
+      approvalWorkflows: 'custom',
+      governance: 'enterprise',
     },
     features: {
-      requiresApiKey: false,
-      platformProvidesKey: true,
-      models: ['All AI models + Custom models'],
+      requiresApiKey: true,
+      platformProvidesKey: false,
+      models: ['BYOK or custom model routing'],
       support: 'Dedicated support + SLA',
       features: [
-        'Unlimited everything',
-        'Custom AI models',
+        'Custom agent capacity',
+        'BYOK or custom model routing',
         'On-premise deployment',
+        'Approvals, audit, and retention controls',
         'SLA guarantees',
         'Security audit',
         'Dedicated support',
@@ -320,8 +358,11 @@ export function getNextPlan(currentPlan: PlanId): PlanId | null {
  */
 export function getLimitDescription(planId: PlanId): string {
   const limits = getPlanLimits(planId);
-  
-  return `${limits.sessionsPerDay} sessions/day with ${(limits.tokensPerSessionPricey / 1000).toFixed(0)}k tokens per session for premium models. Free models have unlimited usage.`;
+  const workspaceLabel = limits.workspaces >= 999 ? 'unlimited workspaces' : `${limits.workspaces} workspace${limits.workspaces === 1 ? '' : 's'}`;
+  const agentLabel = limits.connectedAgents >= 999 ? 'unlimited connected agents' : `${limits.connectedAgents} connected agent${limits.connectedAgents === 1 ? '' : 's'}`;
+  const previewLabel = limits.previewDeploysPerMonth >= 999 ? 'unlimited preview deploys' : `${limits.previewDeploysPerMonth} preview deploys/month`;
+
+  return `${workspaceLabel}, ${agentLabel}, ${previewLabel}, and ${limits.artifactRetentionDays} days of artifact history.`;
 }
 
 /**

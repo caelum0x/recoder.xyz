@@ -11,8 +11,18 @@
 // ---------------------------------------------------------------------------
 
 export const AnalyticsEvents = {
+  // ---- Acquisition / marketing ----
+  CTA_CLICKED: 'cta_clicked',
+
+  // ---- Lead capture (top of funnel, pre-signup) ----
+  LEAD_CAPTURE_SUBMITTED: 'lead_capture_submitted',
+  LEAD_CAPTURE_SUCCEEDED: 'lead_capture_succeeded',
+  LEAD_CAPTURE_FAILED: 'lead_capture_failed',
+  LEAD_CONVERTED_TO_SIGNUP: 'lead_converted_to_signup',
+
   // ---- Auth funnel ----
   SIGNUP_STARTED: 'signup_started',
+  LOGIN_STARTED: 'login_started',
   SIGNUP_COMPLETED: 'signup_completed',
   LOGIN_COMPLETED: 'login_completed',
   LOGIN_FAILED: 'login_failed',
@@ -20,10 +30,14 @@ export const AnalyticsEvents = {
 
   // ---- Onboarding ----
   ONBOARDING_STARTED: 'onboarding_started',
+  ONBOARDING_STEP_VIEWED: 'onboarding_step_viewed',
   ONBOARDING_COMPLETED: 'onboarding_completed',
   ONBOARDING_SKIPPED: 'onboarding_skipped',
+  API_KEY_SAVED: 'api_key_saved',
 
   // ---- Activation (first-time milestones) ----
+  DASHBOARD_VIEWED: 'dashboard_viewed',
+  PROJECTS_VIEWED: 'projects_viewed',
   FIRST_PROJECT_CREATED: 'first_project_created',
   FIRST_AGENT_RUN: 'first_agent_run',
   FIRST_CLI_SESSION: 'first_cli_session',
@@ -64,6 +78,26 @@ export interface BaseEventProperties {
   source?: string;
   /** ISO-8601 timestamp; auto-filled by the tracker when omitted. */
   timestamp?: string;
+}
+
+export interface CTAEventProperties extends BaseEventProperties {
+  location?: string;
+  ctaLabel?: string;
+  destination?: string;
+}
+
+/** Lead-capture funnel properties (newsletter / pre-signup email capture). */
+export interface LeadCaptureEventProperties extends BaseEventProperties {
+  /** Where the lead form was rendered, e.g. "homepage_hero_lead_capture". */
+  leadSource?: string;
+  /** True when a previously-unsubscribed lead was reactivated. */
+  reactivated?: boolean;
+  /** True when the lead email already matched a registered user at capture time. */
+  matchedExistingUser?: boolean;
+  /** Signup method (LEAD_CONVERTED_TO_SIGNUP only). */
+  method?: 'email' | 'google' | 'github' | 'cli';
+  /** Failure reason (LEAD_CAPTURE_FAILED only). */
+  reason?: string;
 }
 
 /** Auth funnel properties. */
@@ -118,8 +152,18 @@ export interface PageViewEventProperties extends BaseEventProperties {
 // ---------------------------------------------------------------------------
 
 export type EventPropertiesMap = {
+  // Acquisition
+  [AnalyticsEvents.CTA_CLICKED]: CTAEventProperties;
+
+  // Lead capture
+  [AnalyticsEvents.LEAD_CAPTURE_SUBMITTED]: LeadCaptureEventProperties;
+  [AnalyticsEvents.LEAD_CAPTURE_SUCCEEDED]: LeadCaptureEventProperties;
+  [AnalyticsEvents.LEAD_CAPTURE_FAILED]: LeadCaptureEventProperties;
+  [AnalyticsEvents.LEAD_CONVERTED_TO_SIGNUP]: LeadCaptureEventProperties;
+
   // Auth
   [AnalyticsEvents.SIGNUP_STARTED]: AuthEventProperties;
+  [AnalyticsEvents.LOGIN_STARTED]: AuthEventProperties;
   [AnalyticsEvents.SIGNUP_COMPLETED]: AuthEventProperties;
   [AnalyticsEvents.LOGIN_COMPLETED]: AuthEventProperties;
   [AnalyticsEvents.LOGIN_FAILED]: AuthEventProperties;
@@ -127,10 +171,14 @@ export type EventPropertiesMap = {
 
   // Onboarding
   [AnalyticsEvents.ONBOARDING_STARTED]: OnboardingEventProperties;
+  [AnalyticsEvents.ONBOARDING_STEP_VIEWED]: OnboardingEventProperties;
   [AnalyticsEvents.ONBOARDING_COMPLETED]: OnboardingEventProperties;
   [AnalyticsEvents.ONBOARDING_SKIPPED]: OnboardingEventProperties;
+  [AnalyticsEvents.API_KEY_SAVED]: OnboardingEventProperties;
 
   // Activation
+  [AnalyticsEvents.DASHBOARD_VIEWED]: ActivationEventProperties;
+  [AnalyticsEvents.PROJECTS_VIEWED]: ActivationEventProperties;
   [AnalyticsEvents.FIRST_PROJECT_CREATED]: ActivationEventProperties;
   [AnalyticsEvents.FIRST_AGENT_RUN]: ActivationEventProperties;
   [AnalyticsEvents.FIRST_CLI_SESSION]: ActivationEventProperties;

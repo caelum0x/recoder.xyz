@@ -10,8 +10,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Recoder.xyz - The AI Platform | Agents + Web IDE + PM + Agency',
-  description: 'Build AI agents, code in the browser, manage products, and deliver client work — all powered by AI. Free beta with 40+ models. Cursor for everything.',
+  metadataBase: new URL('https://recoder.xyz'),
+  title: 'Recoder.xyz | BYOK-first AI platform for coding, agents, PM, and agency workflows',
+  description: 'Recoder helps developers and teams build with AI across agents, browser coding, CLI, PM, and agency workflows while keeping provider choice and cost control.',
   icons: {
     icon: [
       { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
@@ -23,11 +24,11 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   keywords: [
     'AI coding platform',
-    'free AI development',
+    'BYOK AI development',
     'BYOK AI',
-    'Claude Code alternative',
-    'AI coding alternative',
-    'web IDE CLI sync',
+    'AI developer workflow',
+    'agent development platform',
+    'Spaces CLI sync',
     'AI code generator',
     'multi-AI platform',
     'GPT-4 coding',
@@ -41,8 +42,8 @@ export const metadata: Metadata = {
   authors: [{ name: 'Recoder Team' }],
   category: 'Technology',
   openGraph: {
-    title: 'Recoder.xyz - FREE AI Coding Platform | Web IDE + CLI Sync',
-    description: 'The only platform with seamless Web IDE + Terminal CLI sync. 100% FREE beta with BYOK. Access 40+ AI models including Claude, GPT-4, Gemini.',
+    title: 'Recoder.xyz | Build with AI and keep control',
+    description: 'BYOK-first AI platform for coding, agents, PM, and agency workflows with browser and terminal surfaces.',
     url: 'https://recoder.xyz',
     siteName: 'Recoder.xyz',
     locale: 'en_US',
@@ -52,16 +53,16 @@ export const metadata: Metadata = {
         url: 'https://recoder.xyz/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Recoder.xyz - Web IDE + CLI Sync Platform',
+        alt: 'Recoder.xyz - Build with AI and keep control',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Recoder.xyz - FREE AI Coding Platform',
-    description: 'Seamless Web IDE + CLI sync. 100% FREE beta with BYOK. 40+ AI models.',
+    title: 'Recoder.xyz | Build with AI and keep control',
+    description: 'BYOK-first AI development across agents, browser coding, CLI, PM, and agency workflows.',
     creator: '@recoderxyz',
-    images: ['https://recoder.xyz/twitter-card.png'],
+    images: ['https://recoder.xyz/og-image.png'],
   },
   robots: {
     index: true,

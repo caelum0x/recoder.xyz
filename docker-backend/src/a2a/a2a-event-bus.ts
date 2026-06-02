@@ -42,6 +42,7 @@ export const A2AEventType = {
   TaskSubmitted: 'task.submitted',
   TaskStarted: 'task.started',
   TaskProgress: 'task.progress',
+  ArtifactAttached: 'artifact.attached',
   TaskStream: 'task.stream',
   TaskInputRequired: 'task.input-required',
   TaskCompleted: 'task.completed',
@@ -75,6 +76,8 @@ export const A2AEventType = {
   HandoffCompleted: 'handoff.completed',
   DelegationCreated: 'delegation.created',
   DelegationCompleted: 'delegation.completed',
+  ReviewAccepted: 'review.accepted',
+  MergeRequested: 'merge.requested',
 
   // Approval events
   ApprovalRequested: 'approval.requested',
@@ -103,6 +106,7 @@ export const TASK_EVENT_TYPES = new Set<string>([
   A2AEventType.TaskSubmitted,
   A2AEventType.TaskStarted,
   A2AEventType.TaskProgress,
+  A2AEventType.ArtifactAttached,
   A2AEventType.TaskStream,
   A2AEventType.TaskInputRequired,
   A2AEventType.TaskCompleted,
@@ -148,6 +152,8 @@ export const HANDOFF_EVENT_TYPES = new Set<string>([
   A2AEventType.HandoffCompleted,
   A2AEventType.DelegationCreated,
   A2AEventType.DelegationCompleted,
+  A2AEventType.ReviewAccepted,
+  A2AEventType.MergeRequested,
 ]);
 
 /** All approval event types. */

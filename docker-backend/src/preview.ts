@@ -9,12 +9,17 @@ import Docker from 'dockerode';
 import WebSocket from 'ws';
 import { isLikelySandboxProjectId } from './auth-utils.js';
 import { recoverContainerFromDocker } from './container-recovery.js';
+import { buildDaytonaPreviewHeaders, getDaytonaPreviewAccess } from './daytona-preview.js';
 import { devServerManager, detectFrameworkFromContainer } from './dev-server.js';
 import { getDaytonaClient } from './daytona-client.js';
 import { daytonaGetLogs, daytonaWriteFiles, ensureDaytonaSandboxRunning } from './daytona-file-ops.js';
+import { buildDaytonaCommandScript, buildDaytonaInstallCommand } from './daytona-runtime.js';
 import { rewritePreviewBody, shouldRewritePreviewBody } from './preview-rewrite.js';
-import { updateShareTarget, getPreviewUrl as getZrokPreviewUrl } from './zrok-preview.js';
+import { updateShareTarget } from './zrok-preview.js';
 import { buildInternalServiceHeaders } from './public-api/byok-provider-keys.js';
+import { getPreviewDeploymentService } from './edge/preview-deployment.service.js';
+import { verifyPreviewAccessToken } from './edge/preview-access.js';
+import { applyEdgeSecurityHeaders, checkEdgeSlidingWindowLimit, getEdgeSecurityPolicy } from './edge/edge-security.js';
 
 const docker = new Docker();
 const autoStartAttempts = new Map<string, number>();
@@ -60,6 +65,10 @@ async function runAutoStartOnce(projectId: string, work: () => Promise<void>): P
 
   autoStartPromises.set(projectId, pending);
   await pending;
+}
+
+async function getDaytonaWorkDir(sandboxId: string): Promise<string> {
+  return await getDaytonaClient().getWorkDir(sandboxId);
 }
 
 function getDaytonaPortCandidatesForFramework(framework?: string): typeof DAYTONA_PORT_CANDIDATES {
@@ -248,9 +257,10 @@ async function ensureDaytonaWorkspaceHydrated(
   entry: { id: string; userId?: string },
 ): Promise<boolean> {
   const dc = getDaytonaClient();
+  const workDir = await getDaytonaWorkDir(entry.id);
   const pkgCheck = await dc.execCommand(
     entry.id,
-    'test -f /home/daytona/package.json && echo YES || echo NO',
+    `test -f ${workDir}/package.json && echo YES || echo NO`,
     { timeoutSecs: 10 },
   );
 
@@ -268,7 +278,7 @@ async function ensureDaytonaWorkspaceHydrated(
     if (!normalizedDirectory) continue;
     await dc.execCommand(
       entry.id,
-      `mkdir -p '/home/daytona/${normalizedDirectory.replace(/'/g, "'\\''")}'`,
+      `mkdir -p '${workDir}/${normalizedDirectory.replace(/'/g, "'\\''")}'`,
       { timeoutSecs: 10 },
     );
   }
@@ -298,7 +308,7 @@ async function ensureDaytonaWorkspaceHydrated(
   // snapshot so dependency reinstalls stay deterministic.
   await dc.execCommand(
     entry.id,
-    "rm -rf /home/daytona/node_modules",
+    `rm -rf ${workDir}/node_modules`,
     { timeoutSecs: 20 },
   );
 
@@ -335,7 +345,8 @@ async function detectFramework(containerId: string, isDaytona?: boolean): Promis
 
     let pkgRaw: string;
     const dc = getDaytonaClient();
-    const result = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+    const workDir = await getDaytonaWorkDir(containerId);
+    const result = await dc.execCommand(containerId, `cat ${workDir}/package.json 2>/dev/null || echo ""`, { timeoutSecs: 10 });
     pkgRaw = result.output;
 
     if (!pkgRaw) return 'vite';
@@ -358,7 +369,7 @@ async function detectFramework(containerId: string, isDaytona?: boolean): Promis
     if (deps.servor || deps.serve) return 'static';
     if (pkg.scripts?.start && !pkg.scripts?.dev) return 'static';
     if (deps.express || deps.fastify || deps.koa) return 'node-server';
-    const indexHtml = await dc.execCommand(containerId, 'test -f /home/daytona/index.html && echo "yes" || echo "no"', { timeoutSecs: 10 });
+    const indexHtml = await dc.execCommand(containerId, `test -f ${workDir}/index.html && echo "yes" || echo "no"`, { timeoutSecs: 10 });
     if (indexHtml.output.includes('yes')) return 'static';
     return 'node';
   } catch {
@@ -367,28 +378,14 @@ async function detectFramework(containerId: string, isDaytona?: boolean): Promis
   return 'vite';
 }
 
-function getDaytonaNodeBootstrapCommands(): string[] {
-  return [
-    'NODE_BIN="$(command -v node 2>/dev/null || true)"',
-    'if [ -z "$NODE_BIN" ]; then',
-    '  for candidate in /usr/local/nvm/versions/node/*/bin/node /usr/local/bin/node /usr/bin/node; do',
-    '    if [ -x "$candidate" ]; then NODE_BIN="$candidate"; break; fi',
-    '  done',
-    'fi',
-    'if [ -z "$NODE_BIN" ]; then echo missing-node; exit 1; fi',
-    'export PATH="$(dirname "$NODE_BIN"):$PATH"',
-    'NPM_CLI="/usr/local/nvm/versions/node/v22.14.0/lib/node_modules/npm/bin/npm-cli.js"',
-    'cd /home/daytona',
-  ];
-}
-
 async function runDaytonaCommand(
   sandboxId: string,
   commandParts: string[],
   options: { timeoutSecs: number },
 ): Promise<{ exitCode: number; output: string }> {
   const dc = getDaytonaClient();
-  return dc.execCommand(sandboxId, commandParts.join('; '), options);
+  const workDir = await getDaytonaWorkDir(sandboxId);
+  return dc.execCommand(sandboxId, buildDaytonaCommandScript(commandParts, { cwd: workDir }), options);
 }
 
 async function daytonaPathExists(sandboxId: string, path: string): Promise<boolean> {
@@ -400,28 +397,20 @@ async function daytonaPathExists(sandboxId: string, path: string): Promise<boole
   return result.output.includes('yes');
 }
 
-function buildDaytonaInstallCommand(hasPackageLock: boolean): string {
-  if (hasPackageLock) {
-    return `"${'$'}NODE_BIN" "${'$'}NPM_CLI" ci --no-audit --no-fund`;
-  }
-
-  return `"${'$'}NODE_BIN" "${'$'}NPM_CLI" install --legacy-peer-deps --no-audit --no-fund`;
-}
-
 async function repairDaytonaReactScriptsDependencies(
   sandboxId: string,
   projectId: string,
   timeoutSecs: number = 600,
 ): Promise<void> {
-  const hasPackageLock = await daytonaPathExists(sandboxId, '/home/daytona/package-lock.json');
+  const workDir = await getDaytonaWorkDir(sandboxId);
+  const hasPackageLock = await daytonaPathExists(sandboxId, `${workDir}/package-lock.json`);
   console.log(`🩹 [Preview] Forcing deterministic CRA dependency repair for ${projectId} (Daytona)...`);
   await runDaytonaCommand(
     sandboxId,
     [
-      ...getDaytonaNodeBootstrapCommands(),
-      'rm -rf /home/daytona/node_modules',
+      `rm -rf ${workDir}/node_modules`,
       buildDaytonaInstallCommand(hasPackageLock),
-      `"${'$'}NODE_BIN" "${'$'}NPM_CLI" install --no-save --legacy-peer-deps --no-audit --no-fund ajv@^8 ajv-keywords@^5`,
+      `"${'$'}NPM_BIN" install --no-save --legacy-peer-deps --no-audit --no-fund ajv@^8 ajv-keywords@^5`,
       'pkill -f "react-scripts start|npm.*start" 2>/dev/null || true',
     ],
     { timeoutSecs },
@@ -431,18 +420,19 @@ async function repairDaytonaReactScriptsDependencies(
 async function checkReactScriptsIntegrity(
   sandboxId: string,
 ): Promise<{ ok: boolean; missing: string[]; output: string }> {
+  const workDir = await getDaytonaWorkDir(sandboxId);
   const criticalChecks = [
-    { label: 'react-scripts/package.json', path: '/home/daytona/node_modules/react-scripts/package.json' },
-    { label: 'html-webpack-plugin/lib/loader.js', path: '/home/daytona/node_modules/html-webpack-plugin/lib/loader.js' },
-    { label: 'ajv/dist/compile/codegen', path: '/home/daytona/node_modules/ajv/dist/compile/codegen.js' },
-    { label: 'ajv/dist/compile/codegen', path: '/home/daytona/node_modules/ajv/dist/compile/codegen/index.js' },
+    { label: 'react-scripts/package.json', path: `${workDir}/node_modules/react-scripts/package.json` },
+    { label: 'html-webpack-plugin/lib/loader.js', path: `${workDir}/node_modules/html-webpack-plugin/lib/loader.js` },
+    { label: 'ajv/dist/compile/codegen', path: `${workDir}/node_modules/ajv/dist/compile/codegen.js` },
+    { label: 'ajv/dist/compile/codegen', path: `${workDir}/node_modules/ajv/dist/compile/codegen/index.js` },
   ];
 
   const result = await runDaytonaCommand(
     sandboxId,
     [
       `missing=0`,
-      `if [ -f '/home/daytona/node_modules/ajv/package.json' ] && grep -Eq '"version"[[:space:]]*:[[:space:]]*"6\\.' '/home/daytona/node_modules/ajv/package.json'; then echo 'ajv/dist/compile/codegen'; missing=1; fi`,
+      `if [ -f '${workDir}/node_modules/ajv/package.json' ] && grep -Eq '"version"[[:space:]]*:[[:space:]]*"6\\.' '${workDir}/node_modules/ajv/package.json'; then echo 'ajv/dist/compile/codegen'; missing=1; fi`,
       ...criticalChecks.map(({ label, path }, index) =>
         index === 3
           ? `if [ ! -f '${path}' ] && [ "$missing_codegen" = "1" ]; then echo '${label}'; missing=1; fi`
@@ -478,11 +468,12 @@ async function ensureDependencies(containerId: string, projectId: string, isDayt
 
   if (isDaytona) {
     const dc = getDaytonaClient();
-    let pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+    const workDir = await getDaytonaWorkDir(containerId);
+    let pkgResult = await dc.execCommand(containerId, `cat ${workDir}/package.json 2>/dev/null || echo ""`, { timeoutSecs: 10 });
     if (!pkgResult.output.trim()) {
       for (let attempt = 0; attempt < 4; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 500));
-        pkgResult = await dc.execCommand(containerId, 'cat /home/daytona/package.json 2>/dev/null || echo ""', { timeoutSecs: 10 });
+        pkgResult = await dc.execCommand(containerId, `cat ${workDir}/package.json 2>/dev/null || echo ""`, { timeoutSecs: 10 });
         if (pkgResult.output.trim()) {
           break;
         }
@@ -523,23 +514,25 @@ async function ensureDependencies(containerId: string, projectId: string, isDayt
       }
     };
 
-    const nmResult = await dc.execCommand(containerId, 'test -d /home/daytona/node_modules && echo "yes" || echo "no"', { timeoutSecs: 10 });
+    const nmResult = await dc.execCommand(containerId, `test -d ${workDir}/node_modules && echo "yes" || echo "no"`, { timeoutSecs: 10 });
     if (nmResult.output.includes('yes')) {
       await repairReactScriptsDeps();
       return;
     }
 
     autoInstallAttempts.set(projectId, now);
-    const hasPackageLock = await daytonaPathExists(containerId, '/home/daytona/package-lock.json');
+    const hasPackageLock = await daytonaPathExists(containerId, `${workDir}/package-lock.json`);
     console.log(`📦 [Preview] Installing dependencies for ${projectId} (Daytona)...`);
-    await runDaytonaCommand(
+    const installResult = await runDaytonaCommand(
       containerId,
       [
-        ...getDaytonaNodeBootstrapCommands(),
         buildDaytonaInstallCommand(hasPackageLock),
       ],
       { timeoutSecs: 120 },
     );
+    if (installResult.exitCode !== 0) {
+      throw new Error(`daytona dependency install failed: ${installResult.output}`);
+    }
     await repairReactScriptsDeps();
     return;
   }
@@ -654,121 +647,45 @@ export function buildDockerPreviewUpstreamHeaders(
   };
 }
 
-type DaytonaPreviewAccess = {
-  url: string;
-  token?: string;
-  host: string;
-  port: number;
-};
-
-function getDaytonaPreviewHost(url: string, sandboxId: string, port: number): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return `${port}-${sandboxId}.sandbox.recoder.xyz`;
-  }
-}
-
-async function getDaytonaPreviewAccess(entry: { id: string }, port: number): Promise<DaytonaPreviewAccess> {
-  const dc = getDaytonaClient();
-  try {
-    const preview = await dc.getPortPreviewUrl(entry.id, port);
-    const url = preview?.url || dc.getPreviewUrl(entry.id, port);
-    return {
-      url,
-      token: preview?.token,
-      host: getDaytonaPreviewHost(url, entry.id, port),
-      port,
-    };
-  } catch {
-    const url = dc.getPreviewUrl(entry.id, port);
-    return {
-      url,
-      host: getDaytonaPreviewHost(url, entry.id, port),
-      port,
-    };
-  }
-}
-
-function buildDaytonaPreviewHeaders(
-  preview: DaytonaPreviewAccess,
-  options: {
-    accept?: string;
-    forwardedHost?: string;
-  } = {},
-): Record<string, string> {
-  const headers: Record<string, string> = {
-    Host: preview.host,
-    Accept: options.accept || '*/*',
-    'X-Daytona-Skip-Preview-Warning': 'true',
-    'X-Daytona-Disable-CORS': 'true',
-    'X-Forwarded-Host': options.forwardedHost || preview.host,
-  };
-
-  if (preview.token) {
-    headers['X-Daytona-Preview-Token'] = preview.token;
-  }
-
-  return headers;
-}
-
 async function probeDaytonaPort(
   entry: { id: string },
   port: number,
   path: string = '/',
-  previewAccess?: DaytonaPreviewAccess,
+  previewAccess?: Awaited<ReturnType<typeof getDaytonaPreviewAccess>>,
 ): Promise<boolean> {
-  const proxyHost = getDaytonaProxyHost();
-  const proxyPort = getDaytonaProxyPort();
   const preview = previewAccess || await getDaytonaPreviewAccess(entry, port);
+  const targetUrl = new URL(preview.url);
+  targetUrl.pathname = path;
 
-  return await new Promise<boolean>((resolve) => {
-    const req = http.request({
-      hostname: proxyHost,
-      port: proxyPort,
-      path,
-      method: 'GET',
-      headers: buildDaytonaPreviewHeaders(preview),
-      timeout: 4000,
-    }, (resp) => {
-      const status = resp.statusCode || 0;
-      const contentType = String(resp.headers['content-type'] || '');
-      let body = '';
+  const response = await fetch(targetUrl.toString(), {
+    method: 'GET',
+    headers: {
+      Accept: '*/*',
+      'X-Daytona-Skip-Preview-Warning': 'true',
+      'X-Daytona-Disable-CORS': 'true',
+      ...(preview.token && !preview.signed
+        ? { 'X-Daytona-Preview-Token': preview.token }
+        : {}),
+    },
+    signal: AbortSignal.timeout(4000),
+  }).catch(() => null);
 
-      resp.setEncoding('utf8');
-      resp.on('data', (chunk: string) => {
-        if (body.length < 8192) {
-          body += chunk.slice(0, 8192 - body.length);
-        }
-      });
-      resp.on('end', () => {
-        const okStatus = status >= 200 && status < 400;
-        if (!okStatus) {
-          resolve(false);
-          return;
-        }
+  if (!response || !response.ok) {
+    return false;
+  }
 
-        if (path === '/' && looksLikeDirectoryListing(body, contentType)) {
-          resolve(false);
-          return;
-        }
+  const contentType = response.headers.get('content-type') || '';
+  const body = (await response.text().catch(() => '')).slice(0, 8192);
 
-        if (path === '/' && looksLikePreviewBuildError(body, contentType)) {
-          resolve(false);
-          return;
-        }
+  if (path === '/' && looksLikeDirectoryListing(body, contentType)) {
+    return false;
+  }
 
-        resolve(true);
-      });
-    });
+  if (path === '/' && looksLikePreviewBuildError(body, contentType)) {
+    return false;
+  }
 
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(false);
-    });
-    req.end();
-  });
+  return true;
 }
 
 async function detectDaytonaPortFromLogs(entry: { id: string }): Promise<number | null> {
@@ -863,9 +780,12 @@ async function recoverContainerFromDaytona(
       });
     const match = matches[0];
     if (match) {
-      // Default to 8080 (common for file servers in agent sandboxes)
-      // The preview route's health check will detect the actual port
-      const defaultPort = 8080;
+      const workDir = await dc.getWorkDir(match.id);
+      dc.rememberWorkDir(match.id, workDir);
+      // Align recovered preview entries with the main Web IDE runtime lane.
+      // Vite-based build sandboxes should start on 5173 unless a later probe
+      // proves another port is actually responding.
+      const defaultPort = 5173;
       const preview = await getDaytonaPreviewAccess({ id: match.id }, defaultPort);
       const entry = {
         id: match.id,
@@ -875,6 +795,7 @@ async function recoverContainerFromDaytona(
         userId: match.labels?.userId,
         daytona: true,
         daytonaPreviewUrl: preview.url,
+        daytonaWorkDir: workDir,
       } as any;
       containers.set(projectId, entry);
       console.log(`🔄 [Preview] Recovered Daytona sandbox for ${projectId}: ${match.id} (state: ${match.state})`);
@@ -1116,7 +1037,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       const preview = await getDaytonaPreviewAccess(entry, targetPort);
       (entry as any).daytonaPreviewUrl = preview.url;
       upstreamUrl = `ws://${proxyHost}:${proxyPort}${upstreamPath}`;
-      if (preview.token) {
+      if (preview.token && !preview.signed) {
         upstreamUrl += `${upstreamUrl.includes('?') ? '&' : '?'}DAYTONA_SANDBOX_AUTH_KEY=${encodeURIComponent(preview.token)}`;
       }
       upstreamHeaders = buildDaytonaPreviewHeaders(preview, {
@@ -1186,7 +1107,70 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     });
   });
 
-  app.use('/preview/:projectId', async (req, res, next) => {
+  async function authorizePreviewRequest(req: any, res: any, projectId: string): Promise<boolean> {
+    const latestDeployment = getPreviewDeploymentService().getLatestByProject(projectId);
+    const securityPolicy = getEdgeSecurityPolicy();
+    const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+    const limit = checkEdgeSlidingWindowLimit(
+      `preview:${projectId}:${clientIp}`,
+      securityPolicy.previewRateLimitPerMinute,
+      60_000,
+    );
+
+    if (!limit.allowed) {
+      res.status(429).send(friendlyPreviewPage(
+        projectId,
+        `Preview rate limit exceeded. Try again in ${Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000))} seconds.`,
+      ));
+      return false;
+    }
+
+    const protectionMode = latestDeployment?.protectionMode || 'public';
+    if (protectionMode === 'public') {
+      return true;
+    }
+
+    const routeToken =
+      typeof req.params?.previewAccessToken === 'string' && req.params.previewAccessToken.trim().length > 0
+        ? req.params.previewAccessToken.trim()
+        : null;
+    const queryToken =
+      typeof req.query?.preview_access_token === 'string' && req.query.preview_access_token.trim().length > 0
+        ? req.query.preview_access_token.trim()
+        : null;
+    const headerToken =
+      typeof req.headers['x-recoder-preview-token'] === 'string' && req.headers['x-recoder-preview-token'].trim().length > 0
+        ? req.headers['x-recoder-preview-token'].trim()
+        : null;
+    const previewToken = routeToken || queryToken || headerToken;
+
+    if (!previewToken) {
+      res.status(403).send(friendlyPreviewPage(
+        projectId,
+        'This preview is protected. Use the protected preview link issued by Recoder.',
+      ));
+      return false;
+    }
+
+    const verification = verifyPreviewAccessToken(previewToken, {
+      projectId,
+      deploymentId: latestDeployment?.id,
+    });
+
+    if (!verification.ok) {
+      res.status(403).send(friendlyPreviewPage(projectId, verification.error));
+      return false;
+    }
+
+    return true;
+  }
+
+  async function handleProjectPreviewRoute(
+    req: any,
+    res: any,
+    next: any,
+    proxyPrefix: string,
+  ) {
     const projectId = getValidatedPreviewProjectId(req.params.projectId);
     if (!projectId) {
       return res
@@ -1203,6 +1187,13 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('Surrogate-Control', 'no-store');
+    applyEdgeSecurityHeaders(res, {
+      privatePreview: typeof req.params?.previewAccessToken === 'string' && req.params.previewAccessToken.length > 0,
+    });
+
+    if (!await authorizePreviewRequest(req, res, projectId)) {
+      return;
+    }
 
     if (!entry) {
       console.warn(`[Preview] Request for unknown project: ${projectId}`);
@@ -1271,17 +1262,13 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       if (readyPort !== null) {
         entry.port = readyPort;
         const preview = await getDaytonaPreviewAccess(entry, readyPort);
-        let effectivePreviewUrl = preview.url;
         try {
-          const zrokUpdated = await updateShareTarget(projectId, readyPort);
-          if (zrokUpdated) {
-            effectivePreviewUrl = getZrokPreviewUrl(projectId) ?? preview.url;
-          }
+          await updateShareTarget(projectId, readyPort);
         } catch (zrokErr: any) {
           console.warn(`[Preview] Failed to retarget Zrok share for ${projectId}:`, zrokErr?.message || zrokErr);
         }
-        if (effectivePreviewUrl !== (entry as any).daytonaPreviewUrl) {
-          (entry as any).daytonaPreviewUrl = effectivePreviewUrl;
+        if (preview.url !== (entry as any).daytonaPreviewUrl) {
+          (entry as any).daytonaPreviewUrl = preview.url;
           console.log(`[Preview] Updated preview URL to port ${readyPort}`);
         }
       }
@@ -1290,7 +1277,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
         // Proxy inline — no redirect to docker.recoder.xyz (avoids X-Frame-Options cross-origin block)
         console.log(`[Preview] Daytona preview ready, proxying inline for ${projectId}`);
         const subPath = getProxySubPath(req);
-        return handleSandboxPreview(req, res, containers, subPath, `${DOCKER_PUBLIC_URL}/preview/${projectId}`);
+        return handleSandboxPreview(req, res, containers, subPath, proxyPrefix);
       }
 
       // Dev server not running — try to auto-start
@@ -1466,7 +1453,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
                 ? (req as any).url.split('?')[0].replace(/^\/+/, '')
                 : '';
               const modifiedBody = rewritePreviewBody(body, {
-                proxyPrefix: `${DOCKER_PUBLIC_URL}/preview/${projectId}`,
+                proxyPrefix,
                 contentType,
                 requestPath,
                 errorCaptureScript: ERROR_CAPTURE_SCRIPT,
@@ -1534,6 +1521,24 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     }
 
     return proxy(req, res, next);
+  }
+
+  app.use('/preview/:projectId', async (req, res, next) => {
+    return handleProjectPreviewRoute(
+      req,
+      res,
+      next,
+      `${DOCKER_PUBLIC_URL}/preview/${encodeURIComponent(req.params.projectId)}`,
+    );
+  });
+
+  app.use('/preview-access/:previewAccessToken/:projectId', async (req, res, next) => {
+    return handleProjectPreviewRoute(
+      req,
+      res,
+      next,
+      `${DOCKER_PUBLIC_URL}/preview-access/${encodeURIComponent(req.params.previewAccessToken)}/${encodeURIComponent(req.params.projectId)}`,
+    );
   });
 
   // Helper: proxy request to Daytona sandbox dev server port
@@ -1671,56 +1676,10 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     if (!projectId) {
       return res.status(400).json({ error: 'Invalid sandbox project ID' });
     }
+    const latestDeployment = getPreviewDeploymentService().getLatestByProject(projectId);
 
     let entry = containers.get(projectId);
     if (!entry) {
-      entry = await recoverContainerFromDocker(docker, projectId, containers);
-    }
-    // For Daytona sandboxes, proxy through docker-backend instead of using
-    // the external *.sandbox.recoder.xyz URL — avoids needing wildcard SSL cert
-    const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
-    if (daytonaUrl) {
-      // Return a docker.recoder.xyz proxy URL that we handle internally
-      const dockerUrl = process.env.DOCKER_PUBLIC_URL || 'https://docker.recoder.xyz';
-      const proxyUrl = `${dockerUrl}/api/sandbox-preview/${projectId}`;
-      return res.json({ url: proxyUrl, port: entry?.port || 3000, daytona: true });
-    }
-    const port = entry?.port || 0;
-    const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
-    res.json({ url: `${baseUrl}/preview/${projectId}`, port });
-  });
-
-  // Sandbox preview proxy — forwards requests to Daytona sandbox dev server
-  // This avoids needing *.sandbox.recoder.xyz wildcard SSL cert.
-  // Uses Daytona port-forward via toolbox API.
-  app.all('/api/sandbox-preview/:projectId', async (req, res) => {
-    const projectId = getValidatedPreviewProjectId(req.params.projectId);
-    if (!projectId) {
-      return res.status(400).json({ error: 'Invalid sandbox project ID' });
-    }
-
-    return handleSandboxPreview(req, res, containers, '', `/api/sandbox-preview/${projectId}`);
-  });
-  app.all('/api/sandbox-preview/:projectId/*', async (req, res) => {
-    const projectId = getValidatedPreviewProjectId(req.params.projectId);
-    if (!projectId) {
-      return res.status(400).json({ error: 'Invalid sandbox project ID' });
-    }
-
-    const subPath = getProxySubPath(req);
-    return handleSandboxPreview(req, res, containers, subPath, `/api/sandbox-preview/${projectId}`);
-  });
-
-  // Health check - shows which ports are responding
-  app.get('/api/preview/:projectId/health', async (req, res) => {
-    const projectId = getValidatedPreviewProjectId(req.params.projectId);
-    if (!projectId) {
-      return res.status(400).json({ error: 'Invalid sandbox project ID' });
-    }
-
-    let entry = containers.get(projectId);
-    if (!entry) {
-      // Try Docker recovery first, then Daytona recovery
       entry = await recoverContainerFromDocker(docker, projectId, containers);
       if (!entry && process.env.USE_DAYTONA_CONTAINERS === 'true') {
         try {
@@ -1748,9 +1707,84 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
             } as any;
             containers.set(projectId, entry as any);
           }
-        } catch (e) {
-          // Daytona recovery failed, continue to 404
+        } catch {
+          // Daytona recovery failed, continue to default behavior below.
         }
+      }
+    }
+    if ((entry as any)?.daytona) {
+      try {
+        const dc = getDaytonaClient();
+        await dc.getOrStartSandbox(entry!.id, 15000);
+      } catch {
+        // Non-fatal — use the latest known preview access below.
+      }
+      const port = entry?.port || 5173;
+      const preview = await getDaytonaPreviewAccess(entry!, port);
+      (entry as any).daytonaPreviewUrl = preview.url;
+      return res.json({
+        url: latestDeployment?.protectedPreviewUrl || preview.url,
+        baseUrl: preview.url,
+        protectedUrl: latestDeployment?.protectedPreviewUrl || null,
+        edgeHost: latestDeployment?.edgeHost || null,
+        port,
+        daytona: true,
+        signed: preview.signed,
+      });
+    }
+    const port = entry?.port || 0;
+    const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
+    res.json({
+      url: latestDeployment?.protectedPreviewUrl || `${baseUrl}/preview/${projectId}`,
+      baseUrl: `${baseUrl}/preview/${projectId}`,
+      protectedUrl: latestDeployment?.protectedPreviewUrl || null,
+      edgeHost: latestDeployment?.edgeHost || null,
+      port,
+    });
+  });
+
+  // Sandbox preview proxy — forwards requests to Daytona sandbox dev server
+  // This avoids needing *.sandbox.recoder.xyz wildcard SSL cert.
+  // Uses Daytona port-forward via toolbox API.
+  app.all('/api/sandbox-preview/:projectId', async (req, res) => {
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
+    if (!await authorizePreviewRequest(req, res, projectId)) {
+      return;
+    }
+
+    return handleSandboxPreview(req, res, containers, '', `/api/sandbox-preview/${projectId}`);
+  });
+  app.all('/api/sandbox-preview/:projectId/*', async (req, res) => {
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
+    if (!await authorizePreviewRequest(req, res, projectId)) {
+      return;
+    }
+
+    const subPath = getProxySubPath(req);
+    return handleSandboxPreview(req, res, containers, subPath, `/api/sandbox-preview/${projectId}`);
+  });
+
+  // Health check - shows which ports are responding
+  app.get('/api/preview/:projectId/health', async (req, res) => {
+    const projectId = getValidatedPreviewProjectId(req.params.projectId);
+    if (!projectId) {
+      return res.status(400).json({ error: 'Invalid sandbox project ID' });
+    }
+
+    let entry = containers.get(projectId);
+    if (!entry) {
+      // Try Docker recovery first, then Daytona recovery
+      entry = await recoverContainerFromDocker(docker, projectId, containers);
+      if (!entry) {
+        entry = await recoverContainerFromDaytona(projectId, containers);
       }
     }
     if (!entry) {
@@ -1760,8 +1794,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     // For Daytona sandboxes, ensure sandbox is running before checking ports
     if ((entry as any)?.daytona) {
       try {
-        const dc = getDaytonaClient();
-        await dc.getOrStartSandbox(entry.id, 15000);
+        await ensureDaytonaSandboxRunning(entry.id);
       } catch {
         // Non-fatal — sandbox may already be running or start may timeout
       }
@@ -1770,14 +1803,14 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
     // For Daytona sandboxes, check multiple common dev server ports via internal curl
     // Probe through the Daytona proxy instead of relying on curl inside the sandbox.
     const daytonaUrl = (entry as any)?.daytonaPreviewUrl;
-    if (daytonaUrl) {
+    if ((entry as any)?.daytona) {
       const detectedFramework = await detectFramework(entry.id, true).catch(() => 'unknown');
       const portCandidates = getDaytonaPortCandidatesForFramework(detectedFramework);
       const portResults = await Promise.all(
         portCandidates.map(async ({ port, type }) => {
           const preview = await getDaytonaPreviewAccess(entry, port);
           const responding = await probeDaytonaPort(entry, port, '/', preview);
-          return { port, responding, type, url: preview.url };
+          return { port, responding, type, url: preview.url, signed: preview.signed };
         }),
       );
 
@@ -1785,11 +1818,14 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
       const respondingResult = (preferredPort !== null
         ? portResults.find((result) => result.port === preferredPort && result.responding)
         : undefined) || portResults.find((result) => result.responding);
-      const effectivePreviewUrl = respondingResult?.url || daytonaUrl;
+      const defaultResult =
+        portResults.find((result) => result.port === (entry?.port || 5173)) ||
+        portResults[0];
+      const effectivePreviewUrl = respondingResult?.url || daytonaUrl || defaultResult?.url;
       if (respondingResult) {
         entry.port = respondingResult.port;
       }
-      if (respondingResult && effectivePreviewUrl !== daytonaUrl) {
+      if (effectivePreviewUrl && effectivePreviewUrl !== daytonaUrl) {
         (entry as any).daytonaPreviewUrl = effectivePreviewUrl;
       }
 
@@ -1797,7 +1833,7 @@ export function setupPreviewProxy(app: WsExpressApp, containers: Map<string, { i
         projectId,
         daytona: true,
         previewUrl: effectivePreviewUrl,
-        ports: portResults.map(({ port, responding, type }) => ({ port, responding, type })),
+        ports: portResults.map(({ port, responding, type, url, signed }) => ({ port, responding, type, url, signed })),
       });
     }
 

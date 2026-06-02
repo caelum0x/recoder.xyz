@@ -15,7 +15,7 @@ export const fallbackBlogPosts: BlogPost[] = [
     title:
       'Introducing Recoder.xyz — Free AI Coding Platform with 40+ Models',
     excerpt:
-      'Today we are launching Recoder.xyz into public beta: a completely free AI coding platform that gives every developer access to 40+ models through both a browser-based Web IDE and a terminal CLI. Here is why we built it and where we are headed.',
+      'Today we are launching Recoder.xyz into public beta: a completely free AI coding platform that gives every developer access to 40+ models through both a browser-based Spaces and a terminal CLI. Here is why we built it and where we are headed.',
     date: '2025-02-10',
     author: 'Recoder Team',
     category: 'Launch',
@@ -28,7 +28,7 @@ Today we are making that vision real. Recoder.xyz is now in public beta.
 
 ## What Recoder gives you
 
-At its core, Recoder is two things that stay perfectly in sync: a **terminal CLI** and a **browser-based Web IDE**. Start a session from your laptop, review generated code in the browser on your tablet, then push to production from either surface. Your context, files, and agent state travel with you.
+At its core, Recoder is two things that stay perfectly in sync: a **terminal CLI** and a **browser-based Spaces**. Start a session from your laptop, review generated code in the browser on your tablet, then push to production from either surface. Your context, files, and agent state travel with you.
 
 Under the hood you get access to **more than 40 AI models** — Claude 3.5 Sonnet and Claude Opus from Anthropic, the full GPT-4 family from OpenAI, Gemini 2.0 Flash and Pro from Google, DeepSeek R1 for advanced reasoning, and dozens more through OpenRouter. Every model is available through a single, consistent interface with no vendor lock-in.
 
@@ -59,7 +59,7 @@ npm install -g recoder-code
 recoder-code
 \`\`\`
 
-Or open the Web IDE at [https://recoder.xyz](https://recoder.xyz) and sign up. No credit card, no trial timer — just start building.
+Or open the Spaces at [https://recoder.xyz](https://recoder.xyz) and sign up. No credit card, no trial timer — just start building.
 
 ## What is next
 
@@ -95,7 +95,7 @@ With BYOK, you pay your model provider directly, at their published per-token ra
 
 ## How it works
 
-1. Go to **Settings > API Keys** in the Web IDE or run \`recoder-code config\` in the CLI.
+1. Go to **Settings > API Keys** in the Spaces or run \`recoder-code config\` in the CLI.
 2. Paste your key for one or more providers.
 3. Recoder encrypts the key with AES-256-GCM and stores it server-side.
 4. When you make a request, Recoder attaches your key and routes it to the provider.
@@ -112,21 +112,21 @@ You can also run models locally through Ollama. Point Recoder at your local endp
 BYOK is one of the foundational decisions we made early on. It keeps Recoder honest and keeps you in control.`,
   },
   {
-    slug: 'cli-web-ide-cross-platform',
-    title: 'Recoder CLI + Web IDE: Seamless Cross-Platform Development',
+    slug: 'cli-spaces-cross-platform',
+    title: 'Recoder CLI + Spaces: Seamless Cross-Platform Development',
     excerpt:
-      'Start a coding session in your terminal, pick it up in the browser, and push to production from either surface. A deep dive into how Recoder keeps your context, files, and agent state in sync across the CLI and Web IDE.',
+      'Start a coding session in your terminal, pick it up in the browser, and push to production from either surface. A deep dive into how Recoder keeps your context, files, and agent state in sync across the CLI and Spaces.',
     date: '2025-02-24',
     author: 'Recoder Team',
     category: 'Engineering',
     readTime: '7 min read',
-    content: `# CLI + Web IDE: Cross-Platform Development
+    content: `# CLI + Spaces: Cross-Platform Development
 
 Most AI coding tools force a choice: terminal or browser. We built Recoder so you never have to pick.
 
 ## Two surfaces, one session
 
-The Recoder CLI (\`recoder-code\`) and the Recoder Web IDE share the same backend session. When the AI generates a file in your terminal, it appears in the browser instantly. When you edit a file in the Web IDE, the CLI picks up the change. Conversation history, agent state, and file diffs are synchronized in real time over WebSocket connections.
+The Recoder CLI (\`recoder-code\`) and the Recoder Spaces share the same backend session. When the AI generates a file in your terminal, it appears in the browser instantly. When you edit a file in the Spaces, the CLI picks up the change. Conversation history, agent state, and file diffs are synchronized in real time over WebSocket connections.
 
 ## Why this matters
 
@@ -134,22 +134,22 @@ The Recoder CLI (\`recoder-code\`) and the Recoder Web IDE share the same backen
 Some tasks are faster in a terminal: running tests, grepping logs, piping output. Other tasks benefit from a visual canvas: reviewing diffs, browsing file trees, previewing a UI. With Recoder you switch between them without losing context.
 
 ### Device flexibility
-Start a session on your desktop CLI, commute, and resume on your laptop or tablet in the Web IDE. The session is tied to your account, not your device.
+Start a session on your desktop CLI, commute, and resume on your laptop or tablet in the Spaces. The session is tied to your account, not your device.
 
 ### Pair programming with AI
-Open the Web IDE side-by-side with your regular editor. Let the AI prototype in the Web IDE sandbox while you write production code locally. Merge the results when you are ready.
+Open the Spaces side-by-side with your regular editor. Let the AI prototype in the Spaces sandbox while you write production code locally. Merge the results when you are ready.
 
 ## Architecture overview
 
 \`\`\`
-CLI  <-->  Session API  <-->  Web IDE
+CLI  <-->  Session API  <-->  Spaces
              |
          Agent Runtime
              |
       Sandbox (Docker)
 \`\`\`
 
-The Session API is the single source of truth. Both the CLI and Web IDE are thin clients that send user input and render agent output. The Agent Runtime manages model calls, tool execution, and MCP server connections. Sandboxed execution happens in Docker containers that persist for the lifetime of the session.
+The Session API is the single source of truth. Both the CLI and Spaces are thin clients that send user input and render agent output. The Agent Runtime manages model calls, tool execution, and MCP server connections. Sandboxed execution happens in Docker containers that persist for the lifetime of the session.
 
 ## Getting started
 

@@ -10,12 +10,14 @@ const mocks = vi.hoisted(() => ({
   promptProject: vi.fn(),
   setProviderKey: vi.fn(async () => true),
   getProjectDiff: vi.fn(async () => []),
+  getProjectMessages: vi.fn(async () => []),
 }));
 
 vi.mock('../opencode-service-adapter', () => ({
   promptProject: mocks.promptProject,
   setProviderKey: mocks.setProviderKey,
   getProjectDiff: mocks.getProjectDiff,
+  getProjectMessages: mocks.getProjectMessages,
 }));
 
 describe('opencode-service-handler', () => {
@@ -23,8 +25,10 @@ describe('opencode-service-handler', () => {
     mocks.promptProject.mockReset();
     mocks.setProviderKey.mockReset();
     mocks.getProjectDiff.mockReset();
+    mocks.getProjectMessages.mockReset();
     mocks.setProviderKey.mockImplementation(async () => true);
     mocks.getProjectDiff.mockImplementation(async () => []);
+    mocks.getProjectMessages.mockImplementation(async () => []);
   });
 
   describe('forwardProviderKeys', () => {
@@ -269,6 +273,177 @@ describe('opencode-service-handler', () => {
       expect(readWorkspaceFile).toHaveBeenCalledWith('hello.txt');
       expect(writeSandboxFile).toHaveBeenCalledWith('sbx_1', 'hello.txt', 'hello');
       expect(result.syncedFiles).toEqual(['hello.txt']);
+    });
+
+    it('skips sandbox sync when the file content is unchanged', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm_same', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          {
+            type: 'text',
+            text: 'Updated `/workspace/src/App.tsx`.',
+          },
+        ],
+      });
+
+      const readWorkspaceFile = vi.fn().mockResolvedValue('same content');
+      const readSandboxFile = vi.fn().mockResolvedValue('same content');
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'update app',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        readSandboxFile,
+        writeSandboxFile,
+      });
+
+      expect(readWorkspaceFile).toHaveBeenCalledWith('src/App.tsx');
+      expect(readSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx');
+      expect(writeSandboxFile).not.toHaveBeenCalled();
+      expect(result.syncedFiles).toEqual([]);
+    });
+
+    it('writes the sandbox file when it does not exist yet', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm_new', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          {
+            type: 'text',
+            text: 'Created `/workspace/src/App.tsx`.',
+          },
+        ],
+      });
+
+      const readWorkspaceFile = vi.fn().mockResolvedValue('new content');
+      const readSandboxFile = vi.fn().mockRejectedValue(new Error('ENOENT: no such file or directory'));
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'create app',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        readSandboxFile,
+        writeSandboxFile,
+      });
+
+      expect(readSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx');
+      expect(writeSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx', 'new content');
+      expect(result.syncedFiles).toEqual(['src/App.tsx']);
+    });
+
+    it('syncs files from patch parts that expose a files array', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm_patch', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          {
+            id: 'p_patch',
+            sessionID: 's',
+            messageID: 'm_patch',
+            type: 'patch',
+            hash: 'abc123',
+            files: ['src/App.tsx'],
+          },
+        ],
+      });
+
+      const readWorkspaceFile = vi.fn().mockResolvedValue('updated app');
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'update app',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        writeSandboxFile,
+      });
+
+      expect(readWorkspaceFile).toHaveBeenCalledWith('src/App.tsx');
+      expect(writeSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx', 'updated app');
+      expect(result.syncedFiles).toEqual(['src/App.tsx']);
+    });
+
+    it('syncs files from current tool parts using state.input metadata', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm_tool', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          {
+            id: 'p_tool',
+            sessionID: 's',
+            messageID: 'm_tool',
+            type: 'tool',
+            tool: 'write',
+            state: {
+              status: 'completed',
+              input: {
+                filePath: '/workspace/src/App.tsx',
+              },
+            },
+          },
+        ],
+      });
+
+      const readWorkspaceFile = vi.fn().mockResolvedValue('tool output');
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'update app',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        writeSandboxFile,
+      });
+
+      expect(readWorkspaceFile).toHaveBeenCalledWith('src/App.tsx');
+      expect(writeSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/App.tsx', 'tool output');
+      expect(result.syncedFiles).toEqual(['src/App.tsx']);
+    });
+
+    it('loads the canonical stored message when the immediate response omits patch metadata', async () => {
+      mocks.promptProject.mockResolvedValueOnce({
+        info: { id: 'm_hist', sessionID: 's', role: 'assistant', time: { created: 0 } },
+        parts: [
+          { id: 'reasoning', sessionID: 's', messageID: 'm_hist', type: 'reasoning', text: 'Thinking...' },
+        ],
+      });
+      mocks.getProjectMessages.mockResolvedValueOnce([
+        {
+          info: { id: 'm_hist', sessionID: 's', role: 'assistant', time: { created: 0 } },
+          parts: [
+            {
+              id: 'p_hist',
+              sessionID: 's',
+              messageID: 'm_hist',
+              type: 'patch',
+              hash: 'hist123',
+              files: ['src/main.ts'],
+            },
+          ],
+        },
+      ]);
+
+      const readWorkspaceFile = vi.fn().mockResolvedValue('history output');
+      const writeSandboxFile = vi.fn().mockResolvedValue(undefined);
+
+      const { handleOpencodeServicePrompt } = await import('../opencode-service-handler');
+      const result = await handleOpencodeServicePrompt({
+        projectId: 'proj_1',
+        prompt: 'update main',
+        sandboxId: 'sbx_1',
+        readWorkspaceFile,
+        writeSandboxFile,
+      });
+
+      expect(mocks.getProjectMessages).toHaveBeenCalledWith('proj_1');
+      expect(readWorkspaceFile).toHaveBeenCalledWith('src/main.ts');
+      expect(writeSandboxFile).toHaveBeenCalledWith('sbx_1', 'src/main.ts', 'history output');
+      expect(result.syncedFiles).toEqual(['src/main.ts']);
     });
 
     it('passes directory option to promptProject', async () => {

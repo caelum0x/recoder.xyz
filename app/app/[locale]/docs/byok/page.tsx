@@ -225,7 +225,7 @@ export default function BYOKPage() {
                 {
                   step: '4',
                   title: 'Start Building!',
-                  desc: 'Use Web IDE or CLI - pay only for what you use',
+                  desc: 'Use Spaces or CLI - pay only for what you use',
                   detail: 'Check your AI provider dashboard to see exact costs'
                 }
               ].map((item, i) => (

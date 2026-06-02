@@ -12,12 +12,17 @@ import {
 	type ProjectStatus,
 	projects,
 	quotes,
+	workspaces,
 } from "@/db";
 import { applyProjectTransitionWithAudit } from "@/lib/agency/project-transition";
 import {
 	normalizeProjectStatus,
 	validateProjectStatusTransition,
 } from "@/lib/agency/project-workflow";
+import {
+	annotateRecoderTaskMetadata,
+	createAgencyDeliverableRevisionRun,
+} from "@/lib/agency/recoder-control-plane";
 import { maybeRefreshWeeklyDeliveryMetrics } from "@/lib/agency/weekly-delivery-metrics-refresh";
 
 const payloadSchema = z.object({
@@ -48,6 +53,62 @@ const formatProjectLink = (projectId: string) => {
 	const link = buildProjectLink(projectId);
 	return link ? `<${link}|View project>` : null;
 };
+
+async function createDeliverableRevisionRun(input: {
+	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
+	deliverable: Awaited<ReturnType<typeof db.query.deliverables.findFirst>>;
+	feedback: string;
+	source: string;
+}) {
+	if (!input.project?.workspaceDbId || !input.deliverable) {
+		return null;
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, input.project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		return null;
+	}
+
+	const created = await createAgencyDeliverableRevisionRun({
+		workspaceId: workspace.id,
+		projectId: input.project.id,
+		projectDbId: input.project.dbId,
+		projectName: input.project.name,
+		deliverable: input.deliverable,
+		feedback: input.feedback,
+		source: input.source,
+	});
+
+	if (!created?.taskId) {
+		return null;
+	}
+
+	await db
+		.update(deliverables)
+		.set({ taskId: created.taskId })
+		.where(eq(deliverables.dbId, input.deliverable.dbId));
+
+	if (input.deliverable.taskId) {
+		await annotateRecoderTaskMetadata({
+			taskId: input.deliverable.taskId,
+			triggeredBy: "client-channel-gateway",
+			reason: "Client review rejected deliverable",
+			metadataPatch: {
+				clientReview: {
+					status: "rejected",
+					feedback: input.feedback,
+					followUpTaskId: created.taskId,
+					source: input.source,
+					reviewedAt: new Date().toISOString(),
+				},
+			},
+		});
+	}
+
+	return created.taskId;
+}
 
 const recordGatewayEvent = async (params: {
 	provider: "slack" | "whatsapp" | "telegram" | "discord";
@@ -345,6 +406,13 @@ export async function POST(request: Request) {
 			deliverableId: deliverable.id,
 		});
 
+		const followUpTaskId = await createDeliverableRevisionRun({
+			project,
+			deliverable,
+			feedback: reason,
+			source: "client.channel-gateway.action.reject",
+		});
+
 		await recordGatewayEvent({
 			provider: payload.provider,
 			eventType: "deliverable_rejected",
@@ -358,6 +426,7 @@ export async function POST(request: Request) {
 		return Response.json({
 			ok: true,
 			replyText: `Deliverable ${deliverable.id} rejected.`,
+			metadata: followUpTaskId ? { followUpTaskId } : undefined,
 		});
 	}
 
@@ -467,7 +536,14 @@ export async function POST(request: Request) {
 		}
 
 		const milestoneDeliverables = await db
-			.select({ dbId: deliverables.dbId, id: deliverables.id })
+			.select({
+				dbId: deliverables.dbId,
+				id: deliverables.id,
+				taskId: deliverables.taskId,
+				name: deliverables.name,
+				type: deliverables.type,
+				content: deliverables.content,
+			})
 			.from(deliverables)
 			.where(
 				and(
@@ -535,6 +611,18 @@ export async function POST(request: Request) {
 			bulk: true,
 		});
 
+		const milestoneFollowUps = await Promise.all(
+			milestoneDeliverables.map(async (deliverable) => ({
+				deliverable,
+				followUpTaskId: await createDeliverableRevisionRun({
+					project,
+					deliverable,
+					feedback: reason,
+					source: "client.channel-gateway.action.milestone-reject",
+				}),
+			})),
+		);
+
 		await recordGatewayEvent({
 			provider: payload.provider,
 			eventType: "milestone_rejected",
@@ -548,6 +636,11 @@ export async function POST(request: Request) {
 		return Response.json({
 			ok: true,
 			replyText: `Milestone "${milestoneLabel}" rejected.`,
+			metadata: {
+				followUpTaskIds: milestoneFollowUps
+					.map((entry) => entry.followUpTaskId)
+					.filter(Boolean),
+			},
 		});
 	}
 

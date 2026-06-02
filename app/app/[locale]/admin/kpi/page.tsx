@@ -39,6 +39,15 @@ interface KPIData {
       mrrEstimate: number;
       paidUsers: number;
     };
+    funnel: {
+      leadCapture: {
+        totalLeads: number;
+        newThisWeek: number;
+        convertedToSignup: number;
+        conversionRatePct: number | null;
+        bySource: { homepage: number; signupPage: number; other: number };
+      };
+    };
     email: {
       newsletter: { activeSubscribers: number; newThisWeek: number };
       scheduled: { sentThisWeek: number; failedThisWeek: number; pending: number };
@@ -354,6 +363,37 @@ export default function KPIDashboard() {
                   label="Paid Users"
                   value={m.revenue.paidUsers}
                   sub="non-free plans"
+                />
+              </div>
+            </Section>
+
+            {/* LEAD FUNNEL */}
+            <Section title="Lead Funnel">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard
+                  label="Leads Captured"
+                  value={m.funnel.leadCapture.totalLeads}
+                  sub={`${m.funnel.leadCapture.newThisWeek} new this week`}
+                />
+                <StatCard
+                  label="Converted to Signup"
+                  value={m.funnel.leadCapture.convertedToSignup}
+                  sub={`of ${m.funnel.leadCapture.totalLeads} leads`}
+                />
+                <StatCard
+                  label="Conversion Rate"
+                  value={
+                    m.funnel.leadCapture.conversionRatePct === null
+                      ? '—'
+                      : m.funnel.leadCapture.conversionRatePct
+                  }
+                  suffix={m.funnel.leadCapture.conversionRatePct === null ? undefined : '%'}
+                  sub="leads → registered users"
+                />
+                <StatCard
+                  label="Leads by Source"
+                  value={`${m.funnel.leadCapture.bySource.homepage} / ${m.funnel.leadCapture.bySource.signupPage}`}
+                  sub={`homepage / signup · ${m.funnel.leadCapture.bySource.other} other`}
                 />
               </div>
             </Section>

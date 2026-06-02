@@ -13,15 +13,32 @@ import {
 	projects,
 	quotes,
 	users,
+	workspaces,
 } from "@/db";
 import { fetchCurrentTeam } from "@/services/teams";
 import { createChangeOrder } from "./change-order-actions";
+import {
+	deleteProjectRoutingPolicy,
+	requestProjectBrowserRun,
+	requestProjectComputerUseRun,
+	requestProjectGovernanceRun,
+	requestProjectHandoff,
+	requestProjectPlanningRun,
+	saveProjectRoutingPolicy,
+} from "../actions";
 import { CostSection } from "./cost-section";
 import { DeliverableSection } from "./deliverable-section";
 import { InvoiceSection } from "./invoice-section";
 import { ProjectStatusControl } from "./project-status-control";
 import { ProjectTransitionHistory } from "./project-transition-history";
 import { RetryClientTransitionPanel } from "./retry-client-transition-panel";
+import {
+	buildRecoderProjectControlSummary,
+	buildRecoderProjectDeliveryPackage,
+	getRecoderTaskContext,
+	type RecoderTaskContext,
+} from "@/lib/agency/recoder-control-plane";
+import { resolveModelRoutingPolicyForWorkspace } from "@/lib/agency/model-routing";
 
 type DodTemplateConfig = {
 	minContentLength: number;
@@ -73,6 +90,16 @@ export default async function ProjectDetailPage({
 		forced?: string;
 		startDate?: string;
 		endDate?: string;
+		handoffTaskId?: string;
+		handoffRequested?: string;
+		planningTaskId?: string;
+		planningRequested?: string;
+		governanceTaskId?: string;
+		governanceRequested?: string;
+		browserTaskId?: string;
+		browserRequested?: string;
+		computerUseTaskId?: string;
+		computerUseRequested?: string;
 	}>;
 }) {
 	const { projectId } = await params;
@@ -140,6 +167,16 @@ export default async function ProjectDetailPage({
 	const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
 	const normalizedStartDate = parsedStartDate ? toIsoDate(parsedStartDate) : "";
 	const normalizedEndDate = parsedEndDate ? toIsoDate(parsedEndDate) : "";
+	const handoffTaskId = query.handoffTaskId?.trim() ?? "";
+	const handoffRequested = query.handoffRequested?.trim() ?? "";
+	const planningTaskId = query.planningTaskId?.trim() ?? "";
+	const planningRequested = query.planningRequested?.trim() ?? "";
+	const governanceTaskId = query.governanceTaskId?.trim() ?? "";
+	const governanceRequested = query.governanceRequested?.trim() ?? "";
+	const browserTaskId = query.browserTaskId?.trim() ?? "";
+	const browserRequested = query.browserRequested?.trim() ?? "";
+	const computerUseTaskId = query.computerUseTaskId?.trim() ?? "";
+	const computerUseRequested = query.computerUseRequested?.trim() ?? "";
 	if (parsedStartDate) {
 		transitionWhere.push(
 			gte(projectStatusTransitions.createdAt, parsedStartDate),
@@ -194,6 +231,36 @@ export default async function ProjectDetailPage({
 		if (normalizedEndDate) {
 			params.set("endDate", normalizedEndDate);
 		}
+		if (handoffTaskId) {
+			params.set("handoffTaskId", handoffTaskId);
+		}
+		if (handoffRequested) {
+			params.set("handoffRequested", handoffRequested);
+		}
+		if (planningTaskId) {
+			params.set("planningTaskId", planningTaskId);
+		}
+		if (planningRequested) {
+			params.set("planningRequested", planningRequested);
+		}
+		if (governanceTaskId) {
+			params.set("governanceTaskId", governanceTaskId);
+		}
+		if (governanceRequested) {
+			params.set("governanceRequested", governanceRequested);
+		}
+		if (browserTaskId) {
+			params.set("browserTaskId", browserTaskId);
+		}
+		if (browserRequested) {
+			params.set("browserRequested", browserRequested);
+		}
+		if (computerUseTaskId) {
+			params.set("computerUseTaskId", computerUseTaskId);
+		}
+		if (computerUseRequested) {
+			params.set("computerUseRequested", computerUseRequested);
+		}
 		params.set("pageSize", String(pageSize));
 		params.set("page", String(currentPage));
 		redirect(`/projects/${projectId}?${params.toString()}`);
@@ -209,6 +276,7 @@ export default async function ProjectDetailPage({
 		dodTemplatesRaw,
 		projectCostEntries,
 		linkedQuote,
+		projectWorkspace,
 	] = await Promise.all([
 		db.query.clients.findFirst({
 			where: eq(clients.dbId, project.clientDbId),
@@ -297,7 +365,15 @@ export default async function ProjectDetailPage({
 					where: eq(quotes.dbId, project.quoteDbId),
 				})
 			: Promise.resolve(null),
+		project.workspaceDbId
+			? db.query.workspaces.findFirst({
+					where: eq(workspaces.dbId, project.workspaceDbId),
+				})
+			: Promise.resolve(null),
 	]);
+	const effectiveRoutingPolicy = projectWorkspace?.id
+		? await resolveModelRoutingPolicyForWorkspace(projectWorkspace.id)
+		: null;
 	const qaGateRuns = qaGateRunsRaw.rows.map((row) => {
 		const record = row as Record<string, unknown>;
 		const failureReasonsRaw = record.failure_reasons;
@@ -331,6 +407,34 @@ export default async function ProjectDetailPage({
 			checklistItems: parseChecklistItems(record.checklist_items),
 		};
 	}
+
+	const controlPlaneByDeliverableId = Object.fromEntries(
+		await Promise.all(
+			projectDeliverables.map(async (deliverable) => [
+				deliverable.id,
+				await getRecoderTaskContext(deliverable.taskId),
+			]),
+		),
+	) as Record<string, RecoderTaskContext | null>;
+	const controlPlaneSummary = await buildRecoderProjectControlSummary({
+		workspaceId: projectWorkspace?.id ?? null,
+		taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
+	});
+	const deliveryPackage = await buildRecoderProjectDeliveryPackage({
+		projectId: project.id,
+		projectName: project.name,
+		workspaceId: projectWorkspace?.id ?? null,
+		deliverables: projectDeliverables.map((deliverable) => ({
+			id: deliverable.id,
+			name: deliverable.name,
+			status: deliverable.status,
+			type: deliverable.type,
+			taskId: deliverable.taskId,
+			fileKey: deliverable.fileKey,
+			milestoneLabel: deliverable.milestoneLabel,
+			content: deliverable.content,
+		})),
+	});
 
 	return (
 		<div className="space-y-6">
@@ -369,6 +473,13 @@ export default async function ProjectDetailPage({
 						Open Workflow
 					</Link>
 				)}
+				<Link
+					href={`/projects/${project.id}/delivery-package`}
+					className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-text hover:bg-bg-hover transition-colors"
+				>
+					<ExternalLinkIcon className="size-3.5" />
+					Export Delivery Package
+				</Link>
 			</div>
 
 			{project.brief && (
@@ -379,6 +490,525 @@ export default async function ProjectDetailPage({
 					</p>
 				</div>
 			)}
+
+			{handoffTaskId ? (
+				<div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4 text-sm text-sky-200">
+					Project handoff run created: <span className="font-medium">{handoffTaskId}</span>
+				</div>
+			) : null}
+			{handoffRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project handoff request was submitted, but no shared run was created.
+				</div>
+			) : null}
+			{planningTaskId ? (
+				<div className="rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4 text-sm text-indigo-200">
+					Project planning run created: <span className="font-medium">{planningTaskId}</span>
+				</div>
+			) : null}
+			{planningRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project planning request was submitted, but no shared run was created.
+				</div>
+			) : null}
+			{governanceTaskId ? (
+				<div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4 text-sm text-violet-200">
+					Project governance run created: <span className="font-medium">{governanceTaskId}</span>
+				</div>
+			) : null}
+			{governanceRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project governance request was submitted, but no shared run was created.
+				</div>
+			) : null}
+			{browserTaskId ? (
+				<div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-200">
+					Project browser run created: <span className="font-medium">{browserTaskId}</span>
+				</div>
+			) : null}
+			{browserRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project browser request was submitted, but no shared run was created.
+				</div>
+			) : null}
+			{computerUseTaskId ? (
+				<div className="rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/10 p-4 text-sm text-fuchsia-200">
+					Project computer-use run created: <span className="font-medium">{computerUseTaskId}</span>
+				</div>
+			) : null}
+			{computerUseRequested === "error" ? (
+				<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+					Project computer-use request was submitted, but no shared run was created.
+				</div>
+			) : null}
+
+			<div className="rounded-xl border border-border bg-background p-4">
+				<h2 className="text-sm font-medium text-text-muted mb-3">
+					Control Plane Summary
+				</h2>
+				<div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Linked runs</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.totalTasks}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Pending approvals</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.pendingApprovals}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Active handoffs</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.activeHandoffs}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Online agents</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.onlineAgents}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Evidence refs</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{controlPlaneSummary.evidenceCount}
+						</p>
+					</div>
+				</div>
+				<div className="mt-3 flex flex-wrap gap-2">
+					<span className="inline-flex items-center rounded-full bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-300">
+						source: {controlPlaneSummary.source}
+					</span>
+					{Object.entries(controlPlaneSummary.states).map(([state, count]) => (
+						<span
+							key={state}
+							className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary"
+						>
+							{state}: {count}
+						</span>
+					))}
+					{controlPlaneSummary.previewCount > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
+							previews: {controlPlaneSummary.previewCount}
+						</span>
+					) : null}
+					{controlPlaneSummary.artifactCount > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-indigo-500/10 px-2 py-0.5 text-[11px] text-indigo-300">
+							artifacts: {controlPlaneSummary.artifactCount}
+						</span>
+					) : null}
+					{controlPlaneSummary.logCount > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-slate-500/10 px-2 py-0.5 text-[11px] text-slate-300">
+							logs: {controlPlaneSummary.logCount}
+						</span>
+					) : null}
+					{controlPlaneSummary.pairedBridgeSessions > 0 ||
+					controlPlaneSummary.localBridgeSessions > 0 ? (
+						<span className="inline-flex items-center rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] text-sky-300">
+							sessions: {controlPlaneSummary.pairedBridgeSessions}/
+							{controlPlaneSummary.localBridgeSessions}
+						</span>
+					) : null}
+				</div>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4">
+				<h2 className="mb-3 text-sm font-medium text-text-muted">
+					Review Summary
+				</h2>
+				<div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Review ready</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.reviewReadyCount}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Merge requested</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.mergeRequestedCount}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Ready to merge</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.readyToMergeCount}
+						</p>
+					</div>
+					<div className="rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] text-text-muted">Branches</p>
+						<p className="mt-1 text-lg font-semibold text-text">
+							{deliveryPackage.reviewSummary.branches.length}
+						</p>
+					</div>
+				</div>
+				<div className="mt-3 flex flex-wrap gap-2">
+					{deliveryPackage.reviewSummary.branches.slice(0, 6).map((branch) => (
+						<span
+							key={branch}
+							className="inline-flex items-center rounded-full bg-orange-500/10 px-2 py-0.5 text-[11px] text-orange-300"
+						>
+							{branch}
+						</span>
+					))}
+				</div>
+				{deliveryPackage.reviewSummary.latestEvents.length ? (
+					<div className="mt-4 rounded-lg border border-border/70 bg-bg-hover/20 p-3">
+						<p className="text-[11px] font-medium text-text-muted">
+							Latest review events
+						</p>
+						<div className="mt-2 space-y-1">
+							{deliveryPackage.reviewSummary.latestEvents.slice(0, 5).map((entry, index) => (
+								<p
+									key={`${entry.deliverableId}-${entry.at ?? "event"}-${index}`}
+									className="text-[11px] text-text-muted"
+								>
+									<span className="text-text">{entry.deliverableName}</span>
+									{": "}
+									{entry.type ?? "review.event"}
+									{entry.branchName ? ` • ${entry.branchName}` : ""}
+									{entry.status ? ` • ${entry.status}` : ""}
+								</p>
+							))}
+						</div>
+					</div>
+				) : null}
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Policy Snapshot</h2>
+					<span className="text-xs text-text-muted">
+						Routing and budget guardrails for this project
+					</span>
+				</div>
+				<div className="flex flex-wrap gap-2 text-[11px]">
+					<span className="rounded bg-orange-500/10 px-2 py-0.5 text-orange-300">
+						warn:{project.costWarningThresholdPct}%
+					</span>
+					<span className="rounded bg-red-500/10 px-2 py-0.5 text-red-300">
+						hard-stop:{project.costHardStopThresholdPct}% {project.costHardStopEnabled ? "on" : "off"}
+					</span>
+					{effectiveRoutingPolicy ? (
+						<>
+							<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+								policy:{effectiveRoutingPolicy.name}
+							</span>
+							<span className="rounded bg-cyan-500/10 px-2 py-0.5 text-cyan-300">
+								model:{effectiveRoutingPolicy.preferredModelId}
+							</span>
+							{effectiveRoutingPolicy.fallbackModelId ? (
+								<span className="rounded bg-teal-500/10 px-2 py-0.5 text-teal-300">
+									fallback:{effectiveRoutingPolicy.fallbackModelId}
+								</span>
+							) : null}
+							{effectiveRoutingPolicy.costCeilingCentsPerGeneration != null ? (
+								<span className="rounded bg-indigo-500/10 px-2 py-0.5 text-indigo-300">
+									ceiling:{effectiveRoutingPolicy.costCeilingCentsPerGeneration}c
+								</span>
+							) : null}
+						</>
+					) : (
+						<span className="rounded bg-zinc-500/10 px-2 py-0.5 text-zinc-300">
+							no routing policy
+						</span>
+					)}
+				</div>
+				<form
+					action={saveProjectRoutingPolicy.bind(null, project.id)}
+					className="grid grid-cols-1 gap-2 md:grid-cols-5"
+				>
+					<input
+						name="name"
+						required
+						defaultValue={effectiveRoutingPolicy?.name ?? `${project.name} policy`}
+						placeholder="Policy name"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="preferredModelId"
+						required
+						defaultValue={effectiveRoutingPolicy?.preferredModelId ?? ""}
+						placeholder="Preferred model ID"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="fallbackModelId"
+						defaultValue={effectiveRoutingPolicy?.fallbackModelId ?? ""}
+						placeholder="Fallback model ID"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="costCeilingCentsPerGeneration"
+						type="number"
+						min={0}
+						defaultValue={effectiveRoutingPolicy?.costCeilingCentsPerGeneration ?? ""}
+						placeholder="Cost ceiling cents/gen"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<input
+						name="priority"
+						type="number"
+						defaultValue={effectiveRoutingPolicy?.priority ?? 0}
+						placeholder="Priority"
+						className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+					/>
+					<label className="inline-flex items-center gap-2 text-xs text-text-muted">
+						<input
+							type="checkbox"
+							name="isActive"
+							value="1"
+							defaultChecked={effectiveRoutingPolicy?.dbId ? true : true}
+							className="size-4 rounded border border-border bg-background"
+						/>
+						Policy active
+					</label>
+					<div className="md:col-span-4 flex flex-wrap gap-2">
+						<button
+							type="submit"
+							className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+						>
+							Save Project Routing Policy
+						</button>
+					</div>
+				</form>
+				{effectiveRoutingPolicy ? (
+					<form action={deleteProjectRoutingPolicy.bind(null, project.id)}>
+						<button
+							type="submit"
+							className="rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover"
+						>
+							Delete Project Routing Policy
+						</button>
+					</form>
+				) : null}
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Project Handoff</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared handoff run in the linked workspace
+					</span>
+				</div>
+				<form
+					action={requestProjectHandoff.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<textarea
+						name="note"
+						rows={3}
+						placeholder="Optional handoff note for the next operator or agent"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Project Handoff Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Planning Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared planning/product run in the linked workspace
+					</span>
+				</div>
+				<form
+					action={requestProjectPlanningRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<textarea
+						name="note"
+						rows={3}
+						placeholder="Optional planning focus, scope question, or risk area"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Planning Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Governance Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared governance/policy audit run
+					</span>
+				</div>
+				<form
+					action={requestProjectGovernanceRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<textarea
+						name="note"
+						rows={3}
+						placeholder="Optional governance focus, policy concern, or audit question"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Governance Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Browser Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared browser-task run in the linked workspace
+					</span>
+				</div>
+				<form
+					action={requestProjectBrowserRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+						<input
+							name="targetUrl"
+							placeholder="Target URL (optional)"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+						<input
+							name="sessionName"
+							placeholder="Session name (optional)"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+					</div>
+					<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+						<select
+							name="engine"
+							defaultValue="chrome"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="chrome">Chrome</option>
+							<option value="lightpanda">Lightpanda</option>
+						</select>
+						<input
+							name="allowedDomains"
+							placeholder="Allowed domains comma-separated"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+					</div>
+					<textarea
+						name="goal"
+						rows={3}
+						placeholder="Optional browser goal, validation task, or research target"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<div className="flex flex-wrap gap-4 text-xs text-text-muted">
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="headed"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Run headed
+						</label>
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="annotate"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Annotated screenshots
+						</label>
+					</div>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Browser Run
+					</button>
+				</form>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">Computer Use Run</h2>
+					<span className="text-xs text-text-muted">
+						Create a shared desktop/computer-use run in the linked workspace
+					</span>
+				</div>
+				<form
+					action={requestProjectComputerUseRun.bind(null, project.id)}
+					className="space-y-2"
+				>
+					<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+						<input
+							name="appName"
+							placeholder="Target app (optional)"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						/>
+						<select
+							name="targetMode"
+							defaultValue="auto"
+							className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="auto">Auto detect</option>
+							<option value="native">Native accessibility</option>
+							<option value="electron">Electron / CDP</option>
+						</select>
+					</div>
+					<textarea
+						name="goal"
+						rows={3}
+						placeholder="Optional desktop goal, GUI workflow, or validation target"
+						className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text resize-none"
+					/>
+					<div className="flex flex-wrap gap-4 text-xs text-text-muted">
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="useCdp"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Prefer CDP
+						</label>
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="captureScreenshot"
+								value="1"
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Capture screenshots
+						</label>
+						<label className="inline-flex items-center gap-2">
+							<input
+								type="checkbox"
+								name="includeSnapshot"
+								value="1"
+								defaultChecked
+								className="size-4 rounded border border-border bg-background"
+							/>
+							Include snapshots
+						</label>
+					</div>
+					<button
+						type="submit"
+						className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+					>
+						Create Computer Use Run
+					</button>
+				</form>
+			</div>
 
 			<ProjectTransitionHistory
 				items={transitions.map((item) => ({
@@ -410,6 +1040,42 @@ export default async function ProjectDetailPage({
 								qaTemplate?: { deliverableType?: string } | null;
 							} | null
 						)?.qaTemplate?.deliverableType ?? null,
+					controlPlaneSummary:
+						(
+							item.metadata as {
+								controlPlaneSummary?: {
+									totalTasks?: number;
+									pendingApprovals?: number;
+									activeHandoffs?: number;
+									onlineAgents?: number;
+									evidenceCount?: number;
+									previewCount?: number;
+								} | null;
+							} | null
+						)?.controlPlaneSummary ?? null,
+					costGuardrail:
+						(
+							item.metadata as {
+								costGuardrail?: {
+									percentUsed?: number | null;
+									warningBreached?: boolean;
+									hardStopBreached?: boolean;
+								} | null;
+							} | null
+						)?.costGuardrail ?? null,
+					followUpTaskId:
+						(
+							item.metadata as {
+								followUpTaskId?: string | null;
+								clientReview?: { followUpTaskId?: string | null } | null;
+							} | null
+						)?.followUpTaskId ??
+						(
+							item.metadata as {
+								clientReview?: { followUpTaskId?: string | null } | null;
+							} | null
+						)?.clientReview?.followUpTaskId ??
+						null,
 				}))}
 				projectId={project.id}
 				filters={{
@@ -530,6 +1196,7 @@ export default async function ProjectDetailPage({
 				projectId={project.id}
 				deliverables={projectDeliverables}
 				dodTemplatesByType={dodTemplatesByType}
+				controlPlaneByDeliverableId={controlPlaneByDeliverableId}
 			/>
 
 			<div className="rounded-xl border border-border bg-background p-4">

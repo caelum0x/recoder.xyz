@@ -6,6 +6,7 @@ import crypto from 'crypto';
 
 import { prisma } from './prisma';
 import { getPlanLimits, canStartSession, canUseModel } from './plan-config';
+import { ensureCommercialQuota } from '@/lib/commercial-quota';
 
 export interface UsageMetadata {
   modelUsed?: string;
@@ -59,38 +60,7 @@ export async function checkQuota(userId: string): Promise<QuotaInfo> {
   }
 
   const planLimits = getPlanLimits(user.subscriptionPlan);
-  
-  // Get or create current quota period
-  let quota = await prisma.user_quota.findFirst({
-    where: { 
-      userId,
-      periodEnd: { gt: new Date() }
-    },
-    orderBy: { periodStart: 'desc' }
-  });
-  
-  if (!quota) {
-    quota = await prisma.user_quota.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId,
-        sessionsPerDay: planLimits.sessionsPerDay || 5,
-        sessionsUsedToday: 0,
-        tokensPerSession: planLimits.tokensPerMonth ? Math.floor(planLimits.tokensPerMonth / 30) : 10000,
-        requestsLimit: planLimits.monthlyRequests,
-        requestsUsed: 0,
-        periodStart: new Date(),
-        periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        lastResetAt: new Date(),
-        updatedAt: new Date()
-      },
-    });
-  }
-
-  // Check if period has expired and needs reset
-  if (quota.periodEnd < new Date()) {
-    quota = await resetQuota(userId, planLimits.monthlyRequests, planLimits.tokensPerMonth);
-  }
+  const quota = await ensureCommercialQuota(userId, user.subscriptionPlan, 'month');
 
   // Check if user can start a new session (using sessions instead of requests)
   const today = new Date();
@@ -204,40 +174,6 @@ export async function trackUsage(
  * @param tokensLimit New tokens limit
  * @returns New quota record
  */
-async function resetQuota(
-  userId: string,
-  requestsLimit: number,
-  tokensLimit: number
-): Promise<any> {
-  // Archive old quota
-  await prisma.user_quota.updateMany({
-    where: {
-      userId,
-      periodEnd: { lt: new Date() },
-    },
-    data: {
-      updatedAt: new Date(),
-    },
-  });
-
-  // Create new quota period
-  return prisma.user_quota.create({
-    data: {
-      id: crypto.randomUUID(),
-      userId,
-      sessionsPerDay: 5,
-      sessionsUsedToday: 0,
-      tokensPerSession: tokensLimit,
-      requestsLimit,
-      requestsUsed: 0,
-      periodStart: new Date(),
-      periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      lastResetAt: new Date(),
-      updatedAt: new Date()
-    },
-  });
-}
-
 /**
  * Get usage statistics for a user
  * @param userId The user's ID
