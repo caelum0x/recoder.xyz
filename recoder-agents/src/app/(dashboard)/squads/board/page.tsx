@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, LayoutGrid, AlertTriangle, Play, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +11,7 @@ import { cn } from '@/lib/utils';
 import {
   useAllSquadTasks,
   useTransitionBoardAssignment,
+  useCollabStream,
   type BoardTask,
   type AssignmentStatus,
 } from '@/hooks/use-squads';
@@ -37,6 +40,21 @@ const COLUMNS: Column[] = [
 export default function SquadTaskBoardPage() {
   const { data: tasks, isLoading, isError } = useAllSquadTasks();
   const transition = useTransitionBoardAssignment();
+  const qc = useQueryClient();
+
+  // Live refresh: when a dispatch/assignment event crosses the collab stream,
+  // refetch the board immediately instead of waiting for the 10s poll.
+  const { events, connected } = useCollabStream(20);
+  const lastSeen = useRef<string | null>(null);
+  useEffect(() => {
+    const latest = events[0];
+    if (!latest || latest.at === lastSeen.current) return;
+    lastSeen.current = latest.at;
+    const a = latest.action ?? '';
+    if (a.startsWith('task_') || a.startsWith('assignment_')) {
+      qc.invalidateQueries({ queryKey: ['squad-tasks'] });
+    }
+  }, [events, qc]);
 
   const byColumn = (col: Column) => (tasks ?? []).filter((t) => col.statuses.includes(t.status));
 
@@ -53,7 +71,13 @@ export default function SquadTaskBoardPage() {
             </h1>
             <p className="text-sm text-muted-foreground">Every dispatched task across your squads, grouped by status.</p>
           </div>
-          <Button variant="outline" size="sm" asChild><Link href="/squads">Manage squads</Link></Button>
+          <div className="flex items-center gap-3">
+            <span className={cn('flex items-center gap-1.5 text-[11px] font-medium', connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
+              <span className={cn('h-2 w-2 rounded-full', connected ? 'animate-pulse bg-emerald-500' : 'bg-zinc-400')} />
+              {connected ? 'Live' : 'Polling'}
+            </span>
+            <Button variant="outline" size="sm" asChild><Link href="/squads">Manage squads</Link></Button>
+          </div>
         </div>
       </div>
 
