@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { Users, Plus, Trash2, Loader2, ChevronRight, Crown, AlertTriangle, Upload } from 'lucide-react';
+import { Users, Plus, Trash2, Loader2, ChevronRight, Crown, AlertTriangle, Upload, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -90,6 +90,12 @@ export default function SquadsPage() {
               e.target.value = '';
             }}
           />
+          <Button variant="outline" asChild>
+            <Link href="/squads/board">
+              <LayoutGrid className="mr-2 h-4 w-4" />
+              Task board
+            </Link>
+          </Button>
           <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importSquad.isPending}>
             {importSquad.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
             Import

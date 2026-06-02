@@ -201,6 +201,18 @@ export function getSquadTask(id: string): SquadTask | undefined {
   return getStore()[id];
 }
 
+/**
+ * All squad tasks across every squad, newest first. Optionally restricted to a
+ * set of squad ids (used by the cross-squad board to scope to an owner's
+ * squads). Powers the operational task board where per-squad lists are merged.
+ */
+export function listAllSquadTasks(squadIds?: readonly string[]): SquadTask[] {
+  const allow = squadIds ? new Set(squadIds) : null;
+  return Object.values(getStore())
+    .filter((t) => (allow ? allow.has(t.squadId) : true))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
 export interface SquadStats {
   totalTasks: number;
   byStatus: Record<string, number>;

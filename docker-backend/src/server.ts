@@ -16309,6 +16309,21 @@ app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async
   sendSuccess(res, { ...result.squadTask, deliveredTo: result.deliveredTo ?? [], executed });
 }));
 
+// Cross-squad board: every task across the caller's squads, enriched with the
+// squad name so the frontend doesn't need an N+1 join. Scoped to squads the
+// caller owns so the board never leaks another user's dispatches.
+app.get('/api/a2a/squad-tasks', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listAllSquadTasks } = await import('./a2a/squad-dispatch.service.js');
+  const { listSquads } = await import('./a2a/squad.service.js');
+  const squads = listSquads(req.userId!);
+  const nameById = new Map(squads.map((s) => [s.id, s.name]));
+  const tasks = listAllSquadTasks(squads.map((s) => s.id)).map((t) => ({
+    ...t,
+    squadName: nameById.get(t.squadId) ?? t.squadId,
+  }));
+  sendSuccess(res, { tasks });
+}));
+
 app.get('/api/a2a/squads/:id/tasks', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { listSquadTasks } = await import('./a2a/squad-dispatch.service.js');
   sendSuccess(res, { tasks: listSquadTasks(req.params.id) });
