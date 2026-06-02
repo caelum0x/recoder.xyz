@@ -33,8 +33,17 @@ export default function SquadsPage() {
   const importSquad = useImportSquad();
   const fileRef = useRef<HTMLInputElement>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   const presenceByAgent = new Map((roster ?? []).map((r) => [r.agentId, r.presence?.availability ?? 'offline']));
+
+  const q = search.trim().toLowerCase();
+  const visibleSquads = q
+    ? (squads ?? []).filter((s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.description?.toLowerCase().includes(q) ||
+        s.members.some((m) => m.id.toLowerCase().includes(q)))
+    : squads;
 
   const handleImportFile = async (file: File) => {
     try {
@@ -94,6 +103,14 @@ export default function SquadsPage() {
 
       <SquadStats />
 
+      {squads && squads.length > 0 && (
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search squads by name, description, or member…"
+        />
+      )}
+
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -125,9 +142,11 @@ export default function SquadsPage() {
             New Squad
           </Button>
         </div>
+      ) : (visibleSquads ?? []).length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">No squads match “{search}”.</p>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {squads.map((squad) => (
+          {(visibleSquads ?? []).map((squad) => (
             <SquadCard key={squad.id} squad={squad} presenceByAgent={presenceByAgent} />
           ))}
         </div>
