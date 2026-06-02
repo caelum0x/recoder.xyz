@@ -64,7 +64,7 @@ import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
-import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
+import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, agentRegistryRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
 import { memoryRouter } from './a2a/memory.routes.js';
 import { codeSearchRouter } from './a2a/code-search.routes.js';
@@ -720,7 +720,7 @@ function isLocalhostOrigin(origin: string): boolean {
 /**
  * Optional auth middleware - attempts authentication but allows anonymous access.
  * Used for routes that should work for both authenticated and unauthenticated users
- * (e.g., container creation from web.recoder.xyz for anonymous/local projects).
+ * (e.g., container creation for anonymous/local sandbox projects).
  */
 function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   if (STRICT_AUTH) {
@@ -907,7 +907,7 @@ function verifyProjectOwnership(req: AuthenticatedRequest, res: express.Response
 
 /**
  * Flexible project ownership middleware - allows anonymous users to create/access
- * containers for local projects (e.g., from web.recoder.xyz anonymous mode).
+ * containers for local sandbox projects.
  * For authenticated users, still verifies ownership.
  */
 function flexibleProjectOwnership(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
@@ -921,7 +921,7 @@ function flexibleProjectOwnership(req: AuthenticatedRequest, res: express.Respon
     return res.status(400).json({ error: 'Invalid sandbox project ID' });
   }
 
-  // Allow anonymous users to access containers (web.recoder.xyz anonymous mode)
+  // Allow anonymous users to access local sandbox containers when strict auth is disabled.
   if (req.userId === 'anonymous') {
     logger.info({ projectId: maskIdentifier(projectId), method: req.method, path: req.path },
       'anonymous container access allowed');
@@ -1658,11 +1658,11 @@ const PUBLIC_DOCKER_BACKEND_URL =
   process.env.BACKEND_PUBLIC_URL ||
   'https://docker.recoder.xyz';
 
-const PUBLIC_WEB_PREVIEW_URL =
+const PUBLIC_PREVIEW_URL =
   process.env.PUBLIC_URL ||
-  process.env.RECODER_WEB_URL ||
+  process.env.PREVIEW_PUBLIC_URL ||
   process.env.MAIN_SITE_URL ||
-  'https://web.recoder.xyz';
+  PUBLIC_DOCKER_BACKEND_URL;
 
 const PUBLIC_DOCKER_BACKEND_WS_URL = PUBLIC_DOCKER_BACKEND_URL
   .replace('https://', 'wss://')
@@ -2768,7 +2768,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
   let reservedUserId: string | null = null;
   try {
     const { projectId, framework, templateId } = req.body;
-    const userId = req.userId || 'anonymous'; // May be anonymous for web.recoder.xyz unauthenticated users
+    const userId = req.userId || 'anonymous';
     const isAnonymous = userId === 'anonymous';
 
     // Audit log
@@ -2839,7 +2839,7 @@ app.post('/api/container', containerLimiter, optionalAuthenticateRequest, flexib
       try {
         const dc = getDaytonaClient();
         const sandbox = await dc.createSandbox({
-          labels: { projectId, userId, source: 'web-ide' },
+          labels: { projectId, userId, source: 'spaces' },
           // Uses 43200s (12hr) defaults from daytona-client.ts — do NOT override here
           public: true,
           resources: {
@@ -10234,7 +10234,7 @@ app.post('/api/tunnel/start', authenticateRequest, async (req: AuthenticatedRequ
   try {
     // Get the local URL to tunnel
     // The preview URL proxies to the container's dev server
-    const previewBaseUrl = PUBLIC_WEB_PREVIEW_URL.replace(/\/+$/, '');
+    const previewBaseUrl = PUBLIC_PREVIEW_URL.replace(/\/+$/, '');
     const localUrl = `${previewBaseUrl}/preview/${projectId}`;
 
     // Mark as starting
@@ -15510,6 +15510,11 @@ app.use('/api/v1/identity', identityRouter);
 
 // App key management endpoints (requires API key auth)
 app.use('/api/v1/app-keys', appKeysRouter);
+// Agent Registry REST API: register / discover / heartbeat / health for external agents.
+// Mounted BEFORE the legacy a2aRouter so the in-process AgentRegistryService (used by
+// external Claude Code / Codex clients) takes precedence over the admin-gated legacy
+// connector registry at a2a-gateway.ts (`GET /agents`, `PUT /agents/:id`).
+app.use('/api/a2a/agents', agentRegistryRouter);
 app.use('/api/a2a', a2aRouter);
 app.use('/api/a2a/tasks', taskLifecycleRouter);
 app.use('/api/a2a/channels', collaborationRouter);
@@ -15588,12 +15593,12 @@ const codingRuntimeSelectionByProject = new Map<string, {
 }>();
 
 app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getRuntime } = await import('./a2a/coding-runtime.js');
+  const { getRuntime, listRuntimes } = await import('./a2a/coding-runtime.js');
   const { getCodingRuntimeHistoryService } = await import('./coding-runtime-history.js');
   const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt, executionMode } = req.body;
   if (!projectId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId required'));
   let resolvedRuntimeType = runtimeType;
-  let autoSelection: { classification: unknown; routeDecision: unknown } | undefined;
+  let autoSelection: { classification: unknown; routeDecision: unknown; adaptive?: unknown } | undefined;
 
   if (runtimeType === 'auto') {
     if (typeof prompt !== 'string' || !prompt.trim()) {
@@ -15610,7 +15615,32 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
       resolvedRuntimeType = 'opencode';
     }
 
-    autoSelection = { classification, routeDecision };
+    // Adaptive routing: if a runtime has a strong proven track record for this
+    // category (skill profiles), prefer it over the static mapping. Conservative
+    // gate (score >= 0.6 already requires both high success rate and evidence).
+    let adaptive: { picked: string; score: number; reason: string } | undefined;
+    try {
+      const category = (routeDecision as { category?: string }).category;
+      if (category) {
+        const { rankAgentsForSkills } = await import('./agent-skill-profile.js');
+        const candidates = listRuntimes()
+          .filter((rt) => rt !== 'native')
+          .map((rt) => `runtime:${rt}`);
+        const ranked = rankAgentsForSkills(candidates, [category]);
+        const best = ranked[0];
+        if (best && best.score >= 0.6) {
+          const bestRuntime = best.agentId.replace(/^runtime:/, '');
+          if (bestRuntime && bestRuntime !== resolvedRuntimeType && getRuntime(bestRuntime as never)) {
+            adaptive = { picked: bestRuntime, score: best.score, reason: best.reason };
+            resolvedRuntimeType = bestRuntime;
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn({ err, projectId }, 'adaptive routing skipped');
+    }
+
+    autoSelection = { classification, routeDecision, adaptive };
   }
 
   const runtime = getRuntime(resolvedRuntimeType as never);
@@ -15644,6 +15674,18 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
     autoSelection,
   });
 
+  // Best-effort, fire-and-forget: auto-build the code knowledge graph so agents
+  // can navigate the project immediately. Works for Daytona + Docker sandboxes
+  // (execInContainer routes both); never blocks the response.
+  void (async () => {
+    try {
+      const { autoBuildCodeGraph } = await import('./code-graph-bootstrap.js');
+      await autoBuildCodeGraph((cmd) => execInContainer(entry.id, cmd), projectId);
+    } catch (err) {
+      logger.warn({ err, projectId }, 'code-graph auto-build failed');
+    }
+  })();
+
   sendSuccess(res, {
     ...session,
     selectedRuntime: resolvedRuntimeType,
@@ -15654,8 +15696,9 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
 app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwnership, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getRuntime } = await import('./a2a/coding-runtime.js');
   const { getCodingRuntimeHistoryService } = await import('./coding-runtime-history.js');
-  const { projectId, prompt, runtimeType, agent, enableCompletionLoop, maxIterations, backoffMs } = req.body;
+  const { projectId, prompt, runtimeType, agent, enableCompletionLoop, maxIterations, backoffMs, injectDocs, useMemory, memoryLimit, codeContext } = req.body;
   if (!projectId || !prompt) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
+  const userId = req.userId;
   const selection = codingRuntimeSelectionByProject.get(projectId);
   let resolvedRuntimeType = typeof runtimeType === 'string' ? runtimeType : selection?.runtimeType ?? 'opencode';
   const autoSelection = selection?.classification && selection?.routeDecision
@@ -15674,8 +15717,95 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
   const state = runtime.getState(projectId);
   if (!state || state.status !== 'ready') return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'No ready session. Call /session first.'));
   const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
+
+  // Auto-enrichment: in `auto` mode, turn on code-context and memory by default
+  // for code-touching categories so callers don't have to opt in. Explicit
+  // request flags always win (e.g. pass codeContext:false to force off).
+  const autoEnrich = runtimeType === 'auto';
+  const routedCategory = (autoSelection?.routeDecision as { category?: string } | undefined)?.category
+    || (autoSelection?.classification as { category?: string } | undefined)?.category;
+  const CODE_CATEGORIES = new Set(['feature', 'bug-fix', 'debug', 'refactor', 'visual', 'test']);
+  const effectiveCodeContext = typeof codeContext === 'boolean'
+    ? codeContext
+    : autoEnrich && !!routedCategory && CODE_CATEGORIES.has(routedCategory);
+  const effectiveUseMemory = typeof useMemory === 'boolean' ? useMemory : autoEnrich;
+
+  // Optionally enrich the prompt with up-to-date library docs (Context7).
+  // Deterministic + fail-safe: missing/errored docs simply aren't injected.
+  let effectivePrompt = prompt;
+  if (Array.isArray(injectDocs) && injectDocs.length > 0) {
+    try {
+      const { getDocsForQuery } = await import('./context7-client.js');
+      const libraries = injectDocs.filter((l: unknown): l is string => typeof l === 'string' && l.trim().length > 0).slice(0, 5);
+      const sections = await Promise.all(
+        libraries.map(async (library) => {
+          const result = await getDocsForQuery({ libraryName: library, query: prompt });
+          return result.docs ? `### ${result.resolved?.title ?? library}\n${result.docs}` : null;
+        }),
+      );
+      const docs = sections.filter(Boolean).join('\n\n');
+      if (docs) {
+        effectivePrompt = `You have the following up-to-date library documentation. Prefer these current APIs over prior knowledge.\n\n<library-docs>\n${docs}\n</library-docs>\n\n---\n\n${prompt}`;
+      }
+    } catch (err) {
+      logger.warn({ err, projectId }, 'Context7 doc injection failed; proceeding without docs');
+    }
+  }
+
+  // Optionally inject a compact project-structure summary from the auto-built
+  // code graph. Opt-in via codeContext; fail-safe; composes with the blocks below.
+  if (effectiveCodeContext) {
+    try {
+      const { getStoredGraph, summarizeGraph } = await import('./code-graph.js');
+      const graph = getStoredGraph(projectId);
+      if (graph && graph.stats.files > 0) {
+        const summary = summarizeGraph(graph);
+        effectivePrompt = `Here is the structure of the project you are working in (files and their key symbols). Use it to locate code; do not re-discover it.\n\n<project-structure>\n${summary}\n</project-structure>\n\n---\n\n${effectivePrompt}`;
+      }
+    } catch (err) {
+      logger.warn({ err, projectId }, 'code-context injection failed; proceeding without it');
+    }
+  }
+
+  // Optionally recall relevant memories (mem0) and prepend them to the prompt.
+  // Opt-in via useMemory; fail-safe; composes with the library-docs block above.
+  const memoryEnabled = effectiveUseMemory && !!userId && userId !== 'anonymous' && !userId.startsWith('anon_');
+  if (memoryEnabled) {
+    try {
+      const { mem0Search } = await import('./mem0-client.js');
+      const limit = typeof memoryLimit === 'number' && memoryLimit > 0 ? Math.min(memoryLimit, 20) : 5;
+      const recall = await mem0Search(prompt, { userId, runId: projectId }, limit);
+      const lines = recall.results.map((r) => (typeof r.memory === 'string' ? `- ${r.memory}` : '')).filter(Boolean);
+      if (lines.length > 0) {
+        effectivePrompt = `You have the following relevant memories from prior work for this user/project. Use them as context when helpful; ignore if irrelevant.\n\n<relevant-memories>\n${lines.join('\n')}\n</relevant-memories>\n\n---\n\n${effectivePrompt}`;
+      }
+    } catch (err) {
+      logger.warn({ err, projectId }, 'mem0 recall failed; proceeding without memories');
+    }
+  }
+
+  // Persist the exchange to mem0 after a successful run (fire-and-forget).
+  const persistMemory = (runResult: { error?: unknown; parts?: Array<{ type: string; content?: string }> }, succeeded: boolean): void => {
+    if (!memoryEnabled || !succeeded) return;
+    const resultText = (runResult.parts ?? [])
+      .filter((p) => p.type === 'text')
+      .map((p) => p.content ?? '')
+      .join('\n')
+      .trim();
+    if (!resultText) return;
+    void (async () => {
+      try {
+        const { mem0Add } = await import('./mem0-client.js');
+        await mem0Add(
+          [{ role: 'user', content: prompt }, { role: 'assistant', content: resultText }],
+          { userId, runId: projectId, metadata: { runtimeType: resolvedRuntimeType, agent } },
+        );
+      } catch { /* memory persistence is best-effort */ }
+    })();
+  };
+
   const promptParams = {
-    projectId, prompt, agent,
+    projectId, prompt: effectivePrompt, agent,
     sandboxExecUrl: `${daytonaUrl}/api/toolbox/${state.sandboxId}/toolbox/process/execute`,
     daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
   };
@@ -15702,6 +15832,22 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
       },
     });
 
+    // Compound skills: record which runtime succeeded at which task category.
+    void (async () => {
+      try {
+        const { recordTaskOutcome } = await import('./agent-skill-profile.js');
+        const category = (autoSelection?.routeDecision as { category?: string } | undefined)?.category
+          || (autoSelection?.classification as { category?: string } | undefined)?.category;
+        recordTaskOutcome({
+          agentId: `runtime:${resolvedRuntimeType}`,
+          skills: [category || 'general'],
+          success: outcome.completed && !outcome.result.error,
+        });
+      } catch { /* skill tracking is best-effort */ }
+    })();
+
+    persistMemory(outcome.result, outcome.completed && !outcome.result.error);
+
     return sendSuccess(res, {
       ...outcome.result,
       selectedRuntime: resolvedRuntimeType,
@@ -15724,6 +15870,23 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
       enabled: false,
     },
   });
+
+  // Compound skills: record which runtime succeeded at which task category.
+  void (async () => {
+    try {
+      const { recordTaskOutcome } = await import('./agent-skill-profile.js');
+      const category = (autoSelection?.routeDecision as { category?: string } | undefined)?.category
+        || (autoSelection?.classification as { category?: string } | undefined)?.category;
+      recordTaskOutcome({
+        agentId: `runtime:${resolvedRuntimeType}`,
+        skills: [category || 'general'],
+        success: !result.error && Array.isArray(result.parts) && result.parts.length > 0,
+      });
+    } catch { /* skill tracking is best-effort */ }
+  })();
+
+  persistMemory(result, !result.error && Array.isArray(result.parts) && result.parts.length > 0);
+
   sendSuccess(res, {
     ...result,
     selectedRuntime: resolvedRuntimeType,
@@ -15748,10 +15911,445 @@ app.get('/api/coding-runtime/history/:projectId', authenticateRequest, flexibleP
 }));
 
 app.get('/api/coding-runtime/runtimes', (_req, res) => {
-  import('./a2a/coding-runtime.js').then(({ listRuntimes }) => {
-    sendSuccess(res, { runtimes: ['auto', ...listRuntimes()] });
+  import('./a2a/coding-runtime.js').then(({ listRuntimes, getRuntimeCatalog }) => {
+    sendSuccess(res, {
+      runtimes: ['auto', ...listRuntimes()],
+      catalog: getRuntimeCatalog(),
+    });
   });
 });
+
+// ── E2B Secure Runner API ───────────────────────────────────────────────────
+// Run AI-generated code / shell commands in secure, ephemeral E2B sandboxes.
+// Fail-safe: when the SDK or E2B_API_KEY is missing, health reports the reason
+// and exec/run return explicit errors — never fake success.
+
+app.get('/api/e2b/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const { e2bHealth } = await import('./e2b-client.js');
+  sendSuccess(res, await e2bHealth());
+}));
+
+app.post('/api/e2b/exec', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { command, timeoutMs, envs, sandboxId, keepAlive } = req.body ?? {};
+  if (typeof command !== 'string' || !command.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'command (string) is required'));
+  }
+  const { e2bExec } = await import('./e2b-client.js');
+  try {
+    const result = await e2bExec({ command, timeoutMs, envs, sandboxId, keepAlive });
+    sendSuccess(res, result);
+  } catch (err) {
+    sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B exec failed'));
+  }
+}));
+
+app.post('/api/e2b/run', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { code, language, timeoutMs, envs, sandboxId, keepAlive } = req.body ?? {};
+  if (typeof code !== 'string' || !code.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'code (string) is required'));
+  }
+  if (language && !['python', 'node', 'bash'].includes(language)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'language must be python, node, or bash'));
+  }
+  const { e2bRunCode } = await import('./e2b-client.js');
+  try {
+    const result = await e2bRunCode({ code, language, timeoutMs, envs, sandboxId, keepAlive });
+    sendSuccess(res, result);
+  } catch (err) {
+    sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B run failed'));
+  }
+}));
+
+app.delete('/api/e2b/sandbox/:sandboxId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { sandboxId } = req.params;
+  const { e2bKill } = await import('./e2b-client.js');
+  const killed = await e2bKill(sandboxId);
+  sendSuccess(res, { killed });
+}));
+
+// ── Browser Verification API ────────────────────────────────────────────────
+// Drive a headless browser to verify a preview URL actually renders/behaves.
+// Deterministic checks (Puppeteer) + optional AI checks (Stagehand, fail-safe).
+
+app.get('/api/browser/verify/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const { browserVerifyHealth } = await import('./browser-verify.js');
+  sendSuccess(res, await browserVerifyHealth());
+}));
+
+app.post('/api/browser/verify', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { url, checks, timeoutMs, viewport, settleMs } = req.body ?? {};
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
+  }
+  if (checks !== undefined && !Array.isArray(checks)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'checks must be an array'));
+  }
+  const { browserVerify } = await import('./browser-verify.js');
+  const result = await browserVerify({ url, checks, timeoutMs, viewport, settleMs });
+  sendSuccess(res, result);
+}));
+
+app.post('/api/browser/verify/ai', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { url, instruction, timeoutMs } = req.body ?? {};
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
+  }
+  if (typeof instruction !== 'string' || !instruction.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'instruction (string) is required'));
+  }
+  const { browserAiVerify } = await import('./browser-verify.js');
+  const result = await browserAiVerify({ url, instruction, timeoutMs });
+  sendSuccess(res, result);
+}));
+
+// ── mem0 Intelligent Agent Memory API ───────────────────────────────────────
+// LLM-managed memory (extract/dedupe/update) on top of the raw Qdrant store.
+// Fail-safe: reports availability truthfully; recall returns empty when off.
+
+app.get('/api/memory/mem0/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const { mem0Health } = await import('./mem0-client.js');
+  sendSuccess(res, await mem0Health());
+}));
+
+app.post('/api/memory/mem0/add', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { messages, userId, agentId, runId, metadata } = req.body ?? {};
+  const scopeUserId = userId || req.userId;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
+  }
+  if (!scopeUserId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'userId is required'));
+  }
+  const { mem0Add } = await import('./mem0-client.js');
+  const result = await mem0Add(messages, { userId: scopeUserId, agentId, runId, metadata });
+  sendSuccess(res, result);
+}));
+
+app.post('/api/memory/mem0/search', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { query, userId, agentId, runId, limit } = req.body ?? {};
+  const scopeUserId = userId || req.userId;
+  if (typeof query !== 'string' || !query.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
+  }
+  if (!scopeUserId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'userId is required'));
+  }
+  const { mem0Search } = await import('./mem0-client.js');
+  const result = await mem0Search(query, { userId: scopeUserId, agentId, runId }, typeof limit === 'number' ? limit : 10);
+  sendSuccess(res, result);
+}));
+
+app.get('/api/memory/mem0/all', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const scopeUserId = (req.query.userId as string | undefined) || req.userId;
+  const agentId = req.query.agentId as string | undefined;
+  if (!scopeUserId) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'userId is required'));
+  }
+  const { mem0GetAll } = await import('./mem0-client.js');
+  const result = await mem0GetAll({ userId: scopeUserId, agentId });
+  sendSuccess(res, result);
+}));
+
+app.delete('/api/memory/mem0/:memoryId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { mem0Delete } = await import('./mem0-client.js');
+  const result = await mem0Delete(req.params.memoryId);
+  sendSuccess(res, result);
+}));
+
+// ── Context7 Up-to-date Docs API ────────────────────────────────────────────
+// Resolve a library and fetch current docs to inject into coding-agent context.
+
+app.get('/api/context7/health', (_req, res) => {
+  import('./context7-client.js').then(({ context7Health }) => sendSuccess(res, context7Health()));
+});
+
+app.get('/api/context7/resolve', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const library = (req.query.library as string | undefined)?.trim();
+  const query = (req.query.query as string | undefined) ?? '';
+  if (!library) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'library query param is required'));
+  }
+  const { resolveLibrary } = await import('./context7-client.js');
+  sendSuccess(res, await resolveLibrary(library, query));
+}));
+
+app.post('/api/context7/docs', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { libraryId, query } = req.body ?? {};
+  if (typeof libraryId !== 'string' || !libraryId.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'libraryId (string) is required'));
+  }
+  if (typeof query !== 'string' || !query.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
+  }
+  const { getLibraryDocs } = await import('./context7-client.js');
+  sendSuccess(res, await getLibraryDocs(libraryId, query));
+}));
+
+app.post('/api/context7/inject', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { libraryName, query } = req.body ?? {};
+  if (typeof libraryName !== 'string' || !libraryName.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'libraryName (string) is required'));
+  }
+  if (typeof query !== 'string' || !query.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
+  }
+  const { getDocsForQuery } = await import('./context7-client.js');
+  sendSuccess(res, await getDocsForQuery({ libraryName, query }));
+}));
+
+// ── Platform Capabilities Aggregator ────────────────────────────────────────
+// Single call reporting the status of every agent capability, so UIs and
+// monitoring can discover what's wired and what needs configuration.
+
+app.get('/api/capabilities', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const [
+    { listRuntimes, getRuntimeCatalog },
+    { e2bHealth },
+    { browserVerifyHealth },
+    { mem0Health },
+    { context7Health },
+  ] = await Promise.all([
+    import('./a2a/coding-runtime.js'),
+    import('./e2b-client.js'),
+    import('./browser-verify.js'),
+    import('./mem0-client.js'),
+    import('./context7-client.js'),
+  ]);
+
+  const [e2b, browser, mem0] = await Promise.all([
+    e2bHealth(),
+    browserVerifyHealth(),
+    mem0Health(),
+  ]);
+
+  sendSuccess(res, {
+    codingRuntimes: {
+      available: true,
+      runtimes: listRuntimes(),
+      catalog: getRuntimeCatalog(),
+    },
+    secureRunner: e2b,
+    browserVerification: browser,
+    agentMemory: mem0,
+    libraryDocs: context7Health(),
+    codeIntelligence: { available: true },
+    llmRouter: (await import('./llm-router.js')).llmRouterHealth(),
+    agentSkills: { available: true, trackedAgents: (await import('./agent-skill-profile.js')).listProfiles().length },
+    zeroTrustNetwork: await (await import('./ziti-client.js')).zitiHealth(),
+    billing: await (await import('./polar-client.js')).polarHealth(),
+  });
+}));
+
+// ── Billing (Polar) API ─────────────────────────────────────────────────────
+// Additive, fail-safe billing via Polar. Does not touch existing entitlements.
+
+app.get('/api/billing/polar/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const { polarHealth } = await import('./polar-client.js');
+  sendSuccess(res, await polarHealth());
+}));
+
+app.get('/api/billing/polar/products', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
+  const { listProducts } = await import('./polar-client.js');
+  sendSuccess(res, await listProducts());
+}));
+
+app.post('/api/billing/polar/checkout', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { products, successUrl, customerEmail, metadata } = req.body ?? {};
+  if (!Array.isArray(products) || products.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'products (non-empty array of product IDs) is required'));
+  }
+  const { createCheckout } = await import('./polar-client.js');
+  const result = await createCheckout({ products, successUrl, customerEmail, metadata });
+  if (!result.available) return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Polar unavailable'));
+  if (result.reason && !result.checkoutUrl) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.reason));
+  sendSuccess(res, result);
+}));
+
+app.get('/api/billing/polar/subscriptions', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listSubscriptions } = await import('./polar-client.js');
+  sendSuccess(res, await listSubscriptions(req.query.customerId as string | undefined));
+}));
+
+// ── Zero-Trust Network (OpenZiti) API ───────────────────────────────────────
+// Provision zero-trust identities/enrollment for runners. Fail-safe.
+
+app.get('/api/ziti/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
+  const { zitiHealth } = await import('./ziti-client.js');
+  sendSuccess(res, await zitiHealth());
+}));
+
+app.get('/api/ziti/identities', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listIdentities } = await import('./ziti-client.js');
+  sendSuccess(res, await listIdentities(req.query.filter as string | undefined));
+}));
+
+app.post('/api/ziti/identities', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name, isAdmin, roleAttributes } = req.body ?? {};
+  if (typeof name !== 'string' || !name.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+  }
+  const { createIdentity } = await import('./ziti-client.js');
+  const result = await createIdentity({ name: name.trim(), isAdmin, roleAttributes });
+  if (!result.available) return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
+  sendSuccess(res, result);
+}));
+
+app.post('/api/ziti/runners', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name } = req.body ?? {};
+  if (typeof name !== 'string' || !name.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+  }
+  const { provisionRunnerIdentity } = await import('./ziti-client.js');
+  const result = await provisionRunnerIdentity(name.trim());
+  if (!result.available) return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
+  sendSuccess(res, result);
+}));
+
+app.delete('/api/ziti/identities/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { deleteIdentity } = await import('./ziti-client.js');
+  sendSuccess(res, await deleteIdentity(req.params.id));
+}));
+
+// ── Agent Skill Profiles API (dynamic, outcome-driven proficiency) ──────────
+// Compound skills: record task outcomes and rank agents by demonstrated ability.
+
+app.post('/api/agent-skills/record', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { agentId, skills, success, durationMs } = req.body ?? {};
+  if (typeof agentId !== 'string' || !agentId.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'agentId (string) is required'));
+  }
+  if (!Array.isArray(skills) || skills.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
+  }
+  if (typeof success !== 'boolean') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'success (boolean) is required'));
+  }
+  const { recordTaskOutcome } = await import('./agent-skill-profile.js');
+  sendSuccess(res, recordTaskOutcome({ agentId, skills, success, durationMs }));
+}));
+
+app.get('/api/agent-skills', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
+  const { listProfiles } = await import('./agent-skill-profile.js');
+  sendSuccess(res, { profiles: listProfiles() });
+}));
+
+app.get('/api/agent-skills/:agentId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getAgentProfile } = await import('./agent-skill-profile.js');
+  const profile = getAgentProfile(req.params.agentId);
+  if (!profile) return sendError(res, createError(ErrorCode.NOT_FOUND, 'no profile for that agent yet'));
+  sendSuccess(res, profile);
+}));
+
+app.post('/api/agent-skills/rank', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { agentIds, skills } = req.body ?? {};
+  if (!Array.isArray(skills) || skills.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
+  }
+  const { rankAgentsForSkills } = await import('./agent-skill-profile.js');
+  sendSuccess(res, { rankings: rankAgentsForSkills(Array.isArray(agentIds) ? agentIds : undefined, skills) });
+}));
+
+// ── Unified Multi-Model LLM Router API ──────────────────────────────────────
+// One endpoint routes to any provider by `provider/model`, BYOK-aware.
+
+app.get('/api/llm/providers', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
+  const { listProviders, llmRouterHealth } = await import('./llm-router.js');
+  sendSuccess(res, { health: llmRouterHealth(), providers: listProviders() });
+}));
+
+app.post('/api/llm/chat', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { model, messages, provider, apiKey, temperature, maxTokens, timeoutMs } = req.body ?? {};
+  if (typeof model !== 'string' || !model.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model (string) is required'));
+  }
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
+  }
+  const { chatComplete } = await import('./llm-router.js');
+  const result = await chatComplete({
+    model,
+    messages,
+    provider,
+    apiKey,
+    userId: req.userId,
+    temperature,
+    maxTokens,
+    timeoutMs,
+  });
+  if (!result.ok) {
+    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.error ?? 'chat completion failed'));
+  }
+  sendSuccess(res, result);
+}));
+
+// ── Code Intelligence API (code knowledge graph) ────────────────────────────
+// Build a queryable symbol/import graph from project files so agents can
+// navigate a codebase: find symbols, list a file's exports, who-imports, deps.
+
+app.post('/api/code-graph/build', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { files, graphId, maxFiles, maxFileBytes } = req.body ?? {};
+  if (!Array.isArray(files) || files.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'files (non-empty array of {path, content}) is required'));
+  }
+  const { buildCodeGraph, storeGraph } = await import('./code-graph.js');
+  const graph = buildCodeGraph(files, { maxFiles, maxFileBytes });
+  const id = (typeof graphId === 'string' && graphId.trim()) ? graphId.trim() : `graph_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  storeGraph(id, graph);
+  sendSuccess(res, { graphId: id, stats: graph.stats });
+}));
+
+app.get('/api/code-graph/:graphId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getStoredGraph } = await import('./code-graph.js');
+  const graph = getStoredGraph(req.params.graphId);
+  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+  const full = req.query.full === 'true';
+  sendSuccess(res, full ? graph : { stats: graph.stats });
+}));
+
+app.get('/api/code-graph/:graphId/search', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getStoredGraph, searchSymbols } = await import('./code-graph.js');
+  const graph = getStoredGraph(req.params.graphId);
+  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+  const q = (req.query.q as string | undefined)?.trim();
+  if (!q) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'q query param is required'));
+  sendSuccess(res, { results: searchSymbols(graph, q, Number(req.query.limit) || 50) });
+}));
+
+app.get('/api/code-graph/:graphId/symbol', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getStoredGraph, findSymbol } = await import('./code-graph.js');
+  const graph = getStoredGraph(req.params.graphId);
+  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+  const name = (req.query.name as string | undefined)?.trim();
+  if (!name) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name query param is required'));
+  sendSuccess(res, { results: findSymbol(graph, name) });
+}));
+
+app.get('/api/code-graph/:graphId/file-symbols', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getStoredGraph, fileSymbols } = await import('./code-graph.js');
+  const graph = getStoredGraph(req.params.graphId);
+  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+  const path = (req.query.path as string | undefined)?.trim();
+  if (!path) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query param is required'));
+  sendSuccess(res, { symbols: fileSymbols(graph, path) });
+}));
+
+app.get('/api/code-graph/:graphId/who-imports', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getStoredGraph, whoImports } = await import('./code-graph.js');
+  const graph = getStoredGraph(req.params.graphId);
+  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+  const path = (req.query.path as string | undefined)?.trim();
+  if (!path) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query param is required'));
+  sendSuccess(res, { importers: whoImports(graph, path) });
+}));
+
+app.get('/api/code-graph/:graphId/dependencies', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getStoredGraph, dependenciesOf } = await import('./code-graph.js');
+  const graph = getStoredGraph(req.params.graphId);
+  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+  const path = (req.query.path as string | undefined)?.trim();
+  if (!path) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query param is required'));
+  sendSuccess(res, { dependencies: dependenciesOf(graph, path) });
+}));
 
 // ── Agent Terminal Registry ─────────────────────────────────────────────────
 // Per-terminal discovery so the system knows exactly how many Claude Code,
@@ -16523,7 +17121,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
       outputDir,
     });
 
-    const url = `https://web.recoder.xyz/published/${slug}`;
+    const url = `${PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/published/${slug}`;
     logger.info({ projectId, url }, 'Publish: project published');
     trackPublish({ userId: req.userId ?? 'anonymous', projectId, slug: slug!, target: 'web' });
 
@@ -16592,7 +17190,7 @@ app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwne
   const zrokUrl = await ensurePublishedZrokUrl(projectId, publishedDir);
   sendSuccess(res, {
     published: true,
-    url: `https://web.recoder.xyz/published/${slug}`,
+    url: `${PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/published/${slug}`,
     slug,
     publishedAt: meta?.publishedAt || null,
     framework: meta?.framework || null,
@@ -16621,7 +17219,7 @@ app.post('/api/publish/:projectId/slug', authenticateRequest, verifyProjectOwner
   }
 
   const publishedDir = getPublishedPath(result.slug);
-  const url = `https://web.recoder.xyz/published/${result.slug}`;
+  const url = `${PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/published/${result.slug}`;
   const zrokUrl = await ensurePublishedZrokUrl(projectId, publishedDir);
   logger.info({ projectId, slug: result.slug }, 'Publish: project slug changed');
   sendSuccess(res, { url, slug: result.slug, changed: true, ...(zrokUrl ? { zrokUrl } : {}) });
@@ -18341,7 +18939,7 @@ startupInfo('routes.github-pull-requests', 'registered');
 startupInfo('routes.github-collaborators', 'registered');
 
 // ==================== DAYTONA SANDBOX INTEGRATION ====================
-// REST-based Daytona sandbox management for recoder-web projects.
+// REST-based Daytona sandbox management for Spaces projects.
 // Provides an alternative to local Docker containers using the self-hosted Daytona API.
 
 // POST /api/daytona/sandbox - Create a new Daytona sandbox
@@ -18641,7 +19239,7 @@ server.listen(PORT, async () => {
   startupInfo('server', 'docker backend running', {
     port: PORT,
     image: IMAGE_NAME,
-    previewUrlPattern: `${PUBLIC_WEB_PREVIEW_URL.replace(/\/+$/, '')}/preview/{projectId}`,
+    previewUrlPattern: `${PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/preview/{projectId}`,
     collaborationUrlPattern: `${PUBLIC_DOCKER_BACKEND_WS_URL}/collab?projectId=XXX&file=YYY`,
     lspStartEndpoint: '/api/lsp/:projectId/start',
   });
@@ -18669,7 +19267,7 @@ server.listen(PORT, async () => {
   try {
     startAgentWorkers();
     startupInfo('a2a-agent-workers', 'started', {
-      agents: ['recoder_backend', 'recoder_web', 'recoder_pm', 'recoder_agency'],
+      agents: ['recoder_backend', 'recoder_pm', 'recoder_agency'],
     });
   } catch (err) {
     startupInfo('a2a-agent-workers', 'failed', {

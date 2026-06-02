@@ -44,6 +44,18 @@ const getBackendUrl = (): string => {
   return 'https://staging-api.recoder.xyz/v1';
 };
 
+// docker-backend hosts the agent capability layer at /api/*. It is a different
+// service from the Python backend that serves /v1. We proxy /dx/* to it so
+// browser fetches stay same-origin. Override with DOCKER_BACKEND_URL.
+const getDockerBackendUrl = (): string => {
+  const explicit = process.env.DOCKER_BACKEND_URL || process.env.NEXT_PUBLIC_DOCKER_BACKEND_URL;
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (explicit && explicit.trim() !== '' && !(isProduction && explicit.includes('localhost'))) {
+    return explicit.replace(/\/$/, '');
+  }
+  return isProduction ? 'https://api.recoder.xyz' : 'http://localhost:3001';
+};
+
 const buildCsp = () => {
   const directives = [
     "default-src 'self'",
@@ -180,6 +192,11 @@ const nextConfig: NextConfig = {
       {
         source: '/v1/:path*',
         destination: `${backendUrl}/v1/:path*`,
+      },
+      // Proxy /dx/* to docker-backend's agent capability layer (/api/*)
+      {
+        source: '/dx/:path*',
+        destination: `${getDockerBackendUrl()}/api/:path*`,
       },
       {
         source: '/ingest/static/:path*',
