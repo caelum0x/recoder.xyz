@@ -99,6 +99,12 @@ if [ -n "$AUTH" ]; then
     rs=$(curl -s -m 30 "${auth_args[@]}" -H 'content-type: application/json' -d "$steps" "$BASE/api/workflows/run-steps")
     echo "  run-steps: $(echo "$rs" | jq -c '(.data // .) | {success, steps: (.results|length)}' 2>/dev/null | head -c 100)"
 
+    # Assert stats reflect the completed assignment.
+    st=$(curl -s -m 15 "${auth_args[@]}" "$BASE/api/a2a/squads/$sid/stats")
+    completed=$(echo "$st" | jq -r '(.data // .).assignments.completed // 0' 2>/dev/null)
+    echo "  stats: $(echo "$st" | jq -c '(.data // .) | {totalTasks, completionRate, completed: .assignments.completed}' 2>/dev/null | head -c 120)"
+    [ "${completed:-0}" -ge 1 ] && echo "    ✓ stats reflect the completed assignment" || echo "    ✗ expected >=1 completed assignment in stats"
+
     curl -s -m 15 "${auth_args[@]}" -X DELETE "$BASE/api/a2a/squads/$sid" >/dev/null
     echo "  cleaned up squad $sid"
   else
