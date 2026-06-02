@@ -192,6 +192,33 @@ export function useSquadTasks(squadId: string) {
   });
 }
 
+export interface BoardTask extends SquadTask {
+  squadName: string;
+}
+
+/** Every task across all of the caller's squads, for the cross-squad board. */
+export function useAllSquadTasks() {
+  return useQuery<BoardTask[]>({
+    queryKey: ['squad-tasks', 'all'],
+    queryFn: async () => (await dx<{ tasks: BoardTask[] }>(`/a2a/squad-tasks`)).tasks,
+    refetchInterval: 10_000,
+  });
+}
+
+/** Transition an assignment from the board, invalidating both the board and the squad's own list. */
+export function useTransitionBoardAssignment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, memberId, status }: { taskId: string; memberId: string; status: AssignmentStatus }) =>
+      dx<SquadTask>(`/a2a/squad-tasks/${taskId}/assignments/${memberId}`, { method: 'POST', body: JSON.stringify({ status }) }),
+    onSuccess: () => {
+      // Prefix match invalidates the board (['squad-tasks','all']) and any
+      // open per-squad list (['squad-tasks', squadId]).
+      qc.invalidateQueries({ queryKey: ['squad-tasks'] });
+    },
+  });
+}
+
 export function useDispatchToSquad(squadId: string) {
   const qc = useQueryClient();
   return useMutation({
