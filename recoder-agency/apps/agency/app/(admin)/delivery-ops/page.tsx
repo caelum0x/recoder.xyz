@@ -1,18 +1,29 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { DatabaseIcon, DownloadIcon } from "lucide-react";
 import Link from "next/link";
-import { alertSubscriptions, db } from "@/db";
+import { alertSubscriptions, db, deliverables, projects, workspaces } from "@/db";
 import {
 	type DeliveryOpsFilters,
 	fetchDeliveryOpsData,
 	parseDeliveryOpsFilters,
 	toDeliveryOpsSearchParams,
 } from "@/lib/agency/delivery-ops";
+import {
+	buildRecoderProjectControlSummary,
+	getRecoderTaskContext,
+	type RecoderProjectControlSummary,
+} from "@/lib/agency/recoder-control-plane";
 import { getTeamCapacitySnapshot } from "@/lib/agency/team-capacity";
 import { fetchCurrentTeam } from "@/services/teams";
 import {
+	createDeliveryOpsBrowserRuns,
+	createDeliveryOpsComputerUseRuns,
+	createDeliveryOpsGovernanceRuns,
+	createDeliveryOpsPlanningRuns,
 	createAlertSubscription,
 	deleteAlertSubscription,
+	markDeliveryOpsReviewAccepted,
+	requestDeliveryOpsMerge,
 	saveCapacitySettings,
 	toggleAlertSubscription,
 } from "./actions";
@@ -70,12 +81,28 @@ export default async function DeliveryOpsPage({
 		reworkThreshold?: string;
 		minRiskScore?: string;
 		hasForcedOnly?: string;
+		reviewStatus?: string;
+		mergeStatus?: string;
+		hasBranchOnly?: string;
+		hasPreviewOnly?: string;
+		reviewSort?: string;
 		preset?: string;
+		opsRunMode?: string;
+		opsRunCount?: string;
 	}>;
 }) {
 	const team = await fetchCurrentTeam();
 	const params = await searchParams;
 	const filters = parseDeliveryOpsFilters(params);
+	const opsRunMode = params.opsRunMode === "planning" || params.opsRunMode === "governance"
+		? params.opsRunMode
+		: "";
+	const opsRunCount = Number.parseInt(params.opsRunCount ?? "", 10);
+	const reviewStatusFilter = String(params.reviewStatus ?? "").trim();
+	const mergeStatusFilter = String(params.mergeStatus ?? "").trim();
+	const hasBranchOnly = params.hasBranchOnly === "1" || params.hasBranchOnly === "true";
+	const hasPreviewOnly = params.hasPreviewOnly === "1" || params.hasPreviewOnly === "true";
+	const reviewSort = String(params.reviewSort ?? "latest_event_desc").trim();
 	const [data, capacity, teamAlertSubscriptions] = await Promise.all([
 		fetchDeliveryOpsData(team.dbId, filters),
 		getTeamCapacitySnapshot(team.dbId),
@@ -98,6 +125,193 @@ export default async function DeliveryOpsPage({
 		const delta = current - prior;
 		const sign = delta > 0 ? "+" : "";
 		return `${sign}${delta.toFixed(1)}pp`;
+	};
+
+	const projectIdsNeedingSummary = Array.from(
+		new Set([
+			...data.stuckProjects.map((project) => project.projectId),
+			...data.breachedProjects.map((project) => project.projectId),
+			...data.reworkSpikes.map((project) => project.projectId),
+			...data.forcedTransitions.map((project) => project.projectId),
+			...data.exceptionQueue.map((project) => project.projectId),
+		]),
+	);
+
+	const projectWorkspaceRows = projectIdsNeedingSummary.length === 0
+		? []
+		: await db
+				.select({
+					projectId: projects.id,
+					workspaceId: workspaces.id,
+				})
+				.from(projects)
+				.leftJoin(workspaces, eq(projects.workspaceDbId, workspaces.dbId))
+				.where(
+					and(
+						eq(projects.teamDbId, team.dbId),
+						inArray(projects.id, projectIdsNeedingSummary),
+					),
+				);
+	const workspaceIdByProjectId = Object.fromEntries(
+		projectWorkspaceRows.map((row) => [row.projectId, row.workspaceId]),
+	) as Record<string, string | null>;
+
+	const controlPlaneByProjectId = projectIdsNeedingSummary.length === 0
+		? {}
+		: Object.fromEntries(
+				await Promise.all(
+					projectIdsNeedingSummary.map(async (projectId) => {
+						const projectDeliverables = await db
+							.select({
+								id: deliverables.id,
+								taskId: deliverables.taskId,
+							})
+							.from(deliverables)
+							.innerJoin(projects, eq(deliverables.projectDbId, projects.dbId))
+							.where(
+								and(
+									eq(projects.teamDbId, team.dbId),
+									eq(projects.id, projectId),
+								),
+							);
+						return [
+							projectId,
+							await buildRecoderProjectControlSummary({
+								workspaceId: workspaceIdByProjectId[projectId] ?? null,
+								taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
+							}),
+						];
+					}),
+				),
+			) as Record<string, RecoderProjectControlSummary>;
+
+	const reviewQueueDeliverables = projectIdsNeedingSummary.length === 0
+		? []
+		: await db
+				.select({
+					projectId: projects.id,
+					projectName: projects.name,
+					deliverableId: deliverables.id,
+					deliverableName: deliverables.name,
+					deliverableStatus: deliverables.status,
+					taskId: deliverables.taskId,
+				})
+				.from(deliverables)
+				.innerJoin(projects, eq(deliverables.projectDbId, projects.dbId))
+				.where(
+					and(
+						eq(projects.teamDbId, team.dbId),
+						inArray(projects.id, projectIdsNeedingSummary),
+					),
+				);
+
+	const reviewQueue = (
+		await Promise.all(
+			reviewQueueDeliverables.map(async (deliverable) => {
+				const context = await getRecoderTaskContext(deliverable.taskId);
+				if (!context) return null;
+
+				const reviewStatus = context.review?.handoff?.status ?? null;
+				const mergeStatus = context.review?.merge?.status ?? null;
+				const branchName =
+					context.review?.worktree?.branchName ??
+					context.review?.merge?.branchName ??
+					null;
+
+				const isInQueue =
+					reviewStatus === "review-ready" ||
+					reviewStatus === "review-accepted" ||
+					mergeStatus === "merge-requested" ||
+					mergeStatus === "ready-to-merge";
+
+				if (!isInQueue) return null;
+
+				return {
+					projectId: deliverable.projectId,
+					projectName: deliverable.projectName,
+					deliverableId: deliverable.deliverableId,
+					deliverableName: deliverable.deliverableName,
+					deliverableStatus: deliverable.deliverableStatus,
+					taskId: context.task.id,
+					taskState: context.task.state,
+					reviewStatus,
+					mergeStatus,
+					branchName,
+					previewUrl: context.task.result?.preview?.[0]?.url ?? null,
+					reviewHistory: context.review?.history ?? [],
+				};
+			}),
+		)
+	)
+		.filter((item): item is NonNullable<typeof item> => item !== null)
+		.filter((item) => {
+			if (reviewStatusFilter && item.reviewStatus !== reviewStatusFilter) {
+				return false;
+			}
+			if (mergeStatusFilter && item.mergeStatus !== mergeStatusFilter) {
+				return false;
+			}
+			if (hasBranchOnly && !item.branchName) {
+				return false;
+			}
+			if (hasPreviewOnly && !item.previewUrl) {
+				return false;
+			}
+			return true;
+		})
+		.sort((a, b) => {
+			const latestA = a.reviewHistory[a.reviewHistory.length - 1]?.at ?? "";
+			const latestB = b.reviewHistory[b.reviewHistory.length - 1]?.at ?? "";
+			switch (reviewSort) {
+				case "branch_asc":
+					return (a.branchName ?? "").localeCompare(b.branchName ?? "");
+				case "merge_status":
+					return (a.mergeStatus ?? "").localeCompare(b.mergeStatus ?? "");
+				case "review_status":
+					return (a.reviewStatus ?? "").localeCompare(b.reviewStatus ?? "");
+				case "latest_event_asc":
+					return latestA.localeCompare(latestB);
+				case "latest_event_desc":
+				default:
+					return latestB.localeCompare(latestA);
+			}
+		});
+
+	const renderControlPlaneSummary = (projectId: string) => {
+		const summary = controlPlaneByProjectId[projectId];
+		if (!summary || summary.totalTasks === 0) {
+			return null;
+		}
+
+		return (
+			<div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+				<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+					runs:{summary.totalTasks}
+				</span>
+				<span className="rounded bg-purple-500/10 px-2 py-0.5 text-purple-300">
+					approvals:{summary.pendingApprovals}
+				</span>
+				<span className="rounded bg-amber-500/10 px-2 py-0.5 text-amber-300">
+					handoffs:{summary.activeHandoffs}
+				</span>
+				<span className="rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+					online:{summary.onlineAgents}
+				</span>
+				<span className="rounded bg-slate-500/10 px-2 py-0.5 text-slate-300">
+					evidence:{summary.evidenceCount}
+				</span>
+				{summary.logCount > 0 ? (
+					<span className="rounded bg-zinc-500/10 px-2 py-0.5 text-zinc-300">
+						logs:{summary.logCount}
+					</span>
+				) : null}
+				{summary.pairedBridgeSessions > 0 || summary.localBridgeSessions > 0 ? (
+					<span className="rounded bg-sky-500/10 px-2 py-0.5 text-sky-300">
+						sessions:{summary.pairedBridgeSessions}/{summary.localBridgeSessions}
+					</span>
+				) : null}
+			</div>
+		);
 	};
 
 	return (
@@ -253,6 +467,85 @@ export default async function DeliveryOpsPage({
 				</div>
 			</form>
 
+			{opsRunMode && Number.isFinite(opsRunCount) ? (
+				<div className="rounded-xl border border-primary/30 bg-primary/10 p-4 text-sm text-text">
+					Created {opsRunCount} delivery-ops {opsRunMode} run(s) for the current filtered project set.
+				</div>
+			) : null}
+
+			<div className="rounded-xl border border-border bg-background p-4 space-y-3">
+				<div className="flex items-center justify-between gap-2">
+					<h2 className="text-sm font-medium text-text-muted">
+						Ops Workflow Runs
+					</h2>
+					<span className="text-xs text-text-muted">
+						Launch planning or governance runs for the current risk set
+					</span>
+				</div>
+				<div className="flex flex-wrap gap-2">
+					<form action={createDeliveryOpsPlanningRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+						>
+							Create Ops Planning Runs
+						</button>
+					</form>
+					<form action={createDeliveryOpsGovernanceRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
+						>
+							Create Ops Governance Runs
+						</button>
+					</form>
+					<form action={createDeliveryOpsBrowserRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
+						>
+							Create Ops Browser Runs
+						</button>
+					</form>
+					<form action={createDeliveryOpsComputerUseRuns}>
+						<input type="hidden" name="windowDays" value={filters.windowDays} />
+						<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+						<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+						<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+						{filters.hasForcedOnly ? (
+							<input type="hidden" name="hasForcedOnly" value="1" />
+						) : null}
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg-hover transition-colors"
+						>
+							Create Ops Computer-Use Runs
+						</button>
+					</form>
+				</div>
+			</div>
+
 			<div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
 				<div className="rounded-xl border border-border bg-background p-4">
 					<h2 className="text-sm font-medium text-text-muted">
@@ -295,6 +588,196 @@ export default async function DeliveryOpsPage({
 						{filters.reworkThreshold} times.
 					</p>
 				</div>
+			</div>
+
+			<div className="rounded-xl border border-border bg-background p-4">
+				<div className="mb-3 flex items-center justify-between gap-3">
+					<h2 className="text-sm font-medium text-text-muted">
+						Review Queue
+					</h2>
+					<span className="text-xs text-text-muted">
+						{reviewQueue.length} item(s) in current filtered project set
+					</span>
+				</div>
+				<form
+					method="get"
+					className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-5"
+				>
+					<input type="hidden" name="windowDays" value={filters.windowDays} />
+					<input type="hidden" name="stuckDays" value={filters.stuckDays} />
+					<input type="hidden" name="reworkThreshold" value={filters.reworkThreshold} />
+					<input type="hidden" name="minRiskScore" value={filters.minRiskScore} />
+					{filters.hasForcedOnly ? (
+						<input type="hidden" name="hasForcedOnly" value="1" />
+					) : null}
+					<div>
+						<label className="mb-1 block text-xs text-text-muted">
+							Review status
+						</label>
+						<select
+							name="reviewStatus"
+							defaultValue={reviewStatusFilter}
+							className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="">All</option>
+							<option value="review-ready">review-ready</option>
+							<option value="review-accepted">review-accepted</option>
+						</select>
+					</div>
+					<div>
+						<label className="mb-1 block text-xs text-text-muted">
+							Merge status
+						</label>
+						<select
+							name="mergeStatus"
+							defaultValue={mergeStatusFilter}
+							className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="">All</option>
+							<option value="merge-requested">merge-requested</option>
+							<option value="ready-to-merge">ready-to-merge</option>
+						</select>
+					</div>
+					<div>
+						<label className="mb-1 block text-xs text-text-muted">
+							Sort
+						</label>
+						<select
+							name="reviewSort"
+							defaultValue={reviewSort}
+							className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text"
+						>
+							<option value="latest_event_desc">Latest event desc</option>
+							<option value="latest_event_asc">Latest event asc</option>
+							<option value="branch_asc">Branch</option>
+							<option value="merge_status">Merge status</option>
+							<option value="review_status">Review status</option>
+						</select>
+					</div>
+					<div className="flex items-center gap-2 self-end pb-2">
+						<input
+							id="hasBranchOnly"
+							name="hasBranchOnly"
+							type="checkbox"
+							value="1"
+							defaultChecked={hasBranchOnly}
+							className="size-4 rounded border border-border bg-background"
+						/>
+						<label htmlFor="hasBranchOnly" className="text-xs text-text-muted">
+							Branch only
+						</label>
+					</div>
+					<div className="flex items-center gap-2 self-end pb-2">
+						<input
+							id="hasPreviewOnly"
+							name="hasPreviewOnly"
+							type="checkbox"
+							value="1"
+							defaultChecked={hasPreviewOnly}
+							className="size-4 rounded border border-border bg-background"
+						/>
+						<label htmlFor="hasPreviewOnly" className="text-xs text-text-muted">
+							Preview only
+						</label>
+					</div>
+					<div className="md:col-span-5 flex items-center gap-2">
+						<button
+							type="submit"
+							className="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+						>
+							Apply queue filters
+						</button>
+						<Link
+							href={`/delivery-ops?${toDeliveryOpsSearchParams(filters).toString()}`}
+							className="inline-flex items-center rounded-lg border border-border px-3 py-2 text-sm text-text hover:bg-bg-hover transition-colors"
+						>
+							Reset queue filters
+						</Link>
+					</div>
+				</form>
+				{reviewQueue.length === 0 ? (
+					<p className="text-sm text-text-muted">
+						No review-ready or merge-requested deliverables in the current risk set.
+					</p>
+				) : (
+					<div className="space-y-2">
+						{reviewQueue.map((item) => (
+							<div
+								key={`${item.projectId}-${item.deliverableId}`}
+								className="rounded-lg border border-border/70 bg-bg-hover/20 p-3"
+							>
+								<div className="flex flex-wrap items-center justify-between gap-2">
+									<div>
+										<Link
+											href={`/projects/${item.projectId}`}
+											className="text-sm font-medium text-text hover:text-primary transition-colors"
+										>
+											{item.projectName}
+										</Link>
+										<p className="text-xs text-text-muted">
+											{item.deliverableName} • {item.deliverableStatus.replaceAll("_", " ")}
+										</p>
+									</div>
+									<div className="flex flex-wrap items-center gap-2 text-[11px]">
+										<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+											task:{item.taskId}
+										</span>
+										{item.reviewStatus ? (
+											<span className="rounded bg-lime-500/10 px-2 py-0.5 text-lime-300">
+												review:{item.reviewStatus}
+											</span>
+										) : null}
+										{item.mergeStatus ? (
+											<span className="rounded bg-orange-500/10 px-2 py-0.5 text-orange-300">
+												merge:{item.mergeStatus}
+											</span>
+										) : null}
+									</div>
+								</div>
+								<div className="mt-2 space-y-1 text-[11px] text-text-muted">
+									<p>task state: {item.taskState}</p>
+									{item.branchName ? <p>branch: {item.branchName}</p> : null}
+									{item.previewUrl ? <p>preview: {item.previewUrl}</p> : null}
+									{item.reviewHistory.length ? (
+										<p>
+											latest: {item.reviewHistory[item.reviewHistory.length - 1]?.type ?? "review.event"}
+										</p>
+									) : null}
+								</div>
+								<div className="mt-3 flex flex-wrap gap-2">
+									<form action={markDeliveryOpsReviewAccepted}>
+										<input type="hidden" name="taskId" value={item.taskId} />
+										<button
+											type="submit"
+											className="rounded-lg border border-border px-3 py-1.5 text-[11px] font-medium text-text hover:bg-bg-hover transition-colors"
+										>
+											Mark review accepted
+										</button>
+									</form>
+									<form action={requestDeliveryOpsMerge}>
+										<input type="hidden" name="taskId" value={item.taskId} />
+										<button
+											type="submit"
+											className="rounded-lg border border-border px-3 py-1.5 text-[11px] font-medium text-text hover:bg-bg-hover transition-colors"
+										>
+											Request merge
+										</button>
+									</form>
+									{item.previewUrl ? (
+										<a
+											href={item.previewUrl}
+											target="_blank"
+											rel="noreferrer"
+											className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-[11px] font-medium text-text hover:bg-bg-hover transition-colors"
+										>
+											Open preview
+										</a>
+									) : null}
+								</div>
+							</div>
+						))}
+					</div>
+				)}
 			</div>
 
 			<div className="rounded-xl border border-border bg-background p-4">
@@ -363,6 +846,7 @@ export default async function DeliveryOpsPage({
 										{item.reason}
 									</p>
 								) : null}
+								{renderControlPlaneSummary(item.projectId)}
 							</Link>
 						))}
 					</div>
@@ -517,6 +1001,7 @@ export default async function DeliveryOpsPage({
 												Escalation reason: {project.escalationReason}
 											</p>
 										)}
+										{renderControlPlaneSummary(project.projectId)}
 									</div>
 									<span className="text-xs text-text-muted">
 										Updated{" "}
@@ -571,6 +1056,7 @@ export default async function DeliveryOpsPage({
 												Escalation reason: {project.escalationReason}
 											</p>
 										)}
+										{renderControlPlaneSummary(project.projectId)}
 									</div>
 								</div>
 							</Link>
@@ -608,6 +1094,7 @@ export default async function DeliveryOpsPage({
 								{item.reason && (
 									<p className="mt-1 text-xs text-text-muted">{item.reason}</p>
 								)}
+								{renderControlPlaneSummary(item.projectId)}
 							</Link>
 						))}
 					</div>
@@ -647,6 +1134,7 @@ export default async function DeliveryOpsPage({
 												? new Date(item.lastReworkAt).toLocaleDateString()
 												: "-"}
 										</p>
+										{renderControlPlaneSummary(item.projectId)}
 									</div>
 								</div>
 							</Link>

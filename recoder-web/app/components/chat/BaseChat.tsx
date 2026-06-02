@@ -120,6 +120,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       clearAttachments,
     } = useAttachments();
 
+    const liveTextareaValue = actualTextareaRef.current?.value ?? input;
+    const canSend = liveTextareaValue.trim().length > 0 || attachments.length > 0;
+
     // Get filtered commands for slash menu
     const slashCommands = useMemo(() => {
       if (!showSlashMenu) return [];
@@ -165,11 +168,14 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
 
     // Handle sending message with attachments
     const handleSendWithAttachments = useCallback((event: React.UIEvent, messageInput?: string) => {
-      sendMessage?.(event, messageInput, attachments.length > 0 ? attachments : undefined);
+      const liveInputValue = actualTextareaRef.current?.value ?? '';
+      const resolvedMessage = messageInput ?? liveInputValue;
+
+      sendMessage?.(event, resolvedMessage, attachments.length > 0 ? attachments : undefined);
       clearAttachments();
       // Reset textarea height after sending
       setTextareaHeight(TEXTAREA_DEFAULT_HEIGHT);
-    }, [sendMessage, attachments, clearAttachments]);
+    }, [sendMessage, attachments, clearAttachments, actualTextareaRef]);
 
     /**
      * Auto-expand textarea as content grows
@@ -383,8 +389,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             }
                           }
 
-                          if (input.trim().length > 0 || attachments.length > 0) {
-                            handleSendWithAttachments(event);
+                          const liveValue = (event.currentTarget as HTMLTextAreaElement).value;
+
+                          if (liveValue.trim().length > 0 || attachments.length > 0) {
+                            handleSendWithAttachments(event, liveValue);
                           }
                         }
                       }}
@@ -438,7 +446,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                     {() => (
                       <SendButton
                         show={true}
-                        disabled={(input.length === 0 && attachments.length === 0) && !isStreaming}
+                        disabled={!canSend && !isStreaming}
                         isStreaming={isStreaming}
                         onClick={(event) => {
                           if (isStreaming) {
@@ -446,7 +454,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                             return;
                           }
 
-                          handleSendWithAttachments(event);
+                          handleSendWithAttachments(event, liveTextareaValue);
                         }}
                       />
                     )}

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     title:
       'Recoder vs Cursor vs Replit vs GitHub Copilot - AI Coding Platform Comparison',
     description:
-      'Side-by-side comparison of AI coding platforms. 40+ models, BYOK, Web IDE, CLI, multi-agent workflows, self-hosting, and more.',
+      'Side-by-side comparison of AI coding platforms. 40+ models, BYOK, Spaces, CLI, multi-agent workflows, self-hosting, and more.',
     url: `${BASE_URL}/alternatives`,
     siteName: 'Recoder.xyz',
     images: [
@@ -59,7 +59,7 @@ const jsonLd = {
     featureList: [
       '40+ AI models',
       'Bring Your Own Key (BYOK)',
-      'Web IDE',
+      'Spaces',
       'CLI Tool',
       'Multi-agent workflows',
       'Self-hostable',

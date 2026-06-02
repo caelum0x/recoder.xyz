@@ -1,0 +1,5116 @@
+# Current Status, 2026-05-14
+
+This is broad backlog material. The active paid-user launch checklist now lives in `docs/remaining.md`; current execution sequencing lives in `docs/plan.md`.
+
+Recent shipped baseline:
+
+- Spaces are the primary signed-in conversion path.
+- Connecting an agent is the activation milestone.
+- Commercial limits now align around workspaces, connected agents, approvals, artifact retention, and preview deploy capacity.
+- Legacy session/token quota fields remain only as compatibility outputs derived from commercial entitlements.
+- Preview deploy artifacts, private preview access, and the `recoder-edge` scaffold exist in code.
+
+Near-term remaining work before paid users:
+
+1. Instrument the lead-to-signup-to-activation funnel.
+2. Connect GitHub repos and make PRs first-class run artifacts.
+3. Show task -> artifact -> PR -> preview -> approval on the main timeline.
+4. Move PM and Agency ingress fully onto shared A2A envelope normalization.
+5. Roll out live preview/edge routing, private access, TLS/DNS, and WAF/rate-limit enforcement.
+6. Unblock full Hetzner deploy by landing or resolving missing Daytona backend sources.
+
+Everything below is retained as broader product and infrastructure backlog context.
+
+If you want to build something that feels like “open-source Cloudflare at 90% capability,” the realistic path is:
+Core Architecture
+Users
+   ↓
+Anycast / Geo DNS
+   ↓
+Edge Reverse Proxy Layer
+(Traefik / Pingap / Nginx)
+   ↓
+WAF + Bot Protection
+(open-appsec / CrowdSec)
+   ↓
+Cache Layer
+(Varnish / Redis)
+   ↓
+Tunnel / Zero Trust
+(WireGuard / Pangolin)
+   ↓
+Container Runtime
+(Docker / K8s)
+   ↓
+Apps
+
+⸻
+
+Best OSS Stack
+1. Edge Proxy Layer
+Pingap GitHub
+Most “Cloudflare-core” feeling project.
+Why:
+	•	built around Cloudflare Pingora concepts
+	•	async high concurrency
+	•	modern architecture
+	•	good for AI infra gateways
+	•	websocket/stream friendly
+Good fit for:
+	•	recoder agents
+	•	sandbox routing
+	•	IDE streaming
+	•	MCP/A2A routing
+
+⸻
+
+2. Reverse Proxy / Routing
+Traefik GitHub
+Use for:
+	•	Docker auto discovery
+	•	HTTPS
+	•	load balancing
+	•	dynamic service routing
+This solves:
+	•	“I have 5 products”
+	•	ephemeral containers
+	•	temporary sandboxes
+	•	AI agents spinning up/down
+
+⸻
+
+3. WAF + AI Protection
+open-appsec GitHub
+This is probably the strongest OSS WAF stack right now.
+Cloudflare-like:
+	•	attack detection
+	•	bot filtering
+	•	rate limiting
+	•	ML-based behavior analysis
+
+⸻
+
+4. Crowd-based Threat Intelligence
+CrowdSec GitHub
+Very important.
+Acts like:
+	•	mini Cloudflare threat network
+	•	community ban lists
+	•	IP reputation
+Massively useful against:
+	•	scrapers
+	•	brute force
+	•	AI bot abuse
+	•	signup attacks
+
+⸻
+
+5. CDN / Edge Cache
+Varnish Cache GitHub
+This is where you get:
+	•	edge caching
+	•	page caching
+	•	API acceleration
+	•	static asset optimization
+
+⸻
+
+6. DNS
+CoreDNS GitHub
+Cloudflare DNS alternative.
+Can integrate with:
+	•	Kubernetes
+	•	service discovery
+	•	geo routing
+
+⸻
+
+7. Tunnel / Zero Trust
+Pangolin GitHub
+Closest OSS Cloudflare Zero Trust clone.
+Features:
+	•	secure tunnels
+	•	identity-aware access
+	•	WireGuard-based access
+	•	internal dashboards
+
+⸻
+
+Missing 10%
+This is the hard part.
+Cloudflare’s true moat:
+	•	300+ edge locations
+	•	Anycast routing
+	•	submarine cable relationships
+	•	terabit-scale DDoS absorption
+	•	custom silicon/networking
+You cannot realistically OSS that as a startup.
+But you can replicate:
+	•	developer experience
+	•	routing
+	•	caching
+	•	tunnels
+	•	edge workers
+	•	protection
+	•	observability
+	•	deployment UX
+That’s enough to build:
+	•	“developer-first edge infra”
+	•	“AI-native Cloudflare”
+	•	“Cloudflare for agents”
+	•	“Cloudflare for sandboxed AI apps”
+
+⸻
+
+Honestly the Biggest Opportunity
+Not “Cloudflare clone.”
+But:
+Cloudflare optimized for AI workloads.
+Meaning:
+	•	websocket-heavy
+	•	streaming-first
+	•	sandbox-aware
+	•	GPU-aware routing
+	•	AI agent identity/auth
+	•	MCP routing
+	•	ephemeral compute
+	•	browser IDE streaming
+	•	model gatewaying
+Cloudflare itself still feels web-app-first.
+Your angle could be:
+“Edge infrastructure for autonomous AI applications.”
+That actually aligns with recoder’s broader thesis better than a generic CDN clone.
+Yeah — but the answer depends on which part of Cloudflare you want to replace.
+
+Cloudflare is basically:
+
+	•	CDN
+	•	reverse proxy
+	•	DDoS protection
+	•	WAF
+	•	tunnels/ngrok
+	•	edge compute
+	•	DNS
+	•	caching
+	•	bot protection
+
+No single OSS project fully replaces Cloudflare’s global network, but you can build ~70–90% of it yourself.
+
+Here are the strongest open-source projects:
+
+⸻
+
+Full “Cloudflare-like stack”
+
+Traefik Proxy
+
+	•	Reverse proxy
+	•	Load balancing
+	•	Auto HTTPS
+	•	Docker/K8s native
+	•	Great for AI startups + container infra
+
+GitHub:
+Traefik GitHub
+
+⸻
+
+HAProxy
+
+	•	Insanely performant
+	•	Used at huge scale
+	•	Cloudflare-style L4/L7 routing possible
+	•	DDoS mitigation + rate limiting
+
+GitHub:
+HAProxy GitHub
+
+Cloudflare-like capabilities discussed widely.  
+
+⸻
+
+Pingap
+
+This one is VERY interesting for you.
+
+It’s literally:
+
+“reverse proxy powered by Cloudflare Pingora”
+
+GitHub:
+Pingap GitHub
+
+Built on Cloudflare’s own Pingora architecture.  
+
+Good if you want:
+
+	•	ultra high concurrency
+	•	Rust-ish modern infra vibes
+	•	AI infra gateway
+	•	multi-service routing for recoder.xyz
+
+⸻
+
+Open-source Cloudflare Tunnel alternatives
+
+Pangolin
+
+Probably the closest OSS “Cloudflare Zero Trust + Tunnel” clone.
+
+Features:
+
+	•	reverse proxy
+	•	identity-aware auth
+	•	WireGuard
+	•	secure app exposure
+	•	browser access
+
+
+
+⸻
+
+SelfHosted Gateway
+
+Self-hosted Cloudflare Tunnel/ngrok replacement.
+
+Features:
+
+	•	WireGuard
+	•	Caddy
+	•	NGINX
+	•	HTTPS auto provisioning
+
+
+
+⸻
+
+Awesome Tunneling List
+
+Massive curated list of:
+
+	•	Cloudflare Tunnel alternatives
+	•	ngrok alternatives
+	•	Tailscale alternatives
+	•	self-hosted tunnels
+
+
+
+⸻
+
+Open-source WAF / bot protection
+
+RhinoWAF
+
+Modern OSS WAF.
+
+Features:
+
+	•	DDoS protection
+	•	bot detection
+	•	zero-config setup
+
+
+
+⸻
+
+open-appsec
+
+AI/ML-based open-source WAF.
+
+GitHub:
+open-appsec GitHub
+
+Very production-grade. Often recommended as modern ModSecurity replacement.  
+
+⸻
+
+SafeLine WAF
+
+Very Cloudflare-ish feeling.
+
+Features:
+
+	•	anti-bot
+	•	reverse proxy
+	•	WAF
+	•	attack detection
+	•	rate limiting
+
+
+
+⸻
+
+CDN / caching layer
+
+Varnish Cache
+
+Classic CDN/cache engine.
+
+GitHub:
+Varnish GitHub
+
+Can replicate large parts of Cloudflare edge caching.  
+
+⸻
+
+Nginx
+
+Still the GOAT for DIY Cloudflare-like infra.
+
+GitHub:
+Nginx GitHub
+
+People on HN literally said:
+
+“you can just use nginx”
+
+
+
+⸻
+
+What I’d use for recoder.xyz specifically
+
+For your “5 infra-heavy products” architecture:
+
+Stack
+
+	•	Traefik or Pingap
+	•	Caddy
+	•	CrowdSec/open-appsec
+	•	Redis cache
+	•	Fly.io/Hetzner edge mix
+	•	WireGuard tunnels
+	•	Docker/K8s
+
+Why
+
+You don’t actually need a global CDN empire yet.
+
+You mainly need:
+
+	•	secure reverse proxy
+	•	websocket handling
+	•	streaming
+	•	sandbox isolation
+	•	tunnel access
+	•	anti-bot/rate limiting
+	•	AI gateway routing
+	•	edge caching for docs/static assets
+
+That’s achievable with OSS infra.
+
+Cloudflare’s true moat is the global network, not the software itself.  
+That’s actually a much stronger direction than “Cloudflare clone.”
+
+You’d basically be building:
+
+“Open-source AI-native application cloud.”
+
+A stack combining:
+
+	•	Cloudflare
+	•	Vercel
+	•	Heroku
+	•	Railway
+	•	Fly.io
+	•	Replit
+	•	Codespaces
+	•	AI agent infra
+
+…into one platform.
+
+That’s MUCH more aligned with recoder.xyz than just another AI IDE.
+
+⸻
+
+The Stack You Want
+
+Layer 1 — Edge Network (Cloudflare-like)
+
+Use:
+
+	•	Pingap
+	•	Traefik
+	•	open-appsec
+	•	CrowdSec
+	•	Varnish Cache
+
+This gives:
+
+	•	CDN-ish infra
+	•	WAF
+	•	tunnels
+	•	edge routing
+	•	caching
+	•	rate limiting
+
+⸻
+
+Layer 2 — Deployment Platform (Vercel/Heroku clone)
+
+This is the important part.
+
+Best Open Source Projects
+
+Coolify
+
+The strongest OSS Vercel/Railway/Heroku alternative.
+
+Features:
+
+	•	one-click deploys
+	•	GitHub deploys
+	•	Docker
+	•	databases
+	•	teams
+	•	env vars
+	•	domains
+	•	previews
+
+This is probably your BEST base.
+
+⸻
+
+Dokploy
+
+Modern Railway/Vercel-style platform.
+
+Very clean UI.
+
+Good:
+
+	•	Docker deployments
+	•	compose support
+	•	server management
+	•	app orchestration
+
+⸻
+
+CapRover
+
+Very Heroku feeling.
+
+Good for:
+
+	•	simple PaaS
+	•	cheap deployments
+	•	internal infra
+
+⸻
+
+OpenResty
+
+Useful if you want programmable edge/server logic like Cloudflare Workers.
+
+⸻
+
+Layer 3 — Sandboxes / AI Runtime
+
+This is where your moat could actually happen.
+
+Use
+
+Kubernetes
+
+for orchestration
+
+Firecracker
+
+AWS Lambda-style microVMs
+
+Kata Containers
+
+secure isolation
+
+Sysbox
+
+Docker-in-Docker without privilege nightmare
+
+⸻
+
+Layer 4 — AI Gateway
+
+This is MASSIVE.
+
+You can unify:
+
+	•	OpenAI
+	•	Anthropic
+	•	Gemini
+	•	DeepSeek
+	•	local models
+
+with:
+
+LiteLLM
+
+or
+
+One API
+
+Then:
+
+	•	model routing
+	•	fallback
+	•	caching
+	•	billing
+	•	quotas
+	•	multi-provider inference
+
+becomes native.
+
+⸻
+
+What This Becomes
+
+Not:
+
+“another AI coding IDE”
+
+But:
+
+“the operating system for AI software companies.”
+
+That’s a WAY bigger category.
+
+⸻
+
+Your Strongest Narrative
+
+Instead of:
+
+❌ “5 random products”
+
+You position it as:
+
+Recoder Platform
+
+Infrastructure Layer
+
+	•	Edge
+	•	Deploy
+	•	Sandbox
+	•	AI Gateway
+
+Runtime Layer
+
+	•	Agents
+	•	Workflows
+	•	PM
+	•	IDE
+	•	Client Ops
+
+Outcome Layer
+
+	•	AI software companies
+	•	AI agencies
+	•	autonomous SaaS
+	•	AI-native products
+
+That story actually makes the 5 products make sense.
+
+Because otherwise people think:
+
+“why does this startup have random unrelated tools?”
+
+But under:
+
+“AI operating system”
+
+…it becomes coherent.
+
+⸻
+
+Honestly?
+
+The infra layer may actually become more valuable than the IDE.
+
+Because AI infra is becoming:
+
+	•	fragmented
+	•	expensive
+	•	hard to orchestrate
+	•	multi-model
+	•	sandbox-heavy
+	•	streaming-heavy
+
+And most OSS infra still assumes:
+
+	•	normal web apps
+	•	not autonomous agents
+	•	not ephemeral execution
+	•	not AI workflows
+
+That’s the opening.
+That pivot honestly makes the architecture much more coherent.
+
+Right now the market is crowded with:
+
+	•	“AI coding agents”
+	•	“Claude wrapper”
+	•	“multi-model chat”
+	•	“Copilot but slightly different”
+
+But a workspace/orchestration layer for agents is a much more defensible category.
+
+Instead of competing on:
+
+	•	who has the best model
+	•	who burns the most inference money
+	•	who subsidizes tokens hardest
+
+…you become:
+
+the environment where agents work together.
+
+That changes the economics completely.
+
+⸻
+
+The Big Strategic Shift
+
+Old positioning:
+
+“We have AI agents.”
+
+New positioning:
+
+“We are the operating system/workspace where any agent works.”
+
+That’s MUCH stronger.
+
+⸻
+
+Why This Is Smart
+
+If users bring:
+
+	•	OpenAI Codex
+	•	Claude Code
+	•	OpenClaw
+	•	local agents
+	•	MCP tools
+	•	OSS agent runtimes
+
+…then YOU:
+
+	•	avoid inference burn
+	•	avoid model wars
+	•	avoid competing with frontier labs
+	•	become infrastructure/platform
+
+That’s similar to:
+
+	•	Vercel not building React
+	•	GitHub not building programming languages
+	•	Figma not inventing design
+
+They own the workspace layer.
+
+⸻
+
+Your New Moat
+
+The moat becomes:
+
+1. Agent Workspace UX
+
+	•	shared memory
+	•	shared tasks
+	•	shared files
+	•	PM integration
+	•	deploy integration
+	•	agency/client views
+
+⸻
+
+2. Agent Communication Layer
+
+This is VERY important.
+
+Your A2A angle is actually differentiated.
+
+If Recoder becomes:
+
+“Slack + GitHub + Jira + deployment + runtime for agents”
+
+that’s interesting.
+
+Especially if agents can:
+
+	•	hand off tasks
+	•	open PRs
+	•	update PM boards
+	•	deploy apps
+	•	review each other
+	•	communicate through protocols
+
+⸻
+
+3. Persistent Agent Environment
+
+Most agents today are stateless.
+
+You could provide:
+
+	•	long-running workspaces
+	•	shared memory
+	•	agent identity
+	•	agent permissions
+	•	audit trails
+	•	task ownership
+	•	artifacts
+
+This is valuable.
+
+⸻
+
+The Most Important Realization
+
+You should stop thinking:
+
+❌ “AI app”
+
+and think:
+
+✅ “AI-native collaboration infrastructure”
+
+That’s a MUCH bigger category.
+
+⸻
+
+What the Product Actually Starts Looking Like
+
+Recoder Workspace
+
+Humans
+
+	•	founders
+	•	PMs
+	•	engineers
+	•	agencies
+	•	clients
+
+Agents
+
+	•	Codex
+	•	Claude Code
+	•	OpenClaw
+	•	Devin-style agents
+	•	local agents
+	•	MCP agents
+
+Shared Environment
+
+	•	files
+	•	repos
+	•	deployments
+	•	PM boards
+	•	tasks
+	•	chats
+	•	sandboxes
+	•	previews
+	•	APIs
+
+⸻
+
+The Genius Part
+
+You can now support:
+
+	•	frontier models
+	•	open-source models
+	•	local models
+	•	enterprise internal models
+
+WITHOUT paying inference.
+
+That changes your scaling story massively.
+
+Because earlier your biggest weakness was:
+
+“5 products but cannot afford concurrency.”
+
+Now users fund compute themselves.
+
+That’s a HUGE unlock.
+
+⸻
+
+Your Infra Direction Now Makes Sense
+
+Now the Cloudflare/Vercel stuff becomes:
+
+	•	workspace infrastructure
+	•	agent runtime infrastructure
+	•	collaboration infrastructure
+
+instead of random infra experiments.
+
+⸻
+
+This Positioning Is MUCH Better
+
+Instead of:
+
+“AI software company in a box”
+
+You can evolve toward:
+
+“The workspace where humans and agents build companies together.”
+
+Or:
+
+“The operating system for AI-native teams.”
+
+Or:
+
+“Agent collaboration infrastructure.”
+
+That’s cleaner than “5 AI products.”
+
+⸻
+
+Important Warning
+
+Do NOT market this as:
+
+	•	“multi-agent”
+	•	“autonomous AGI”
+	•	“AI employee”
+
+Those are becoming buzzword graveyards.
+
+The valuable framing is:
+
+	•	workspace
+	•	orchestration
+	•	collaboration
+	•	infrastructure
+	•	runtime
+	•	persistent environments
+	•	deployment
+	•	coordination
+
+More practical.
+recoder.xyz is honestly starting to evolve into something much more interesting than “another AI coding tool.”  
+
+The strongest part now is NOT:
+
+	•	the IDE
+	•	the models
+	•	the agents
+
+It’s this emerging idea:
+
+“Workspace + runtime + communication layer for agents and humans.”
+
+That’s significantly more differentiated.
+
+⸻
+
+Your current public positioning already hints at this:
+
+	•	Agents
+	•	Web IDE
+	•	PM
+	•	Agency
+	•	CLI
+	•	A2A gateway
+	•	MCP support
+	•	BYOK
+	•	multi-provider infrastructure
+
+The missing piece is:
+
+tying them together under ONE category.
+
+Right now visitors can still think:
+
+“Why are there 5 separate products?”
+
+But if you frame it as:
+
+Recoder = AI-Native Workspace Infrastructure
+
+then suddenly:
+
+	•	PM makes sense
+	•	Agency makes sense
+	•	A2A makes sense
+	•	Web IDE makes sense
+	•	deployment makes sense
+	•	BYOK makes sense
+
+⸻
+
+The BIG unlock is your BYOK-first approach.
+
+That’s actually strategically important.
+
+Most AI startups today are trapped because:
+
+	•	inference margins collapse
+	•	model providers commoditize them
+	•	users churn to better models instantly
+	•	serving costs explode
+
+Your approach:
+
+“Bring your own agents/models/providers into a shared workspace”
+
+avoids a LOT of that.
+
+⸻
+
+The smartest direction now is probably:
+
+Recoder OS
+
+Not:
+
+	•	“AI coding assistant”
+	•	“AI agent platform”
+	•	“multi-agent framework”
+
+But:
+
+“The operating system for AI-native teams.”
+
+That’s broader and more durable.
+
+⸻
+
+Your architecture now naturally becomes:
+
+Core Infrastructure
+
+	•	edge/runtime
+	•	deployment
+	•	sandboxes
+	•	tunnels
+	•	AI gateway
+	•	A2A protocol
+	•	MCP connectivity
+
+Workspace Layer
+
+	•	repos
+	•	tasks
+	•	PM
+	•	artifacts
+	•	previews
+	•	deployments
+	•	agency/client access
+
+Agent Layer
+
+	•	Codex
+	•	Claude Code
+	•	OpenClaw
+	•	local agents
+	•	custom agents
+	•	MCP tools
+
+Coordination Layer
+
+	•	agent-to-agent messaging
+	•	permissions
+	•	memory
+	•	task ownership
+	•	orchestration
+	•	audit logs
+
+⸻
+
+The A2A section on the site is actually one of the most differentiated things already.  
+
+Because:
+
+	•	everyone is building agents
+	•	almost nobody is building the collaboration/runtime layer BETWEEN agents
+
+That’s potentially much more defensible.
+
+⸻
+
+One thing I’d strongly recommend:
+
+Stop emphasizing:
+
+	•	“40+ models”
+	•	“AI code generation”
+	•	generic AI features
+
+Those are becoming commodity checkboxes.
+
+Instead emphasize:
+
+	•	interoperability
+	•	persistent workspaces
+	•	orchestration
+	•	runtime
+	•	collaboration
+	•	infrastructure
+	•	deployment
+	•	coordination
+
+⸻
+
+This framing is MUCH stronger:
+
+❌ “AI coding platform”
+
+vs
+
+✅ “Workspace infrastructure where humans and AI agents collaborate.”
+
+or
+
+✅ “The operating system for autonomous software teams.”
+
+⸻
+
+Honestly the most valuable future version of Recoder may not even be the coding UI.
+
+It may be:
+
+	•	the orchestration layer
+	•	the runtime layer
+	•	the communication protocol layer
+	•	the deployment/workspace layer
+
+That’s where platform moats usually emerge.
+Yes. Plan them as one layered platform:
+Recoder Spaces = workspace where humans and external agents collaborate, run, communicate, and deploy software.
+The key is: do not build “agents” first. Build the place where agents work.
+
+⸻
+
+0. Product Thesis
+Recoder should become:
+The operating workspace for AI-native teams and agent workers.
+Users bring:
+	•	Claude Code
+	•	Codex
+	•	OpenClaw / OpenHands-style agents
+	•	local agents
+	•	custom agents
+	•	MCP tools
+	•	API keys
+	•	their own compute
+Recoder provides:
+	•	shared workspace
+	•	task coordination
+	•	A2A communication
+	•	agent permissions
+	•	runtime/sandbox
+	•	deployment
+	•	audit logs
+	•	PM/agency/client layer
+This means you skip most AI API costs because Recoder is not primarily the model provider.
+
+⸻
+
+1. Communication Protocol Layer
+This should be the foundation.
+Without communication, agents are just isolated CLIs. With communication, Recoder becomes the coordination layer.
+Goal
+Let any agent join a Recoder Space and communicate with:
+	•	humans
+	•	tasks
+	•	files
+	•	repos
+	•	other agents
+	•	deployments
+	•	tools
+	•	PM boards
+	•	clients
+Build This First
+Recoder A2A SDK
+Create SDKs for:
+JavaScript / TypeScript
+Python
+CLI
+REST API
+WebSocket API
+The SDK lets any external agent do things like:
+await recoder.agent.register({
+  name: "Claude Code",
+  capabilities: ["code.write", "code.review", "terminal.run"],
+});
+
+await recoder.tasks.claim("task_123");
+
+await recoder.messages.send({
+  to: "pm-agent",
+  type: "progress.update",
+  content: "Implemented auth flow. Opening PR now.",
+});
+
+await recoder.artifacts.create({
+  type: "pull_request",
+  url: "https://github.com/...",
+});
+
+⸻
+
+Core A2A Concepts
+1. Agent Identity
+Every agent gets an identity.
+{
+  "agent_id": "agent_claude_code_01",
+  "name": "Claude Code",
+  "type": "coding_agent",
+  "owner": "user_123",
+  "space_id": "space_abc",
+  "capabilities": ["code.write", "shell.run", "git.commit"],
+  "status": "online"
+}
+This allows Recoder to know:
+	•	who did what
+	•	what agent is online
+	•	what permissions it has
+	•	what tasks it can handle
+	•	what artifacts it created
+
+⸻
+
+2. Agent Capabilities
+Agents should advertise what they can do.
+Example capabilities:
+code.write
+code.review
+test.run
+terminal.run
+git.commit
+git.pr.create
+deploy.request
+pm.plan
+pm.update
+client.message
+browser.use
+mcp.call
+This becomes the base for orchestration later.
+
+⸻
+
+3. Agent Messages
+Agents communicate through typed messages, not random chat only.
+Example event types:
+task.assigned
+task.claimed
+task.started
+task.blocked
+task.completed
+artifact.created
+review.requested
+review.completed
+deploy.requested
+deploy.completed
+human_approval.required
+memory.updated
+This makes the workspace structured.
+
+⸻
+
+4. MCP Bridge
+Do not compete with MCP. Bridge into it.
+Recoder A2A should support:
+A2A ↔ MCP
+A2A ↔ GitHub
+A2A ↔ Linear/Jira
+A2A ↔ Slack/Discord
+A2A ↔ deployment tools
+A2A ↔ local CLI agents
+Your advantage is not replacing MCP.
+Your advantage is:
+MCP gives agents tools.Recoder gives agents a workplace.
+
+⸻
+
+MVP for Protocol Layer
+Build this first:
+Agent registration
+Agent identity
+Space join/leave
+Task claim/update
+Message bus
+Artifact creation
+Basic permissions
+WebSocket streaming
+CLI SDK
+TypeScript SDK
+Python SDK
+Do not overcomplicate the first protocol version.
+Simple JSON over HTTP/WebSocket is enough.
+
+⸻
+
+2. Deployment / Workspace Layer
+This is the user-facing product.
+This is where Recoder becomes more than an SDK.
+Goal
+A Recoder Space should feel like:
+GitHub + Linear + Slack + Vercel + agent control room
+for human-agent teams.
+
+⸻
+
+What Is a Recoder Space?
+A Space contains:
+Repo
+Tasks
+Agents
+Humans
+Files
+Chat
+Artifacts
+Pull requests
+Deployments
+Previews
+Secrets
+Logs
+Memory
+Permissions
+Client access
+This is the product’s center.
+
+⸻
+
+Main Workspace Views
+1. Space Overview
+Shows:
+Active agents
+Current tasks
+Latest commits
+Open PRs
+Deployment status
+Blocked work
+Recent artifacts
+This should feel like a mission control panel.
+
+⸻
+
+2. Tasks / PM Board
+This is where PM agents and humans assign work.
+Columns:
+Backlog
+Ready
+In Progress
+Needs Review
+Blocked
+Done
+Deployed
+Each task can have:
+assigned human
+assigned agent
+repo
+branch
+requirements
+files touched
+logs
+artifacts
+PR
+deployment preview
+approval status
+
+⸻
+
+3. Agent Room
+A dedicated view for agents.
+Shows:
+Online agents
+Agent capabilities
+Current task
+Recent messages
+Permissions
+Run logs
+Cost owner
+Connected tools
+Useful for seeing what Claude Code, Codex, OpenClaw, etc. are doing.
+
+⸻
+
+4. Artifacts
+Agents should produce artifacts, not just messages.
+Artifacts include:
+pull requests
+commits
+screenshots
+test reports
+deployment previews
+design docs
+API specs
+bug reports
+terminal logs
+client updates
+This is important because agencies and clients need visible outputs.
+
+⸻
+
+5. Deployments
+Deployment should be native.
+For each Space:
+Preview deployments
+Production deployments
+Environment variables
+Domains
+Build logs
+Rollback
+Traffic status
+This is where the open-source Vercel/Heroku clone stack fits.
+
+⸻
+
+Use OSS Instead of Building Everything
+For the first real version, you can bundle/integrate:
+Coolify / Dokploy / CapRover for app deployment
+Traefik / Caddy / Pingap for routing
+Varnish / Redis for caching
+open-appsec / CrowdSec for protection
+Docker / Kubernetes for runtime
+But the UX should be Recoder-native.
+Users should not feel like they are using ten random OSS tools.
+They should feel like:
+“I deploy and manage agent-built apps from Recoder Spaces.”
+
+⸻
+
+MVP for Workspace Layer
+Build:
+Organizations
+Spaces
+Projects
+GitHub repo connection
+Task board
+Agent list
+Human/agent chat
+Artifact timeline
+Basic deployment connection
+Preview URL display
+Secrets/env manager
+Audit log
+
+⸻
+
+3. Runtime Layer
+This is where agents actually work.
+Goal
+Provide safe, persistent, permissioned environments where external agents can run.
+This is the layer that lets users say:
+“Claude Code, work inside this Recoder Space.”
+or:
+“Codex, take this task and run it in this repo.”
+
+⸻
+
+Runtime Types
+You should support three runtime modes.
+
+⸻
+
+Mode 1: Local Runner
+This should be the cheapest and fastest to launch.
+User installs:
+npm install -g recoder
+recoder login
+recoder join space_abc
+recoder agent start claude-code
+Then Recoder can coordinate the local agent.
+Benefits:
+Almost no cloud cost for you
+User uses their own machine
+User uses their own agent subscription/API key
+Great for early adoption
+Easy BYOK/BYOA story
+This is the best MVP runtime.
+
+⸻
+
+Mode 2: Cloud Sandbox Runner
+For users who want hosted agent execution.
+Each agent gets a sandbox:
+container
+workspace volume
+repo checkout
+terminal
+network controls
+secrets injection
+logs
+snapshots
+timeout limits
+Use this for paid plans.
+Possible tech:
+Docker first
+Kubernetes later
+Firecracker/Kata later for stronger isolation
+Do not start with the most complex microVM setup unless you really need it.
+
+⸻
+
+Mode 3: External Runner
+Let agents run elsewhere but report back to Recoder.
+Examples:
+GitHub Actions
+user VPS
+company server
+local machine
+self-hosted Recoder runner
+This is important for enterprise and privacy-sensitive users.
+
+⸻
+
+Runtime Permissions
+Agents should not have unlimited access.
+Each agent gets permission scopes:
+repo.read
+repo.write
+terminal.read
+terminal.run
+secrets.read
+deploy.request
+deploy.execute
+task.update
+client.message
+billing.use
+Example:
+{
+  "agent_id": "agent_codex_01",
+  "permissions": [
+    "repo.read",
+    "repo.write",
+    "task.update",
+    "artifact.create"
+  ],
+  "requires_human_approval": [
+    "deploy.execute",
+    "secrets.read",
+    "client.message"
+  ]
+}
+This becomes a huge trust feature.
+
+⸻
+
+Runtime MVP
+Build:
+Recoder CLI runner
+Agent process registration
+Repo checkout
+Task context injection
+Terminal log streaming
+Artifact upload
+Local Claude Code/Codex/OpenClaw adapter
+Basic Docker sandbox
+Permission scopes
+Human approval gates
+The local runner should come before expensive hosted compute.
+
+⸻
+
+4. Orchestration Layer
+This should come after communication, workspace, and runtime.
+Do not start here.
+Most startups jump straight into “multi-agent orchestration” and end up building fragile demos.
+Your orchestrator should be practical.
+Goal
+Coordinate humans and agents around actual software work.
+Not:
+“Autonomous AGI team.”
+But:
+“Reliable task routing, handoffs, approvals, reviews, and deployment workflows.”
+
+⸻
+
+What the Orchestrator Does
+1. Task Routing
+Given a task, Recoder chooses who can do it.
+Example:
+Task: Fix Stripe webhook bug
+
+Available:
+- Claude Code: code.write, test.run
+- Reviewer Agent: code.review
+- PM Agent: pm.update
+- Human: final approval
+
+Flow:
+1. Assign to Claude Code
+2. Run tests
+3. Request review
+4. Open PR
+5. Ask human for approval
+6. Deploy preview
+7. Update client
+
+⸻
+
+2. Capability Matching
+Match tasks to agents based on capabilities.
+Frontend task → agent with react.nextjs capability
+Backend task → agent with api.node capability
+Review task → agent with code.review capability
+Deployment task → deploy agent
+Client update → PM/agency agent
+
+⸻
+
+3. Handoffs
+Agents need clean handoffs.
+Example:
+PM Agent → Coding Agent:
+"Build this feature. Requirements are attached."
+
+Coding Agent → Review Agent:
+"PR is ready. Files changed: X, Y, Z."
+
+Review Agent → Deploy Agent:
+"Approved. Deploy preview."
+
+Deploy Agent → PM Agent:
+"Preview deployed. URL attached."
+
+PM Agent → Client:
+"Feature is ready for review."
+This is where Recoder becomes more than chat.
+
+⸻
+
+4. Human Approval Gates
+Important actions should require approval.
+Examples:
+deploy production
+message client
+access secret
+delete data
+merge PR
+change billing
+run dangerous shell command
+This is crucial for trust.
+
+⸻
+
+5. Memory and Context Packaging
+The orchestrator should package the right context for each agent.
+Instead of giving an agent the whole workspace, it receives:
+task description
+relevant files
+previous attempts
+acceptance criteria
+current branch
+known constraints
+related artifacts
+permissions
+This reduces chaos and makes external agents more useful.
+
+⸻
+
+Orchestration MVP
+Do not build a magical planner first.
+Build deterministic workflows:
+Task assigned
+Agent claims task
+Agent starts run
+Agent posts progress
+Agent creates artifact
+Review requested
+Human approval requested
+Deployment requested
+Task completed
+Later, add intelligent routing.
+
+⸻
+
+The Correct Build Order
+Phase 1 — Protocol + Local Runner
+Build the minimum foundation.
+A2A SDK
+Agent registry
+Message bus
+Task API
+Artifact API
+Recoder CLI
+Local runner
+Claude Code/Codex/OpenClaw adapters
+Basic Space UI
+This proves the core idea:
+external agents can work inside Recoder.
+
+⸻
+
+Phase 2 — Workspace Product
+Make it useful for teams.
+Spaces
+PM board
+Agent dashboard
+GitHub integration
+PR/artifact timeline
+Human-agent chat
+Permissions
+Audit logs
+Client/agency view
+This proves:
+humans can manage agent work from Recoder.
+
+⸻
+
+Phase 3 — Runtime
+Make agent execution stronger.
+Docker sandbox
+Hosted runners
+Secrets manager
+Terminal streaming
+Snapshots
+Logs
+Network controls
+Self-hosted runner
+This proves:
+Recoder can safely run agent workspaces.
+
+⸻
+
+Phase 4 — Deployment Layer
+Add Vercel/Heroku-like abilities.
+Preview deployments
+Production deployments
+Domains
+Env vars
+Build logs
+Rollbacks
+Edge routing
+Rate limiting
+WAF integration
+This proves:
+agents can build and ship from the same workspace.
+
+⸻
+
+Phase 5 — Orchestration
+Add coordination intelligence.
+Workflow templates
+Capability matching
+Task routing
+Agent handoffs
+Review chains
+Approval gates
+PM automation
+Agency automation
+This proves:
+Recoder can coordinate full software delivery loops.
+
+⸻
+
+Suggested Product Names
+You can structure the product like this:
+Recoder Spaces        → workspace
+Recoder A2A           → communication protocol + SDK
+Recoder Runner        → local/cloud agent runtime
+Recoder Deploy        → Vercel/Heroku-like deployment
+Recoder Orchestrator  → task routing and handoffs
+Recoder Agency        → client-facing delivery layer
+This makes the platform understandable.
+
+⸻
+
+First Killer Demo
+Build one demo that shows the whole platform.
+Demo Flow
+1. User creates a Recoder Space.
+2. User connects a GitHub repo.
+3. User connects Claude Code through Recoder Runner.
+4. User creates task: “Add pricing page.”
+5. Claude Code claims the task.
+6. Recoder streams the agent’s work.
+7. Agent opens a PR.
+8. Review agent reviews the PR.
+9. Human approves.
+10. Recoder Deploy creates preview URL.
+11. PM agent updates the client.
+12. Task moves to Done.
+That demo explains the entire company.
+It is much stronger than saying:
+“We have AI agents.”
+You are saying:
+“We are the workspace where agents ship software.”
+
+⸻
+
+Data Model
+Start with these core tables/entities:
+organizations
+users
+spaces
+projects
+repos
+agents
+agent_sessions
+agent_capabilities
+tasks
+task_events
+messages
+artifacts
+runs
+runner_instances
+permissions
+approvals
+deployments
+environments
+secrets
+audit_logs
+The most important entities are:
+space
+agent
+task
+message
+artifact
+run
+deployment
+approval
+Everything else can evolve around those.
+
+⸻
+
+API Shape
+Keep the protocol simple.
+Example endpoints:
+POST /agents/register
+POST /agents/:id/heartbeat
+POST /spaces/:id/messages
+POST /tasks
+POST /tasks/:id/claim
+POST /tasks/:id/events
+POST /artifacts
+POST /runs
+POST /approvals/request
+POST /deployments/request
+GET  /spaces/:id/context
+WebSocket events:
+agent.online
+agent.offline
+task.created
+task.claimed
+task.updated
+message.created
+artifact.created
+run.started
+run.log
+run.completed
+approval.requested
+deployment.started
+deployment.completed
+
+⸻
+
+What Not to Build First
+Avoid these early:
+Full Cloudflare clone
+Full Vercel clone
+Full autonomous multi-agent planner
+Your own foundation model
+Expensive hosted agents
+Complex microVM runtime
+Huge marketplace
+Advanced billing engine
+Too many integrations
+The first win is not infrastructure perfection.
+The first win is:
+Claude Code, Codex, OpenClaw, and other agents can enter a Recoder Space, take tasks, communicate, create artifacts, and ship work.
+
+⸻
+
+Business Model
+This pivot gives you cleaner pricing.
+Free
+1–2 spaces
+local runner
+limited agents
+basic A2A SDK
+basic task board
+Pro
+more spaces
+more agents
+advanced permissions
+hosted runner minutes
+deployment previews
+artifact history
+team collaboration
+Agency
+client portals
+multi-client spaces
+white-label reports
+PM agents
+handoff workflows
+approval flows
+Enterprise
+self-hosted runner
+SSO
+audit logs
+private deployments
+custom policies
+on-prem/VPC
+compliance controls
+You are not mainly charging for AI tokens.
+You are charging for:
+workspace
+coordination
+runtime
+deployment
+security
+team control
+That is much healthier.
+
+⸻
+
+Final Platform Architecture
+                    Recoder Spaces
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+   Workspace UI      A2A Protocol      Deploy UI
+        │                │                │
+        └─────────────── API ─────────────┘
+                         │
+                 Message/Event Bus
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+  Local Runner      Cloud Runner     External Runner
+        │                │                │
+ Claude Code         Docker/K8s       GitHub Actions
+ Codex CLI           Sandboxes         User VPS
+ OpenClaw            Logs              Self-hosted
+ Local agents        Secrets
+                         │
+                  Recoder Orchestrator
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+   Task Routing      Handoffs       Approval Gates
+
+⸻
+
+My Strong Recommendation
+Build in this order:
+1. Recoder A2A SDK
+2. Recoder CLI local runner
+3. Recoder Spaces UI
+4. Agent/task/artifact timeline
+5. GitHub integration
+6. Claude Code / Codex / OpenClaw adapters
+7. Hosted sandbox runner
+8. Deployment previews
+9. Workflow orchestration
+10. Agency/client layer
+Your category should be:
+Recoder is the workspace where humans and AI agents build, coordinate, and deploy software together.
+That is much more defensible than being another agent builder.
+Yes — because you already have Recoder Code CLI and a forked Google A2A SDK, the roadmap changes.
+You should not build “Recoder A2A SDK” and “CLI local runner” as separate first-time projects anymore. You should turn them into the foundation of Recoder Spaces.
+Your new product direction should be:
+Recoder Spaces: the workspace where Recoder Code, Claude Code, Codex, OpenClaw, and other agents collaborate, communicate, produce artifacts, and deploy software.
+A2A is the right base because it is designed for interoperability between independent agents, and the official A2A docs describe it as an open standard for secure communication and collaboration between agents built by different vendors/frameworks.  
+
+⸻
+
+Updated Roadmap
+New Priority Order
+Instead of this:
+1. Recoder A2A SDK
+2. Recoder CLI local runner
+3. Recoder Spaces UI
+4. Agent/task/artifact timeline
+5. GitHub integration
+6. Claude Code / Codex / OpenClaw adapters
+7. Hosted sandbox runner
+8. Deployment previews
+9. Workflow orchestration
+10. Agency/client layer
+Use this:
+1. Recoder Code CLI → A2A-native first-party agent
+2. Recoder A2A fork → protocol + workspace event layer
+3. Recoder Spaces UI → main product surface
+4. Task / run / artifact timeline
+5. GitHub integration
+6. External agent adapters: Claude Code, Codex, OpenClaw, custom agents
+7. Local + self-hosted runners
+8. Hosted sandbox runners
+9. Deployment previews
+10. Workflow orchestration
+11. Agency/client layer
+The big change:
+Recoder Code CLI becomes your first working agent inside Recoder Spaces.
+That gives you an immediate dogfood path.
+
+⸻
+
+1. Recoder Code CLI Becomes the First-Party Agent
+Your CLI should not just be “like Claude Code.”
+It should become:
+the reference agent for Recoder Spaces.
+Claude Code is positioned as an agentic coding system that reads a codebase, makes changes, runs tests, and delivers committed code. Codex CLI similarly runs locally from the terminal and can read, change, and run code in the selected directory. So Recoder Code CLI should match that category, but its unique advantage should be workspace-native collaboration.  
+Required Recoder Code CLI Modes
+Mode A — Standalone Coding Agent
+This is what you already have or are building.
+recoder code
+It behaves like:
+Claude Code / Codex-style local coding agent
+Capabilities:
+read repo
+edit files
+run commands
+commit changes
+open PRs
+explain work
+
+⸻
+
+Mode B — Space-Connected Agent
+This is the important one.
+recoder code connect --space my-startup
+Now the CLI becomes an agent inside Recoder Spaces.
+It should:
+register itself as an agent
+advertise capabilities
+receive tasks
+claim tasks
+stream progress
+upload logs
+create artifacts
+request approvals
+open PRs
+update task status
+Example:
+Human creates task in Recoder Space:
+“Add Stripe checkout to pricing page.”
+
+Recoder Code CLI sees the task.
+It claims the task.
+It edits the repo locally.
+It runs tests.
+It opens a PR.
+It posts artifact.
+It marks task as Needs Review.
+That is your first killer workflow.
+
+⸻
+
+Mode C — Runner / Bridge Mode
+This lets Recoder Code CLI act as the bridge for external agents.
+recoder runner start --space my-startup
+This runner can launch or observe:
+Claude Code
+Codex CLI
+OpenClaw
+custom local agents
+shell scripts
+MCP tools
+Codex CLI is open source and runs locally on a user’s machine, which makes it a natural candidate for local bridge/adaptor mode.  
+The key idea:
+Recoder Code CLI is both an agent and the local gateway that lets other agents join Recoder Spaces.
+
+⸻
+
+2. Recoder A2A Fork Becomes the Protocol Core
+You already forked Google A2A SDK. Good.
+Now do not turn it into a totally incompatible protocol.
+Instead:
+Keep A2A compatibility, then add Recoder-specific extensions.
+A2A already exists to let agents discover capabilities, negotiate modalities, and collaborate across different frameworks/vendors.  
+Protocol Strategy
+Use standard A2A for:
+agent discovery
+agent cards
+capabilities
+messages
+tasks
+agent-to-agent communication
+Add Recoder extensions for:
+workspace identity
+task board events
+artifact tracking
+run logs
+approval gates
+permissions
+deployment events
+agency/client events
+Use namespaced extensions like:
+{
+  "x_recoder": {
+    "space_id": "space_123",
+    "task_id": "task_456",
+    "artifact_type": "pull_request",
+    "requires_approval": true
+  }
+}
+This matters because you want Recoder to be compatible with the broader A2A ecosystem, not isolated from it.
+
+⸻
+
+3. Recoder Spaces UI Becomes the Main Product
+This is now the next major product surface.
+The UI should not feel like a generic project manager.
+It should feel like:
+mission control for human-agent software teams.
+Core Views
+Space Overview
+Shows:
+active agents
+active tasks
+blocked tasks
+latest PRs
+recent commits
+recent artifacts
+deployment previews
+approval requests
+This is the homepage for a workspace.
+
+⸻
+
+Agent Panel
+Shows:
+Recoder Code CLI
+Claude Code
+Codex
+OpenClaw
+custom agents
+online/offline state
+current task
+permissions
+capabilities
+last activity
+OpenClaw is a personal AI assistant designed to run on users’ own devices and communicate through existing channels, so treat it differently from code-only agents: it may be more useful as a PM/personal-assistant bridge than as a pure code writer.  
+
+⸻
+
+Task Board
+Columns:
+Backlog
+Ready
+Claimed
+In Progress
+Needs Review
+Blocked
+Approved
+Deployed
+Done
+Each task should show:
+assigned agent/human
+linked repo
+branch
+run logs
+artifacts
+PR
+preview URL
+approval status
+
+⸻
+
+Timeline
+This is critical.
+Every task needs a timeline like:
+Task created
+Recoder Code claimed task
+Agent started run
+Files changed
+Tests executed
+PR created
+Review requested
+Human approved
+Preview deployed
+Task completed
+This is where Recoder feels trustworthy.
+
+⸻
+
+4. Artifact System
+Agents should not just chat.
+They should produce artifacts.
+Artifact Types
+pull_request
+commit
+branch
+test_report
+terminal_log
+screenshot
+deployment_preview
+design_doc
+api_spec
+bug_report
+client_update
+handoff_note
+Example artifact:
+{
+  "artifact_id": "art_123",
+  "space_id": "space_abc",
+  "task_id": "task_456",
+  "agent_id": "agent_recoder_code",
+  "type": "pull_request",
+  "title": "Add Stripe checkout flow",
+  "url": "https://github.com/org/repo/pull/42",
+  "status": "ready_for_review"
+}
+The artifact system is what turns agent work from “chat noise” into visible production output.
+
+⸻
+
+5. GitHub Integration
+GitHub should come before hosted sandboxes.
+Why?
+Because the core proof is:
+An agent can take a task and produce a PR.
+GitHub MVP
+Build:
+connect GitHub repo
+list branches
+create branch
+read files
+create commits
+open PR
+link PR to task
+listen to PR status
+listen to commit status
+listen to review status
+Required GitHub Events
+pull_request.opened
+pull_request.merged
+pull_request.closed
+check_run.completed
+commit_status.updated
+review.submitted
+branch.created
+Recoder UI Behavior
+When an agent opens a PR:
+Task automatically moves to Needs Review.
+Artifact appears in task timeline.
+Human gets approval request.
+Review agent can be assigned.
+This creates the loop.
+
+⸻
+
+6. External Agent Adapters
+This comes after Recoder Code CLI works inside Spaces.
+Do not build every adapter at once.
+Build them in this order:
+1. Recoder Code CLI native
+2. Codex CLI adapter
+3. Claude Code adapter
+4. OpenClaw adapter
+5. Generic shell agent adapter
+6. Generic A2A-compatible agent adapter
+Adapter Principle
+Each adapter translates external agent activity into Recoder events.
+For example:
+External agent says: “I finished the task.”
+Recoder records: task.completed
+
+External agent creates PR.
+Recoder records: artifact.created pull_request
+
+External agent needs approval.
+Recoder records: approval.requested
+Codex Adapter
+Because Codex CLI runs locally from the terminal and can operate on files in the selected directory, the first Codex adapter can simply wrap local execution and stream results back to Recoder.  
+Example:
+recoder adapter codex --space my-startup --repo ./app
+It should:
+register Codex as an agent
+inject task context
+launch Codex CLI
+stream terminal output
+watch file changes
+detect commits/PRs
+post artifacts
+
+⸻
+
+Claude Code Adapter
+Claude Code can work across a codebase, use tools, automate development tasks, and run code-related workflows, so the adapter should focus on task context injection, run observation, artifact capture, and approvals.  
+Example:
+recoder adapter claude-code --space my-startup --repo ./app
+It should:
+register Claude Code as an agent
+pass task context
+observe work session
+stream logs
+capture file changes
+capture PRs
+request approval before risky operations
+
+⸻
+
+OpenClaw Adapter
+OpenClaw should not be treated only as a coding agent.
+Use it as:
+personal assistant agent
+PM assistant
+notification bridge
+calendar/email/task assistant
+client update assistant
+OpenClaw’s own positioning is broader than coding: it runs on users’ devices and acts through channels users already use.  
+Example use:
+Recoder task blocked → OpenClaw messages founder
+Client asks for status → OpenClaw fetches Recoder task summary
+PM agent needs reminder → OpenClaw schedules follow-up
+
+⸻
+
+7. Local + Self-Hosted Runner
+Since you already have Recoder Code CLI, the runner should be lightweight.
+Runner Responsibilities
+connect local machine to Recoder Space
+sync task context
+checkout repo
+start agent process
+stream logs
+watch files
+upload artifacts
+enforce permissions
+request approvals
+Commands
+recoder login
+recoder spaces list
+recoder runner start --space my-startup
+recoder code connect --space my-startup
+recoder adapter codex --space my-startup
+recoder adapter claude-code --space my-startup
+Why This Matters
+This keeps your costs low.
+Users bring:
+their own laptop
+their own agent subscriptions
+their own API keys
+their own compute
+Recoder provides:
+workspace
+coordination
+artifact tracking
+audit trail
+deployment bridge
+permissions
+That is the margin-friendly version of the product.
+
+⸻
+
+8. Hosted Sandbox Runner
+Build this only after the local runner works.
+Hosted sandboxes should be a paid feature.
+Hosted Runner MVP
+Docker container per run
+repo checkout
+task context injection
+terminal streaming
+log storage
+artifact upload
+timeout limits
+basic network controls
+env var injection
+approval gates
+Start with Docker.
+Do not start with Firecracker/Kata unless you absolutely need high-security isolation early.
+Later Add
+persistent volumes
+snapshots
+workspace restore
+browser preview
+multi-agent same sandbox
+GPU runner
+microVM isolation
+enterprise VPC runner
+Hosted compute should be monetized carefully because it can become expensive.
+
+⸻
+
+9. Deployment Previews
+This is where your Vercel/Heroku clone bundle enters.
+But again, do not build a full Vercel clone first.
+Start with:
+agent-created preview deployments linked to tasks.
+Deployment MVP
+connect repo
+select framework
+build command
+start command
+env vars
+preview deploy per PR
+production deploy after approval
+logs
+rollback
+custom domain later
+Task Integration
+When PR opens:
+Recoder creates preview deployment.
+Preview URL appears in task.
+Human/client can review.
+Approval moves task forward.
+This is much more valuable than generic hosting.
+
+⸻
+
+10. Workflow Orchestration
+Do this after tasks, agents, GitHub, and artifacts work.
+The first orchestrator should be deterministic, not magical.
+Workflow Templates
+Start with 5 workflows:
+1. Code Task Workflow
+task created
+agent claims task
+agent works
+PR created
+review requested
+human approves
+preview deployed
+task done
+2. Bug Fix Workflow
+bug report created
+agent reproduces issue
+agent patches
+tests run
+PR created
+review requested
+deploy preview
+3. Review Workflow
+PR created
+review agent assigned
+review posted
+human approval requested
+merge/deploy
+4. Deployment Workflow
+deploy requested
+checks pass
+approval requested
+production deploy
+rollback available
+5. Agency Delivery Workflow
+client request
+PM agent converts to tasks
+coding agent executes
+review agent checks
+preview shared
+client approves
+production deploy
+status report generated
+That last one becomes your agency moat.
+
+⸻
+
+11. Agency / Client Layer
+Do this last, but design for it early.
+The agency layer is not just another dashboard.
+It is a filtered view of Recoder Spaces.
+Client Portal
+Clients see:
+project roadmap
+task status
+preview links
+approval requests
+deliverables
+weekly reports
+messages
+invoices later
+Clients should not see:
+raw agent logs
+internal prompts
+private repo details
+secrets
+internal debates
+failed attempts unless shared
+Agency Features
+multi-client workspaces
+white-label portal
+client approval flows
+automated progress reports
+SLA/status tracking
+agent/human assignment
+deliverable history
+This makes Recoder useful for AI agencies and software teams.
+
+⸻
+
+Concrete 12-Week Execution Plan
+Weeks 1–2: Make Recoder Code CLI Space-Native
+Deliver:
+agent registration
+space connection
+heartbeat
+capability advertisement
+task list
+task claim
+task status update
+basic message send/receive
+CLI commands:
+recoder code connect --space <space>
+recoder tasks list
+recoder tasks claim <task_id>
+recoder tasks update <task_id> --status in_progress
+Success metric:
+Recoder Code CLI appears as an online agent inside a Space.
+It can claim and update a task.
+
+⸻
+
+Weeks 3–4: Build Spaces UI + Task Timeline
+Deliver:
+spaces
+agents list
+task board
+task detail page
+event timeline
+basic human-agent chat
+artifact placeholder
+Success metric:
+A user can create a Space, create a task, see Recoder Code CLI claim it, and watch events appear live.
+
+⸻
+
+Weeks 5–6: GitHub + Artifacts
+Deliver:
+GitHub repo connect
+branch creation
+commit detection
+PR artifact
+PR timeline event
+test/check status display
+artifact API
+Success metric:
+Recoder Code CLI can complete a task and attach a GitHub PR as an artifact.
+
+⸻
+
+Weeks 7–8: External Agent Adapters
+Deliver:
+Codex CLI adapter
+Claude Code adapter
+generic shell adapter
+agent output streaming
+file-change watcher
+artifact capture
+Success metric:
+A user can connect Codex or Claude Code to a Recoder Space and see it act like a workspace agent.
+
+⸻
+
+Weeks 9–10: Local Runner + Approval Gates
+Deliver:
+runner daemon
+process manager
+permission scopes
+approval requests
+dangerous command approval
+deploy approval placeholder
+audit log
+Success metric:
+External agents can run locally while Recoder controls visibility, permissions, and approvals.
+
+⸻
+
+Weeks 11–12: Preview Deployment MVP
+Deliver:
+deploy provider integration
+preview URL artifact
+deployment logs
+env vars
+manual deploy approval
+task → preview connection
+Success metric:
+An agent-created PR generates a preview deployment linked to the task timeline.
+
+⸻
+
+MVP Demo You Should Aim For
+This should be the first public demo:
+1. Founder creates Recoder Space.
+2. Connects GitHub repo.
+3. Starts Recoder Code CLI locally.
+4. Starts Codex or Claude Code adapter.
+5. Creates task: “Add pricing page.”
+6. Recoder Code CLI claims task.
+7. Agent edits code and opens PR.
+8. PR appears as artifact in Recoder.
+9. Preview deployment appears.
+10. Human approves.
+11. Task moves to Done.
+The message is:
+Bring any coding agent. Recoder gives it a workspace, task system, artifact trail, approvals, and deployment path.
+That is much stronger than saying “we built another coding agent.”
+
+⸻
+
+Core Data Model
+Start with these entities:
+organizations
+spaces
+users
+agents
+agent_sessions
+agent_capabilities
+tasks
+task_events
+messages
+artifacts
+runs
+runner_processes
+repos
+branches
+pull_requests
+approvals
+deployments
+audit_logs
+Most important:
+space
+agent
+task
+event
+artifact
+run
+approval
+deployment
+Everything should attach to the timeline.
+
+⸻
+
+Core API Shape
+Agent API
+POST /agents/register
+POST /agents/:id/heartbeat
+POST /agents/:id/capabilities
+POST /agents/:id/status
+Task API
+GET  /spaces/:id/tasks
+POST /spaces/:id/tasks
+POST /tasks/:id/claim
+POST /tasks/:id/status
+POST /tasks/:id/events
+Artifact API
+POST /artifacts
+GET  /tasks/:id/artifacts
+Run API
+POST /runs/start
+POST /runs/:id/logs
+POST /runs/:id/complete
+Approval API
+POST /approvals/request
+POST /approvals/:id/approve
+POST /approvals/:id/reject
+Deployment API
+POST /deployments/request
+POST /deployments/:id/logs
+POST /deployments/:id/complete
+
+⸻
+
+Product Architecture
+Recoder Spaces UI
+        │
+        ▼
+Recoder API
+        │
+        ├── A2A-compatible protocol layer
+        ├── Task/event system
+        ├── Artifact system
+        ├── Approval system
+        ├── GitHub integration
+        └── Deployment integration
+        │
+        ▼
+Recoder Runner / CLI
+        │
+        ├── Recoder Code CLI
+        ├── Codex adapter
+        ├── Claude Code adapter
+        ├── OpenClaw adapter
+        ├── Generic shell adapter
+        └── Generic A2A adapter
+
+⸻
+
+What You Should Not Do Yet
+Avoid:
+full autonomous planner
+full Cloudflare clone
+full Vercel clone
+complex hosted compute
+multi-agent fantasy demos
+large marketplace
+building your own model layer
+trying to replace Claude Code/Codex immediately
+Your wedge is not:
+“Our agent is smarter.”
+Your wedge is:
+“Every agent needs a workspace. Recoder is that workspace.”
+
+⸻
+
+Final Reframed Plan
+Since you already have Recoder Code CLI and a forked A2A SDK, your true roadmap is:
+1. Make Recoder Code CLI A2A-native.
+2. Make your A2A fork workspace-aware, but remain compatible.
+3. Build Recoder Spaces as the control room.
+4. Add task/event/artifact timelines.
+5. Connect GitHub deeply.
+6. Add adapters for Codex, Claude Code, OpenClaw, and shell agents.
+7. Add local/self-hosted runner.
+8. Add hosted sandbox runner as paid infrastructure.
+9. Add deployment previews.
+10. Add deterministic workflows.
+11. Add agency/client portal.
+The north star:
+Recoder is the operating workspace where humans and agents build, coordinate, review, and deploy software together.
+Yes. Here is the detailed roadmap I would use.
+The core product should become:
+Recoder Spaces: the workspace/control plane where humans and any AI agent work together, communicate through A2A/MCP, produce artifacts, and ship software.
+This fits what Recoder already says publicly: your site already presents Agents, Web IDE, CLI, PM, Agency, BYOK, A2A/MCP, and the “bring your own keys / keep control” message.  Your recoder-code repo is also already a strong base: it has CLI, core, MCP support, provider abstraction, file/shell/git tools, agent templates, and VS Code companion structure.  
+So the roadmap is not “build another Claude Code.”It is:
+turn Recoder Code + A2A into the operating workspace for Claude Code, Codex, Recoder Code, OpenClaw, OpenHands, Cline, OpenCode, Aider, local agents, agency agents, PM agents, and deployment agents.
+
+⸻
+
+1. The Big Product Structure
+Package Recoder as five connected products:
+Recoder Spaces        → workspace/control room
+Recoder Code          → first-party coding agent CLI
+Recoder A2A Gateway   → agent communication/protocol layer
+Recoder Runner        → local/self-hosted/hosted agent runtime
+Recoder Deploy        → Vercel/Heroku-like deployment + previews
+Then later:
+Recoder Agency        → client portal + delivery workflows
+Recoder Edge          → Cloudflare-like edge/security layer
+Recoder Marketplace   → agent/tool/workflow marketplace
+The key is that Spaces becomes the center. Everything else plugs into Spaces.
+
+⸻
+
+2. What You Should Clone
+Not legally copy code/UI/branding. Clone the workflow patterns.
+Clone category 1: GitHub Agent HQ / mission control
+GitHub is moving toward a “choose the right agent for the job” flow, where Copilot, Claude, Codex, and custom agents can be managed from one place. GitHub’s own Copilot agents page describes choosing from Copilot, third-party agents like Claude and Codex, and custom agents, then managing agents and tasks together from a mission-control style view.  
+You should clone this concept, but make it platform-neutral:
+GitHub Agent HQ clone → Recoder Agent Room
+Build:
+agent list
+agent status
+agent capabilities
+agent current task
+agent logs
+agent cost owner
+agent permissions
+agent memory/context
+agent artifacts
+agent handoffs
+Difference from GitHub:
+GitHub is repo-first.
+Recoder should be workspace-first.
+
+GitHub agents live inside GitHub.
+Recoder agents can live in terminal, local machine, cloud runner, self-hosted runner, MCP server, A2A server, or client workspace.
+This is one of your biggest opportunities.
+
+⸻
+
+Clone category 2: Claude Code / Codex CLI
+Codex CLI is OpenAI’s local coding agent that can read, change, and run code on a user’s machine.  Claude Code is a full-featured terminal CLI that can edit files, run commands, and manage a project from the command line.  
+You already have Recoder Code, so do not rebuild from zero. Clone the best behavior patterns:
+terminal-first UX
+repo awareness
+file editing
+diff preview
+shell execution
+approval before dangerous commands
+git status/diff/commit/PR flow
+task planning
+review mode
+test mode
+model/provider selection
+local model support
+But make Recoder Code different:
+Claude Code/Codex = local coding agent
+Recoder Code = local coding agent + Space-connected agent + A2A-native worker
+The “Space-connected” part is the moat.
+
+⸻
+
+Clone category 3: A2A protocol layer
+The A2A protocol is an open standard for communication and collaboration between agents built by different vendors/frameworks.  The official A2A repo says the goal is to enable agents on different frameworks and servers to communicate and collaborate as agents, not merely as tools.  
+You already forked Google/A2A. Good.
+Clone/extend:
+agent cards
+agent discovery
+capability advertisement
+task handoff
+message streaming
+multi-agent collaboration
+secure agent calls
+Add Recoder extensions:
+space_id
+task_id
+artifact_id
+run_id
+approval_id
+deployment_id
+permission scopes
+audit event IDs
+client visibility flags
+Keep A2A compatibility. Do not create a totally isolated Recoder-only protocol.
+
+⸻
+
+Clone category 4: MCP ecosystem
+MCP standardizes how applications provide tools, resources, and prompts to LLMs, with official SDKs for multiple languages.  
+Clone the MCP registry idea, but make it workspace-controlled:
+Recoder MCP Registry
+Recoder MCP Gateway
+MCP permissions
+MCP audit logs
+MCP tool approvals
+MCP tool usage analytics
+Positioning:
+MCP gives agents tools.
+A2A lets agents talk.
+Recoder gives agents a workplace.
+
+⸻
+
+Clone category 5: Vercel / Heroku / Railway / Coolify
+Coolify describes itself as an open-source, self-hostable alternative to Heroku, Netlify, Vercel, etc., for managing servers, apps, and databases over SSH.  Dokploy is a free self-hostable PaaS for app/database deployment and management.  CapRover is a Docker/nginx/Let’s Encrypt based app and database deployment manager, basically a lightweight Heroku-like PaaS.  
+Clone this into:
+Recoder Deploy
+Build:
+connect repo
+detect framework
+build app
+preview deploy per branch/PR/task
+production deploy
+env vars
+domains
+logs
+rollback
+database/service add-ons
+one-click templates
+But your differentiator is:
+Deployments are connected to agent tasks.
+So a task should show:
+PR artifact
+test report
+preview URL
+deploy logs
+human approval
+production rollout
+rollback button
+client approval
+That is more valuable than generic hosting.
+
+⸻
+
+Clone category 6: Cloudflare-ish edge/security
+You cannot clone Cloudflare’s global network. But you can clone the useful software layers.
+Use:
+Traefik / Caddy / Pingap for routing
+Varnish / Redis for caching
+open-appsec / CrowdSec for WAF/security
+Pangolin / WireGuard for tunnels/zero-trust access
+Traefik is a modern reverse proxy/load balancer that dynamically integrates with Docker, Kubernetes, ECS, Consul, etc.  Caddy is an open-source web server/reverse proxy with automatic HTTPS.  Pingap is a reverse proxy powered by Cloudflare Pingora concepts.  Varnish is a high-performance HTTP accelerator/cache.  open-appsec is an ML-based WAF/API security engine.  CrowdSec is open-source participative security with malicious-IP detection/protection.  Pangolin is an open-source identity-based remote access platform built on WireGuard with reverse-proxy/VPN capabilities.  
+Clone as:
+Recoder Edge
+Build later:
+custom domains
+automatic TLS
+reverse proxy
+tunnels
+private app exposure
+rate limiting
+bot protection
+WAF
+edge cache
+deploy previews behind access control
+client preview links
+Do this after Spaces + Deploy are useful. Do not start here.
+
+⸻
+
+Clone category 7: OpenHands / Devin-like cloud agent workspace
+OpenHands is an open-source platform for cloud coding agents, and its SDK supports agents that can run locally or inside ephemeral Docker/Kubernetes workspaces.  
+Clone the useful runtime patterns:
+ephemeral workspace
+repo checkout
+terminal
+browser
+file system
+sandbox logs
+snapshot
+task state
+agent run replay
+But do not try to beat OpenHands as “the agent.” Instead:
+OpenHands = one agent platform
+Recoder = workspace that can host/coordinate OpenHands + others
+Add an OpenHands adapter.
+
+⸻
+
+Clone category 8: Linear/Jira/Trello
+Clone:
+project board
+issues
+statuses
+assignees
+labels
+priority
+sprints
+roadmap
+comments
+attachments
+But agent-native:
+agent assignment
+agent capability matching
+task context package
+agent run timeline
+artifact output
+approval state
+deployment state
+client-visible state
+A normal PM tool tracks humans.Recoder PM should track humans + agents + artifacts + deployments.
+
+⸻
+
+Clone category 9: Slack/Discord for agents
+Clone:
+channels
+threads
+mentions
+DMs
+message history
+bot messages
+notifications
+But structure it:
+agent-to-human
+agent-to-agent
+task thread
+run thread
+deployment thread
+approval thread
+client thread
+This becomes the social layer of Recoder Spaces.
+
+⸻
+
+Clone category 10: Datadog/Grafana-lite observability
+Use OpenTelemetry, Prometheus, Loki, and Grafana patterns.
+OpenTelemetry provides APIs/SDKs/tools for metrics, logs, and traces.  Prometheus collects metrics and supports alerting.  Loki is Grafana’s horizontally scalable log aggregation system.  
+Clone:
+agent logs
+run logs
+deployment logs
+task timeline
+model/tool usage
+failure reasons
+approval latency
+build duration
+agent success rate
+You do not need full Datadog. You need “agent work observability.”
+
+⸻
+
+3. The Platform Architecture
+Target architecture:
+                      Recoder Spaces UI
+                              │
+                              ▼
+                         Recoder API
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+ A2A Gateway              Task Engine           Artifact Engine
+        │                     │                     │
+        ├── Agent Registry    ├── Task Board        ├── PRs
+        ├── Agent Cards       ├── Events            ├── Commits
+        ├── Capabilities      ├── Runs              ├── Test Reports
+        ├── Messages          ├── Approvals         ├── Preview URLs
+        └── Handoffs          └── Workflows         └── Client Updates
+                              │
+                              ▼
+                         Recoder Runner
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+  Local Runner          Self-hosted Runner     Hosted Runner
+        │                     │                     │
+  Recoder Code          Company server         Docker/K8s
+  Claude Code           User VPS               Firecracker later
+  Codex CLI             GitHub Actions         Cloud sandbox
+  OpenCode/Cline        Private network        Paid compute
+  OpenClaw
+Deployment/edge layer:
+GitHub Repo
+   │
+   ▼
+BuildKit / Buildpacks / Docker
+   │
+   ▼
+Recoder Deploy
+   │
+   ├── Preview URL
+   ├── Production URL
+   ├── Logs
+   ├── Rollback
+   └── Domain/TLS
+        │
+        ▼
+Traefik/Caddy/Pingap + WAF + Cache + Tunnel
+
+⸻
+
+4. Repositories to Create
+You already have recoder-code. Keep it.
+I would structure repos like this:
+recoder-code
+recoder-a2a
+recoder-spaces
+recoder-runner
+recoder-deploy
+recoder-edge
+recoder-adapters
+recoder-sdk-js
+recoder-sdk-python
+recoder-docs
+recoder-examples
+recoder-code
+Your first-party Claude Code/Codex-like CLI.
+Work on:
+space connection
+task claiming
+artifact creation
+run streaming
+git PR flow
+approval gates
+A2A native mode
+MCP native mode
+provider routing
+local model support
+recoder-a2a
+Your fork/extension of A2A.
+Work on:
+A2A compatibility
+Recoder agent cards
+workspace-aware messages
+task handoff
+artifact events
+approval messages
+deployment events
+permissions
+audit logs
+recoder-spaces
+Main web app/control room.
+Work on:
+spaces
+agent room
+task board
+timeline
+chat
+artifacts
+GitHub integration
+approvals
+deployment previews
+client views
+recoder-runner
+Local/self-hosted/hosted runtime.
+Work on:
+daemon
+process manager
+agent process wrappers
+file watcher
+terminal streaming
+Docker runner
+permission enforcement
+secret injection
+run replay
+recoder-deploy
+Vercel/Heroku clone layer.
+Work on:
+build detection
+Docker builds
+BuildKit integration
+preview envs
+prod envs
+logs
+domains
+TLS
+rollback
+templates
+database add-ons
+recoder-edge
+Cloudflare-ish layer.
+Work on:
+reverse proxy
+routing
+TLS
+tunnels
+WAF
+rate limits
+cache
+custom domains
+private previews
+recoder-adapters
+Adapters for external agents.
+Work on:
+claude-code-adapter
+codex-adapter
+opencode-adapter
+cline-adapter
+openhands-adapter
+openclaw-adapter
+aider-adapter
+generic-shell-adapter
+generic-a2a-adapter
+generic-mcp-adapter
+
+⸻
+
+5. Roadmap by Phase
+Phase 0 — Reposition Recoder around Spaces
+Timeline: immediate.
+Current site says “one system, five working surfaces.” That is good, but the new narrative should be stronger:
+Old:
+Agents, Web IDE, CLI, PM, Agency
+
+New:
+Spaces where humans and AI agents build, coordinate, and deploy software together.
+Update landing page copy:
+Headline:
+The workspace where AI agents ship software with your team.
+
+Subheadline:
+Connect Recoder Code, Claude Code, Codex, OpenClaw, OpenHands, local agents, and MCP tools into one shared workspace with tasks, artifacts, approvals, and deployments.
+
+Core promise:
+Bring your own agents. Bring your own keys. Keep control.
+Update navigation:
+Spaces
+Code CLI
+A2A Gateway
+Deploy
+Agency
+Docs
+Do not remove existing products. Reframe them under Spaces.
+
+⸻
+
+Phase 1 — Recoder Spaces Kernel
+Build the core workspace backend.
+Entities:
+organizations
+spaces
+projects
+users
+memberships
+roles
+agents
+agent_sessions
+agent_capabilities
+tasks
+task_events
+messages
+artifacts
+runs
+approvals
+repos
+deployments
+audit_logs
+Minimum database model:
+Space
+  id
+  org_id
+  name
+  slug
+  visibility
+  created_by
+
+Agent
+  id
+  space_id
+  name
+  type
+  provider
+  capabilities
+  status
+  owner_user_id
+  last_seen_at
+
+Task
+  id
+  space_id
+  title
+  description
+  status
+  priority
+  assigned_agent_id
+  assigned_user_id
+  repo_id
+  branch
+  acceptance_criteria
+
+Run
+  id
+  task_id
+  agent_id
+  runner_id
+  status
+  started_at
+  completed_at
+  exit_code
+
+Artifact
+  id
+  task_id
+  run_id
+  agent_id
+  type
+  title
+  url
+  metadata
+  visibility
+
+Approval
+  id
+  task_id
+  run_id
+  requested_by_agent_id
+  type
+  status
+  approver_user_id
+  payload
+
+AuditLog
+  id
+  space_id
+  actor_type
+  actor_id
+  action
+  target_type
+  target_id
+  metadata
+  created_at
+Core statuses:
+task.created
+task.ready
+task.claimed
+task.in_progress
+task.blocked
+task.needs_review
+task.approved
+task.deployed
+task.done
+task.cancelled
+Deliverable:
+A user can create a Space, create a task, and see an empty agent room + task timeline.
+
+⸻
+
+Phase 2 — Make Recoder Code Space-Native
+This is the first real product proof.
+Add commands:
+recoder auth login
+recoder spaces list
+recoder space connect <space>
+recoder agent register
+recoder tasks list
+recoder tasks claim <task_id>
+recoder run start <task_id>
+recoder artifact create
+recoder approval request
+recoder run logs
+Modes:
+recoder
+recoder code
+recoder code --space <space>
+recoder runner start --space <space>
+recoder tasks claim <task_id> --agent recoder-code
+When Recoder Code connects, it should register:
+{
+  "name": "Recoder Code",
+  "type": "coding_agent",
+  "capabilities": [
+    "code.read",
+    "code.write",
+    "terminal.run",
+    "git.diff",
+    "git.commit",
+    "git.pr.create",
+    "test.run",
+    "artifact.create"
+  ]
+}
+Then it should heartbeat:
+{
+  "agent_id": "agent_123",
+  "status": "online",
+  "current_task_id": "task_456",
+  "current_run_id": "run_789"
+}
+Deliverable:
+Recoder Code appears online in Recoder Space.
+It can claim a task.
+It can stream progress.
+It can create a simple artifact.
+This is the first killer demo.
+
+⸻
+
+Phase 3 — A2A Workspace Gateway
+Turn your forked A2A SDK into Recoder’s interoperability layer.
+Keep standard A2A concepts:
+agent cards
+discovery
+messages
+tasks
+capabilities
+streaming
+Add Recoder-specific envelope:
+{
+  "a2a": {
+    "message_id": "msg_123",
+    "from": "agent_recoder_code",
+    "to": "agent_reviewer"
+  },
+  "x_recoder": {
+    "space_id": "space_abc",
+    "task_id": "task_456",
+    "run_id": "run_789",
+    "visibility": "internal",
+    "requires_audit": true
+  }
+}
+Add event types:
+agent.registered
+agent.online
+agent.offline
+agent.capabilities.updated
+
+task.created
+task.claimed
+task.started
+task.blocked
+task.completed
+
+run.started
+run.log
+run.failed
+run.completed
+
+artifact.created
+artifact.updated
+
+approval.requested
+approval.approved
+approval.rejected
+
+deployment.requested
+deployment.started
+deployment.completed
+deployment.failed
+
+handoff.requested
+handoff.accepted
+handoff.completed
+Deliverable:
+Any A2A-compatible agent can join a Recoder Space and exchange structured messages.
+
+⸻
+
+Phase 4 — Spaces UI
+Build the control room.
+Main screens:
+1. Space Overview
+2. Task Board
+3. Agent Room
+4. Task Detail
+5. Artifact Timeline
+6. Runs/Logs
+7. Approvals
+8. Repos
+9. Deployments
+10. Settings/Permissions
+Space Overview
+Show:
+active agents
+active tasks
+blocked tasks
+pending approvals
+latest artifacts
+latest PRs
+latest deployments
+recent run failures
+Task Board
+Columns:
+Backlog
+Ready
+Claimed
+In Progress
+Blocked
+Needs Review
+Approved
+Deployed
+Done
+Task card:
+title
+priority
+assigned agent/human
+repo
+branch
+latest artifact
+approval state
+deployment state
+last activity
+Agent Room
+Show:
+agent name
+agent type
+online/offline
+capabilities
+current task
+last heartbeat
+permissions
+connected runner
+recent logs
+recent artifacts
+Task Detail
+Sections:
+description
+acceptance criteria
+assigned agent
+task chat
+run logs
+file changes
+artifacts
+approvals
+deployment preview
+timeline
+The timeline is the core UX. It should show everything in order:
+Task created
+Recoder Code claimed task
+Run started
+Agent edited files
+Tests executed
+PR created
+Review requested
+Human approved
+Preview deployed
+Task completed
+Deliverable:
+The user can watch agent work like a production workflow, not random chat.
+
+⸻
+
+Phase 5 — GitHub Integration
+This is the highest-value integration after Spaces.
+GitHub Apps can receive webhooks when a push, PR, or other event happens.  GitHub’s REST API supports listing, creating, updating, and merging pull requests.  GitHub Checks API can provide detailed feedback on commits.  
+Build a GitHub App.
+Permissions:
+Repository metadata: read
+Contents: read/write
+Pull requests: read/write
+Issues: read/write
+Checks: read/write
+Commit statuses: read/write
+Webhooks: receive
+Actions: read
+Events to handle:
+push
+pull_request
+pull_request_review
+check_run
+check_suite
+status
+issues
+issue_comment
+workflow_run
+Features:
+connect repo to Space
+create branch for task
+create PR artifact
+sync PR status
+sync check status
+sync review status
+link commits to task
+map GitHub issue → Recoder task
+map Recoder task → GitHub issue
+When an agent opens a PR:
+1. Create artifact: pull_request
+2. Move task to Needs Review
+3. Request approval
+4. Show PR diff/checks in task timeline
+5. Trigger preview deployment
+Deliverable:
+Recoder Code or an external agent can produce a PR, and the PR appears as an artifact inside Recoder.
+
+⸻
+
+Phase 6 — External Agent Adapters
+Build adapters in this order:
+1. Generic shell adapter
+2. Codex CLI adapter
+3. Claude Code adapter
+4. OpenCode adapter
+5. Aider adapter
+6. OpenHands adapter
+7. Cline/Roo adapter
+8. OpenClaw adapter
+9. Generic A2A adapter
+10. Generic MCP adapter
+Generic shell adapter
+This is the universal base.
+recoder adapter shell \
+  --space my-space \
+  --agent-name "My Local Agent" \
+  --command "my-agent run"
+Captures:
+stdout
+stderr
+exit code
+file changes
+git diff
+created commits
+created PRs
+logs
+artifacts
+Codex adapter
+recoder adapter codex --space my-space --repo .
+Capabilities:
+code.read
+code.write
+terminal.run
+git.diff
+test.run
+artifact.create
+Codex CLI is a local terminal coding agent, so it is ideal for local wrapper mode.  
+Claude Code adapter
+recoder adapter claude-code --space my-space --repo .
+Capabilities:
+code.read
+code.write
+terminal.run
+git.pr.create
+review.request
+Claude Code has terminal CLI commands and permission-related commands, so map its permission model into Recoder approvals.  
+OpenCode adapter
+OpenCode is an open-source terminal-based coding agent available as TUI, desktop app, or IDE extension.  
+recoder adapter opencode --space my-space --repo .
+Aider adapter
+Aider is an AI pair-programming CLI that works with local git repositories.  
+recoder adapter aider --space my-space --repo .
+OpenHands adapter
+OpenHands can run agents locally or in ephemeral workspaces, so this adapter can later become a cloud runner integration.  
+recoder adapter openhands --space my-space
+OpenClaw adapter
+OpenClaw is a personal AI assistant that runs on users’ own devices and answers through channels they already use.  
+Use it less as “coding agent,” more as:
+personal PM assistant
+notification bridge
+email/calendar/client assistant
+human approval reminder
+status summarizer
+Deliverable:
+Users can connect external coding agents into Recoder Spaces without Recoder paying model costs.
+
+⸻
+
+Phase 7 — Local and Self-Hosted Runner
+This is your cost-control layer.
+Runner responsibilities:
+connect machine to Space
+register available agents
+sync task context
+spawn agent process
+watch file changes
+stream logs
+capture git diff
+upload artifacts
+enforce permissions
+request approvals
+inject secrets safely
+Commands:
+recoder runner start --space <space>
+recoder runner status
+recoder runner agents
+recoder runner logs
+recoder runner stop
+Runner config:
+space: my-startup
+repo_path: ./app
+agents:
+  - name: Recoder Code
+    command: recoder code --connected
+  - name: Codex
+    command: codex
+  - name: Claude Code
+    command: claude
+permissions:
+  terminal.run: ask
+  git.commit: allow
+  git.pr.create: allow
+  secrets.read: deny
+  deploy.production: ask
+Runner modes:
+local laptop runner
+user VPS runner
+agency server runner
+company self-hosted runner
+GitHub Actions runner bridge
+GitHub Actions already supports self-hosted runners that users deploy and manage themselves.  Use that pattern: Recoder Runner should feel like a self-hosted agent worker.
+Deliverable:
+A user can run all agents locally while Recoder only coordinates.
+This preserves your margins.
+
+⸻
+
+Phase 8 — Hosted Sandbox Runner
+Only build after local runner works.
+Start with Docker.
+Hosted runner MVP:
+Docker container per run
+repo checkout
+task context injection
+terminal streaming
+file watcher
+artifact upload
+log storage
+timeout limits
+CPU/memory limits
+network restrictions
+secret injection
+approval gates
+Use:
+Docker
+BuildKit
+Kubernetes later
+Firecracker later
+BuildKit is a toolkit for converting source code into build artifacts efficiently and repeatably.  Kubernetes is an open-source system for deployment, maintenance, and scaling of containerized applications.  Firecracker provides lightweight microVMs for secure multi-tenant container/function workloads.  
+Start simple:
+Docker runner
+per-run container
+per-run volume
+hard timeout
+logs
+artifact upload
+Later:
+Firecracker microVMs
+snapshots
+warm pools
+browser previews
+GPU runners
+team-specific runner pools
+enterprise VPC runners
+Do not overbuild microVMs early.
+
+⸻
+
+Phase 9 — Recoder Deploy
+Build the Vercel/Heroku clone as an agent-output deployment layer.
+MVP features:
+connect repo
+detect framework
+build command
+start command
+env vars
+preview deployments
+production deployments
+logs
+rollback
+custom domain
+TLS
+Build pipeline:
+GitHub PR
+  ↓
+Recoder Deploy trigger
+  ↓
+BuildKit / Buildpacks / Dockerfile
+  ↓
+Container image
+  ↓
+Runtime service
+  ↓
+Preview URL
+  ↓
+Task artifact
+Use build options:
+Dockerfile if present
+Cloud Native Buildpacks
+BuildKit
+Nixpacks/Railpack-style detection
+Cloud Native Buildpacks transform source code into container images that can run on any cloud.  Note: Nixpacks is useful historically, but its own docs currently say it is in maintenance mode and recommend Railpack as replacement.  
+Task integration:
+task -> branch -> PR -> preview deployment -> approval -> production deployment
+Deployment artifact:
+{
+  "type": "deployment_preview",
+  "task_id": "task_123",
+  "url": "https://preview-abc.recoder.app",
+  "status": "ready",
+  "source_pr": "https://github.com/org/repo/pull/42"
+}
+OSS integration strategy:
+Study Coolify for self-hosted PaaS UX.
+Study Dokploy for modern deployment dashboard.
+Study CapRover for lightweight Docker/nginx simplicity.
+Do not copy all internals.
+Build Recoder-native deploy tied to tasks/artifacts.
+Deliverable:
+An agent-created PR automatically produces a preview URL attached to the task.
+
+⸻
+
+Phase 10 — Recoder Edge
+This is the Cloudflare-like bundle.
+Do after Deploy.
+MVP:
+custom domains
+automatic TLS
+reverse proxy
+preview URL routing
+access-protected previews
+basic rate limits
+basic WAF
+basic cache
+Stack:
+Traefik for dynamic service discovery
+Caddy for simple automatic HTTPS
+Pingap if you want Rust/Pingora style
+Varnish or Redis for cache
+open-appsec for WAF
+CrowdSec for IP reputation/security
+Pangolin/WireGuard for private access/tunnels
+Product features:
+private preview links
+client-only preview access
+password-protected preview
+team-only staging URL
+agent-only internal services
+custom domain per project
+automatic TLS
+rollback routing
+rate limits
+bot blocking
+Deliverable:
+Recoder Deploy has Cloudflare/Vercel-like preview access, routing, TLS, and protection.
+
+⸻
+
+Phase 11 — Workflow Orchestration
+Do not start with magical autonomous planning. Start with deterministic workflows.
+Use Temporal later if you need durable workflows. Temporal is an open-source durable execution platform for reliable distributed systems and preserving workflow state through failures.  
+Workflow engine concepts:
+task workflow
+bug workflow
+review workflow
+deployment workflow
+client approval workflow
+agency delivery workflow
+Workflow 1: Code task
+task created
+agent assigned
+agent claims
+runner starts
+agent edits files
+tests run
+PR created
+review requested
+approval requested
+preview deployed
+task done
+Workflow 2: Bug fix
+bug report created
+agent reproduces issue
+agent patches
+tests run
+PR artifact created
+review requested
+preview deployed
+human approves
+production deploy
+Workflow 3: Review
+PR artifact created
+review agent assigned
+review comments created
+human approves/rejects
+task updated
+Workflow 4: Deployment
+deploy requested
+checks verified
+approval requested
+deploy executed
+logs streamed
+deployment artifact created
+rollback available
+Workflow 5: Agency delivery
+client request
+PM agent turns request into tasks
+coding agent implements
+review agent reviews
+preview shared with client
+client approves
+production deploy
+weekly report generated
+Deliverable:
+Recoder can coordinate repeated software delivery loops.
+
+⸻
+
+Phase 12 — Agency / Client Layer
+This is where Recoder becomes commercially sharp.
+Client portal should show:
+roadmap
+tasks
+deliverables
+preview links
+approval requests
+status updates
+weekly report
+messages
+invoices later
+Client portal should hide:
+raw agent prompts
+failed internal attempts
+private repo logs
+secrets
+internal debate
+sensitive stack details
+Agency dashboard:
+clients
+projects
+spaces
+active agents
+pending approvals
+blocked tasks
+deliverables
+deployment previews
+reports
+Agency workflows:
+quote generation
+proposal generation
+client intake
+scope breakdown
+task generation
+progress report
+delivery checklist
+approval flow
+handoff doc
+This turns Recoder into:
+AI agency operating system
+Not just developer tooling.
+
+⸻
+
+6. Security and Permissions Roadmap
+This is critical because users will allow agents to touch code, secrets, terminals, deployments, and clients.
+Use permission scopes:
+repo.read
+repo.write
+file.read
+file.write
+terminal.read
+terminal.run
+git.diff
+git.commit
+git.pr.create
+git.pr.merge
+secrets.read
+deploy.preview
+deploy.production
+client.message
+task.update
+artifact.create
+mcp.call
+a2a.message
+Approval policies:
+always allow
+ask once
+ask every time
+deny
+admin only
+client visible
+Examples:
+Recoder Code:
+repo.read allow
+repo.write ask once
+terminal.run ask
+git.pr.create allow
+deploy.production ask every time
+
+PM Agent:
+task.update allow
+client.message ask
+repo.write deny
+secrets.read deny
+
+Deploy Agent:
+deploy.preview allow
+deploy.production ask
+secrets.read ask
+Use OPA later for policy-as-code. OPA is an open-source general-purpose policy engine for context-aware policy enforcement across the stack.  
+Secrets options:
+Infisical
+Vault
+OpenBao
+your own encrypted secret store first
+Infisical is an open-source secrets platform for centralizing API keys, database credentials, configuration, and PKI.  Vault provides controlled access to secrets with access control and audit logs.  
+Identity options:
+use your existing auth first
+Keycloak for self-host/enterprise later
+Keycloak provides open-source identity/access management, strong authentication, user management, and authorization.  
+
+⸻
+
+7. Artifact System
+Artifacts are the most important UX layer after tasks.
+Artifact types:
+pull_request
+commit
+branch
+diff
+test_report
+lint_report
+terminal_log
+screenshot
+deployment_preview
+production_deployment
+design_doc
+api_spec
+bug_report
+client_update
+handoff_note
+approval_request
+status_report
+Artifact fields:
+{
+  "id": "artifact_123",
+  "space_id": "space_abc",
+  "task_id": "task_456",
+  "run_id": "run_789",
+  "agent_id": "agent_recoder_code",
+  "type": "pull_request",
+  "title": "Add pricing page",
+  "url": "https://github.com/org/repo/pull/42",
+  "visibility": "internal",
+  "metadata": {
+    "branch": "recoder/task-456-pricing-page",
+    "checks": "passing"
+  }
+}
+Artifact rule:
+Every meaningful agent output must become an artifact.
+This makes Recoder feel professional instead of chatty.
+
+⸻
+
+8. Events and WebSocket Spec
+Use WebSocket/SSE for live updates.
+Events:
+space.updated
+
+agent.registered
+agent.online
+agent.offline
+agent.status_changed
+agent.capabilities_updated
+
+task.created
+task.updated
+task.claimed
+task.assigned
+task.blocked
+task.completed
+
+message.created
+message.stream_delta
+message.completed
+
+run.started
+run.log
+run.file_changed
+run.command_started
+run.command_completed
+run.failed
+run.completed
+
+artifact.created
+artifact.updated
+
+approval.requested
+approval.approved
+approval.rejected
+
+repo.connected
+repo.branch_created
+repo.pr_created
+repo.pr_merged
+repo.checks_updated
+
+deployment.started
+deployment.log
+deployment.ready
+deployment.failed
+deployment.rollback
+
+client.approval_requested
+client.approved
+client.rejected
+API endpoints:
+POST /agents/register
+POST /agents/:id/heartbeat
+POST /agents/:id/capabilities
+
+GET  /spaces/:id/tasks
+POST /spaces/:id/tasks
+POST /tasks/:id/claim
+POST /tasks/:id/events
+
+POST /runs/start
+POST /runs/:id/logs
+POST /runs/:id/complete
+
+POST /artifacts
+GET  /tasks/:id/artifacts
+
+POST /approvals/request
+POST /approvals/:id/approve
+POST /approvals/:id/reject
+
+POST /repos/connect
+POST /repos/:id/branches
+POST /repos/:id/pull-requests
+
+POST /deployments/request
+POST /deployments/:id/logs
+POST /deployments/:id/complete
+
+⸻
+
+9. 30 / 60 / 90 Day Execution Plan
+First 30 days: prove “agent enters Space”
+Build:
+Spaces backend
+Space UI shell
+agent registry
+task board
+task detail timeline
+Recoder Code space connection
+A2A gateway basics
+run logging
+artifact API
+Demo:
+1. Create Space
+2. Start Recoder Code locally
+3. Recoder Code appears online
+4. Create task
+5. Recoder Code claims task
+6. CLI streams logs into task timeline
+7. CLI creates artifact
+8. Task moves to Done
+This is your minimum proof.
+
+⸻
+
+Days 31–60: prove “agent ships PR”
+Build:
+GitHub App
+repo connection
+branch creation
+PR artifact
+GitHub webhooks
+checks display
+approval request
+Codex adapter
+Claude Code adapter
+generic shell adapter
+Demo:
+1. Create task: Add pricing page
+2. Recoder Code or Codex claims it
+3. Agent edits repo
+4. Agent creates PR
+5. PR appears in Recoder timeline
+6. Human approves
+7. Task moves to Needs Deploy
+This is the point where Recoder becomes real.
+
+⸻
+
+Days 61–90: prove “agent ships preview”
+Build:
+local runner daemon
+Docker hosted runner MVP
+deployment preview MVP
+env var manager
+build logs
+preview URL artifact
+basic permission scopes
+audit logs
+Demo:
+1. Agent opens PR
+2. Recoder builds preview
+3. Preview URL appears on task
+4. Human/client approves
+5. Production deploy requested
+6. Approval gate protects production
+This is the first full loop.
+
+⸻
+
+10. 6-Month Roadmap
+Month 1
+Spaces kernel
+Recoder Code connected mode
+A2A gateway basics
+task timeline
+agent room
+Month 2
+GitHub App
+PR artifacts
+run logs
+Codex adapter
+Claude Code adapter
+generic shell adapter
+Month 3
+local runner daemon
+permissions
+approval gates
+Docker hosted runner MVP
+preview deployment MVP
+Month 4
+OpenCode/Aider/OpenHands adapters
+deployment logs
+rollback
+custom domains
+basic edge routing
+private previews
+Month 5
+workflow templates
+review agent workflow
+PM agent workflow
+client approval workflow
+agency dashboard v1
+Month 6
+self-hosted runner
+enterprise permissions
+audit logs
+MCP registry/gateway
+agent marketplace alpha
+Cloudflare-like edge/security alpha
+
+⸻
+
+11. 12-Month Roadmap
+Months 1–3: Workspace proof
+Goal:
+External agents can work inside Recoder Spaces.
+Ship:
+Spaces
+Recoder Code connected mode
+GitHub PR artifacts
+Codex/Claude adapters
+local runner
+preview deploy MVP
+Months 4–6: Team product
+Goal:
+Small teams/agencies can manage agent work.
+Ship:
+client portal alpha
+workflow templates
+review/approval chains
+agency dashboard
+self-hosted runner
+MCP registry
+basic Recoder Deploy
+Months 7–9: Infrastructure product
+Goal:
+Recoder becomes deploy/runtime infrastructure, not just PM.
+Ship:
+hosted sandbox runner
+snapshots
+deployment rollback
+custom domains
+routing/TLS
+WAF/rate limiting
+private tunnel previews
+observability dashboards
+Months 10–12: Platform/ecosystem
+Goal:
+Others build agents/tools/workflows for Recoder.
+Ship:
+public SDKs
+agent marketplace
+workflow marketplace
+template marketplace
+enterprise runner
+policy-as-code
+SSO
+audit exports
+white-label agency portal
+
+⸻
+
+12. Product Names
+Use names that make the architecture understandable:
+Recoder Spaces       → workspace/control room
+Recoder Code         → first-party coding CLI
+Recoder A2A Gateway  → agent communication
+Recoder Runner       → local/self-hosted/hosted agent runtime
+Recoder Deploy       → preview/production deployment
+Recoder Edge         → routing, TLS, tunnels, WAF, cache
+Recoder Agency       → client delivery portal
+Avoid too many separate brands at first. The main brand should be Recoder Spaces.
+
+⸻
+
+13. What to Build vs Integrate vs Fork
+Build yourself
+Spaces UI
+agent room
+task timeline
+artifact system
+approval system
+Recoder Code connected mode
+Recoder A2A extensions
+runner control plane
+GitHub integration UX
+agency/client portal
+Fork/extend
+A2A SDK
+possibly MCP gateway pieces
+possibly simple runner templates
+possibly open-source deploy templates
+Integrate/use
+Coolify/Dokploy/CapRover ideas for Deploy
+Traefik/Caddy/Pingap for Edge
+open-appsec/CrowdSec for security
+Pangolin/WireGuard for tunnels
+BuildKit/Buildpacks for builds
+Docker/Kubernetes/Firecracker for runtime
+OpenTelemetry/Prometheus/Loki for observability
+Infisical/Vault/OpenBao for secrets
+OPA for policy
+Only clone UX/workflow
+GitHub Agent HQ
+Vercel
+Heroku
+Railway
+Linear
+Slack
+Datadog
+Cloudflare dashboard
+Devin/OpenHands cloud workspace
+
+⸻
+
+14. The First Public Demo Script
+This should be the demo on the landing page.
+1. Create Recoder Space: “SaaS Landing Page”
+2. Connect GitHub repo.
+3. Start Recoder Code locally.
+4. Start Codex or Claude Code adapter.
+5. Create task: “Add pricing page with Stripe CTA.”
+6. Recoder Code claims task.
+7. Timeline shows agent reading repo, editing files, running tests.
+8. Agent creates PR.
+9. PR appears as artifact.
+10. Recoder Deploy creates preview URL.
+11. Human approves.
+12. PM agent writes client update.
+13. Client sees preview in portal.
+14. Task moves to Done.
+The message:
+Bring any coding agent. Recoder gives it a workspace, tasks, artifacts, approvals, and deployment.
+That is your wedge.
+
+⸻
+
+15. What Not to Build Yet
+Avoid:
+your own foundation model
+expensive hosted autonomous agents first
+full Cloudflare clone
+full Vercel clone
+full Kubernetes platform
+huge marketplace
+complex multi-agent planner
+too many provider integrations
+too much AI chat UI
+The first win is not “we have the smartest agent.”
+The first win is:
+all agents need a workplace, and Recoder is that workplace.
+
+⸻
+
+16. Final Priority List
+Use this exact order:
+1. Reposition around Recoder Spaces.
+2. Make Recoder Code Space-connected.
+3. Make A2A workspace-aware.
+4. Build task/event/artifact timeline.
+5. Build Agent Room.
+6. Build GitHub App + PR artifacts.
+7. Build generic shell adapter.
+8. Build Codex + Claude Code adapters.
+9. Build local runner daemon.
+10. Add permissions + approval gates.
+11. Add preview deployments.
+12. Add OpenCode/Aider/OpenHands/OpenClaw adapters.
+13. Add hosted Docker runner.
+14. Add Recoder Deploy deeper features.
+15. Add Recoder Edge.
+16. Add deterministic workflows.
+17. Add agency/client portal.
+18. Add marketplace.
+19. Add enterprise/self-hosted runner.
+20. Add policy/secrets/observability stack.
+The north star should stay simple:
+Recoder is the workspace where humans and AI agents build, coordinate, review, and deploy software together — without Recoder owning the model cost.
+Yes — you are right. A lot of the ideas should not become separate little SaaS apps. They should become modules inside Recoder.xyz.
+Recoder already has the right umbrella: Agents + Web IDE + CLI + PM + Agency workflows in one system, with BYOK/model choice and A2A/MCP positioning. That means the bigger opportunity is not “LaunchKit AI standalone.” It is:
+Recoder = AI operating system from idea → code → launch → client delivery
+That is much more unicorn-style than 20 small products.
+Recoder’s public site already says it combines agents, Web IDE, CLI, PM, and agency workflows, and its product surfaces include AI agents, browser IDE, project management, agency/client delivery, and CLI. (Recoder) Its open-source CLI also supports multiple AI providers, BYOK, agents, file/shell/git/web tools, and MCP integrations. (GitHub)
+So the real strategy should be:
+Do not build LaunchKit AI as a separate app. Build “Recoder Launch” as a paid Recoder module.
+
+New product thesis
+Bad strategy
+launchkit.ai
+screenshotroast.ai
+featureannounce.ai
+clientreport.ai
+competitormonitor.ai
+Too fragmented. Too many landing pages. Too much maintenance.
+Better strategy
+recoder.xyz
+├── Recoder Build
+├── Recoder PM
+├── Recoder Launch
+├── Recoder Agency
+├── Recoder Monitor
+├── Recoder Marketplace
+└── Recoder CLI
+One brand. One login. One payment system. One database. Multiple revenue modules.
+
+Recoder’s real unicorn wedge
+The big wedge is:
+AI-native product delivery platform
+Most AI coding tools stop at code.
+Recoder can own the entire workflow:
+Idea
+→ PRD
+→ Tasks
+→ Code
+→ Preview
+→ Deploy
+→ Launch assets
+→ Client delivery
+→ Monitoring
+→ Updates
+→ Reports
+That is the difference.
+Cursor is strong in the coding/editor layer, with Pro at $20/month, Pro+ at $60/month, Ultra at $200/month, and Teams at $40/user/month. (Cursor) Replit is strong in browser building/hosting, with Core around $20/month annually and Pro around $95/month annually for commercial/professional builds. (replit) Lovable is strong in AI app generation, with Pro at $25/month and Business at $50/month. (Lovable) Devin is strong in agentic coding/work execution, with Pro at $20/month, Max at $200/month, and Teams at $80/month. (Devin)
+Recoder should not fight only as “another AI code editor.” It should fight as:
+The AI platform that helps builders ship real products and deliver client work end-to-end.
+
+Top 10 ideas that should become Recoder modules
+Scoring
+I’m scoring for Recoder fit, not standalone SaaS.
+Rank	Recoder module	Recoder fit	Revenue potential	Build cost	Competition	ROI	Verdict
+1	Recoder Launch	10/10	High	Low	Medium	Very high	Build first
+2	Recoder Agency OS	10/10	Very high	Medium	Medium	Very high	Core business
+3	Recoder PM / PRD Agent	10/10	High	Low-medium	Medium	High	Strengthen now
+4	Recoder Release / Changelog Agent	9/10	High	Low	Medium	High	Add fast
+5	Recoder Client Report Generator	9/10	High	Medium	Medium-high	High	Agency monetization
+6	Recoder Template Marketplace	9/10	Very high	Medium	Medium	Very high	Long-term moat
+7	Recoder Landing Page Optimizer	8/10	Medium-high	Medium	High	High	Great viral tool
+8	Recoder Monitor / Competitor Radar	8/10	Very high	Medium-high	Medium	High	Recurring revenue
+9	Recoder Docs / DevRel Agent	8/10	High	Medium	Medium	High	Great for devtools
+10	Recoder QA / Visual Check Agent	7/10	High	Medium-high	High	Medium-high	Later
+1. Recoder Launch
+This is the old LaunchKit AI, but inside Recoder.
+What it does
+After a user builds something in Recoder, it generates:
+Product Hunt copy
+launch email
+X posts
+LinkedIn posts
+landing page copy
+FAQ
+press release
+demo script
+social graphics text
+launch checklist
+The earlier LaunchKit idea already had this exact product direction: product info in, launch page/Product Hunt/social/email/press kit out.
+Why it fits Recoder
+Because Recoder already knows the project context:
+project name
+codebase
+features
+tech stack
+screenshots
+README
+target user
+tasks completed
+deployment URL
+A standalone LaunchKit asks the user to re-enter everything.
+Recoder can generate launch assets from the actual project.
+Monetization
+Free: 1 mini launch
+Pro: included monthly credits
+One-time: $19 launch export
+Agency: white-label client launch pack
+ARR path
+10,000 users paying $20/mo = $2.4M ARR
+50,000 users paying $20/mo = $12M ARR
+10,000 agency/pro users paying $99/mo = $11.9M ARR
+Verdict
+This should be the first paid expansion.
+
+2. Recoder Agency OS
+Recoder already has an Agency surface described as client delivery with client portal, quote generation, deliverable tracking, and template library. (Recoder) This is very important.
+What it should become
+An AI operating system for freelancers and agencies:
+client portal
+quotes
+contracts
+PRDs
+project plans
+task breakdowns
+deliverables
+reports
+launch packs
+handoff documents
+invoices later
+Why this is bigger than LaunchKit
+Agencies have money. They also have repeated projects.
+A founder may pay once.
+An agency can pay every month.
+Pricing
+Solo freelancer: $29/mo
+Agency: $99/mo
+Agency Pro: $299/mo
+White-label: $999/mo
+ARR path
+1,000 agencies at $99/mo = $1.18M ARR
+10,000 agencies at $99/mo = $11.88M ARR
+5,000 agencies at $299/mo = $17.94M ARR
+1,000 white-label agencies at $999/mo = $11.98M ARR
+Verdict
+This is probably Recoder’s best business customer segment.
+
+3. Recoder PM / PRD Agent
+Recoder already positions PM as AI-first project management with PRD generation, sprint planning, automated status tracking, collaboration, and insights. (Recoder)
+What to add
+idea → PRD
+PRD → tasks
+tasks → agent work
+agent work → status update
+status update → client report
+completed feature → launch announcement
+This creates the loop.
+Why it matters
+The PM module should not just be project management. It should be the control center for AI development work.
+Monetization
+This becomes part of Recoder Pro/Team.
+Individual: $20/mo
+Team: $49–$99/mo
+Agency: $99–$299/mo
+Verdict
+This is core. Not optional.
+
+4. Recoder Release / Changelog Agent
+This comes from the Feature Announcement Generator and Changelog-to-Social ideas. Earlier, we listed feature announcements and changelog-to-social as products that turn shipped updates into customer email, changelog, docs intro, and social posts.
+What it does
+When a feature is shipped, Recoder generates:
+release notes
+changelog
+customer email
+in-app announcement
+X/LinkedIn posts
+docs update
+demo script
+Why it fits Recoder
+Recoder sees the actual code/task changes.
+So it can say:
+You shipped:
+- auth flow
+- dashboard page
+- billing settings
+- export button
+
+Suggested announcement:
+...
+ROI
+Very high. Tiny AI cost. Clear repeat usage.
+Verdict
+Add this right after Recoder Launch.
+
+5. Recoder Client Report Generator
+This came from the Agency Client Report Generator idea. The earlier list described reports for agencies using metrics, AI summary, PDF export, and white-label branding.
+What it does
+For every client project, Recoder generates:
+weekly client update
+monthly delivery report
+what was shipped
+what is delayed
+next sprint
+risks
+invoice summary
+client-friendly explanation
+Why it fits Recoder
+Recoder has project data.
+It can automatically turn work history into a client report.
+Monetization
+This is perfect for agency plans.
+Agency Basic: $99/mo
+Agency Pro: $299/mo
+White-label: $999/mo
+Verdict
+High ROI. Strong B2B value.
+
+6. Recoder Template Marketplace
+This is where unicorn thinking starts.
+What it is
+A marketplace for:
+SaaS templates
+AI agents
+MCP workflows
+agency workflows
+launch templates
+PRD templates
+code generators
+client portal templates
+automation packs
+Why it matters
+Tools are copied. Marketplaces create ecosystems.
+The Recoder CLI is already open-source and has provider abstraction, agent framework, tools, and MCP support. (GitHub) That means a marketplace can become the distribution layer for agents, templates, workflows, and project starters.
+Monetization
+10%–30% marketplace fee
+premium official templates
+agency workflow packs
+enterprise private marketplace
+ARR/GMV path
+$1M marketplace GMV/year at 20% = $200k revenue
+$10M GMV/year at 20% = $2M revenue
+$100M GMV/year at 20% = $20M revenue
+Verdict
+This is the long-term moat.
+
+7. Recoder Landing Page Optimizer
+This comes from the Landing Page Before/After Generator and Landing Page Roast ideas. We already identified this as very viral because users can enter a URL or upload a screenshot and get a better hero section, CTA, and conversion report.
+What it does
+After Recoder builds a landing page, the optimizer checks:
+headline clarity
+CTA strength
+pricing section
+social proof
+mobile layout
+SEO basics
+conversion friction
+Then it proposes edits.
+Why it fits Recoder
+A standalone roast tool only gives advice.
+Recoder can actually edit the landing page.
+That is the killer difference.
+Verdict
+Very strong viral feature. Add after Launch/Release.
+
+8. Recoder Monitor / Competitor Radar
+This came from the Competitor Launch Monitor, Website Change Monitoring API, and Product Hunt / Launch Monitor ideas. The previous lists included tracking competitor websites, pricing pages, changelogs, blogs, and social posts, then sending AI summaries.
+What it does
+Users add competitors.
+Recoder watches:
+homepages
+pricing pages
+changelogs
+blogs
+docs
+Product Hunt launches
+social links
+Then generates:
+what changed
+why it matters
+suggested response
+sales battlecard
+feature gap
+launch response
+pricing response
+Why it fits Recoder
+This is recurring.
+Launch is one-time. Monitoring is monthly.
+Pricing
+Starter: $29/mo, 3 competitors
+Pro: $99/mo, 15 competitors
+Team: $299/mo, 50 competitors
+Enterprise: custom
+Verdict
+This is the most “unicorn-like” Recoder module because it creates recurring business intelligence.
+
+9. Recoder Docs / DevRel Agent
+This comes from the AI documentation generator, changelog, API docs, and developer adoption ideas.
+What it does
+From the codebase, Recoder generates:
+README
+API docs
+SDK examples
+setup guide
+tutorials
+changelog
+release notes
+integration guide
+Why it fits Recoder
+The code is already inside the Web IDE/CLI environment.
+Recoder should not just write code. It should prepare the project for real users.
+Target customers
+developer tools
+API startups
+open-source maintainers
+technical agencies
+Verdict
+Strong. Especially useful if Recoder wants developer customers.
+
+10. Recoder QA / Visual Check Agent
+This comes from the visual monitoring, screenshot comparison, uptime + visual monitoring, and screenshot API ideas.
+What it does
+After app generation, Recoder checks:
+broken layout
+missing buttons
+mobile responsiveness
+console errors
+broken links
+visual regressions
+basic accessibility
+Why it fits Recoder
+Replit/Lovable-style generated apps often break or look rough.
+If Recoder can say:
+I built it.
+I tested it.
+I fixed the issues.
+I prepared launch assets.
+That becomes much stronger.
+Verdict
+Important, but not first. It requires browser automation and test infrastructure.
+
+What should NOT be Recoder core
+Some earlier ideas are useful, but they are distractions for Recoder right now.
+Idea	Keep or drop?	Reason
+Text-to-audio API	Drop for now	Not core to build/launch workflow
+Email verification API	Drop	Different market, compliance/abuse risk
+B2B email retrieval API	Drop	Data/compliance heavy
+Transactional email API	Drop	Deliverability nightmare
+PDF generation API	Maybe later	Useful as export feature, not standalone
+Social scheduler API	Maybe later	OAuth complexity
+Screenshot API	Maybe later	Useful internally for Recoder QA/Launch
+Brand asset API	Add later	Useful for agency/client workflows
+The key is: everything must support build → launch → deliver → monitor.
+
+Recoder vs competitors
+Product	Main strength	Weakness Recoder can attack
+Cursor	Best AI coding/editor workflow	Mostly developer/editor focused, less client delivery/launch workflow
+Replit	Browser IDE, hosting, app publishing	Can become expensive/credit-based for larger workflows; less agency-delivery specific
+Lovable	Fast no-code/vibe app generation	Less technical control and less full delivery workflow
+Devin	Autonomous software engineering agent	More expensive/agent-work focused, less self-serve agency/product launch OS
+Recoder	BYOK, agents, Web IDE, CLI, PM, agency workflows	Needs sharper positioning and paid modules
+Recoder should not say:
+“We are another AI coding tool.”
+It should say:
+“Recoder helps you build, launch, and deliver software with AI agents.”
+That positioning includes coding, but does not stop at coding.
+
+Best monetization model for Recoder
+Free
+BYOK
+limited sessions
+limited projects
+community templates
+This matches the current BYOK/no-payment-gate activation idea on Recoder. (Recoder)
+Individual Pro
+$20/mo
+more sessions
+cloud projects
+PM agent
+Launch agent
+Release agent
+basic templates
+Builder Plus
+$49/mo
+more projects
+more agent runs
+launch exports
+docs generator
+landing optimizer
+Agency
+$99/mo
+client portal
+quotes
+deliverables
+client reports
+white-label exports
+agency templates
+Agency Pro
+$299/mo
+team seats
+client workspaces
+advanced reports
+competitor monitor
+priority support
+Enterprise
+custom
+SSO
+audit logs
+private templates
+custom agents
+self-host/VPC later
+
+ARR scenarios
+Small but real SaaS
+1,000 Pro users × $20/mo = $240k ARR
+500 Agency users × $99/mo = $594k ARR
+Total = ~$834k ARR
+Strong bootstrapped SaaS
+10,000 Pro users × $20/mo = $2.4M ARR
+2,000 Agency users × $99/mo = $2.38M ARR
+500 Agency Pro users × $299/mo = $1.79M ARR
+Total = ~$6.57M ARR
+Venture-scale path
+50,000 Pro users × $20/mo = $12M ARR
+10,000 Agency users × $99/mo = $11.88M ARR
+3,000 Agency Pro users × $299/mo = $10.76M ARR
+1,000 Enterprise customers × $15k/year = $15M ARR
+Marketplace revenue = $5M–$20M/year
+Total path = $45M–$70M+ ARR
+To reach true unicorn scale, Recoder needs enterprise, marketplace, and recurring monitoring/workflow revenue — not only individual subscriptions.
+
+What I would build next
+Do not build standalone LaunchKit AI.
+Fold it into Recoder as:
+Recoder Launch
+First version
+/app/launch
+Inputs:
+project
+target user
+features shipped
+launch date
+pricing
+screenshots
+tone
+platforms
+Outputs:
+Product Hunt copy
+X thread
+LinkedIn post
+launch email
+FAQ
+press release
+demo script
+launch checklist
+Why this first
+It is low cost, high ROI, and uses the existing Recoder project context.
+
+Then build these in order
+Phase 1: Monetizable modules
+1. Recoder Launch
+2. Recoder Release / Changelog
+3. Recoder Client Reports
+Phase 2: Agency revenue
+4. Quotes
+5. Client portal
+6. White-label reports
+7. Deliverable templates
+Phase 3: Defensibility
+8. Template marketplace
+9. Agent marketplace
+10. Competitor/market monitor
+
+Final decision
+Your instinct is correct.
+The strongest path is not:
+“Pick one micro-SaaS idea.”
+The strongest path is:
+Make Recoder.xyz the platform, and turn the best ideas into paid Recoder modules.
+The first paid module should be:
+Recoder Launch
+Then:
+Recoder Agency + Recoder Release + Recoder Marketplace
+That is the path from “small SaaS idea” to a real platform.
+You’re not delusional. You’re actually closer than the previous roadmap made it sound.
+But there is one real danger:
+You already have many of the pieces. The risk is not lack of ideas.The risk is turning Recoder into 8 half-overlapping products instead of one obvious operating system.
+From the public site, Recoder already claims the core bundle: Agents, Web IDE, CLI, PM, Agency workflows, BYOK, A2A/MCP, and model-cost control. The homepage literally says Recoder gives users “agents, a Web IDE, CLI, PM, and agency workflows in one system,” with BYOK and A2A/MCP readiness. (Recoder) The platform page also presents Recoder Agents, Web, PM, and Agency as the four current services. (Recoder)
+So the answer is:
+No, you’re not delusional. You already have the skeleton.But you need consolidation, not more random expansion.
+
+What You Already Have
+Based on the current public Recoder pages and repo, you already have a lot of the “agent workspace OS” thesis.
+Area	Do you already have it?	My read
+AI coding CLI	Yes	recoder-code already positions itself as terminal + IDE AI dev toolkit with provider support, agents, tools, MCP, BYOK, and VS Code companion. (GitHub)
+BYOK / cost control	Yes	This is already a major public message: bring your own OpenRouter, Anthropic, OpenAI, or Google keys and keep provider cost visibility. (Recoder)
+Agent dashboard	Yes	Recoder Agents is already presented as multi-turn agents, tool execution, templates, and monitoring. (Recoder)
+Web IDE	Yes	Public site describes browser IDE, live preview, built-in terminal, AI code generation, and one-click deploy. (Recoder)
+PM product	Yes	Recoder PM is already described as AI-first project management with PRDs, sprint automation, progress insights, RICE scoring, and feedback analysis. (Recoder)
+Agency product	Yes	Recoder Agency is already positioned around client delivery and AI agent workflows. (Recoder)
+A2A/MCP angle	Yes	The site already says Claude Code, Codex, Cursor, and MCP-compatible tools can talk to Recoder agents through recoder-a2a, with discovery, secure handoff, permissions, audit logging, SSE, and WebSocket streaming. (Recoder)
+Security story	Partial but real	The security page already talks about BYOK data boundaries, encrypted key storage, sandboxed execution, account/access controls, and audit-friendly operations. (Recoder)
+So the big missing thing is not another product idea.
+The big missing thing is:
+A single center object: Recoder Space.
+Right now, the public story can feel like:
+Agents + Web IDE + PM + Agency + CLI + A2A.
+It needs to feel like:
+One Recoder Space where agents, humans, tasks, code, clients, deployments, and marketing outputs all live.
+
+The Honest Diagnosis
+You are not delusional because the thesis is coherent:
+AI agents will need workspaces, task systems, communication protocols, artifact trails, approvals, deployment, and client/business surfaces.
+That is real.
+But you would become delusional if you try to separately build:
+AI coding platform
+AI PM tool
+AI agency OS
+AI product marketing OS
+AI GTM OS
+AI Vercel clone
+AI Cloudflare clone
+AI sales tool
+AI support tool
+AI compliance tool
+AI procurement tool
+That becomes founder-brain chaos.
+The right move is:
+Do not add all these as separate companies. Turn the useful ones into modules inside Recoder Spaces.
+
+The Ideas That Are Too Similar
+Your uploaded note is directionally right: LaunchKit-style product marketing is not a unicorn alone, but it can become a wedge into AI GTM Intelligence OS or AI Product Marketing OS.
+But several of these are basically the same product wearing different clothes.
+Merge These Into One Module
+LaunchKit AI
+AI Product Marketing OS
+AI Developer Adoption OS
+Changelog-to-social
+Release notes generator
+Product update email generator
+Launch announcement generator
+Agency report generator
+These should become:
+Recoder Launch
+Not a new standalone startup.
+
+Merge These Into Another Module
+AI GTM Intelligence OS
+Competitor monitor
+Pricing monitor
+Battlecard generator
+Launch response generator
+Market change monitor
+These should become:
+Recoder GTM Radar
+Again, not a new standalone product at first.
+
+Already Exists / Should Not Be Duplicated
+AI Agency OS  → already Recoder Agency
+AI PM OS      → already Recoder PM
+AI coding CLI → already Recoder Code
+Agent dashboard → already Recoder Agents
+A2A SDK / gateway → already part of your public direction
+So don’t build “another Agency OS” or “another PM OS.”
+Make your existing Agency and PM products more agent-native.
+
+What You Should Add
+You should add AI Product Marketing OS, but not as a random sixth product.
+Add it as:
+Recoder Launch: product marketing for agent-built software.
+This is powerful because Recoder already has the source of truth:
+tasks
+PRDs
+code changes
+commits
+PRs
+deployments
+client requests
+agent outputs
+screenshots
+preview URLs
+A generic product marketing tool has to ask:
+“What did you ship?”
+Recoder already knows.
+That is your advantage.
+
+Recoder Launch
+What It Does
+When an agent or human ships something, Recoder Launch generates:
+release notes
+changelog entry
+customer email
+in-app announcement
+social post
+LinkedIn post
+X/Twitter post
+Product Hunt copy
+landing page update
+docs update
+sales enablement blurb
+client update
+demo script
+Existing tools like LaunchNotes focus on centralizing product updates and product communication for teams. (LaunchNotes) Beamer also positions release notes as a product marketing workflow for announcing SaaS updates. (Beamer)
+Your twist is:
+Recoder Launch is not just a changelog tool. It is connected to the actual agent work, PR, preview deployment, and client workflow.
+That is meaningfully different.
+
+Recoder Launch Workflow
+1. Task created in Recoder PM
+2. Agent implements feature
+3. PR created
+4. Preview deployment created
+5. Human approves
+6. Recoder Launch generates:
+   - changelog
+   - release email
+   - social posts
+   - docs update
+   - client update
+7. Agency/client portal shows polished deliverable
+This completes the loop:
+Idea → task → code → preview → approval → launch → client/GTM update.
+That is a much better platform story than “we have agents.”
+
+Recoder GTM Radar
+This is the bigger unicorn-style idea from your note, but I would not build it first as a standalone.
+Build it as an add-on to Recoder Launch.
+What It Does
+It monitors:
+competitor homepage
+pricing page
+changelog
+blog
+docs
+Product Hunt launches
+job posts
+social posts
+reviews
+Then generates:
+what changed
+why it matters
+threat level
+recommended response
+sales battlecard
+product task suggestions
+launch response copy
+pricing response
+founder summary
+agency/client report
+This is a real market. Kompyte says it tracks competitor updates across websites, reviews, content, social, ads, and job postings, then uses AI to filter noise into actionable updates. (Kompyte) Crayon also positions itself as competitive intelligence software for monitoring competitors and enabling sales teams with real-time intelligence. (Crayon)
+Your version should not start as “enterprise competitive intelligence.”
+It should start as:
+GTM Radar for SaaS builders and AI agencies using Recoder.
+
+The Better Product Architecture
+Instead of this:
+Recoder Agents
+Recoder Web
+Recoder CLI
+Recoder PM
+Recoder Agency
+Recoder LaunchKit
+Recoder GTM Radar
+Recoder Deploy
+Recoder Edge
+Make it this:
+Recoder Spaces
+  ├── Code
+  ├── Agents
+  ├── PM
+  ├── Deploy
+  ├── Launch
+  ├── GTM Radar
+  └── Agency
+One workspace. Many modules.
+This makes everything coherent.
+
+The Core Recoder Loop
+Your product should have one master loop:
+Plan → Build → Review → Deploy → Announce → Report
+Map your products into that:
+Step	Recoder module
+Plan	Recoder PM
+Build	Recoder Code / Agents / Web IDE
+Review	Agent timeline / PR review / approvals
+Deploy	Recoder Deploy
+Announce	Recoder Launch
+Report	Recoder Agency / Client Portal
+Monitor market	Recoder GTM Radar
+This is the cleanest version of the company.
+
+What To Stop Saying
+Avoid saying:
+We have agents, web IDE, PM, agency, CLI, A2A, deploy, marketing OS, GTM OS...
+That sounds scattered.
+Say:
+Recoder is the AI-native workspace where humans and agents plan, build, deploy, launch, and deliver software.
+Then the modules make sense.
+
+What To Build Next
+Since you already have Recoder Code, A2A/MCP direction, PM, Agency, and Agents, I would update the roadmap like this.
+Phase 1 — Consolidate Around Recoder Spaces
+Build or rename the core object:
+Space
+Project
+Repo
+Task
+Agent
+Run
+Artifact
+Deployment
+Launch
+Client
+Every existing surface should attach to a Space.
+The user should feel:
+“I am inside one workspace.”
+Not:
+“I am jumping between five unrelated apps.”
+
+Phase 2 — Artifact Timeline
+This is more important than another AI feature.
+Every task should show:
+task created
+agent assigned
+agent started
+files changed
+command run
+PR created
+preview deployed
+approval requested
+release note generated
+client update sent
+task completed
+This is what makes Recoder trustworthy.
+
+Phase 3 — GitHub + PR + Deployment Connection
+Your strongest demo is still:
+Task → Agent → PR → Preview → Approval
+Once this works, Recoder becomes real infrastructure, not just AI chat.
+
+Phase 4 — Recoder Launch
+Add product marketing outputs directly from shipped work.
+MVP:
+generate changelog from task + PR
+generate customer email
+generate social posts
+generate docs update
+generate client update
+save brand voice
+publish/export
+This should be inside PM/Agency/Deploy, not a separate app.
+
+Phase 5 — Recoder GTM Radar
+Add competitor monitoring after Launch.
+MVP:
+track 3 competitor URLs
+detect homepage/pricing/changelog changes
+summarize what changed
+suggest product/marketing response
+create Recoder PM tasks from competitor changes
+generate battlecard
+This is where the “AI GTM Intelligence OS” idea enters.
+
+Phase 6 — Agency Client Portal
+This is where Recoder can become a revenue product faster.
+Agencies need to show clients:
+what was requested
+what agent/human worked on it
+what changed
+preview URL
+release note
+status report
+next steps
+approval button
+This connects perfectly with Recoder Launch.
+
+What Not To Build Now
+Do not build these yet:
+AI SaaS Procurement Agent
+AI Customer Support Agent
+AI Compliance Agent
+AI Sales Prospecting Agent
+Healthcare Ops AI
+Full Cloudflare clone
+Full Vercel clone
+Huge marketplace
+Those are valid businesses, but they are different buyers, different data, different trust requirements, and different sales cycles.
+For Recoder, they are distractions right now.
+
+The Best Add-On Ideas For Recoder
+Here is my ranking specifically for Recoder, not generic startup ideas.
+Rank	Idea	Add now?	Why
+1	Recoder Spaces	Yes	This is the center that makes everything coherent.
+2	Artifact timeline	Yes	Turns agent work into visible production workflow.
+3	GitHub PR integration	Yes	Makes Recoder useful for real software teams.
+4	Recoder Launch / AI Product Marketing OS	Yes	Natural extension after shipping features.
+5	Agency client portal	Yes	Strong monetization and matches existing Agency product.
+6	GTM Radar	Later	Strong idea, but should come after Launch.
+7	Deployment previews	Yes, but scoped	Needed for the full shipping loop.
+8	Cloudflare-like Edge	Later	Useful infrastructure, not core wedge yet.
+9	SaaS procurement / support / compliance	No	Separate companies, not Recoder core.
+10	Generic sales prospecting	No	Crowded, compliance-heavy, and off-focus.
+The Product Marketing OS Version You Should Build
+Call it something like:
+Recoder Launch
+Not:
+AI Product Marketing OS
+The product page can say:
+Turn every shipped feature into release notes, customer updates, social posts, docs, and client-ready launch assets.
+Core features:
+1. Changelog generator
+2. Release notes generator
+3. Customer email generator
+4. Social post generator
+5. Docs update generator
+6. Launch checklist
+7. Product Hunt launch pack
+8. Demo script generator
+9. Client update generator
+10. Brand voice memory
+The killer input:
+Use task + PR + deployment + screenshots + agent notes.
+That is the moat.
+
+The GTM Radar Version You Should Build
+Call it:
+Recoder Radar
+or:
+Recoder GTM Radar
+Core features:
+1. Track competitor URLs
+2. Weekly competitor diff
+3. Pricing page change detector
+4. Changelog/blog monitor
+5. Threat score
+6. Battlecard generator
+7. Launch response generator
+8. Suggested Recoder PM tasks
+9. Agency/client report
+10. Slack/email alerts later
+This should feed into PM:
+Competitor shipped feature X
+→ Recoder suggests response
+→ PM task created
+→ Agent builds response
+→ Launch generates announcement
+That is the full strategic loop.
+
+The Non-Delusional Final Shape
+The company should not be:
+“Recoder has a bunch of AI tools.”
+It should be:
+Recoder Spaces is the workspace where AI agents and humans plan, build, deploy, launch, and deliver software.
+Then your modules are obvious:
+Recoder Code      → build
+Recoder Agents    → automate
+Recoder PM        → plan
+Recoder Deploy    → ship
+Recoder Launch    → announce
+Recoder Radar     → monitor market
+Recoder Agency    → deliver to clients
+Recoder A2A       → connect all agents
+That is not delusional.
+That is coherent.
+The immediate move is not to add five new products. It is to rename, consolidate, and connect what you already have into one workspace loop.

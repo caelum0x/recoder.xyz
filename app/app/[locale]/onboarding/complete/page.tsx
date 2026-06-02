@@ -15,12 +15,13 @@ import {
   Sparkles,
   ExternalLink,
   BookOpen,
-  Code2,
+  Workflow,
   Bot,
   Zap,
   ArrowRight,
   Star
 } from 'lucide-react';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 // ── Recommendation engine ──────────────────────────────────────────
 // Maps the user's role + useCase from setup-profile into a primary
@@ -35,7 +36,7 @@ interface AppRecommendation {
   quickStart: string;
   quickStartLink: string;
   gradient: string;
-  external: true;
+  external: boolean;
 }
 
 const APP_CATALOG: Record<string, AppRecommendation> = {
@@ -50,16 +51,16 @@ const APP_CATALOG: Record<string, AppRecommendation> = {
     gradient: 'from-orange-500 to-amber-600',
     external: true,
   },
-  web: {
-    icon: Code2,
-    title: 'Code in Web IDE',
-    description: 'Write, run, and deploy code in a full cloud IDE with AI pair-programming built in',
-    link: 'https://web.recoder.xyz',
-    action: 'Open Web IDE',
+  spaces: {
+    icon: Workflow,
+    title: 'Code in Spaces',
+    description: 'Coordinate agents, projects, and delivery work in the shared dashboard workspace',
+    link: '/dashboard/spaces',
+    action: 'Open Spaces',
     quickStart: 'Start a new project',
-    quickStartLink: 'https://web.recoder.xyz?new=project',
+    quickStartLink: '/dashboard/spaces',
     gradient: 'from-blue-500 to-cyan-600',
-    external: true,
+    external: false,
   },
   agency: {
     icon: Zap,
@@ -91,8 +92,8 @@ function getRecommendedOrder(
   role: string | undefined
 ): string[] {
   // Role-based overrides take precedence when they're a strong signal
-  if (role === 'product') return ['pm', 'agents', 'agency', 'web'];
-  if (role === 'designer') return ['agency', 'agents', 'web', 'pm'];
+  if (role === 'product') return ['pm', 'agents', 'agency', 'spaces'];
+  if (role === 'designer') return ['agency', 'agents', 'spaces', 'pm'];
 
   // Use-case-based routing
   switch (useCase) {
@@ -100,15 +101,15 @@ function getRecommendedOrder(
     case 'mobile':
     case 'api':
     case 'blockchain':
-      return ['agents', 'web', 'agency', 'pm'];
+      return ['agents', 'spaces', 'agency', 'pm'];
     case 'automation':
     case 'ai':
     case 'data':
-      return ['agents', 'agency', 'web', 'pm'];
+      return ['agents', 'agency', 'spaces', 'pm'];
     case 'other':
     default:
       // Generic fallback — lead with agents as the broadest surface
-      return ['agents', 'web', 'agency', 'pm'];
+      return ['agents', 'spaces', 'agency', 'pm'];
   }
 }
 
@@ -215,6 +216,12 @@ export default function CompletePage() {
       completeOnboarding(parsed);
     }
   }, [session, isPending, router, completeOnboarding]);
+
+  useEffect(() => {
+    if (!loading && !isPending && session) {
+      trackEvent(AnalyticsEvents.ONBOARDING_COMPLETED, { step: 'complete', source: 'onboarding' });
+    }
+  }, [loading, isPending, session]);
 
   if (loading || isPending) {
     return (

@@ -1,0 +1,25 @@
+[
+  [
+    "ws_15c04abbb2f64be6",
+    {
+      "workspaceId": "ws_15c04abbb2f64be6",
+      "name": "Approval Workspace",
+      "projectId": "proj-1",
+      "ownerId": "owner-1",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "9368943e-e8e5-4ddd-a416-26a260830292",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-05-08T08:42:43.974Z",
+      "updatedAt": "2026-05-08T08:42:43.974Z"
+    }
+  ]
+]

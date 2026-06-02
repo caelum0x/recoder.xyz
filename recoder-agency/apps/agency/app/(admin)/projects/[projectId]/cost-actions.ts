@@ -2,8 +2,12 @@
 
 import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import type { CostCategory } from "@/db";
-import { costLedgerEntries, db, projects } from "@/db";
+import { costLedgerEntries, db, projects, workspaces } from "@/db";
+import { createRecoderTask } from "@/lib/agency/recoder-control-plane";
+import { resolveModelRoutingPolicyForWorkspace } from "@/lib/agency/model-routing";
+import { getCurrentUser } from "@/lib/get-current-user";
 import { requireAdminRole } from "@/services/teams";
 
 export async function addCostEntry(formData: FormData) {
@@ -80,6 +84,11 @@ export async function deleteCostEntry(entryId: string, projectId: string) {
 }
 
 export async function updateProjectBudget(formData: FormData) {
+	const { projectId } = await updateProjectBudgetInternal(formData);
+	revalidatePath(`/projects/${projectId}`);
+}
+
+async function updateProjectBudgetInternal(formData: FormData) {
 	const team = await requireAdminRole();
 	const projectId = formData.get("projectId") as string;
 	const budgetStr = formData.get("budget") as string;
@@ -133,5 +142,90 @@ export async function updateProjectBudget(formData: FormData) {
 		})
 		.where(eq(projects.id, projectId));
 
+	return {
+		projectId,
+		project,
+		updatedBudget: {
+			budgetCents,
+			warningThresholdPct,
+			hardStopThresholdPct,
+			hardStopEnabled,
+		},
+	};
+}
+
+export async function updateProjectBudgetAndRequestGovernance(
+	formData: FormData,
+) {
+	const [{ projectId, project, updatedBudget }, user] = await Promise.all([
+		updateProjectBudgetInternal(formData),
+		getCurrentUser(),
+	]);
+
+	const workspace =
+		project.workspaceDbId != null
+			? await db.query.workspaces.findFirst({
+					where: eq(workspaces.dbId, project.workspaceDbId),
+				})
+			: null;
+
+	let governanceTaskId: string | null = null;
+	if (workspace?.id) {
+		const policy = await resolveModelRoutingPolicyForWorkspace(workspace.id);
+		const prompt = [
+			`Review updated cost governance for "${project.name}".`,
+			`Budget: ${updatedBudget.budgetCents != null ? `$${(updatedBudget.budgetCents / 100).toFixed(2)}` : "unset"}.`,
+			`Warning threshold: ${updatedBudget.warningThresholdPct}%.`,
+			`Hard-stop threshold: ${updatedBudget.hardStopThresholdPct}% (${updatedBudget.hardStopEnabled ? "enabled" : "disabled"}).`,
+			policy
+				? `Routing policy: ${policy.name} (preferred=${policy.preferredModelId}${policy.fallbackModelId ? `, fallback=${policy.fallbackModelId}` : ""})`
+				: "Routing policy: none configured",
+			`Previous budget: ${project.budgetCents != null ? `$${(project.budgetCents / 100).toFixed(2)}` : "unset"}.`,
+			`Previous warning threshold: ${project.costWarningThresholdPct}%.`,
+			`Previous hard-stop threshold: ${project.costHardStopThresholdPct}% (${project.costHardStopEnabled ? "enabled" : "disabled"}).`,
+			"Audit the policy delta, budget risk, and any operator follow-up required.",
+		].join("\n\n");
+
+		const created = await createRecoderTask({
+			workspaceId: workspace.id,
+			threadId: `agency-cost-governance-${project.id}-${Date.now()}`,
+			requester: {
+				agentId: "recoder-agency",
+				platform: "recoder_agency",
+				name: "Recoder Agency",
+			},
+			prompt,
+			autoRoute: true,
+			routingHints: {
+				runtimeCategory: "documentation",
+				requiredCapabilities: ["code-review"],
+				preferredCapabilities: ["documentation"],
+				preferredPlatform: "claude_code",
+			},
+			metadata: {
+				projectId: project.id,
+				projectDbId: project.dbId,
+				costPolicyChange: {
+					requestedByUserDbId: user.dbId,
+					requestedAt: new Date().toISOString(),
+					previous: {
+						budgetCents: project.budgetCents,
+						warningThresholdPct: project.costWarningThresholdPct,
+						hardStopThresholdPct: project.costHardStopThresholdPct,
+						hardStopEnabled: project.costHardStopEnabled,
+					},
+					next: updatedBudget,
+				},
+			},
+		});
+		governanceTaskId = created?.taskId ?? null;
+	}
+
 	revalidatePath(`/projects/${projectId}`);
+	if (governanceTaskId) {
+		redirect(
+			`/projects/${projectId}?governanceTaskId=${encodeURIComponent(governanceTaskId)}`,
+		);
+	}
+	redirect(`/projects/${projectId}?governanceRequested=error`);
 }

@@ -1,14 +1,24 @@
 /**
  * Email Test API Route (Admin Only)
- * Tests email delivery with Resend API
+ * Tests transactional and onboarding email delivery using the configured provider.
  *
  * Usage:
  * POST /api/admin/test-email
- * Body: { email: "test@example.com", type: "verification" | "welcome" | "password-reset" }
+ * Body: { email: "test@example.com", type: "verification" | "welcome" | "password-reset" | "temp-password" | "getting-started" | "feature-deep-dive" | "engagement" }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getEmailProviderStatus, sendVerificationEmail, sendWelcomeEmail, sendPasswordResetEmail, sendTemporaryPasswordEmail } from '@/lib/email';
+import {
+  getEmailProviderStatus,
+  sendVerificationEmail,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  sendTemporaryPasswordEmail,
+  sendGettingStartedEmail,
+  sendFeatureDeepDiveEmail,
+  sendEngagementEmail,
+} from '@/lib/email';
+import { getOnboardingEmailOperationsStatus, getOnboardingEmailTemplateCatalog } from '@/lib/services/onboarding-email.service';
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET;
 if (!ADMIN_SECRET) {
@@ -28,6 +38,16 @@ function getProviderLabel() {
       return 'None';
   }
 }
+
+const AVAILABLE_TYPES = [
+  'verification',
+  'welcome',
+  'password-reset',
+  'temp-password',
+  'getting-started',
+  'feature-deep-dive',
+  'engagement',
+] as const;
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,9 +86,18 @@ export async function POST(request: NextRequest) {
       case 'temp-password':
         result = await sendTemporaryPasswordEmail(email, 'TEST1234');
         break;
+      case 'getting-started':
+        result = await sendGettingStartedEmail(email, name);
+        break;
+      case 'feature-deep-dive':
+        result = await sendFeatureDeepDiveEmail(email, name);
+        break;
+      case 'engagement':
+        result = await sendEngagementEmail(email, name);
+        break;
       default:
         return NextResponse.json(
-          { success: false, error: `Unknown email type: ${type}. Use: verification, welcome, password-reset, temp-password` },
+          { success: false, error: `Unknown email type: ${type}. Use: ${AVAILABLE_TYPES.join(', ')}` },
           { status: 400 }
         );
     }
@@ -110,18 +139,39 @@ export async function GET(request: NextRequest) {
   }
 
   const providerStatus = getEmailProviderStatus();
+  const pipeline = await getOnboardingEmailOperationsStatus();
   const config = {
     resendConfigured: providerStatus.hasResend,
     smtpConfigured: providerStatus.hasSmtp,
     fromEmail: providerStatus.fromEmail,
     isDev: process.env.NODE_ENV === 'development',
     activeProvider: getProviderLabel(),
+    emailProvider: providerStatus.provider,
+    cronSecretConfigured: pipeline.cronSecretConfigured,
+    adminSecretConfigured: Boolean(ADMIN_SECRET),
   };
 
   return NextResponse.json({
     success: true,
     config,
+    pipeline,
+    templates: {
+      onboarding: getOnboardingEmailTemplateCatalog(),
+      testableTypes: AVAILABLE_TYPES,
+    },
+    endpoints: {
+      test: 'POST /api/admin/test-email',
+      cronStatus: 'GET /api/cron/process-emails?mode=status',
+      cronRun: 'POST /api/cron/process-emails',
+    },
+    rollout: [
+      'Set EMAIL_PROVIDER=smtp and configure SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASSWORD.',
+      'Use a transactional sender like Postal or docker-mailserver for noreply@recoder.xyz.',
+      'Set ADMIN_SECRET and CRON_SECRET in production.',
+      'Run GET /api/admin/test-email and GET /api/cron/process-emails?mode=status before enabling cron.',
+      'Schedule /api/cron/process-emails every 15 minutes with x-cron-secret or Bearer authorization.',
+    ],
     testEndpoint: 'POST /api/admin/test-email with { email, type }',
-    availableTypes: ['verification', 'welcome', 'password-reset', 'temp-password'],
+    availableTypes: AVAILABLE_TYPES,
   });
 }

@@ -89,10 +89,10 @@ export default function LearnPage() {
   const guides = [
     {
       title: 'Getting Started',
-      description: 'Set up your account, add your API keys, and build your first project with Recoder.',
+      description: 'Follow the real path from signup to provider setup to first project.',
       icon: Zap,
       level: 'Beginner',
-      href: '/auth/signup'
+      href: '/docs/getting-started'
     },
     {
       title: 'AI Agent IDE',
@@ -109,11 +109,18 @@ export default function LearnPage() {
       href: 'https://agency.recoder.xyz'
     },
     {
-      title: 'Web IDE',
-      description: 'Full-featured browser IDE with AI assistance, container-based execution, and live preview.',
+      title: 'Spaces',
+      description: 'Browser surface for projects, previews, and fast AI-assisted iteration.',
       icon: Code,
       level: 'Intermediate',
-      href: 'https://web.recoder.xyz'
+      href: '/dashboard'
+    },
+    {
+      title: 'Customer Workflows',
+      description: 'See practical examples of teams using Recoder across agents, PM, and delivery.',
+      icon: FileText,
+      level: 'Beginner',
+      href: '/customers'
     }
   ];
 
@@ -125,10 +132,10 @@ export default function LearnPage() {
       href: 'https://pm.recoder.xyz'
     },
     {
-      title: 'About Recoder',
-      description: 'Our mission, values, and platform overview',
+      title: 'Customer Workflows',
+      description: 'Proof-oriented examples and case-study style workflows',
       icon: FileText,
-      href: '/about'
+      href: '/customers'
     },
     {
       title: 'Settings & API Keys',
@@ -191,8 +198,8 @@ export default function LearnPage() {
             Learn Recoder
           </h1>
           <p className="text-xl text-zinc-400 mb-12 max-w-3xl mx-auto">
-            Everything you need to get started with AI-powered development.
-            Browse our documentation, guides, and resources.
+            Everything you need to understand the real Recoder path:
+            sign in, connect your providers, pick the right surface, and ship.
           </p>
         </div>
       </section>

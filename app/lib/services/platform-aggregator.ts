@@ -24,11 +24,35 @@ export interface AppActivity {
   error?: string;
 }
 
+/**
+ * Activity endpoints for each ecosystem app.
+ *
+ * These calls are server-to-server and run from the same host as the target
+ * apps in production.  Routing them through the public Cloudflare edge gets
+ * them challenged by Bot Fight Mode (UA `node` looks bot-like) and rejected
+ * with a 403 "Just a moment..." page.  To avoid that, each URL can be
+ * overridden via env to point at the app's internal loopback port, bypassing
+ * Cloudflare entirely.  The public URL is kept as a safe fallback.
+ */
 export const APP_ENDPOINTS = [
-  { app: "agents", url: "https://agents.recoder.xyz/api/platform/activity" },
-  { app: "agency", url: "https://agency.recoder.xyz/api/platform/activity" },
-  { app: "pm", url: "https://pm.recoder.xyz/api/platform/activity" },
-  { app: "web", url: "https://web.recoder.xyz/api/platform/activity" },
+  {
+    app: "agents",
+    url:
+      process.env.AGENTS_ACTIVITY_URL ??
+      "https://agents.recoder.xyz/api/platform/activity",
+  },
+  {
+    app: "agency",
+    url:
+      process.env.AGENCY_ACTIVITY_URL ??
+      "https://agency.recoder.xyz/api/platform/activity",
+  },
+  {
+    app: "pm",
+    url:
+      process.env.PM_ACTIVITY_URL ??
+      "https://pm.recoder.xyz/api/platform/activity",
+  },
 ];
 
 const TIMEOUT_MS = 3000;

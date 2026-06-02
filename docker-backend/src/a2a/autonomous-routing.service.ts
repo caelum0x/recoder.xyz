@@ -70,6 +70,30 @@ function parseIntent(text: string, mentionedAgentIds: string[]): ParsedIntent | 
 // ---------------------------------------------------------------------------
 
 export class AutonomousRoutingService {
+  private findLatestSourceTask(
+    senderAgentId: string,
+    threadId?: string,
+  ): { id: string; state: string } | null {
+    const taskLifecycle = getTaskLifecycleService();
+    if (threadId) {
+      const inThread = taskLifecycle.list({
+        thread_id: threadId,
+        assignee_agent_id: senderAgentId,
+        limit: 1,
+      });
+      if (inThread.length > 0) {
+        return { id: inThread[0].id, state: inThread[0].state };
+      }
+    }
+
+    const latest = taskLifecycle.list({ assignee_agent_id: senderAgentId, limit: 1 });
+    if (latest.length > 0) {
+      return { id: latest[0].id, state: latest[0].state };
+    }
+
+    return null;
+  }
+
   /**
    * Process a @mention from the collaboration service.
    * Called via `CollaborationService.onMention()` callback.
@@ -95,13 +119,112 @@ export class AutonomousRoutingService {
     const ws = this.findWorkspaceForChannel(channelId);
     if (ws?.settings.approvalRequired) {
       const approvalGate = getApprovalGateService();
+      const sourceTask = this.findLatestSourceTask(message.senderAgentId, message.threadId);
       const approval = approvalGate.createRequest({
         workspaceId: ws.workspaceId,
         requestingAgentId: message.senderAgentId,
         targetAgentId: intent.targetAgentId,
         action: intent.type,
-        details: { prompt: intent.prompt, channelId },
+        details: {
+          prompt: intent.prompt,
+          channelId,
+          threadId: message.threadId,
+          sourceTaskId: sourceTask?.id || '',
+          handoffType: intent.type,
+        },
         timeoutMs: 300_000, // 5 minutes
+      });
+
+      if (sourceTask) {
+        const lifecycle = getTaskLifecycleService();
+        if (sourceTask.state !== 'input-required') {
+          lifecycle.requestInput(
+            sourceTask.id,
+            `Awaiting approval for ${intent.type} to @${intent.targetAgentId}`,
+            'approval-gate',
+          );
+        }
+        lifecycle.updateTaskMetadata(sourceTask.id, {
+          metadataPatch: {
+            approval: {
+              approvalId: approval.approvalId,
+              status: approval.status,
+              action: intent.type,
+              targetAgentId: intent.targetAgentId,
+            },
+            handoff: {
+              status: 'awaiting-approval',
+              targetAgentId: intent.targetAgentId,
+              channelId,
+              threadId: message.threadId,
+            },
+          },
+          triggeredBy: 'approval-gate',
+          reason: 'Delegation approval requested',
+        });
+      }
+
+      approvalGate.onResolved(approval.approvalId, (resolved) => {
+        const resolvedTaskId =
+          typeof resolved.details.sourceTaskId === 'string' && resolved.details.sourceTaskId
+            ? resolved.details.sourceTaskId
+            : sourceTask?.id;
+
+        if (resolvedTaskId) {
+          const lifecycle = getTaskLifecycleService();
+          lifecycle.updateTaskMetadata(resolvedTaskId, {
+            metadataPatch: {
+              approval: {
+                approvalId: resolved.approvalId,
+                status: resolved.status,
+                resolvedAt: resolved.resolvedAt,
+                resolvedBy: resolved.resolvedBy,
+                action: resolved.action,
+                targetAgentId: resolved.targetAgentId,
+              },
+              handoff: {
+                status: resolved.status === 'granted' ? 'approved' : resolved.status,
+                targetAgentId: resolved.targetAgentId,
+                channelId,
+                threadId: message.threadId,
+              },
+            },
+            triggeredBy: 'approval-gate',
+            reason: `Delegation approval ${resolved.status}`,
+          });
+
+          if (resolved.status === 'granted') {
+            const currentTask = lifecycle.getTask(resolvedTaskId);
+            if (currentTask.ok && currentTask.data.state === 'input-required') {
+              lifecycle.startTask(resolvedTaskId, 'approval-gate');
+            }
+          }
+        }
+
+        if (resolved.status === 'granted') {
+          void this.executeDelegation(intent, message.senderAgentId, channelId, {
+            sourceTaskId: resolvedTaskId,
+            approvalId: resolved.approvalId,
+          }).catch((err) => {
+            logger.error({ err, approvalId: resolved.approvalId }, 'approved delegation failed to execute');
+            if (resolvedTaskId) {
+              getTaskLifecycleService().updateTaskMetadata(resolvedTaskId, {
+                metadataPatch: {
+                  handoff: {
+                    status: 'failed',
+                    targetAgentId: intent.targetAgentId,
+                    channelId,
+                    threadId: message.threadId,
+                    approvalId: resolved.approvalId,
+                    error: err instanceof Error ? err.message : String(err),
+                  },
+                },
+                triggeredBy: 'approval-gate',
+                reason: 'Approved delegation failed to execute',
+              });
+            }
+          });
+        }
       });
 
       // Post approval request in channel
@@ -137,9 +260,11 @@ export class AutonomousRoutingService {
     intent: ParsedIntent,
     fromAgentId: string,
     channelId: string,
+    context?: { sourceTaskId?: string; approvalId?: string },
   ): Promise<void> {
     const now = new Date().toISOString();
     const bus = getA2AEventBus();
+    const workspace = this.findWorkspaceForChannel(channelId);
 
     // Publish handoff initiated event
     bus.publish({
@@ -163,7 +288,30 @@ export class AutonomousRoutingService {
         toAgentId: intent.targetAgentId,
         prompt: intent.prompt,
         priority: 'normal',
+        metadata: {
+          channelId,
+          ...(workspace ? { workspaceId: workspace.workspaceId, projectId: workspace.projectId } : {}),
+          intent: intent.type,
+          ...(context?.sourceTaskId ? { sourceTaskId: context.sourceTaskId } : {}),
+          ...(context?.approvalId ? { approvalId: context.approvalId } : {}),
+        },
       });
+
+      if (context?.sourceTaskId) {
+        getTaskLifecycleService().updateTaskMetadata(context.sourceTaskId, {
+          metadataPatch: {
+            handoff: {
+              status: 'delegated',
+              delegationId: delegation.delegationId,
+              targetAgentId: intent.targetAgentId,
+              channelId,
+              ...(context.approvalId ? { approvalId: context.approvalId } : {}),
+            },
+          },
+          triggeredBy: fromAgentId,
+          reason: 'Delegation created',
+        });
+      }
 
       // Transfer context
       try {
@@ -175,7 +323,14 @@ export class AutonomousRoutingService {
           const delegationTask = taskLifecycle.createTask({
             prompt: intent.prompt,
             assignee_agent_id: intent.targetAgentId,
-            metadata: { delegationId: delegation.delegationId },
+            metadata: {
+              delegationId: delegation.delegationId,
+              handoffFromAgentId: fromAgentId,
+              handoffToAgentId: intent.targetAgentId,
+              handoffChannelId: channelId,
+              ...(context?.sourceTaskId ? { handoffSourceTaskId: context.sourceTaskId } : {}),
+              ...(context?.approvalId ? { approvalId: context.approvalId } : {}),
+            },
           });
 
           await contextBridge.transferContext(sourceTasks[0].id, delegationTask.id);

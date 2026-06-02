@@ -10,9 +10,16 @@ import {
 	type ProjectStatus,
 	projects,
 	quotes,
+	workspaces,
 } from "@/db";
 import { getClientForUser } from "@/lib/agency/get-client-for-user";
 import { applyProjectTransitionWithAudit } from "@/lib/agency/project-transition";
+import {
+	annotateRecoderTaskMetadata,
+	buildRecoderProjectControlSummary,
+	buildRecoderProjectDeliveryPackage,
+	createAgencyDeliverableRevisionRun,
+} from "@/lib/agency/recoder-control-plane";
 import {
 	normalizeProjectStatus,
 	validateProjectStatusTransition,
@@ -55,6 +62,99 @@ async function verifyDeliverableOwnership(deliverableId: string) {
 	};
 }
 
+async function getProjectControlPlaneSummary(projectDbId: number) {
+	const projectDeliverables = await db.query.deliverables.findMany({
+		where: eq(deliverables.projectDbId, projectDbId),
+	});
+	const project = await db.query.projects.findFirst({
+		where: eq(projects.dbId, projectDbId),
+	});
+	const projectWorkspace =
+		project?.workspaceDbId != null
+			? await db.query.workspaces.findFirst({
+					where: eq(workspaces.dbId, project.workspaceDbId),
+				})
+			: null;
+	return buildRecoderProjectControlSummary({
+		workspaceId: projectWorkspace?.id ?? null,
+		taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
+	});
+}
+
+async function attachClientReviewToRun(input: {
+	taskId: string | null | undefined;
+	status: "approved" | "rejected";
+	feedback?: string | null;
+	reviewerUserDbId: number | null;
+	source: string;
+	followUpTaskId?: string | null;
+}) {
+	if (!input.taskId) return;
+	await annotateRecoderTaskMetadata({
+		taskId: input.taskId,
+		triggeredBy: "client-portal",
+		reason: `Client review ${input.status}`,
+		metadataPatch: {
+			clientReview: {
+				status: input.status,
+				feedback: input.feedback ?? null,
+				followUpTaskId: input.followUpTaskId ?? null,
+				reviewerUserDbId: input.reviewerUserDbId,
+				source: input.source,
+				reviewedAt: new Date().toISOString(),
+			},
+		},
+	});
+}
+
+async function createRevisionFollowUpTask(input: {
+	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
+	deliverable: {
+		dbId: number;
+		id: string;
+		taskId: string | null;
+		name: string;
+		type: string | null;
+		content: string | null;
+	};
+	feedback: string;
+	reviewerUserDbId: number | null;
+	source: string;
+}): Promise<string | null> {
+	if (!input.project?.workspaceDbId) {
+		return null;
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, input.project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		return null;
+	}
+
+	const created = await createAgencyDeliverableRevisionRun({
+		workspaceId: workspace.id,
+		projectId: input.project.id,
+		projectDbId: input.project.dbId,
+		projectName: input.project.name,
+		deliverable: input.deliverable,
+		feedback: input.feedback,
+		source: input.source,
+		reviewerUserDbId: input.reviewerUserDbId,
+	});
+
+	if (!created?.taskId) {
+		return null;
+	}
+
+	await db
+		.update(deliverables)
+		.set({ taskId: created.taskId })
+		.where(eq(deliverables.dbId, input.deliverable.dbId));
+
+	return created.taskId;
+}
+
 async function transitionProjectStatusIfValid({
 	projectDbId,
 	currentStatus,
@@ -63,6 +163,7 @@ async function transitionProjectStatusIfValid({
 	reason,
 	deliverableId,
 	bulk = false,
+	controlPlaneSummary,
 }: {
 	projectDbId: number;
 	currentStatus: ProjectStatus;
@@ -71,6 +172,7 @@ async function transitionProjectStatusIfValid({
 	reason: string;
 	deliverableId?: string;
 	bulk?: boolean;
+	controlPlaneSummary?: Record<string, unknown>;
 }) {
 	const fromStatus = normalizeProjectStatus(currentStatus);
 	const toStatus = normalizeProjectStatus(nextStatus);
@@ -95,6 +197,7 @@ async function transitionProjectStatusIfValid({
 			metadata: {
 				deliverableId: deliverableId ?? null,
 				bulk,
+				controlPlaneSummary: controlPlaneSummary ?? null,
 			},
 		});
 		didUpdate = result.applied;
@@ -169,6 +272,7 @@ export async function approveDeliverable(deliverableId: string) {
 		: hasRejected
 			? "in_progress"
 			: "done";
+	const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
 
 	await transitionProjectStatusIfValid({
 		projectDbId: project.dbId,
@@ -178,6 +282,14 @@ export async function approveDeliverable(deliverableId: string) {
 		reason: "Client approved deliverable",
 		deliverableId,
 		bulk: false,
+		controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
+	});
+
+	await attachClientReviewToRun({
+		taskId: deliverable.taskId,
+		status: "approved",
+		reviewerUserDbId: actorUserDbId,
+		source: "client.portal.deliverables.review",
 	});
 
 	revalidatePath(`/portal/projects/${project.id}`);
@@ -231,6 +343,8 @@ export async function rejectDeliverable(
 		throw new Error("Only deliverables in pending review can be rejected.");
 	}
 
+	const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
+
 	await transitionProjectStatusIfValid({
 		projectDbId: project.dbId,
 		currentStatus: project.status,
@@ -241,6 +355,31 @@ export async function rejectDeliverable(
 			: "Client requested revisions",
 		deliverableId,
 		bulk: false,
+		controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
+	});
+
+	const followUpTaskId = await createRevisionFollowUpTask({
+		project,
+		deliverable: {
+			dbId: deliverable.dbId,
+			id: deliverable.id,
+			taskId: deliverable.taskId,
+			name: deliverable.name,
+			type: deliverable.type,
+			content: deliverable.content,
+		},
+		feedback: normalizedFeedback,
+		reviewerUserDbId: actorUserDbId,
+		source: "client.portal.deliverables.review",
+	});
+
+	await attachClientReviewToRun({
+		taskId: deliverable.taskId,
+		status: "rejected",
+		feedback: normalizedFeedback,
+		reviewerUserDbId: actorUserDbId,
+		source: "client.portal.deliverables.review",
+		followUpTaskId,
 	});
 
 	revalidatePath(`/portal/projects/${project.id}`);
@@ -301,6 +440,12 @@ async function verifyChangeOrderOwnership(changeOrderId: string) {
 
 export async function approveAllPendingDeliverables(projectId: string) {
 	const { project, actorUserDbId } = await verifyProjectOwnership(projectId);
+	const pendingDeliverables = await db.query.deliverables.findMany({
+		where: and(
+			eq(deliverables.projectDbId, project.dbId),
+			eq(deliverables.status, "pending_review"),
+		),
+	});
 
 	const approvedRows = await db
 		.update(deliverables)
@@ -330,6 +475,7 @@ export async function approveAllPendingDeliverables(projectId: string) {
 		: hasRejected
 			? "in_progress"
 			: "done";
+	const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
 
 	await transitionProjectStatusIfValid({
 		projectDbId: project.dbId,
@@ -338,7 +484,19 @@ export async function approveAllPendingDeliverables(projectId: string) {
 		actorUserDbId,
 		reason: "Client approved all pending deliverables",
 		bulk: true,
+		controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
 	});
+
+	await Promise.all(
+		pendingDeliverables.map((deliverable) =>
+			attachClientReviewToRun({
+				taskId: deliverable.taskId,
+				status: "approved",
+				reviewerUserDbId: actorUserDbId,
+				source: "client.portal.deliverables.bulk-review",
+			}),
+		),
+	);
 
 	revalidatePath(`/portal/projects/${project.id}`);
 	return { updated: approvedRows.length };
@@ -354,6 +512,12 @@ export async function rejectAllPendingDeliverables(
 	}
 
 	const { project, actorUserDbId } = await verifyProjectOwnership(projectId);
+	const pendingDeliverables = await db.query.deliverables.findMany({
+		where: and(
+			eq(deliverables.projectDbId, project.dbId),
+			eq(deliverables.status, "pending_review"),
+		),
+	});
 
 	const rejectedRows = await db
 		.update(deliverables)
@@ -367,6 +531,7 @@ export async function rejectAllPendingDeliverables(
 		.returning({ id: deliverables.id });
 
 	if (rejectedRows.length > 0) {
+		const controlPlaneSummary = await getProjectControlPlaneSummary(project.dbId);
 		await transitionProjectStatusIfValid({
 			projectDbId: project.dbId,
 			currentStatus: project.status,
@@ -374,8 +539,42 @@ export async function rejectAllPendingDeliverables(
 			actorUserDbId,
 			reason: `Client requested revisions (bulk): ${normalizedFeedback}`,
 			bulk: true,
+			controlPlaneSummary: controlPlaneSummary as unknown as Record<string, unknown>,
 		});
 	}
+
+	const followUps = await Promise.all(
+		pendingDeliverables.map(async (deliverable) => ({
+			deliverable,
+			followUpTaskId: await createRevisionFollowUpTask({
+				project,
+				deliverable: {
+					dbId: deliverable.dbId,
+					id: deliverable.id,
+					taskId: deliverable.taskId,
+					name: deliverable.name,
+					type: deliverable.type,
+					content: deliverable.content,
+				},
+				feedback: normalizedFeedback,
+				reviewerUserDbId: actorUserDbId,
+				source: "client.portal.deliverables.bulk-review",
+			}),
+		})),
+	);
+
+	await Promise.all(
+		followUps.map(({ deliverable, followUpTaskId }) =>
+			attachClientReviewToRun({
+				taskId: deliverable.taskId,
+				status: "rejected",
+				feedback: normalizedFeedback,
+				reviewerUserDbId: actorUserDbId,
+				source: "client.portal.deliverables.bulk-review",
+				followUpTaskId,
+			}),
+		),
+	);
 
 	revalidatePath(`/portal/projects/${project.id}`);
 	return { updated: rejectedRows.length };
@@ -494,7 +693,7 @@ export async function approveMilestone(
 	const { project, actorUserDbId } = await verifyProjectOwnership(projectId);
 
 	const milestoneDeliverables = await db
-		.select({ dbId: deliverables.dbId, id: deliverables.id })
+		.select({ dbId: deliverables.dbId, id: deliverables.id, taskId: deliverables.taskId })
 		.from(deliverables)
 		.where(
 			and(
@@ -569,6 +768,17 @@ export async function approveMilestone(
 		bulk: true,
 	});
 
+	await Promise.all(
+		milestoneDeliverables.map((deliverable) =>
+			attachClientReviewToRun({
+				taskId: deliverable.taskId,
+				status: "approved",
+				reviewerUserDbId: actorUserDbId,
+				source: "client.portal.milestone.approval",
+			}),
+		),
+	);
+
 	revalidatePath(`/portal/projects/${project.id}`);
 }
 
@@ -585,7 +795,14 @@ export async function rejectMilestone(
 	const { project, actorUserDbId } = await verifyProjectOwnership(projectId);
 
 	const milestoneDeliverables = await db
-		.select({ dbId: deliverables.dbId, id: deliverables.id })
+		.select({
+			dbId: deliverables.dbId,
+			id: deliverables.id,
+			taskId: deliverables.taskId,
+			name: deliverables.name,
+			type: deliverables.type,
+			content: deliverables.content,
+		})
 		.from(deliverables)
 		.where(
 			and(
@@ -648,5 +865,83 @@ export async function rejectMilestone(
 		bulk: true,
 	});
 
+	const milestoneFollowUps = await Promise.all(
+		milestoneDeliverables.map(async (deliverable) => ({
+			deliverable,
+			followUpTaskId: await createRevisionFollowUpTask({
+				project,
+				deliverable: {
+					dbId: deliverable.dbId,
+					id: deliverable.id,
+					taskId: deliverable.taskId,
+					name: deliverable.name,
+					type: deliverable.type,
+					content: deliverable.content,
+				},
+				feedback: normalizedFeedback,
+				reviewerUserDbId: actorUserDbId,
+				source: "client.portal.milestone.approval",
+			}),
+		})),
+	);
+	await Promise.all(
+		milestoneFollowUps.map(({ deliverable, followUpTaskId }) =>
+			attachClientReviewToRun({
+				taskId: deliverable.taskId,
+				status: "rejected",
+				feedback: normalizedFeedback,
+				reviewerUserDbId: actorUserDbId,
+				source: "client.portal.milestone.approval",
+				followUpTaskId,
+			}),
+		),
+	);
+
 	revalidatePath(`/portal/projects/${project.id}`);
+}
+
+export async function exportClientDeliveryPackage(projectId: string) {
+	const user = await getCurrentUser();
+	const client = await getClientForUser(user.dbId);
+
+	if (!client) {
+		throw new Error("No client profile found");
+	}
+
+	const project = await db.query.projects.findFirst({
+		where: and(
+			eq(projects.id, projectId),
+			eq(projects.clientDbId, client.dbId),
+		),
+	});
+	if (!project) {
+		throw new Error("Unauthorized");
+	}
+
+	const projectDeliverables = await db.query.deliverables.findMany({
+		where: eq(deliverables.projectDbId, project.dbId),
+		orderBy: [deliverables.phaseOrder, deliverables.createdAt],
+	});
+	const projectWorkspace =
+		project.workspaceDbId != null
+			? await db.query.workspaces.findFirst({
+					where: eq(workspaces.dbId, project.workspaceDbId),
+				})
+			: null;
+
+	return buildRecoderProjectDeliveryPackage({
+		projectId: project.id,
+		projectName: project.name,
+		workspaceId: projectWorkspace?.id ?? null,
+		deliverables: projectDeliverables.map((deliverable) => ({
+			id: deliverable.id,
+			name: deliverable.name,
+			status: deliverable.status,
+			type: deliverable.type,
+			taskId: deliverable.taskId,
+			fileKey: deliverable.fileKey,
+			milestoneLabel: deliverable.milestoneLabel,
+			content: deliverable.content,
+		})),
+	});
 }

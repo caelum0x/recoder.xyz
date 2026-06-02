@@ -8,12 +8,15 @@ exports.buildInvalidA2AEnvelopeError = buildInvalidA2AEnvelopeError;
 exports.verifyIncomingRequest = verifyIncomingRequest;
 exports.checkAndStoreEnvelopeIdempotency = checkAndStoreEnvelopeIdempotency;
 exports.handleA2AIntent = handleA2AIntent;
+exports.listBridgeSessionsForBinding = listBridgeSessionsForBinding;
 exports.getDockerBackendAgentCard = getDockerBackendAgentCard;
 exports.__createSignatureForTest = __createSignatureForTest;
 exports.__resetA2ATestState = __resetA2ATestState;
 const express_1 = require("express");
 const ioredis_1 = __importDefault(require("ioredis"));
 const a2a_1 = require("@recoder/shared/a2a");
+const workspace_service_1 = require("./a2a/workspace.service");
+const agent_registry_service_1 = require("./a2a/agent-registry.service");
 const router = (0, express_1.Router)();
 exports.a2aRouter = router;
 // A2A Agent Card (standard A2A protocol discovery)
@@ -117,6 +120,16 @@ function isRecord(value) {
 }
 function asString(value) {
     return typeof value === 'string' ? value : '';
+}
+function asOptionalString(value) {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+function asStringArray(value) {
+    if (!Array.isArray(value))
+        return [];
+    return value
+        .map((item) => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean);
 }
 function normalizePlatform(value) {
     const platform = asString(value).trim();
@@ -1489,6 +1502,30 @@ async function listBridgeSessions() {
     cleanBridgeState(Date.now());
     return Array.from(bridgeSessionStore.values()).map((row) => JSON.parse(row.value));
 }
+async function listBridgeSessionsForBinding(input) {
+    const sessions = await listBridgeSessions();
+    const filtered = sessions.filter((session) => {
+        if (input.agentId && session.agentId !== input.agentId)
+            return false;
+        if (input.workspaceId && session.workspaceId !== input.workspaceId)
+            return false;
+        return true;
+    });
+    return Promise.all(filtered.map(async (session) => ({
+        ...session,
+        heartbeat: await getBridgeHeartbeat(session.bridgeId),
+    })));
+}
+async function findReusableBridgeSession(input) {
+    if (!input.agentId)
+        return null;
+    const sessions = await listBridgeSessions();
+    return (sessions.find((session) => session.bridgeId === input.bridgeId &&
+        (session.scope || null) === input.scope &&
+        (session.agentId || null) === input.agentId &&
+        (session.workspaceId || null) === input.workspaceId &&
+        (session.projectId || null) === input.projectId) || null);
+}
 async function emitAuditEvent(event, details) {
     const auditEvent = {
         id: `audit-${Date.now()}-${crypto.randomUUID().slice(0, 10)}`,
@@ -1578,7 +1615,7 @@ async function verifyBridgeTokenForRequest(req) {
     const staticToken = process.env.RECODER_A2A_BRIDGE_TOKEN || '';
     if (staticToken && bearerToken === staticToken) {
         const staticScope = String(process.env.RECODER_A2A_BRIDGE_TOKEN_SCOPE || '').trim() || null;
-        return { ok: true, scope: staticScope };
+        return { ok: true, scope: staticScope, session: null };
     }
     const session = await getBridgeSession(bearerToken);
     if (!session) {
@@ -1588,7 +1625,77 @@ async function verifyBridgeTokenForRequest(req) {
     if (bridgeId && session.bridgeId !== bridgeId) {
         return { ok: false, status: 403, error: 'Bridge token does not match bridge id' };
     }
-    return { ok: true, scope: session.scope || null };
+    return { ok: true, scope: session.scope || null, session };
+}
+function validateBridgeSessionInput(input) {
+    if (input.workspaceId && !input.agentId) {
+        return { ok: false, status: 400, error: 'agentId is required when workspaceId is provided' };
+    }
+    if (input.projectId && !input.workspaceId) {
+        return { ok: false, status: 400, error: 'workspaceId is required when projectId is provided' };
+    }
+    return { ok: true };
+}
+function validateBridgeSessionWorkspaceBinding(input) {
+    if (!input.workspaceId)
+        return { ok: true };
+    const workspace = (0, workspace_service_1.getWorkspaceService)().get(input.workspaceId);
+    if (!workspace) {
+        return { ok: false, status: 404, error: `Workspace not found: ${input.workspaceId}` };
+    }
+    if (input.projectId && workspace.projectId !== input.projectId) {
+        return {
+            ok: false,
+            status: 409,
+            error: `Workspace projectId mismatch for ${input.workspaceId}`,
+        };
+    }
+    if (input.agentId && !workspace.memberAgentIds.includes(input.agentId)) {
+        return {
+            ok: false,
+            status: 403,
+            error: `Agent ${input.agentId} is not a member of workspace ${input.workspaceId}`,
+        };
+    }
+    return { ok: true };
+}
+function reconcileBridgeSessionRegistryBinding(input) {
+    if (!input.agentId)
+        return { ok: true };
+    const registry = (0, agent_registry_service_1.getAgentRegistryService)();
+    const existing = registry.get(input.agentId);
+    const desiredPlatform = input.agentPlatform || 'custom';
+    if (existing) {
+        if (existing.identity.platform !== desiredPlatform) {
+            return {
+                ok: false,
+                status: 409,
+                error: `Agent platform mismatch for ${input.agentId}`,
+            };
+        }
+        registry.recordHeartbeat(input.agentId);
+        return { ok: true };
+    }
+    const tags = Array.from(new Set([
+        'bridge',
+        `bridge:${input.bridgeId}`,
+        ...(input.workspaceId ? [`workspace:${input.workspaceId}`] : []),
+        ...(input.projectId ? [`project:${input.projectId}`] : []),
+        ...input.capabilities.map((capability) => `capability:${capability}`),
+    ].filter(Boolean)));
+    registry.selfRegister({
+        agentId: input.agentId,
+        name: input.agentName || input.agentId,
+        platform: desiredPlatform,
+        tags,
+        skills: input.capabilities.map((capability) => ({
+            id: capability,
+            name: capability,
+            description: capability,
+            tags: [capability],
+        })),
+    });
+    return { ok: true };
 }
 function newBridgeSessionToken() {
     const bytes = crypto.getRandomValues(new Uint8Array(24));
@@ -1684,23 +1791,80 @@ router.post('/bridge/pair', async (req, res) => {
         res.status(400).json({ ok: false, error: 'Scope claim is required for bridge session' });
         return;
     }
+    const agentId = asOptionalString(parsedBody.agentId);
+    const agentName = asOptionalString(parsedBody.agentName);
+    const agentPlatform = agentId ? normalizePlatform(parsedBody.agentPlatform || 'custom') : null;
+    const workspaceId = asOptionalString(parsedBody.workspaceId);
+    const projectId = asOptionalString(parsedBody.projectId);
+    const capabilities = asStringArray(parsedBody.capabilities);
+    const metadata = isRecord(parsedBody.metadata)
+        ? parsedBody.metadata
+        : undefined;
+    const bindingValidation = validateBridgeSessionInput({ agentId, workspaceId, projectId });
+    if (!bindingValidation.ok) {
+        res.status(bindingValidation.status).json({ ok: false, error: bindingValidation.error });
+        return;
+    }
+    const workspaceValidation = validateBridgeSessionWorkspaceBinding({ agentId, workspaceId, projectId });
+    if (!workspaceValidation.ok) {
+        res.status(workspaceValidation.status).json({ ok: false, error: workspaceValidation.error });
+        return;
+    }
+    const registryValidation = reconcileBridgeSessionRegistryBinding({
+        bridgeId,
+        agentId,
+        agentName,
+        agentPlatform,
+        capabilities,
+        workspaceId,
+        projectId,
+    });
+    if (!registryValidation.ok) {
+        res.status(registryValidation.status).json({ ok: false, error: registryValidation.error });
+        return;
+    }
     const ttlMs = Number(parsedBody.ttlMs || BRIDGE_SESSION_TTL_MS);
     const boundedTtlMs = Math.min(Math.max(ttlMs, 60 * 1000), 7 * 24 * 60 * 60 * 1000);
     const now = Date.now();
+    const reuseExisting = parsedBody.reuseExisting !== false;
+    const reusableSession = reuseExisting
+        ? await findReusableBridgeSession({
+            bridgeId,
+            scope: requestedScope,
+            agentId,
+            workspaceId,
+            projectId,
+        })
+        : null;
     const session = {
-        token: newBridgeSessionToken(),
+        token: reusableSession?.token || newBridgeSessionToken(),
         bridgeId,
         scope: requestedScope,
-        createdAt: new Date(now).toISOString(),
+        agentId,
+        agentName,
+        agentPlatform,
+        workspaceId,
+        projectId,
+        capabilities,
+        metadata,
+        createdAt: reusableSession?.createdAt || new Date(now).toISOString(),
         expiresAt: new Date(now + boundedTtlMs).toISOString(),
         issuedBy: String(parsedBody.issuedBy || 'admin'),
     };
     await storeBridgeSession(session);
-    res.status(201).json({
+    res.status(reusableSession ? 200 : 201).json({
         ok: true,
+        reused: Boolean(reusableSession),
         bridgeId: session.bridgeId,
         token: session.token,
         scope: session.scope || null,
+        agentId: session.agentId || null,
+        agentName: session.agentName || null,
+        agentPlatform: session.agentPlatform || null,
+        workspaceId: session.workspaceId || null,
+        projectId: session.projectId || null,
+        capabilities: session.capabilities || [],
+        metadata: session.metadata || null,
         expiresAt: session.expiresAt,
         createdAt: session.createdAt,
     });
@@ -1712,16 +1876,41 @@ router.get('/bridge/sessions', async (req, res) => {
         return;
     }
     const sessions = await listBridgeSessions();
-    res.status(200).json({
-        ok: true,
-        sessions: sessions.map((session) => ({
+    const sessionRows = await Promise.all(sessions.map(async (session) => {
+        const registryAgent = session.agentId ? (0, agent_registry_service_1.getAgentRegistryService)().getWithHealth(session.agentId) : undefined;
+        return {
             bridgeId: session.bridgeId,
             scope: session.scope || null,
+            agentId: session.agentId || null,
+            agentName: session.agentName || registryAgent?.identity.name || null,
+            agentPlatform: session.agentPlatform || registryAgent?.identity.platform || null,
+            workspaceId: session.workspaceId || null,
+            projectId: session.projectId || null,
             issuedBy: session.issuedBy,
+            capabilities: session.capabilities || [],
+            metadata: session.metadata || null,
             createdAt: session.createdAt,
             expiresAt: session.expiresAt,
             tokenPreview: `${session.token.slice(0, 8)}...`,
-        })),
+            heartbeat: await getBridgeHeartbeat(session.bridgeId),
+            registry: registryAgent
+                ? {
+                    registered: true,
+                    online: registryAgent.health.online,
+                    lastHeartbeat: registryAgent.health.lastHeartbeat,
+                    reconnectCount: registryAgent.lifecycle.reconnectCount,
+                    registrationCount: registryAgent.lifecycle.registrationCount,
+                }
+                : {
+                    registered: false,
+                    online: false,
+                    lastHeartbeat: '',
+                },
+        };
+    }));
+    res.status(200).json({
+        ok: true,
+        sessions: sessionRows,
     });
 });
 router.get('/bridge/jobs/next', async (req, res) => {
@@ -1843,10 +2032,51 @@ router.post('/bridge/heartbeat', async (req, res) => {
         return;
     }
     const bridgeId = String(req.header('x-recoder-a2a-bridge-id') || parsedBody.bridgeId || process.env.RECODER_A2A_BRIDGE_DEFAULT_ID || 'default').trim();
-    await storeBridgeHeartbeat({ bridgeId, payload: parsedBody });
+    const payloadAgentId = asOptionalString(parsedBody.agentId);
+    const payloadWorkspaceId = asOptionalString(parsedBody.workspaceId);
+    const payloadProjectId = asOptionalString(parsedBody.projectId);
+    const boundSession = auth.session;
+    if (boundSession?.agentId && payloadAgentId && boundSession.agentId !== payloadAgentId) {
+        res.status(403).json({ ok: false, error: 'Heartbeat agentId does not match paired bridge session' });
+        return;
+    }
+    if (boundSession?.workspaceId && payloadWorkspaceId && boundSession.workspaceId !== payloadWorkspaceId) {
+        res.status(403).json({ ok: false, error: 'Heartbeat workspaceId does not match paired bridge session' });
+        return;
+    }
+    if (boundSession?.projectId && payloadProjectId && boundSession.projectId !== payloadProjectId) {
+        res.status(403).json({ ok: false, error: 'Heartbeat projectId does not match paired bridge session' });
+        return;
+    }
+    if (boundSession?.agentId) {
+        const registryValidation = reconcileBridgeSessionRegistryBinding({
+            bridgeId,
+            agentId: boundSession.agentId,
+            agentName: boundSession.agentName || null,
+            agentPlatform: boundSession.agentPlatform || null,
+            capabilities: boundSession.capabilities || [],
+            workspaceId: boundSession.workspaceId || null,
+            projectId: boundSession.projectId || null,
+        });
+        if (!registryValidation.ok) {
+            res.status(registryValidation.status).json({ ok: false, error: registryValidation.error });
+            return;
+        }
+    }
+    const mergedPayload = {
+        ...parsedBody,
+        ...(boundSession?.agentId ? { agentId: boundSession.agentId } : {}),
+        ...(boundSession?.workspaceId ? { workspaceId: boundSession.workspaceId } : {}),
+        ...(boundSession?.projectId ? { projectId: boundSession.projectId } : {}),
+        ...(boundSession?.capabilities?.length ? { sessionCapabilities: boundSession.capabilities } : {}),
+    };
+    await storeBridgeHeartbeat({ bridgeId, payload: mergedPayload });
     await emitAuditEvent('bridge_heartbeat', {
         bridgeId,
-        capabilities: parsedBody.capabilities || null,
+        agentId: boundSession?.agentId || payloadAgentId || null,
+        workspaceId: boundSession?.workspaceId || payloadWorkspaceId || null,
+        projectId: boundSession?.projectId || payloadProjectId || null,
+        capabilities: parsedBody.capabilities || boundSession?.capabilities || null,
     });
     res.status(200).json({ ok: true, bridgeId });
 });
@@ -2879,5 +3109,7 @@ function __resetA2ATestState() {
     bridgeSessionStore.clear();
     orchestrationHistorySubscribers.clear();
     orchestrationHistoryEventLog.clear();
+    (0, workspace_service_1.resetWorkspaceService)();
+    (0, agent_registry_service_1.resetAgentRegistryService)();
 }
 exports.__testSelectTargets = selectTargets;

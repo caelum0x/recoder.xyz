@@ -24,6 +24,8 @@ const fs_1 = require("fs");
 const path_1 = require("path");
 const url_1 = require("url");
 const logger = (0, logger_js_1.createLogger)('pi-runtime');
+const PI_SESSION_START_TIMEOUT_MS = 15000;
+const PI_PROMPT_TIMEOUT_MS = 45000;
 // ── Daytona-backed Operations ───────────────────────────────────────
 const DAYTONA_CWD = '/home/daytona';
 async function loadPiModule() {
@@ -49,75 +51,6 @@ function buildPiExecutionPrompt(userPrompt) {
         'User request:',
         userPrompt,
     ].join('\n');
-}
-async function applyLegacyRecoderFileActions(sandboxId, responseText) {
-    const appliedFiles = [];
-    const isPlaceholderPath = (value) => value.includes('[') || value.includes(']');
-    const candidateExistingFiles = ['src/App.tsx', 'src/main.tsx', 'src/main.jsx', 'src/App.jsx'];
-    const actionRegex = /<recoderAction\s+type="file"\s+filePath="([^"]+)"\s*>([\s\S]*?)<\/recoderAction>/gi;
-    const replaceRegex = /<recoderAction\s+type="str_replace"\s+filePath="([^"]+)"\s+oldString="([^"]*)"\s+newString="([^"]*)"\s*>[\s\S]*?<\/recoderAction>/gi;
-    for (const match of responseText.matchAll(actionRegex)) {
-        const filePath = match[1]?.trim();
-        const fileContent = match[2];
-        if (!filePath || fileContent == null || isPlaceholderPath(filePath))
-            continue;
-        const normalizedContent = fileContent.replace(/^\n+|\n+$/g, '');
-        await (0, daytona_file_ops_js_1.daytonaWriteFile)(sandboxId, filePath, normalizedContent);
-        appliedFiles.push(filePath);
-        logger.warn({ sandboxId, filePath }, 'Applied legacy recoderAction file output via Daytona fallback');
-    }
-    for (const match of responseText.matchAll(replaceRegex)) {
-        const filePath = match[1]?.trim();
-        const oldString = match[2] ?? '';
-        const newString = match[3] ?? '';
-        if (!filePath || !oldString || isPlaceholderPath(filePath))
-            continue;
-        const currentContent = await (0, daytona_file_ops_js_1.daytonaReadFile)(sandboxId, filePath);
-        if (!currentContent.includes(oldString))
-            continue;
-        const updatedContent = currentContent.replace(oldString, newString);
-        await (0, daytona_file_ops_js_1.daytonaWriteFile)(sandboxId, filePath, updatedContent);
-        appliedFiles.push(filePath);
-        logger.warn({ sandboxId, filePath }, 'Applied legacy recoderAction str_replace output via Daytona fallback');
-    }
-    if (appliedFiles.length === 0) {
-        const referencedFiles = Array.from(new Set(Array.from(responseText.matchAll(/filePath="([^"]+)"/g)).map((match) => match[1]?.trim()).filter(Boolean)));
-        const codeBlocks = Array.from(responseText.matchAll(/```(?:[\w-]+)?\n([\s\S]*?)```/g))
-            .map((match) => match[1]?.trim())
-            .filter(Boolean);
-        const candidateBlock = codeBlocks.reverse().find((block) => {
-            return !block.startsWith('<recoder') && (block.includes('export default') || block.includes('function App'));
-        });
-        const validReferencedFiles = referencedFiles.filter((filePath) => !isPlaceholderPath(filePath));
-        let fallbackTarget = validReferencedFiles.length === 1 ? validReferencedFiles[0] : '';
-        if (!fallbackTarget && candidateBlock) {
-            for (const candidate of candidateExistingFiles) {
-                try {
-                    const existing = await (0, daytona_file_ops_js_1.daytonaReadFile)(sandboxId, candidate);
-                    if (!existing)
-                        continue;
-                    if ((candidate.endsWith('App.tsx') || candidate.endsWith('App.jsx'))
-                        && (candidateBlock.includes('function App') || candidateBlock.includes('export default App'))) {
-                        fallbackTarget = candidate;
-                        break;
-                    }
-                    if ((candidate.endsWith('main.tsx') || candidate.endsWith('main.jsx'))
-                        && (candidateBlock.includes('createRoot') || candidateBlock.includes('ReactDOM'))) {
-                        fallbackTarget = candidate;
-                        break;
-                    }
-                }
-                catch {
-                }
-            }
-        }
-        if (fallbackTarget && candidateBlock) {
-            await (0, daytona_file_ops_js_1.daytonaWriteFile)(sandboxId, fallbackTarget, candidateBlock);
-            appliedFiles.push(fallbackTarget);
-            logger.warn({ sandboxId, filePath: fallbackTarget }, 'Applied legacy fenced code fallback via Daytona');
-        }
-    }
-    return appliedFiles;
 }
 /** ReadOperations backed by Daytona */
 function createDaytonaReadOps(sandboxId) {
@@ -192,6 +125,12 @@ function createDaytonaBashOps(sandboxId) {
 const activeSessions = new Map();
 /** Session TTL: 30 minutes */
 const SESSION_TTL_MS = 30 * 60 * 1000;
+async function withTimeout(promise, timeoutMs, label) {
+    return await Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs)),
+    ]);
+}
 /**
  * Get or create a Pi coding agent session for a project's Daytona sandbox.
  */
@@ -214,7 +153,7 @@ async function getOrCreatePiSession(projectId, sandboxId, options) {
     logger.info({ projectId, sandboxId }, 'Creating Pi coding agent session');
     // Load the ESM-only Pi package by absolute file URL so CommonJS output
     // does not collapse this into require(), which breaks on the package exports map.
-    const piModule = await loadPiModule();
+    const piModule = await withTimeout(loadPiModule(), PI_SESSION_START_TIMEOUT_MS, 'Pi module load');
     const { AuthStorage, ModelRegistry, createAgentSession, createReadToolDefinition, createBashToolDefinition, createEditToolDefinition, createWriteToolDefinition, } = piModule;
     const SessionManager = piModule.SessionManager;
     const authStorage = AuthStorage.inMemory();
@@ -250,7 +189,7 @@ async function getOrCreatePiSession(projectId, sandboxId, options) {
     // Use customTools with ToolDefinitions (not AgentTool) — this bypasses
     // the allTools global registry and ensures our Daytona-backed operations
     // are actually used instead of the default fs implementations.
-    const { session } = await createAgentSession({
+    const sessionResult = await withTimeout(createAgentSession({
         cwd: DAYTONA_CWD,
         authStorage,
         modelRegistry,
@@ -263,7 +202,8 @@ async function getOrCreatePiSession(projectId, sandboxId, options) {
             createBashToolDefinition(DAYTONA_CWD, { operations: bashOps }),
         ],
         sessionManager: SessionManager?.inMemory?.() ?? undefined,
-    });
+    }), PI_SESSION_START_TIMEOUT_MS, 'Pi session creation');
+    const { session } = sessionResult;
     const piSession = {
         sessionPromise: Promise.resolve(session),
         session,
@@ -281,7 +221,7 @@ async function getOrCreatePiSession(projectId, sandboxId, options) {
  * Returns the assistant's text response after all tool calls complete.
  */
 async function promptPiSession(projectId, sandboxId, prompt, options) {
-    const session = await getOrCreatePiSession(projectId, sandboxId, options);
+    const session = await withTimeout(getOrCreatePiSession(projectId, sandboxId, options), PI_SESSION_START_TIMEOUT_MS, 'Pi session bootstrap');
     const textParts = [];
     const filesChanged = [];
     // Subscribe to events to collect results
@@ -304,11 +244,7 @@ async function promptPiSession(projectId, sandboxId, prompt, options) {
         }
     });
     try {
-        await session.prompt(buildPiExecutionPrompt(prompt));
-        if (filesChanged.length === 0 && textParts.length > 0) {
-            const legacyWrites = await applyLegacyRecoderFileActions(sandboxId, textParts.join('\n\n'));
-            filesChanged.push(...legacyWrites);
-        }
+        await withTimeout(session.prompt(buildPiExecutionPrompt(prompt)), PI_PROMPT_TIMEOUT_MS, 'Pi prompt execution');
         return {
             success: true,
             text: textParts.join('\n\n'),

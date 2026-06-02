@@ -10,10 +10,15 @@ import {
 	type ProjectStatus,
 	projects,
 	quotes,
+	workspaces,
 } from "@/db";
 import type { ConversationMessage } from "./conversation-store";
 import type { DetectedIntent } from "./intent-detector";
 import { applyProjectTransitionWithAudit } from "./project-transition";
+import {
+	annotateRecoderTaskMetadata,
+	createAgencyDeliverableRevisionRun,
+} from "./recoder-control-plane";
 import {
 	normalizeProjectStatus,
 	validateProjectStatusTransition,
@@ -35,6 +40,62 @@ type OrchestratorResult = {
 	projectId?: string;
 	metadata?: Record<string, unknown>;
 };
+
+async function createDeliverableRevisionRun(input: {
+	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
+	deliverable: Awaited<ReturnType<typeof db.query.deliverables.findFirst>>;
+	feedback: string;
+	source: string;
+}): Promise<string | null> {
+	if (!input.project?.workspaceDbId || !input.deliverable) {
+		return null;
+	}
+
+	const workspace = await db.query.workspaces.findFirst({
+		where: eq(workspaces.dbId, input.project.workspaceDbId),
+	});
+	if (!workspace?.id) {
+		return null;
+	}
+
+	const created = await createAgencyDeliverableRevisionRun({
+		workspaceId: workspace.id,
+		projectId: input.project.id,
+		projectDbId: input.project.dbId,
+		projectName: input.project.name,
+		deliverable: input.deliverable,
+		feedback: input.feedback,
+		source: input.source,
+	});
+
+	if (!created?.taskId) {
+		return null;
+	}
+
+	await db
+		.update(deliverables)
+		.set({ taskId: created.taskId })
+		.where(eq(deliverables.dbId, input.deliverable.dbId));
+
+	if (input.deliverable.taskId) {
+		await annotateRecoderTaskMetadata({
+			taskId: input.deliverable.taskId,
+			triggeredBy: "client-channel",
+			reason: "Client review rejected deliverable",
+			metadataPatch: {
+				clientReview: {
+					status: "rejected",
+					feedback: input.feedback,
+					followUpTaskId: created.taskId,
+					source: input.source,
+					reviewedAt: new Date().toISOString(),
+				},
+			},
+		});
+	}
+
+	return created.taskId;
+}
 
 /**
  * Execute a detected intent by performing the corresponding action.
@@ -387,10 +448,18 @@ async function handleRejectDeliverable(params: {
 		"Client rejected deliverable via agent",
 	);
 
+	const followUpTaskId = await createDeliverableRevisionRun({
+		project,
+		deliverable,
+		feedback: params.reason,
+		source: "client.agent.deliverable-review",
+	});
+
 	return {
 		action: "deliverable_rejected",
 		projectId: project.id,
 		replyText: `Noted — "${deliverable.name}" sent back for revision. Your feedback: "${params.reason}"`,
+		metadata: followUpTaskId ? { followUpTaskId } : undefined,
 	};
 }
 

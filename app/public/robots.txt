@@ -1,0 +1,43 @@
+# Recoder.xyz Robots.txt
+
+User-agent: *
+Allow: /
+Allow: /cli
+Allow: /docs/*
+Disallow: /auth/*
+Disallow: /dashboard
+Disallow: /settings/*
+Disallow: /projects
+Disallow: /onboarding
+Disallow: /api/*
+Disallow: /billing/*
+Disallow: /checkout
+Disallow: /analytics
+
+# Sitemap
+Sitemap: https://recoder.xyz/sitemap.xml
+
+# Crawl delay (optional, be nice to servers)
+Crawl-delay: 1
+
+# Major search engines
+User-agent: Googlebot
+Allow: /
+Disallow: /auth/*
+Disallow: /dashboard
+Disallow: /api/*
+Disallow: /checkout
+
+User-agent: Bingbot
+Allow: /
+Disallow: /auth/*
+Disallow: /dashboard
+Disallow: /api/*
+Disallow: /checkout
+
+# Block bad bots
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10

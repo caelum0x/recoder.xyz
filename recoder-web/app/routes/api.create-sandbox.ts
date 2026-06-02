@@ -242,6 +242,7 @@ interface CreateSandboxResponse {
   message?: string;
   error?: string;
   details?: string;
+  canRetry?: boolean;
 }
 
 interface ContainerResponse {
@@ -261,6 +262,38 @@ interface ContainerResponse {
     preview?: string;
     vite?: string;
     pty?: string;
+  };
+}
+
+function extractDockerErrorPayload(error: DockerHttpError): {
+  error: string;
+  details?: string;
+  provider?: string;
+  canRetry?: boolean;
+} {
+  const payload = error.payload as
+    | string
+    | {
+        error?: string;
+        message?: string;
+        details?: string;
+        provider?: string;
+        canRetry?: boolean;
+      }
+    | null;
+
+  if (typeof payload === 'string') {
+    return {
+      error: error.message || 'Docker backend request failed',
+      details: payload,
+    };
+  }
+
+  return {
+    error: payload?.error || payload?.message || error.message || 'Docker backend request failed',
+    details: payload?.details,
+    provider: payload?.provider,
+    canRetry: payload?.canRetry,
   };
 }
 
@@ -340,15 +373,51 @@ export async function action({ request, context }: ActionFunctionArgs) {
         dockerHeaders,
       );
     } catch (error) {
-      logger.error('Failed to create container:', error);
-      const status = error instanceof DockerHttpError ? error.status : 503;
+      logger.error('Failed to create container, retrying once:', error);
+
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        containerResponse = await dockerFetchJson<ContainerResponse>(
+          `${dockerUrl}/api/container`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ projectId, framework, templateId }),
+          },
+          dockerHeaders,
+        );
+      } catch (retryError) {
+        logger.error('Retry container create also failed:', retryError);
+        const status = retryError instanceof DockerHttpError ? retryError.status : 503;
+        const dockerError = retryError instanceof DockerHttpError
+          ? extractDockerErrorPayload(retryError)
+          : {
+              error: 'Failed to create container',
+              details: retryError instanceof Error ? retryError.message : 'Could not create Daytona sandbox',
+            };
+
+        return json<CreateSandboxResponse>(
+          {
+            success: false,
+            error: dockerError.error,
+            details: dockerError.details,
+            provider: dockerError.provider,
+            canRetry: dockerError.canRetry,
+          },
+          { status }
+        );
+      }
+
+      logger.info(`Container create recovered on retry: ${containerResponse.containerId.slice(0, 12)}, port: ${containerResponse.port}`);
+    }
+
+    if (!containerResponse) {
       return json<CreateSandboxResponse>(
         {
           success: false,
           error: 'Failed to create container',
-          details: 'Could not create Docker container. Make sure docker-backend is running.',
+          details: 'Container response missing after retry',
         },
-        { status }
+        { status: 503 }
       );
     }
 
@@ -365,14 +434,30 @@ export async function action({ request, context }: ActionFunctionArgs) {
           content,
         }));
 
-        await dockerFetchJson(
+        const batchWriteResponse = await dockerFetchJson<{
+          success?: boolean;
+          failedFiles?: Array<{ path?: string; error?: string }>;
+        }>(
           `${dockerUrl}/api/files/${projectId}/batch`,
           {
             method: 'POST',
-            body: JSON.stringify({ files }),
+            body: JSON.stringify({ files, bootstrapPreview: false }),
           },
           dockerHeaders,
         );
+
+        if (batchWriteResponse?.success === false) {
+          const failedSummary = (batchWriteResponse.failedFiles || [])
+            .slice(0, 3)
+            .map((file) => `${file.path || 'unknown'}: ${file.error || 'write failed'}`)
+            .join('; ');
+
+          throw new Error(
+            failedSummary
+              ? `Template batch write failed: ${failedSummary}`
+              : 'Template batch write failed',
+          );
+        }
 
         logger.info(`Wrote ${files.length} template files to container`);
       } catch (error) {
@@ -426,6 +511,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
     });
   } catch (error) {
     logger.error('Error creating sandbox:', error);
+
+    if (error instanceof DockerHttpError) {
+      const dockerError = extractDockerErrorPayload(error);
+      return json<CreateSandboxResponse>(
+        {
+          success: false,
+          error: dockerError.error,
+          details: dockerError.details,
+          provider: dockerError.provider,
+          canRetry: dockerError.canRetry,
+        },
+        { status: error.status }
+      );
+    }
 
     return json<CreateSandboxResponse>(
       {

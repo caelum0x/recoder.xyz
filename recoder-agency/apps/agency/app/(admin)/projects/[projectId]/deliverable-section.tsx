@@ -10,6 +10,7 @@ import {
 	sendForReview,
 	toggleBillableMilestone,
 } from "./deliverables-actions";
+import type { RecoderTaskContext } from "@/lib/agency/recoder-control-plane";
 
 const statusColors: Record<string, string> = {
 	draft: "bg-gray-500/10 text-gray-400",
@@ -21,6 +22,7 @@ const statusColors: Record<string, string> = {
 interface Deliverable {
 	dbId: number;
 	id: string;
+	taskId: string | null;
 	name: string;
 	type: string;
 	status: string;
@@ -42,6 +44,7 @@ interface DeliverableSectionProps {
 			checklistItems: string[];
 		}
 	>;
+	controlPlaneByDeliverableId: Record<string, RecoderTaskContext | null>;
 }
 
 function getDodReadiness(
@@ -82,6 +85,7 @@ export function DeliverableSection({
 	projectId,
 	deliverables,
 	dodTemplatesByType,
+	controlPlaneByDeliverableId,
 }: DeliverableSectionProps) {
 	const [showForm, setShowForm] = useState(false);
 	const [sendError, setSendError] = useState<{
@@ -272,6 +276,142 @@ export function DeliverableSection({
 							key={d.dbId}
 							className="rounded-xl border border-border bg-background p-4"
 						>
+							{(() => {
+								const controlPlane = controlPlaneByDeliverableId[d.id];
+								const previewUrl =
+									controlPlane?.task.result?.preview?.[0]?.url ?? null;
+								return controlPlane ? (
+									<div className="mb-3 rounded-lg border border-border/70 bg-bg-hover/20 px-3 py-2">
+										<div className="flex flex-wrap items-center gap-2 text-[11px]">
+											<span className="font-medium text-text-muted">
+												Control Plane
+											</span>
+											<span className="rounded bg-blue-500/10 px-2 py-0.5 text-blue-300">
+												task:{controlPlane.task.id}
+											</span>
+											<span className="rounded bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+												state:{controlPlane.task.state}
+											</span>
+											{controlPlane.links?.approval ? (
+												<span className="rounded bg-purple-500/10 px-2 py-0.5 text-purple-300">
+													approval:{controlPlane.links.approval.status}
+												</span>
+											) : null}
+											{controlPlane.links?.delegation ? (
+												<span className="rounded bg-amber-500/10 px-2 py-0.5 text-amber-300">
+													handoff:{controlPlane.links.delegation.status}
+												</span>
+											) : null}
+											{typeof controlPlane.runtime?.evidenceCount === "number" ? (
+												<span className="rounded bg-slate-500/10 px-2 py-0.5 text-slate-300">
+													evidence:{controlPlane.runtime.evidenceCount}
+												</span>
+											) : null}
+											{typeof controlPlane.runtime?.logCount === "number" &&
+											controlPlane.runtime.logCount > 0 ? (
+												<span className="rounded bg-zinc-500/10 px-2 py-0.5 text-zinc-300">
+													logs:{controlPlane.runtime.logCount}
+												</span>
+											) : null}
+											{typeof controlPlane.runtime?.artifactCount === "number" &&
+											controlPlane.runtime.artifactCount > 0 ? (
+												<span className="rounded bg-indigo-500/10 px-2 py-0.5 text-indigo-300">
+													artifacts:{controlPlane.runtime.artifactCount}
+												</span>
+											) : null}
+											{controlPlane.assignee?.registry ? (
+												<span
+													className={`rounded px-2 py-0.5 ${
+														controlPlane.assignee.registry.online
+															? "bg-green-500/10 text-green-300"
+															: "bg-zinc-500/10 text-zinc-300"
+													}`}
+												>
+													agent:
+													{controlPlane.assignee.registry.online
+														? "online"
+														: "offline"}
+												</span>
+											) : null}
+											{((controlPlane.assignee?.pairedBridgeSessions?.length ?? 0) +
+												(controlPlane.assignee?.localBridgeSessions?.length ?? 0)) > 0 ? (
+												<span className="rounded bg-sky-500/10 px-2 py-0.5 text-sky-300">
+													sessions:
+													{(controlPlane.assignee?.pairedBridgeSessions?.length ?? 0) +
+														(controlPlane.assignee?.localBridgeSessions?.length ?? 0)}
+												</span>
+											) : null}
+											{controlPlane.review?.merge?.status ? (
+												<span className="rounded bg-orange-500/10 px-2 py-0.5 text-orange-300">
+													merge:{controlPlane.review.merge.status}
+												</span>
+											) : null}
+										</div>
+										{controlPlane.runtime?.git?.branch ? (
+											<p className="mt-2 text-[11px] text-text-muted">
+												git branch: {controlPlane.runtime.git.branch}
+											</p>
+										) : null}
+										{controlPlane.review?.worktree?.branchName ? (
+											<p className="mt-1 text-[11px] text-text-muted">
+												review branch: {controlPlane.review.worktree.branchName}
+											</p>
+										) : null}
+										{controlPlane.review?.worktree?.worktreePath ? (
+											<p className="mt-1 break-all text-[11px] text-text-muted">
+												worktree path: {controlPlane.review.worktree.worktreePath}
+											</p>
+										) : null}
+										{controlPlane.review?.history?.length ? (
+											<div className="mt-2 rounded-md border border-border/60 bg-background/70 px-2 py-2">
+												<p className="text-[11px] font-medium text-text-muted">
+													review history
+												</p>
+												<div className="mt-1 space-y-1">
+													{controlPlane.review.history.slice(-3).reverse().map((entry, index) => (
+														<p
+															key={`${entry.at ?? "entry"}-${index}`}
+															className="text-[11px] text-text-muted"
+														>
+															{entry.type ?? "review.event"}
+															{entry.branchName ? ` • ${entry.branchName}` : ""}
+															{entry.status ? ` • ${entry.status}` : ""}
+														</p>
+													))}
+												</div>
+											</div>
+										) : null}
+										{controlPlane.timeline?.length ? (
+											<div className="mt-2 rounded-md border border-border/60 bg-background/70 px-2 py-2">
+												<p className="text-[11px] font-medium text-text-muted">
+													task timeline
+												</p>
+												<div className="mt-1 space-y-1">
+													{controlPlane.timeline.slice(-3).reverse().map((entry, index) => (
+														<p
+															key={`${entry.at ?? "timeline"}-${index}`}
+															className="text-[11px] text-text-muted"
+														>
+															{entry.title ?? entry.type ?? "timeline.event"}
+															{entry.detail ? ` • ${entry.detail}` : ""}
+														</p>
+													))}
+												</div>
+											</div>
+										) : null}
+										{previewUrl ? (
+											<a
+												href={previewUrl}
+												target="_blank"
+												rel="noreferrer"
+												className="mt-2 inline-flex text-[11px] text-primary hover:underline"
+											>
+												Open preview
+											</a>
+										) : null}
+									</div>
+								) : null;
+							})()}
 							{(() => {
 								const dod =
 									dodTemplatesByType[d.type] ?? dodTemplatesByType.other;

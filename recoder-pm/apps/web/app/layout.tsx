@@ -78,8 +78,16 @@ const title = "Recoder PM";
 const description =
   "Recoder PM marketing site and customer-facing product management workspace.";
 
+function toAbsoluteUrl(value: string | undefined, fallback: string): URL {
+  try {
+    return new URL(value || fallback);
+  } catch {
+    return new URL(fallback);
+  }
+}
+
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: toAbsoluteUrl(siteUrl, "https://pm.recoder.xyz"),
   title,
   description,
   applicationName: "Recoder PM",

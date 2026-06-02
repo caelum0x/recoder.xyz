@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
       tokensUsed, 
       cost,
       duration,
-      platform = 'web', // Default to web, CLI should explicitly set 'cli'
+      platform = 'spaces',
       success = true,
       errorMessage 
     } = await request.json();
@@ -22,15 +22,15 @@ export async function POST(request: NextRequest) {
 
     // Detect platform from headers if not explicitly provided
     let detectedPlatform = platform;
-    if (!platform || platform === 'web') {
+    if (!platform || platform === 'spaces') {
       const userAgent = request.headers.get('user-agent') || '';
       const referer = request.headers.get('referer') || '';
       
       // Check if request is from CLI
       if (userAgent.includes('recoder-cli') || userAgent.includes('recoder-code')) {
         detectedPlatform = 'cli';
-      } else if (referer.includes('web.recoder.xyz') || referer.includes('localhost:5173')) {
-        detectedPlatform = 'web';
+      } else if (referer.includes('recoder.xyz/dashboard') || referer.includes('localhost:3000/dashboard')) {
+        detectedPlatform = 'spaces';
       }
     }
 

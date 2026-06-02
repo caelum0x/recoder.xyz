@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import { AllPlatformServicesSchema } from '@/app/components/StructuredData';
 
 export const metadata: Metadata = {
-  title: 'Recoder Platform - AI Development Ecosystem Services | Recoder.xyz',
-  description: 'Explore the services powering the Recoder AI development ecosystem. From AI agents and a browser-based IDE to project management and agency workflows, Recoder provides a complete AI-powered development platform.',
+  title: 'Recoder Platform - External Agent Control Plane | Recoder.xyz',
+  description: 'Explore the Recoder control plane for external coding agents across identity, runtime, preview, task state, approvals, and delivery.',
   openGraph: {
-    title: 'Recoder Platform - AI Development Ecosystem Services | Recoder.xyz',
-    description: 'Services powering the Recoder AI development ecosystem including AI agents, browser IDE, project management, and agency workflows.',
+    title: 'Recoder Platform - External Agent Control Plane | Recoder.xyz',
+    description: 'Platform surfaces for external coding agents, runtime execution, PM approvals, and delivery packaging.',
     url: 'https://recoder.xyz/platform',
     siteName: 'Recoder.xyz',
     images: [
@@ -14,15 +14,15 @@ export const metadata: Metadata = {
         url: 'https://recoder.xyz/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Recoder Platform - AI Development Ecosystem Services',
+        alt: 'Recoder Platform - External Agent Control Plane',
       },
     ],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Recoder Platform - AI Development Ecosystem Services',
-    description: 'Services powering the Recoder AI development ecosystem.',
+    title: 'Recoder Platform - External Agent Control Plane',
+    description: 'Platform surfaces for external coding agents, runtime execution, PM approvals, and delivery packaging.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {

@@ -21,8 +21,8 @@ exports.searchCode = searchCode;
 exports.dropProjectIndex = dropProjectIndex;
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const logger_js_1 = require("../logger.js");
+const byok_js_1 = require("./byok.js");
 const QDRANT_URL = process.env.QDRANT_URL ?? 'http://localhost:6333';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const EMBED_MODEL = 'openai/text-embedding-ada-002';
 const VECTOR_SIZE = 1536;
 const CHUNK_LINES = 60;
@@ -58,14 +58,15 @@ async function ensureCodeCollection(name) {
     }
 }
 // ── Embedding ─────────────────────────────────────────────────────────────────
-async function embed(text) {
-    if (!OPENROUTER_API_KEY)
-        throw new Error('OPENROUTER_API_KEY not set');
+async function embed(text, userId) {
+    const openRouterKey = await (0, byok_js_1.getOpenRouterByokKey)(userId);
+    if (!openRouterKey)
+        throw new Error('No BYOK OpenRouter key available for code search embeddings');
     const res = await fetch('https://openrouter.ai/api/v1/embeddings', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+            Authorization: `Bearer ${openRouterKey}`,
         },
         body: JSON.stringify({ model: EMBED_MODEL, input: text.slice(0, 8000) }),
         signal: AbortSignal.timeout(20_000),
@@ -101,7 +102,7 @@ const debounceTimers = new Map();
  * If `debounce` is true (default), the upsert is deferred 5s to batch writes.
  */
 async function indexFile(params) {
-    const { projectId, filePath, content, debounce = true } = params;
+    const { projectId, filePath, content, debounce = true, userId } = params;
     const key = `${projectId}:${filePath}`;
     if (debounce) {
         const existing = debounceTimers.get(key);
@@ -109,7 +110,7 @@ async function indexFile(params) {
             clearTimeout(existing);
         debounceTimers.set(key, setTimeout(() => {
             debounceTimers.delete(key);
-            indexFile({ projectId, filePath, content, debounce: false }).catch((err) => {
+            indexFile({ projectId, filePath, content, debounce: false, userId }).catch((err) => {
                 logger_js_1.logger.warn({ err, projectId, filePath }, '[code-search] Debounced index failed');
             });
         }, DEBOUNCE_MS));
@@ -138,7 +139,7 @@ async function indexFile(params) {
         const batch = chunks.slice(b, b + BATCH);
         const points = await Promise.all(batch.map(async (c) => ({
             id: node_crypto_1.default.randomUUID(),
-            vector: await embed(c.text),
+            vector: await embed(c.text, userId),
             payload: {
                 projectId,
                 filePath,
@@ -155,7 +156,7 @@ async function indexFile(params) {
  * Semantic search across a project's code index.
  */
 async function searchCode(params) {
-    const { projectId, query, limit = 10 } = params;
+    const { projectId, query, limit = 10, userId } = params;
     const collection = codeCollection(projectId);
     try {
         await qdrantReq('GET', `/collections/${collection}`);
@@ -163,7 +164,7 @@ async function searchCode(params) {
     catch {
         return []; // Not indexed yet
     }
-    const vector = await embed(query);
+    const vector = await embed(query, userId);
     const result = (await qdrantReq('POST', `/collections/${collection}/points/search`, {
         vector,
         limit,

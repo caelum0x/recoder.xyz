@@ -408,6 +408,13 @@ export interface A2AWorkspace {
 
 export type AggregationStrategy = 'first-wins' | 'merge-all' | 'best-score' | 'manual';
 
+export interface TaskRoutingHints {
+  requiredCapabilities?: string[];
+  preferredCapabilities?: string[];
+  preferredPlatform?: string;
+  runtimeCategory?: 'implementation' | 'review' | 'documentation' | 'visual' | 'debug' | 'general';
+}
+
 export interface MultiDispatchRequest {
   prompt: string;
   agentIds?: string[];
@@ -416,6 +423,7 @@ export interface MultiDispatchRequest {
   aggregationStrategy?: AggregationStrategy;
   priority?: 'critical' | 'high' | 'normal' | 'low';
   worktreeIsolation?: boolean;
+  routingHints?: TaskRoutingHints;
 }
 
 export type DispatchStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -435,6 +443,14 @@ export interface DispatchRecord {
   worktrees?: Record<string, WorktreeInfo>;
   /** Per-agent routing reasons when auto-routing was used (agentId -> reason string). */
   routingReasons?: Record<string, string>;
+  /** Routing hints supplied or inferred at dispatch time. */
+  routingHints?: TaskRoutingHints;
+  /** Prompt intent classification captured at dispatch time. */
+  intentClassification?: {
+    category: string;
+    confidence: number;
+    keywords: string[];
+  };
   createdAt: string;
   completedAt?: string;
 }

@@ -2,7 +2,7 @@ import { getSessionAccessToken } from '@/lib/auth/session-token';
 import { resolveDockerBackendUrl } from '@/lib/runtime-urls';
 
 const SANDBOX_FILE_PROXY_PATH = '/api/files/content';
-const SANDBOX_PREVIEW_DOMAIN = 'sandbox.recoder.xyz';
+const SANDBOX_PREVIEW_DOMAIN = process.env.NEXT_PUBLIC_SANDBOX_PREVIEW_DOMAIN || 'sandbox.recoder.xyz';
 
 function extractSandboxPathFromUrl(filePath: string): string {
   if (!filePath.includes('://') && !filePath.includes('/sandboxes/') && !filePath.includes('/files/content')) {

@@ -1,18 +1,21 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useAgentFleet, useTaskPipeline, useSLOMetrics } from '@/hooks/workspaces/use-mission-control';
+import { useControlPlaneSnapshot, useSLOMetrics } from '@/hooks/workspaces/use-mission-control';
 import { AgentFleetOverview } from '@/components/workspaces/mission-control/agent-fleet-overview';
 import { TaskPipelineView } from '@/components/workspaces/mission-control/task-pipeline-view';
 import { SLODashboard } from '@/components/workspaces/mission-control/slo-dashboard';
 import { ActivityTimeline } from '@/components/workspaces/mission-control/activity-timeline';
+import { ControlPlanePanel } from '@/components/workspaces/mission-control/control-plane-panel';
+import { TaskDetailDialog } from '@/components/workspaces/mission-control/task-detail-dialog';
 
 export default function MissionControlPage() {
   const params = useParams();
   const wsId = params.workspaceId as string;
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
-  useAgentFleet(wsId);
-  const { data: tasks } = useTaskPipeline(wsId);
+  const { data: snapshot } = useControlPlaneSnapshot(wsId);
   const { data: metrics } = useSLOMetrics(wsId);
 
   return (
@@ -31,10 +34,27 @@ export default function MissionControlPage() {
       <AgentFleetOverview />
 
       {/* Task Pipeline */}
-      <TaskPipelineView tasks={(tasks as any[]) ?? []} />
+      <TaskPipelineView
+        tasks={(snapshot?.tasks as any[]) ?? []}
+        onTaskClick={(taskId) => setSelectedTaskId(taskId)}
+      />
+
+      {/* Control-plane state */}
+      <ControlPlanePanel workspaceId={wsId} summary={snapshot?.summary ?? null} />
 
       {/* Activity Timeline */}
-      <ActivityTimeline workspaceId={wsId} />
+      <ActivityTimeline
+        workspaceId={wsId}
+        onTaskClick={(taskId) => setSelectedTaskId(taskId)}
+      />
+
+      <TaskDetailDialog
+        taskId={selectedTaskId}
+        open={!!selectedTaskId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTaskId(null);
+        }}
+      />
     </div>
   );
 }

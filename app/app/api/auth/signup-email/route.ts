@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendTemporaryPasswordEmail } from '@/lib/email';
+import { getEmailProviderStatus, sendTemporaryPasswordEmail } from '@/lib/email';
 import { scheduleOnboardingEmails } from '@/lib/services/onboarding-email.service';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -14,6 +14,7 @@ import { rateLimit, rateLimitConfigs } from '@/lib/middleware/rate-limit';
 import { trackServerEvent, AnalyticsEvents } from '@/lib/analytics';
 import { extractAttribution } from '@/lib/attribution';
 import { generateReferralCode } from '@/lib/referral';
+import { buildCommercialQuotaCreateData } from '@/lib/commercial-quota';
 
 const authRateLimiter = rateLimit(rateLimitConfigs.auth);
 
@@ -80,26 +81,8 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Create user quota
-    const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-
     await prisma.user_quota.create({
-      data: {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        sessionsPerDay: 6,
-        sessionsUsedToday: 0,
-        tokensPerSession: 10000,
-        periodStart: now,
-        periodEnd: endOfDay,
-        lastResetAt: now,
-        requestsLimit: 1000,
-        requestsUsed: 0,
-        createdAt: now,
-        updatedAt: now,
-      }
+      data: buildCommercialQuotaCreateData(user.id, 'free', 'day'),
     });
 
     // Send temporary password email
@@ -124,6 +107,34 @@ export async function POST(request: NextRequest) {
       plan: 'free',
       source: attribution.acquisitionSource,
     });
+
+    // Lead -> signup conversion: if this email was captured as a lead, link it
+    // to the new user and record the conversion. Best-effort; never blocks signup.
+    try {
+      const lead = await prisma.newsletter_subscribers.findUnique({
+        where: { email },
+        select: { id: true, source: true, userId: true },
+      });
+      if (lead) {
+        if (!lead.userId) {
+          await prisma.newsletter_subscribers.update({
+            where: { id: lead.id },
+            data: { userId: user.id, updatedAt: new Date() },
+          });
+        }
+        trackServerEvent(AnalyticsEvents.LEAD_CONVERTED_TO_SIGNUP, {
+          method: 'email',
+          userId: user.id,
+          leadSource: lead.source ?? undefined,
+          matchedExistingUser: Boolean(lead.userId),
+        });
+      }
+    } catch (conversionError) {
+      logger.warn('Lead-to-signup conversion tracking failed', {
+        route: 'auth/signup-email',
+        error: conversionError instanceof Error ? conversionError.message : String(conversionError),
+      });
+    }
 
     // In development, include the temp password for testing
     const isDev = process.env.NODE_ENV === 'development';
@@ -152,4 +163,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-import { getEmailProviderStatus } from '@/lib/email';

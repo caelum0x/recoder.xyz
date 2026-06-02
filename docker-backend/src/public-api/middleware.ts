@@ -28,6 +28,7 @@ import {
 import type { ApiKey, ApiKeyScope, AppKey, PublicApiErrorCode, ApiKeyTier } from './types.js';
 import { validateAppKey as validateAppKeyFn } from './app-keys.js';
 import { createLogger } from '../logger.js';
+import { applyEdgeSecurityHeaders } from '../edge/edge-security.js';
 
 const logger = createLogger('public-api');
 
@@ -422,7 +423,7 @@ export function sandboxLimitMiddleware(
   next();
 }
 
-type RouteRateLimitKey = 'projectPrompt' | 'projectTaskRead' | 'projectTaskStream';
+type RouteRateLimitKey = 'projectPrompt' | 'projectTaskRead' | 'projectTaskStream' | 'projectPreviewDeploy';
 
 const ROUTE_RATE_LIMITS_PER_MINUTE: Record<RouteRateLimitKey, Record<ApiKeyTier, number>> = {
   projectPrompt: {
@@ -438,6 +439,12 @@ const ROUTE_RATE_LIMITS_PER_MINUTE: Record<RouteRateLimitKey, Record<ApiKeyTier,
     enterprise: 3000,
   },
   projectTaskStream: {
+    free: 10,
+    developer: 30,
+    team: 90,
+    enterprise: 200,
+  },
+  projectPreviewDeploy: {
     free: 10,
     developer: 30,
     team: 90,
@@ -721,6 +728,15 @@ export function asyncApiHandler<T extends AuthenticatedApiRequest = Authenticate
   };
 }
 
+export function publicApiSecurityHeadersMiddleware(
+  _req: AuthenticatedApiRequest,
+  res: Response,
+  next: NextFunction,
+): void {
+  applyEdgeSecurityHeaders(res);
+  next();
+}
+
 // ==================== Combined Middleware ====================
 
 /**
@@ -731,6 +747,7 @@ export const standardMiddleware = [
   requestIdMiddleware,
   authenticateApiKey,
   rateLimitMiddleware,
+  publicApiSecurityHeadersMiddleware,
   requestLoggingMiddleware,
 ];
 
@@ -742,6 +759,7 @@ export const sandboxCreationMiddleware = [
   authenticateApiKey,
   rateLimitMiddleware,
   sandboxLimitMiddleware,
+  publicApiSecurityHeadersMiddleware,
   requestLoggingMiddleware,
   requireScope('sandboxes:write', 'admin'),
 ];

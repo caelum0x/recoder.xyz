@@ -91,6 +91,28 @@ function getEnv(context?: LoaderFunctionArgs['context'] | ActionFunctionArgs['co
   return ((context as any)?.cloudflare?.env || process.env) as Record<string, string | undefined>;
 }
 
+function hasBrowserAuth(request: Request): boolean {
+  return Boolean(request.headers.get('Cookie') || request.headers.get('Authorization'));
+}
+
+function buildBrowserProxyHeaders(request: Request): Headers {
+  const headers = new Headers({
+    Accept: 'application/json',
+  });
+
+  const cookie = request.headers.get('Cookie');
+  if (cookie) {
+    headers.set('Cookie', cookie);
+  }
+
+  const authorization = request.headers.get('Authorization');
+  if (authorization) {
+    headers.set('Authorization', authorization);
+  }
+
+  return headers;
+}
+
 function inferStarterIdFromMessages(messages: Array<{ role: string; content: string }>): string {
   const combined = messages
     .filter((message) => message.role === 'assistant')
@@ -229,14 +251,48 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
             projectId,
             status: response.status,
           });
-          return json({ error: 'Project snapshots unavailable' }, { status: response.status });
+          if (response.status < 500 && response.status !== 404 && response.status !== 405) {
+            return json({ error: 'Project snapshots unavailable' }, { status: response.status });
+          }
         }
       } catch (error) {
         logger.warn('Hub project detail request threw', {
           projectId,
           error: error instanceof Error ? error.message : String(error),
         });
-        return json({ error: 'Project snapshots unavailable' }, { status: 502 });
+      }
+    }
+
+    if (userId && hasBrowserAuth(request)) {
+      try {
+        const pathname = `/api/projects/${encodeURIComponent(projectId)}`;
+        const hubUrl = new URL(pathname, hubBaseUrl);
+        const response = await fetch(hubUrl.toString(), {
+          headers: buildBrowserProxyHeaders(request),
+        });
+
+        if (response.ok) {
+          const payload = await response.json() as { success?: boolean; data?: HubProjectDetail };
+          const hubProject = payload.data;
+          if (hubProject) {
+            return json({
+              project: {
+                ...mapHubProjectToLegacyProject(projectId, userId, hubProject),
+                fileSnapshot: hubProject.fileSnapshot || {},
+              },
+            });
+          }
+        } else {
+          logger.warn('Browser-auth hub project detail request failed', {
+            projectId,
+            status: response.status,
+          });
+        }
+      } catch (error) {
+        logger.warn('Browser-auth hub project detail request threw', {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 

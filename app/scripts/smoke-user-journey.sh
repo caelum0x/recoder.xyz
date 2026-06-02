@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # smoke-user-journey.sh - End-to-end user journey smoke test for Recoder.xyz
-# Tests the full signup -> dashboard -> API key -> Web IDE flow via HTTP
+# Tests the full signup -> dashboard -> API key -> Spaces flow via HTTP
 # Usage: bash scripts/smoke-user-journey.sh [BASE_URL]
 
 set -euo pipefail
@@ -103,18 +103,18 @@ test_step "Agents page loads" "$STATUS"
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/plan")
 test_step "Plan page loads" "$STATUS"
 
-# Step 9: Web IDE health
+# Step 9: Spaces health
 echo ""
-echo "--- Step 7: Web IDE ---"
-WEB_IDE_URL="https://web.recoder.xyz"
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$WEB_IDE_URL" 2>/dev/null || echo "000")
+echo "--- Step 7: Spaces ---"
+SPACES_URL="${BASE_URL}/dashboard/spaces"
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$SPACES_URL" 2>/dev/null || echo "000")
 if [ "$STATUS" = "200" ] || [ "$STATUS" = "301" ] || [ "$STATUS" = "302" ]; then
-  echo -e "  ${GREEN}PASS${NC} Web IDE reachable (HTTP $STATUS)"
+  echo -e "  ${GREEN}PASS${NC} Spaces reachable (HTTP $STATUS)"
   ((PASS++))
 elif [ "$STATUS" = "000" ]; then
-  echo -e "  ${YELLOW}SKIP${NC} Web IDE unreachable (timeout or DNS)"
+  echo -e "  ${YELLOW}SKIP${NC} Spaces unreachable (timeout or DNS)"
 else
-  echo -e "  ${RED}FAIL${NC} Web IDE (HTTP $STATUS)"
+  echo -e "  ${RED}FAIL${NC} Spaces (HTTP $STATUS)"
   ((FAIL++))
 fi
 

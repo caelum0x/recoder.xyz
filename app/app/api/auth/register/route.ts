@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/crypto';
-import { getPlanLimits } from '@/lib/plan-config';
+import { buildCommercialQuotaCreateData, getCommercialQuotaConfig } from '@/lib/commercial-quota';
 import { resolvePublicAppUrl, sendVerificationEmail } from '@/lib/email';
 import { scheduleOnboardingEmails } from '@/lib/services/onboarding-email.service';
 import { nanoid } from 'nanoid';
@@ -110,32 +110,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create initial quota based on schema
-    const planLimits = getPlanLimits(plan);
-    const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setHours(23, 59, 59, 999);
-    
-    // Map plan limits to quota fields
-    let tokensPerSession = 10000; // Default for free
-    if (plan === 'pro') tokensPerSession = 100000; // 100K for pro
-    else if (plan === 'enterprise') tokensPerSession = 500000; // 500K for enterprise
-    
     await prisma.user_quota.create({
-      data: {
-        id: nanoid(),
-        userId: user.id,
-        sessionsPerDay: planLimits.sessionsPerDay || 6,
-        sessionsUsedToday: 0,
-        tokensPerSession: tokensPerSession,
-        periodStart: now,
-        periodEnd: endOfDay,
-        lastResetAt: now,
-      },
+      data: buildCommercialQuotaCreateData(user.id, plan, 'day'),
     });
 
     // Determine if onboarding is needed (free users need to add API key)
-    const needsOnboarding = planLimits.requiresOwnApiKey;
+    const needsOnboarding = getCommercialQuotaConfig(plan).entitlements.workspaces <= 1;
 
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString('hex');

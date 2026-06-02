@@ -1,10 +1,13 @@
 import { eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { clients, db, deliverables, projects, quotes } from "@/db";
+import { clients, db, deliverables, projects, quotes, workspaces } from "@/db";
 import {
 	copilotToolDefinitions,
 	executeTool,
 } from "@/lib/agency/copilot-tools";
+import {
+	buildRecoderProjectControlSummary,
+} from "@/lib/agency/recoder-control-plane";
 import { requireCurrentTeamRole } from "@/services/teams";
 
 export const maxDuration = 60;
@@ -123,6 +126,8 @@ export async function POST(req: Request) {
 						name: deliverables.name,
 						type: deliverables.type,
 						status: deliverables.status,
+						projectDbId: deliverables.projectDbId,
+						taskId: deliverables.taskId,
 					})
 					.from(deliverables)
 					.where(inArray(deliverables.projectDbId, projectDbIds))
@@ -155,6 +160,44 @@ export async function POST(req: Request) {
 		),
 	].join("\n");
 
+	const projectDbIdToPublicId = new Map(
+		allProjects.map((project) => [project.dbId, project.id] as const),
+	);
+	const projectWorkspaceRows = allProjects.length === 0
+		? []
+		: await db
+				.select({
+					projectId: projects.id,
+					workspaceId: workspaces.id,
+				})
+				.from(projects)
+				.leftJoin(workspaces, eq(projects.workspaceDbId, workspaces.dbId))
+				.where(inArray(projects.id, allProjects.map((project) => project.id)));
+	const workspaceIdByProjectId = Object.fromEntries(
+		projectWorkspaceRows.map((row) => [row.projectId, row.workspaceId]),
+	) as Record<string, string | null>;
+
+	const controlPlaneSummaries = await Promise.all(
+		allProjects.map(async (project) => {
+			return {
+				projectId: project.id,
+				projectName: project.name,
+				summary: await buildRecoderProjectControlSummary({
+					workspaceId: workspaceIdByProjectId[project.id] ?? null,
+					taskIds: allDeliverables
+						.filter((deliverable) => deliverable.projectDbId === project.dbId)
+						.map((deliverable) => deliverable.taskId),
+				}),
+			};
+		}),
+	);
+	const controlPlaneContext = [
+		`### Shared Control Plane`,
+		...controlPlaneSummaries.map(({ projectId, projectName, summary }) =>
+			`- ${projectName} (${projectId}) source=${summary.source} runs=${summary.totalTasks} approvals=${summary.pendingApprovals} handoffs=${summary.activeHandoffs} onlineAgents=${summary.onlineAgents} evidence=${summary.evidenceCount} artifacts=${summary.artifactCount} logs=${summary.logCount} sessions=${summary.pairedBridgeSessions}/${summary.localBridgeSessions}`,
+		),
+	].join("\n");
+
 	const { getUserOpenRouterApiKeyForAgency } = await import(
 		"@/lib/agency/openrouter-model"
 	);
@@ -172,9 +215,11 @@ You have tools to create and modify data. When the user asks you to create clien
 
 When referencing IDs in tool calls, use the exact IDs from the context or from previous tool results.
 
-You have access to this agency data:
+You have access to this agency data and project-level shared execution state:
 
 ${context}
+
+${controlPlaneContext}
 
 Be concise, actionable, and professional. Reference specific data points. Suggest next steps based on agency state. When you perform an action with a tool, clearly confirm what you did.`;
 

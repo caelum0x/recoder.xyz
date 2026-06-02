@@ -19,6 +19,68 @@ import { getAgentMessagingService } from './agent-messaging.service';
 import { getDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
 import { getTaskLifecycleService } from './task-lifecycle.service';
+import { appendTaskScopedControlPlaneLifecycleEvent } from '../a2a-gateway';
+
+function mapDelegationStatusToLifecycleEvent(status: string): string {
+  switch (status) {
+    case 'accepted':
+      return 'handoff.accepted';
+    case 'completed':
+      return 'handoff.completed';
+    case 'rejected':
+    case 'failed':
+    case 'cancelled':
+      return 'handoff.declined';
+    case 'pending':
+    case 'in-progress':
+    default:
+      return 'handoff.initiated';
+  }
+}
+
+function syncDelegationToTaskMetadata(
+  delegation: { delegationId: string; toAgentId: string; status: string; metadata?: Record<string, string>; error?: string; result?: string },
+  patch: Record<string, unknown>,
+  reason: string,
+): void {
+  const sourceTaskId = delegation.metadata?.sourceTaskId;
+  if (!sourceTaskId) return;
+
+  const taskService = getTaskLifecycleService();
+  taskService.updateTaskMetadata(sourceTaskId, {
+    metadataPatch: {
+      handoff: {
+        delegationId: delegation.delegationId,
+        targetAgentId: delegation.toAgentId,
+        status: delegation.status,
+        ...(delegation.metadata?.approvalId ? { approvalId: delegation.metadata.approvalId } : {}),
+        ...patch,
+      },
+    },
+    triggeredBy: 'workflow-messaging',
+    reason,
+  });
+
+  void appendTaskScopedControlPlaneLifecycleEvent({
+    taskId: sourceTaskId,
+    eventType: mapDelegationStatusToLifecycleEvent(delegation.status),
+    actorId: delegation.toAgentId,
+    state:
+      delegation.status === 'completed'
+        ? 'completed'
+        : delegation.status === 'rejected' || delegation.status === 'failed' || delegation.status === 'cancelled'
+          ? 'failed'
+          : 'working',
+    detail: {
+      delegationId: delegation.delegationId,
+      targetAgentId: delegation.toAgentId,
+      status: delegation.status,
+      intent: delegation.metadata?.intent || 'handoff',
+      ...(delegation.error ? { error: delegation.error } : {}),
+      ...(delegation.result ? { result: delegation.result } : {}),
+    },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Stub executor (kept for reference)
@@ -422,6 +484,10 @@ messagingRouter.post('/expire', (_req: Request, res: Response) => {
 
 const delegationRouter = Router();
 
+function sendDelegationResponse(res: Response, delegation: any) {
+  sendSuccess(res, delegation);
+}
+
 /** POST /delegations — Create a delegation */
 delegationRouter.post('/', (req: Request, res: Response) => {
   try {
@@ -440,6 +506,12 @@ delegationRouter.post('/', (req: Request, res: Response) => {
       parentDelegationId,
       metadata,
     });
+
+    syncDelegationToTaskMetadata(
+      delegation,
+      {},
+      'Delegation created via workflow messaging route',
+    );
 
     sendSuccess(res, delegation, 201);
   } catch (err: any) {
@@ -476,7 +548,12 @@ delegationRouter.post('/:delegationId/accept', (req: Request, res: Response) => 
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
-    sendSuccess(res, delegation);
+    syncDelegationToTaskMetadata(
+      delegation,
+      { acceptedAt: delegation.acceptedAt },
+      'Delegation accepted via workflow messaging route',
+    );
+    sendDelegationResponse(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
   }
@@ -490,7 +567,12 @@ delegationRouter.post('/:delegationId/reject', (req: Request, res: Response) => 
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
-    sendSuccess(res, delegation);
+    syncDelegationToTaskMetadata(
+      delegation,
+      { error: delegation.error, completedAt: delegation.completedAt },
+      'Delegation rejected via workflow messaging route',
+    );
+    sendDelegationResponse(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
   }
@@ -510,6 +592,11 @@ delegationRouter.post('/:delegationId/complete', (req: Request, res: Response) =
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { result: delegation.result, completedAt: delegation.completedAt },
+      'Delegation completed via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
@@ -530,6 +617,11 @@ delegationRouter.post('/:delegationId/fail', (req: Request, res: Response) => {
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { error: delegation.error, completedAt: delegation.completedAt },
+      'Delegation failed via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
@@ -543,6 +635,11 @@ delegationRouter.post('/:delegationId/cancel', (req: Request, res: Response) => 
     if (!delegation) {
       return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
     }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { completedAt: delegation.completedAt },
+      'Delegation cancelled via workflow messaging route',
+    );
     sendSuccess(res, delegation);
   } catch (err: any) {
     sendError(res, 500, err?.message ?? 'Internal error');
@@ -590,3 +687,36 @@ export const workflowMessagingRouter = Router();
 workflowMessagingRouter.use('/workflows', workflowRouter);
 workflowMessagingRouter.use('/messages', messagingRouter);
 workflowMessagingRouter.use('/delegations', delegationRouter);
+workflowMessagingRouter.post('/handoffs/:delegationId/accept', (req: Request, res: Response) => {
+  try {
+    const delegation = getDelegationChainService().accept(req.params.delegationId);
+    if (!delegation) {
+      return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
+    }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { acceptedAt: delegation.acceptedAt },
+      'Delegation accepted via handoff alias route',
+    );
+    sendDelegationResponse(res, delegation);
+  } catch (err: any) {
+    sendError(res, 500, err?.message ?? 'Internal error');
+  }
+});
+workflowMessagingRouter.post('/handoffs/:delegationId/decline', (req: Request, res: Response) => {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const delegation = getDelegationChainService().reject(req.params.delegationId, body?.reason);
+    if (!delegation) {
+      return sendError(res, 404, `Delegation not found: ${req.params.delegationId}`);
+    }
+    syncDelegationToTaskMetadata(
+      delegation,
+      { error: delegation.error, completedAt: delegation.completedAt },
+      'Delegation declined via handoff alias route',
+    );
+    sendDelegationResponse(res, delegation);
+  } catch (err: any) {
+    sendError(res, 500, err?.message ?? 'Internal error');
+  }
+});

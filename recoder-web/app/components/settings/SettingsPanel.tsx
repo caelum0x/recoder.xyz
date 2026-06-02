@@ -702,7 +702,7 @@ function Toggle({
     >
       <span
         className={classNames(
-          'absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform',
+          'absolute top-1 left-1 w-4 h-4 rounded-full bg-zinc-200 transition-transform',
           enabled ? 'translate-x-5' : 'translate-x-0'
         )}
       />

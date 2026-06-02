@@ -1,6 +1,6 @@
 /**
  * CLI Projects API
- * Provides authenticated access to user's web IDE projects for CLI download
+ * Provides authenticated access to user's Spaces projects for CLI download
  */
 
 import { NextRequest, NextResponse } from 'next/server';

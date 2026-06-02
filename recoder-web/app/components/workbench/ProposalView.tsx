@@ -99,7 +99,7 @@ export function ProposalView() {
                 proposalMode ? 'bg-purple-600' : 'bg-recoder-elements-borderColor'
               }`}
             >
-              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+              <div className={`absolute top-0.5 w-4 h-4 bg-zinc-200 rounded-full transition-transform ${
                 proposalMode ? 'translate-x-4' : 'translate-x-0.5'
               }`} />
             </button>

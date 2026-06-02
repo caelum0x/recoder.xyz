@@ -20,7 +20,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-bold mb-4">2. Description of Service</h2>
             <p className="text-gray-300">
-              Recoder.xyz provides AI-powered development tools including a Web IDE and CLI. The service requires users to provide their own API keys for AI providers.
+              Recoder.xyz provides AI-powered development tools including a Spaces and CLI. The service requires users to provide their own API keys for AI providers.
             </p>
           </section>
 

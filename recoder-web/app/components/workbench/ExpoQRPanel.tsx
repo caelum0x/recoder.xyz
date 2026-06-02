@@ -548,7 +548,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
       </div>
 
       {/* QR Code */}
-      <div className="bg-white p-3 rounded-lg shadow-sm">
+      <div className="bg-recoder-elements-background-depth-3 p-3 rounded-lg border border-recoder-elements-borderColor shadow-sm">
         <img
           src={qrUrl}
           alt="Expo Go QR Code"
@@ -639,7 +639,7 @@ export const ExpoQRPanel = memo(({ projectId, className }: ExpoQRPanelProps) => 
             {shareResult && (
               <div className="bg-blue-500/10 border border-blue-500/30 rounded p-2.5">
                 <div className="text-blue-400 text-[10px] font-medium mb-1">Share Link Ready</div>
-                <div className="bg-white p-2 rounded mb-2 flex justify-center">
+                <div className="bg-recoder-elements-background-depth-3 p-2 rounded mb-2 flex justify-center border border-recoder-elements-borderColor">
                   <img
                     src={shareResult.qrUrl}
                     alt="Share QR Code"

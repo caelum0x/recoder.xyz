@@ -16,7 +16,7 @@ export default function CareersPage() {
           </div>
           <h1 className="text-4xl font-bold mb-4">Careers at Recoder</h1>
           <p className="text-xl text-gray-400">
-            We&apos;re a small, early-stage team building an AI-powered development platform.
+            We&apos;re a small, early-stage team building the control plane for external coding agents.
           </p>
         </div>
 
@@ -24,10 +24,9 @@ export default function CareersPage() {
         <div className="mb-12 p-8 rounded-2xl border border-white/10 bg-white/5">
           <h2 className="text-xl font-semibold mb-4">Who We Are</h2>
           <p className="text-gray-400 leading-relaxed">
-            Recoder is currently in public beta. We&apos;re building a platform that combines
-            a CLI tool, a Web IDE, AI agents, and a BYOK model architecture — letting
-            developers use 40+ AI models with their own API keys, at no markup. We&apos;re
-            remote-first and move fast.
+            Recoder is currently in public beta. We&apos;re building the workflow layer around
+            external coding agents so teams can execute real software work across runtime,
+            preview, task state, approvals, and handoff. We&apos;re remote-first and move fast.
           </p>
         </div>
 

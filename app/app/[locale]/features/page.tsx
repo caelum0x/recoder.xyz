@@ -9,10 +9,10 @@ import {
 
 export const metadata: Metadata = {
   title: 'Features - AI-Powered Development Tools | Recoder.xyz',
-  description: 'Explore Recoder features: CLI tool, Web IDE, 40+ AI models, BYOK support, real-time code generation, Git integration, multi-language support, database management, and cloud deployment to AWS, Vercel, Docker, and Kubernetes.',
+  description: 'Explore Recoder features: CLI tool, Spaces, 40+ AI models, BYOK support, real-time code generation, Git integration, multi-language support, database management, and cloud deployment to AWS, Vercel, Docker, and Kubernetes.',
   openGraph: {
     title: 'Features - AI-Powered Development Tools | Recoder.xyz',
-    description: 'CLI tool, Web IDE, 40+ AI models, BYOK support, production-ready code generation, Git integration, and cloud deployment.',
+    description: 'CLI tool, Spaces, 40+ AI models, BYOK support, production-ready code generation, Git integration, and cloud deployment.',
     url: 'https://recoder.xyz/features',
     siteName: 'Recoder.xyz',
     images: [
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Features - AI-Powered Development Tools',
-    description: 'CLI, Web IDE, 40+ AI models, BYOK, real-time code generation, Git integration, and cloud deployment.',
+    description: 'CLI, Spaces, 40+ AI models, BYOK, real-time code generation, Git integration, and cloud deployment.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -46,7 +46,7 @@ export default function FeaturesPage() {
     },
     {
       icon: Globe,
-      title: 'Web IDE',
+      title: 'Spaces',
       description: 'Full-featured browser-based code editor with AI integration. Code anywhere, anytime, on any device.',
       color: 'from-blue-500 to-cyan-600'
     },

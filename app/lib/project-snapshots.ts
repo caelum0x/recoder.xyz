@@ -198,6 +198,36 @@ async function upsertSnapshotRow(input: {
   return mapSnapshotRow(rows[0]);
 }
 
+export async function createProjectSnapshot(input: {
+  projectId: string;
+  userId: string;
+  urlId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  framework?: string | null;
+  starterId?: string | null;
+  source?: string | null;
+  files?: Record<string, string>;
+  directories?: string[];
+}): Promise<ProjectSnapshotRecord> {
+  const now = new Date();
+
+  return upsertSnapshotRow({
+    projectId: input.projectId,
+    userId: input.userId,
+    urlId: input.urlId ?? null,
+    title: input.title ?? null,
+    description: input.description ?? null,
+    files: input.files ?? {},
+    directories: input.directories ?? [],
+    framework: input.framework ?? null,
+    starterId: input.starterId ?? null,
+    source: input.source ?? 'web',
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
 export async function listProjectSnapshots(userId: string, limit: number): Promise<ProjectSnapshotRecord[]> {
   await ensureProjectSnapshotsTable();
 

@@ -22,6 +22,7 @@ import {
 } from './task-lifecycle.service';
 import { getHeartbeatTracker } from './heartbeat-tracker.service';
 import { createLogger } from '../logger';
+import type { AuditEvent, TaskEnvelope, TaskEvidenceItem } from '@recoder/shared/a2a';
 
 const logger = createLogger('a2a-event-bridge');
 
@@ -51,6 +52,243 @@ const AUDIT_TO_SSE_EVENT_TYPE: Record<string, string> = {
   'task.cancelled': A2AEventType.TaskCancelled,
 };
 
+const AUDIT_TO_CONTROL_PLANE_EVENT_TYPE: Record<string, string> = {
+  'task.submitted': 'task.submitted',
+  'task.started': 'task.started',
+  'task.input_required': 'task.input-required',
+  'task.completed': 'task.completed',
+  'task.failed': 'task.failed',
+  'task.cancelled': 'task.cancelled',
+};
+
+type ControlPlaneGatewayModule = {
+  appendTaskScopedControlPlaneLifecycleEvent(input: {
+    taskId: string;
+    eventType: string;
+    actorId?: string | null;
+    state?: string | null;
+    detail?: Record<string, unknown>;
+  }): Promise<void>;
+  appendControlPlaneEvidence(input: {
+    workspaceId: string;
+    threadId: string;
+    traceId: string;
+    taskId?: string | null;
+    agentId?: string | null;
+    evidence: Array<{
+      kind: string;
+      label: string;
+      ref?: string | null;
+      metadata?: Record<string, unknown> | null;
+    }>;
+  }): Promise<void>;
+};
+
+let controlPlaneGatewayModulePromise: Promise<ControlPlaneGatewayModule> | null = null;
+
+function getControlPlaneGatewayModule(): Promise<ControlPlaneGatewayModule> {
+  if (!controlPlaneGatewayModulePromise) {
+    controlPlaneGatewayModulePromise = import('../a2a-gateway.js').then((module) => ({
+      appendTaskScopedControlPlaneLifecycleEvent: module.appendTaskScopedControlPlaneLifecycleEvent,
+      appendControlPlaneEvidence: module.appendControlPlaneEvidence,
+    }));
+  }
+  return controlPlaneGatewayModulePromise;
+}
+
+function readEvidenceMetadata(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function deriveMetadataPatchLifecycleEvents(
+  auditEvent: AuditEvent,
+  task: TaskEnvelope,
+): Array<{
+  eventType: string;
+  actorId: string | null;
+  state: string;
+  detail: Record<string, unknown>;
+}> {
+  if (auditEvent.event_type !== 'task.progress') return [];
+
+  const metadata = toRecord(auditEvent.metadata);
+  const metadataPatch = toRecord(metadata?.metadata_patch);
+  if (!metadataPatch) return [];
+
+  const actorId =
+    typeof auditEvent.actor?.id === 'string' && auditEvent.actor.id.trim().length > 0
+      ? auditEvent.actor.id
+      : null;
+  const derived: Array<{
+    eventType: string;
+    actorId: string | null;
+    state: string;
+    detail: Record<string, unknown>;
+  }> = [];
+
+  const approval = toRecord(metadataPatch.approval);
+  if (approval) {
+    derived.push({
+      eventType: 'task.approval.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...approval,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const handoff = toRecord(metadataPatch.handoff);
+  if (handoff) {
+    const handoffStatus =
+      typeof handoff.status === 'string' && handoff.status.trim().length > 0
+        ? handoff.status
+        : null;
+    derived.push({
+      eventType: handoffStatus === 'review-accepted' ? 'review.accepted' : 'task.handoff.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...handoff,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const merge = toRecord(metadataPatch.merge);
+  if (merge) {
+    const mergeStatus =
+      typeof merge.status === 'string' && merge.status.trim().length > 0
+        ? merge.status
+        : null;
+    derived.push({
+      eventType: mergeStatus === 'merge-requested' ? 'merge.requested' : 'task.merge.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...merge,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const routing = toRecord(metadataPatch.routing);
+  if (routing) {
+    derived.push({
+      eventType: 'task.routing.updated',
+      actorId,
+      state: task.state,
+      detail: {
+        ...routing,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const claimedBy = toRecord(metadataPatch.claimedBy);
+  if (claimedBy) {
+    derived.push({
+      eventType: 'task.claimed',
+      actorId,
+      state: task.state,
+      detail: {
+        ...claimedBy,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  const deploymentPreview = toRecord(metadataPatch.deploymentPreview);
+  if (deploymentPreview) {
+    derived.push({
+      eventType: 'deploy.preview.created',
+      actorId,
+      state: task.state,
+      detail: {
+        ...deploymentPreview,
+        reason: metadata?.reason ?? null,
+      },
+    });
+  }
+
+  return derived;
+}
+
+function extractTaskEvidence(task: TaskEnvelope): Array<{
+  kind: string;
+  label: string;
+  ref?: string | null;
+  metadata?: Record<string, unknown> | null;
+}> {
+  const evidence = Array.isArray(task.result?.evidence) ? task.result?.evidence : [];
+  return evidence
+    .map((item: TaskEvidenceItem) => ({
+      kind: typeof item.kind === 'string' ? item.kind : '',
+      label: typeof item.label === 'string' ? item.label : '',
+      ref: typeof item.ref === 'string' && item.ref.trim().length > 0 ? item.ref : null,
+      metadata: readEvidenceMetadata(item.metadata),
+    }))
+    .filter((item) => Boolean(item.kind && item.label));
+}
+
+async function projectAuditEventToControlPlaneHistory(
+  lifecycleService: ReturnType<typeof getTaskLifecycleService>,
+  auditEvent: AuditEvent,
+): Promise<void> {
+  const taskId = auditEvent.task_id;
+  if (!taskId) return;
+
+  const taskResult = lifecycleService.getTask(taskId);
+  if (!taskResult.ok) return;
+
+  const task = taskResult.data;
+  const gateway = await getControlPlaneGatewayModule();
+  const lifecycleEventType = AUDIT_TO_CONTROL_PLANE_EVENT_TYPE[auditEvent.event_type];
+  const actorId =
+    typeof auditEvent.actor?.id === 'string' && auditEvent.actor.id.trim().length > 0
+      ? auditEvent.actor.id
+      : null;
+
+  if (lifecycleEventType) {
+    await gateway.appendTaskScopedControlPlaneLifecycleEvent({
+      taskId: task.id,
+      eventType: lifecycleEventType,
+      actorId,
+      state: task.state,
+      detail: {
+        auditEventType: auditEvent.event_type,
+        ...(toRecord(auditEvent.metadata) ?? {}),
+      },
+    });
+  }
+
+  for (const event of deriveMetadataPatchLifecycleEvents(auditEvent, task)) {
+    await gateway.appendTaskScopedControlPlaneLifecycleEvent({
+      taskId: task.id,
+      eventType: event.eventType,
+      actorId: event.actorId,
+      state: event.state,
+      detail: event.detail,
+    });
+  }
+
+  const evidence = extractTaskEvidence(task);
+  if (evidence.length === 0) return;
+
+  await gateway.appendControlPlaneEvidence({
+    workspaceId: task.workspace_id,
+    threadId: task.thread_id,
+    traceId: task.trace_id,
+    taskId: task.id,
+    agentId: task.assignee.agent_id,
+    evidence,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Bridge setup
 // ---------------------------------------------------------------------------
@@ -58,6 +296,26 @@ const AUDIT_TO_SSE_EVENT_TYPE: Record<string, string> = {
 let _bridgeWired = false;
 let _heartbeatOnlineListener: ((payload: any) => void) | null = null;
 let _heartbeatOfflineListener: ((payload: any) => void) | null = null;
+let controlPlaneProjectionQueue: Promise<void> = Promise.resolve();
+
+function enqueueControlPlaneProjection(
+  lifecycleService: ReturnType<typeof getTaskLifecycleService>,
+  auditEvent: AuditEvent,
+): void {
+  controlPlaneProjectionQueue = controlPlaneProjectionQueue
+    .catch(() => undefined)
+    .then(() => projectAuditEventToControlPlaneHistory(lifecycleService, auditEvent))
+    .catch((error) => {
+      logger.warn(
+        {
+          err: error,
+          taskId: auditEvent.task_id,
+          auditEventType: auditEvent.event_type,
+        },
+        'failed to project task audit event into control-plane history',
+      );
+    });
+}
 
 /**
  * Wire the A2A event bridge.
@@ -118,6 +376,8 @@ export function wireA2AEventBridge(): void {
 
     eventBus.publish(event);
     // NATS mirroring is handled automatically by A2AEventBus.publishToNats()
+
+    enqueueControlPlaneProjection(lifecycleService, auditEvent);
 
     // ── PM integration: completed tasks with intent=feature → create PM feature ──
     if (auditEvent.event_type === 'task.completed' && taskId) {
@@ -218,6 +478,7 @@ export function resetA2AEventBridge(): void {
   _heartbeatOnlineListener = null;
   _heartbeatOfflineListener = null;
   _bridgeWired = false;
+  controlPlaneProjectionQueue = Promise.resolve();
 }
 
 // ---------------------------------------------------------------------------

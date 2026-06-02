@@ -67,6 +67,43 @@ export interface GitDiff {
   deletions: number;
 }
 
+export interface GitPullRequest {
+  number: number;
+  url: string;
+  state: string;
+  title: string;
+  head?: string;
+  base?: string;
+  draft?: boolean;
+  author?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GitPullRequestDetail {
+  pullRequest: GitPullRequest & {
+    body?: string;
+    merged?: boolean;
+    mergeable?: boolean | null;
+    mergeableState?: string | null;
+    additions?: number;
+    deletions?: number;
+    changedFiles?: number;
+  };
+  reviews: Array<{ user?: string; state?: string; submittedAt?: string }>;
+  checks: Array<{ name?: string; status?: string; conclusion?: string | null }>;
+}
+
+export interface CreatePullRequestOptions {
+  title: string;
+  body?: string;
+  head?: string;
+  base?: string;
+  draft?: boolean;
+  token?: string;
+  taskId?: string;
+}
+
 export type GitStateType = 'clean' | 'merging' | 'rebasing' | 'cherry-picking';
 
 export interface GitState {
@@ -95,6 +132,7 @@ export interface UseGitReturn {
   isGitRepo: boolean | null;
   error: string | null;
   gitState: GitState | null;
+  pullRequests: GitPullRequest[];
 
   // Operations
   refreshStatus: () => Promise<void>;
@@ -129,6 +167,9 @@ export interface UseGitReturn {
   fetchRemote: (remote?: string, token?: string) => Promise<boolean>;
   getRemotes: () => Promise<{ name: string; url: string; type: string }[]>;
   setRemote: (name: string, url: string) => Promise<boolean>;
+  listPullRequests: (options?: { state?: 'open' | 'closed' | 'all'; token?: string }) => Promise<GitPullRequest[]>;
+  createPullRequest: (options: CreatePullRequestOptions) => Promise<GitPullRequest | null>;
+  getPullRequest: (number: number, token?: string) => Promise<GitPullRequestDetail | null>;
 
   // Enhanced operations
   merge: (branch: string, options?: { noFf?: boolean; squash?: boolean }) => Promise<{ success: boolean; conflicts?: string[] }>;
@@ -159,6 +200,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
   const [suspended, setSuspended] = useState(false);
   const [gitState, setGitState] = useState<GitState | null>(null);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
+  const [pullRequests, setPullRequests] = useState<GitPullRequest[]>([]);
   const historyPageSizeRef = useRef(50);
   const consecutiveFailuresRef = useRef(0);
 
@@ -582,6 +624,78 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
     }
   }, [projectId]);
 
+  const listPullRequests = useCallback(async (options?: {
+    state?: 'open' | 'closed' | 'all';
+    token?: string;
+  }): Promise<GitPullRequest[]> => {
+    if (!projectId) return [];
+
+    try {
+      const params = new URLSearchParams();
+      params.set('state', options?.state || 'open');
+      if (options?.token) params.set('token', options.token);
+      const data = await dockerGet<{ pullRequests: GitPullRequest[] }>(
+        `/api/git/${projectId}/pull-requests?${params.toString()}`,
+      );
+      const prs = data?.pullRequests || [];
+      setPullRequests(prs);
+      return prs;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load pull requests');
+      return [];
+    }
+  }, [projectId]);
+
+  const createPullRequest = useCallback(async (options: CreatePullRequestOptions): Promise<GitPullRequest | null> => {
+    if (!projectId) return null;
+
+    const title = options.title.trim();
+    if (!title) {
+      toast.error('Pull request title required');
+      return null;
+    }
+
+    setIsLoading(true);
+    try {
+      const data = await dockerPost<{
+        pullRequest: GitPullRequest;
+        taskAttachment?: { attached: boolean; taskId?: string; error?: string };
+      }>(`/api/git/${projectId}/pull-request`, {
+        ...options,
+        title,
+      });
+      if (data?.taskAttachment?.error) {
+        toast.warning(`Pull request opened, but task attachment failed: ${data.taskAttachment.error}`);
+      } else if (data?.taskAttachment?.attached) {
+        toast.success('Pull request opened and attached to task');
+      } else {
+        toast.success('Pull request opened');
+      }
+      await listPullRequests({ token: options.token });
+      return data?.pullRequest || null;
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to open pull request');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [projectId, listPullRequests]);
+
+  const getPullRequest = useCallback(async (number: number, token?: string): Promise<GitPullRequestDetail | null> => {
+    if (!projectId) return null;
+
+    try {
+      const params = new URLSearchParams();
+      if (token) params.set('token', token);
+      return await dockerGet<GitPullRequestDetail>(
+        `/api/git/${projectId}/pull-request/${number}?${params.toString()}`,
+      );
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to load pull request');
+      return null;
+    }
+  }, [projectId]);
+
   // Enhanced operations
 
   // Merge branch into current
@@ -792,6 +906,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       isGitRepo,
       error,
       gitState,
+      pullRequests,
 
       // Operations
       refreshStatus,
@@ -826,6 +941,9 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       fetchRemote,
       getRemotes,
       setRemote,
+      listPullRequests,
+      createPullRequest,
+      getPullRequest,
 
       // Enhanced operations
       merge,
@@ -845,6 +963,7 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       isGitRepo,
       error,
       gitState,
+      pullRequests,
       refreshStatus,
       getStatus,
       getCurrentBranch,
@@ -869,6 +988,9 @@ export function useGit(options: UseGitOptions = {}): UseGitReturn {
       fetchRemote,
       getRemotes,
       setRemote,
+      listPullRequests,
+      createPullRequest,
+      getPullRequest,
       merge,
       rebase,
       rebaseAbort,
