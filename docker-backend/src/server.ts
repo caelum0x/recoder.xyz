@@ -16261,31 +16261,49 @@ app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async
   if (!result.ok) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.reason ?? 'dispatch failed'));
 
   // Optional real execution: if a project's coding-runtime session is already
-  // ready, run the task on it (fire-and-forget, best-effort). Never starts a
-  // sandbox — only uses an existing ready session, so there's no lifecycle risk.
-  let executed = false;
-  if (execute === true && typeof projectId === 'string' && projectId) {
-    try {
-      const { getRuntime } = await import('./a2a/coding-runtime.js');
-      const selection = codingRuntimeSelectionByProject.get(projectId);
-      const runtimeType = selection?.runtimeType ?? 'opencode';
-      const runtime = getRuntime(runtimeType as never);
-      const state = runtime?.getState(projectId);
-      if (runtime && state && state.status === 'ready') {
-        executed = true;
+  // run the task on it. Session-on-demand: if no ready session exists, start one
+  // on the project's EXISTING container (reuses the proven session-start path).
+  // Fire-and-forget + best-effort; never creates a sandbox from nothing.
+  const executed = execute === true && typeof projectId === 'string' && !!projectId;
+  if (executed) {
+    void (async () => {
+      try {
+        const { getRuntime } = await import('./a2a/coding-runtime.js');
+        const selection = codingRuntimeSelectionByProject.get(projectId);
+        const runtimeType = selection?.runtimeType ?? 'opencode';
+        const runtime = getRuntime(runtimeType as never);
+        if (!runtime) return;
         const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
-        void runtime
-          .sendPrompt({
+
+        let state = runtime.getState(projectId);
+        if (!state || state.status !== 'ready') {
+          const entry = await getOrRecoverContainer(projectId);
+          if (!entry) {
+            logger.info({ projectId, runtimeType }, 'squad dispatch execution skipped — no sandbox/container for project');
+            return;
+          }
+          const resolvedSandboxId = isDaytonaSandbox(entry) ? entry.id : entry.id;
+          await runtime.startSession({
+            projectId,
+            sandboxId: resolvedSandboxId,
+            sandboxExecUrl: `${daytonaUrl}/api/toolbox/${resolvedSandboxId}/toolbox/process/execute`,
+            daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+          });
+          state = runtime.getState(projectId);
+        }
+
+        if (state && state.status === 'ready') {
+          await runtime.sendPrompt({
             projectId,
             prompt: task.trim(),
             sandboxExecUrl: `${daytonaUrl}/api/toolbox/${state.sandboxId}/toolbox/process/execute`,
             daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
-          })
-          .catch((err) => logger.warn({ err, projectId }, 'squad dispatch coding-runtime execution failed'));
+          });
+        }
+      } catch (err) {
+        logger.warn({ err, projectId }, 'squad dispatch on-demand coding-runtime execution failed');
       }
-    } catch (err) {
-      logger.warn({ err, projectId }, 'squad dispatch execution hook failed');
-    }
+    })();
   }
 
   sendSuccess(res, { ...result.squadTask, deliveredTo: result.deliveredTo ?? [], executed });

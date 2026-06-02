@@ -18,7 +18,7 @@ Source of truth order: plan.md (execution) → remaining.md (paid-user gate) →
 
 ## Agent platform — next
 
-- Squad dispatch → coding-runtime execution: SAFE path shipped (opt-in `execute`+`projectId`, runs on an already-ready session, fire-and-forget). Still TODO — start a session/sandbox on demand when none is ready (needs sandbox lifecycle + agent↔project mapping).
+- Squad dispatch → coding-runtime execution: shipped incl. **session-on-demand** (opt-in `execute`+`projectId`; starts a session on the project's existing container when none is ready via getOrRecoverContainer+startSession, then runs; fire-and-forget). Still TODO — create a sandbox/container from nothing when the project has none (heavier container-creation flow), and a richer agent↔project mapping.
 - Workflow StepMode: `parallel` + `conditional` (then/else sub-step branches) steps shipped. Still TODO — a squad-step node in the visual workflow designer (internal-packages/workflow-designer-ui).
 - Surface presence on the main agents list; per-agent drill-down beyond skills (run history).
 
