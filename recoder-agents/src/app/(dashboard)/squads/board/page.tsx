@@ -3,17 +3,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, LayoutGrid, AlertTriangle, Play, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, LayoutGrid, AlertTriangle, Play, CheckCircle2, XCircle, Loader2, Plus, Send } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
   useAllSquadTasks,
   useTransitionBoardAssignment,
+  useDispatchAnySquad,
   useCollabStream,
+  useSquads,
   type BoardTask,
   type AssignmentStatus,
+  type DispatchStrategy,
 } from '@/hooks/use-squads';
 
 const ASSIGN_STATUS_STYLE: Record<AssignmentStatus, string> = {
@@ -65,6 +71,8 @@ export default function SquadTaskBoardPage() {
   }, [tasks]);
 
   const filteredTasks = squadFilter === 'all' ? (tasks ?? []) : (tasks ?? []).filter((t) => t.squadId === squadFilter);
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+
   const byColumn = (col: Column) => filteredTasks.filter((t) => col.statuses.includes(t.status));
 
   return (
@@ -96,10 +104,15 @@ export default function SquadTaskBoardPage() {
               <span className={cn('h-2 w-2 rounded-full', connected ? 'animate-pulse bg-emerald-500' : 'bg-zinc-400')} />
               {connected ? 'Live' : 'Polling'}
             </span>
+            <Button size="sm" onClick={() => setDispatchOpen(true)}>
+              <Plus className="mr-1.5 h-4 w-4" /> New task
+            </Button>
             <Button variant="outline" size="sm" asChild><Link href="/squads">Manage squads</Link></Button>
           </div>
         </div>
       </div>
+
+      <DispatchDialog open={dispatchOpen} onOpenChange={setDispatchOpen} />
 
       {isError ? (
         <Card>
@@ -196,5 +209,76 @@ export default function SquadTaskBoardPage() {
         </p>
       )}
     </div>
+  );
+}
+
+const STRATEGIES: DispatchStrategy[] = ['all', 'leader', 'round-robin', 'best-match'];
+
+function DispatchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { data: squads } = useSquads();
+  const dispatch = useDispatchAnySquad();
+  const [squadId, setSquadId] = useState('');
+  const [task, setTask] = useState('');
+  const [strategy, setStrategy] = useState<DispatchStrategy>('all');
+
+  const handleDispatch = async () => {
+    if (!squadId || !task.trim()) return;
+    try {
+      await dispatch.mutateAsync({ squadId, task: task.trim(), strategy });
+      toast.success('Dispatched to squad');
+      setTask('');
+      onOpenChange(false);
+    } catch {
+      toast.error('Dispatch failed (backend unreachable?)');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Dispatch a task</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Squad</label>
+            <select
+              value={squadId}
+              onChange={(e) => setSquadId(e.target.value)}
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+            >
+              <option value="">Select a squad…</option>
+              {(squads ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name} ({s.members.length})</option>
+              ))}
+            </select>
+            {(!squads || squads.length === 0) && (
+              <span className="text-xs text-muted-foreground">No squads yet — create one on the Squads page.</span>
+            )}
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Task</label>
+            <Textarea value={task} onChange={(e) => setTask(e.target.value)} rows={3} placeholder="What should the squad do?" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Strategy</label>
+            <select
+              value={strategy}
+              onChange={(e) => setStrategy(e.target.value as DispatchStrategy)}
+              className="h-9 w-44 rounded-md border bg-background px-2 text-sm"
+            >
+              {STRATEGIES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleDispatch} disabled={dispatch.isPending || !squadId || !task.trim()}>
+            {dispatch.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
+            Dispatch
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
