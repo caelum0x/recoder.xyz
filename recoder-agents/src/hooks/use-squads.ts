@@ -205,6 +205,18 @@ export function useAllSquadTasks() {
   });
 }
 
+/** Dispatch to any squad by id (used by the board's dispatch dialog). */
+export function useDispatchAnySquad() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ squadId, ...body }: { squadId: string; task: string; strategy?: DispatchStrategy; projectId?: string; execute?: boolean }) =>
+      dx<SquadTask>(`/a2a/squads/${squadId}/dispatch`, { method: 'POST', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['squad-tasks'] });
+    },
+  });
+}
+
 /** Transition an assignment from the board, invalidating both the board and the squad's own list. */
 export function useTransitionBoardAssignment() {
   const qc = useQueryClient();
