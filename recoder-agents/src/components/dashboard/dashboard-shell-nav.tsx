@@ -6,8 +6,17 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', match: (pathname: string) => !pathname.startsWith('/agents') },
+  {
+    href: '/dashboard',
+    label: 'Dashboard',
+    match: (pathname: string) =>
+      !pathname.startsWith('/agents') &&
+      !pathname.startsWith('/workflows') &&
+      !pathname.startsWith('/capabilities'),
+  },
   { href: '/agents', label: 'Agents', match: (pathname: string) => pathname.startsWith('/agents') },
+  { href: '/workflows', label: 'Workflows', match: (pathname: string) => pathname.startsWith('/workflows') },
+  { href: '/capabilities', label: 'Capabilities', match: (pathname: string) => pathname.startsWith('/capabilities') },
 ];
 
 export function DashboardShellNav() {

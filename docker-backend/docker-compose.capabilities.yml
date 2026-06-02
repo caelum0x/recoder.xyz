@@ -1,0 +1,106 @@
+# Self-hosted, keyless capability layer for Recoder's agent capabilities.
+#
+# These are the open-source backends that let the capability layer run WITHOUT
+# any SaaS keys:
+#   - Qdrant   -> mem0 OSS vector store (agent memory)
+#   - Ollama   -> local LLM + embeddings (mem0 OSS, unified LLM router)
+#   - vLLM     -> optional GPU inference, OpenAI-compatible (LLM router)
+#   - OpenZiti -> optional zero-trust controller (runner identities)
+#
+# Bring up the core two:   docker compose -f docker-compose.capabilities.yml up -d qdrant ollama
+# Add optional services:   docker compose -f docker-compose.capabilities.yml --profile inference --profile ziti up -d
+# Then set the matching vars from .env.capabilities.example on the backend.
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: recoder-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - recoder-capabilities
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: recoder-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - recoder-capabilities
+    # GPU is optional; uncomment if available:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Optional: self-hosted GPU inference, OpenAI-compatible API for the LLM router.
+  # Enable with: --profile inference  (set VLLM_BASE_URL=http://vllm:8000/v1)
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: recoder-vllm
+    profiles: ["inference"]
+    restart: unless-stopped
+    command: ["--model", "${VLLM_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - vllm-cache:/root/.cache/huggingface
+    networks:
+      - recoder-capabilities
+    # Requires NVIDIA runtime:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Optional: OpenZiti zero-trust controller (auto-generates PKI + admin creds;
+  # see container logs for the admin password). Enable with: --profile ziti
+  ziti-controller:
+    image: openziti/ziti-controller:latest
+    container_name: recoder-ziti-controller
+    profiles: ["ziti"]
+    restart: unless-stopped
+    environment:
+      # Advertised address MUST match the host:port the backend dials
+      # (ZITI_CONTROLLER_URL), or TLS hostname verification fails. Default to
+      # localhost since 1280 is published to the host below.
+      ZITI_CTRL_ADVERTISED_ADDRESS: ${ZITI_ADVERTISED_ADDRESS:-localhost}
+      ZITI_CTRL_ADVERTISED_PORT: "1280"
+      ZITI_USER: ${ZITI_ADMIN_USERNAME:-admin}
+      # Non-empty default: an empty password blocks first-boot bootstrap.
+      ZITI_PWD: ${ZITI_ADMIN_PASSWORD:-recoder_ziti_admin}
+    ports:
+      - "1280:1280"
+    volumes:
+      - ziti-data:/persistent
+    networks:
+      - recoder-capabilities
+    healthcheck:
+      test: ["CMD", "curl", "-skf", "https://localhost:1280/edge/management/v1/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  qdrant-data:
+  ollama-data:
+  vllm-cache:
+  ziti-data:
+
+networks:
+  recoder-capabilities:
+    name: recoder-capabilities

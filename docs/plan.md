@@ -26,6 +26,21 @@ The current implementation has moved the app away from session/token-era commerc
 - Preview deploy artifacts and private preview access attach to the control-plane model as run/task evidence.
 - `recoder-edge` exists as an in-repo scaffold for preview routing, private preview access, and public-route security policy.
 
+## 2026-06-02 — Agent Capability Layer (vendored OSS integrations)
+
+Recoder now runs best-in-class open-source agent tools as first-class product capabilities. Every integration is additive and fail-safe (truthful health, never fake success) and is unified under `GET /api/capabilities`.
+
+- Coding backends: Qwen Code (`qwen-code`) and Gemini CLI (`gemini-cli`) added as sandbox-local runtime adapters alongside OpenCode/Codex/Claude Code/OMO. `docker-backend/src/a2a/cli-agent-runtime.service.ts`; registered in `coding-runtime.ts`; reachable via `/api/coding-runtime/session|prompt`; auto-routed (test → Qwen, doc → Gemini) in `category-router.ts`; branded via `getRuntimeCatalog()`.
+- Secure runner: E2B (`e2b`) ephemeral code/command sandboxes — `e2b-client.ts`, routes `/api/e2b/*`. Complements Daytona (durable workspaces) with throwaway secure execution.
+- Browser verification: Puppeteer deterministic checks + optional Stagehand AI checks — `browser-verify.ts`, routes `/api/browser/verify*`. Agents verify their own work against a live preview.
+- Agent memory: mem0 (`mem0ai`) LLM-managed memory layered over the existing Qdrant store — `mem0-client.ts`, routes `/api/memory/mem0/*`.
+- Library docs: Context7 up-to-date docs injection — `context7-client.ts`, routes `/api/context7/*`.
+- Workflows UI: workspace-level surface in recoder-agents (`/workflows`, `/workflows/[id]`, `/workflows/approvals`).
+
+Vendored OSS sources (shallow clone, `.git` stripped, gitignored) for direct reuse: qwen-code, gemini-cli, a2a-js, A2A, open-agents, agent-browser, stagehand, E2B, ziti, beads, mem0, context7, vllm, ollama, polar. Recoder-variant references for mining: pal-mcp-server, pi, openfang, GitNexus, ClawWork, multica.
+
+Next execution step: mine GitNexus (client-side code knowledge graph) to add code intelligence — drop a repo, get a queryable symbol/dependency graph for agents to navigate.
+
 ## Current Paid-User Launch Gate
 
 The remaining near-term goal is not more roadmap breadth. It is a complete paid-user loop:
