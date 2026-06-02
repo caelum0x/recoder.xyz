@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, LayoutGrid, AlertTriangle, Play, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
@@ -56,7 +56,16 @@ export default function SquadTaskBoardPage() {
     }
   }, [events, qc]);
 
-  const byColumn = (col: Column) => (tasks ?? []).filter((t) => col.statuses.includes(t.status));
+  // Squad filter — options derived from the loaded tasks (no extra fetch).
+  const [squadFilter, setSquadFilter] = useState('all');
+  const squadOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const t of tasks ?? []) if (!seen.has(t.squadId)) seen.set(t.squadId, t.squadName);
+    return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks]);
+
+  const filteredTasks = squadFilter === 'all' ? (tasks ?? []) : (tasks ?? []).filter((t) => t.squadId === squadFilter);
+  const byColumn = (col: Column) => filteredTasks.filter((t) => col.statuses.includes(t.status));
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6">
@@ -72,6 +81,17 @@ export default function SquadTaskBoardPage() {
             <p className="text-sm text-muted-foreground">Every dispatched task across your squads, grouped by status.</p>
           </div>
           <div className="flex items-center gap-3">
+            {squadOptions.length > 1 && (
+              <select
+                value={squadFilter}
+                onChange={(e) => setSquadFilter(e.target.value)}
+                className="h-8 rounded-md border bg-background px-2 text-xs"
+                aria-label="Filter by squad"
+              >
+                <option value="all">All squads</option>
+                {squadOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
             <span className={cn('flex items-center gap-1.5 text-[11px] font-medium', connected ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
               <span className={cn('h-2 w-2 rounded-full', connected ? 'animate-pulse bg-emerald-500' : 'bg-zinc-400')} />
               {connected ? 'Live' : 'Polling'}
