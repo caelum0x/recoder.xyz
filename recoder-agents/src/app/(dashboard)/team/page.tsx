@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Network, Bot, Users, Activity, AlertTriangle, TrendingUp, ChevronDown, Trophy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
@@ -29,8 +30,16 @@ export default function TeamPage() {
   const { data: feed } = useCollabFeed(40);
   const { events: live, connected } = useCollabStream(60);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [rosterQuery, setRosterQuery] = useState('');
 
   const entries = connected && live.length > 0 ? live : (feed ?? []).map((e) => ({ ...e, type: e.action }));
+
+  const rq = rosterQuery.trim().toLowerCase();
+  const visibleRoster = rq
+    ? (roster ?? []).filter((r) =>
+        r.agentId.toLowerCase().includes(rq) ||
+        r.squads.some((s) => s.squadName.toLowerCase().includes(rq)))
+    : (roster ?? []);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6">
@@ -70,8 +79,20 @@ export default function TeamPage() {
                 No agents on squads yet. <Link href="/squads" className="underline-offset-2 hover:underline">Create a squad →</Link>
               </div>
             ) : (
+              <>
+              {roster.length > 5 && (
+                <Input
+                  value={rosterQuery}
+                  onChange={(e) => setRosterQuery(e.target.value)}
+                  placeholder="Filter agents…"
+                  className="mb-2 h-8"
+                />
+              )}
+              {visibleRoster.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No agents match “{rosterQuery}”.</p>
+              ) : (
               <ul className="flex flex-col divide-y">
-                {roster.map((r) => (
+                {visibleRoster.map((r) => (
                   <li key={r.agentId}>
                     <button
                       type="button"
@@ -97,6 +118,8 @@ export default function TeamPage() {
                   </li>
                 ))}
               </ul>
+              )}
+              </>
             )}
           </CardContent>
         </Card>
