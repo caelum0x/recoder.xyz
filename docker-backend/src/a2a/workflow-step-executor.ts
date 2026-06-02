@@ -128,7 +128,7 @@ function getDaytonaKey(): string {
 // ---------------------------------------------------------------------------
 
 interface WorkflowStep {
-  type: 'llm' | 'http' | 'code' | 'branch' | 'trigger';
+  type: 'llm' | 'http' | 'code' | 'branch' | 'trigger' | 'squad' | 'parallel' | 'conditional';
   name: string;
   config: Record<string, unknown>;
 }
@@ -358,38 +358,65 @@ async function executeCodeStep(
   return { stdout, stderr, exitCode };
 }
 
-function executeBranchStep(
-  config: Record<string, unknown>,
-  context: Record<string, unknown>,
-): unknown {
-  const condition = String(config.condition ?? '');
-  if (!condition) throw new Error('branch step requires config.condition');
-
-  // Safe evaluation: only simple comparisons and context lookups
-  // Resolve the condition against context values
-  let result = false;
+/** Safely evaluate a boolean condition against context in a sandboxed VM. */
+function evaluateCondition(condition: string, context: Record<string, unknown>): boolean {
+  if (!condition) return false;
   try {
     const vm = require('vm');
     const sandbox = Object.freeze({
       context: Object.freeze({ ...context }),
       input: Object.freeze(context._lastOutput ?? ''),
     });
-    result = !!vm.runInNewContext(`!!(${condition})`, sandbox, {
-      timeout: 100,
-      displayErrors: false,
-    });
+    return !!vm.runInNewContext(`!!(${condition})`, sandbox, { timeout: 100, displayErrors: false });
   } catch (err) {
     logger.warn(
       { condition, error: err instanceof Error ? err.message : String(err) },
-      'Branch condition evaluation failed',
+      'Condition evaluation failed',
     );
-    result = false;
+    return false;
   }
+}
 
+function executeBranchStep(
+  config: Record<string, unknown>,
+  context: Record<string, unknown>,
+): unknown {
+  const condition = String(config.condition ?? '');
+  if (!condition) throw new Error('branch step requires config.condition');
+  const result = evaluateCondition(condition, context);
   return {
     condition,
     result,
     branch: result ? (config.thenLabel ?? 'then') : (config.elseLabel ?? 'else'),
+  };
+}
+
+/**
+ * Conditional step (openfang StepMode): evaluate `config.condition`, then run
+ * `config.then[]` (true) or `config.else[]` (false) sub-steps sequentially.
+ */
+async function executeConditionalStep(
+  config: Record<string, unknown>,
+  ctx: Record<string, unknown>,
+): Promise<unknown> {
+  const condition = String(config.condition ?? '');
+  if (!condition) throw new Error('conditional step requires config.condition');
+  const passed = evaluateCondition(condition, ctx);
+  const branch = passed ? config.then : config.else;
+  const subSteps = Array.isArray(branch) ? (branch as WorkflowStep[]) : [];
+
+  const results: Array<Record<string, unknown>> = [];
+  for (const s of subSteps) {
+    try {
+      results.push({ name: s.name, type: s.type, output: await dispatchStep(s, ctx) });
+    } catch (err) {
+      results.push({ name: s.name, type: s.type, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return {
+    content: `condition ${passed ? 'true → then' : 'false → else'} (${subSteps.length} step(s))`,
+    passed,
+    results,
   };
 }
 
@@ -438,6 +465,74 @@ async function executeTriggerStep(
  * Each step's output is merged into the shared context as `_lastOutput`.
  * Returns the full execution result.
  */
+/**
+ * Squad step: dispatch the (variable-resolved) task to a squad, fanning out to
+ * its agent members by strategy. Connects workflows to the collaboration layer.
+ */
+async function executeSquadStep(
+  config: Record<string, unknown>,
+  context: Record<string, unknown>,
+): Promise<unknown> {
+  const squadId = String(config.squadId ?? '');
+  const rawTask = String(config.task ?? '');
+  const strategy = ['all', 'leader', 'round-robin', 'best-match'].includes(String(config.strategy))
+    ? (config.strategy as 'all' | 'leader' | 'round-robin' | 'best-match')
+    : 'all';
+  if (!squadId) throw new Error('squad step requires config.squadId');
+  if (!rawTask) throw new Error('squad step requires config.task');
+
+  const task = rawTask.replace(/\{\{(\w+)\}\}/g, (_, key) => (context[key] != null ? String(context[key]) : `{{${key}}}`));
+  const createdBy = typeof context._userId === 'string' ? context._userId : 'workflow';
+
+  const { dispatchToSquad } = await import('./squad-dispatch.service.js');
+  const result = await dispatchToSquad({ squadId, task, strategy, createdBy });
+  if (!result.ok) throw new Error(result.reason ?? 'squad dispatch failed');
+
+  return {
+    content: `Dispatched to squad ${squadId} via ${strategy} (${result.deliveredTo?.length ?? 0} delivered)`,
+    squadTaskId: result.squadTask?.id,
+    deliveredTo: result.deliveredTo ?? [],
+  };
+}
+
+/** Dispatch a single step to its executor (shared by sequential + parallel). */
+async function dispatchStep(step: WorkflowStep, ctx: Record<string, unknown>): Promise<unknown> {
+  switch (step.type) {
+    case 'llm': return executeLlmStep(step.config, ctx);
+    case 'http': return executeHttpStep(step.config, ctx);
+    case 'code': return executeCodeStep(step.config, ctx);
+    case 'branch': return executeBranchStep(step.config, ctx);
+    case 'trigger': return executeTriggerStep(step.config, ctx);
+    case 'squad': return executeSquadStep(step.config, ctx);
+    case 'parallel': return executeParallelStep(step.config, ctx);
+    case 'conditional': return executeConditionalStep(step.config, ctx);
+    default: throw new Error(`Unknown step type: ${step.type}`);
+  }
+}
+
+/**
+ * Parallel step (openfang StepMode): run `config.steps[]` concurrently against
+ * the same context. Sub-step failures are isolated (Promise.allSettled) and
+ * reported per-step; the overall step succeeds with a results array.
+ */
+async function executeParallelStep(
+  config: Record<string, unknown>,
+  ctx: Record<string, unknown>,
+): Promise<unknown> {
+  const subSteps = Array.isArray(config.steps) ? (config.steps as WorkflowStep[]) : [];
+  if (subSteps.length === 0) throw new Error('parallel step requires a non-empty config.steps[]');
+
+  const settled = await Promise.allSettled(subSteps.map((s) => dispatchStep(s, ctx)));
+  const results = settled.map((r, i) => ({
+    name: subSteps[i]?.name ?? `parallel-${i}`,
+    type: subSteps[i]?.type,
+    ...(r.status === 'fulfilled'
+      ? { output: r.value }
+      : { error: r.reason instanceof Error ? r.reason.message : String(r.reason) }),
+  }));
+  return { content: `Ran ${subSteps.length} step(s) in parallel`, results };
+}
+
 export async function executeWorkflowSteps(
   steps: WorkflowStep[],
   context: Record<string, unknown> = {},
@@ -449,27 +544,7 @@ export async function executeWorkflowSteps(
   for (const step of steps) {
     const start = Date.now();
     try {
-      let output: unknown;
-
-      switch (step.type) {
-        case 'llm':
-          output = await executeLlmStep(step.config, ctx);
-          break;
-        case 'http':
-          output = await executeHttpStep(step.config, ctx);
-          break;
-        case 'code':
-          output = await executeCodeStep(step.config, ctx);
-          break;
-        case 'branch':
-          output = executeBranchStep(step.config, ctx);
-          break;
-        case 'trigger':
-          output = await executeTriggerStep(step.config, ctx);
-          break;
-        default:
-          throw new Error(`Unknown step type: ${step.type}`);
-      }
+      const output: unknown = await dispatchStep(step, ctx);
 
       const durationMs = Date.now() - start;
 

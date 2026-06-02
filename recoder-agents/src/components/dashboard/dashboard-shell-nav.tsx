@@ -12,10 +12,14 @@ const NAV_ITEMS = [
     match: (pathname: string) =>
       !pathname.startsWith('/agents') &&
       !pathname.startsWith('/workflows') &&
+      !pathname.startsWith('/squads') &&
+      !pathname.startsWith('/team') &&
       !pathname.startsWith('/capabilities'),
   },
   { href: '/agents', label: 'Agents', match: (pathname: string) => pathname.startsWith('/agents') },
   { href: '/workflows', label: 'Workflows', match: (pathname: string) => pathname.startsWith('/workflows') },
+  { href: '/squads', label: 'Squads', match: (pathname: string) => pathname.startsWith('/squads') },
+  { href: '/team', label: 'Team', match: (pathname: string) => pathname.startsWith('/team') },
   { href: '/capabilities', label: 'Capabilities', match: (pathname: string) => pathname.startsWith('/capabilities') },
 ];
 
