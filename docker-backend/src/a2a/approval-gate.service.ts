@@ -13,6 +13,7 @@ import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
 import { createLogger } from '../logger';
 import { loadA2AApprovals, saveA2AApprovals } from './a2a-persistence';
 import type { ApprovalRequest, ApprovalStatus } from '@recoder/shared/a2a';
+import { appendTaskScopedControlPlaneLifecycleEvent } from '../a2a-gateway';
 
 const logger = createLogger('a2a-approval-gate');
 
@@ -30,6 +31,18 @@ export interface CreateApprovalInput {
 }
 
 type ApprovalCallback = (approval: ApprovalRequest) => void;
+
+function extractApprovalTaskId(request: { details: Record<string, unknown> }): string | null {
+  const sourceTaskId =
+    typeof request.details.sourceTaskId === 'string'
+      ? request.details.sourceTaskId
+      : typeof request.details.taskId === 'string'
+        ? request.details.taskId
+        : typeof request.details.task_id === 'string'
+          ? request.details.task_id
+          : null;
+  return sourceTaskId && sourceTaskId.trim().length > 0 ? sourceTaskId : null;
+}
 
 // ---------------------------------------------------------------------------
 // Service
@@ -84,6 +97,29 @@ export class ApprovalGateService {
     this.requests.set(approvalId, request);
     this.persist();
 
+    getA2AEventBus().publish({
+      id: `evt_${uuid().replace(/-/g, '').slice(0, 16)}`,
+      type: A2AEventType.ApprovalRequested,
+      timestamp: now,
+      data: { approval: request },
+      workspaceId: request.workspaceId,
+      taskId: extractApprovalTaskId(request) || undefined,
+    });
+    const requestTaskId = extractApprovalTaskId(request);
+    if (requestTaskId) {
+      void appendTaskScopedControlPlaneLifecycleEvent({
+        taskId: requestTaskId,
+        eventType: 'approval.requested',
+        actorId: request.requestingAgentId,
+        state: 'input-required',
+        detail: {
+          approvalId: request.approvalId,
+          action: request.action,
+          targetAgentId: request.targetAgentId,
+        },
+      });
+    }
+
     // Set timeout
     const timer = setTimeout(() => {
       this.expire(approvalId);
@@ -112,6 +148,19 @@ export class ApprovalGateService {
       data: { approval: request },
       workspaceId: request.workspaceId,
     });
+    const grantedTaskId = extractApprovalTaskId(request);
+    if (grantedTaskId) {
+      void appendTaskScopedControlPlaneLifecycleEvent({
+        taskId: grantedTaskId,
+        eventType: 'approval.granted',
+        actorId: resolvedBy,
+        state: 'working',
+        detail: {
+          approvalId: request.approvalId,
+          action: request.action,
+        },
+      });
+    }
 
     // Fire callbacks
     this.fireCallbacks(approvalId, request);
@@ -138,6 +187,21 @@ export class ApprovalGateService {
       data: { approval: request },
       workspaceId: request.workspaceId,
     });
+    const rejectedTaskId = extractApprovalTaskId(request);
+    if (rejectedTaskId) {
+      void appendTaskScopedControlPlaneLifecycleEvent({
+        taskId: rejectedTaskId,
+        eventType: 'approval.rejected',
+        actorId: resolvedBy,
+        state: 'failed',
+        detail: {
+          approvalId: request.approvalId,
+          action: request.action,
+        },
+      });
+    }
+
+    this.fireCallbacks(approvalId, request);
 
     logger.info({ approvalId, resolvedBy }, 'approval rejected');
     return request;
@@ -176,6 +240,20 @@ export class ApprovalGateService {
       data: { approval: request, reason: reason ?? '' },
       workspaceId: request.workspaceId,
     });
+    const escalatedTaskId = extractApprovalTaskId(request);
+    if (escalatedTaskId) {
+      void appendTaskScopedControlPlaneLifecycleEvent({
+        taskId: escalatedTaskId,
+        eventType: 'approval.escalated',
+        actorId: request.requestingAgentId,
+        state: 'input-required',
+        detail: {
+          approvalId: request.approvalId,
+          action: request.action,
+          reason: reason ?? '',
+        },
+      });
+    }
 
     logger.info({ approvalId, reason, extendedTimeoutMs }, 'approval escalated');
     return request;
@@ -189,6 +267,15 @@ export class ApprovalGateService {
     return [...this.requests.values()].filter(
       (r) => r.workspaceId === workspaceId && (r.status === 'pending' || r.status === 'escalated'),
     );
+  }
+
+  listByWorkspace(workspaceId: string, statuses?: ApprovalStatus[]): ApprovalRequest[] {
+    const statusSet = statuses && statuses.length > 0 ? new Set(statuses) : null;
+    return [...this.requests.values()].filter((request) => {
+      if (request.workspaceId !== workspaceId) return false;
+      if (!statusSet) return true;
+      return statusSet.has(request.status);
+    });
   }
 
   /**
@@ -207,6 +294,20 @@ export class ApprovalGateService {
     request.status = 'expired';
     request.resolvedAt = new Date().toISOString();
     this.persist();
+    this.fireCallbacks(approvalId, request);
+    const expiredTaskId = extractApprovalTaskId(request);
+    if (expiredTaskId) {
+      void appendTaskScopedControlPlaneLifecycleEvent({
+        taskId: expiredTaskId,
+        eventType: 'approval.expired',
+        actorId: request.requestingAgentId,
+        state: 'failed',
+        detail: {
+          approvalId: request.approvalId,
+          action: request.action,
+        },
+      });
+    }
 
     logger.info({ approvalId }, 'approval expired');
   }
@@ -237,6 +338,14 @@ export class ApprovalGateService {
       this.callbacks.delete(approvalId);
     }
   }
+
+  dispose(): void {
+    for (const timer of this.timeouts.values()) {
+      clearTimeout(timer);
+    }
+    this.timeouts.clear();
+    this.callbacks.clear();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -253,5 +362,6 @@ export function getApprovalGateService(): ApprovalGateService {
 }
 
 export function resetApprovalGateService(): void {
+  _instance?.dispose();
   _instance = null;
 }

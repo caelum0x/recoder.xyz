@@ -2,36 +2,28 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const { mockUseSession, mockGetServiceUrlClient } = vi.hoisted(() => ({
+const { mockUseSession } = vi.hoisted(() => ({
   mockUseSession: vi.fn(),
-  mockGetServiceUrlClient: vi.fn(() => 'https://agents.recoder.xyz'),
 }));
 
 vi.mock('@/lib/session-provider', () => ({
   useSession: mockUseSession,
 }));
 
-vi.mock('@/lib/config/platforms', () => ({
-  getServiceUrlClient: mockGetServiceUrlClient,
-}));
-
-vi.mock('@/app/components/LaunchWebIDEButton', () => ({
-  LaunchWebIDEButton: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <button className={className}>{children}</button>
-  ),
-}));
-
 import { SiteHeader } from '@/components/SiteHeader';
 
 describe('SiteHeader', () => {
-  it('shows only Agents and Dashboard nav tabs', () => {
+  it('shows the public shell nav without pricing noise', () => {
     mockUseSession.mockReturnValue({ data: null });
 
     render(<SiteHeader fixed={false} />);
 
+    expect(screen.getByText('Docs')).toBeDefined();
     expect(screen.getByText('Agents')).toBeDefined();
     expect(screen.getByText('Dashboard')).toBeDefined();
-    expect(screen.queryByText('Plan')).toBeNull();
-    expect(screen.queryByText('Platform')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Agents' }).getAttribute('href')).toBe('/agents');
+    expect(screen.queryByText('Security')).toBeNull();
+    expect(screen.queryByText('Pricing')).toBeNull();
+    expect(screen.queryByText('Open Spaces')).toBeNull();
   });
 });

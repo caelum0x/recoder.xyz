@@ -2,6 +2,7 @@ import crypto, { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type { TaskId } from "@recoder/protocol";
 import { db, deliverables, projects } from "@/db";
 import { notifyClient } from "@/lib/agency/channel-notifier";
 import {
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
 			.values({
 				id: deliverableId,
 				projectDbId: project.dbId,
+				taskId: (body.taskId ?? null) as TaskId | null,
 				name: deliverableName,
 				type: "code",
 				status: "draft",

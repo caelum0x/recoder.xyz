@@ -23,7 +23,7 @@ COPY packages/ ./packages/
 COPY shared/package.json ./shared/
 
 # Install dependencies
-RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm install --filter ./app... --no-frozen-lockfile
+RUN AUTH_DATABASE_URL="postgresql://build:build@localhost:5432/build" pnpm install --filter ./app... --filter @recoder/auth --no-frozen-lockfile
 
 # Generate Prisma client using the app's own schema (Prisma 6.x compatible)
 WORKDIR /app/app
@@ -31,8 +31,8 @@ RUN pnpm exec prisma generate
 
 # Regenerate the auth client from its schema so runtime binaryTargets changes in
 # packages/auth/prisma/schema.prisma are reflected in the copied auth-client.
-WORKDIR /app/packages/auth
-RUN pnpm exec prisma generate --schema=prisma/schema.prisma
+WORKDIR /app
+RUN pnpm --filter @recoder/auth run build
 
 # @recoder/auth uses a separately generated Prisma client with a custom output
 # path under packages/auth/prisma/auth-client. Some build-time/static generation
@@ -55,9 +55,9 @@ ARG BUILD_NODE_MAX_OLD_SPACE=3072
 
 # NEXT_PUBLIC_* vars must be declared as ARGs so Next.js can inline them at build time
 ARG NEXT_PUBLIC_APP_URL=https://recoder.xyz
-ARG NEXT_PUBLIC_RECODER_WEB_URL=https://web.recoder.xyz
+ARG NEXT_PUBLIC_SPACES_URL=/dashboard
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
-ENV NEXT_PUBLIC_RECODER_WEB_URL=${NEXT_PUBLIC_RECODER_WEB_URL}
+ENV NEXT_PUBLIC_SPACES_URL=${NEXT_PUBLIC_SPACES_URL}
 
 RUN SKIP_ENV_VALIDATION=true \
     API_KEY_ENCRYPTION_SECRET="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \

@@ -12,7 +12,7 @@ const SMTP_FROM = process.env.SMTP_FROM || process.env.EMAIL_FROM || DEFAULT_FRO
 const FROM_NAME = 'Recoder.xyz';
 const APP_URL = resolvePublicAppUrl();
 
-export type EmailProviderKind = 'smtp' | 'resend' | 'dev' | 'none';
+export type EmailProviderKind = 'smtp' | 'sendmail' | 'resend' | 'dev' | 'none';
 
 export interface EmailProviderStatus {
   provider: EmailProviderKind;
@@ -101,6 +101,14 @@ function createSmtpTransport(env: NodeJS.ProcessEnv = process.env) {
   });
 }
 
+function createSendmailTransport() {
+  return nodemailer.createTransport({
+    sendmail: true,
+    newline: 'unix',
+    path: '/usr/sbin/sendmail',
+  });
+}
+
 export function getEmailProviderStatus(env: NodeJS.ProcessEnv = process.env): EmailProviderStatus {
   const preferred = (env.EMAIL_PROVIDER || 'auto').trim().toLowerCase();
   const hasResend = !!env.RESEND_API_KEY;
@@ -114,6 +122,10 @@ export function getEmailProviderStatus(env: NodeJS.ProcessEnv = process.env): Em
 
   if (preferred === 'resend') {
     return { provider: hasResend ? 'resend' : env.NODE_ENV === 'development' ? 'dev' : 'none', hasSmtp, hasResend, fromEmail: env.EMAIL_FROM || RESEND_FROM };
+  }
+
+  if (preferred === 'sendmail') {
+    return { provider: 'sendmail', hasSmtp, hasResend, fromEmail };
   }
 
   if (hasSmtp) {
@@ -164,6 +176,24 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions) {
       return { success: true, messageId: info.messageId };
     } catch (error) {
       logger.error('SMTP error', { error: String(error) });
+      return { success: false, error };
+    }
+  }
+
+  if (providerStatus.provider === 'sendmail') {
+    try {
+      const transporter = createSendmailTransport();
+      const info = await transporter.sendMail({
+        from: `${FROM_NAME} <${SMTP_FROM}>`,
+        to,
+        subject,
+        html,
+        text: text || html.replace(/<[^>]*>/g, ''),
+      });
+      logger.info('Email sent via sendmail', { to, subject, messageId: info.messageId });
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      logger.error('Sendmail error', { error: String(error) });
       return { success: false, error };
     }
   }

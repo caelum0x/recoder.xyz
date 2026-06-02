@@ -1,113 +1,180 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Bot, Workflow, Code2, Sparkles, Globe } from 'lucide-react';
+import { ArrowRight, Bot, CheckCircle2, Network, Shield, Terminal, Workflow } from 'lucide-react';
 import { getServiceUrlClient } from '@/lib/config/platforms';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 
-const agentPlatforms = [
+const connectors = [
   {
-    id: 'agents',
-    name: 'Recoder Agents',
-    description: 'Autonomous AI agents that write, debug, and deploy code. Full IDE with agent-powered workflows, file management, and browser automation.',
-    icon: Bot,
-    color: 'from-blue-500 to-cyan-500',
-    features: ['Autonomous coding agents', 'Browser automation', 'File management', 'Sandbox execution'],
+    name: 'Claude Code',
+    description: 'Connect Claude Code through MCP and route real coding tasks into Recoder with preview, artifacts, and approvals attached.',
   },
   {
-    id: 'agency',
-    name: 'Recoder Agency',
-    description: 'Multi-agent orchestration platform. Build, deploy, and manage AI agent workflows that collaborate on complex tasks.',
-    icon: Workflow,
-    color: 'from-purple-500 to-pink-500',
-    features: ['Multi-agent workflows', 'Agent orchestration', 'Task delegation', 'Custom triggers'],
+    name: 'Codex',
+    description: 'Use Codex as an external execution worker while Recoder owns the shared task, runtime, and delivery state.',
   },
   {
-    id: 'web',
-    name: 'Recoder Web IDE',
-    description: 'Browser-based AI development environment. Build full-stack applications with AI assistance, real-time preview, and instant deployment.',
-    icon: Code2,
-    color: 'from-orange-500 to-yellow-500',
-    features: ['In-browser development', 'Real-time preview', 'Full-stack support', 'Instant deploy'],
+    name: 'Custom agent',
+    description: 'Bring your own runtime and capabilities as long as it can speak the bridge and operate inside the control plane.',
   },
-  {
-    id: 'pm',
-    name: 'Recoder PM',
-    description: 'AI-first project management. RICE scoring, feedback analysis, PRD generation, and intelligent insights — built for product teams.',
-    icon: Sparkles,
-    color: 'from-indigo-500 to-violet-500',
-    features: ['AI insights', 'RICE scoring', 'PRD generation', 'Feedback analysis'],
-  },
-];
+] as const;
+
+const capturePoints = [
+  'Agent identity and session health',
+  'Task assignment and state transitions',
+  'Runtime logs, code changes, and previews',
+  'Artifacts, approvals, and handoff context',
+] as const;
 
 export default function AgentsPage() {
+  const agentsUrl = getServiceUrlClient('agents');
+
   return (
     <div className="min-h-screen bg-black text-white">
       <SiteHeader fixed={false} />
 
-      {/* Hero */}
-      <section className="py-20 px-6">
-        <div className="container mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full mb-8">
-            <Bot className="w-4 h-4 text-purple-400" />
-            <span className="text-sm text-purple-300">AI Agent Ecosystem</span>
+      <section className="px-6 py-20">
+        <div className="container mx-auto max-w-6xl">
+          <div className="grid items-start gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+            <div>
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-2 text-sm text-purple-300">
+                <Bot className="h-4 w-4" />
+                External Agents
+              </div>
+              <h1 className="text-5xl font-bold tracking-tight md:text-6xl">
+                Connect the coding agents your team already trusts.
+              </h1>
+              <p className="mt-6 max-w-2xl text-xl leading-relaxed text-gray-400">
+                Recoder is not another isolated chat box. It is the control plane where external agents connect,
+                take on software work, run through the runtime lane, and hand results back with proof.
+              </p>
+
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row">
+                <a
+                  href={agentsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-purple-600 px-7 py-4 text-lg font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  Open Agents Surface <ArrowRight className="h-5 w-5" />
+                </a>
+                <Link
+                  href="/docs/a2a/mcp-setup"
+                  className="inline-flex items-center justify-center rounded-xl border border-white/15 px-7 py-4 text-lg font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+                >
+                  Read MCP Setup
+                </Link>
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
+              <div className="mb-5 flex items-center justify-between rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-red-400/80" />
+                  <span className="h-3 w-3 rounded-full bg-yellow-400/80" />
+                  <span className="h-3 w-3 rounded-full bg-green-400/80" />
+                </div>
+                <span className="text-xs uppercase tracking-[0.2em] text-gray-500">control plane</span>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-cyan-300">Connect</div>
+                  <div className="font-semibold">Register external agents with stable identity</div>
+                </div>
+                <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-violet-300">Execute</div>
+                  <div className="font-semibold">Run software work across code, terminal, preview, and runtime logs</div>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-emerald-300">Review</div>
+                  <div className="font-semibold">Keep artifacts, approvals, and handoff visible to humans</div>
+                </div>
+              </div>
+            </div>
           </div>
-          <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-cyan-500 bg-clip-text text-transparent">
-              AI Agents
-            </span>
-            {' '}for Every Task
-          </h1>
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-12">
-            Four specialized platforms for building, deploying, and managing AI agents.
-            From autonomous coding to AI-first project management.
-          </p>
         </div>
       </section>
 
-      {/* Agent Platforms Grid */}
-      <section className="pb-20 px-6">
+      <section className="border-t border-white/5 px-6 py-20">
         <div className="container mx-auto max-w-6xl">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {agentPlatforms.map((platform) => {
-              const Icon = platform.icon;
-              const url = getServiceUrlClient(platform.id);
+          <div className="mb-10">
+            <h2 className="text-3xl font-bold md:text-4xl">Supported connection patterns</h2>
+            <p className="mt-3 max-w-3xl text-lg text-gray-400">
+              The wedge starts narrow: external coding agents doing real software work for AI-native dev teams.
+            </p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            {connectors.map((connector) => (
+              <div key={connector.name} className="rounded-3xl border border-white/10 bg-white/[0.02] p-6">
+                <div className="mb-3 inline-flex rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-gray-500">
+                  Connector
+                </div>
+                <h3 className="text-2xl font-semibold">{connector.name}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-gray-400">{connector.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-white/5 bg-gradient-to-b from-transparent via-white/[0.02] to-transparent px-6 py-20">
+        <div className="container mx-auto max-w-6xl">
+          <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr]">
+            <div>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/10 px-4 py-2 text-sm text-orange-300">
+                <Network className="h-4 w-4" />
+                What Recoder captures
+              </div>
+              <h2 className="text-3xl font-bold md:text-4xl">The value is in the orchestration and control layer</h2>
+              <p className="mt-4 text-lg text-gray-400">
+                Buyers should understand that Recoder is not selling “access to a model.” It is selling the workflow system around execution.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {capturePoints.map((item) => (
+                <div key={item} className="flex gap-4 rounded-2xl border border-white/10 bg-black/30 p-5">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-400" />
+                  <p className="text-sm leading-relaxed text-gray-300">{item}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-t border-white/5 px-6 py-20">
+        <div className="container mx-auto max-w-5xl">
+          <div className="grid gap-5 md:grid-cols-3">
+            {[
+              {
+                icon: Shield,
+                title: 'BYOK first',
+                text: 'Your team keeps provider choice and budget control. Recoder should win on workflow, not token arbitrage.',
+              },
+              {
+                icon: Terminal,
+                title: 'Runtime truth',
+                text: 'If code changes, previews, or deployments are unreliable, the product promise breaks. Reliability is part of the agents story.',
+              },
+              {
+                icon: Workflow,
+                title: 'Human approvals',
+                text: 'Agents can execute, but teams still need review and delivery control before work is handed off or shipped.',
+              },
+            ].map((item) => {
+              const Icon = item.icon;
               return (
-                <div
-                  key={platform.id}
-                  className="group relative bg-zinc-900 border border-white/10 rounded-xl p-6 hover:border-white/20 transition-all"
-                >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${platform.color} flex items-center justify-center mb-4`}>
-                    <Icon className="w-6 h-6 text-white" />
+                <div key={item.title} className="rounded-3xl border border-white/10 bg-white/[0.02] p-6">
+                  <div className="mb-4 inline-flex rounded-2xl border border-white/10 bg-black/30 p-3">
+                    <Icon className="h-5 w-5 text-white" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-2">{platform.name}</h3>
-                  <p className="text-gray-400 text-sm mb-4 leading-relaxed">{platform.description}</p>
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {platform.features.map((feature) => (
-                      <span key={feature} className="text-xs px-2 py-1 bg-white/5 border border-white/10 rounded-md text-gray-400">
-                        {feature}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r ${platform.color} rounded-lg text-sm font-medium hover:opacity-90 transition-opacity`}
-                    >
-                      <Globe className="w-4 h-4" />
-                      <span>Launch</span>
-                    </a>
-                    <Link
-                      href={`/platform/${platform.id}`}
-                      className="text-sm text-gray-400 hover:text-white transition-colors flex items-center space-x-1"
-                    >
-                      <span>Details</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </Link>
-                  </div>
+                  <h3 className="text-xl font-semibold">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-gray-400">{item.text}</p>
                 </div>
               );
             })}
@@ -115,27 +182,28 @@ export default function AgentsPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-16 px-6 border-t border-white/10">
-        <div className="container mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl font-bold mb-4">Ready to build with AI agents?</h2>
-          <p className="text-gray-400 mb-8">Start for free with BYOK. No credit card required.</p>
-          <div className="flex items-center justify-center space-x-4">
-            <Link
-              href="/auth/signup"
-              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 rounded-lg font-medium hover:opacity-90 transition-opacity"
-            >
-              Get Started Free
+      <section className="px-6 pb-24 pt-6">
+        <div className="container mx-auto max-w-4xl rounded-[2rem] border border-white/10 bg-gradient-to-r from-orange-500/10 via-white/[0.04] to-cyan-500/10 p-10 text-center">
+          <h2 className="text-4xl font-bold tracking-tight md:text-5xl">Run one flagship proof loop in production</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-300">
+            Connect an agent, assign a real software task, verify preview and artifacts, and prove the loop works repeatedly without manual rescue.
+          </p>
+          <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
+            <Link href="/docs/getting-started" className="inline-flex items-center justify-center rounded-xl bg-white px-7 py-3 text-base font-semibold text-black hover:bg-gray-200">
+              Read getting started
             </Link>
-            <Link
-              href="/plan"
-              className="px-6 py-3 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-medium transition-colors"
+            <a
+              href={agentsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-xl border border-white/20 px-7 py-3 text-base font-semibold text-white hover:border-white/35 hover:bg-white/[0.04]"
             >
-              View Plans
-            </Link>
+              Open agents surface
+            </a>
           </div>
         </div>
       </section>
+
       <SiteFooter />
     </div>
   );

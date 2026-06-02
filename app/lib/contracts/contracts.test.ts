@@ -4,7 +4,7 @@
  * These tests verify that the Zod schemas used by API routes correctly
  * validate response shapes. They serve as the Phase 2 contract boundary
  * for auth/session, account, and security APIs consumed by
- * recoder-web, frontend, mobile, and desktop clients.
+ * Spaces dashboard, frontend, mobile, and desktop clients.
  */
 import { describe, expect, it } from 'vitest';
 import {

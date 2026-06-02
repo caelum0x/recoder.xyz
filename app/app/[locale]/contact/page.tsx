@@ -19,6 +19,7 @@ import {
   Users,
   Shield,
   Zap,
+  BookOpen,
   HelpCircle,
   Github,
   Twitter,
@@ -29,11 +30,11 @@ import {
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Contact Us - Support & Sales | Recoder.xyz',
-  description: 'Get in touch with the Recoder team. 24/7 live chat support, email assistance within 4 hours, phone support for enterprise customers, and offices in San Francisco, New York, London, and Singapore.',
+  title: 'Contact | Recoder.xyz',
+  description: 'Reach the Recoder team for support, documentation, product questions, or security disclosures.',
   openGraph: {
-    title: 'Contact Us - Support & Sales | Recoder.xyz',
-    description: '24/7 live chat, email support within 4 hours, enterprise phone support. Global offices in San Francisco, New York, London, and Singapore.',
+    title: 'Contact | Recoder.xyz',
+    description: 'Support, docs, product questions, and security reporting for Recoder.',
     url: 'https://recoder.xyz/contact',
     siteName: 'Recoder.xyz',
     images: [
@@ -48,8 +49,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Contact Us - Support & Sales | Recoder.xyz',
-    description: '24/7 live chat, email support, and enterprise phone support. Global offices worldwide.',
+    title: 'Contact | Recoder.xyz',
+    description: 'Support, docs, product questions, and security reporting for Recoder.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -60,43 +61,43 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   const contactMethods = [
     {
-      icon: MessageSquare,
-      title: 'Live Chat',
-      description: 'Get instant help from our support team',
-      availability: '24/7',
-      response: 'Immediate',
-      action: 'Start Chat',
-      href: '/chat',
+      icon: BookOpen,
+      title: 'Getting Started Docs',
+      description: 'Start with the docs, setup guide, and onboarding path.',
+      availability: 'Any time',
+      response: 'Self-serve',
+      action: 'Open Docs',
+      href: '/docs/getting-started',
       priority: 'default'
     },
     {
       icon: Mail,
       title: 'Email Support',
-      description: 'Detailed questions and technical issues',
-      availability: 'Business Hours',
-      response: '< 4 hours',
+      description: 'Product questions, account help, and technical issues.',
+      availability: 'Async',
+      response: 'As available',
       action: 'Send Email',
       href: 'mailto:support@recoder.xyz',
       priority: 'secondary'
     },
     {
-      icon: Phone,
-      title: 'Phone Support',
-      description: 'Enterprise customers and urgent issues',
-      availability: 'Business Hours',
-      response: 'Immediate',
-      action: 'Call Now',
-      href: 'tel:+1-555-RECODER',
+      icon: Shield,
+      title: 'Security Reporting',
+      description: 'Responsible disclosure and security questions.',
+      availability: 'Async',
+      response: 'As available',
+      action: 'Email Security',
+      href: 'mailto:security@recoder.xyz',
       priority: 'secondary'
     },
     {
-      icon: Calendar,
-      title: 'Schedule Meeting',
-      description: 'Demo, onboarding, or technical consultation',
-      availability: 'By Appointment',
-      response: 'Same Day',
-      action: 'Book Meeting',
-      href: '/schedule',
+      icon: Github,
+      title: 'GitHub',
+      description: 'Follow development and public repo activity.',
+      availability: 'Any time',
+      response: 'Public',
+      action: 'Open GitHub',
+      href: 'https://github.com/recoderxyz',
       priority: 'outline'
     }
   ];
@@ -105,84 +106,60 @@ export default function ContactPage() {
     {
       name: 'General Support',
       email: 'support@recoder.xyz',
-      description: 'Technical issues, billing questions, and general inquiries',
+      description: 'Technical issues, product questions, and general inquiries',
       icon: Headphones,
-      hours: '24/7'
+      hours: 'Async'
     },
     {
-      name: 'Sales Team',
-      email: 'sales@recoder.xyz', 
-      description: 'Pricing, enterprise plans, and partnership opportunities',
-      icon: Users,
-      hours: 'Mon-Fri 9AM-6PM PST'
-    },
-    {
-      name: 'Security Team',
-      email: 'security@recoder.xyz',
-      description: 'Security reports, compliance questions, and audits',
+      name: 'Security',
+      email: 'security@recoder.xyz', 
+      description: 'Security reports, trust questions, and responsible disclosure',
       icon: Shield,
-      hours: '24/7'
+      hours: 'Async'
     },
     {
-      name: 'Technical Team',
-      email: 'tech@recoder.xyz',
-      description: 'API questions, integration help, and developer resources',
+      name: 'Docs & Onboarding',
+      email: 'support@recoder.xyz',
+      description: 'Getting-started help and product setup questions',
+      icon: Users,
+      hours: 'Async'
+    },
+    {
+      name: 'Product',
+      email: 'support@recoder.xyz',
+      description: 'Feedback, roadmap questions, and integration requests',
       icon: Zap,
-      hours: 'Mon-Fri 8AM-8PM PST'
+      hours: 'Async'
     }
   ];
 
   const offices = [
     {
-      name: 'San Francisco (Headquarters)',
-      address: '123 Tech Street, Suite 100\nSan Francisco, CA 94105\nUnited States',
-      phone: '+1 (555) 123-4567',
-      email: 'sf@recoder.xyz',
-      hours: 'Mon-Fri 9AM-6PM PST',
-      timezone: 'Pacific Time'
-    },
-    {
-      name: 'New York',
-      address: '456 Innovation Ave, Floor 15\nNew York, NY 10001\nUnited States',
-      phone: '+1 (555) 234-5678',
-      email: 'ny@recoder.xyz',
-      hours: 'Mon-Fri 9AM-6PM EST',
-      timezone: 'Eastern Time'
-    },
-    {
-      name: 'London',
-      address: '789 Tech Square, Level 5\nLondon EC2A 4BX\nUnited Kingdom',
-      phone: '+44 20 1234 5678',
-      email: 'london@recoder.xyz',
-      hours: 'Mon-Fri 9AM-6PM GMT',
-      timezone: 'Greenwich Mean Time'
-    },
-    {
-      name: 'Singapore',
-      address: '321 Digital Hub, Tower B\nSingapore 018942\nSingapore',
-      phone: '+65 6123 4567',
-      email: 'sg@recoder.xyz',
-      hours: 'Mon-Fri 9AM-6PM SGT',
-      timezone: 'Singapore Time'
+      name: 'Remote-first team',
+      address: 'Recoder operates as a distributed product team.\nUse the support and security channels on this page for contact.',
+      phone: 'No public phone support',
+      email: 'support@recoder.xyz',
+      hours: 'Async support',
+      timezone: 'Global / remote'
     }
   ];
 
   const faqs = [
     {
       question: 'How quickly do you respond to support requests?',
-      answer: 'We respond to critical issues within 1 hour, general support within 4 hours, and feature requests within 24 hours.'
+      answer: 'Support is handled asynchronously. For the fastest route, start with the docs and email support@recoder.xyz with the relevant details.'
     },
     {
       question: 'Do you offer phone support?',
-      answer: 'Yes, phone support is available for Enterprise customers and urgent issues during business hours.'
+      answer: 'Recoder does not advertise public phone support on the main site. Use email support or security reporting channels instead.'
     },
     {
       question: 'Can I schedule a demo or consultation?',
-      answer: 'Absolutely! You can book a meeting with our team for demos, onboarding, or technical consultations.'
+      answer: 'Start with the getting-started docs and email support@recoder.xyz if you need a product or onboarding conversation.'
     },
     {
       question: 'How do I report a security issue?',
-      answer: 'Please email security@recoder.xyz immediately. We take security reports very seriously and respond within 1 hour.'
+      answer: 'Please email security@recoder.xyz with a clear report, impact summary, and reproduction details if available.'
     }
   ];
 

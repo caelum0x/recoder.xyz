@@ -510,7 +510,7 @@ const SettingsPanel = memo(function SettingsPanel({
             }`}
           >
             <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-zinc-200 transition-transform ${
                 settings.autoContextEnabled ? 'translate-x-5' : 'translate-x-1'
               }`}
             />

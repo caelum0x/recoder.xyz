@@ -477,7 +477,7 @@ export default function ModelsGuidePage() {
                     1
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-white mb-2">In the Web IDE Chat</h3>
+                    <h3 className="font-semibold text-white mb-2">In the Spaces Chat</h3>
                     <p className="text-sm text-gray-400">
                       Look for the model selector dropdown at the top of the chat interface.
                       Click it to see all available models from your configured providers.

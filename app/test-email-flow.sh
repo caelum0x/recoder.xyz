@@ -8,11 +8,12 @@
 #
 # Requirements:
 #   - App running on localhost:3000
-#   - RESEND_API_KEY configured (or SMTP)
+#   - SMTP configured (preferred) or Resend fallback
 #   - SHOW_TEST_CREDENTIALS=true for dev mode response
 
 EMAIL="${1:-test@example.com}"
 ADMIN_SECRET="${2:-recoder-admin-2026}"
+CRON_SECRET="${CRON_SECRET:-$ADMIN_SECRET}"
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 echo "======================================"
@@ -29,8 +30,15 @@ CONFIG_RESPONSE=$(curl -s -X GET "$BASE_URL/api/admin/test-email" \
 echo "$CONFIG_RESPONSE" | jq '.' 2>/dev/null || echo "$CONFIG_RESPONSE"
 echo ""
 
-# Step 2: Send a test email
-echo "📤 Step 2: Sending test verification email..."
+# Step 2: Check onboarding cron status
+echo "⏱️ Step 2: Checking onboarding cron status..."
+CRON_STATUS_RESPONSE=$(curl -s -X GET "$BASE_URL/api/cron/process-emails?mode=status" \
+  -H "x-cron-secret: $CRON_SECRET")
+echo "$CRON_STATUS_RESPONSE" | jq '.' 2>/dev/null || echo "$CRON_STATUS_RESPONSE"
+echo ""
+
+# Step 3: Send a test email
+echo "📤 Step 3: Sending test verification email..."
 TEST_EMAIL_RESPONSE=$(curl -s -X POST "$BASE_URL/api/admin/test-email" \
   -H "Content-Type: application/json" \
   -H "x-admin-secret: $ADMIN_SECRET" \
@@ -38,8 +46,17 @@ TEST_EMAIL_RESPONSE=$(curl -s -X POST "$BASE_URL/api/admin/test-email" \
 echo "$TEST_EMAIL_RESPONSE" | jq '.' 2>/dev/null || echo "$TEST_EMAIL_RESPONSE"
 echo ""
 
-# Step 3: Test user signup flow
-echo "👤 Step 3: Testing user signup flow..."
+# Step 4: Send an onboarding template test
+echo "🧭 Step 4: Sending onboarding template test..."
+ONBOARDING_TEST_RESPONSE=$(curl -s -X POST "$BASE_URL/api/admin/test-email" \
+  -H "Content-Type: application/json" \
+  -H "x-admin-secret: $ADMIN_SECRET" \
+  -d "{\"email\": \"$EMAIL\", \"type\": \"getting-started\", \"name\": \"Test User\"}")
+echo "$ONBOARDING_TEST_RESPONSE" | jq '.' 2>/dev/null || echo "$ONBOARDING_TEST_RESPONSE"
+echo ""
+
+# Step 5: Test user signup flow
+echo "👤 Step 5: Testing user signup flow..."
 NAME="Test User $(date +%s)"
 SIGNUP_RESPONSE=$(curl -s -X POST "$BASE_URL/api/auth/signup-email" \
   -H "Content-Type: application/json" \
@@ -54,15 +71,15 @@ if [ -n "$TEMP_PASSWORD" ]; then
   echo ""
 fi
 
-# Step 4: Check pending verifications
-echo "🔍 Step 4: Checking pending verifications for $EMAIL..."
+# Step 6: Check pending verifications
+echo "🔍 Step 6: Checking pending verifications for $EMAIL..."
 PENDING_RESPONSE=$(curl -s -X GET "$BASE_URL/api/admin/pending-verifications?email=$EMAIL" \
   -H "x-admin-secret: $ADMIN_SECRET")
 echo "$PENDING_RESPONSE" | jq '.' 2>/dev/null || echo "$PENDING_RESPONSE"
 echo ""
 
-# Step 5: Request verification email resend
-echo "📨 Step 5: Requesting verification email resend..."
+# Step 7: Request verification email resend
+echo "📨 Step 7: Requesting verification email resend..."
 RESEND_RESPONSE=$(curl -s -X POST "$BASE_URL/api/auth/verify-email" \
   -H "Content-Type: application/json" \
   -d "{\"email\": \"$EMAIL\"}")
@@ -75,15 +92,15 @@ if [ -n "$VERIFY_URL" ]; then
   echo "🔗 Dev Mode: Verification URL extracted: $VERIFY_URL"
   echo ""
 
-  # Step 6: Complete verification (dev only)
-  echo "✅ Step 6: Completing email verification..."
+  # Step 8: Complete verification (dev only)
+  echo "✅ Step 8: Completing email verification..."
   curl -s -I "$VERIFY_URL" | head -5
   echo ""
 fi
 
-# Step 7: Test login (if signup succeeded)
+# Step 9: Test login (if signup succeeded)
 if [ -n "$TEMP_PASSWORD" ]; then
-  echo "🔐 Step 7: Testing login..."
+  echo "🔐 Step 9: Testing login..."
   LOGIN_RESPONSE=$(curl -s -X POST "$BASE_URL/api/auth/login" \
     -H "Content-Type: application/json" \
     -d "{\"email\": \"$EMAIL\", \"password\": \"$TEMP_PASSWORD\"}")

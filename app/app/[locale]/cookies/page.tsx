@@ -22,7 +22,7 @@ export default function CookiesPage() {
           <section>
             <h2 className="mb-4 text-2xl font-bold">Essential cookies</h2>
             <ul className="list-disc space-y-2 pl-6 text-gray-300">
-              <li>Authentication cookies that let you sign in on `recoder.xyz` and access `web.recoder.xyz`.</li>
+              <li>Authentication cookies that let you sign in on `recoder.xyz` and access `recoder.xyz/dashboard`.</li>
               <li>Security cookies used for session verification, CSRF protection, and abuse prevention.</li>
               <li>Locale and onboarding cookies that remember your language and basic setup state.</li>
             </ul>

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { sendSubscriptionConfirmationEmail } from '../email';
 import { randomUUID, createHmac, timingSafeEqual } from 'crypto';
 import { logger } from '@/lib/logger';
+import { buildCommercialQuotaCreateData, getCommercialQuotaConfig } from '@/lib/commercial-quota';
 
 export class BillingService {
   /**
@@ -629,7 +630,7 @@ export class BillingService {
   // Helper methods
 
   private async updateUserQuota(userId: string, plan: string) {
-    const quotaConfig = this.getQuotaConfig(plan);
+    const quotaConfig = getCommercialQuotaConfig(plan);
 
     await prisma.user_quota.upsert({
       where: { userId },
@@ -639,27 +640,8 @@ export class BillingService {
         requestsLimit: quotaConfig.requestsLimit,
         updatedAt: new Date(),
       },
-      create: {
-        userId,
-        sessionsPerDay: quotaConfig.sessionsPerDay,
-        tokensPerSession: quotaConfig.tokensPerSession,
-        requestsLimit: quotaConfig.requestsLimit,
-        periodStart: new Date(),
-        periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        updatedAt: new Date(),
-      },
+      create: buildCommercialQuotaCreateData(userId, plan, 'month'),
     });
-  }
-
-  private getQuotaConfig(plan: string) {
-    const configs: Record<string, any> = {
-      free: { sessionsPerDay: 6, tokensPerSession: 10000, requestsLimit: 1000 },
-      weekly: { sessionsPerDay: 10, tokensPerSession: 30000, requestsLimit: 5000 },
-      monthly: { sessionsPerDay: 15, tokensPerSession: 50000, requestsLimit: 10000 },
-      pro: { sessionsPerDay: 20, tokensPerSession: 100000, requestsLimit: 50000 },
-      enterprise: { sessionsPerDay: 100, tokensPerSession: 500000, requestsLimit: 500000 },
-    };
-    return configs[plan] || configs.free;
   }
 
   private getPlanAmount(plan: string): number {

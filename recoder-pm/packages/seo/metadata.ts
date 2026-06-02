@@ -20,7 +20,21 @@ const productionUrl =
   process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL ??
   process.env.VERCEL_PROJECT_PRODUCTION_URL ??
   "https://pm.recoder.xyz";
-const baseUrl = new URL(productionUrl);
+
+function toAbsoluteUrl(value: string | undefined, fallback: string): URL {
+  try {
+    return new URL(value || fallback);
+  } catch {
+    try {
+      return new URL(fallback);
+    } catch {
+      const url = fallback.startsWith("http") ? fallback : `https://${fallback}`;
+      return new URL(url);
+    }
+  }
+}
+
+const baseUrl = toAbsoluteUrl(productionUrl, "https://pm.recoder.xyz");
 
 export const createMetadata = ({
   title,

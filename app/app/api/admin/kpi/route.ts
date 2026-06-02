@@ -13,6 +13,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import {
+  conversionRatePct,
+  summarizeLeadsBySource,
+  type LeadSourceCount,
+} from '@/lib/analytics/lead-funnel';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -227,6 +232,36 @@ export async function GET(request: NextRequest) {
   );
 
   // -----------------------------------------------------------------------
+  // 6b. LEAD FUNNEL (lead capture -> signup conversion + source breakdown)
+  // -----------------------------------------------------------------------
+  // Conversion is computed by matching lead emails against registered users,
+  // so it captures conversions from every signup method (email + OAuth),
+  // retroactively, regardless of whether userId was backfilled at signup.
+  const leadsConverted = await safe(async () => {
+    const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS count
+      FROM newsletter_subscribers n
+      WHERE n.status = 'active'
+        AND EXISTS (
+          SELECT 1 FROM users u WHERE lower(u.email) = lower(n.email)
+        )
+    `;
+    return Number(rows[0]?.count ?? 0);
+  }, 0);
+
+  const leadsBySourceRows = await safe<LeadSourceCount[]>(async () => {
+    const grouped = await prisma.newsletter_subscribers.groupBy({
+      by: ['source'],
+      where: { status: 'active' },
+      _count: { _all: true },
+    });
+    return grouped.map((g) => ({ source: g.source, count: g._count._all }));
+  }, []);
+
+  const leadsBySource = summarizeLeadsBySource(leadsBySourceRows);
+  const leadConversionRatePct = conversionRatePct(leadsConverted, newsletterActive);
+
+  // -----------------------------------------------------------------------
   // 7. SCHEDULED EMAILS
   // -----------------------------------------------------------------------
   const emailsSentThisWeek = await safe(
@@ -335,6 +370,15 @@ export async function GET(request: NextRequest) {
         newThisWeek: newSubsThisWeek,
         mrrEstimate: Math.round((mrrEstimate + dodoMrr) * 100) / 100,
         paidUsers: paidUsersCount,
+      },
+      funnel: {
+        leadCapture: {
+          totalLeads: newsletterActive,
+          newThisWeek: newsletterThisWeek,
+          convertedToSignup: leadsConverted,
+          conversionRatePct: leadConversionRatePct,
+          bySource: leadsBySource,
+        },
       },
       email: {
         newsletter: {

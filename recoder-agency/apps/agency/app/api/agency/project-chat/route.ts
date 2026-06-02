@@ -1,10 +1,13 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { clients, db, deliverables, projects, quotes } from "@/db";
+import { clients, db, deliverables, projects, quotes, workspaces } from "@/db";
 import {
 	copilotToolDefinitions,
 	executeTool,
 } from "@/lib/agency/copilot-tools";
+import {
+	buildRecoderProjectControlSummary,
+} from "@/lib/agency/recoder-control-plane";
 import { requireAdminRole } from "@/services/teams";
 
 export const maxDuration = 60;
@@ -129,6 +132,34 @@ export async function POST(req: Request) {
 			: "## No quote linked",
 	].join("\n");
 
+	const projectWorkspace = project.workspaceDbId
+		? await db.query.workspaces.findFirst({
+				where: eq(workspaces.dbId, project.workspaceDbId),
+			})
+		: null;
+	const projectRunSummary = await buildRecoderProjectControlSummary({
+		workspaceId: projectWorkspace?.id ?? null,
+		taskIds: projectDeliverables.map((deliverable) => deliverable.taskId),
+	});
+	const controlPlaneContext = [
+		`## Shared Control Plane`,
+		`Summary source: ${projectRunSummary.source}`,
+		`Linked runs: ${projectRunSummary.totalTasks}`,
+		`Pending approvals: ${projectRunSummary.pendingApprovals}`,
+		`Active handoffs: ${projectRunSummary.activeHandoffs}`,
+		`Online agents: ${projectRunSummary.onlineAgents}`,
+		`Evidence refs: ${projectRunSummary.evidenceCount}`,
+		`Preview refs: ${projectRunSummary.previewCount}`,
+		`Artifact refs: ${projectRunSummary.artifactCount}`,
+		`Log refs: ${projectRunSummary.logCount}`,
+		`Bridge sessions: ${projectRunSummary.pairedBridgeSessions}/${projectRunSummary.localBridgeSessions}`,
+		`Task states: ${
+			Object.entries(projectRunSummary.states)
+				.map(([state, count]) => `${state}=${count}`)
+				.join(", ") || "none"
+		}`,
+	].join("\n");
+
 	const { getUserOpenRouterApiKeyForAgency } = await import(
 		"@/lib/agency/openrouter-model"
 	);
@@ -146,9 +177,11 @@ You have tools to create and modify data. When the user asks you to create clien
 
 When referencing IDs in tool calls, use the exact IDs from the context or from previous tool results.
 
-You have access to this project data:
+You have access to this project data and its shared execution state:
 
 ${context}
+
+${controlPlaneContext}
 
 Be concise, actionable, and professional. Reference specific deliverables and status. Suggest next steps based on project state. When you perform an action with a tool, clearly confirm what you did.`;
 

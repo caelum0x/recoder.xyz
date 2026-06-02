@@ -30,38 +30,41 @@ const COMPARISON_ROWS: {
   getValue: (planId: PlanId) => string;
 }[] = [
   {
-    label: 'Daily sessions',
+    label: 'Workspaces',
     icon: <Zap className="w-4 h-4" />,
     getValue: (id) => {
-      const s = PLANS[id].limits.sessionsPerDay;
-      return s >= 999 ? 'Unlimited' : `${s} / day`;
+      const count = PLANS[id].limits.workspaces;
+      return count >= 999 ? 'Unlimited' : `${count}`;
     },
   },
   {
-    label: 'Tokens per session',
+    label: 'Connected agents',
     icon: <Code className="w-4 h-4" />,
     getValue: (id) => {
-      const t = PLANS[id].limits.tokensPerSessionPricey;
-      return t >= 999_999 ? 'Unlimited' : `${(t / 1_000).toFixed(0)}k`;
+      const count = PLANS[id].limits.connectedAgents;
+      return count >= 999 ? 'Unlimited' : `${count}`;
     },
   },
   {
-    label: 'Team members',
+    label: 'Artifact retention',
     icon: <Users className="w-4 h-4" />,
     getValue: (id) => {
-      const m = PLANS[id].limits.teamMembers;
-      return m >= 999 ? 'Unlimited' : `${m}`;
+      const days = PLANS[id].limits.artifactRetentionDays;
+      return days >= 365 ? '1 year+' : `${days} days`;
     },
   },
   {
-    label: 'API key provided',
+    label: 'Approval workflows',
     icon: <Key className="w-4 h-4" />,
-    getValue: (id) => (PLANS[id].features.platformProvidesKey ? 'Included' : 'Bring your own'),
+    getValue: (id) => PLANS[id].limits.approvalWorkflows,
   },
   {
-    label: 'Support',
+    label: 'Preview deploys / month',
     icon: <Headphones className="w-4 h-4" />,
-    getValue: (id) => PLANS[id].features.support,
+    getValue: (id) => {
+      const count = PLANS[id].limits.previewDeploysPerMonth;
+      return count >= 999 ? 'Unlimited' : `${count}`;
+    },
   },
 ];
 

@@ -8,6 +8,7 @@ import { traceRequest } from '@/lib/tracing-middleware';
 import { detectBillingHealth } from '@/lib/billing-health';
 import { getEmailProviderStatus } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
+import { getOnboardingEmailOperationsStatus } from '@/lib/services/onboarding-email.service';
 
 function sanitizeErrorMessage(value: string): string {
   return value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
 
   const emailProvider = getEmailProviderStatus();
   const billing = detectBillingHealth(process.env);
+  const onboardingEmailStatus = await getOnboardingEmailOperationsStatus();
   let dbConnected = false;
   let dbError: string | null = null;
 
@@ -49,6 +51,14 @@ export async function GET(request: NextRequest) {
         smtpConfigured: emailProvider.hasSmtp,
         resendConfigured: emailProvider.hasResend,
         fromEmail: emailProvider.fromEmail,
+        onboardingAutomation: {
+          tableAvailable: onboardingEmailStatus.tableAvailable,
+          cronSecretConfigured: onboardingEmailStatus.cronSecretConfigured,
+          pending: onboardingEmailStatus.counts.pending,
+          dueNow: onboardingEmailStatus.counts.dueNow,
+          failed: onboardingEmailStatus.counts.failed,
+          nextScheduledAt: onboardingEmailStatus.nextScheduledAt,
+        },
       },
       database: {
         connected: dbConnected,

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { signIn } from '@/lib/auth-client';
 import { SiteHeader } from '@/components/SiteHeader';
+import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
 
 function SignInForm() {
   const [loading, setLoading] = useState(false);
@@ -32,35 +33,8 @@ function SignInForm() {
   const isRecoderSubdomain = /^https:\/\/[a-z-]+\.recoder\.xyz(\/|$)/.test(rawReturn);
   const returnUrl = isRelative || isRecoderSubdomain ? rawReturn : '/dashboard';
 
-  const resolveReturnUrl = async (targetUrl: string) => {
-    if (!targetUrl.startsWith('https://web.recoder.xyz')) {
-      return targetUrl;
-    }
-
-    try {
-      const response = await fetch('/api/platform/access', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          platform: 'web',
-          redirect: targetUrl,
-        }),
-      });
-
-      if (!response.ok) {
-        return targetUrl;
-      }
-
-      const data = await response.json() as { bridgeUrl?: string };
-      return data.bridgeUrl || targetUrl;
-    } catch {
-      return targetUrl;
-    }
-  };
-
   useEffect(() => {
-    if (!returnUrl.startsWith('https://web.recoder.xyz')) {
+    if (!returnUrl.startsWith('/dashboard')) {
       return;
     }
 
@@ -77,10 +51,7 @@ function SignInForm() {
           return;
         }
 
-        const target = await resolveReturnUrl(returnUrl);
-        if (!cancelled) {
-          window.location.href = target;
-        }
+        window.location.href = returnUrl;
       } catch {
         // Keep the user on the sign-in page if session detection fails.
       }
@@ -93,6 +64,7 @@ function SignInForm() {
 
   const handleGitHubSignIn = async () => {
     setLoading(true);
+    trackEvent(AnalyticsEvents.LOGIN_STARTED, { method: 'github', source: 'signin_page' });
     try {
       await signIn.social({
         provider: "github",
@@ -106,6 +78,7 @@ function SignInForm() {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    trackEvent(AnalyticsEvents.LOGIN_STARTED, { method: 'google', source: 'signin_page' });
     try {
       await signIn.social({
         provider: "google",
@@ -119,7 +92,7 @@ function SignInForm() {
 
   const platforms = [
     { name: 'Agents', description: 'AI agent IDE', icon: Bot, url: 'https://agents.recoder.xyz' },
-    { name: 'Web', description: 'Browser-based IDE', icon: Globe, url: 'https://web.recoder.xyz' },
+    { name: 'Spaces', description: 'Shared workspace', icon: Workflow, url: '/dashboard/spaces' },
     { name: 'PM', description: 'Project management', icon: LayoutDashboard, url: 'https://pm.recoder.xyz' },
     { name: 'Agency', description: 'AI agency platform', icon: Briefcase, url: 'https://agency.recoder.xyz' },
     { name: 'CLI', description: 'Terminal access', icon: Terminal, url: 'https://recoder.xyz/tools' },

@@ -22,12 +22,12 @@ const plans = [
     name: 'Free',
     price: '$0',
     period: 'forever',
-    description: 'Bring your own API key',
+    description: 'BYOK proof-of-loop workspace',
     features: [
-      '6 sessions per day',
-      '40+ AI models via BYOK',
-      'Web IDE + CLI access',
-      'All platform services',
+      '6 runs per day',
+      'BYOK provider support',
+      'Runtime + preview lane',
+      'All core platform surfaces',
       'Community support',
     ],
     cta: 'Start Free',
@@ -38,12 +38,12 @@ const plans = [
     name: 'Weekly',
     price: '$10',
     period: '/week',
-    description: 'We provide API keys',
+    description: 'Short shipping cycles with BYOK',
     features: [
-      '10 sessions per day',
-      'Platform-provided API keys',
-      'Priority model access',
-      'All platform services',
+      '10 runs per day',
+      'Bring your own provider keys',
+      'Shared task + artifact workflow',
+      'All core platform surfaces',
       'Email support',
     ],
     cta: 'Subscribe Weekly',
@@ -54,11 +54,11 @@ const plans = [
     name: 'Monthly',
     price: '$20',
     period: '/month',
-    description: 'Best value for individuals',
+    description: 'Team control plane with BYOK',
     features: [
-      '15 sessions per day',
-      'Platform-provided API keys',
-      'Priority model access',
+      '15 runs per day',
+      'Bring your own provider keys',
+      'Shared approvals and handoff',
       'Advanced analytics',
       'Priority support',
     ],
@@ -70,10 +70,10 @@ const plans = [
     name: 'Pro',
     price: '$100',
     period: '/month',
-    description: 'For power users and teams',
+    description: 'For active agent teams',
     features: [
-      '20 sessions per day',
-      'Premium model access',
+      '20 runs per day',
+      'Bring your own provider keys',
       'Team collaboration',
       'Custom integrations',
       'Dedicated support',
@@ -96,13 +96,13 @@ export default function PlanPage() {
       <section className="py-20 px-6">
         <div className="container mx-auto max-w-5xl text-center">
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            One Platform,{' '}
+            One control plane,
             <span className="bg-gradient-to-r from-orange-500 to-purple-600 bg-clip-text text-transparent">
-              5 Products
+              shared across every lane
             </span>
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-4">
-            The complete AI development ecosystem. Every plan includes access to all platform services.
+            Pricing should reflect workflow control for external coding agents, not bundled model access.
           </p>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function PlanPage() {
       {/* Ecosystem Services */}
       <section className="pb-16 px-6">
         <div className="container mx-auto max-w-5xl">
-          <h2 className="text-2xl font-bold mb-8 text-center">Ecosystem Services</h2>
+          <h2 className="text-2xl font-bold mb-8 text-center">Control-Plane Surfaces</h2>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {publicServices.map((service) => {
               const Icon = serviceIcons[service.id] || Globe;
@@ -142,7 +142,7 @@ export default function PlanPage() {
       <section className="py-16 px-6 border-t border-white/10">
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-3xl font-bold mb-4 text-center">Plans & Pricing</h2>
-          <p className="text-gray-400 text-center mb-12">Start free with BYOK. Upgrade anytime.</p>
+          <p className="text-gray-400 text-center mb-12">Start with BYOK and scale into more workflow control as execution volume grows.</p>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => (
               <div
@@ -234,13 +234,13 @@ export default function PlanPage() {
             <div className="p-6 space-y-4">
               <h3 className="text-lg font-semibold text-white">You Already Have Everything!</h3>
               <p className="text-gray-300">
-                During beta, all platform services are free with BYOK (Bring Your Own Key). Paid plans with platform-provided API keys are coming soon.
+                During beta, the platform is available with BYOK (Bring Your Own Key). Paid plans are for workflow control, coordination, and governance rather than platform-provided tokens.
               </p>
               <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
                 <div className="flex items-start space-x-3">
                   <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-gray-300">
-                    You get full access to every service — Agents, Web IDE, PM, Agency, and CLI — completely free during beta.
+                    You get full access to every service — Agents, Spaces, PM, Agency, and CLI — completely free during beta.
                   </p>
                 </div>
               </div>

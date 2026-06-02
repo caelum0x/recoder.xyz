@@ -126,12 +126,13 @@ function PlanCard({ plan }: { plan: Plan }) {
       <div className="mt-6 pt-4 border-t border-white/10">
         <p className="text-xs text-gray-500">
           {plan.id === 'enterprise' ? (
-            'Unlimited sessions & tokens'
+            'Custom capacity, governance, and retention'
           ) : (
             <>
-              {plan.limits.sessionsPerDay} sessions/day &middot;{' '}
-              {(plan.limits.tokensPerSessionPricey / 1000).toFixed(0)}k tokens/session &middot;{' '}
-              {plan.limits.teamMembers === 1 ? 'Solo' : `${plan.limits.teamMembers} team members`}
+              {plan.limits.workspaces} workspace{plan.limits.workspaces === 1 ? '' : 's'} &middot;{' '}
+              {plan.limits.connectedAgents === 1 ? '1 connected agent' : `${plan.limits.connectedAgents} connected agents`} &middot;{' '}
+              {plan.limits.previewDeploysPerMonth} preview deploys/month &middot;{' '}
+              {plan.limits.artifactRetentionDays} days history
             </>
           )}
         </p>
@@ -144,37 +145,37 @@ const FAQ_ITEMS = [
   {
     question: 'What does "Bring Your Own Key" (BYOK) mean?',
     answer:
-      'On the Free plan, you connect your own OpenRouter API key to access AI models. You pay OpenRouter directly for model usage. On paid plans, we provide the API key -- no setup needed.',
+      'BYOK means you connect your own provider keys and keep model spend with OpenRouter, Anthropic, OpenAI, Google, or your preferred vendor. Recoder charges for workflow control, not token resale.',
+  },
+  {
+    question: 'What am I paying Recoder for?',
+    answer:
+      'You are paying for the control plane: shared runtime lanes, task and artifact state, approvals, retention, and connected-agent workflow capacity. The goal is to avoid competing on subsidized tokens.',
+  },
+  {
+    question: 'How do capacity limits work?',
+    answer:
+      'Plans scale by the amount of repeated work a workspace can run and by how many connected builders or agents can use the shared control plane. Higher tiers are for more execution volume and stricter controls.',
+  },
+  {
+    question: 'Does Recoder resell premium model access?',
+    answer:
+      'No. The product is being positioned so better models make Recoder more valuable through workflow control, not more expensive because we are subsidizing tokens.',
   },
   {
     question: 'Can I switch plans at any time?',
     answer:
-      'Yes. You can upgrade or downgrade at any time. When upgrading, you get immediate access to the new tier. When downgrading, your current plan runs until the end of the billing period.',
+      'Yes. You can upgrade or downgrade as your team moves from first validation into repeated production usage.',
   },
   {
-    question: 'What happens when I hit my session or token limit?',
+    question: 'What is the recommended path?',
     answer:
-      'You can still use free models (Llama, Mistral, Gemma, etc.) with unlimited tokens. Only premium models (Claude, GPT-4, Gemini Pro) count against your token limits. You can also upgrade your plan for higher limits.',
+      'Start on BYOK, prove one external-agent workflow end to end, and only then expand into more seats, approvals, retention, and governance.',
   },
   {
-    question: 'Which AI models are included?',
+    question: 'Can enterprise support custom routing or governance?',
     answer:
-      'Paid plans include access to Claude 3.5 Sonnet, Claude 3 Opus, GPT-4 Turbo, GPT-4, Gemini 2.0 Flash, Gemini Pro, and more. Free models like Llama 3.1, Mistral 7B, and Gemma 2 are available on all plans with unlimited usage.',
-  },
-  {
-    question: 'Is there a free trial for paid plans?',
-    answer:
-      'The Free plan itself is a great way to try Recoder. If you want to try the full experience with all models included, the Weekly plan at $10/week gives you flexible, low-commitment access.',
-  },
-  {
-    question: 'How does team collaboration work?',
-    answer:
-      'Each paid plan includes a set number of team member seats. Team members share the workspace and can collaborate on projects in real time. Enterprise plans offer unlimited seats.',
-  },
-  {
-    question: 'What payment methods do you accept?',
-    answer:
-      'We accept all major credit and debit cards through our payment partners Paddle and DodoPayments. Enterprise customers can also pay via invoice.',
+      'Yes. Enterprise is where audit requirements, custom routing, retention, deployment controls, and SLA-driven governance belong.',
   },
 ];
 
@@ -217,17 +218,17 @@ export default function PricingPage() {
         <div className="container mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full mb-8">
             <Zap className="w-4 h-4 text-orange-400" />
-            <span className="text-sm text-orange-300">Simple, transparent pricing</span>
+            <span className="text-sm text-orange-300">BYOK workflow pricing</span>
           </div>
           <h1 className="text-5xl md:text-6xl font-bold mb-6">
-            Choose your{' '}
+            Pay for{' '}
             <span className="bg-gradient-to-r from-orange-500 via-purple-500 to-orange-500 bg-clip-text text-transparent">
-              plan
+              control, not tokens
             </span>
           </h1>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Start free with your own API key, or let us handle everything.
-            All plans include the full Web IDE + CLI experience.
+            Bring your own provider keys and pay Recoder for workspace control, execution visibility,
+            approvals, and connected-agent capacity.
           </p>
         </div>
       </section>
@@ -253,14 +254,14 @@ export default function PricingPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                'Web IDE + Terminal CLI',
-                'Web-to-CLI sync',
-                'Unlimited free model usage',
-                'Project management',
-                'Git integration',
+                'Task room + artifact timeline',
+                'Runtime + preview workflow',
+                'BYOK provider support',
+                'Project management layer',
+                'Git-aware execution surfaces',
                 'Sandboxed execution',
-                'Real-time collaboration',
-                'Multi-model support',
+                'Human approval points',
+                'Multi-surface agent workflows',
                 'Unlimited projects',
               ].map((feature) => (
                 <div key={feature} className="flex items-center gap-2 text-sm text-gray-300">

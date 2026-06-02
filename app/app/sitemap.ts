@@ -40,10 +40,10 @@ const homepagePages: SitemapPage[] = [
 const corePages: SitemapPage[] = [
   { path: '/about',                   changeFrequency: 'monthly',  priority: 0.8 },
   { path: '/features',                changeFrequency: 'weekly',   priority: 0.9 },
-  { path: '/pricing',                 changeFrequency: 'weekly',   priority: 0.9 },
   { path: '/enterprise',              changeFrequency: 'weekly',   priority: 0.9 },
   { path: '/testimonials',            changeFrequency: 'monthly',  priority: 0.7 },
   { path: '/case-studies',            changeFrequency: 'monthly',  priority: 0.7 },
+  { path: '/customers',               changeFrequency: 'monthly',  priority: 0.7 },
   { path: '/integrations',            changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/partnerships',            changeFrequency: 'monthly',  priority: 0.6 },
   { path: '/changelog',               changeFrequency: 'weekly',   priority: 0.7 },
@@ -55,7 +55,7 @@ const corePages: SitemapPage[] = [
 const blogPostPages: SitemapPage[] = [
   { path: '/blog/introducing-recoder-xyz',   changeFrequency: 'monthly',  priority: 0.6 },
   { path: '/blog/why-we-built-byok',         changeFrequency: 'monthly',  priority: 0.6 },
-  { path: '/blog/cli-web-ide-cross-platform',changeFrequency: 'monthly',  priority: 0.6 },
+  { path: '/blog/cli-spaces-cross-platform',  changeFrequency: 'monthly',  priority: 0.6 },
 ];
 
 // ── Platform pages ────────────────────────────────────────────────────────
@@ -99,14 +99,6 @@ const productPages: SitemapPage[] = [
   { path: '/learn',                   changeFrequency: 'weekly',   priority: 0.7 },
 ];
 
-// ── Auth pages (publicly accessible) ──────────────────────────────────────
-const authPages: SitemapPage[] = [
-  { path: '/auth/signup',             changeFrequency: 'monthly',  priority: 0.7 },
-  { path: '/auth/signin',             changeFrequency: 'monthly',  priority: 0.6 },
-  { path: '/auth/register',           changeFrequency: 'monthly',  priority: 0.6 },
-  { path: '/auth/forgot-password',    changeFrequency: 'monthly',  priority: 0.4 },
-];
-
 // ── Support / contact ─────────────────────────────────────────────────────
 const supportPages: SitemapPage[] = [
   { path: '/contact',                 changeFrequency: 'monthly',  priority: 0.7 },
@@ -134,14 +126,8 @@ const companyPages: SitemapPage[] = [
 // NOTE: Dashboard, billing, settings, and onboarding pages are
 // disallowed in robots.txt — do not include them in the sitemap.
 
-// ── Misc pages ────────────────────────────────────────────────────────────
-const miscPages: SitemapPage[] = [
-  { path: '/analytics',               changeFrequency: 'daily',    priority: 0.5 },
-  { path: '/plan',                    changeFrequency: 'monthly',  priority: 0.5 },
-  { path: '/verify',                  changeFrequency: 'monthly',  priority: 0.3 },
-  { path: '/checkout',                changeFrequency: 'monthly',  priority: 0.4 },
-  { path: '/checkout/success',        changeFrequency: 'monthly',  priority: 0.3 },
-];
+// Transactional/auth pages are intentionally omitted to avoid wasting crawl
+// budget on routes that are noindex, ephemeral, or low-value in search.
 
 // ---------------------------------------------------------------------------
 // Combine all page groups
@@ -154,11 +140,9 @@ const allPages: SitemapPage[] = [
   ...cliPages,
   ...docsPages,
   ...productPages,
-  ...authPages,
   ...supportPages,
   ...legalPages,
   ...companyPages,
-  ...miscPages,
 ];
 
 // ---------------------------------------------------------------------------

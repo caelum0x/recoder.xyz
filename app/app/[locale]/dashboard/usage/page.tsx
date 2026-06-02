@@ -436,12 +436,12 @@ export default function UsageDashboardPage() {
     const platformUsage = aggregateByPlatform(records);
     const totalCost = records.reduce((sum, r) => sum + (r.cost || 0), 0);
     const cliUsage = platformUsage.find((p) => p.platform === 'cli');
-    const webUsage = platformUsage.find((p) => p.platform === 'web');
+    const spacesUsage = platformUsage.find((p) => p.platform === 'spaces');
 
-    if (cliUsage && webUsage) {
-      if (cliUsage.cost > webUsage.cost * 2) {
-        recommendations.push('Consider using web interface for cost-effective operations');
-      } else if (webUsage.cost > cliUsage.cost * 2) {
+    if (cliUsage && spacesUsage) {
+      if (cliUsage.cost > spacesUsage.cost * 2) {
+        recommendations.push('Consider using Spaces for cost-effective operations');
+      } else if (spacesUsage.cost > cliUsage.cost * 2) {
         recommendations.push('CLI usage is more cost-effective for your workflow');
       }
     }

@@ -28,7 +28,9 @@ export interface DockerLogsResponse {
 }
 
 export interface DockerHealthCheckResponse {
-  ports: Array<{ port: number; responding: boolean; type: string }>;
+  daytona?: boolean;
+  previewUrl?: string;
+  ports: Array<{ port: number; responding: boolean; type: string; url?: string; signed?: boolean }>;
 }
 
 // Module-level state for docker availability check

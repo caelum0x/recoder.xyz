@@ -73,4 +73,23 @@ describe('requireRouteRateLimit', () => {
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(429);
   });
+
+  it('supports preview deploy route limits', () => {
+    mockCheckSlidingWindowLimit.mockReturnValueOnce({
+      allowed: true,
+      remaining: 9,
+      resetAt: Date.now() + 60000,
+    });
+
+    const req = {
+      requestId: 'r3',
+      apiKey: { id: 'k1', tier: 'free' },
+    } as any;
+    const res = createRes();
+    const next = vi.fn();
+
+    requireRouteRateLimit('projectPreviewDeploy')(req, res, next);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.headers['RateLimit-Limit']).toBe('10');
+  });
 });

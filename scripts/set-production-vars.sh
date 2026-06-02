@@ -2,18 +2,20 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_ENV="${ROOT_ENV:-$REPO_ROOT/.env.production}"
 AGENCY_ENV="${AGENCY_ENV:-$REPO_ROOT/recoder-agency/.env.docker}"
 PM_ENV="${PM_ENV:-$REPO_ROOT/recoder-pm/.env.docker}"
 WRITE_MODE="${WRITE_MODE:-false}"
 USE_PROCESS_ENV=false
 ROTATE_MINIO=false
 
+root_pairs=()
 agency_pairs=()
 pm_pairs=()
 
 usage() {
   cat <<'EOF'
-Set production env vars for Agency and PM.
+Set production env vars for root, Agency, and PM.
 
 Usage:
   bash scripts/set-production-vars.sh [options]
@@ -22,9 +24,14 @@ Options:
   --write                  Apply changes (default is dry-run)
   --from-env               Read known keys from current process env and stage them
   --rotate-minio           Generate and set secure MINIO_ROOT_PASSWORD + S3_SECRET_ACCESS_KEY in PM
+  --root KEY=VALUE         Stage root .env.production key/value (repeatable)
   --agency KEY=VALUE       Stage Agency key/value (repeatable)
   --pm KEY=VALUE           Stage PM key/value (repeatable)
   -h, --help               Show help
+
+Known Root keys:
+  INTERNAL_SERVICE_KEY AUTH_DATABASE_URL MAIN_SITE_INTERNAL_URL
+  DAYTONA_API_KEY DAYTONA_JWT_TOKEN DAYTONA_ORGANIZATION_ID DAYTONA_API_URL DAYTONA_SERVER_URL
 
 Known Agency keys:
   POLAR_ACCESS_TOKEN POLAR_PRO_PRODUCT_ID POLAR_WEBHOOK_SECRET POLAR_ORGANIZATION_ID
@@ -47,6 +54,11 @@ contains_key() {
   return 1
 }
 
+root_known=(
+  INTERNAL_SERVICE_KEY AUTH_DATABASE_URL MAIN_SITE_INTERNAL_URL
+  DAYTONA_API_KEY DAYTONA_JWT_TOKEN DAYTONA_ORGANIZATION_ID DAYTONA_API_URL DAYTONA_SERVER_URL
+)
+
 agency_known=(
   POLAR_ACCESS_TOKEN POLAR_PRO_PRODUCT_ID POLAR_WEBHOOK_SECRET POLAR_ORGANIZATION_ID
   RECODER_WEB_API_KEY PRODUCTION_DEPLOY_WEBHOOK_URL ALERT_WEBHOOK_URL
@@ -63,6 +75,11 @@ while [[ $# -gt 0 ]]; do
     --write) WRITE_MODE=true ;;
     --from-env) USE_PROCESS_ENV=true ;;
     --rotate-minio) ROTATE_MINIO=true ;;
+    --root)
+      shift
+      [[ $# -gt 0 ]] || { echo "--root requires KEY=VALUE" >&2; exit 1; }
+      root_pairs+=("$1")
+      ;;
     --agency)
       shift
       [[ $# -gt 0 ]] || { echo "--agency requires KEY=VALUE" >&2; exit 1; }
@@ -115,6 +132,10 @@ upsert_key() {
 
 stage_from_env() {
   local key val
+  for key in "${root_known[@]}"; do
+    val="${!key:-}"
+    [[ -n "$val" ]] && root_pairs+=("$key=$val")
+  done
   for key in "${agency_known[@]}"; do
     val="${!key:-}"
     [[ -n "$val" ]] && agency_pairs+=("$key=$val")
@@ -134,7 +155,9 @@ validate_pair() {
     echo "Invalid $scope pair (expected KEY=VALUE): $pair" >&2
     exit 1
   fi
-  if [[ "$scope" == "agency" ]]; then
+  if [[ "$scope" == "root" ]]; then
+    contains_key "$key" "${root_known[@]}" || { echo "Unknown root key: $key" >&2; exit 1; }
+  elif [[ "$scope" == "agency" ]]; then
     contains_key "$key" "${agency_known[@]}" || { echo "Unknown agency key: $key" >&2; exit 1; }
   else
     contains_key "$key" "${pm_known[@]}" || { echo "Unknown pm key: $key" >&2; exit 1; }
@@ -155,6 +178,9 @@ if [[ "$ROTATE_MINIO" == true ]]; then
   pm_pairs+=("S3_SECRET_ACCESS_KEY=$minio_pw")
 fi
 
+if [[ "${#root_pairs[@]}" -gt 0 ]]; then
+  for p in "${root_pairs[@]}"; do validate_pair "$p" "root"; done
+fi
 if [[ "${#agency_pairs[@]}" -gt 0 ]]; then
   for p in "${agency_pairs[@]}"; do validate_pair "$p" "agency"; done
 fi
@@ -163,6 +189,7 @@ if [[ "${#pm_pairs[@]}" -gt 0 ]]; then
 fi
 
 echo "mode: $([[ "$WRITE_MODE" == true ]] && echo write || echo dry-run)"
+echo "root env: $ROOT_ENV"
 echo "agency env: $AGENCY_ENV"
 echo "pm env: $PM_ENV"
 echo ""
@@ -183,6 +210,9 @@ apply_pairs() {
   done
 }
 
+if [[ "${#root_pairs[@]}" -gt 0 ]]; then
+  apply_pairs "$ROOT_ENV" "root" "${root_pairs[@]}"
+fi
 if [[ "${#agency_pairs[@]}" -gt 0 ]]; then
   apply_pairs "$AGENCY_ENV" "agency" "${agency_pairs[@]}"
 fi

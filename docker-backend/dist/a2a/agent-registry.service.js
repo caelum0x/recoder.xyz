@@ -16,6 +16,8 @@ exports.getAgentRegistryService = getAgentRegistryService;
 exports.resetAgentRegistryService = resetAgentRegistryService;
 const a2a_1 = require("@recoder/shared/a2a");
 const logger_1 = require("../logger");
+const a2a_persistence_1 = require("./a2a-persistence");
+const heartbeat_tracker_service_1 = require("./heartbeat-tracker.service");
 const logger = (0, logger_1.createLogger)('a2a-agent-registry');
 // ---------------------------------------------------------------------------
 // Platform defaults for self-registration
@@ -187,17 +189,73 @@ exports.DEFAULT_AGENTS = [
 // ---------------------------------------------------------------------------
 /** Agents are considered offline if no heartbeat within this window (ms). */
 const HEARTBEAT_TIMEOUT_MS = Number(process.env.RECODER_A2A_HEARTBEAT_TIMEOUT_MS || 5 * 60 * 1000);
+function buildTrackerMetadata(agent) {
+    return {
+        source: 'registry',
+        platform: agent.identity.platform,
+        tier: agent.tier,
+        url: agent.card.url,
+        tagCount: agent.tags.length,
+        skillCount: agent.card.skills.length,
+        ...(agent.identity.instanceId ? { instanceId: agent.identity.instanceId } : {}),
+    };
+}
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 class AgentRegistryService {
     registry;
     heartbeats = new Map();
+    lifecycle = new Map();
     constructor(registry) {
         this.registry = registry ?? new a2a_1.InMemoryAgentRegistry();
+        this.hydratePersistedState();
+    }
+    hydratePersistedState() {
+        const persisted = (0, a2a_persistence_1.loadA2AAgentRegistryState)();
+        for (const [, agent] of persisted.agents) {
+            this.registry.register(agent);
+        }
+        for (const [agentId, heartbeat] of persisted.heartbeats) {
+            this.heartbeats.set(agentId, heartbeat);
+        }
+        for (const [agentId, metadata] of persisted.lifecycle) {
+            this.lifecycle.set(agentId, metadata);
+        }
+        // Backfill lifecycle metadata for older persisted snapshots that only had
+        // agents + heartbeats so reconnect visibility survives upgrades.
+        for (const [agentId, agent] of persisted.agents) {
+            if (this.lifecycle.has(agentId))
+                continue;
+            const timestamp = this.heartbeats.get(agentId) || new Date().toISOString();
+            this.lifecycle.set(agentId, {
+                firstRegisteredAt: timestamp,
+                lastRegisteredAt: timestamp,
+                lastSeenAt: timestamp,
+                reconnectCount: 0,
+                registrationCount: 1,
+                ...(agent.identity.instanceId ? { lastInstanceId: agent.identity.instanceId } : {}),
+            });
+        }
+        if (persisted.agents.size > 0 || persisted.heartbeats.size > 0 || persisted.lifecycle.size > 0) {
+            logger.info({
+                persistedAgents: persisted.agents.size,
+                persistedHeartbeats: persisted.heartbeats.size,
+                persistedLifecycle: persisted.lifecycle.size,
+            }, 'Loaded persisted agent registry state');
+        }
+    }
+    persist() {
+        const agents = new Map(this.registry.list().map((agent) => [agent.identity.id, agent]));
+        (0, a2a_persistence_1.saveA2AAgentRegistryState)({
+            agents,
+            heartbeats: new Map(this.heartbeats),
+            lifecycle: new Map(this.lifecycle),
+        });
     }
     // -- Registration ---------------------------------------------------------
     register(input) {
+        const now = new Date().toISOString();
         const agent = {
             identity: input.identity,
             card: input.card,
@@ -206,9 +264,28 @@ class AgentRegistryService {
             status: 'supported',
             tags: input.tags,
         };
+        const previousLifecycle = this.lifecycle.get(agent.identity.id);
         this.registry.register(agent);
-        this.heartbeats.set(agent.identity.id, new Date().toISOString());
-        logger.info({ agentId: agent.identity.id, platform: agent.identity.platform }, 'Agent registered');
+        this.heartbeats.set(agent.identity.id, now);
+        this.lifecycle.set(agent.identity.id, {
+            firstRegisteredAt: previousLifecycle?.firstRegisteredAt || now,
+            lastRegisteredAt: now,
+            lastSeenAt: now,
+            reconnectCount: previousLifecycle ? previousLifecycle.reconnectCount + 1 : 0,
+            registrationCount: (previousLifecycle?.registrationCount || 0) + 1,
+            ...(input.identity.instanceId
+                ? { lastInstanceId: input.identity.instanceId }
+                : previousLifecycle?.lastInstanceId
+                    ? { lastInstanceId: previousLifecycle.lastInstanceId }
+                    : {}),
+        });
+        (0, heartbeat_tracker_service_1.getHeartbeatTracker)().recordHeartbeat(agent.identity.id, 'healthy', buildTrackerMetadata(agent));
+        this.persist();
+        logger.info({
+            agentId: agent.identity.id,
+            platform: agent.identity.platform,
+            reconnectCount: this.lifecycle.get(agent.identity.id)?.reconnectCount ?? 0,
+        }, 'Agent registered');
         return agent;
     }
     /**
@@ -235,6 +312,9 @@ class AgentRegistryService {
         const deleted = this.registry.unregister(agentId);
         if (deleted) {
             this.heartbeats.delete(agentId);
+            this.lifecycle.delete(agentId);
+            (0, heartbeat_tracker_service_1.getHeartbeatTracker)().removeAgent(agentId);
+            this.persist();
             logger.info({ agentId }, 'Agent unregistered');
         }
         return deleted;
@@ -247,7 +327,10 @@ class AgentRegistryService {
         const agent = this.registry.get(agentId);
         if (!agent)
             return undefined;
-        return { ...agent, health: this.getHealth(agentId) };
+        const lifecycle = this.getLifecycle(agentId);
+        if (!lifecycle)
+            return undefined;
+        return { ...agent, health: this.getHealth(agentId), lifecycle };
     }
     list() {
         return this.registry.list();
@@ -256,15 +339,45 @@ class AgentRegistryService {
     discover(query = {}) {
         return this.registry.discover(query);
     }
+    discoverWithHealth(query = {}) {
+        return this.registry.discover(query).flatMap((agent) => {
+            const enriched = this.getWithHealth(agent.identity.id);
+            return enriched ? [enriched] : [];
+        });
+    }
     // -- Health / Heartbeat ---------------------------------------------------
     recordHeartbeat(agentId) {
         const agent = this.registry.get(agentId);
         if (!agent)
             return false;
-        this.heartbeats.set(agentId, new Date().toISOString());
+        const now = new Date().toISOString();
+        this.heartbeats.set(agentId, now);
+        const existingLifecycle = this.lifecycle.get(agentId);
+        this.lifecycle.set(agentId, {
+            firstRegisteredAt: existingLifecycle?.firstRegisteredAt || now,
+            lastRegisteredAt: existingLifecycle?.lastRegisteredAt || now,
+            lastSeenAt: now,
+            reconnectCount: existingLifecycle?.reconnectCount || 0,
+            registrationCount: existingLifecycle?.registrationCount || 1,
+            ...(agent.identity.instanceId
+                ? { lastInstanceId: agent.identity.instanceId }
+                : existingLifecycle?.lastInstanceId
+                    ? { lastInstanceId: existingLifecycle.lastInstanceId }
+                    : {}),
+        });
+        (0, heartbeat_tracker_service_1.getHeartbeatTracker)().recordHeartbeat(agentId, 'healthy', buildTrackerMetadata(agent));
+        this.persist();
         return true;
     }
     getHealth(agentId) {
+        const tracker = (0, heartbeat_tracker_service_1.getHeartbeatTracker)();
+        const trackerRecord = tracker.getRecord(agentId);
+        if (trackerRecord) {
+            return {
+                lastHeartbeat: new Date(trackerRecord.lastHeartbeatAt).toISOString(),
+                online: tracker.isAgentOnline(agentId),
+            };
+        }
         const lastHeartbeat = this.heartbeats.get(agentId);
         if (!lastHeartbeat) {
             return { lastHeartbeat: '', online: false };
@@ -272,6 +385,23 @@ class AgentRegistryService {
         const lastMs = new Date(lastHeartbeat).getTime();
         const online = Date.now() - lastMs < HEARTBEAT_TIMEOUT_MS;
         return { lastHeartbeat, online };
+    }
+    getLifecycle(agentId) {
+        const existing = this.lifecycle.get(agentId);
+        if (existing)
+            return existing;
+        const agent = this.registry.get(agentId);
+        if (!agent)
+            return undefined;
+        const timestamp = this.heartbeats.get(agentId) || new Date().toISOString();
+        return {
+            firstRegisteredAt: timestamp,
+            lastRegisteredAt: timestamp,
+            lastSeenAt: timestamp,
+            reconnectCount: 0,
+            registrationCount: 1,
+            ...(agent.identity.instanceId ? { lastInstanceId: agent.identity.instanceId } : {}),
+        };
     }
     // -- Self-registration ----------------------------------------------------
     selfRegister(input) {

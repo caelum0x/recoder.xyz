@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ensureAppUserFromAuthUser, requireAuth } from "@/lib/auth-helpers";
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,11 +80,28 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    const spacesCount = await prisma.projects.count({
+      where: {
+        userId: user.id,
+        type: 'space',
+      },
+    });
+
+    const connectedAgentsCount = await prisma.agents.count({
+      where: {
+        userId: user.id,
+        status: { in: ['active', 'connected', 'running', 'online'] },
+      },
+    });
+
+    const normalizedPlan = normalizeCommercialPlan(user.subscriptionPlan || user.subscription || 'free');
+    const entitlements = getCommercialEntitlements(normalizedPlan);
+
     const dashboardData = {
       success: true,
       data: {
         subscription: {
-          plan: user.subscription || user.subscriptionPlan || 'free',
+          plan: normalizedPlan,
           status: user.subscriptionStatus || 'active',
           renewsAt: user.subscriptionEndDate?.toISOString() || null,
           limits: {
@@ -91,12 +109,18 @@ export async function GET(request: NextRequest) {
             apiCalls: 100000,
             deployments: 1000,
           },
+          entitlements,
         },
         usage: {
           totalRequests: usage._count || 0,
           usedRequests: usage._count || 0,
           totalTokens: usage._sum.tokensUsed || 0,
           totalCost: usage._sum.cost || 0,
+        },
+        activation: {
+          spacesCreated: spacesCount,
+          connectedAgents: connectedAgentsCount,
+          shippingLoopsVisible: deploymentsCount,
         },
         router_stats: {
           projectsTotal,

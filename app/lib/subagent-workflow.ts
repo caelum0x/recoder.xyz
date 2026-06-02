@@ -29,7 +29,6 @@ const DEFAULT_PATHS = [
   '/Users/arhansubasi/recoder.xyz/recoder-agency',
   '/Users/arhansubasi/recoder.xyz/recoder-pm',
   '/Users/arhansubasi/recoder.xyz/recoder-skill',
-  '/Users/arhansubasi/recoder.xyz/recoder-web',
   '/Users/arhansubasi/recoder.xyz/tools',
 ] as const;
 
@@ -52,11 +51,11 @@ const LANE_CATALOG: SubagentLane[] = [
   },
   {
     laneId: 'A1',
-    title: 'Core app and web runtime',
-    paths: ['/Users/arhansubasi/recoder.xyz/app', '/Users/arhansubasi/recoder.xyz/recoder-web'],
+    title: 'Core app and Spaces dashboard',
+    paths: ['/Users/arhansubasi/recoder.xyz/app'],
     validationCommands: [
-      'pnpm -C /Users/arhansubasi/recoder.xyz/recoder-web test',
-      'pnpm -C /Users/arhansubasi/recoder.xyz/recoder-web run typecheck',
+      'pnpm -C /Users/arhansubasi/recoder.xyz/app test',
+      'pnpm -C /Users/arhansubasi/recoder.xyz/app run typecheck',
     ],
   },
   {

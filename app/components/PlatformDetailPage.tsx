@@ -95,8 +95,8 @@ export function PlatformDetailPage({ serviceId, longDescription, features, useCa
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Open {service.label}</span>
             </a>
-            <Link href="/agents" className="text-sm text-gray-500 hover:text-white transition-colors">AI Agents</Link>
-            <Link href="/plan" className="text-sm text-gray-500 hover:text-white transition-colors">Plans & Pricing</Link>
+            <Link href="/platform/agents" className="text-sm text-gray-500 hover:text-white transition-colors">AI Agents</Link>
+            <Link href="/docs/getting-started" className="text-sm text-gray-500 hover:text-white transition-colors">Getting Started</Link>
           </div>
         </div>
       </div>

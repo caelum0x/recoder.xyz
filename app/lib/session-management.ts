@@ -6,6 +6,7 @@ import crypto from 'crypto';
 
 import { prisma } from './prisma';
 import { getPlanLimits, canStartSession, canUseModel, isPremiumModel } from './plan-config';
+import { getCommercialEntitlements, normalizeCommercialPlan } from '@/lib/plan-entitlements';
 
 export interface Session {
   id: string;
@@ -423,6 +424,13 @@ export async function getSessionStats(userId: string): Promise<{
   premiumTokensLimit: number;
   remainingPremiumTokens: number;
   activeSession: Session | null;
+  commercial: {
+    plan: string;
+    workspaces: number;
+    connectedAgents: number;
+    artifactRetentionDays: number;
+    previewDeploysPerMonth: number;
+  };
 }> {
   const user = await prisma.users.findUnique({
     where: { id: userId },
@@ -438,6 +446,9 @@ export async function getSessionStats(userId: string): Promise<{
   const premiumTokensToday = await getPremiumTokensToday(userId);
   const activeSession = await getActiveSession(userId);
   
+  const normalizedPlan = normalizeCommercialPlan(user.subscriptionPlan);
+  const entitlements = getCommercialEntitlements(normalizedPlan);
+
   return {
     sessionsToday,
     sessionsLimit: limits.sessionsPerDay,
@@ -447,7 +458,14 @@ export async function getSessionStats(userId: string): Promise<{
     remainingPremiumTokens: limits.premiumModelsTokenLimit > 0 
       ? Math.max(0, limits.premiumModelsTokenLimit - premiumTokensToday)
       : -1,
-    activeSession
+    activeSession,
+    commercial: {
+      plan: normalizedPlan,
+      workspaces: entitlements.workspaces,
+      connectedAgents: entitlements.connectedAgents,
+      artifactRetentionDays: entitlements.artifactRetentionDays,
+      previewDeploysPerMonth: entitlements.previewDeploysPerMonth,
+    },
   };
 }
 

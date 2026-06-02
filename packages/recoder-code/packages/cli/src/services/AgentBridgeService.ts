@@ -52,6 +52,7 @@ export class AgentBridgeService extends EventEmitter {
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private connected = false;
   private agentId: string;
+  private sessionId: string | null = null;
   private workspaceId: string | null = null;
   private reconnectAttempts = 0;
   private readonly maxReconnectDelay = 30_000;
@@ -120,6 +121,7 @@ export class AgentBridgeService extends EventEmitter {
 
         this.ws.on('close', (_code, _reason) => {
           this.connected = false;
+          this.sessionId = null;
           this.stopHeartbeat();
           this.emit('disconnected');
           this.scheduleReconnect(token, capabilities);
@@ -156,6 +158,7 @@ export class AgentBridgeService extends EventEmitter {
       this.ws = null;
     }
     this.connected = false;
+    this.sessionId = null;
     this.workspaceId = null;
     this.reconnectAttempts = 0;
   }
@@ -243,8 +246,10 @@ export class AgentBridgeService extends EventEmitter {
   private handleMessage(msg: Record<string, unknown>): void {
     switch (msg.type) {
       case 'registered':
+        this.sessionId = typeof msg.sessionId === 'string' ? msg.sessionId : this.sessionId;
         this.emit('registered', {
           agentId: msg.agentId,
+          sessionId: msg.sessionId,
           workspaces: msg.workspaces,
         });
         break;
@@ -311,6 +316,10 @@ export class AgentBridgeService extends EventEmitter {
     return this.agentId;
   }
 
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
+
   getWorkspaceId(): string | null {
     return this.workspaceId;
   }
@@ -322,6 +331,7 @@ export class AgentBridgeService extends EventEmitter {
     }
     console.log(`Agent Bridge: Connected`);
     console.log(`  Agent ID: ${this.agentId}`);
+    console.log(`  Session ID: ${this.sessionId || 'Unknown'}`);
     console.log(`  Workspace: ${this.workspaceId || 'None'}`);
   }
 }

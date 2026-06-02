@@ -39,8 +39,8 @@ function sendA2AError(res, httpStatus, error) {
  * - workspace_id (string)
  * - thread_id (string)
  * - requester (object with agent_id, platform)
- * - assignee (object with agent_id, platform)
- * - connector (object with connector_id, platform, protocol)
+ * - assignee (object with agent_id, platform), unless `auto_route=true`
+ * - connector (object with connector_id, platform, protocol), unless `auto_route=true`
  * - payload (non-null)
  */
 function validateCreateTaskBody(req, res, next) {
@@ -53,6 +53,7 @@ function validateCreateTaskBody(req, res, next) {
         return;
     }
     const issues = [];
+    const wantsAutoRoute = body?.auto_route === true;
     if (!body.workspace_id || typeof body.workspace_id !== 'string') {
         issues.push('workspace_id must be a non-empty string');
     }
@@ -71,32 +72,36 @@ function validateCreateTaskBody(req, res, next) {
             issues.push('requester.platform must be a non-empty string');
         }
     }
-    // assignee
-    if (!body.assignee || typeof body.assignee !== 'object') {
-        issues.push('assignee must be an object');
+    // assignee / connector are optional when the route is asked to auto-route
+    if (!wantsAutoRoute) {
+        if (!body.assignee || typeof body.assignee !== 'object') {
+            issues.push('assignee must be an object');
+        }
+        else {
+            if (!body.assignee.agent_id || typeof body.assignee.agent_id !== 'string') {
+                issues.push('assignee.agent_id must be a non-empty string');
+            }
+            if (!body.assignee.platform || typeof body.assignee.platform !== 'string') {
+                issues.push('assignee.platform must be a non-empty string');
+            }
+        }
+        if (!body.connector || typeof body.connector !== 'object') {
+            issues.push('connector must be an object');
+        }
+        else {
+            if (!body.connector.connector_id || typeof body.connector.connector_id !== 'string') {
+                issues.push('connector.connector_id must be a non-empty string');
+            }
+            if (!body.connector.platform || typeof body.connector.platform !== 'string') {
+                issues.push('connector.platform must be a non-empty string');
+            }
+            if (!body.connector.protocol || typeof body.connector.protocol !== 'string') {
+                issues.push('connector.protocol must be a non-empty string');
+            }
+        }
     }
-    else {
-        if (!body.assignee.agent_id || typeof body.assignee.agent_id !== 'string') {
-            issues.push('assignee.agent_id must be a non-empty string');
-        }
-        if (!body.assignee.platform || typeof body.assignee.platform !== 'string') {
-            issues.push('assignee.platform must be a non-empty string');
-        }
-    }
-    // connector
-    if (!body.connector || typeof body.connector !== 'object') {
-        issues.push('connector must be an object');
-    }
-    else {
-        if (!body.connector.connector_id || typeof body.connector.connector_id !== 'string') {
-            issues.push('connector.connector_id must be a non-empty string');
-        }
-        if (!body.connector.platform || typeof body.connector.platform !== 'string') {
-            issues.push('connector.platform must be a non-empty string');
-        }
-        if (!body.connector.protocol || typeof body.connector.protocol !== 'string') {
-            issues.push('connector.protocol must be a non-empty string');
-        }
+    else if (body.routing_hints !== undefined && (typeof body.routing_hints !== 'object' || body.routing_hints === null || Array.isArray(body.routing_hints))) {
+        issues.push('routing_hints must be an object when provided');
     }
     // payload
     if (body.payload === undefined || body.payload === null) {

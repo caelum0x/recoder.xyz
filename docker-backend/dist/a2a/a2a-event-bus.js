@@ -43,6 +43,7 @@ exports.A2AEventType = {
     TaskSubmitted: 'task.submitted',
     TaskStarted: 'task.started',
     TaskProgress: 'task.progress',
+    ArtifactAttached: 'artifact.attached',
     TaskStream: 'task.stream',
     TaskInputRequired: 'task.input-required',
     TaskCompleted: 'task.completed',
@@ -72,6 +73,8 @@ exports.A2AEventType = {
     HandoffCompleted: 'handoff.completed',
     DelegationCreated: 'delegation.created',
     DelegationCompleted: 'delegation.completed',
+    ReviewAccepted: 'review.accepted',
+    MergeRequested: 'merge.requested',
     // Approval events
     ApprovalRequested: 'approval.requested',
     ApprovalGranted: 'approval.granted',
@@ -93,6 +96,7 @@ exports.TASK_EVENT_TYPES = new Set([
     exports.A2AEventType.TaskSubmitted,
     exports.A2AEventType.TaskStarted,
     exports.A2AEventType.TaskProgress,
+    exports.A2AEventType.ArtifactAttached,
     exports.A2AEventType.TaskStream,
     exports.A2AEventType.TaskInputRequired,
     exports.A2AEventType.TaskCompleted,
@@ -133,6 +137,8 @@ exports.HANDOFF_EVENT_TYPES = new Set([
     exports.A2AEventType.HandoffCompleted,
     exports.A2AEventType.DelegationCreated,
     exports.A2AEventType.DelegationCompleted,
+    exports.A2AEventType.ReviewAccepted,
+    exports.A2AEventType.MergeRequested,
 ]);
 /** All approval event types. */
 exports.APPROVAL_EVENT_TYPES = new Set([

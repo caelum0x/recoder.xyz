@@ -27,7 +27,10 @@ import {
   type TaskAgentRef,
   type TaskConnectorInfo,
   type TaskResult,
+  type TaskArtifact,
   type TaskErrorInfo,
+  type TaskPreviewLink,
+  type TaskEvidenceItem,
   type CreateTaskEnvelopeInput,
   type AuditEvent,
   type A2AError,
@@ -54,6 +57,241 @@ import { getA2ARetentionWindowConfig, redactSensitiveData } from './data-hygiene
 import { loadA2ATasks, saveA2ATasks } from './a2a-persistence';
 
 const logger = createLogger('a2a-task-lifecycle');
+
+function collectPreviewLinks(
+  result: TaskResult,
+  metadata?: Record<string, unknown>,
+): TaskPreviewLink[] {
+  const links = [...(result.preview ?? [])];
+  const candidates: Array<{ url: unknown; source?: string; createdAt?: unknown }> = [
+    {
+      url: result.data?.previewUrl,
+      source: 'result.data.previewUrl',
+      createdAt: (result.data as Record<string, unknown> | undefined)?.previewCreatedAt,
+    },
+    {
+      url: (result.data?.preview as Record<string, unknown> | undefined)?.url,
+      source: 'result.data.preview',
+      createdAt: (result.data?.preview as Record<string, unknown> | undefined)?.createdAt,
+    },
+    {
+      url: ((result.data?.raw as Record<string, unknown> | undefined)?.previewUrl),
+      source: 'result.data.raw.previewUrl',
+      createdAt: (result.data?.raw as Record<string, unknown> | undefined)?.previewCreatedAt,
+    },
+    {
+      url: metadata?.previewUrl,
+      source: 'task.metadata.previewUrl',
+      createdAt: metadata?.previewCreatedAt,
+    },
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate.url !== 'string' || candidate.url.trim() === '') continue;
+    if (links.some((link) => link.url === candidate.url)) continue;
+    links.push({
+      url: candidate.url,
+      source: candidate.source,
+      metadata:
+        typeof candidate.createdAt === 'string' && candidate.createdAt
+          ? { createdAt: candidate.createdAt }
+          : undefined,
+    });
+  }
+
+  return links;
+}
+
+function collectFilesChanged(result: TaskResult): string[] {
+  const direct = result.data?.filesChanged;
+  if (Array.isArray(direct)) {
+    return direct.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  }
+
+  const rawFiles = (result.data?.raw as Record<string, unknown> | undefined)?.filesChanged;
+  if (Array.isArray(rawFiles)) {
+    return rawFiles.filter((item): item is string => typeof item === 'string' && item.length > 0);
+  }
+
+  return [];
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter(Boolean);
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return [value.trim()];
+  }
+  return [];
+}
+
+function toExcerpt(value: string, maxLength = 240): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function collectLogEvidence(result: TaskResult): TaskEvidenceItem[] {
+  const data = readRecord(result.data);
+  const raw = readRecord(data?.raw);
+  const candidates = [
+    { stream: 'stdout', value: data?.stdout ?? raw?.stdout, label: 'stdout' },
+    { stream: 'stderr', value: data?.stderr ?? raw?.stderr, label: 'stderr' },
+    { stream: 'logs', value: data?.logs ?? raw?.logs, label: 'runtime logs' },
+  ] as const;
+
+  const evidence: TaskEvidenceItem[] = [];
+  for (const candidate of candidates) {
+    const entries = readStringArray(candidate.value);
+    if (entries.length === 0) continue;
+    evidence.push({
+      kind: 'log',
+      label: candidate.label,
+      ref: candidate.stream,
+      metadata: {
+        stream: candidate.stream,
+        lineCount: entries.length,
+        excerpt: toExcerpt(entries.join('\n')),
+      },
+    });
+  }
+
+  return evidence;
+}
+
+function collectRuntimeEvidence(result: TaskResult): TaskEvidenceItem[] {
+  const data = readRecord(result.data);
+  const raw = readRecord(data?.raw);
+  const gitStatus =
+    readString(data?.gitStatus) ??
+    readString(data?.git_status) ??
+    readString(raw?.gitStatus) ??
+    readString(raw?.git_status);
+  const gitBranch =
+    readString(data?.gitBranch) ??
+    readString(data?.git_branch) ??
+    readString(raw?.gitBranch) ??
+    readString(raw?.git_branch);
+  const cloneUrl =
+    readString(data?.cloneUrl) ??
+    readString(data?.clone_url) ??
+    readString(raw?.cloneUrl) ??
+    readString(raw?.clone_url);
+  const runtimeType =
+    readString(data?.runtimeType) ??
+    readString(data?.runtime_type) ??
+    readString(raw?.runtimeType) ??
+    readString(raw?.runtime_type);
+  const sessionId =
+    readString(data?.sessionId) ??
+    readString(data?.session_id) ??
+    readString(raw?.sessionId) ??
+    readString(raw?.session_id);
+  const sandboxId =
+    readString(data?.sandboxId) ??
+    readString(data?.sandbox_id) ??
+    readString(raw?.sandboxId) ??
+    readString(raw?.sandbox_id);
+
+  const evidence: TaskEvidenceItem[] = [];
+
+  if (gitStatus || gitBranch || cloneUrl) {
+    evidence.push({
+      kind: 'runtime',
+      label: gitBranch ? `Git state (${gitBranch})` : 'Git state',
+      ref: gitBranch ? `git:${gitBranch}` : 'git',
+      metadata: {
+        ...(gitStatus ? { gitStatus: toExcerpt(gitStatus) } : {}),
+        ...(gitBranch ? { gitBranch } : {}),
+        ...(cloneUrl ? { cloneUrl } : {}),
+      },
+    });
+  }
+
+  if (runtimeType || sessionId || sandboxId) {
+    evidence.push({
+      kind: 'runtime',
+      label: runtimeType ? `Runtime session (${runtimeType})` : 'Runtime session',
+      ref: sessionId || sandboxId || runtimeType || 'runtime',
+      metadata: {
+        ...(runtimeType ? { runtimeType } : {}),
+        ...(sessionId ? { sessionId } : {}),
+        ...(sandboxId ? { sandboxId } : {}),
+      },
+    });
+  }
+
+  return evidence;
+}
+
+function enrichTaskResult(
+  envelope: TaskEnvelope,
+  result: TaskResult,
+): TaskResult {
+  const preview = collectPreviewLinks(result, envelope.metadata);
+  const filesChanged = collectFilesChanged(result);
+  const explicitEvidence = [...(result.evidence ?? [])];
+  const derivedEvidence: TaskEvidenceItem[] = [
+    {
+      kind: 'trace',
+      label: 'Task trace',
+      ref: envelope.trace_id,
+      metadata: { taskId: envelope.id },
+    },
+    ...preview.map((link) => ({
+      kind: 'preview' as const,
+      label: link.label || 'Preview URL',
+      ref: link.url,
+      metadata: {
+        ...(link.source ? { source: link.source } : {}),
+        ...(link.port != null ? { port: link.port } : {}),
+      },
+    })),
+    ...(result.artifacts ?? []).map((artifact) => ({
+      kind: artifact.artifact_type === 'log' ? 'log' as const : 'artifact' as const,
+      label: artifact.path || artifact.key,
+      ref: artifact.key,
+      metadata: {
+        artifactType: artifact.artifact_type,
+        ...(artifact.path ? { path: artifact.path } : {}),
+      },
+    })),
+    ...filesChanged.map((path) => ({
+      kind: 'file-change' as const,
+      label: path,
+      ref: path,
+    })),
+    ...collectLogEvidence(result),
+    ...collectRuntimeEvidence(result),
+  ];
+
+  const seen = new Set<string>();
+  const evidence = [...explicitEvidence, ...derivedEvidence].filter((item) => {
+    const key = `${item.kind}:${item.ref || item.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return {
+    ...result,
+    ...(preview.length > 0 ? { preview } : {}),
+    evidence,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // ID generation
@@ -180,6 +418,11 @@ export class InMemoryTaskStore implements TaskStore {
  */
 export type AuditEventSink = (event: AuditEvent) => void | Promise<void>;
 
+export interface TaskAuditRecord {
+  event: AuditEvent;
+  expiresAt: number;
+}
+
 // ---------------------------------------------------------------------------
 // Create-task input
 // ---------------------------------------------------------------------------
@@ -242,6 +485,24 @@ export interface TransitionTaskInput {
   tokensUsed?: number;
   /** Estimated cost in USD. Set when completing a task. */
   estimatedCostUsd?: number;
+}
+
+export interface UpdateTaskMetadataInput {
+  metadataPatch: Record<string, unknown>;
+  triggeredBy?: string;
+  reason?: string;
+}
+
+export interface AppendTaskArtifactsInput {
+  artifacts: TaskArtifact[];
+  triggeredBy?: string;
+  reason?: string;
+}
+
+export interface AppendTaskPreviewInput {
+  preview: TaskPreviewLink[];
+  triggeredBy?: string;
+  reason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -629,7 +890,7 @@ export class TaskLifecycleService {
 
     // 5. Attach result / error / cost data if provided
     if (input.result && input.target_state === TaskStateEnum.Completed) {
-      updated = { ...updated, result: input.result };
+      updated = { ...updated, result: enrichTaskResult(updated, input.result) };
     }
     if (input.error && input.target_state === TaskStateEnum.Failed) {
       updated = { ...updated, error: input.error };
@@ -816,6 +1077,226 @@ export class TaskLifecycleService {
     });
   }
 
+  /**
+   * Merge metadata into an existing task without changing its state.
+   * This is used for canonical run-context updates such as approvals,
+   * handoffs, routing decisions, and other lifecycle-adjacent state that
+   * should live on the task envelope itself.
+   */
+  updateTaskMetadata(
+    taskId: string,
+    input: UpdateTaskMetadataInput,
+  ): ServiceResult<TaskEnvelope> {
+    const envelope = this.store.get(taskId);
+    if (!envelope) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    const now = new Date().toISOString();
+    const updated: TaskEnvelope = {
+      ...envelope,
+      updated_at: now,
+      metadata: {
+        ...(envelope.metadata ?? {}),
+        ...input.metadataPatch,
+      },
+    };
+
+    this.store.set(taskId, updated);
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: input.triggeredBy || 'orchestrator',
+          name: input.triggeredBy || 'orchestrator',
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: input.reason || 'Task metadata updated',
+          metadata_patch: input.metadataPatch,
+        },
+        now,
+      }),
+    );
+
+    return { ok: true, data: updated };
+  }
+
+  /**
+   * Append artifacts to an existing task result without changing state.
+   * This supports post-run artifact uploads from Space-native CLI workflows
+   * and other control-plane surfaces that need to enrich a task over time.
+   */
+  appendTaskArtifacts(
+    taskId: string,
+    input: AppendTaskArtifactsInput,
+  ): ServiceResult<TaskEnvelope> {
+    const envelope = this.store.get(taskId);
+    if (!envelope) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    if (input.artifacts.length === 0) {
+      return { ok: true, data: envelope };
+    }
+
+    const existingResult = envelope.result ?? {};
+    const mergedArtifacts = new Map<string, TaskArtifact>();
+
+    for (const artifact of existingResult.artifacts ?? []) {
+      mergedArtifacts.set(artifact.key, artifact);
+    }
+    for (const artifact of input.artifacts) {
+      mergedArtifacts.set(artifact.key, artifact);
+    }
+
+    const now = new Date().toISOString();
+    const updated: TaskEnvelope = {
+      ...envelope,
+      updated_at: now,
+      result: enrichTaskResult(envelope, {
+        ...existingResult,
+        artifacts: [...mergedArtifacts.values()],
+      }),
+    };
+
+    this.store.set(taskId, updated);
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: input.triggeredBy || 'artifact-api',
+          name: input.triggeredBy || 'artifact-api',
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: input.reason || 'Task artifacts appended',
+          artifact_count: input.artifacts.length,
+          artifact_keys: input.artifacts.map((artifact) => artifact.key),
+        },
+        now,
+      }),
+    );
+
+    return { ok: true, data: updated };
+  }
+
+  appendTaskPreview(
+    taskId: string,
+    input: AppendTaskPreviewInput,
+  ): ServiceResult<TaskEnvelope> {
+    const envelope = this.store.get(taskId);
+    if (!envelope) {
+      return {
+        ok: false,
+        httpStatus: 404,
+        error: buildA2AError({
+          code: A2AErrorCodeEnum.TaskNotFound,
+          message: `Task not found: ${taskId}`,
+          details: { task_id: taskId },
+        }),
+      };
+    }
+
+    if (input.preview.length === 0) {
+      return { ok: true, data: envelope };
+    }
+
+    const existingResult = envelope.result ?? {};
+    const mergedPreview = new Map<string, TaskPreviewLink>();
+    for (const preview of existingResult.preview ?? []) {
+      mergedPreview.set(preview.url, preview);
+    }
+    for (const preview of input.preview) {
+      mergedPreview.set(preview.url, preview);
+    }
+
+    const now = new Date().toISOString();
+    const updated: TaskEnvelope = {
+      ...envelope,
+      updated_at: now,
+      result: enrichTaskResult(envelope, {
+        ...existingResult,
+        preview: [...mergedPreview.values()],
+      }),
+    };
+
+    this.store.set(taskId, updated);
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: input.triggeredBy || 'preview-api',
+          name: input.triggeredBy || 'preview-api',
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: input.reason || 'Task preview attached',
+          preview_urls: input.preview.map((preview) => preview.url),
+          metadata_patch: {
+            preview: input.preview.map((preview) => ({
+              url: preview.url,
+              label: preview.label || null,
+              source: preview.source || null,
+            })),
+          },
+        },
+        now,
+      }),
+    );
+
+    return { ok: true, data: updated };
+  }
+
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
@@ -870,15 +1351,47 @@ export class TaskLifecycleService {
       return { ok: true, data: envelope };
     }
 
+    const claimedAt = new Date().toISOString();
+    const claim = { sessionId, agentId, claimedAt };
     const updated: TaskEnvelope = {
       ...envelope,
+      updated_at: claimedAt,
       metadata: {
         ...envelope.metadata,
-        claimedBy: { sessionId, agentId, claimedAt: new Date().toISOString() },
+        claimedBy: claim,
       },
     };
     this.store.set(taskId, updated);
     logger.info({ task_id: taskId, sessionId, agentId }, 'task claimed');
+
+    this.emitAudit(
+      createAuditEvent({
+        id: generateId('evt'),
+        event_type: AuditEventTypeEnum.TaskProgress,
+        severity: AuditSeverityEnum.Info,
+        actor: {
+          kind: AuditActorKindEnum.System,
+          id: agentId,
+          name: agentId,
+        },
+        target: {
+          kind: AuditTargetKindEnum.Task,
+          id: taskId,
+        },
+        trace_id: updated.trace_id,
+        workspace_id: updated.workspace_id,
+        thread_id: updated.thread_id,
+        task_id: taskId,
+        metadata: {
+          reason: 'Task claimed',
+          metadata_patch: {
+            claimedBy: claim,
+          },
+        },
+        now: claimedAt,
+      }),
+    );
+
     return { ok: true, data: updated };
   }
 
@@ -893,6 +1406,16 @@ export class TaskLifecycleService {
     const normalizedLimit = Math.max(0, Math.floor(limit));
     if (normalizedLimit === 0) return [];
     return this.auditTrail.slice(-normalizedLimit).map((item) => item.event);
+  }
+
+  getRecentAuditEventsForTask(taskId: string, limit = 100): AuditEvent[] {
+    this.pruneAuditTrail();
+    const normalizedLimit = Math.max(0, Math.floor(limit));
+    if (normalizedLimit === 0) return [];
+    return this.auditTrail
+      .filter((item) => item.event.task_id === taskId)
+      .slice(-normalizedLimit)
+      .map((item) => item.event);
   }
 
   private stateToAuditEventType(state: TaskState): (typeof AuditEventTypeEnum)[keyof typeof AuditEventTypeEnum] {

@@ -1,5 +1,5 @@
 {
-	"name": "recoder-a2a-sdk",
+	"name": "@recoder/a2a-sdk",
 	"version": "1.0.1",
 	"description": "Shared SDK helpers for A2A task state mapping, error taxonomy, envelope builders, and audit event emitters",
 	"license": "MIT",

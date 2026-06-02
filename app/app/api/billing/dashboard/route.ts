@@ -5,6 +5,7 @@ import { headers } from 'next/headers';
 import { logger } from '@/lib/logger';
 
 import { prisma } from '@/lib/prisma';
+import { getPlanById } from '@/lib/config/subscription-plans';
 
 // GET /api/billing/dashboard - Get billing dashboard data
 export async function GET(req: NextRequest) {
@@ -73,6 +74,29 @@ export async function GET(req: NextRequest) {
       }
     };
 
+    const monthlyProjects = await prisma.ai_generated_projects.count({
+      where: {
+        userId: user.id,
+        createdAt: { gte: startOfMonth },
+      },
+    });
+
+    const deploymentsThisMonth = await prisma.ai_generated_projects.count({
+      where: {
+        userId: user.id,
+        deployUrl: { not: null },
+        updatedAt: { gte: startOfMonth },
+      },
+    });
+
+    const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const projectsActive = await prisma.ai_generated_projects.count({
+      where: {
+        userId: user.id,
+        updatedAt: { gte: last30Days },
+      },
+    });
+
     // Fetch default payment method
     const paymentMethod = await prisma.payment_methods.findFirst({
       where: {
@@ -83,6 +107,9 @@ export async function GET(req: NextRequest) {
 
     // Calculate next payment date
     const nextPaymentDate = subscription?.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const normalizedPlanId = subscription?.planId || 'free';
+    const planDefinition = getPlanById(normalizedPlanId);
+    const freePlanDefinition = getPlanById('free');
 
     return NextResponse.json({
       success: true,
@@ -94,6 +121,14 @@ export async function GET(req: NextRequest) {
           cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
           amount: planAmount,
           currency: subscription.currency || 'USD',
+          entitlements: planDefinition ? {
+            workspaces: planDefinition.limits.workspaces,
+            connectedAgents: planDefinition.limits.connectedAgents,
+            artifactRetentionDays: planDefinition.limits.artifactRetentionDays,
+            previewDeploysPerMonth: planDefinition.limits.previewDeploysPerMonth,
+            approvalWorkflows: planDefinition.limits.approvalWorkflows,
+            governance: planDefinition.limits.governance,
+          } : undefined,
         } : {
           plan: 'free',
           status: 'active',
@@ -101,11 +136,24 @@ export async function GET(req: NextRequest) {
           cancelAtPeriodEnd: false,
           amount: 0,
           currency: 'USD',
+          entitlements: freePlanDefinition ? {
+            workspaces: freePlanDefinition.limits.workspaces,
+            connectedAgents: freePlanDefinition.limits.connectedAgents,
+            artifactRetentionDays: freePlanDefinition.limits.artifactRetentionDays,
+            previewDeploysPerMonth: freePlanDefinition.limits.previewDeploysPerMonth,
+            approvalWorkflows: freePlanDefinition.limits.approvalWorkflows,
+            governance: freePlanDefinition.limits.governance,
+          } : undefined,
         },
         usage: {
           requests: usage._sum.requestCount || 0,
           tokens: usage._sum.totalTokens || 0,
           cost: usage._sum.totalCost || 0,
+          controlPlane: {
+            projectsThisMonth: monthlyProjects,
+            deploymentsThisMonth,
+            projectsActive,
+          },
         },
         nextPayment: subscription ? {
           date: subscription.currentPeriodEnd.toISOString(),

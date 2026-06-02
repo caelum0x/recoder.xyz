@@ -2,9 +2,22 @@ import { Router, type Request, type Response } from 'express';
 import Redis from 'ioredis';
 import {
   buildInvalidA2AEnvelopeErrorResponse,
+  type RecoderAgentSkill,
   type A2AEnvelopeValidationIssue,
   type RecoderA2AEnvelope,
 } from '@recoder/shared/a2a';
+import {
+  A2AErrorCodeEnum,
+  buildA2AError,
+  mapHttpError,
+  validateTaskEnvelope,
+  type A2AErrorCode,
+  type TaskEnvelope,
+  type ValidationIssue,
+} from '@recoder/a2a-sdk';
+import { getWorkspaceService, resetWorkspaceService } from './a2a/workspace.service';
+import { getAgentRegistryService, resetAgentRegistryService } from './a2a/agent-registry.service';
+import { getTaskLifecycleService } from './a2a/task-lifecycle.service';
 
 const router = Router();
 
@@ -130,11 +143,44 @@ type BridgeJob = {
 };
 type BridgeSession = {
   token: string;
+  durableIdentity: string;
   bridgeId: string;
   scope?: string | null;
+  agentId?: string | null;
+  agentName?: string | null;
+  agentPlatform?: GatewayAgentPlatform | null;
+  workspaceId?: string | null;
+  projectId?: string | null;
+  capabilities?: string[];
+  metadata?: Record<string, unknown>;
   createdAt: string;
   expiresAt: string;
   issuedBy: string;
+};
+type OrchestrationLifecycleEvent = {
+  id: string;
+  at: string;
+  eventType: string;
+  workspaceId: string;
+  threadId: string;
+  traceId: string;
+  taskId?: string | null;
+  actorId?: string | null;
+  state?: string | null;
+  detail?: Record<string, unknown> | null;
+};
+type OrchestrationEvidenceRecord = {
+  id: string;
+  at: string;
+  workspaceId: string;
+  threadId: string;
+  traceId: string;
+  taskId?: string | null;
+  agentId?: string | null;
+  kind: string;
+  label: string;
+  ref?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 type AuditEvent = {
   id: string;
@@ -217,12 +263,183 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function asOptionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+}
+
 function normalizePlatform(value: unknown): GatewayAgentPlatform {
   const platform = asString(value).trim();
   if (VALID_RECORDER_PLATFORMS.has(platform)) {
     return platform as GatewayAgentPlatform;
   }
   return 'custom';
+}
+
+function normalizeCapabilities(value: unknown): string[] {
+  return Array.from(new Set(asStringArray(value))).sort((a, b) => a.localeCompare(b));
+}
+
+function buildBridgeCapabilitySkills(capabilities: string[]): RecoderAgentSkill[] {
+  return capabilities.map((capability) => ({
+    id: capability,
+    name: capability,
+    description: capability,
+    tags: [capability, 'bridge-capability'],
+  }));
+}
+
+function stripBridgeManagedTags(tags: string[]): string[] {
+  return tags.filter((tag) => (
+    tag !== 'bridge' &&
+    !tag.startsWith('bridge:') &&
+    !tag.startsWith('workspace:') &&
+    !tag.startsWith('project:') &&
+    !tag.startsWith('capability:')
+  ));
+}
+
+function stripBridgeManagedSkills(
+  skills: RecoderAgentSkill[],
+  existingTags: string[],
+): RecoderAgentSkill[] {
+  const previousCapabilityIds = new Set(
+    existingTags
+      .filter((tag) => tag.startsWith('capability:'))
+      .map((tag) => tag.slice('capability:'.length)),
+  );
+
+  return skills.filter((skill) => {
+    if (previousCapabilityIds.has(skill.id)) return false;
+    return !skill.tags.includes('bridge-capability');
+  });
+}
+
+function buildBridgeDurableIdentity(input: {
+  agentId: string | null;
+  agentPlatform: GatewayAgentPlatform | null;
+  workspaceId: string | null;
+  projectId: string | null;
+  scope: string | null;
+}): string {
+  return [
+    input.agentId || 'anonymous',
+    input.agentPlatform || 'custom',
+    input.workspaceId || 'global',
+    input.projectId || 'global',
+    input.scope || 'unscoped',
+  ].join(':');
+}
+
+function readMetadataWorkspaceId(metadata?: Record<string, unknown>): string | null {
+  const direct = asOptionalString(metadata?.workspaceId);
+  if (direct) return direct;
+  return asOptionalString(metadata?.workspace_id);
+}
+
+function adaptGatewayEnvelopeToCanonicalTaskEnvelope(envelope: GatewayEnvelope): TaskEnvelope {
+  const metadata = isRecord(envelope.metadata) ? envelope.metadata : {};
+  const workspaceId = readMetadataWorkspaceId(metadata) || 'global';
+  const traceId =
+    asOptionalString(envelope.trace?.traceId) ||
+    asOptionalString(metadata.traceId) ||
+    asOptionalString(metadata.trace_id) ||
+    `trace-${envelope.messageId}`;
+
+  return {
+    envelope_version: envelope.envelopeVersion || '1.0.0',
+    id: envelope.messageId,
+    workspace_id: workspaceId,
+    thread_id: envelope.threadId,
+    trace_id: traceId,
+    parent_id: asOptionalString(envelope.trace?.parentMessageId) || undefined,
+    state: 'submitted',
+    history: [],
+    requester: {
+      agent_id: envelope.from.id,
+      platform: envelope.from.platform,
+      ...(envelope.from.name ? { name: envelope.from.name } : {}),
+      ...(envelope.from.instanceId ? { instance_id: envelope.from.instanceId } : {}),
+    },
+    assignee: {
+      agent_id: envelope.to.id,
+      platform: envelope.to.platform,
+      ...(envelope.to.name ? { name: envelope.to.name } : {}),
+      ...(envelope.to.instanceId ? { instance_id: envelope.to.instanceId } : {}),
+    },
+    connector: {
+      connector_id: `${envelope.to.platform}:${envelope.to.id}`,
+      platform: envelope.to.platform,
+      protocol: 'a2a',
+      name: envelope.to.name,
+      metadata: {
+        intent: envelope.intent,
+        protocolVersion: envelope.protocolVersion,
+      },
+    },
+    payload: (Array.isArray(envelope.payload) ? envelope.payload : []) as TaskEnvelope['payload'],
+    created_at: envelope.createdAt,
+    updated_at: envelope.createdAt,
+    metadata: {
+      ...metadata,
+      intent: envelope.intent,
+      protocolVersion: envelope.protocolVersion,
+      envelopeVersion: envelope.envelopeVersion,
+      from: envelope.from,
+      to: envelope.to,
+    },
+    tags: ['gateway-ingress', `intent:${envelope.intent}`],
+  };
+}
+
+function mapValidationIssuesToEnvelopeIssues(
+  issues: ValidationIssue[],
+  sourcePath: string,
+): EnvelopeValidationIssue[] {
+  return issues.map((issue) => ({
+    path: issue.path.startsWith('$') ? sourcePath : `${sourcePath}.${issue.path}`,
+    message: issue.message,
+  }));
+}
+
+function buildCanonicalA2AError(input: {
+  code: A2AErrorCode;
+  message: string;
+  detail?: Record<string, unknown>;
+}) {
+  return buildA2AError({
+    code: input.code,
+    message: input.message,
+    details: input.detail,
+  });
+}
+
+function respondCanonicalA2AError(
+  res: Response,
+  status: number,
+  input: {
+    code: A2AErrorCode;
+    message: string;
+    detail?: Record<string, unknown>;
+    legacyError?: string;
+  },
+): void {
+  const a2aError = buildCanonicalA2AError({
+    code: input.code,
+    message: input.message,
+    detail: input.detail,
+  });
+  res.status(status).json({
+    ok: false,
+    error: input.legacyError || input.message,
+    a2aError,
+  });
 }
 
 function parseEnvelopeFromUnknown(
@@ -284,35 +501,47 @@ function parseEnvelopeFromUnknown(
       }
     : undefined;
 
+  const envelope: GatewayEnvelope = {
+    envelopeVersion: asString(value.envelopeVersion).trim() || RECODER_A2A_ENVELOPE_VERSION,
+    protocolVersion: asString(value.protocolVersion).trim() || RECODER_A2A_PROTOCOL_VERSION,
+    messageId,
+    threadId,
+    createdAt,
+    from: {
+      id: fromId,
+      name: asString(fromRecord.name).trim() || fromId,
+      platform: normalizePlatform(fromRecord.platform),
+      instanceId: asString(fromRecord.instanceId).trim() || undefined,
+      team: asString(fromRecord.team).trim() || undefined,
+      version: asString(fromRecord.version).trim() || undefined,
+    },
+    to: {
+      id: toId,
+      name: asString(toRecord.name).trim() || toId,
+      platform: normalizePlatform(toRecord.platform),
+      instanceId: asString(toRecord.instanceId).trim() || undefined,
+      team: asString(toRecord.team).trim() || undefined,
+      version: asString(toRecord.version).trim() || undefined,
+    },
+    intent,
+    payload: payloadInput as unknown[],
+    metadata,
+    trace,
+  };
+  const canonicalValidation = validateTaskEnvelope(
+    adaptGatewayEnvelopeToCanonicalTaskEnvelope(envelope),
+    { strictVersion: false },
+  );
+  if (!canonicalValidation.valid) {
+    return {
+      ok: false,
+      issues: mapValidationIssuesToEnvelopeIssues(canonicalValidation.issues, sourcePath),
+    };
+  }
+
   return {
     ok: true,
-    envelope: {
-      envelopeVersion: asString(value.envelopeVersion).trim() || RECODER_A2A_ENVELOPE_VERSION,
-      protocolVersion: asString(value.protocolVersion).trim() || RECODER_A2A_PROTOCOL_VERSION,
-      messageId,
-      threadId,
-      createdAt,
-      from: {
-        id: fromId,
-        name: asString(fromRecord.name).trim() || fromId,
-        platform: normalizePlatform(fromRecord.platform),
-        instanceId: asString(fromRecord.instanceId).trim() || undefined,
-        team: asString(fromRecord.team).trim() || undefined,
-        version: asString(fromRecord.version).trim() || undefined,
-      },
-      to: {
-        id: toId,
-        name: asString(toRecord.name).trim() || toId,
-        platform: normalizePlatform(toRecord.platform),
-        instanceId: asString(toRecord.instanceId).trim() || undefined,
-        team: asString(toRecord.team).trim() || undefined,
-        version: asString(toRecord.version).trim() || undefined,
-      },
-      intent,
-      payload: payloadInput as unknown[],
-      metadata,
-      trace,
-    },
+    envelope,
   };
 }
 
@@ -633,7 +862,7 @@ export async function verifyIncomingRequest(input: {
   return { ok: true };
 }
 
-export async function checkAndStoreEnvelopeIdempotency(envelope: RecoderA2AEnvelope): Promise<{ accepted: boolean; duplicate: boolean }> {
+export async function checkAndStoreEnvelopeIdempotency(envelope: { messageId?: string | null }): Promise<{ accepted: boolean; duplicate: boolean }> {
   const nowMs = Date.now();
   cleanIdempotencyStore(nowMs);
 
@@ -791,7 +1020,7 @@ function isAllowedTarget(targetUrl: string): boolean {
 
 async function dispatchSignedEnvelope(input: {
   targetUrl: string;
-  envelope: RecoderA2AEnvelope;
+  envelope: GatewayEnvelope;
   senderAgent?: string;
 }): Promise<{ ok: boolean; status: number; targetUrl: string; responseBody: string }> {
   const secret = process.env.RECODER_A2A_SHARED_SECRET || '';
@@ -855,6 +1084,7 @@ function selectTargets(input: {
 }
 
 async function persistOrchestrationState(input: {
+  workspaceId: string;
   threadId: string;
   traceId: string;
   mode: OrchestrationMode;
@@ -863,9 +1093,12 @@ async function persistOrchestrationState(input: {
   merge?: unknown;
   overrideHistory?: OverrideHistoryEntry[];
   scope?: string | null;
+  lifecycle?: OrchestrationLifecycleEvent[];
+  evidence?: OrchestrationEvidenceRecord[];
 }): Promise<void> {
   const key = `${ORCHESTRATION_KEY_PREFIX}:${input.threadId}:${input.traceId}`;
   const value = JSON.stringify({
+    workspaceId: input.workspaceId,
     threadId: input.threadId,
     traceId: input.traceId,
     mode: input.mode,
@@ -873,6 +1106,8 @@ async function persistOrchestrationState(input: {
     results: input.results,
     merge: input.merge ?? null,
     overrideHistory: input.overrideHistory ?? [],
+    lifecycle: input.lifecycle ?? [],
+    evidence: input.evidence ?? [],
     scope: input.scope ?? null,
     updatedAt: new Date().toISOString(),
   });
@@ -1214,6 +1449,28 @@ async function getOrchestrationState(input: { threadId: string; traceId: string 
   return JSON.parse(hit.value) as Record<string, unknown>;
 }
 
+export async function getOrchestrationHistorySummary(input: {
+  threadId: string;
+  traceId: string;
+}): Promise<Record<string, unknown> | null> {
+  const state = await getOrchestrationState(input);
+  if (!state) return null;
+  const history = buildOrchestrationHistoryPayload({
+    threadId: input.threadId,
+    traceId: input.traceId,
+    state,
+    cursor: 0,
+    limit: 1,
+  });
+  return {
+    historyVersion: history.historyVersion,
+    workspaceId: history.workspaceId,
+    threadId: history.threadId,
+    traceId: history.traceId,
+    summary: history.summary,
+  };
+}
+
 async function upsertOrchestrationStateRecord(input: {
   threadId: string;
   traceId: string;
@@ -1244,6 +1501,45 @@ function extractResultsFromState(state: Record<string, unknown>): Array<Record<s
   return Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
 }
 
+function extractLifecycleFromState(state: Record<string, unknown>): OrchestrationLifecycleEvent[] {
+  const value = (state as any).lifecycle;
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => ({
+      id: String((entry as any)?.id || ''),
+      at: String((entry as any)?.at || ''),
+      eventType: String((entry as any)?.eventType || ''),
+      workspaceId: String((entry as any)?.workspaceId || ''),
+      threadId: String((entry as any)?.threadId || ''),
+      traceId: String((entry as any)?.traceId || ''),
+      taskId: asOptionalString((entry as any)?.taskId),
+      actorId: asOptionalString((entry as any)?.actorId),
+      state: asOptionalString((entry as any)?.state),
+      detail: isRecord((entry as any)?.detail) ? ((entry as any).detail as Record<string, unknown>) : null,
+    }))
+    .filter((entry) => Boolean(entry.id && entry.at && entry.eventType && entry.workspaceId && entry.threadId && entry.traceId));
+}
+
+function extractEvidenceFromState(state: Record<string, unknown>): OrchestrationEvidenceRecord[] {
+  const value = (state as any).evidence;
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => ({
+      id: String((entry as any)?.id || ''),
+      at: String((entry as any)?.at || ''),
+      workspaceId: String((entry as any)?.workspaceId || ''),
+      threadId: String((entry as any)?.threadId || ''),
+      traceId: String((entry as any)?.traceId || ''),
+      taskId: asOptionalString((entry as any)?.taskId),
+      agentId: asOptionalString((entry as any)?.agentId),
+      kind: String((entry as any)?.kind || ''),
+      label: String((entry as any)?.label || ''),
+      ref: asOptionalString((entry as any)?.ref),
+      metadata: isRecord((entry as any)?.metadata) ? ((entry as any).metadata as Record<string, unknown>) : null,
+    }))
+    .filter((entry) => Boolean(entry.id && entry.at && entry.workspaceId && entry.threadId && entry.traceId && entry.kind && entry.label));
+}
+
 function extractOverrideHistoryFromState(state: Record<string, unknown>): OverrideHistoryEntry[] {
   const value = (state as any).overrideHistory;
   if (!Array.isArray(value)) return [];
@@ -1260,6 +1556,110 @@ function extractOverrideHistoryFromState(state: Record<string, unknown>): Overri
       reason: String((entry as any)?.reason || ''),
     }))
     .filter((entry) => Boolean(entry.at && entry.by && entry.winnerAgentId));
+}
+
+function buildLifecycleTimelineEntry(entry: OrchestrationLifecycleEvent): Record<string, unknown> {
+  return {
+    at: entry.at,
+    type: entry.eventType,
+    detail: entry.detail || null,
+    taskId: entry.taskId || null,
+    actorId: entry.actorId || null,
+    state: entry.state || null,
+  };
+}
+
+function buildEvidenceTimelineEntry(entry: OrchestrationEvidenceRecord): Record<string, unknown> {
+  return {
+    at: entry.at,
+    type: 'evidence.attached',
+    detail: {
+      kind: entry.kind,
+      label: entry.label,
+      ref: entry.ref || null,
+      metadata: entry.metadata || null,
+      taskId: entry.taskId || null,
+      agentId: entry.agentId || null,
+    },
+  };
+}
+
+function extractEvidencePayloadItems(
+  value: unknown,
+  fallbackTaskId: string | null,
+  fallbackAgentId: string | null,
+): Array<{
+  kind: string;
+  label: string;
+  ref?: string | null;
+  metadata?: Record<string, unknown> | null;
+}> {
+  if (!isRecord(value)) return [];
+
+  const previewUrl =
+    asOptionalString(value.previewUrl) ||
+    asOptionalString((value.preview as Record<string, unknown> | undefined)?.url);
+  const gitStatus = asOptionalString(value.gitStatus) || asOptionalString(value.git_status);
+  const gitBranch = asOptionalString(value.gitBranch) || asOptionalString(value.git_branch);
+  const cloneUrl = asOptionalString(value.cloneUrl) || asOptionalString(value.clone_url);
+  const runtimeType = asOptionalString(value.runtimeType) || asOptionalString(value.runtime_type);
+  const sessionId = asOptionalString(value.sessionId) || asOptionalString(value.session_id);
+  const sandboxId = asOptionalString(value.sandboxId) || asOptionalString(value.sandbox_id);
+  const artifacts = Array.isArray(value.artifacts) ? value.artifacts : [];
+  const evidence: Array<{
+    kind: string;
+    label: string;
+    ref?: string | null;
+    metadata?: Record<string, unknown> | null;
+  }> = [];
+
+  if (previewUrl) {
+    evidence.push({
+      kind: 'preview',
+      label: 'Preview URL',
+      ref: previewUrl,
+      metadata: {
+        ...(fallbackTaskId ? { taskId: fallbackTaskId } : {}),
+        ...(fallbackAgentId ? { agentId: fallbackAgentId } : {}),
+      },
+    });
+  }
+  if (gitStatus || gitBranch || cloneUrl) {
+    evidence.push({
+      kind: 'runtime',
+      label: gitBranch ? `Git provenance (${gitBranch})` : 'Git provenance',
+      ref: gitBranch ? `git:${gitBranch}` : 'git',
+      metadata: {
+        ...(gitStatus ? { gitStatus } : {}),
+        ...(gitBranch ? { gitBranch } : {}),
+        ...(cloneUrl ? { cloneUrl } : {}),
+      },
+    });
+  }
+  if (runtimeType || sessionId || sandboxId) {
+    evidence.push({
+      kind: 'runtime',
+      label: runtimeType ? `Runtime session (${runtimeType})` : 'Runtime session',
+      ref: sessionId || sandboxId || runtimeType || 'runtime',
+      metadata: {
+        ...(runtimeType ? { runtimeType } : {}),
+        ...(sessionId ? { sessionId } : {}),
+        ...(sandboxId ? { sandboxId } : {}),
+      },
+    });
+  }
+  for (const artifact of artifacts) {
+    if (!isRecord(artifact)) continue;
+    const key = asOptionalString(artifact.key);
+    if (!key) continue;
+    evidence.push({
+      kind: asOptionalString(artifact.artifact_type) || 'artifact',
+      label: asOptionalString(artifact.path) || key,
+      ref: key,
+      metadata: isRecord(artifact.metadata) ? (artifact.metadata as Record<string, unknown>) : null,
+    });
+  }
+  return evidence;
 }
 
 function getRequestScope(req: Request): string | null {
@@ -1312,16 +1712,23 @@ function buildOrchestrationHistoryPayload(input: {
   const overrideHistory = extractOverrideHistoryFromState(input.state);
   const merge = ((input.state as any).merge || null) as Record<string, unknown> | null;
   const results = extractResultsFromState(input.state);
+  const lifecycle = extractLifecycleFromState(input.state);
+  const evidence = extractEvidenceFromState(input.state);
   const timelineAll = [
     {
       at: String((input.state as any).updatedAt || new Date().toISOString()),
       type: 'orchestration_snapshot',
       detail: {
+        workspaceId: String((input.state as any).workspaceId || ''),
         mode: String((input.state as any).mode || ''),
         targets: (input.state as any).targets || [],
         resultCount: results.length,
+        lifecycleCount: lifecycle.length,
+        evidenceCount: evidence.length,
       },
     },
+    ...lifecycle.map((entry) => buildLifecycleTimelineEntry(entry)),
+    ...evidence.map((entry) => buildEvidenceTimelineEntry(entry)),
     ...overrideHistory.map((entry) => ({
       at: entry.at,
       type: 'merge_override',
@@ -1340,15 +1747,27 @@ function buildOrchestrationHistoryPayload(input: {
   const nextCursor = normalizedCursor + timeline.length < totalTimelineCount ? normalizedCursor + timeline.length : null;
   return {
     historyVersion: '2026-02-14.v1',
+    workspaceId: String((input.state as any).workspaceId || ''),
     threadId: input.threadId,
     traceId: input.traceId,
     summary: {
+      workspaceId: String((input.state as any).workspaceId || ''),
       mode: String((input.state as any).mode || ''),
       winnerAgentId: merge ? String((merge as any).winnerAgentId || '') : null,
       overridden: merge ? Boolean((merge as any).overridden) : false,
       conflictReasons: merge && Array.isArray((merge as any).conflictReasons) ? (merge as any).conflictReasons : [],
       collaboration: merge ? (merge as any).collaboration || null : null,
       resultCount: results.length,
+      lifecycleCount: lifecycle.length,
+      evidenceCount: evidence.length,
+      lifecycleByType: lifecycle.reduce<Record<string, number>>((acc, entry) => {
+        acc[entry.eventType] = (acc[entry.eventType] || 0) + 1;
+        return acc;
+      }, {}),
+      evidenceByKind: evidence.reduce<Record<string, number>>((acc, entry) => {
+        acc[entry.kind] = (acc[entry.kind] || 0) + 1;
+        return acc;
+      }, {}),
       successfulAgents: results.filter((row) => Boolean((row as any).ok)).map((row) => String((row as any).agentId || '')),
       totalOverrideCount: overrideHistory.length,
       totalTimelineCount,
@@ -1359,8 +1778,152 @@ function buildOrchestrationHistoryPayload(input: {
       nextCursor,
     },
     overrideHistory,
+    lifecycle,
+    evidence,
     timeline,
   };
+}
+
+async function resolveTaskCorrelation(taskId: string): Promise<{
+  workspaceId: string;
+  threadId: string;
+  traceId: string;
+  taskId: string;
+} | null> {
+  const task = getTaskLifecycleService().getTask(taskId);
+  if (!task.ok) return null;
+  return {
+    workspaceId: task.data.workspace_id,
+    threadId: task.data.thread_id,
+    traceId: task.data.trace_id,
+    taskId: task.data.id,
+  };
+}
+
+export async function appendControlPlaneLifecycleEvent(input: {
+  workspaceId: string;
+  threadId: string;
+  traceId: string;
+  eventType: string;
+  taskId?: string | null;
+  actorId?: string | null;
+  state?: string | null;
+  detail?: Record<string, unknown>;
+}): Promise<void> {
+  const state = await getOrchestrationState({ threadId: input.threadId, traceId: input.traceId });
+  if (!state) return;
+
+  const lifecycle = extractLifecycleFromState(state);
+  lifecycle.push({
+    id: `lifecycle-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+    at: new Date().toISOString(),
+    eventType: input.eventType,
+    workspaceId: input.workspaceId,
+    threadId: input.threadId,
+    traceId: input.traceId,
+    taskId: input.taskId || null,
+    actorId: input.actorId || null,
+    state: input.state || null,
+    detail: input.detail || null,
+  });
+
+  await upsertOrchestrationStateRecord({
+    threadId: input.threadId,
+    traceId: input.traceId,
+    state: {
+      ...state,
+      lifecycle,
+    },
+  });
+  await publishOrchestrationHistoryUpdate({
+    threadId: input.threadId,
+    traceId: input.traceId,
+    eventType: input.eventType,
+    detail: {
+      ...(input.detail || {}),
+      ...(input.taskId ? { taskId: input.taskId } : {}),
+      ...(input.actorId ? { actorId: input.actorId } : {}),
+      ...(input.state ? { state: input.state } : {}),
+    },
+  });
+}
+
+export async function appendTaskScopedControlPlaneLifecycleEvent(input: {
+  taskId: string;
+  eventType: string;
+  actorId?: string | null;
+  state?: string | null;
+  detail?: Record<string, unknown>;
+}): Promise<void> {
+  const correlation = await resolveTaskCorrelation(input.taskId);
+  if (!correlation) return;
+  await appendControlPlaneLifecycleEvent({
+    ...correlation,
+    eventType: input.eventType,
+    actorId: input.actorId || null,
+    state: input.state || null,
+    detail: input.detail,
+  });
+}
+
+export async function appendControlPlaneEvidence(input: {
+  workspaceId: string;
+  threadId: string;
+  traceId: string;
+  taskId?: string | null;
+  agentId?: string | null;
+  evidence: Array<{
+    kind: string;
+    label: string;
+    ref?: string | null;
+    metadata?: Record<string, unknown> | null;
+  }>;
+}): Promise<void> {
+  if (input.evidence.length === 0) return;
+  const state = await getOrchestrationState({ threadId: input.threadId, traceId: input.traceId });
+  if (!state) return;
+
+  const evidence = extractEvidenceFromState(state);
+  const seen = new Set(evidence.map((entry) => `${entry.kind}:${entry.ref || entry.label}:${entry.taskId || ''}`));
+  let appended = false;
+  for (const item of input.evidence) {
+    const key = `${item.kind}:${item.ref || item.label}:${input.taskId || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    appended = true;
+    evidence.push({
+      id: `evidence-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+      at: new Date().toISOString(),
+      workspaceId: input.workspaceId,
+      threadId: input.threadId,
+      traceId: input.traceId,
+      taskId: input.taskId || null,
+      agentId: input.agentId || null,
+      kind: item.kind,
+      label: item.label,
+      ref: item.ref || null,
+      metadata: item.metadata || null,
+    });
+  }
+  if (!appended) return;
+
+  await upsertOrchestrationStateRecord({
+    threadId: input.threadId,
+    traceId: input.traceId,
+    state: {
+      ...state,
+      evidence,
+    },
+  });
+  await publishOrchestrationHistoryUpdate({
+    threadId: input.threadId,
+    traceId: input.traceId,
+    eventType: 'evidence.attached',
+    detail: {
+      taskId: input.taskId || null,
+      totalEvidence: evidence.length,
+    },
+  });
 }
 
 function subscribeOrchestrationHistory(input: {
@@ -1729,6 +2292,100 @@ async function listBridgeSessions(): Promise<BridgeSession[]> {
   return Array.from(bridgeSessionStore.values()).map((row) => JSON.parse(row.value) as BridgeSession);
 }
 
+export async function listBridgeSessionsForBinding(input: {
+  agentId?: string;
+  workspaceId?: string;
+}): Promise<Array<BridgeSession & {
+  heartbeat: Record<string, unknown> | null;
+  registry: {
+    registered: boolean;
+    online: boolean;
+    lastHeartbeat: string | null;
+    reconnectCount: number;
+    registrationCount: number;
+  };
+}>> {
+  const sessions = await listBridgeSessions();
+  const filtered = sessions.filter((session) => {
+    if (input.agentId && session.agentId !== input.agentId) return false;
+    if (input.workspaceId && session.workspaceId !== input.workspaceId) return false;
+    return true;
+  });
+
+  return Promise.all(
+    filtered.map(async (session) => {
+      const registryAgent = session.agentId ? getAgentRegistryService().getWithHealth(session.agentId) : undefined;
+      return {
+        ...session,
+        agentName: registryAgent?.identity.name || session.agentName || null,
+        agentPlatform: registryAgent
+          ? normalizePlatform(registryAgent.identity.platform)
+          : session.agentPlatform || null,
+        heartbeat: await getBridgeHeartbeat(session.bridgeId),
+        registry: registryAgent
+          ? {
+              registered: true,
+              online: registryAgent.health.online,
+              lastHeartbeat: registryAgent.health.lastHeartbeat,
+              reconnectCount: registryAgent.lifecycle.reconnectCount,
+              registrationCount: registryAgent.lifecycle.registrationCount,
+            }
+          : {
+              registered: false,
+              online: false,
+              lastHeartbeat: null,
+              reconnectCount: 0,
+              registrationCount: 0,
+            },
+      };
+    }),
+  );
+}
+
+async function validateBridgeSessionConflicts(input: {
+  agentId: string | null;
+  agentPlatform: GatewayAgentPlatform | null;
+  workspaceId: string | null;
+  projectId: string | null;
+  durableIdentity: string;
+}): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!input.agentId) return { ok: true };
+  const sessions = await listBridgeSessions();
+  for (const session of sessions) {
+    if (session.agentId !== input.agentId) continue;
+    if (session.durableIdentity === input.durableIdentity) continue;
+    if ((session.agentPlatform || null) !== (input.agentPlatform || null)) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Conflicting platform claim for agent ${input.agentId}`,
+      };
+    }
+    if ((session.workspaceId || null) !== (input.workspaceId || null)) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Conflicting workspace claim for agent ${input.agentId}`,
+      };
+    }
+    if ((session.projectId || null) !== (input.projectId || null)) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Conflicting project claim for agent ${input.agentId}`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+async function findReusableBridgeSession(input: {
+  durableIdentity: string;
+}): Promise<BridgeSession | null> {
+  const sessions = await listBridgeSessions();
+  return sessions.find((session) => session.durableIdentity === input.durableIdentity) || null;
+}
+
 async function emitAuditEvent(event: string, details: Record<string, unknown>): Promise<void> {
   const auditEvent: AuditEvent = {
     id: `audit-${Date.now()}-${crypto.randomUUID().slice(0, 10)}`,
@@ -1832,7 +2489,10 @@ function extractBearerToken(req: Request): string {
 
 async function verifyBridgeTokenForRequest(
   req: Request,
-): Promise<{ ok: true; scope: string | null } | { ok: false; status: number; error: string }> {
+): Promise<
+  | { ok: true; scope: string | null; session: BridgeSession | null }
+  | { ok: false; status: number; error: string }
+> {
   const basic = verifyBridgeToken(req);
   if (!basic.ok) return basic;
 
@@ -1840,7 +2500,7 @@ async function verifyBridgeTokenForRequest(
   const staticToken = process.env.RECODER_A2A_BRIDGE_TOKEN || '';
   if (staticToken && bearerToken === staticToken) {
     const staticScope = String(process.env.RECODER_A2A_BRIDGE_TOKEN_SCOPE || '').trim() || null;
-    return { ok: true, scope: staticScope };
+    return { ok: true, scope: staticScope, session: null };
   }
 
   const session = await getBridgeSession(bearerToken);
@@ -1853,7 +2513,118 @@ async function verifyBridgeTokenForRequest(
     return { ok: false, status: 403, error: 'Bridge token does not match bridge id' };
   }
 
-  return { ok: true, scope: session.scope || null };
+  return { ok: true, scope: session.scope || null, session };
+}
+
+function validateBridgeSessionInput(input: {
+  agentId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+}): { ok: true } | { ok: false; status: number; error: string } {
+  if (input.workspaceId && !input.agentId) {
+    return { ok: false, status: 400, error: 'agentId is required when workspaceId is provided' };
+  }
+  if (input.projectId && !input.workspaceId) {
+    return { ok: false, status: 400, error: 'workspaceId is required when projectId is provided' };
+  }
+  return { ok: true };
+}
+
+function validateBridgeSessionWorkspaceBinding(input: {
+  agentId: string | null;
+  workspaceId: string | null;
+  projectId: string | null;
+}): { ok: true } | { ok: false; status: number; error: string } {
+  if (!input.workspaceId) return { ok: true };
+  const workspace = getWorkspaceService().get(input.workspaceId);
+  if (!workspace) {
+    return { ok: false, status: 404, error: `Workspace not found: ${input.workspaceId}` };
+  }
+  if (input.projectId && workspace.projectId !== input.projectId) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Workspace projectId mismatch for ${input.workspaceId}`,
+    };
+  }
+  if (input.agentId && !workspace.memberAgentIds.includes(input.agentId)) {
+    return {
+      ok: false,
+      status: 403,
+      error: `Agent ${input.agentId} is not a member of workspace ${input.workspaceId}`,
+    };
+  }
+  return { ok: true };
+}
+
+function reconcileBridgeSessionRegistryBinding(input: {
+  bridgeId: string;
+  agentId: string | null;
+  agentName: string | null;
+  agentPlatform: GatewayAgentPlatform | null;
+  capabilities: string[];
+  workspaceId: string | null;
+  projectId: string | null;
+}): { ok: true } | { ok: false; status: number; error: string } {
+  if (!input.agentId) return { ok: true };
+
+  const registry = getAgentRegistryService();
+  const existing = registry.get(input.agentId);
+  const desiredPlatform = input.agentPlatform || 'custom';
+  const normalizedCapabilities = normalizeCapabilities(input.capabilities);
+  const bridgeTags = Array.from(
+    new Set(
+      [
+        'bridge',
+        `bridge:${input.bridgeId}`,
+        ...(input.workspaceId ? [`workspace:${input.workspaceId}`] : []),
+        ...(input.projectId ? [`project:${input.projectId}`] : []),
+        ...normalizedCapabilities.map((capability) => `capability:${capability}`),
+      ].filter(Boolean),
+    ),
+  );
+
+  if (existing) {
+    if (existing.identity.platform !== desiredPlatform) {
+      return {
+        ok: false,
+        status: 409,
+        error: `Agent platform mismatch for ${input.agentId}`,
+      };
+    }
+
+    registry.register({
+      identity: {
+        ...existing.identity,
+        name: input.agentName || existing.identity.name,
+      },
+      card: {
+        ...existing.card,
+        name: input.agentName || existing.card.name,
+        skills: [
+          ...stripBridgeManagedSkills(existing.card.skills, existing.tags),
+          ...buildBridgeCapabilitySkills(normalizedCapabilities),
+        ],
+      },
+      protocol: existing.protocol,
+      tier: existing.tier,
+      tags: [
+        ...stripBridgeManagedTags(existing.tags),
+        ...bridgeTags,
+      ],
+    });
+    return { ok: true };
+  }
+
+  registry.selfRegister({
+    agentId: input.agentId,
+    name: input.agentName || input.agentId,
+    platform: desiredPlatform,
+    tags: bridgeTags,
+    skills: buildBridgeCapabilitySkills(normalizedCapabilities),
+  });
+
+  return { ok: true };
 }
 
 function newBridgeSessionToken(): string {
@@ -1957,26 +2728,135 @@ router.post('/bridge/pair', async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: 'Scope claim is required for bridge session' });
     return;
   }
+  const agentId = asOptionalString((parsedBody as any).agentId);
+  const agentName = asOptionalString((parsedBody as any).agentName);
+  const agentPlatform = agentId ? normalizePlatform((parsedBody as any).agentPlatform || 'custom') : null;
+  const workspaceId = asOptionalString((parsedBody as any).workspaceId);
+  const projectId = asOptionalString((parsedBody as any).projectId);
+  const capabilities = asStringArray((parsedBody as any).capabilities);
+  const normalizedCapabilities = normalizeCapabilities((parsedBody as any).capabilities);
+  const metadata = isRecord((parsedBody as any).metadata)
+    ? ((parsedBody as any).metadata as Record<string, unknown>)
+    : undefined;
+  const durableIdentity = buildBridgeDurableIdentity({
+    agentId,
+    agentPlatform,
+    workspaceId,
+    projectId,
+    scope: requestedScope,
+  });
+  const bindingValidation = validateBridgeSessionInput({ agentId, workspaceId, projectId });
+  if (!bindingValidation.ok) {
+    respondCanonicalA2AError(res, bindingValidation.status, {
+      code: A2AErrorCodeEnum.InvalidEnvelope,
+      message: bindingValidation.error,
+    });
+    return;
+  }
+  const workspaceValidation = validateBridgeSessionWorkspaceBinding({ agentId, workspaceId, projectId });
+  if (!workspaceValidation.ok) {
+    respondCanonicalA2AError(res, workspaceValidation.status, {
+      code:
+        workspaceValidation.status === 403
+          ? A2AErrorCodeEnum.AuthorizationDenied
+          : workspaceValidation.status === 404
+            ? A2AErrorCodeEnum.TaskNotFound
+            : A2AErrorCodeEnum.InvalidStateTransition,
+      message: workspaceValidation.error,
+    });
+    return;
+  }
+  const registryValidation = reconcileBridgeSessionRegistryBinding({
+    bridgeId,
+    agentId,
+    agentName,
+    agentPlatform,
+    capabilities,
+    workspaceId,
+    projectId,
+  });
+  if (!registryValidation.ok) {
+    respondCanonicalA2AError(res, registryValidation.status, {
+      code:
+        registryValidation.status === 409
+          ? A2AErrorCodeEnum.InvalidStateTransition
+          : A2AErrorCodeEnum.AgentNotFound,
+      message: registryValidation.error,
+    });
+    return;
+  }
+  const conflictValidation = await validateBridgeSessionConflicts({
+    agentId,
+    agentPlatform,
+    workspaceId,
+    projectId,
+    durableIdentity,
+  });
+  if (!conflictValidation.ok) {
+    respondCanonicalA2AError(res, conflictValidation.status, {
+      code: A2AErrorCodeEnum.InvalidStateTransition,
+      message: conflictValidation.error,
+    });
+    return;
+  }
 
   const ttlMs = Number((parsedBody as any).ttlMs || BRIDGE_SESSION_TTL_MS);
   const boundedTtlMs = Math.min(Math.max(ttlMs, 60 * 1000), 7 * 24 * 60 * 60 * 1000);
   const now = Date.now();
+  const reuseExisting = (parsedBody as any).reuseExisting !== false;
+  const reusableSession = reuseExisting
+    ? await findReusableBridgeSession({ durableIdentity })
+    : null;
   const session: BridgeSession = {
-    token: newBridgeSessionToken(),
+    token: reusableSession?.token || newBridgeSessionToken(),
+    durableIdentity,
     bridgeId,
     scope: requestedScope,
-    createdAt: new Date(now).toISOString(),
+    agentId,
+    agentName,
+    agentPlatform,
+    workspaceId,
+    projectId,
+    capabilities,
+    metadata,
+    createdAt: reusableSession?.createdAt || new Date(now).toISOString(),
     expiresAt: new Date(now + boundedTtlMs).toISOString(),
     issuedBy: String((parsedBody as any).issuedBy || 'admin'),
   };
   await storeBridgeSession(session);
-  res.status(201).json({
+  const registryAgent = agentId ? getAgentRegistryService().getWithHealth(agentId) : undefined;
+  res.status(reusableSession ? 200 : 201).json({
     ok: true,
+    reused: Boolean(reusableSession),
     bridgeId: session.bridgeId,
+    durableIdentity: session.durableIdentity,
     token: session.token,
     scope: session.scope || null,
+    agentId: session.agentId || null,
+    agentName: session.agentName || null,
+    agentPlatform: session.agentPlatform || null,
+    workspaceId: session.workspaceId || null,
+    projectId: session.projectId || null,
+    capabilities: session.capabilities || [],
+    normalizedCapabilities,
+    metadata: session.metadata || null,
     expiresAt: session.expiresAt,
     createdAt: session.createdAt,
+    registry: registryAgent
+      ? {
+          registered: true,
+          online: registryAgent.health.online,
+          lastHeartbeat: registryAgent.health.lastHeartbeat,
+          reconnectCount: registryAgent.lifecycle.reconnectCount,
+          registrationCount: registryAgent.lifecycle.registrationCount,
+        }
+      : {
+          registered: false,
+          online: false,
+          lastHeartbeat: null,
+          reconnectCount: 0,
+          registrationCount: 0,
+        },
   });
 });
 
@@ -1988,16 +2868,45 @@ router.get('/bridge/sessions', async (req: Request, res: Response) => {
   }
 
   const sessions = await listBridgeSessions();
+  const sessionRows = await Promise.all(
+    sessions.map(async (session) => {
+      const registryAgent = session.agentId ? getAgentRegistryService().getWithHealth(session.agentId) : undefined;
+      return {
+        bridgeId: session.bridgeId,
+        durableIdentity: session.durableIdentity,
+        scope: session.scope || null,
+        agentId: session.agentId || null,
+        agentName: registryAgent?.identity.name || session.agentName || null,
+        agentPlatform: registryAgent?.identity.platform || session.agentPlatform || null,
+        workspaceId: session.workspaceId || null,
+        projectId: session.projectId || null,
+        issuedBy: session.issuedBy,
+        capabilities: session.capabilities || [],
+        normalizedCapabilities: normalizeCapabilities(session.capabilities || []),
+        metadata: session.metadata || null,
+        createdAt: session.createdAt,
+        expiresAt: session.expiresAt,
+        tokenPreview: `${session.token.slice(0, 8)}...`,
+        heartbeat: await getBridgeHeartbeat(session.bridgeId),
+        registry: registryAgent
+          ? {
+              registered: true,
+              online: registryAgent.health.online,
+              lastHeartbeat: registryAgent.health.lastHeartbeat,
+              reconnectCount: registryAgent.lifecycle.reconnectCount,
+              registrationCount: registryAgent.lifecycle.registrationCount,
+            }
+          : {
+              registered: false,
+              online: false,
+              lastHeartbeat: '',
+            },
+      };
+    }),
+  );
   res.status(200).json({
     ok: true,
-    sessions: sessions.map((session) => ({
-      bridgeId: session.bridgeId,
-      scope: session.scope || null,
-      issuedBy: session.issuedBy,
-      createdAt: session.createdAt,
-      expiresAt: session.expiresAt,
-      tokenPreview: `${session.token.slice(0, 8)}...`,
-    })),
+    sessions: sessionRows,
   });
 });
 
@@ -2079,6 +2988,44 @@ router.post('/bridge/jobs/:jobId/result', async (req: Request, res: Response) =>
   if (resultEnvelope?.messageId && resultEnvelope.threadId) {
     await dispatchIntentToBackend(resultEnvelope);
   }
+  const resultMetadata = resultEnvelope?.metadata && isRecord(resultEnvelope.metadata)
+    ? (resultEnvelope.metadata as Record<string, unknown>)
+    : {};
+  const resultWorkspaceId = readMetadataWorkspaceId(resultMetadata);
+  const resultTraceId =
+    asOptionalString(resultEnvelope?.trace?.traceId) ||
+    asOptionalString(resultMetadata.traceId) ||
+    asOptionalString(resultMetadata.trace_id);
+  const resultTaskId =
+    asOptionalString(resultMetadata.taskId) ||
+    asOptionalString(resultMetadata.task_id);
+  if (resultEnvelope?.threadId && resultTraceId && resultWorkspaceId) {
+    await appendControlPlaneLifecycleEvent({
+      workspaceId: resultWorkspaceId,
+      threadId: resultEnvelope.threadId,
+      traceId: resultTraceId,
+      eventType: Boolean((parsedBody as any).ok) ? 'bridge.result.accepted' : 'bridge.result.failed',
+      taskId: resultTaskId,
+      actorId: auth.session?.agentId || null,
+      detail: {
+        jobId,
+        bridgeId: auth.session?.bridgeId || null,
+        messageId: resultEnvelope.messageId,
+        ok: Boolean((parsedBody as any).ok),
+      },
+    });
+    await appendControlPlaneEvidence({
+      workspaceId: resultWorkspaceId,
+      threadId: resultEnvelope.threadId,
+      traceId: resultTraceId,
+      taskId: resultTaskId,
+      agentId: auth.session?.agentId || null,
+      evidence: [
+        ...extractEvidencePayloadItems(parsedBody, resultTaskId || null, auth.session?.agentId || null),
+        ...extractEvidencePayloadItems(resultMetadata, resultTaskId || null, auth.session?.agentId || null),
+      ],
+    });
+  }
   await emitAuditEvent('bridge_result_accepted', {
     jobId,
     ok: Boolean((parsedBody as any).ok),
@@ -2134,10 +3081,67 @@ router.post('/bridge/heartbeat', async (req: Request, res: Response) => {
   }
 
   const bridgeId = String(req.header('x-recoder-a2a-bridge-id') || (parsedBody as any).bridgeId || process.env.RECODER_A2A_BRIDGE_DEFAULT_ID || 'default').trim();
-  await storeBridgeHeartbeat({ bridgeId, payload: parsedBody as Record<string, unknown> });
+  const payloadAgentId = asOptionalString((parsedBody as any).agentId);
+  const payloadWorkspaceId = asOptionalString((parsedBody as any).workspaceId);
+  const payloadProjectId = asOptionalString((parsedBody as any).projectId);
+  const boundSession = auth.session;
+  if (boundSession?.agentId && payloadAgentId && boundSession.agentId !== payloadAgentId) {
+    res.status(403).json({ ok: false, error: 'Heartbeat agentId does not match paired bridge session' });
+    return;
+  }
+  if (boundSession?.workspaceId && payloadWorkspaceId && boundSession.workspaceId !== payloadWorkspaceId) {
+    res.status(403).json({ ok: false, error: 'Heartbeat workspaceId does not match paired bridge session' });
+    return;
+  }
+  if (boundSession?.projectId && payloadProjectId && boundSession.projectId !== payloadProjectId) {
+    res.status(403).json({ ok: false, error: 'Heartbeat projectId does not match paired bridge session' });
+    return;
+  }
+  if (boundSession?.agentId) {
+    const registryValidation = reconcileBridgeSessionRegistryBinding({
+      bridgeId,
+      agentId: boundSession.agentId,
+      agentName: boundSession.agentName || null,
+      agentPlatform: boundSession.agentPlatform || null,
+      capabilities: boundSession.capabilities || [],
+      workspaceId: boundSession.workspaceId || null,
+      projectId: boundSession.projectId || null,
+    });
+    if (!registryValidation.ok) {
+      res.status(registryValidation.status).json({ ok: false, error: registryValidation.error });
+      return;
+    }
+  }
+
+  if (boundSession) {
+    const heartbeatCapabilities = normalizeCapabilities((parsedBody as any).capabilities);
+    const nextSession: BridgeSession = {
+      ...boundSession,
+      capabilities: heartbeatCapabilities.length > 0 ? heartbeatCapabilities : boundSession.capabilities || [],
+      metadata: {
+        ...(boundSession.metadata || {}),
+        lastHeartbeatAt: new Date().toISOString(),
+      },
+    };
+    await storeBridgeSession(nextSession);
+  }
+
+  const mergedPayload: Record<string, unknown> = {
+    ...(parsedBody as Record<string, unknown>),
+    ...(boundSession?.agentId ? { agentId: boundSession.agentId } : {}),
+    ...(boundSession?.workspaceId ? { workspaceId: boundSession.workspaceId } : {}),
+    ...(boundSession?.projectId ? { projectId: boundSession.projectId } : {}),
+    ...(boundSession?.capabilities?.length ? { sessionCapabilities: boundSession.capabilities } : {}),
+  };
+  await storeBridgeHeartbeat({ bridgeId, payload: mergedPayload });
   await emitAuditEvent('bridge_heartbeat', {
     bridgeId,
-    capabilities: (parsedBody as any).capabilities || null,
+    agentId: boundSession?.agentId || payloadAgentId || null,
+    workspaceId: boundSession?.workspaceId || payloadWorkspaceId || null,
+    projectId: boundSession?.projectId || payloadProjectId || null,
+    capabilities: normalizeCapabilities((parsedBody as any).capabilities).length > 0
+      ? normalizeCapabilities((parsedBody as any).capabilities)
+      : boundSession?.capabilities || null,
   });
   res.status(200).json({ ok: true, bridgeId });
 });
@@ -2440,7 +3444,11 @@ router.post('/orchestrate', async (req: Request, res: Response) => {
       messageId: envelope.messageId,
       threadId: envelope.threadId,
     });
-    res.status(409).json({ ok: false, error: 'No available agents for requested mode', mode });
+    respondCanonicalA2AError(res, 409, {
+      code: A2AErrorCodeEnum.AgentNotFound,
+      message: 'No available agents for requested mode',
+      detail: { mode },
+    });
     return;
   }
   const policy = await validateOrchestrationPolicy({ envelope, mode, selectedTargets: selected });
@@ -2453,7 +3461,14 @@ router.post('/orchestrate', async (req: Request, res: Response) => {
       messageId: envelope.messageId,
       threadId: envelope.threadId,
     });
-    res.status(policy.status).json({ ok: false, error: policy.error, mode });
+    respondCanonicalA2AError(res, policy.status, {
+      code:
+        policy.status === 409
+          ? A2AErrorCodeEnum.InvalidStateTransition
+          : A2AErrorCodeEnum.PolicyDenied,
+      message: policy.error,
+      detail: { mode, intent: envelope.intent },
+    });
     return;
   }
 
@@ -2469,6 +3484,7 @@ router.post('/orchestrate', async (req: Request, res: Response) => {
     String((envelope as any)?.metadata?.traceId || '') ||
     String((parsedBody as any).traceId || '') ||
     `trace-${envelope.messageId}`;
+  const workspaceId = readMetadataWorkspaceId(envelope.metadata) || 'global';
   const results: Record<string, unknown>[] = [];
 
   for (const agentId of selected) {
@@ -2577,8 +3593,10 @@ router.post('/orchestrate', async (req: Request, res: Response) => {
     }
   }
   const merge = computeDeterministicMerge({ mode, results, primaryAgent });
+  const anySuccess = results.some((row) => Boolean((row as any).ok));
 
   await persistOrchestrationState({
+    workspaceId,
     threadId: envelope.threadId,
     traceId,
     mode,
@@ -2587,9 +3605,43 @@ router.post('/orchestrate', async (req: Request, res: Response) => {
     merge,
     overrideHistory: [],
     scope: effectiveScope.scope,
+    lifecycle: [
+      {
+        id: `lifecycle-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+        at: new Date().toISOString(),
+        eventType: 'orchestration.started',
+        workspaceId,
+        threadId: envelope.threadId,
+        traceId,
+        taskId: asOptionalString((envelope.metadata || {}).taskId) || null,
+        actorId: envelope.from.id,
+        state: 'submitted',
+        detail: {
+          mode,
+          targets: selected,
+          messageId: envelope.messageId,
+          intent: envelope.intent,
+        },
+      },
+      {
+        id: `lifecycle-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+        at: new Date().toISOString(),
+        eventType: anySuccess ? 'orchestration.completed' : 'orchestration.failed',
+        workspaceId,
+        threadId: envelope.threadId,
+        traceId,
+        taskId: asOptionalString((envelope.metadata || {}).taskId) || null,
+        actorId: envelope.from.id,
+        state: anySuccess ? 'working' : 'failed',
+        detail: {
+          selected,
+          mergeWinner: merge ? (merge as any).winnerAgentId || null : null,
+          success: anySuccess,
+        },
+      },
+    ],
   });
 
-  const anySuccess = results.some((row) => Boolean((row as any).ok));
   await emitAuditEvent('orchestrate_completed', {
     mode,
     messageId: envelope.messageId,
@@ -3122,7 +4174,15 @@ router.post('/envelope', async (req: Request, res: Response) => {
     rawBody,
   });
   if (!verification.ok) {
-    res.status(verification.status).json({ ok: false, error: verification.error });
+    respondCanonicalA2AError(res, verification.status, {
+      code:
+        verification.status === 401
+          ? A2AErrorCodeEnum.AuthenticationFailed
+          : verification.status === 403
+            ? A2AErrorCodeEnum.AuthorizationDenied
+            : mapHttpError(verification.status, verification.error).code,
+      message: verification.error,
+    });
     return;
   }
 
@@ -3136,13 +4196,19 @@ router.post('/envelope', async (req: Request, res: Response) => {
     }
     envelope = parsedEnvelope.envelope;
   } catch {
-    res.status(400).json({ ok: false, error: 'Invalid JSON body' });
+    respondCanonicalA2AError(res, 400, {
+      code: A2AErrorCodeEnum.InvalidPayload,
+      message: 'Invalid JSON body',
+    });
     return;
   }
 
   const idempotency = await checkAndStoreEnvelopeIdempotency(envelope);
   if (!idempotency.accepted) {
-    res.status(400).json({ ok: false, error: 'messageId is required' });
+    respondCanonicalA2AError(res, 400, {
+      code: A2AErrorCodeEnum.MissingEnvelopeField,
+      message: 'messageId is required',
+    });
     return;
   }
 
@@ -3169,13 +4235,19 @@ router.post('/dispatch', async (req: Request, res: Response) => {
         })()
       : req.body;
   if (!parsedBody || typeof parsedBody !== 'object') {
-    res.status(400).json({ ok: false, error: 'Invalid JSON body' });
+    respondCanonicalA2AError(res, 400, {
+      code: A2AErrorCodeEnum.InvalidPayload,
+      message: 'Invalid JSON body',
+    });
     return;
   }
 
   const targetUrl = String((parsedBody as any).targetUrl || '').trim();
   if (!targetUrl) {
-    res.status(400).json({ ok: false, error: 'targetUrl is required' });
+    respondCanonicalA2AError(res, 400, {
+      code: A2AErrorCodeEnum.MissingEnvelopeField,
+      message: 'targetUrl is required',
+    });
     return;
   }
 
@@ -3187,13 +4259,19 @@ router.post('/dispatch', async (req: Request, res: Response) => {
   const envelope = envelopeParse.envelope;
 
   if (!isAllowedTarget(targetUrl)) {
-    res.status(403).json({ ok: false, error: 'targetUrl not in egress allowlist' });
+    respondCanonicalA2AError(res, 403, {
+      code: A2AErrorCodeEnum.AuthorizationDenied,
+      message: 'targetUrl not in egress allowlist',
+    });
     return;
   }
 
   const secret = process.env.RECODER_A2A_SHARED_SECRET || '';
   if (!secret) {
-    res.status(503).json({ ok: false, error: 'RECODER_A2A_SHARED_SECRET is not configured' });
+    respondCanonicalA2AError(res, 503, {
+      code: A2AErrorCodeEnum.ConfigurationError,
+      message: 'RECODER_A2A_SHARED_SECRET is not configured',
+    });
     return;
   }
 
@@ -3259,6 +4337,8 @@ export function __resetA2ATestState(): void {
   bridgeSessionStore.clear();
   orchestrationHistorySubscribers.clear();
   orchestrationHistoryEventLog.clear();
+  resetWorkspaceService();
+  resetAgentRegistryService();
 }
 
 export const __testSelectTargets = selectTargets;

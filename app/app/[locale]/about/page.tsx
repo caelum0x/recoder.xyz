@@ -19,11 +19,11 @@ import {
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'About Recoder - AI-Powered Development Platform | Recoder.xyz',
-  description: 'Recoder.xyz is an AI-powered development platform that helps developers build production-ready applications using multiple AI models. Currently in beta.',
+  title: 'About Recoder - External Agent Work Platform | Recoder.xyz',
+  description: 'Recoder.xyz is building the control plane for external coding agents to execute real software work with preview, task state, and handoff.',
   openGraph: {
-    title: 'About Recoder - AI-Powered Development Platform | Recoder.xyz',
-    description: 'Recoder.xyz is an AI-powered development platform. Build with multiple AI models, deploy anywhere. Currently in beta.',
+    title: 'About Recoder - External Agent Work Platform | Recoder.xyz',
+    description: 'Recoder.xyz is building the control plane for external coding agents to execute real software work.',
     url: 'https://recoder.xyz/about',
     siteName: 'Recoder.xyz',
     images: [
@@ -31,15 +31,15 @@ export const metadata: Metadata = {
         url: 'https://recoder.xyz/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'About Recoder - AI-Powered Development Platform',
+        alt: 'About Recoder - External Agent Work Platform',
       },
     ],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'About Recoder - AI-Powered Development Platform',
-    description: 'Recoder.xyz is an AI-powered development platform. Build with multiple AI models, deploy anywhere.',
+    title: 'About Recoder - External Agent Work Platform',
+    description: 'Recoder.xyz is building the control plane for external coding agents to execute real software work.',
     images: ['https://recoder.xyz/og-image.png'],
   },
   alternates: {
@@ -53,7 +53,7 @@ export default function AboutPage() {
       icon: Compass,
       title: 'Why We Started',
       description:
-        'Modern teams jump across too many tools to plan, build, and ship. Recoder exists to make that flow feel like one connected system.',
+        'Modern teams use powerful external coding agents, but the surrounding workflow is fragmented. Recoder exists to make execution, preview, task state, and handoff feel like one connected system.',
     },
     {
       icon: Users,
@@ -65,7 +65,7 @@ export default function AboutPage() {
       icon: Rocket,
       title: 'What We Optimize For',
       description:
-        'Faster iteration loops, clearer ownership, and production-ready outputs that teams can actually trust.',
+        'Faster execution loops, clearer ownership, and production-ready outputs that teams can actually trust.',
     },
   ];
 
@@ -73,42 +73,42 @@ export default function AboutPage() {
     {
       icon: Target,
       title: 'Production-First',
-      description: 'We generate real, working code that ships to production, not mockups or prototypes.'
+      description: 'We care about real software execution, not demo-only AI outputs.'
     },
     {
       icon: Shield,
       title: 'Security & Privacy',
-      description: 'Your code and data remain private. BYOK (Bring Your Own Key) means your API keys stay with you.'
+      description: 'Your code and data remain private. BYOK (Bring Your Own Key) means your provider relationship stays with you.'
     },
     {
       icon: Zap,
-      title: 'Multi-Model AI',
-      description: 'Use the best AI model for each task. Switch between providers without changing your workflow.'
+      title: 'BYOK Control',
+      description: 'Use the best model for each task without turning Recoder into a token reseller.'
     },
     {
       icon: Heart,
       title: 'Developer-Centric',
-      description: 'Built by developers, for developers. Every feature is designed to enhance your coding experience.'
+      description: 'Built by developers, for developers. Every feature is designed to improve agent execution and human control.'
     }
   ];
 
   const platform = [
     {
       icon: Code2,
-      title: 'AI Agent IDE',
-      description: 'Build and deploy AI-powered applications with an integrated development environment.',
+      title: 'External Agents',
+      description: 'Connect coding agents and route work through a shared execution surface.',
       href: 'https://agents.recoder.xyz'
     },
     {
       icon: Layers,
-      title: 'AI Workflow Builder',
-      description: 'Design and run AI workflows visually. Connect nodes, configure models, and execute.',
+      title: 'Delivery Packaging',
+      description: 'Wrap approved outputs for downstream delivery workflows when the core loop is already proven.',
       href: 'https://agency.recoder.xyz'
     },
     {
       icon: Globe,
-      title: 'Product Management',
-      description: 'Collect feedback, plan features, and ship releases with AI-assisted product management.',
+      title: 'Task State & Approvals',
+      description: 'Manage assignment, artifacts, and approvals around real software execution.',
       href: 'https://pm.recoder.xyz'
     }
   ];
