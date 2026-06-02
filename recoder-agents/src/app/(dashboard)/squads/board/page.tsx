@@ -7,6 +7,7 @@ import { ChevronLeft, LayoutGrid, AlertTriangle, Play, CheckCircle2, XCircle, Lo
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from '@/lib/toast';
@@ -220,12 +221,24 @@ function DispatchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   const [squadId, setSquadId] = useState('');
   const [task, setTask] = useState('');
   const [strategy, setStrategy] = useState<DispatchStrategy>('all');
+  const [projectId, setProjectId] = useState('');
 
   const handleDispatch = async () => {
     if (!squadId || !task.trim()) return;
     try {
-      await dispatch.mutateAsync({ squadId, task: task.trim(), strategy });
-      toast.success('Dispatched to squad');
+      const res = await dispatch.mutateAsync({
+        squadId,
+        task: task.trim(),
+        strategy,
+        ...(projectId.trim() ? { projectId: projectId.trim(), execute: true } : {}),
+      });
+      if (!projectId.trim()) {
+        toast.success('Dispatched to squad');
+      } else if (res?.execution?.started) {
+        toast.success('Dispatched + running on coding runtime');
+      } else {
+        toast.warning(`Dispatched — execution skipped: ${res?.execution?.reason ?? 'coding runtime unavailable'}`);
+      }
       setTask('');
       onOpenChange(false);
     } catch {
@@ -269,6 +282,11 @@ function DispatchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
             >
               {STRATEGIES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">Run on project <span className="font-normal">(optional)</span></label>
+            <Input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="project id — executes the task on its coding runtime" />
+            <span className="text-[11px] text-muted-foreground">Leave blank to dispatch only. With a project id, the task runs on that project’s existing sandbox session.</span>
           </div>
         </div>
         <DialogFooter>
