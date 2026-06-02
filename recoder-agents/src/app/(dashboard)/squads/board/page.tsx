@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, LayoutGrid, AlertTriangle, Play, CheckCircle2, XCircle, Loader2, Plus, Send } from 'lucide-react';
+import { ChevronLeft, LayoutGrid, AlertTriangle, Play, CheckCircle2, XCircle, Loader2, Plus, Send, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -47,6 +47,16 @@ const COLUMNS: Column[] = [
 export default function SquadTaskBoardPage() {
   const { data: tasks, isLoading, isError } = useAllSquadTasks();
   const transition = useTransitionBoardAssignment();
+  const redispatch = useDispatchAnySquad();
+
+  const handleRetry = async (t: BoardTask) => {
+    try {
+      await redispatch.mutateAsync({ squadId: t.squadId, task: t.task, strategy: t.strategy });
+      toast.success('Re-dispatched to squad');
+    } catch {
+      toast.error('Retry failed (backend unreachable?)');
+    }
+  };
   const qc = useQueryClient();
 
   // Live refresh: when a dispatch/assignment event crosses the collab stream,
@@ -193,7 +203,15 @@ export default function SquadTaskBoardPage() {
                             </li>
                           ))}
                         </ul>
-                        <p className="mt-2 text-[10px] text-muted-foreground">{new Date(t.createdAt).toLocaleString()}</p>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <p className="text-[10px] text-muted-foreground">{new Date(t.createdAt).toLocaleString()}</p>
+                          {(t.status === 'failed' || t.status === 'partial') && (
+                            <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[11px]" disabled={redispatch.isPending}
+                              onClick={() => handleRetry(t)} aria-label="Retry task">
+                              <RotateCcw className="mr-1 h-3 w-3" /> Retry
+                            </Button>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   ))
