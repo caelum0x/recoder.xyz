@@ -86,6 +86,16 @@ export default function SquadTaskBoardPage() {
 
   const byColumn = (col: Column) => filteredTasks.filter((t) => col.statuses.includes(t.status));
 
+  // Roll-up across the visible (filtered) tasks. Completion rate counts only
+  // terminal tasks (completed vs failed) so in-flight work doesn't skew it.
+  const summary = useMemo(() => {
+    const total = filteredTasks.length;
+    const completed = filteredTasks.filter((t) => t.status === 'completed').length;
+    const failed = filteredTasks.filter((t) => t.status === 'failed').length;
+    const terminal = completed + failed;
+    return { total, completed, failed, rate: terminal > 0 ? Math.round((completed / terminal) * 100) : null };
+  }, [filteredTasks]);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6">
       <div className="flex flex-col gap-2">
@@ -124,6 +134,17 @@ export default function SquadTaskBoardPage() {
       </div>
 
       <DispatchDialog open={dispatchOpen} onOpenChange={setDispatchOpen} />
+
+      {summary.total > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span><span className="font-semibold text-foreground">{summary.total}</span> task{summary.total === 1 ? '' : 's'}</span>
+          <span><span className="font-semibold text-emerald-600 dark:text-emerald-400">{summary.completed}</span> completed</span>
+          <span><span className="font-semibold text-red-600 dark:text-red-400">{summary.failed}</span> failed</span>
+          {summary.rate !== null && (
+            <span><span className="font-semibold text-foreground">{summary.rate}%</span> completion rate</span>
+          )}
+        </div>
+      )}
 
       {isError ? (
         <Card>
