@@ -88,9 +88,10 @@ async function selectTargets(
     case 'best-match': {
       try {
         const { rankAgentsForSkills } = await import('../agent-skill-profile.js');
-        const ranked = rankAgentsForSkills(agents.map((a) => `runtime:${a}`), [skillFromTask(task)]);
-        // rankAgentsForSkills keys may be raw ids too; try both forms.
-        const best = ranked[0]?.agentId?.replace(/^runtime:/, '');
+        // Member skill profiles are keyed by the raw agent id (recordTaskOutcome
+        // in transitionAssignment), so rank by raw ids — not `runtime:` prefixed.
+        const ranked = rankAgentsForSkills(agents, [skillFromTask(task)]);
+        const best = ranked[0]?.agentId;
         return best && agents.includes(best) ? [best] : [agents[0]];
       } catch {
         return [agents[0]];
