@@ -16137,7 +16137,281 @@ app.get('/api/capabilities', asyncHandler(async (_req: express.Request, res: exp
     agentSkills: { available: true, trackedAgents: (await import('./agent-skill-profile.js')).listProfiles().length },
     zeroTrustNetwork: await (await import('./ziti-client.js')).zitiHealth(),
     billing: await (await import('./polar-client.js')).polarHealth(),
+    agentCollaboration: {
+      available: true,
+      squads: (await import('./a2a/squad.service.js')).listSquads().length,
+    },
   });
+}));
+
+// ── Squads API (agent + human teams) ────────────────────────────────────────
+// Named teams with a leader, per-member roles, and an activity log. Work can be
+// assigned to a team, not just a single agent.
+
+app.get('/api/a2a/squads', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listSquads } = await import('./a2a/squad.service.js');
+  sendSuccess(res, { squads: listSquads(req.userId) });
+}));
+
+app.post('/api/a2a/squads', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name, description, leaderId, members } = req.body ?? {};
+  if (typeof name !== 'string' || !name.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+  }
+  if (members !== undefined && !Array.isArray(members)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'members must be an array'));
+  }
+  const { createSquad } = await import('./a2a/squad.service.js');
+  sendSuccess(res, createSquad({ name, description, leaderId, members, ownerId: req.userId! }));
+}));
+
+app.post('/api/a2a/squads/import', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const data = req.body ?? {};
+  if (typeof data.name !== 'string' || !data.name.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+  }
+  if (data.members !== undefined && !Array.isArray(data.members)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'members must be an array'));
+  }
+  const { importSquad } = await import('./a2a/squad.service.js');
+  sendSuccess(res, importSquad(data, req.userId!));
+}));
+
+app.get('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getSquad } = await import('./a2a/squad.service.js');
+  const squad = getSquad(req.params.id);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  if (req.query.withPresence === 'true') {
+    const { buildPresenceMap } = await import('./a2a/presence.service.js');
+    const agentIds = squad.members.filter((m) => m.kind === 'agent').map((m) => m.id);
+    const presence = await buildPresenceMap(agentIds);
+    return sendSuccess(res, { ...squad, presence });
+  }
+  sendSuccess(res, squad);
+}));
+
+app.patch('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name, description, leaderId } = req.body ?? {};
+  const { updateSquad } = await import('./a2a/squad.service.js');
+  const squad = updateSquad(req.params.id, { name, description, leaderId }, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+app.delete('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { deleteSquad } = await import('./a2a/squad.service.js');
+  sendSuccess(res, { deleted: deleteSquad(req.params.id) });
+}));
+
+app.post('/api/a2a/squads/:id/clone', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { cloneSquad } = await import('./a2a/squad.service.js');
+  const squad = cloneSquad(req.params.id, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+app.get('/api/a2a/squads/:id/export', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { exportSquad } = await import('./a2a/squad.service.js');
+  const portable = exportSquad(req.params.id);
+  if (!portable) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, portable);
+}));
+
+app.post('/api/a2a/squads/:id/members', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { id, kind, role } = req.body ?? {};
+  if (typeof id !== 'string' || !id.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'member id (string) is required'));
+  }
+  const { addMember } = await import('./a2a/squad.service.js');
+  const squad = addMember(req.params.id, { id, kind, role }, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+app.patch('/api/a2a/squads/:id/members/:memberId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { role } = req.body ?? {};
+  if (typeof role !== 'string' || !role.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'role (string) is required'));
+  }
+  const { setMemberRole } = await import('./a2a/squad.service.js');
+  const squad = setMemberRole(req.params.id, req.params.memberId, role, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad or member not found'));
+  sendSuccess(res, squad);
+}));
+
+app.delete('/api/a2a/squads/:id/members/:memberId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { removeMember } = await import('./a2a/squad.service.js');
+  const squad = removeMember(req.params.id, req.params.memberId, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+// ── Squad task dispatch (assign work to a team) ─────────────────────────────
+
+app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { task, strategy, projectId, execute } = req.body ?? {};
+  if (typeof task !== 'string' || !task.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'task (string) is required'));
+  }
+  if (strategy !== undefined && !['all', 'leader', 'round-robin', 'best-match'].includes(strategy)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'strategy must be all|leader|round-robin|best-match'));
+  }
+  const { dispatchToSquad } = await import('./a2a/squad-dispatch.service.js');
+  const result = await dispatchToSquad({ squadId: req.params.id, task: task.trim(), strategy, createdBy: req.userId! });
+  if (!result.ok) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.reason ?? 'dispatch failed'));
+
+  // Optional real execution: if a project's coding-runtime session is already
+  // ready, run the task on it (fire-and-forget, best-effort). Never starts a
+  // sandbox — only uses an existing ready session, so there's no lifecycle risk.
+  let executed = false;
+  if (execute === true && typeof projectId === 'string' && projectId) {
+    try {
+      const { getRuntime } = await import('./a2a/coding-runtime.js');
+      const selection = codingRuntimeSelectionByProject.get(projectId);
+      const runtimeType = selection?.runtimeType ?? 'opencode';
+      const runtime = getRuntime(runtimeType as never);
+      const state = runtime?.getState(projectId);
+      if (runtime && state && state.status === 'ready') {
+        executed = true;
+        const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
+        void runtime
+          .sendPrompt({
+            projectId,
+            prompt: task.trim(),
+            sandboxExecUrl: `${daytonaUrl}/api/toolbox/${state.sandboxId}/toolbox/process/execute`,
+            daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+          })
+          .catch((err) => logger.warn({ err, projectId }, 'squad dispatch coding-runtime execution failed'));
+      }
+    } catch (err) {
+      logger.warn({ err, projectId }, 'squad dispatch execution hook failed');
+    }
+  }
+
+  sendSuccess(res, { ...result.squadTask, deliveredTo: result.deliveredTo ?? [], executed });
+}));
+
+app.get('/api/a2a/squads/:id/tasks', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listSquadTasks } = await import('./a2a/squad-dispatch.service.js');
+  sendSuccess(res, { tasks: listSquadTasks(req.params.id) });
+}));
+
+app.get('/api/a2a/squads/:id/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getSquadStats } = await import('./a2a/squad-dispatch.service.js');
+  sendSuccess(res, getSquadStats(req.params.id));
+}));
+
+app.post('/api/a2a/squad-tasks/:taskId/assignments/:memberId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { status } = req.body ?? {};
+  if (!['queued', 'in_progress', 'completed', 'failed'].includes(status)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'status must be queued|in_progress|completed|failed'));
+  }
+  const { transitionAssignment } = await import('./a2a/squad-dispatch.service.js');
+  const result = await transitionAssignment(req.params.taskId, req.params.memberId, status, req.userId!);
+  if (!result.ok) return sendError(res, createError(ErrorCode.NOT_FOUND, result.reason ?? 'transition failed'));
+  sendSuccess(res, result.squadTask);
+}));
+
+// ── Collaboration activity feed (across all squads) ─────────────────────────
+
+app.get('/api/a2a/collaboration/feed', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getCollabFeed } = await import('./a2a/collab-feed.service.js');
+  const limit = Number(req.query.limit) || 50;
+  sendSuccess(res, { feed: await getCollabFeed({ ownerId: req.userId, limit }) });
+}));
+
+app.get('/api/a2a/collaboration/summary', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getCollabSummary } = await import('./a2a/collab-feed.service.js');
+  sendSuccess(res, await getCollabSummary({ ownerId: req.userId }));
+}));
+
+app.get('/api/a2a/collaboration/events', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { recentCollabEvents } = await import('./a2a/collab-events.service.js');
+  sendSuccess(res, { events: recentCollabEvents(Number(req.query.limit) || 50) });
+}));
+
+app.get('/api/a2a/collaboration/roster', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getRoster } = await import('./a2a/collab-feed.service.js');
+  sendSuccess(res, { roster: await getRoster({ ownerId: req.userId }) });
+}));
+
+// ── Workflow step runner (llm/http/code/branch/trigger/squad steps) ─────────
+// Exposes the step executor so composed step lists (incl. squad steps) run via HTTP.
+
+app.post('/api/workflows/run-steps', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { steps, context } = req.body ?? {};
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'steps (non-empty array) is required'));
+  }
+  const valid = steps.every((s) => s && typeof s.type === 'string' && typeof s.name === 'string' && typeof s.config === 'object');
+  if (!valid) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'each step needs { type, name, config }'));
+  }
+  const { executeWorkflowSteps } = await import('./a2a/workflow-step-executor.js');
+  const ctx = { ...(context && typeof context === 'object' ? context : {}), _userId: req.userId };
+  const result = await executeWorkflowSteps(steps, ctx);
+  sendSuccess(res, result);
+}));
+
+// Promote a `?token=` query param into the Authorization header so browser
+// EventSource (which cannot set headers) can authenticate SSE endpoints.
+const promoteQueryToken: express.RequestHandler = (req, _res, next) => {
+  if (!req.headers.authorization && typeof req.query.token === 'string' && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+};
+
+// Live Server-Sent Events stream of collaboration events (real-time consumers).
+app.get('/api/a2a/collaboration/stream', promoteQueryToken, authenticateRequest, (req: AuthenticatedRequest, res: express.Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as express.Response & { flushHeaders?: () => void }).flushHeaders?.();
+
+  const send = (event: unknown) => {
+    try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* client gone */ }
+  };
+
+  void import('./a2a/collab-events.service.js').then(({ recentCollabEvents, subscribeCollab }) => {
+    recentCollabEvents(20).reverse().forEach(send);
+    const unsubscribe = subscribeCollab(send);
+    const keepAlive = setInterval(() => {
+      try { res.write(': keepalive\n\n'); } catch { /* ignore */ }
+    }, 25_000);
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      unsubscribe();
+    });
+  });
+});
+
+// ── Agent Presence API (availability × workload) ────────────────────────────
+
+app.get('/api/a2a/presence', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const idsParam = (req.query.agentIds as string | undefined) ?? '';
+  const agentIds = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+  if (agentIds.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'agentIds (comma-separated) is required'));
+  }
+  const { buildPresenceMap } = await import('./a2a/presence.service.js');
+  sendSuccess(res, { presence: await buildPresenceMap(agentIds) });
+}));
+
+app.get('/api/a2a/presence/:agentId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getPresence } = await import('./a2a/presence.service.js');
+  sendSuccess(res, await getPresence(req.params.agentId));
+}));
+
+app.post('/api/a2a/presence/:agentId/workload', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { active, queued } = req.body ?? {};
+  const { setWorkload, getPresence } = await import('./a2a/presence.service.js');
+  setWorkload(req.params.agentId, {
+    active: typeof active === 'number' ? active : undefined,
+    queued: typeof queued === 'number' ? queued : undefined,
+  });
+  sendSuccess(res, await getPresence(req.params.agentId));
 }));
 
 // ── Billing (Polar) API ─────────────────────────────────────────────────────
@@ -16233,6 +16507,14 @@ app.get('/api/agent-skills', authenticateRequest, asyncHandler(async (_req: Auth
   sendSuccess(res, { profiles: listProfiles() });
 }));
 
+// Registered before /:agentId so "leaderboard" isn't captured as an agentId.
+app.get('/api/agent-skills/leaderboard', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getLeaderboard } = await import('./agent-skill-profile.js');
+  sendSuccess(res, {
+    leaderboard: getLeaderboard({ skill: req.query.skill as string | undefined, limit: Number(req.query.limit) || 20 }),
+  });
+}));
+
 app.get('/api/agent-skills/:agentId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getAgentProfile } = await import('./agent-skill-profile.js');
   const profile = getAgentProfile(req.params.agentId);
@@ -16257,17 +16539,34 @@ app.get('/api/llm/providers', authenticateRequest, asyncHandler(async (_req: Aut
   sendSuccess(res, { health: llmRouterHealth(), providers: listProviders() });
 }));
 
+app.post('/api/llm/route', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { prompt, provider } = req.body ?? {};
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'prompt (string) is required'));
+  }
+  const { recommendModel } = await import('./llm-router.js');
+  sendSuccess(res, recommendModel({ prompt, provider }));
+}));
+
 app.post('/api/llm/chat', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { model, messages, provider, apiKey, temperature, maxTokens, timeoutMs } = req.body ?? {};
-  if (typeof model !== 'string' || !model.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model (string) is required'));
+  const { model, messages, provider, apiKey, temperature, maxTokens, timeoutMs, autoModel } = req.body ?? {};
+  // autoModel: pick a model by prompt complexity when no explicit model given.
+  let resolvedModel = model;
+  if ((!resolvedModel || autoModel === true) && Array.isArray(messages) && messages.length > 0) {
+    const { recommendModel } = await import('./llm-router.js');
+    const lastUser = [...messages].reverse().find((m: { role?: string; content?: string }) => m.role === 'user');
+    const rec = recommendModel({ prompt: String(lastUser?.content ?? ''), provider });
+    resolvedModel = `${rec.provider}/${rec.model}`;
+  }
+  if (typeof resolvedModel !== 'string' || !resolvedModel.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model (string) is required (or pass autoModel:true)'));
   }
   if (!Array.isArray(messages) || messages.length === 0) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
   }
   const { chatComplete } = await import('./llm-router.js');
   const result = await chatComplete({
-    model,
+    model: resolvedModel,
     messages,
     provider,
     apiKey,

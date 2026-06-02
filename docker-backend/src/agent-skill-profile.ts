@@ -168,6 +168,56 @@ export function rankAgentsForSkills(agentIds: string[] | undefined, skills: stri
   return rankings.sort((a, b) => b.score - a.score);
 }
 
+export interface LeaderboardEntry {
+  agentId: string;
+  score: number;
+  attempts: number;
+  successes: number;
+  successRate: number;
+  topSkills: Array<{ skill: string; successRate: number; attempts: number }>;
+}
+
+/**
+ * Rank agents by demonstrated proficiency — overall, or for a specific skill.
+ * Score = successRate × confidence(attempts) so volume-backed records outrank
+ * lucky one-offs. Agents with no record are excluded.
+ */
+export function getLeaderboard(opts: { skill?: string; limit?: number } = {}): LeaderboardEntry[] {
+  const skill = opts.skill?.trim().toLowerCase();
+  const profiles = Object.values(getStore());
+
+  return profiles
+    .map((p) => {
+      let attempts: number;
+      let successes: number;
+      if (skill) {
+        const stat = p.skills[skill];
+        attempts = stat?.attempts ?? 0;
+        successes = stat?.successes ?? 0;
+      } else {
+        attempts = p.totalTasks;
+        successes = p.totalSuccesses;
+      }
+      const successRate = attempts > 0 ? successes / attempts : 0;
+      const confidence = attempts / (attempts + CONFIDENCE_K);
+      const topSkills = Object.values(p.skills)
+        .sort((a, b) => b.attempts - a.attempts)
+        .slice(0, 3)
+        .map((s) => ({ skill: s.skill, successRate: s.successRate, attempts: s.attempts }));
+      return {
+        agentId: p.agentId,
+        score: Number((successRate * confidence).toFixed(4)),
+        attempts,
+        successes,
+        successRate: Number(successRate.toFixed(4)),
+        topSkills,
+      };
+    })
+    .filter((e) => e.attempts > 0)
+    .sort((a, b) => b.score - a.score || b.attempts - a.attempts)
+    .slice(0, opts.limit ?? 20);
+}
+
 /** Test/maintenance helper. */
 export function resetProfiles(): void {
   store = {};

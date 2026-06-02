@@ -1,21 +1,8 @@
 # Recoder Paid-User Remaining Work
 
-Last updated: 2026-05-14
+Last updated: 2026-06-03
 
-## Current Shipped Baseline
-
-The current product direction is no longer generic session or token resale. Recoder now sells the control plane around Spaces, connected agents, approvals, artifact retention, and preview deploy capacity.
-
-Shipped through `recoder-7xqf`:
-
-- Spaces are the primary signed-in conversion path.
-- Connecting an agent is the first activation milestone.
-- Dashboard and Spaces surfaces show the task -> artifact -> PR -> preview -> approval loop.
-- Subscription entitlements are normalized around workspaces, connected agents, approvals, retention, and preview deploys.
-- Legacy session and token quota fields still exist for compatibility, but auth, billing, CLI quota/proxy, user quota, usage tracking, analytics, and plan config now derive those fields from the same commercial entitlement model.
-- Preview deploy artifacts and private preview access are represented as run/task evidence instead of separate deploy-only state.
-- `recoder-edge` exists as a scaffold for preview routing and security policy, but live edge rollout is not complete.
-- 2026-06-02 update: an agent capability layer is wired into `docker-backend` (additive, fail-safe, surfaced at `GET /api/capabilities`): Qwen Code + Gemini CLI coding runtimes, E2B secure runner (`/api/e2b/*`), browser verification (`/api/browser/verify*`), mem0 memory (`/api/memory/mem0/*`), Context7 docs (`/api/context7/*`), and a workspace Workflows UI in recoder-agents. These are capability substrate; none change the paid-user launch gate below, which is still about the end-to-end Spaces loop.
+This doc tracks only what is NOT done before paid users. (Shipped baseline + the agent capability/collaboration layer live in git history.)
 
 ## What Remains Before Paid Users
 
@@ -80,4 +67,4 @@ When roadmap documents conflict, use this order:
 2. `docs/remaining.md` for the current paid-user launch gate.
 3. `docs/prd.md` for product requirements.
 4. `docs/product.md` for public narrative.
-5. `docs/big-plan.md` and `docs/todo` as backlog/reference material.
+5. `docs/todo` as backlog/reference material.
