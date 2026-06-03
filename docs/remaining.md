@@ -22,25 +22,22 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 ## Priority Order
 
-1. Funnel analytics and KPI visibility.
-   Track homepage -> signup -> choose plan -> create Space -> connect agent -> first task -> first artifact -> first approval. This maps to ready issue `recoder-krxl`.
-
-2. GitHub repo connection and PR artifacts.
+1. GitHub repo connection and PR artifacts.
    Add repo connection, branch mapping, PR creation/attachment, review state, check state, and issue/task linking as first-class run artifacts.
 
-3. Main task timeline.
+2. Main task timeline.
    Make the product path visibly show task -> artifact -> PR -> preview -> approval from shared run history, not demo-only or per-page state.
 
-4. Live preview and edge rollout.
+3. Live preview and edge rollout.
    Activate preview host routing, TLS/DNS, private preview access, rate limits, WAF hooks, and production rollout for the in-repo edge scaffold. This maps to ready issue `recoder-zvss`.
    - 2026-05-31 update: the retired browser coding host now redirects to the dashboard. The remaining preview/edge work should attach evidence to Spaces/shared run history, not revive the retired app.
 
-5. Deploy hygiene.
+4. Deploy hygiene.
    Resolve the local<->prod git divergence that still makes full Hetzner deploys risky from this branch. This maps to issue `recoder-js56`.
    - 2026-05-31 update: the Daytona control plane and runner are recovered on Hetzner. `daytona-api`, proxy, db, redis, dex, minio, registry, and runner are healthy; a disposable sandbox create reached `started` and was destroyed.
    - 2026-05-31 update: `docker-backend` is healthy in production and the retired browser coding container/image has been removed. The remaining work is deploy hygiene/reconciliation, not missing Daytona infra.
 
-6. Production traffic and abuse controls.
+5. Production traffic and abuse controls.
    Add Cloudflare/CrowdSec/open-appsec style mitigation rules after real traffic signals are instrumented. This maps to ready issues `recoder-a9rp` and `recoder-rbc2`.
    - 2026-05-31 (recoder-rbc2, analysis done): Investigated the suspected "Finland" abuse signal via Cloudflare analytics. It was NOT external abuse — it was the prod box (Hetzner Helsinki, IPv6 2a01:4f9:c013:9cb6::1) self-polling `/api/platform/activity` and getting 403'd by Bot Fight Mode. No mitigation rule added (a FI block would self-block production). The 403 root cause was fixed instead (internal loopback calls + INTERNAL_SERVICE_KEY). Real abuse-mitigation rules remain deferred until a genuine external signal appears.
 
