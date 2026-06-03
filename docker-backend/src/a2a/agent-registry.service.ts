@@ -138,8 +138,8 @@ const PLATFORM_DEFAULTS: Record<
     status: 'supported',
     description: 'Claude Code agent',
     defaultSkills: [
-      { id: 'code-review', name: 'Code Review', description: 'Review code and architecture', tags: ['code', 'review'] },
-    ],
+        { id: 'code-review', name: 'Code Review', description: 'Review code and architecture', tags: ['code', 'review'] },
+      ],
   },
   recoder_web: {
     protocol: 'rest',
@@ -147,7 +147,7 @@ const PLATFORM_DEFAULTS: Record<
     status: 'supported',
     description: 'Recoder Web application',
     defaultSkills: [
-      { id: 'web-interface', name: 'Web Interface', description: 'User-facing web application', tags: ['web', 'ui'] },
+      { id: 'workspace-ui', name: 'Workspace UI', description: 'Human-facing workspace and agent control UI', tags: ['workspace', 'ui'] },
     ],
   },
   recoder_pm: {
@@ -214,13 +214,13 @@ export const DEFAULT_AGENTS: DefaultAgentConfig[] = [
     id: 'recoder-web',
     name: 'Recoder Web',
     platform: 'recoder_web',
-    description: 'Recoder web application for browser-based coding and AI interaction',
+    description: 'Human-facing workspace surface for tasks, artifacts, and approvals',
     url: process.env.RECODER_WEB_URL || 'https://recoder.xyz',
     skills: [
-      { id: 'web-interface', name: 'Web Interface', description: 'User-facing web application', tags: ['web', 'ui'] },
-      { id: 'thread-management', name: 'Thread Management', description: 'Manage conversation threads', tags: ['threads', 'conversations'] },
+      { id: 'workspace-ui', name: 'Workspace UI', description: 'Human-facing workspace and task management', tags: ['workspace', 'ui'] },
+      { id: 'task-visibility', name: 'Task Visibility', description: 'Surface task, artifact, and approval state', tags: ['tasks', 'visibility'] },
     ],
-    tags: ['web', 'ui', 'core'],
+    tags: ['workspace', 'web', 'core'],
   },
   {
     id: 'recoder-agency',
