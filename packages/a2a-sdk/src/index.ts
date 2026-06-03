@@ -217,3 +217,9 @@ export {
   type AdaptLegacyEnvelopeOptions,
   adaptLegacyEnvelopeToTaskEnvelope,
 } from './envelope-adapters';
+
+export {
+  type NormalizeLegacyInboundEnvelopeOptions,
+  type NormalizeLegacyInboundEnvelopeResult,
+  normalizeLegacyInboundEnvelope,
+} from './legacy-ingress';

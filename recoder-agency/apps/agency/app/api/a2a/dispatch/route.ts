@@ -1,26 +1,35 @@
 import type { RecoderA2AEnvelope } from "@recoder/shared/a2a";
 import { NextResponse } from "next/server";
-import { isAllowedTarget, signOutgoingA2ARequest } from "@/lib/a2a/gateway";
+import {
+	buildInvalidA2AEnvelopeError,
+	isAllowedTarget,
+	parseEnvelopeFromUnknown,
+	signOutgoingA2ARequest,
+} from "@/lib/a2a/gateway";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-	let body: { targetUrl?: string; envelope?: RecoderA2AEnvelope };
+	let body: { targetUrl?: string; envelope?: unknown };
 	try {
-		body = (await request.json()) as { targetUrl?: string; envelope?: RecoderA2AEnvelope };
+		body = (await request.json()) as { targetUrl?: string; envelope?: unknown };
 	} catch {
 		return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
 	}
 
 	const targetUrl = body.targetUrl?.trim();
-	const envelope = body.envelope;
-	if (!targetUrl || !envelope?.messageId) {
-		return NextResponse.json(
-			{ ok: false, error: "targetUrl and envelope.messageId are required" },
-			{ status: 400 },
-		);
+	if (!targetUrl) {
+		return NextResponse.json({ ok: false, error: "targetUrl is required" }, { status: 400 });
 	}
+
+	const parsedEnvelope = parseEnvelopeFromUnknown(body.envelope, "envelope");
+	if (!parsedEnvelope.ok) {
+		return NextResponse.json(buildInvalidA2AEnvelopeError({ issues: parsedEnvelope.issues }), {
+			status: 400,
+		});
+	}
+	const envelope = parsedEnvelope.envelope as RecoderA2AEnvelope;
 
 	if (!isAllowedTarget(targetUrl)) {
 		return NextResponse.json({ ok: false, error: "targetUrl not in egress allowlist" }, { status: 403 });
