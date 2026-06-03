@@ -831,6 +831,13 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
   });
 }
 
+function promoteQueryToken(req: express.Request, _res: express.Response, next: express.NextFunction) {
+  if (!req.headers.authorization && typeof req.query.token === 'string' && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+}
+
 // Admin authorization middleware - requires authenticated user to be in ADMIN_USER_IDS
 const ADMIN_USER_IDS = new Set(
   (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean)
@@ -15606,7 +15613,7 @@ app.post('/api/a2a/openclaw/hub/preview', (req, res) => {
   res.json({ ok: true, targets });
 });
 
-app.use('/api/a2a', sseStreamRouter);
+app.use('/api/a2a', promoteQueryToken, authenticateRequest, sseStreamRouter);
 app.use('/api/a2a/connectors/claude', claudeConnectorRouter);
 app.use('/api/a2a/connectors/codex', codexConnectorRouter);
 app.use('/api/a2a/connectors/opencode', opencodeConnectorRouter);
@@ -15621,8 +15628,8 @@ app.use('/api/a2a/connectors/replit', replitConnectorRouter);
 app.use('/api/a2a/adapters/rest', authenticateRequest, restAdapterRouter);
 app.use('/api/a2a/adapters/git', authenticateRequest, gitAdapterRouter);
 app.use('/api/a2a/context', contextBridgeRouter);
-app.use('/api/a2a/workspaces', a2aWorkspaceRouter);
-app.use('/api/spaces', a2aWorkspaceRouter);
+app.use('/api/a2a/workspaces', promoteQueryToken, authenticateRequest, a2aWorkspaceRouter);
+app.use('/api/spaces', promoteQueryToken, authenticateRequest, a2aWorkspaceRouter);
 app.use('/api/a2a/memory', authenticateRequest, memoryRouter);
 app.use('/api/a2a/code-search', codeSearchRouter);
 app.use('/api/a2a/search', searchRouter);
@@ -16501,15 +16508,6 @@ app.post('/api/workflows/run-steps', authenticateRequest, asyncHandler(async (re
   const result = await executeWorkflowSteps(steps, ctx);
   sendSuccess(res, result);
 }));
-
-// Promote a `?token=` query param into the Authorization header so browser
-// EventSource (which cannot set headers) can authenticate SSE endpoints.
-const promoteQueryToken: express.RequestHandler = (req, _res, next) => {
-  if (!req.headers.authorization && typeof req.query.token === 'string' && req.query.token) {
-    req.headers.authorization = `Bearer ${req.query.token}`;
-  }
-  next();
-};
 
 // Live Server-Sent Events stream of collaboration events (real-time consumers).
 app.get('/api/a2a/collaboration/stream', promoteQueryToken, authenticateRequest, (req: AuthenticatedRequest, res: express.Response) => {
