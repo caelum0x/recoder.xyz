@@ -14,7 +14,7 @@ Source of truth order: plan.md (execution) → remaining.md (paid-user gate) →
 
 ## Security / hardening
 
-- [recoder-0zso] Systemic `/api/a2a/*` auth hardening — most routes unauthenticated, bridge tokens unverified (surfaced by security review). Larger than feature work.
+- [recoder-0zso] `/api/a2a/*` auth hardening. **Reassessed 2026-06-03:** the "most routes unauthenticated" claim was stale — 29/35 already use `authenticateRequest`. Closed the concrete gaps: `adapters/rest` + `adapters/git` (arbitrary REST/repo-path operations), `terminals` + `terminals/summary`, and `bridge/agents` are now authenticated (all had zero consumers). Bridge WS tokens are already verified (`authenticateWebSocket` → `verifySessionToken`, no anon bypass). **Still TODO (careful):** the live-consumed `workspaces/*` + SSE-stream routers (mission-control/handoffs/multi-dispatch + EventSource) are still unauthenticated at the main-server mount — hardening them needs the `?token=`→Authorization promotion pattern and per-consumer verification so EventSource and the existing hooks don't break; the `.well-known/agent.json` discovery endpoint stays public by spec.
 
 ## Agent platform — next
 
