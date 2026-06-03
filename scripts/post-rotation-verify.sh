@@ -98,18 +98,24 @@ run_step "2/5 Core HTTP health checks" \
     frontend=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3001/ || true)
     web=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:5173/ || true)
     backend=$(curl -sS -o /dev/null -w "%{http_code}" http://localhost:3100/health || true)
+    web_present=$(docker inspect recoder-web >/dev/null 2>&1 && echo yes || echo no)
 
     echo "app=${app}"
     echo "frontend=${frontend}"
     echo "web=${web}"
+    echo "web_present=${web_present}"
     echo "backend=${backend}"
 
     test "${app}" = "200"
     test "${frontend}" = "200"
-    case "${web}" in
-      200|301|302|307|308) ;;
-      *) echo "FAIL: recoder-web expected 2xx/3xx, got ${web}"; exit 1 ;;
-    esac
+    if [[ "${web_present}" == "yes" ]]; then
+      case "${web}" in
+        200|301|302|307|308) ;;
+        *) echo "FAIL: recoder-web expected 2xx/3xx, got ${web}"; exit 1 ;;
+      esac
+    else
+      echo "INFO: recoder-web container absent; skipping retired surface HTTP check"
+    fi
     test "${backend}" = "200"
   '
 
@@ -123,7 +129,6 @@ run_step "4/5 Sensitive key presence audit (no values)" \
     bash '$REPO_ROOT/scripts/credential-rotation-audit.sh' remote | tee \"\$audit_file\"
     grep -Eq '^=== recoder-app ===' \"\$audit_file\"
     grep -Eq '^=== recoder-docker-backend ===' \"\$audit_file\"
-    grep -Eq '^=== recoder-web ===' \"\$audit_file\"
     grep -Eq '^=== recoder-redis ===' \"\$audit_file\"
     $(typeset -f check_key_group)
     check_key_group \"\$audit_file\" 'database' '(DATABASE_URL|AUTH_DATABASE_URL)=SET'
