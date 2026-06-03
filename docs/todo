@@ -7,14 +7,13 @@ Source of truth order: plan.md (execution) → remaining.md (paid-user gate) →
 
 - GitHub repo connection → task↔branch mapping → PR artifact creation → review/check sync → issue/task linking, verified against the deployed PR-artifact flow.
 - Real task timeline (task → artifact → PR → preview → approval) from shared run history, not demo/per-page state.
-- PM + Agency approval/handoff: wire `@recoder/a2a-sdk` into recoder-pm/recoder-agency, replacing local envelope parsers with `normalizeInboundEnvelope(adaptLegacyEnvelopeToTaskEnvelope(...))`. SDK landed; consumer wiring pending.
 - Live edge/preview rollout: DNS, TLS, protected preview hosts, rate limits, WAF hooks, production verification (recoder-zvss).
 - Hetzner deploy hygiene: resolve local↔prod git divergence so full deploys don't need scoped checkout/build handling (recoder-js56).
 - Production traffic/abuse controls once real signals exist (recoder-a9rp, recoder-rbc2 mitigation half).
 
 ## Security / hardening
 
-- [recoder-0zso] `/api/a2a/*` auth hardening. **Reassessed 2026-06-03:** the "most routes unauthenticated" claim was stale — 29/35 already use `authenticateRequest`. Closed the concrete gaps: `adapters/rest` + `adapters/git` (arbitrary REST/repo-path operations), `terminals` + `terminals/summary`, and `bridge/agents` are now authenticated (all had zero consumers). Bridge WS tokens are already verified (`authenticateWebSocket` → `verifySessionToken`, no anon bypass). **Still TODO (careful):** the live-consumed `workspaces/*` + SSE-stream routers (mission-control/handoffs/multi-dispatch + EventSource) are still unauthenticated at the main-server mount — hardening them needs the `?token=`→Authorization promotion pattern and per-consumer verification so EventSource and the existing hooks don't break; the `.well-known/agent.json` discovery endpoint stays public by spec.
+- [recoder-0zso] `/api/a2a/*` auth hardening. **Reassessed 2026-06-03:** the "most routes unauthenticated" claim was stale — 29/35 already use `authenticateRequest`. Closed the concrete gaps: `adapters/rest` + `adapters/git` (arbitrary REST/repo-path operations), `terminals` + `terminals/summary`, `bridge/agents`, and now the live-consumed `workspaces/*` + SSE-stream mounts are authenticated on the main server. The workspace slice also enforces owner scoping, and EventSource consumers use the `?token=`→Authorization promotion path so mission-control/handoff/multi-dispatch streams keep working. Bridge WS tokens are already verified (`authenticateWebSocket` → `verifySessionToken`, no anon bypass). **Still open under recoder-0zso:** broader surface review/closure beyond the live workspace/SSE slice; the `.well-known/agent.json` discovery endpoint stays public by spec.
 
 ## Agent platform — next
 

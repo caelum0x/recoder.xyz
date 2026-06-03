@@ -34,6 +34,13 @@ describe('A2A workspace routes', () => {
     resetTaskLifecycleService();
 
     const app = express();
+    app.use((req, _res, next) => {
+      (req as express.Request & { userId?: string }).userId =
+        typeof req.headers['x-test-user-id'] === 'string'
+          ? req.headers['x-test-user-id']
+          : 'owner-test';
+      next();
+    });
     app.use('/api/a2a', express.text({ type: 'application/json' }));
     app.use('/api/a2a', a2aRouter);
     app.use('/api/a2a/workspaces', workspaceRouter);
@@ -142,6 +149,51 @@ describe('A2A workspace routes', () => {
       assignee_agent_id: 'agent-b',
       workspace_id: workspace.workspaceId,
     });
+  });
+
+  it('rejects access to another user workspace when userId is present', async () => {
+    const workspace = createWorkspace(['agent-a'], 'proj-forbidden');
+
+    const response = await fetch(`${baseUrl}/api/a2a/workspaces/${workspace.workspaceId}`, {
+      headers: {
+        'x-test-user-id': 'other-user',
+      },
+    });
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.success).toBe(false);
+    expect(body.error?.code).toBe('AUTHORIZATION_DENIED');
+  });
+
+  it('lists only authenticated user workspaces by default', async () => {
+    const ownerId = `owner-unique-${Date.now()}`;
+    const owned = getWorkspaceService().create({
+      name: 'ws-owned',
+      projectId: 'proj-owned',
+      ownerId,
+      memberAgentIds: ['agent-a'],
+      settings: { approvalRequired: false },
+    });
+    getWorkspaceService().create({
+      name: 'ws-other',
+      projectId: 'proj-other',
+      ownerId: 'other-owner',
+      memberAgentIds: [],
+      settings: { approvalRequired: false },
+    });
+
+    const response = await fetch(`${baseUrl}/api/a2a/workspaces`, {
+      headers: {
+        'x-test-user-id': ownerId,
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.workspaces).toHaveLength(1);
+    expect(body.data.workspaces[0].workspaceId).toBe(owned.workspaceId);
   });
 
   it('builds a unified workspace control-plane snapshot with evidence totals', async () => {
