@@ -23,13 +23,21 @@ check "recoder-pm" "http://localhost:3004" "307"
 check "recoder-agency" "http://localhost:3007" "307"
 
 # Docker containers
-for container in recoder-web recoder-docker-backend; do
-  status=$(docker inspect --format='{{.State.Running}}' "$container" 2>/dev/null)
+mandatory_container="recoder-docker-backend"
+status=$(docker inspect --format='{{.State.Running}}' "$mandatory_container" 2>/dev/null)
+if [ "$status" != "true" ]; then
+  DOWN_SERVICES="$DOWN_SERVICES $mandatory_container(stopped)"
+  echo "$(date -Iseconds) DOWN $mandatory_container docker-stopped" >> "$LOG"
+fi
+
+optional_retired_container="recoder-web"
+if docker inspect "$optional_retired_container" >/dev/null 2>&1; then
+  status=$(docker inspect --format='{{.State.Running}}' "$optional_retired_container" 2>/dev/null)
   if [ "$status" != "true" ]; then
-    DOWN_SERVICES="$DOWN_SERVICES $container(stopped)"
-    echo "$(date -Iseconds) DOWN $container docker-stopped" >> "$LOG"
+    DOWN_SERVICES="$DOWN_SERVICES $optional_retired_container(stopped)"
+    echo "$(date -Iseconds) DOWN $optional_retired_container docker-stopped" >> "$LOG"
   fi
-done
+fi
 
 # Daytona
 daytona_healthy=$(docker ps --filter name=daytona-api --format '{{.Status}}' 2>/dev/null | grep -c healthy)
