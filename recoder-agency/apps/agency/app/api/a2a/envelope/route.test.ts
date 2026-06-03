@@ -71,4 +71,23 @@ describe("POST /api/a2a/envelope", () => {
 		expect(first.status).toBe(200);
 		expect(second.status).toBe(202);
 	});
+
+	it("returns structured invalid-envelope errors for bad payloads", async () => {
+		const ts = `${Math.floor(Date.now() / 1000)}`;
+		const badBody = {
+			...envelopeBody(),
+			payload: [{ kind: "text", text: "" }],
+		};
+
+		const response = await POST(await signedRequest(badBody, ts));
+		const json = await response.json();
+
+		expect(response.status).toBe(400);
+		expect(json.code).toBe("INVALID_A2A_ENVELOPE");
+		expect(json.schemaVersion).toBe("a2a-envelope-error-v1");
+		expect(json.issues).toContainEqual({
+			path: "body.payload[0].text",
+			message: "must be a non-empty string",
+		});
+	});
 });

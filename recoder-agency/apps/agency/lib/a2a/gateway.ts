@@ -1,3 +1,8 @@
+import {
+	normalizeLegacyInboundEnvelope,
+	type LegacyInboundEnvelope,
+	type ValidationIssue,
+} from "@recoder/a2a-sdk";
 import type { RecoderA2AEnvelope } from "@recoder/shared/a2a";
 
 const MAX_CLOCK_SKEW_MS = Number(process.env.RECODER_A2A_MAX_SKEW_MS || 5 * 60 * 1000);
@@ -14,6 +19,9 @@ type RedisLike = {
 const idempotencyStore = new Map<string, number>();
 let redisClient: RedisLike | null = null;
 let redisLoadAttempted = false;
+
+const A2A_ENVELOPE_ERROR_SCHEMA_VERSION = "a2a-envelope-error-v1";
+const INVALID_A2A_ENVELOPE_CODE = "INVALID_A2A_ENVELOPE";
 
 function getRedisUrl(): string {
 	return process.env.RECODER_A2A_REDIS_URL || process.env.REDIS_URL || "";
@@ -89,6 +97,45 @@ function cleanIdempotencyStore(nowMs: number): void {
 	for (const [messageId, expiresAt] of idempotencyStore.entries()) {
 		if (expiresAt <= nowMs) idempotencyStore.delete(messageId);
 	}
+}
+
+function resolveIngressWorkspaceId(): string {
+	return process.env.RECODER_AGENCY_A2A_WORKSPACE_ID?.trim() || "recoder-agency";
+}
+
+export function parseEnvelopeFromUnknown(
+	value: unknown,
+	sourcePath = "envelope",
+): { ok: true; envelope: RecoderA2AEnvelope } | { ok: false; issues: ValidationIssue[] } {
+	if (typeof value === "string") {
+		return { ok: false, issues: [{ path: sourcePath, message: "must be an object" }] };
+	}
+
+	const normalized = normalizeLegacyInboundEnvelope(value, {
+		workspaceId: resolveIngressWorkspaceId(),
+		sourcePath,
+	});
+	if (!normalized.ok) {
+		return { ok: false, issues: normalized.issues };
+	}
+
+	return {
+		ok: true,
+		envelope: normalized.legacyEnvelope as LegacyInboundEnvelope as RecoderA2AEnvelope,
+	};
+}
+
+export function buildInvalidA2AEnvelopeError(input: {
+	issues: ValidationIssue[];
+	error?: string;
+}) {
+	return {
+		ok: false as const,
+		error: input.error || "Invalid A2A envelope",
+		code: INVALID_A2A_ENVELOPE_CODE,
+		schemaVersion: A2A_ENVELOPE_ERROR_SCHEMA_VERSION,
+		issues: input.issues,
+	};
 }
 
 export async function verifyIncomingA2ARequest(input: {
