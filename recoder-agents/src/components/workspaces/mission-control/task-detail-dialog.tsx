@@ -16,6 +16,7 @@ import { dockerBackendApi } from '@/lib/docker-backend-api';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
+import { useWorkspace } from '@/hooks/workspaces/use-workspaces';
 
 interface TaskArtifact {
   key: string;
@@ -127,6 +128,7 @@ interface TaskContextData {
 
 interface TaskDetailDialogProps {
   taskId: string | null;
+  workspaceId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -140,8 +142,9 @@ function findDiffArtifact(artifacts: TaskArtifact[] | undefined): TaskArtifact |
   );
 }
 
-export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ taskId, workspaceId, open, onOpenChange }: TaskDetailDialogProps) {
   const queryClient = useQueryClient();
+  const { data: workspace } = useWorkspace(workspaceId);
   const { data, isLoading, error } = useQuery({
     queryKey: ['mission-control', 'task-context', taskId ?? ''],
     queryFn: async () => {
@@ -199,6 +202,46 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
     },
     onError: (mutationError) => {
       toast.error(mutationError instanceof Error ? mutationError.message : 'Failed to update review state');
+    },
+  });
+
+  const createPreviewMutation = useMutation({
+    mutationFn: async () => {
+      if (!taskId) {
+        throw new Error('Task ID is required');
+      }
+      if (!workspace?.projectId) {
+        throw new Error('Workspace project ID is required');
+      }
+
+      const res = await dockerBackendApi.post(`/api/a2a/tasks/${taskId}/preview-deploy`, {
+        projectId: workspace.projectId,
+        branchName:
+          data?.review?.worktree?.branchName ??
+          data?.delivery?.githubPullRequest?.head ??
+          data?.delivery?.previewDeployment?.branchName ??
+          undefined,
+        prUrl: data?.delivery?.githubPullRequest?.prUrl ?? undefined,
+        prNumber: data?.delivery?.githubPullRequest?.prNumber ?? undefined,
+        protectionMode: 'signed',
+        createdBy: 'recoder-agents-mission-control',
+      });
+
+      if (!res.success) {
+        throw new Error(res.error?.message || 'Failed to create preview deployment');
+      }
+
+      return res.data;
+    },
+    onSuccess: async () => {
+      toast.success('Protected preview created');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['mission-control', 'task-context', taskId ?? ''] }),
+        queryClient.invalidateQueries({ queryKey: ['mission-control'] }),
+      ]);
+    },
+    onError: (mutationError) => {
+      toast.error(mutationError instanceof Error ? mutationError.message : 'Failed to create preview deployment');
     },
   });
 
@@ -500,6 +543,25 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                   <ShieldCheck className="h-4 w-4" />
                   Preview Deployment
+                </div>
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={createPreviewMutation.isPending || !workspace?.projectId}
+                    onClick={() => createPreviewMutation.mutate()}
+                  >
+                    {createPreviewMutation.isPending ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    {data.delivery?.previewDeployment ? 'Refresh protected preview' : 'Create protected preview'}
+                  </Button>
+                  {!workspace?.projectId ? (
+                    <span className="text-xs text-muted-foreground">
+                      Workspace project ID is required before creating a preview.
+                    </span>
+                  ) : null}
                 </div>
                 {previewUrls.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No preview URLs attached to this task.</p>

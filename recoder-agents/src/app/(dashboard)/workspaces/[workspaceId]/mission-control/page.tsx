@@ -50,6 +50,7 @@ export default function MissionControlPage() {
 
       <TaskDetailDialog
         taskId={selectedTaskId}
+        workspaceId={wsId}
         open={!!selectedTaskId}
         onOpenChange={(open) => {
           if (!open) setSelectedTaskId(null);
