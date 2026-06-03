@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useWorkspace, useUpdateWorkspace } from '@/hooks/workspaces/use-workspaces';
+import { WorkspaceRepoPanel } from '@/components/workspaces/workspace-repo-panel';
 import type { WorkspaceSettings } from '@recoder/shared/a2a';
 
 type OrchestrationPattern = WorkspaceSettings['defaultOrchestrationPattern'];
@@ -59,6 +60,11 @@ export default function WorkspaceSettingsPage() {
       <h1 className="text-xl font-semibold mb-6">Workspace Settings</h1>
 
       <div className="space-y-6">
+        <div>
+          <Label>Workspace Project ID</Label>
+          <Input value={workspace.projectId} readOnly className="mt-1.5 font-mono text-xs" />
+        </div>
+
         <div>
           <Label>Workspace Name</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" />
@@ -136,6 +142,8 @@ export default function WorkspaceSettingsPage() {
           )}
           Save Settings
         </Button>
+
+        <WorkspaceRepoPanel projectId={workspace.projectId} />
       </div>
     </div>
   );
