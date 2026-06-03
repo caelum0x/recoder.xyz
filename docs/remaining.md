@@ -28,7 +28,7 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 2. Main task timeline.
    Make the product path visibly show task -> artifact -> PR -> preview -> approval from shared run history, not demo-only or per-page state.
-   - 2026-06-03 update: mission-control task detail now surfaces attached GitHub PR metadata, preview deployment state, approval linkage, and human-readable PR/preview timeline entries from shared task context. Remaining work is the broader end-to-end product path, not the absence of those shared run-context fields.
+   - 2026-06-03 update: mission-control task detail now surfaces attached GitHub issue/PR metadata, preview deployment state, approval linkage, and human-readable PR/preview timeline entries from shared task context. Task pipeline cards also show issue/PR/preview badges directly from shared delivery state. Remaining work is the broader end-to-end product path, not the absence of those shared run-context fields.
 
 3. Live preview and edge rollout.
    Activate preview host routing, TLS/DNS, private preview access, rate limits, WAF hooks, and production rollout for the in-repo edge scaffold. This maps to ready issue `recoder-zvss`.
