@@ -36,7 +36,11 @@ test_http "api-health" "http://localhost:8000/v1/health" "200"
 test_http "docker-health" "http://localhost:3100/health" "200"
 test_http "recoder-pm" "http://localhost:3004" "307"
 test_http "recoder-agency" "http://localhost:3007" "307"
-echo "  $(docker ps --filter name=recoder-web --format '{{.Status}}' | grep -c healthy) recoder-web (healthy containers)"
+if docker inspect recoder-web >/dev/null 2>&1; then
+  echo "  $(docker ps --filter name=recoder-web --format '{{.Status}}' | grep -c healthy) recoder-web (healthy containers)"
+else
+  echo "  SKIP recoder-web (retired container absent)"
+fi
 echo "  $(docker ps --filter name=daytona-api --format '{{.Status}}' | grep -c healthy) daytona (healthy)"
 
 # ── Section 2: Auth ──

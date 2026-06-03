@@ -64,10 +64,14 @@ if [[ "$DRY_RUN" == "true" ]]; then
   exit 0
 fi
 
-RECODER_WEB_URL="$RECODER_WEB_URL" \
-BACKEND_URL="$BACKEND_URL" \
-EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" \
-BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" \
-pnpm -C "$REPO_ROOT/recoder-web" smoke:prod-blockers
+if [[ -d "$REPO_ROOT/recoder-web" && -f "$REPO_ROOT/recoder-web/package.json" ]]; then
+  RECODER_WEB_URL="$RECODER_WEB_URL" \
+  BACKEND_URL="$BACKEND_URL" \
+  EXPECTED_QUEUE_BACKEND="$EXPECTED_QUEUE_BACKEND" \
+  BILLING_ACTIONS_ENABLED="$BILLING_ACTIONS_ENABLED" \
+  pnpm -C "$REPO_ROOT/recoder-web" smoke:prod-blockers
+else
+  echo "recoder-web surface absent; skipping retired browser-surface smoke."
+fi
 
 echo "Phase 1 smoke passed."
