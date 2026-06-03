@@ -11,6 +11,10 @@ vi.mock('@/hooks/workspaces/use-workspace-repo', () => ({
   useCreateWorkspacePullRequest: vi.fn(),
 }));
 
+vi.mock('@/hooks/workspaces/use-mission-control', () => ({
+  useTaskPipeline: vi.fn(),
+}));
+
 import {
   useWorkspaceRepoSnapshot,
   useCloneWorkspaceRepo,
@@ -18,6 +22,7 @@ import {
   useWorkspacePullRequestDetail,
   useCreateWorkspacePullRequest,
 } from '@/hooks/workspaces/use-workspace-repo';
+import { useTaskPipeline } from '@/hooks/workspaces/use-mission-control';
 
 describe('WorkspaceRepoPanel', () => {
   beforeEach(() => {
@@ -74,15 +79,31 @@ describe('WorkspaceRepoPanel', () => {
       isPending: false,
       mutateAsync: vi.fn(),
     } as any);
+
+    vi.mocked(useTaskPipeline).mockReturnValue({
+      data: [
+        {
+          id: 'task-123',
+          prompt: 'Prepare pricing page PR',
+          state: 'working',
+          review: {
+            worktree: {
+              branchName: 'feature/pricing-page',
+            },
+          },
+        },
+      ],
+    } as any);
   });
 
   it('renders connected repo state and token-gated pull request section', () => {
-    render(<WorkspaceRepoPanel projectId="project-123" />);
+    render(<WorkspaceRepoPanel projectId="project-123" workspaceId="ws-123" />);
 
     expect(screen.getByText('Repository & Pull Requests')).toBeTruthy();
     expect(screen.getByText('project-123')).toBeTruthy();
     expect(screen.getByText('https://github.com/recoder/recoder.xyz.git')).toBeTruthy();
     expect(screen.getByText('Create PR')).toBeTruthy();
+    expect(screen.getByText('Attach to workspace task')).toBeTruthy();
     expect(screen.getByText('Enter a GitHub token to load PR review and check state.')).toBeTruthy();
   });
 });
