@@ -7,29 +7,56 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   useCloneWorkspaceRepo,
   useCreateWorkspacePullRequest,
   useWorkspacePullRequestDetail,
   useWorkspacePullRequests,
   useWorkspaceRepoSnapshot,
 } from '@/hooks/workspaces/use-workspace-repo';
+import { useTaskPipeline } from '@/hooks/workspaces/use-mission-control';
 import { toast } from '@/lib/toast';
 
 interface WorkspaceRepoPanelProps {
   projectId: string;
+  workspaceId: string;
 }
 
-export function WorkspaceRepoPanel({ projectId }: WorkspaceRepoPanelProps) {
+interface WorkspaceTask {
+  id: string;
+  prompt?: string;
+  state?: string;
+  review?: {
+    worktree?: {
+      branchName?: string | null;
+    } | null;
+    merge?: {
+      branchName?: string | null;
+    } | null;
+  } | null;
+}
+
+export function WorkspaceRepoPanel({ projectId, workspaceId }: WorkspaceRepoPanelProps) {
   const [githubToken, setGithubToken] = useState('');
   const [cloneUrl, setCloneUrl] = useState('');
   const [cloneBranch, setCloneBranch] = useState('');
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
+  const [sourceBranch, setSourceBranch] = useState('');
+  const [baseBranch, setBaseBranch] = useState('main');
   const [prTaskId, setPrTaskId] = useState('');
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('none');
   const [selectedPrNumber, setSelectedPrNumber] = useState<number | null>(null);
 
   const repoSnapshot = useWorkspaceRepoSnapshot(projectId);
   const cloneRepo = useCloneWorkspaceRepo(projectId);
+  const taskPipeline = useTaskPipeline(workspaceId);
   const pullRequests = useWorkspacePullRequests(projectId, githubToken, 'open');
   const pullRequestDetail = useWorkspacePullRequestDetail(projectId, githubToken, selectedPrNumber);
   const createPullRequest = useCreateWorkspacePullRequest(projectId);
@@ -42,6 +69,14 @@ export function WorkspaceRepoPanel({ projectId }: WorkspaceRepoPanelProps) {
     const untracked = status?.untracked?.length ?? 0;
     return modified + staged + untracked;
   }, [status]);
+  const tasks = (taskPipeline.data ?? []) as WorkspaceTask[];
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
+  const selectedTaskBranch =
+    selectedTask?.review?.worktree?.branchName ??
+    selectedTask?.review?.merge?.branchName ??
+    null;
+  const effectiveTaskId = prTaskId.trim() || (selectedTaskId !== 'none' ? selectedTaskId : '');
+  const effectiveHead = sourceBranch.trim() || selectedTaskBranch || undefined;
 
   const handleClone = async () => {
     try {
@@ -63,7 +98,9 @@ export function WorkspaceRepoPanel({ projectId }: WorkspaceRepoPanelProps) {
         token: githubToken.trim(),
         title: prTitle.trim(),
         body: prBody.trim() || undefined,
-        taskId: prTaskId.trim() || undefined,
+        taskId: effectiveTaskId || undefined,
+        head: effectiveHead,
+        base: baseBranch.trim() || undefined,
       });
 
       toast.success(
@@ -73,6 +110,7 @@ export function WorkspaceRepoPanel({ projectId }: WorkspaceRepoPanelProps) {
       );
       setPrTitle('');
       setPrBody('');
+      setSourceBranch('');
       setSelectedPrNumber(result.pullRequest.number);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create pull request');
@@ -176,6 +214,33 @@ export function WorkspaceRepoPanel({ projectId }: WorkspaceRepoPanelProps) {
             </div>
             <div className="grid gap-3">
               <div className="space-y-1">
+                <Label htmlFor="workspace-pr-task-select">Attach to workspace task</Label>
+                <Select value={selectedTaskId} onValueChange={setSelectedTaskId}>
+                  <SelectTrigger id="workspace-pr-task-select">
+                    <SelectValue placeholder="Select a task (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No task selected</SelectItem>
+                    {tasks.map((task) => (
+                      <SelectItem key={task.id} value={task.id}>
+                        {(task.prompt?.trim() || task.id).slice(0, 80)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedTask ? (
+                  <p className="text-xs text-muted-foreground">
+                    Task state: {selectedTask.state ?? 'unknown'}
+                    {selectedTaskBranch ? ` · linked branch: ${selectedTaskBranch}` : ''}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Optional: attach the PR to a workspace task so it appears in shared run history.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1">
                 <Label htmlFor="workspace-pr-title">PR title</Label>
                 <Input
                   id="workspace-pr-title"
@@ -192,6 +257,26 @@ export function WorkspaceRepoPanel({ projectId }: WorkspaceRepoPanelProps) {
                   onChange={(event) => setPrTaskId(event.target.value)}
                   placeholder="task_..."
                 />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="workspace-pr-head">Source branch</Label>
+                  <Input
+                    id="workspace-pr-head"
+                    value={sourceBranch}
+                    onChange={(event) => setSourceBranch(event.target.value)}
+                    placeholder={selectedTaskBranch ?? status?.branch ?? 'feature/my-branch'}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="workspace-pr-base">Base branch</Label>
+                  <Input
+                    id="workspace-pr-base"
+                    value={baseBranch}
+                    onChange={(event) => setBaseBranch(event.target.value)}
+                    placeholder="main"
+                  />
+                </div>
               </div>
               <div className="space-y-1">
                 <Label htmlFor="workspace-pr-body">PR body (optional)</Label>

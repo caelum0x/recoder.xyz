@@ -143,7 +143,7 @@ export default function WorkspaceSettingsPage() {
           Save Settings
         </Button>
 
-        <WorkspaceRepoPanel projectId={workspace.projectId} />
+        <WorkspaceRepoPanel projectId={workspace.projectId} workspaceId={wsId} />
       </div>
     </div>
   );
