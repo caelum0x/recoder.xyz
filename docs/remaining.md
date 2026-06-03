@@ -32,6 +32,7 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 3. Live preview and edge rollout.
    Activate preview host routing, TLS/DNS, private preview access, rate limits, WAF hooks, and production rollout for the in-repo edge scaffold. This maps to ready issue `recoder-zvss`.
+   - 2026-06-03 update: mission-control task detail can now create or refresh a protected preview deployment through the existing shared task preview route, using the workspace project id and task branch/PR context. The remaining work is live edge routing, DNS/TLS, and production rollout evidence, not the absence of a user-facing preview action.
    - 2026-05-31 update: the retired browser coding host now redirects to the dashboard. The remaining preview/edge work should attach evidence to Spaces/shared run history, not revive the retired app.
 
 4. Deploy hygiene.
