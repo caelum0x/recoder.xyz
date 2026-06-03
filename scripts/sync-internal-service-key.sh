@@ -14,7 +14,7 @@ Sync INTERNAL_SERVICE_KEY across app/recoder-web/docker-backend env files.
 
 Defaults:
   APP_ENV=app/.env.production
-  WEB_ENV=recoder-web/.env.local
+  WEB_ENV=recoder-web/.env.local   # optional retired surface; skipped when absent
   DOCKER_ENV=docker-backend/.env
 
 Provide key via env:
@@ -66,11 +66,17 @@ upsert_key() {
 }
 
 upsert_key "$APP_ENV" "INTERNAL_SERVICE_KEY" "$INTERNAL_SERVICE_KEY_VALUE"
-upsert_key "$WEB_ENV" "INTERNAL_SERVICE_KEY" "$INTERNAL_SERVICE_KEY_VALUE"
 upsert_key "$DOCKER_ENV" "INTERNAL_SERVICE_KEY" "$INTERNAL_SERVICE_KEY_VALUE"
+if [[ -e "$(dirname "$WEB_ENV")" || -f "$WEB_ENV" ]]; then
+  upsert_key "$WEB_ENV" "INTERNAL_SERVICE_KEY" "$INTERNAL_SERVICE_KEY_VALUE"
+fi
 
 echo "updated:"
 echo "- $APP_ENV"
-echo "- $WEB_ENV"
+if [[ -e "$(dirname "$WEB_ENV")" || -f "$WEB_ENV" ]]; then
+  echo "- $WEB_ENV"
+else
+  echo "- $WEB_ENV (skipped; retired surface absent)"
+fi
 echo "- $DOCKER_ENV"
 echo "key length: ${#INTERNAL_SERVICE_KEY_VALUE}"
