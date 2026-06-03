@@ -266,14 +266,38 @@ function buildTaskTimeline(input: {
   if (input.artifacts && input.artifacts.length > 0) {
     for (const artifact of input.artifacts) {
       const artifactMetadata = readRecord(artifact.metadata);
+      const artifactType = typeof artifactMetadata?.type === 'string' ? artifactMetadata.type : null;
+      const isGitHubPrArtifact = artifactType === 'github_pull_request';
+      const isPreviewArtifact = artifactType === 'deployment_preview';
       timeline.push({
         at:
           typeof artifactMetadata?.createdAt === 'string'
             ? artifactMetadata.createdAt
             : input.task.updated_at,
-        type: `artifact.${artifact.artifact_type}`,
-        title: `Artifact: ${artifact.artifact_type}`,
-        detail: artifact.key,
+        type: isGitHubPrArtifact
+          ? 'github.pull_request'
+          : isPreviewArtifact
+            ? 'preview.deployment'
+            : `artifact.${artifact.artifact_type}`,
+        title: isGitHubPrArtifact
+          ? 'Pull request attached'
+          : isPreviewArtifact
+            ? 'Preview deployment'
+            : `Artifact: ${artifact.artifact_type}`,
+        detail: isGitHubPrArtifact
+          ? [
+              typeof artifactMetadata?.title === 'string' ? artifactMetadata.title : null,
+              typeof artifactMetadata?.prNumber === 'number' ? `#${artifactMetadata.prNumber}` : null,
+              typeof artifactMetadata?.prUrl === 'string' ? artifactMetadata.prUrl : null,
+            ].filter(Boolean).join(' · ') || artifact.key
+          : isPreviewArtifact
+            ? [
+                typeof artifactMetadata?.previewUrl === 'string' ? artifactMetadata.previewUrl : null,
+                typeof artifactMetadata?.protectionMode === 'string' ? artifactMetadata.protectionMode : null,
+              ].filter(Boolean).join(' · ') || artifact.key
+            : artifact.key,
+        ...(typeof artifactMetadata?.prUrl === 'string' ? { href: artifactMetadata.prUrl } : {}),
+        ...(typeof artifactMetadata?.previewUrl === 'string' ? { href: artifactMetadata.previewUrl } : {}),
       });
     }
   }
@@ -329,6 +353,7 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const handoffMetadata = readRecord(task.metadata?.handoff);
   const mergeMetadata = readRecord(task.metadata?.merge);
   const deploymentPreviewMetadata = readRecord(task.metadata?.deploymentPreview);
+  const githubPullRequestMetadata = readRecord(task.metadata?.githubPullRequest);
   const reviewHistory = Array.isArray(task.metadata?.reviewHistory)
     ? task.metadata.reviewHistory
         .filter((entry): entry is Record<string, unknown> => Boolean(readRecord(entry)))
@@ -427,6 +452,46 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
       history: reviewHistory,
     },
     delivery: {
+      githubPullRequest: githubPullRequestMetadata
+        ? {
+            projectId:
+              typeof githubPullRequestMetadata.projectId === 'string'
+                ? githubPullRequestMetadata.projectId
+                : null,
+            repo:
+              typeof githubPullRequestMetadata.repo === 'string'
+                ? githubPullRequestMetadata.repo
+                : null,
+            prUrl:
+              typeof githubPullRequestMetadata.prUrl === 'string'
+                ? githubPullRequestMetadata.prUrl
+                : null,
+            prNumber:
+              typeof githubPullRequestMetadata.prNumber === 'number'
+                ? githubPullRequestMetadata.prNumber
+                : null,
+            state:
+              typeof githubPullRequestMetadata.state === 'string'
+                ? githubPullRequestMetadata.state
+                : null,
+            title:
+              typeof githubPullRequestMetadata.title === 'string'
+                ? githubPullRequestMetadata.title
+                : null,
+            head:
+              typeof githubPullRequestMetadata.head === 'string'
+                ? githubPullRequestMetadata.head
+                : null,
+            base:
+              typeof githubPullRequestMetadata.base === 'string'
+                ? githubPullRequestMetadata.base
+                : null,
+            draft:
+              typeof githubPullRequestMetadata.draft === 'boolean'
+                ? githubPullRequestMetadata.draft
+                : null,
+          }
+        : null,
       previewDeployment: deploymentPreviewMetadata
         ? {
             deploymentId:
