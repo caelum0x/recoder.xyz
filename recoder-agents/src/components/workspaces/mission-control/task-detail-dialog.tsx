@@ -1,7 +1,17 @@
 'use client';
 
+import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, GitBranch, Loader2, Copy, FileDiff, FolderTree, Eye } from 'lucide-react';
+import {
+  ExternalLink,
+  GitBranch,
+  Loader2,
+  Copy,
+  FileDiff,
+  FolderTree,
+  GitPullRequest,
+  ShieldCheck,
+} from 'lucide-react';
 import { dockerBackendApi } from '@/lib/docker-backend-api';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -28,8 +38,19 @@ interface TaskContextData {
     type?: string | null;
     title?: string | null;
     detail?: string | null;
+    href?: string | null;
     files?: string[];
   }>;
+  links?: {
+    approval?: {
+      approvalId?: string | null;
+      status?: string | null;
+      action?: string | null;
+      resolvedBy?: string | null;
+      source?: string | null;
+      grantedBy?: string | null;
+    } | null;
+  };
   review?: {
     worktree?: {
       isolated?: boolean;
@@ -65,6 +86,30 @@ interface TaskContextData {
       reviewPath?: string | null;
       suggestedAction?: string | null;
     }>;
+  } | null;
+  delivery?: {
+    githubPullRequest?: {
+      projectId?: string | null;
+      repo?: string | null;
+      prUrl?: string | null;
+      prNumber?: number | null;
+      state?: string | null;
+      title?: string | null;
+      head?: string | null;
+      base?: string | null;
+      draft?: boolean | null;
+    } | null;
+    previewDeployment?: {
+      deploymentId?: string | null;
+      projectId?: string | null;
+      protectionMode?: string | null;
+      protectedPreviewUrl?: string | null;
+      basePreviewUrl?: string | null;
+      edgeHost?: string | null;
+      branchName?: string | null;
+      prUrl?: string | null;
+      prNumber?: number | null;
+    } | null;
   } | null;
   runtime?: {
     filesChanged?: string[];
@@ -155,7 +200,15 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
     : data?.review?.merge?.changedFiles?.length
       ? data.review.merge.changedFiles
       : data?.runtime?.filesChanged ?? [];
-  const previewUrls = data?.task.result?.preview?.map((preview) => preview.url).filter(Boolean) ?? [];
+  const previewUrls = Array.from(
+    new Set(
+      [
+        ...(data?.task.result?.preview?.map((preview) => preview.url).filter(Boolean) ?? []),
+        data?.delivery?.previewDeployment?.protectedPreviewUrl ?? null,
+        data?.delivery?.previewDeployment?.basePreviewUrl ?? null,
+      ].filter((value): value is string => typeof value === 'string' && value.length > 0),
+    ),
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -194,6 +247,90 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
+              <section className="rounded-lg border p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                  <GitPullRequest className="h-4 w-4" />
+                  Delivery
+                </div>
+                <div className="space-y-4 text-sm">
+                  <div className="space-y-2">
+                    <p className="font-medium">Pull Request</p>
+                    {data.delivery?.githubPullRequest?.prUrl ? (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Title:</span>{' '}
+                          <span>{data.delivery.githubPullRequest.title ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Repo:</span>{' '}
+                          <span className="font-mono">{data.delivery.githubPullRequest.repo ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Number:</span>{' '}
+                          <span>#{data.delivery.githubPullRequest.prNumber ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">State:</span>{' '}
+                          <span>{data.delivery.githubPullRequest.state ?? '—'}</span>
+                          {data.delivery.githubPullRequest.draft ? ' · draft' : ''}
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Branch:</span>{' '}
+                          <span className="font-mono">
+                            {data.delivery.githubPullRequest.head ?? '—'} → {data.delivery.githubPullRequest.base ?? '—'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void copyToClipboard('PR URL', data.delivery?.githubPullRequest?.prUrl)}
+                          >
+                            <Copy className="mr-1 h-3.5 w-3.5" />
+                            Copy PR URL
+                          </Button>
+                          <Button asChild type="button" size="sm" variant="outline">
+                            <a href={data.delivery.githubPullRequest.prUrl} target="_blank" rel="noreferrer">
+                              <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                              Open PR
+                            </a>
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">No GitHub pull request attached to this task.</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="font-medium">Approval</p>
+                    {data.links?.approval ? (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Status:</span>{' '}
+                          <span>{data.links.approval.status ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Action:</span>{' '}
+                          <span>{data.links.approval.action ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Approval ID:</span>{' '}
+                          <span className="font-mono">{data.links.approval.approvalId ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Resolved by:</span>{' '}
+                          <span>{data.links.approval.resolvedBy ?? data.links.approval.grantedBy ?? '—'}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">No approval linked to this task.</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
               <section className="rounded-lg border p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium">
                   <GitBranch className="h-4 w-4" />
@@ -301,13 +438,29 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
 
               <section className="rounded-lg border p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                  <Eye className="h-4 w-4" />
-                  Preview URLs
+                  <ShieldCheck className="h-4 w-4" />
+                  Preview Deployment
                 </div>
                 {previewUrls.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No preview URLs attached to this task.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    {data.delivery?.previewDeployment ? (
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Protection:</span>{' '}
+                          <span>{data.delivery.previewDeployment.protectionMode ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Project:</span>{' '}
+                          <span className="font-mono">{data.delivery.previewDeployment.projectId ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Branch:</span>{' '}
+                          <span className="font-mono">{data.delivery.previewDeployment.branchName ?? '—'}</span>
+                        </div>
+                      </div>
+                    ) : null}
                     {previewUrls.map((url) => (
                       <div key={url} className="flex items-center gap-2 text-sm">
                         <a
@@ -362,6 +515,19 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                       </div>
                       {entry.detail ? (
                         <p className="mt-2 text-muted-foreground">{entry.detail}</p>
+                      ) : null}
+                      {entry.href ? (
+                        <div className="mt-2">
+                          <a
+                            href={entry.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            Open link
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </div>
                       ) : null}
                       {entry.files?.length ? (
                         <div className="mt-2 flex flex-wrap gap-2">
