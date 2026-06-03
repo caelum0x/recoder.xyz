@@ -24,6 +24,7 @@ Categories:
   - host-only removals: host-untracked paths absent locally
   - branch-tracked additions: host-untracked paths that are now tracked locally
   - local-overlap/manual-review: host paths that collide with current local changes
+  - retired-surface remnants: host paths under retired surfaces such as recoder-web
 EOF
 }
 
@@ -134,6 +135,17 @@ exists_locally() {
   [[ -e "$LOCAL_REPO_ROOT/$rel" ]]
 }
 
+is_retired_surface_path() {
+  case "$1" in
+    recoder-web|recoder-web/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 reset_count=0
 reset_items=""
 host_only_count=0
@@ -152,6 +164,12 @@ while IFS= read -r line; do
   local_status="$(local_status_for_path "$rel_path")"
   tracked_locally=false
   exists_in_worktree=false
+
+  if is_retired_surface_path "$rel_path"; then
+    retired_count=$((retired_count + 1))
+    retired_items+="${line} | local=$(if [[ -n "$local_status" ]]; then printf '%s' "$local_status"; elif [[ -e "$LOCAL_REPO_ROOT/$rel_path" ]]; then printf 'exists'; else printf 'absent'; fi)"$'\n'
+    continue
+  fi
 
   if has_tracked_content "$rel_path"; then
     tracked_locally=true
@@ -220,7 +238,7 @@ fi
 
 if [[ -n "$retired_items" ]]; then
   echo
-  echo "-- Manual Review: No Longer Tracked Locally ($retired_count) --"
+  echo "-- Retired Surface / No-Longer-Tracked Remnants ($retired_count) --"
   printf '%s' "$retired_items"
 fi
 
@@ -229,4 +247,5 @@ echo "Suggested actions:"
 echo "- reset-to-branch: safe to restore from git after backup"
 echo "- host-only removals: safe to remove from host after backup"
 echo "- host-untracked but branch-tracked: prefer pull/redeploy, do not delete manually"
+echo "- retired-surface remnants: remove from host once the retired surface is no longer intentionally tracked"
 echo "- manual-review buckets: reconcile against active local work before touching host"
