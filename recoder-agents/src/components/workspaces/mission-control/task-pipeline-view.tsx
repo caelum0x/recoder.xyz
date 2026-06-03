@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Loader2, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,20 @@ interface Task {
       baseBranch?: string | null;
       suggestedAction?: string | null;
       changedFiles?: string[];
+    } | null;
+  } | null;
+  delivery?: {
+    githubIssue?: {
+      issueNumber?: number | null;
+      state?: string | null;
+    } | null;
+    githubPullRequest?: {
+      prNumber?: number | null;
+      state?: string | null;
+      draft?: boolean | null;
+    } | null;
+    previewDeployment?: {
+      protectionMode?: string | null;
     } | null;
   } | null;
   assignee?: {
@@ -194,6 +209,22 @@ export function TaskPipelineView({ tasks, onTaskClick }: TaskPipelineViewProps) 
                             review-ready
                           </span>
                         )}
+                        {task.delivery?.githubIssue?.issueNumber ? (
+                          <span className="text-[10px] rounded bg-fuchsia-100 px-1 py-0.5 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400">
+                            issue:#{task.delivery.githubIssue.issueNumber}
+                          </span>
+                        ) : null}
+                        {task.delivery?.githubPullRequest?.prNumber ? (
+                          <span className="text-[10px] rounded bg-indigo-100 px-1 py-0.5 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                            pr:#{task.delivery.githubPullRequest.prNumber}
+                            {task.delivery.githubPullRequest.draft ? ' draft' : ''}
+                          </span>
+                        ) : null}
+                        {task.delivery?.previewDeployment?.protectionMode ? (
+                          <span className="text-[10px] rounded bg-teal-100 px-1 py-0.5 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400">
+                            preview:{task.delivery.previewDeployment.protectionMode}
+                          </span>
+                        ) : null}
                         {typeof task.runtime?.evidenceCount === 'number' && task.runtime.evidenceCount > 0 && (
                           <span className="text-[10px] rounded bg-blue-100 px-1 py-0.5 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                             evidence:{task.runtime.evidenceCount}
