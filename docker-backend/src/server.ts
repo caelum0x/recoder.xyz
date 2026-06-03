@@ -14052,7 +14052,7 @@ app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
 });
 
 // GET /api/a2a/bridge/agents — live connected bridge sessions
-app.get('/api/a2a/bridge/agents', async (_req: express.Request, res: express.Response) => {
+app.get('/api/a2a/bridge/agents', authenticateRequest, async (_req: express.Request, res: express.Response) => {
   try {
     const sessions = getAgentBridgeService().listConnectedSessions();
     res.json({
@@ -15613,8 +15613,13 @@ app.use('/api/a2a/connectors/opencode', opencodeConnectorRouter);
 app.use('/api/a2a/connectors/cursor', cursorConnectorRouter);
 app.use('/api/a2a/connectors/windsurf', windsurfConnectorRouter);
 app.use('/api/a2a/connectors/replit', replitConnectorRouter);
-app.use('/api/a2a/adapters/rest', restAdapterRouter);
-app.use('/api/a2a/adapters/git', gitAdapterRouter);
+// These adapters can register REST/Git integrations against arbitrary
+// targets/repo paths and drive operations on them, so they MUST require auth.
+// (The standalone a2a-gateway process guards the same routers via its own
+// extractA2AIdentity middleware; the main server has no such guard, so add it
+// here explicitly.) No frontend/external consumers — purely additive hardening.
+app.use('/api/a2a/adapters/rest', authenticateRequest, restAdapterRouter);
+app.use('/api/a2a/adapters/git', authenticateRequest, gitAdapterRouter);
 app.use('/api/a2a/context', contextBridgeRouter);
 app.use('/api/a2a/workspaces', a2aWorkspaceRouter);
 app.use('/api/spaces', a2aWorkspaceRouter);
@@ -16831,12 +16836,12 @@ app.delete('/api/a2a/terminals/:sessionId', authenticateRequest, asyncHandler(as
   sendSuccess(res, { ok: true });
 }));
 
-app.get('/api/a2a/terminals', asyncHandler(async (_req, res) => {
+app.get('/api/a2a/terminals', authenticateRequest, asyncHandler(async (_req, res) => {
   const { listTerminals, getSummary } = await import('./a2a/agent-terminal-registry.js');
   sendSuccess(res, { terminals: listTerminals(), summary: getSummary() });
 }));
 
-app.get('/api/a2a/terminals/summary', asyncHandler(async (_req, res) => {
+app.get('/api/a2a/terminals/summary', authenticateRequest, asyncHandler(async (_req, res) => {
   const { getSummary } = await import('./a2a/agent-terminal-registry.js');
   sendSuccess(res, getSummary());
 }));
