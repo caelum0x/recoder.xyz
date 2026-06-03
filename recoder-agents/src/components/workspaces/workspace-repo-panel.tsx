@@ -22,6 +22,7 @@ import {
 } from '@/hooks/workspaces/use-workspace-repo';
 import { useTaskPipeline } from '@/hooks/workspaces/use-mission-control';
 import { toast } from '@/lib/toast';
+import { dockerBackendApi } from '@/lib/docker-backend-api';
 
 interface WorkspaceRepoPanelProps {
   projectId: string;
@@ -52,6 +53,10 @@ export function WorkspaceRepoPanel({ projectId, workspaceId }: WorkspaceRepoPane
   const [baseBranch, setBaseBranch] = useState('main');
   const [prTaskId, setPrTaskId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState<string>('none');
+  const [issueUrl, setIssueUrl] = useState('');
+  const [issueTitle, setIssueTitle] = useState('');
+  const [issueLabels, setIssueLabels] = useState('');
+  const [linkingIssue, setLinkingIssue] = useState(false);
   const [selectedPrNumber, setSelectedPrNumber] = useState<number | null>(null);
 
   const repoSnapshot = useWorkspaceRepoSnapshot(projectId);
@@ -114,6 +119,78 @@ export function WorkspaceRepoPanel({ projectId, workspaceId }: WorkspaceRepoPane
       setSelectedPrNumber(result.pullRequest.number);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create pull request');
+    }
+  };
+
+  const handleLinkIssue = async () => {
+    if (!effectiveTaskId) {
+      toast.error('Select or enter a task ID first');
+      return;
+    }
+    if (!issueUrl.trim()) {
+      toast.error('Issue URL is required');
+      return;
+    }
+
+    const issueNumberMatch = issueUrl.match(/\/issues\/(\d+)(?:$|[?#/])/);
+    const issueNumber = issueNumberMatch ? Number(issueNumberMatch[1]) : null;
+    const repoMatch = issueUrl.match(/github\.com\/([^/]+\/[^/]+)\/issues\//);
+    const repo = repoMatch ? repoMatch[1] : null;
+    const labels = issueLabels.split(',').map((value) => value.trim()).filter(Boolean);
+
+    setLinkingIssue(true);
+    try {
+      await dockerBackendApi.post(`/api/a2a/tasks/${effectiveTaskId}/artifacts`, {
+        artifacts: [
+          {
+            key: issueNumber ? `github-issue-${issueNumber}` : `github-issue-${Date.now()}`,
+            artifact_type: 'custom',
+            mime_type: 'application/json',
+            content: JSON.stringify({
+              type: 'github_issue',
+              issueUrl: issueUrl.trim(),
+              issueNumber,
+              title: issueTitle.trim() || undefined,
+              repo,
+              labels,
+            }),
+            metadata: {
+              type: 'github_issue',
+              issueUrl: issueUrl.trim(),
+              issueNumber,
+              title: issueTitle.trim() || undefined,
+              repo,
+              labels,
+            },
+          },
+        ],
+        reason: 'GitHub issue linked from workspace settings',
+        triggeredBy: 'recoder-agents-workspace-settings',
+      });
+
+      await dockerBackendApi.post(`/api/a2a/tasks/${effectiveTaskId}/metadata`, {
+        metadataPatch: {
+          githubIssue: {
+            issueUrl: issueUrl.trim(),
+            issueNumber,
+            title: issueTitle.trim() || undefined,
+            repo,
+            state: 'open',
+            labels,
+          },
+        },
+        reason: 'GitHub issue linked from workspace settings',
+        triggeredBy: 'recoder-agents-workspace-settings',
+      });
+
+      toast.success('GitHub issue linked to task');
+      setIssueUrl('');
+      setIssueTitle('');
+      setIssueLabels('');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to link GitHub issue');
+    } finally {
+      setLinkingIssue(false);
     }
   };
 
@@ -295,6 +372,51 @@ export function WorkspaceRepoPanel({ projectId, workspaceId }: WorkspaceRepoPane
               >
                 {createPullRequest.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Create PR
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+              <ShieldCheck className="h-4 w-4" />
+              Link GitHub issue to task
+            </div>
+            <div className="grid gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="workspace-issue-url">Issue URL</Label>
+                <Input
+                  id="workspace-issue-url"
+                  value={issueUrl}
+                  onChange={(event) => setIssueUrl(event.target.value)}
+                  placeholder="https://github.com/owner/repo/issues/123"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="workspace-issue-title">Issue title (optional)</Label>
+                <Input
+                  id="workspace-issue-title"
+                  value={issueTitle}
+                  onChange={(event) => setIssueTitle(event.target.value)}
+                  placeholder="Fix launch-gate task linkage"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="workspace-issue-labels">Labels (optional)</Label>
+                <Input
+                  id="workspace-issue-labels"
+                  value={issueLabels}
+                  onChange={(event) => setIssueLabels(event.target.value)}
+                  placeholder="launch-gate, github"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLinkIssue}
+                disabled={linkingIssue || !effectiveTaskId || !issueUrl.trim()}
+              >
+                {linkingIssue ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Link issue to task
               </Button>
             </div>
           </div>

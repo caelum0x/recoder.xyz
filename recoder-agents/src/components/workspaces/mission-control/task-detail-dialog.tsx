@@ -88,6 +88,14 @@ interface TaskContextData {
     }>;
   } | null;
   delivery?: {
+    githubIssue?: {
+      issueUrl?: string | null;
+      issueNumber?: number | null;
+      title?: string | null;
+      repo?: string | null;
+      state?: string | null;
+      labels?: string[];
+    } | null;
     githubPullRequest?: {
       projectId?: string | null;
       repo?: string | null;
@@ -253,6 +261,58 @@ export function TaskDetailDialog({ taskId, open, onOpenChange }: TaskDetailDialo
                   Delivery
                 </div>
                 <div className="space-y-4 text-sm">
+                  <div className="space-y-2">
+                    <p className="font-medium">Linked Issue</p>
+                    {data.delivery?.githubIssue?.issueUrl ? (
+                      <>
+                        <div>
+                          <span className="text-muted-foreground">Title:</span>{' '}
+                          <span>{data.delivery.githubIssue.title ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Repo:</span>{' '}
+                          <span className="font-mono">{data.delivery.githubIssue.repo ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Number:</span>{' '}
+                          <span>#{data.delivery.githubIssue.issueNumber ?? '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">State:</span>{' '}
+                          <span>{data.delivery.githubIssue.state ?? '—'}</span>
+                        </div>
+                        {data.delivery.githubIssue.labels?.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {data.delivery.githubIssue.labels.map((label) => (
+                              <span key={label} className="rounded bg-muted px-2 py-0.5 text-xs">
+                                {label}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void copyToClipboard('Issue URL', data.delivery?.githubIssue?.issueUrl)}
+                          >
+                            <Copy className="mr-1 h-3.5 w-3.5" />
+                            Copy issue URL
+                          </Button>
+                          <Button asChild type="button" size="sm" variant="outline">
+                            <a href={data.delivery.githubIssue.issueUrl} target="_blank" rel="noreferrer">
+                              <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                              Open issue
+                            </a>
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">No GitHub issue linked to this task.</p>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <p className="font-medium">Pull Request</p>
                     {data.delivery?.githubPullRequest?.prUrl ? (

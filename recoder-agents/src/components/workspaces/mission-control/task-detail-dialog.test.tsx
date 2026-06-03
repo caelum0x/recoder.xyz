@@ -57,6 +57,14 @@ describe('TaskDetailDialog', () => {
           },
         },
         delivery: {
+          githubIssue: {
+            repo: 'recoder/recoder.xyz',
+            issueUrl: 'https://github.com/recoder/recoder.xyz/issues/7',
+            issueNumber: 7,
+            title: 'Link task delivery state to issue',
+            state: 'open',
+            labels: ['launch-gate'],
+          },
           githubPullRequest: {
             repo: 'recoder/recoder.xyz',
             prUrl: 'https://github.com/recoder/recoder.xyz/pull/42',
@@ -101,8 +109,9 @@ describe('TaskDetailDialog', () => {
     });
 
     expect(screen.getByText('Add task delivery visibility')).toBeTruthy();
-    expect(screen.getByText('recoder/recoder.xyz')).toBeTruthy();
+    expect(screen.getAllByText('recoder/recoder.xyz').length).toBeGreaterThan(0);
     expect(screen.getByText('#42')).toBeTruthy();
+    expect(screen.getByText('#7')).toBeTruthy();
     expect(screen.getByText('approval-123')).toBeTruthy();
     expect(screen.getByText('signed')).toBeTruthy();
     expect(screen.getAllByText(/preview\.recoder\.xyz/).length).toBeGreaterThan(0);
