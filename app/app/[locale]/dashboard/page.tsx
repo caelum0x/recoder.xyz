@@ -2,35 +2,28 @@
 
 import React from 'react';
 import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/lib/session-provider';
 import {
-  Globe,
   ArrowRight, CheckCircle, Sparkles, TrendingUp,
   BarChart3, FolderOpen,
   MessageCircle, Terminal, Zap, Bot, Workflow,
-  Database, Server, ExternalLink, Activity, AlertCircle, Clock, Settings, Layers3
+  Database, ExternalLink, Activity, Clock, Settings, Layers3, BookOpenText, Shield
 } from 'lucide-react';
-import { RECODER_SERVICES, getServiceUrlClient } from '@/lib/config/platforms';
 import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
+import { ACTIVE_PRODUCTS } from '@/lib/active-products';
+import { detectLocaleFromPathname, localizePath } from '@/lib/locale-paths';
 
-const serviceIcons: Record<string, React.ElementType> = {
-  app: Globe,
+const productIcons: Record<string, React.ElementType> = {
+  spaces: Layers3,
   agents: Bot,
-  api: Server,
   pm: Database,
-  studio: Sparkles,
   agency: Workflow,
+  cli: Terminal,
+  docs: BookOpenText,
+  providers: Shield,
 };
-
-interface ServiceHealthEntry {
-  id: string;
-  name: string;
-  status: 'operational' | 'degraded' | 'down';
-  responseTime: number | null;
-  lastChecked: string;
-}
 
 interface AppActivity {
   app: string;
@@ -84,18 +77,21 @@ const appIcons: Record<string, React.ElementType> = {
 
 function DashboardContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { data: session, isPending } = useSession();
   const [showWelcome, setShowWelcome] = useState(false);
-  const [serviceHealth, setServiceHealth] = useState<Record<string, ServiceHealthEntry>>({});
   const [platformActivity, setPlatformActivity] = useState<AppActivity[]>([]);
   const [platformActivityLoading, setPlatformActivityLoading] = useState(true);
   const [spacesSummary, setSpacesSummary] = useState<SpacesSummary | null>(null);
+  const locale = detectLocaleFromPathname(pathname || '');
+  const appHref = (href: string) => localizePath(href, locale);
+
   const redirectToSignIn = () => {
     const currentPath = typeof window !== 'undefined'
       ? `${window.location.pathname}${window.location.search}`
       : '/dashboard';
-    router.push(`/auth/signin?redirect=${encodeURIComponent(currentPath)}`);
+    router.push(`${appHref('/auth/signin')}?redirect=${encodeURIComponent(currentPath)}`);
   };
 
   useEffect(() => {
@@ -114,22 +110,6 @@ function DashboardContent() {
       trackEvent(AnalyticsEvents.DASHBOARD_VIEWED, { source: 'dashboard', userId: session.user?.id });
     }
   }, [isPending, session]);
-
-  // Fetch ecosystem health for status dots
-  useEffect(() => {
-    fetch('/api/ecosystem-health')
-      .then(r => r.json())
-      .then((data: { services?: ServiceHealthEntry[] }) => {
-        if (data.services) {
-          const map: Record<string, ServiceHealthEntry> = {};
-          for (const s of data.services) {
-            map[s.id] = s;
-          }
-          setServiceHealth(map);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   // Fetch cross-app platform activity
   useEffect(() => {
@@ -187,14 +167,14 @@ function DashboardContent() {
           </div>
           <div className="flex space-x-3">
              <Link
-                href="/settings/ai-providers"
+                href={appHref('/settings/ai-providers')}
                 className="flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 hover:border-orange-500/50 rounded-lg text-sm transition-all"
               >
                 <Sparkles className="w-4 h-4 text-orange-500" />
                 <span>API Keys</span>
               </Link>
               <Link
-                href="/dashboard/settings"
+                href={appHref('/settings')}
                 className="flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 hover:border-white/20 rounded-lg text-sm transition-all"
               >
                 <Settings className="w-4 h-4 text-gray-400" />
@@ -247,11 +227,11 @@ function DashboardContent() {
                 <div className="flex justify-between"><span>Preview deploys</span><span>{spacesSummary?.entitlements.previewDeploysPerMonth ?? 3}/month</span></div>
               </div>
               <div className="mt-6 flex flex-col gap-3">
-                <Link href="/dashboard/spaces" className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 font-medium text-black hover:bg-orange-400">
+                <Link href={appHref('/dashboard/spaces')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 font-medium text-black hover:bg-orange-400">
                   Create your first Space
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link href="/agents" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-5 py-3 hover:bg-white/[0.04]">
+                <Link href={appHref('/agents')} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-5 py-3 hover:bg-white/[0.04]">
                   Connect an agent
                   <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -260,95 +240,79 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* Platforms & Services Unified */}
+        {/* All Products */}
         <div className="mb-12">
           <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
             <Zap className="w-6 h-6 text-orange-500" />
-            Launch Platforms
+            All Recoder Products
           </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* CLI */}
-            <a
-              href="https://www.npmjs.com/package/recoder-code"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group p-5 rounded-2xl border border-white/10 bg-white/5 hover:border-orange-500/40 hover:bg-white/10 transition-all"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-500/20 to-red-600/20 rounded-xl flex items-center justify-center group-hover:from-orange-500/30 group-hover:to-red-600/30 transition-colors">
-                  <Terminal className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
-                </div>
-                <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-orange-400 transition-transform group-hover:translate-x-1" />
-              </div>
-              <h3 className="font-semibold text-sm mb-1">CLI</h3>
-              <p className="text-xs text-gray-500">Terminal-based development</p>
-            </a>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {ACTIVE_PRODUCTS.map((product) => {
+              const Icon = productIcons[product.id] || Sparkles;
+              const primaryHref = product.primaryAction.external ? product.primaryAction.href : appHref(product.primaryAction.href);
+              const secondaryHref = product.secondaryAction
+                ? (product.secondaryAction.external ? product.secondaryAction.href : appHref(product.secondaryAction.href))
+                : null;
 
-            {/* Agents */}
-            <a
-              href={getServiceUrlClient('agents')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group p-5 rounded-2xl border border-white/10 bg-white/5 hover:border-purple-500/40 hover:bg-white/10 transition-all"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500/20 to-pink-600/20 rounded-xl flex items-center justify-center group-hover:from-purple-500/30 group-hover:to-pink-600/30 transition-colors">
-                  <Bot className="w-5 h-5 text-gray-300 group-hover:text-purple-400 transition-colors" />
-                </div>
-                <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-purple-400 transition-transform group-hover:translate-x-1" />
-              </div>
-              <h3 className="font-semibold text-sm mb-1">Agents</h3>
-              <p className="text-xs text-gray-500">AI autonomous agents</p>
-            </a>
-
-             {/* PM */}
-             <a
-              href={getServiceUrlClient('pm')}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group p-5 rounded-2xl border border-white/10 bg-white/5 hover:border-green-500/40 hover:bg-white/10 transition-all"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-xl flex items-center justify-center group-hover:from-green-500/30 group-hover:to-emerald-600/30 transition-colors">
-                  <Database className="w-5 h-5 text-gray-300 group-hover:text-green-400 transition-colors" />
-                </div>
-                <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-green-400 transition-transform group-hover:translate-x-1" />
-              </div>
-              <h3 className="font-semibold text-sm mb-1">Product Management</h3>
-              <p className="text-xs text-gray-500">Manage features & roadmaps</p>
-            </a>
-          </div>
-        </div>
-
-        {/* Other Services */}
-        <div className="mb-12">
-          <h2 className="text-xl font-bold mb-6 text-gray-300">Additional Services</h2>
-          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {RECODER_SERVICES.filter(s => s.showInSwitcher && !['agents', 'pm'].includes(s.id)).map(service => {
-              const Icon = serviceIcons[service.id] || Globe;
-              const health = serviceHealth[service.id];
-              const statusColor = health
-                ? health.status === 'operational' ? 'bg-green-500'
-                  : health.status === 'degraded' ? 'bg-yellow-500'
-                  : 'bg-red-500'
-                : 'bg-gray-500';
               return (
-                <a
-                  key={service.id}
-                  href={getServiceUrlClient(service.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group p-4 rounded-xl border border-white/10 bg-white/2 hover:border-white/20 transition-all"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-3">
-                       <Icon className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-                       <h3 className="font-medium text-sm">{service.label}</h3>
+                <div key={product.id} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
+                        <Icon className="h-5 w-5 text-orange-300" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-white">{product.name}</h3>
+                        <p className="text-xs text-gray-500">{product.category}</p>
+                      </div>
                     </div>
-                    <div className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
+                    <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-gray-300">
+                      {product.status}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-gray-600 truncate">{service.description}</p>
-                </a>
+                  <p className="mb-2 text-sm font-medium text-orange-200">{product.eyebrow}</p>
+                  <p className="text-sm leading-relaxed text-gray-400">{product.description}</p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    {product.primaryAction.external ? (
+                      <a
+                        href={primaryHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-medium text-black hover:bg-orange-400"
+                      >
+                        {product.primaryAction.label}
+                        <ArrowRight className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <Link
+                        href={primaryHref}
+                        className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-medium text-black hover:bg-orange-400"
+                      >
+                        {product.primaryAction.label}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    )}
+                    {product.secondaryAction && secondaryHref ? (
+                      product.secondaryAction.external ? (
+                        <a
+                          href={secondaryHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/[0.04]"
+                        >
+                          {product.secondaryAction.label}
+                        </a>
+                      ) : (
+                        <Link
+                          href={secondaryHref}
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm font-medium text-white hover:bg-white/[0.04]"
+                        >
+                          {product.secondaryAction.label}
+                        </Link>
+                      )
+                    ) : null}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -356,7 +320,7 @@ function DashboardContent() {
 
         {/* Quick Links */}
         <div className="mb-12 grid md:grid-cols-3 gap-6">
-            <Link href="/dashboard/projects" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group flex items-center space-x-4">
+            <Link href={appHref('/dashboard/projects')} className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group flex items-center space-x-4">
               <FolderOpen className="w-10 h-10 text-purple-500" />
               <div>
                 <h3 className="font-bold text-lg">My Projects</h3>
@@ -364,7 +328,7 @@ function DashboardContent() {
               </div>
             </Link>
 
-            <Link href="/dashboard/usage" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group flex items-center space-x-4">
+            <Link href={appHref('/dashboard/usage')} className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group flex items-center space-x-4">
               <BarChart3 className="w-10 h-10 text-blue-500" />
               <div>
                 <h3 className="font-bold text-lg">Usage</h3>
@@ -372,7 +336,7 @@ function DashboardContent() {
               </div>
             </Link>
 
-            <Link href="/docs" className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group flex items-center space-x-4">
+            <Link href={appHref('/docs')} className="p-6 rounded-2xl border border-white/10 bg-white/5 hover:border-white/20 transition-all group flex items-center space-x-4">
               <TrendingUp className="w-10 h-10 text-green-500" />
               <div>
                 <h3 className="font-bold text-lg">Docs</h3>
@@ -406,14 +370,14 @@ function DashboardContent() {
                   <Activity className="w-6 h-6 text-orange-500" />
                   <h2 className="text-2xl font-bold">Recent Activity</h2>
                 </div>
-                <Link href="/dashboard/activity" className="text-sm text-gray-500 hover:text-white transition-colors">
+                <Link href={appHref('/dashboard/analytics')} className="text-sm text-gray-500 hover:text-white transition-colors">
                   View all
                 </Link>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
                 <ul className="divide-y divide-white/5">
                   {allActivities.map((item) => {
-                    const Icon = appIcons[item.app] || Globe;
+                    const Icon = appIcons[item.app] || Sparkles;
                     return (
                       <li key={`${item.app}-${item.id}`}>
                         <a
@@ -489,7 +453,7 @@ function DashboardContent() {
               </div>
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href="/settings/ai-providers"
+                  href={appHref('/settings/ai-providers')}
                   className="inline-flex items-center space-x-2 px-6 py-3 bg-green-500 hover:bg-green-600 rounded-lg font-medium transition-all"
                 >
                   <span>Manage API Keys</span>
