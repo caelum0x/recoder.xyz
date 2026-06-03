@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { useSession } from '@/lib/session-provider';
+import { detectLocaleFromPathname, localizePath, stripLocalePrefix } from '@/lib/locale-paths';
 
 const NAV_LINKS = [
   { href: '/docs', label: 'Docs', external: false },
@@ -31,9 +32,11 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
   });
 
   // Strip locale prefix for matching (e.g. /en/agents -> /agents)
-  const cleanPath = pathname?.replace(/^\/[a-z]{2}(?=\/|$)/, '') || '/';
+  const locale = detectLocaleFromPathname(pathname || '');
+  const cleanPath = stripLocalePrefix(pathname || '/');
 
   const isActive = (href: string) => href.startsWith('/') && (cleanPath === href || cleanPath.startsWith(href + '/'));
+  const localHref = (href: string) => (href.startsWith('/') ? localizePath(href, locale) : href);
 
   return (
     <>
@@ -42,7 +45,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
       >
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2 group shrink-0">
+          <Link href={localHref('/')} className="flex items-center space-x-2 group shrink-0">
             <img
               src="/logo.png"
               alt="Recoder"
@@ -56,7 +59,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
-                href={link.href}
+                href={localHref(link.href)}
                 {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className={`text-sm transition-colors ${
                   isActive(link.href)
@@ -71,13 +74,13 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
             {(session?.user || hasCookie) ? (
               <>
                 <Link
-                  href="/dashboard"
+                  href={localHref('/dashboard')}
                   className="px-4 py-2 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors text-white"
                 >
                   Go to Dashboard
                 </Link>
                 <Link
-                  href="/auth/signout"
+                  href={localHref('/auth/signout')}
                   className="px-3 py-1.5 text-sm text-gray-400 hover:text-red-400 transition-colors"
                 >
                   Sign Out
@@ -86,13 +89,13 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
             ) : (
               <>
                 <Link
-                  href="/auth/signin"
+                  href={localHref('/auth/signin')}
                   className="px-4 py-2 text-sm text-gray-300 hover:text-white border border-white/20 hover:border-white/40 rounded-lg transition-colors"
                 >
                   Sign In
                 </Link>
                 <Link
-                  href="/auth/signup"
+                  href={localHref('/auth/signup')}
                   className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-white"
                 >
                   Sign Up
@@ -123,7 +126,7 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
               {NAV_LINKS.map((link) => (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  href={localHref(link.href)}
                   {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   onClick={() => setMobileOpen(false)}
                   className={`block py-2 text-sm transition-colors ${
@@ -140,14 +143,14 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
                 {(session?.user || hasCookie) ? (
                   <>
                     <Link
-                      href="/dashboard"
+                      href={localHref('/dashboard')}
                       onClick={() => setMobileOpen(false)}
                       className="block w-full text-center px-4 py-2.5 text-sm bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg transition-colors text-white"
                     >
                       Go to Dashboard
                     </Link>
                     <Link
-                      href="/auth/signout"
+                      href={localHref('/auth/signout')}
                       onClick={() => setMobileOpen(false)}
                       className="block py-2 text-sm text-gray-400 hover:text-red-400 transition-colors"
                     >
@@ -157,14 +160,14 @@ export function SiteHeader({ fixed = true }: SiteHeaderProps) {
                 ) : (
                   <>
                     <Link
-                      href="/auth/signin"
+                      href={localHref('/auth/signin')}
                       onClick={() => setMobileOpen(false)}
                       className="block py-2 text-sm text-gray-400 hover:text-white transition-colors"
                     >
                       Sign In
                     </Link>
                     <Link
-                      href="/auth/signup"
+                      href={localHref('/auth/signup')}
                       onClick={() => setMobileOpen(false)}
                       className="block w-full text-center px-4 py-2.5 text-sm bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-white"
                     >

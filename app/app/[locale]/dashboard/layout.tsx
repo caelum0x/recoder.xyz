@@ -9,11 +9,12 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MobileNav } from '@/app/components/MobileNav';
+import { detectLocaleFromPathname, localizePath, stripLocalePrefix } from '@/lib/locale-paths';
 
 const sidebarLinks = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/spaces', label: 'Spaces', icon: Layers3 },
-  { href: '/dashboard/api-keys', label: 'Developer Keys', icon: Key },
+  { href: '/settings/ai-providers', label: 'AI Provider Keys', icon: Key },
   { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
   { href: '/dashboard/usage', label: 'Usage', icon: BarChart3 },
   { href: '/dashboard/analytics', label: 'Analytics', icon: Cpu },
@@ -31,18 +32,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const locale = detectLocaleFromPathname(pathname);
 
   useEffect(() => {
     if (!isPending && !session?.user) {
       const query = searchParams.toString();
       const pathWithQuery = `${pathname || '/dashboard'}${query ? `?${query}` : ''}`;
       const redirect = encodeURIComponent(pathWithQuery);
-      router.replace(`/auth/signin?redirect=${redirect}`);
+      router.replace(`${localizePath('/auth/signin', locale)}?redirect=${redirect}`);
     }
-  }, [isPending, pathname, router, searchParams, session?.user]);
+  }, [isPending, locale, pathname, router, searchParams, session?.user]);
 
-  // Strip locale prefix for matching
-  const pathWithoutLocale = pathname.replace(/^\/[a-z]{2}(?:\/|$)/, '/');
+  const pathWithoutLocale = stripLocalePrefix(pathname);
+  const localHref = (href: string) => (href.startsWith('/') ? localizePath(href, locale) : href);
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathWithoutLocale === href;
@@ -51,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleSignOut = async () => {
     await signOut();
-    router.push('/');
+    router.push(localHref('/'));
   };
 
   if (isPending || !session?.user) {
@@ -71,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 border-r border-white/10 bg-black/95 backdrop-blur-xl z-30 flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-white/10">
-          <Link href="/" className="flex items-center space-x-2 group">
+          <Link href={localHref('/')} className="flex items-center space-x-2 group">
             <img
               src="/logo.png"
               alt="Recoder"
@@ -90,7 +92,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               return (
                 <Link
                   key={link.href}
-                  href={link.href}
+                  href={localHref(link.href)}
                   className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     active
                       ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
@@ -113,7 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 return (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    href={localHref(link.href)}
                     className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       active
                         ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20'
@@ -168,7 +170,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-white/10 bg-black/95 backdrop-blur-xl shadow-2xl z-50 overflow-hidden">
                   <div className="p-2">
                     <Link
-                      href="/settings/account"
+                      href={localHref('/settings/account')}
                       onClick={() => setShowUserMenu(false)}
                       className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
                     >
@@ -176,7 +178,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       <span className="text-sm text-gray-300">Account</span>
                     </Link>
                     <Link
-                      href="/settings"
+                      href={localHref('/settings')}
                       onClick={() => setShowUserMenu(false)}
                       className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors"
                     >
