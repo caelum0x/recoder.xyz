@@ -39,6 +39,7 @@ The next launch gate is a paid-user loop that a real user can complete without i
    Resolve the local<->prod git divergence that still makes full Hetzner deploys risky from this branch. This maps to issue `recoder-js56`.
    - 2026-05-31 update: the Daytona control plane and runner are recovered on Hetzner. `daytona-api`, proxy, db, redis, dex, minio, registry, and runner are healthy; a disposable sandbox create reached `started` and was destroyed.
    - 2026-05-31 update: `docker-backend` is healthy in production and the retired browser coding container/image has been removed. The remaining work is deploy hygiene/reconciliation, not missing Daytona infra.
+   - 2026-06-03 update: checkout-drift and env/deploy helper scripts now classify retired `recoder-web` remnants separately and stop hard-requiring that retired surface for local env/script checks. The remaining work is host reconciliation and production proof, not those stale local-script assumptions.
 
 5. Production traffic and abuse controls.
    Add Cloudflare/CrowdSec/open-appsec style mitigation rules after real traffic signals are instrumented. This maps to ready issues `recoder-a9rp` and `recoder-rbc2`.
