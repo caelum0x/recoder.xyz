@@ -25,7 +25,6 @@ SYNC_PATHS=(
   "recoder-agents"
   "recoder-pm"
   "recoder-studio"
-  "recoder-web/package.json"
 )
 
 RSYNC_EXCLUDES=(
