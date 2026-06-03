@@ -24,7 +24,7 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 1. GitHub repo connection and PR artifacts.
    Add repo connection, branch mapping, PR creation/attachment, review state, check state, and issue/task linking as first-class run artifacts.
-   - 2026-06-03 update: workspace settings now expose a repo/PR panel backed by `/api/git/*` so a user can connect a repo by clone URL, inspect origin/branch state, select a workspace task, reuse its branch context when opening a PR, and inspect PR reviews/checks. Remaining work is the broader issue/linking polish and end-to-end product path, not the absence of any user-facing repo/PR surface.
+   - 2026-06-03 update: workspace settings now expose a repo/PR panel backed by `/api/git/*` so a user can connect a repo by clone URL, inspect origin/branch state, select a workspace task, reuse its branch context when opening a PR, inspect PR reviews/checks, and attach a GitHub issue to a task as a first-class artifact/metadata link. Remaining work is the broader end-to-end product path and deeper issue/linking polish, not the absence of a user-facing repo/PR/issue surface.
 
 2. Main task timeline.
    Make the product path visibly show task -> artifact -> PR -> preview -> approval from shared run history, not demo-only or per-page state.

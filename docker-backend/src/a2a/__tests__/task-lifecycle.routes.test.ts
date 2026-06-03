@@ -340,6 +340,68 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     ).toBe(true);
   });
 
+  it('returns delivery metadata for linked GitHub issues', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_issue_delivery',
+      thread_id: 'thread_issue_delivery',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Issue-linked task' },
+      metadata: {
+        githubIssue: {
+          issueUrl: 'https://github.com/recoder/recoder.xyz/issues/7',
+          issueNumber: 7,
+          title: 'Link task delivery state to issue',
+          repo: 'recoder/recoder.xyz',
+          state: 'open',
+          labels: ['launch-gate', 'github'],
+        },
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    service.appendTaskArtifacts(created.data.id, {
+      triggeredBy: 'test',
+      reason: 'Attach issue artifact',
+      artifacts: [
+        {
+          key: 'github-issue-7',
+          artifact_type: 'custom',
+          mime_type: 'application/json',
+          content: JSON.stringify({ type: 'github_issue', issueNumber: 7 }),
+          metadata: {
+            type: 'github_issue',
+            title: 'Link task delivery state to issue',
+            issueNumber: 7,
+            issueUrl: 'https://github.com/recoder/recoder.xyz/issues/7',
+          },
+        },
+      ],
+    });
+
+    const req = makeReq({
+      method: 'GET',
+      params: { taskId: created.data.id },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/context', 'get', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.success).toBe(true);
+    expect(state.jsonData.data.delivery.githubIssue).toMatchObject({
+      issueNumber: 7,
+      repo: 'recoder/recoder.xyz',
+      state: 'open',
+    });
+    expect(
+      state.jsonData.data.timeline.some((entry: any) => entry.type === 'github.issue' && String(entry.detail).includes('#7')),
+    ).toBe(true);
+  });
+
   it('appends review history entries when review metadata is updated', async () => {
     const service = getTaskLifecycleService();
     const created = service.createTask({

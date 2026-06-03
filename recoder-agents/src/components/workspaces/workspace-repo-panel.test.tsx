@@ -15,6 +15,12 @@ vi.mock('@/hooks/workspaces/use-mission-control', () => ({
   useTaskPipeline: vi.fn(),
 }));
 
+vi.mock('@/lib/docker-backend-api', () => ({
+  dockerBackendApi: {
+    post: vi.fn(),
+  },
+}));
+
 import {
   useWorkspaceRepoSnapshot,
   useCloneWorkspaceRepo,
@@ -104,6 +110,7 @@ describe('WorkspaceRepoPanel', () => {
     expect(screen.getByText('https://github.com/recoder/recoder.xyz.git')).toBeTruthy();
     expect(screen.getByText('Create PR')).toBeTruthy();
     expect(screen.getByText('Attach to workspace task')).toBeTruthy();
+    expect(screen.getByText('Link GitHub issue to task')).toBeTruthy();
     expect(screen.getByText('Enter a GitHub token to load PR review and check state.')).toBeTruthy();
   });
 });

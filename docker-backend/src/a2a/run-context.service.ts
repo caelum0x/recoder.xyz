@@ -268,6 +268,7 @@ function buildTaskTimeline(input: {
       const artifactMetadata = readRecord(artifact.metadata);
       const artifactType = typeof artifactMetadata?.type === 'string' ? artifactMetadata.type : null;
       const isGitHubPrArtifact = artifactType === 'github_pull_request';
+      const isGitHubIssueArtifact = artifactType === 'github_issue';
       const isPreviewArtifact = artifactType === 'deployment_preview';
       timeline.push({
         at:
@@ -276,11 +277,15 @@ function buildTaskTimeline(input: {
             : input.task.updated_at,
         type: isGitHubPrArtifact
           ? 'github.pull_request'
+          : isGitHubIssueArtifact
+            ? 'github.issue'
           : isPreviewArtifact
             ? 'preview.deployment'
             : `artifact.${artifact.artifact_type}`,
         title: isGitHubPrArtifact
           ? 'Pull request attached'
+          : isGitHubIssueArtifact
+            ? 'Issue linked'
           : isPreviewArtifact
             ? 'Preview deployment'
             : `Artifact: ${artifact.artifact_type}`,
@@ -290,6 +295,12 @@ function buildTaskTimeline(input: {
               typeof artifactMetadata?.prNumber === 'number' ? `#${artifactMetadata.prNumber}` : null,
               typeof artifactMetadata?.prUrl === 'string' ? artifactMetadata.prUrl : null,
             ].filter(Boolean).join(' · ') || artifact.key
+          : isGitHubIssueArtifact
+            ? [
+                typeof artifactMetadata?.title === 'string' ? artifactMetadata.title : null,
+                typeof artifactMetadata?.issueNumber === 'number' ? `#${artifactMetadata.issueNumber}` : null,
+                typeof artifactMetadata?.issueUrl === 'string' ? artifactMetadata.issueUrl : null,
+              ].filter(Boolean).join(' · ') || artifact.key
           : isPreviewArtifact
             ? [
                 typeof artifactMetadata?.previewUrl === 'string' ? artifactMetadata.previewUrl : null,
@@ -297,6 +308,7 @@ function buildTaskTimeline(input: {
               ].filter(Boolean).join(' · ') || artifact.key
             : artifact.key,
         ...(typeof artifactMetadata?.prUrl === 'string' ? { href: artifactMetadata.prUrl } : {}),
+        ...(typeof artifactMetadata?.issueUrl === 'string' ? { href: artifactMetadata.issueUrl } : {}),
         ...(typeof artifactMetadata?.previewUrl === 'string' ? { href: artifactMetadata.previewUrl } : {}),
       });
     }
@@ -354,6 +366,7 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
   const mergeMetadata = readRecord(task.metadata?.merge);
   const deploymentPreviewMetadata = readRecord(task.metadata?.deploymentPreview);
   const githubPullRequestMetadata = readRecord(task.metadata?.githubPullRequest);
+  const githubIssueMetadata = readRecord(task.metadata?.githubIssue);
   const reviewHistory = Array.isArray(task.metadata?.reviewHistory)
     ? task.metadata.reviewHistory
         .filter((entry): entry is Record<string, unknown> => Boolean(readRecord(entry)))
@@ -452,6 +465,33 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
       history: reviewHistory,
     },
     delivery: {
+      githubIssue: githubIssueMetadata
+        ? {
+            issueUrl:
+              typeof githubIssueMetadata.issueUrl === 'string'
+                ? githubIssueMetadata.issueUrl
+                : null,
+            issueNumber:
+              typeof githubIssueMetadata.issueNumber === 'number'
+                ? githubIssueMetadata.issueNumber
+                : null,
+            title:
+              typeof githubIssueMetadata.title === 'string'
+                ? githubIssueMetadata.title
+                : null,
+            repo:
+              typeof githubIssueMetadata.repo === 'string'
+                ? githubIssueMetadata.repo
+                : null,
+            state:
+              typeof githubIssueMetadata.state === 'string'
+                ? githubIssueMetadata.state
+                : null,
+            labels: Array.isArray(githubIssueMetadata.labels)
+              ? githubIssueMetadata.labels.filter((value): value is string => typeof value === 'string')
+              : [],
+          }
+        : null,
       githubPullRequest: githubPullRequestMetadata
         ? {
             projectId:
