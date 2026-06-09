@@ -271,6 +271,82 @@ export function listProviders(): ProviderStatus[] {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Complexity-based model routing (inspired by openfang's tiered model config)
+// ---------------------------------------------------------------------------
+
+export type ComplexityTier = 'simple' | 'medium' | 'complex';
+
+// Cheap → mid → strong model per provider. Overridable via env LLM_TIER_<PROVIDER>_<TIER>.
+const TIER_MODELS: Partial<Record<KnownProvider, Record<ComplexityTier, string>>> = {
+  openrouter: { simple: 'openai/gpt-4o-mini', medium: 'openai/gpt-4o', complex: 'anthropic/claude-3-5-sonnet' },
+  openai: { simple: 'gpt-4o-mini', medium: 'gpt-4o', complex: 'gpt-4o' },
+  anthropic: { simple: 'claude-3-5-haiku-latest', medium: 'claude-3-5-sonnet-latest', complex: 'claude-3-5-sonnet-latest' },
+  google: { simple: 'gemini-2.0-flash', medium: 'gemini-2.0-flash', complex: 'gemini-1.5-pro' },
+  groq: { simple: 'llama-3.1-8b-instant', medium: 'llama-3.3-70b-versatile', complex: 'llama-3.3-70b-versatile' },
+  deepseek: { simple: 'deepseek-chat', medium: 'deepseek-chat', complex: 'deepseek-reasoner' },
+};
+
+const SIMPLE_MAX_TOKENS = Number(process.env.LLM_SIMPLE_THRESHOLD) || 400;
+const COMPLEX_MIN_TOKENS = Number(process.env.LLM_COMPLEX_THRESHOLD) || 2000;
+
+/** Rough token estimate (~4 chars/token) — no tokenizer dependency. */
+export function estimateTokens(text: string): number {
+  return Math.ceil((text?.length ?? 0) / 4);
+}
+
+export function classifyComplexity(text: string): ComplexityTier {
+  const tokens = estimateTokens(text);
+  // Signals beyond length: multi-step / reasoning keywords bump complexity.
+  const hard = /\b(architect|refactor|design|debug|why|trade-?off|optimi[sz]e|migrate|prove|analy[sz]e)\b/i.test(text);
+  if (tokens >= COMPLEX_MIN_TOKENS || (hard && tokens > SIMPLE_MAX_TOKENS)) return 'complex';
+  if (tokens <= SIMPLE_MAX_TOKENS && !hard) return 'simple';
+  return 'medium';
+}
+
+export interface ModelRecommendation {
+  provider: KnownProvider;
+  model: string;
+  complexity: ComplexityTier;
+  estimatedTokens: number;
+  reasoning: string;
+}
+
+/**
+ * Recommend a provider/model for a prompt by estimated complexity — cheaper
+ * models for simple tasks, stronger for complex. Prefers a provider that has a
+ * configured key; falls back to openrouter.
+ */
+export function recommendModel(params: { prompt: string; provider?: string }): ModelRecommendation {
+  const complexity = classifyComplexity(params.prompt);
+  const estimatedTokens = estimateTokens(params.prompt);
+
+  // Pick a provider: explicit → first with a configured key + tier table → openrouter.
+  let provider: KnownProvider | undefined;
+  if (params.provider) {
+    const resolved = (PROVIDER_ALIASES[params.provider.toLowerCase()] ?? params.provider.toLowerCase()) as KnownProvider;
+    if (resolved in TIER_MODELS) provider = resolved;
+  }
+  if (!provider) {
+    provider = (Object.keys(TIER_MODELS) as KnownProvider[]).find((p) => {
+      const cfg = PROVIDERS[p];
+      return !cfg.keyRequired || (cfg.keyEnv && process.env[cfg.keyEnv]);
+    });
+  }
+  if (!provider) provider = 'openrouter';
+
+  const envOverride = process.env[`LLM_TIER_${provider.toUpperCase()}_${complexity.toUpperCase()}`];
+  const model = envOverride || TIER_MODELS[provider]?.[complexity] || 'openai/gpt-4o-mini';
+
+  return {
+    provider,
+    model,
+    complexity,
+    estimatedTokens,
+    reasoning: `~${estimatedTokens} tokens → ${complexity}; routed to ${provider}/${model}`,
+  };
+}
+
 export function llmRouterHealth(): { available: boolean; providers: number; configured: number } {
   const providers = listProviders();
   return {

@@ -8,19 +8,21 @@ import {
   Check,
   ClipboardList,
   Copy,
-  LayoutDashboard,
   Network,
+  Package2,
   Shield,
   Terminal,
-  Workflow,
   Wrench,
 } from 'lucide-react';
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { LeadCaptureForm } from '@/components/LeadCaptureForm';
 import { useSession } from '@/lib/session-provider';
 import { AnalyticsEvents, trackEvent } from '@/lib/analytics';
+import { ACTIVE_PRODUCTS } from '@/lib/active-products';
+import { detectLocaleFromPathname, localizePath } from '@/lib/locale-paths';
 
 const loopSteps = [
   {
@@ -55,54 +57,6 @@ const loopSteps = [
   },
 ] as const;
 
-const platformLanes = [
-  {
-    title: 'App',
-    subtitle: 'Identity and billing authority',
-    text: 'Shared account, workspace, auth, and billing boundaries for the rest of the system.',
-    icon: Shield,
-    border: 'border-orange-500/20',
-    bg: 'bg-orange-500/5',
-    textColor: 'text-orange-400',
-  },
-  {
-    title: 'Agents',
-    subtitle: 'Connection and dispatch',
-    text: 'Register external agents, route work, inspect live runs, and keep agent identity stable.',
-    icon: Bot,
-    border: 'border-cyan-500/20',
-    bg: 'bg-cyan-500/5',
-    textColor: 'text-cyan-400',
-  },
-  {
-    title: 'Runtime Lane',
-    subtitle: 'Code, preview, logs',
-    text: 'The execution lane for software work with runtime, file mutation, terminal access, and preview attached to the run instead of hidden behind a separate surface.',
-    icon: Terminal,
-    border: 'border-violet-500/20',
-    bg: 'bg-violet-500/5',
-    textColor: 'text-violet-400',
-  },
-  {
-    title: 'PM',
-    subtitle: 'Task state and approvals',
-    text: 'Status, artifacts, assignment, and approvals wrap around the execution loop instead of living elsewhere.',
-    icon: LayoutDashboard,
-    border: 'border-blue-500/20',
-    bg: 'bg-blue-500/5',
-    textColor: 'text-blue-400',
-  },
-  {
-    title: 'Agency',
-    subtitle: 'Optional delivery wrapper',
-    text: 'Useful when outputs need packaging for clients, but intentionally downstream from the core loop.',
-    icon: Workflow,
-    border: 'border-emerald-500/20',
-    bg: 'bg-emerald-500/5',
-    textColor: 'text-emerald-400',
-  },
-] as const;
-
 const reliabilityPoints = [
   'Runtime lane correctness is part of the product, not a hidden implementation detail.',
   'File mutation, preview availability, and deploy stability matter more than adding more surface area.',
@@ -110,9 +64,49 @@ const reliabilityPoints = [
   'Artifacts, previews, and task status should reflect the actual execution truth of the run.',
 ] as const;
 
+const productStyles = {
+  spaces: {
+    border: 'border-orange-500/20',
+    bg: 'bg-orange-500/5',
+    text: 'text-orange-300',
+  },
+  agents: {
+    border: 'border-cyan-500/20',
+    bg: 'bg-cyan-500/5',
+    text: 'text-cyan-300',
+  },
+  pm: {
+    border: 'border-blue-500/20',
+    bg: 'bg-blue-500/5',
+    text: 'text-blue-300',
+  },
+  agency: {
+    border: 'border-emerald-500/20',
+    bg: 'bg-emerald-500/5',
+    text: 'text-emerald-300',
+  },
+  cli: {
+    border: 'border-violet-500/20',
+    bg: 'bg-violet-500/5',
+    text: 'text-violet-300',
+  },
+  docs: {
+    border: 'border-fuchsia-500/20',
+    bg: 'bg-fuchsia-500/5',
+    text: 'text-fuchsia-300',
+  },
+  providers: {
+    border: 'border-white/15',
+    bg: 'bg-white/[0.03]',
+    text: 'text-gray-200',
+  },
+} as const;
+
 export default function HomePage() {
   const [copiedA2a, setCopiedA2a] = useState(false);
   const { data: session } = useSession();
+  const pathname = usePathname();
+  const locale = detectLocaleFromPathname(pathname || '');
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -128,6 +122,8 @@ export default function HomePage() {
       source: 'homepage',
     });
   };
+
+  const appHref = (href: string) => localizePath(href, locale);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -173,14 +169,14 @@ export default function HomePage() {
                 {session?.user ? (
                   <>
                     <Link
-                      href="/dashboard"
+                      href={appHref('/dashboard')}
                       onClick={() => trackCta('Go to Dashboard', '/dashboard', 'hero')}
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-7 py-4 text-lg font-semibold text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.01] hover:from-orange-400 hover:to-cyan-500"
                     >
                       Open Workspace <ArrowRight className="h-5 w-5" />
                     </Link>
                     <Link
-                      href="/docs/getting-started"
+                      href={appHref('/docs/getting-started')}
                       onClick={() => trackCta('Read Getting Started', '/docs/getting-started', 'hero')}
                       className="inline-flex items-center justify-center rounded-xl border border-white/15 px-7 py-4 text-lg font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/[0.04]"
                     >
@@ -190,14 +186,14 @@ export default function HomePage() {
                 ) : (
                   <>
                     <Link
-                      href="/auth/signup"
+                      href={appHref('/auth/signup')}
                       onClick={() => trackCta('Get Started', '/auth/signup', 'hero')}
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-7 py-4 text-lg font-semibold text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.01] hover:from-orange-400 hover:to-cyan-500"
                     >
                       Connect Your First Agent <ArrowRight className="h-5 w-5" />
                     </Link>
                     <Link
-                      href="/docs/getting-started"
+                      href={appHref('/docs/getting-started')}
                       onClick={() => trackCta('Documentation', '/docs/getting-started', 'hero')}
                       className="inline-flex items-center justify-center rounded-xl border border-white/15 px-7 py-4 text-lg font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/[0.04]"
                     >
@@ -305,24 +301,75 @@ export default function HomePage() {
               </p>
             </div>
             <Link
-              href="/platform"
+              href={appHref('/platform')}
               className="inline-flex items-center gap-2 text-sm font-semibold text-white transition-colors hover:text-orange-300"
             >
               See platform architecture <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-5">
-            {platformLanes.map((lane) => {
-              const Icon = lane.icon;
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {ACTIVE_PRODUCTS.map((product) => {
+              const styles = productStyles[product.id as keyof typeof productStyles] ?? productStyles.providers;
+              const primaryHref = product.primaryAction.external ? product.primaryAction.href : appHref(product.primaryAction.href);
+              const secondaryHref = product.secondaryAction
+                ? (product.secondaryAction.external ? product.secondaryAction.href : appHref(product.secondaryAction.href))
+                : null;
+
               return (
-                <div key={lane.title} className={`rounded-3xl border ${lane.border} ${lane.bg} p-5`}>
-                  <div className={`mb-4 inline-flex rounded-2xl border ${lane.border} bg-black/30 p-3`}>
-                    <Icon className={`h-5 w-5 ${lane.textColor}`} />
+                <div key={product.id} className={`rounded-3xl border ${styles.border} ${styles.bg} p-6`}>
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div className={`inline-flex rounded-2xl border ${styles.border} bg-black/30 p-3`}>
+                      <Package2 className={`h-5 w-5 ${styles.text}`} />
+                    </div>
+                    <span className={`rounded-full border ${styles.border} px-3 py-1 text-xs ${styles.text}`}>
+                      {product.status}
+                    </span>
                   </div>
-                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-gray-500">{lane.subtitle}</div>
-                  <h3 className="mb-3 text-xl font-semibold">{lane.title}</h3>
-                  <p className="text-sm leading-relaxed text-gray-400">{lane.text}</p>
+                  <div className="mb-2 text-xs uppercase tracking-[0.2em] text-gray-500">{product.eyebrow}</div>
+                  <h3 className="mb-2 text-2xl font-semibold">{product.name}</h3>
+                  <div className={`mb-3 text-sm font-medium ${styles.text}`}>{product.category}</div>
+                  <p className="text-sm leading-relaxed text-gray-400">{product.description}</p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    {product.primaryAction.external ? (
+                      <a
+                        href={primaryHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-gray-200"
+                      >
+                        {product.primaryAction.label}
+                        <ArrowRight className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <Link
+                        href={primaryHref}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-gray-200"
+                      >
+                        {product.primaryAction.label}
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    )}
+                    {product.secondaryAction && secondaryHref ? (
+                      product.secondaryAction.external ? (
+                        <a
+                          href={secondaryHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+                        >
+                          {product.secondaryAction.label}
+                        </a>
+                      ) : (
+                        <Link
+                          href={secondaryHref}
+                          className="inline-flex items-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:border-white/30 hover:bg-white/[0.04]"
+                        >
+                          {product.secondaryAction.label}
+                        </Link>
+                      )
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
@@ -461,14 +508,14 @@ export default function HomePage() {
           </p>
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
             <Link
-              href="/auth/signup"
+              href={appHref('/auth/signup')}
               onClick={() => trackCta('Bottom CTA Signup', '/auth/signup', 'bottom_cta')}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-7 py-3 text-base font-semibold text-black transition-colors hover:bg-gray-200"
             >
               Start Free with BYOK
             </Link>
             <Link
-              href="/docs/getting-started"
+              href={appHref('/docs/getting-started')}
               onClick={() => trackCta('Bottom CTA Docs', '/docs/getting-started', 'bottom_cta')}
               className="inline-flex items-center justify-center rounded-xl border border-white/20 px-7 py-3 text-base font-semibold text-white transition-colors hover:border-white/35 hover:bg-white/[0.04]"
             >

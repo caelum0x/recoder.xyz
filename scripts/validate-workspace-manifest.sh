@@ -13,10 +13,11 @@ extract_list() {
   awk -v sec="$section" '
     $0 ~ "^" sec ":" { in_section=1; next }
     in_section && $0 ~ /^[^[:space:]]/ { in_section=0 }
-    in_section && $0 ~ /^[[:space:]]*-[[:space:]]*["\047]/ {
+    in_section && $0 ~ /^[[:space:]]*-[[:space:]]*[^[:space:]#]/ {
       line=$0
-      sub(/^[[:space:]]*-[[:space:]]*["\047]/, "", line)
-      sub(/["\047][[:space:]]*(#.*)?$/, "", line)
+      sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+      gsub(/["\047]/, "", line)
+      sub(/[[:space:]]*(#.*)?$/, "", line)
       print line
     }
   ' "$WORKSPACE_FILE"

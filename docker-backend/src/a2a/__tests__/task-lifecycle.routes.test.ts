@@ -259,6 +259,149 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     expect(state.jsonData.data.runtime.evidenceCount).toBe(0);
   });
 
+  it('returns delivery metadata for attached GitHub PRs and preview deployments', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_delivery',
+      thread_id: 'thread_delivery',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Delivery task' },
+      metadata: {
+        githubPullRequest: {
+          projectId: 'project-123',
+          repo: 'recoder/recoder.xyz',
+          prUrl: 'https://github.com/recoder/recoder.xyz/pull/42',
+          prNumber: 42,
+          state: 'open',
+          title: 'Add shared timeline delivery UI',
+          head: 'feature/pr-ui',
+          base: 'main',
+          draft: false,
+        },
+        deploymentPreview: {
+          deploymentId: 'deploy-123',
+          projectId: 'project-123',
+          protectedPreviewUrl: 'https://preview.recoder.xyz/access/deploy-123',
+          basePreviewUrl: 'https://preview.recoder.xyz/deploy-123',
+          protectionMode: 'signed',
+          edgeHost: 'preview.recoder.xyz',
+          prUrl: 'https://github.com/recoder/recoder.xyz/pull/42',
+          prNumber: 42,
+          branchName: 'feature/pr-ui',
+        },
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    service.appendTaskArtifacts(created.data.id, {
+      triggeredBy: 'test',
+      reason: 'Attach PR artifact',
+      artifacts: [
+        {
+          key: 'github-pr-42',
+          artifact_type: 'custom',
+          mime_type: 'application/json',
+          content: JSON.stringify({ type: 'github_pull_request', prNumber: 42 }),
+          metadata: {
+            type: 'github_pull_request',
+            title: 'Add shared timeline delivery UI',
+            prNumber: 42,
+            prUrl: 'https://github.com/recoder/recoder.xyz/pull/42',
+          },
+        },
+      ],
+    });
+
+    const req = makeReq({
+      method: 'GET',
+      params: { taskId: created.data.id },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/context', 'get', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.success).toBe(true);
+    expect(state.jsonData.data.delivery.githubPullRequest).toMatchObject({
+      prNumber: 42,
+      repo: 'recoder/recoder.xyz',
+      state: 'open',
+    });
+    expect(state.jsonData.data.delivery.previewDeployment).toMatchObject({
+      deploymentId: 'deploy-123',
+      prNumber: 42,
+      protectionMode: 'signed',
+    });
+    expect(
+      state.jsonData.data.timeline.some((entry: any) => entry.type === 'github.pull_request' && String(entry.detail).includes('#42')),
+    ).toBe(true);
+  });
+
+  it('returns delivery metadata for linked GitHub issues', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_issue_delivery',
+      thread_id: 'thread_issue_delivery',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Issue-linked task' },
+      metadata: {
+        githubIssue: {
+          issueUrl: 'https://github.com/recoder/recoder.xyz/issues/7',
+          issueNumber: 7,
+          title: 'Link task delivery state to issue',
+          repo: 'recoder/recoder.xyz',
+          state: 'open',
+          labels: ['launch-gate', 'github'],
+        },
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    service.appendTaskArtifacts(created.data.id, {
+      triggeredBy: 'test',
+      reason: 'Attach issue artifact',
+      artifacts: [
+        {
+          key: 'github-issue-7',
+          artifact_type: 'custom',
+          mime_type: 'application/json',
+          content: JSON.stringify({ type: 'github_issue', issueNumber: 7 }),
+          metadata: {
+            type: 'github_issue',
+            title: 'Link task delivery state to issue',
+            issueNumber: 7,
+            issueUrl: 'https://github.com/recoder/recoder.xyz/issues/7',
+          },
+        },
+      ],
+    });
+
+    const req = makeReq({
+      method: 'GET',
+      params: { taskId: created.data.id },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/context', 'get', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.success).toBe(true);
+    expect(state.jsonData.data.delivery.githubIssue).toMatchObject({
+      issueNumber: 7,
+      repo: 'recoder/recoder.xyz',
+      state: 'open',
+    });
+    expect(
+      state.jsonData.data.timeline.some((entry: any) => entry.type === 'github.issue' && String(entry.detail).includes('#7')),
+    ).toBe(true);
+  });
+
   it('appends review history entries when review metadata is updated', async () => {
     const service = getTaskLifecycleService();
     const created = service.createTask({

@@ -5,9 +5,11 @@ import {
 	__createSignatureForTest,
 	__resetA2ATestState,
 	agencyAgentCard,
+	buildInvalidA2AEnvelopeError,
 	checkAndStoreEnvelopeIdempotency,
 	handleA2AIntent,
 	isAllowedTarget,
+	parseEnvelopeFromUnknown,
 	signOutgoingA2ARequest,
 	verifyIncomingA2ARequest,
 } from "../gateway";
@@ -65,6 +67,36 @@ test.beforeEach(() => {
 	delete process.env.REDIS_URL;
 	delete process.env.AGENCY_PUBLIC_URL;
 	__resetA2ATestState();
+});
+
+test("parseEnvelopeFromUnknown: validates legacy envelopes through shared normalization", () => {
+	const result = parseEnvelopeFromUnknown({
+		messageId: "msg-parse-1",
+		threadId: "thread-parse-1",
+		intent: "execute",
+		from: { id: "sender", platform: "unknown-platform" },
+		to: { id: "agency", platform: "recoder_agency" },
+		payload: [{ kind: "text", text: "hello" }],
+	});
+
+	assert.equal(result.ok, true);
+	if (!result.ok) {
+		return;
+	}
+
+	assert.equal(result.envelope.from.platform, "custom");
+	assert.equal(result.envelope.to.name, "agency");
+});
+
+test("buildInvalidA2AEnvelopeError: returns the shared invalid-envelope contract shape", () => {
+	const error = buildInvalidA2AEnvelopeError({
+		issues: [{ path: "body.payload[0].text", message: "must be a non-empty string" }],
+	});
+
+	assert.equal(error.ok, false);
+	assert.equal(error.code, "INVALID_A2A_ENVELOPE");
+	assert.equal(error.schemaVersion, "a2a-envelope-error-v1");
+	assert.equal(error.issues[0]?.path, "body.payload[0].text");
 });
 
 // ---------------------------------------------------------------------------

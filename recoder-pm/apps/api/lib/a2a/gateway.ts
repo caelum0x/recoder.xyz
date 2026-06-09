@@ -1,4 +1,8 @@
 import {
+  normalizeLegacyInboundEnvelope,
+  type NormalizeLegacyInboundEnvelopeResult,
+} from "@recoder/a2a-sdk";
+import {
   buildInvalidA2AEnvelopeErrorResponse,
   type A2AEnvelopeValidationIssue,
   type RecoderA2AEnvelope,
@@ -8,30 +12,6 @@ const MAX_CLOCK_SKEW_MS = Number(process.env.RECODER_A2A_MAX_SKEW_MS || 5 * 60 *
 const IDEMPOTENCY_TTL_MS = Number(process.env.RECODER_A2A_IDEMPOTENCY_TTL_MS || 10 * 60 * 1000);
 const IDEMPOTENCY_KEY_PREFIX = process.env.RECODER_A2A_IDEMPOTENCY_KEY_PREFIX || "recoder:a2a:idempotency";
 const INTENT_STREAM_KEY = process.env.RECODER_A2A_INTENT_STREAM_KEY || "recoder:a2a:intents";
-const RECODER_A2A_PROTOCOL_VERSION = "0.3.0";
-const RECODER_A2A_ENVELOPE_VERSION = "2026-02-14";
-const VALID_RECORDER_INTENTS = new Set([
-  "plan",
-  "execute",
-  "review",
-  "handoff",
-  "status",
-  "sync",
-  "tool_call",
-  "tool_result",
-  "error",
-]);
-const VALID_RECORDER_PLATFORMS = new Set([
-  "codex",
-  "claude_code",
-  "recoder_web",
-  "recoder_pm",
-  "recoder_agency",
-  "recoder_backend",
-  "recoder_desktop",
-  "custom",
-]);
-
 type GatewayAgentPlatform =
   | "codex"
   | "claude_code"
@@ -127,102 +107,29 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function normalizePlatform(value: unknown): GatewayAgentPlatform {
-  const platform = asString(value).trim();
-  if (VALID_RECORDER_PLATFORMS.has(platform)) {
-    return platform as GatewayAgentPlatform;
-  }
-  return "custom";
+function resolveIngressWorkspaceId(): string {
+  return process.env.RECODER_PM_A2A_WORKSPACE_ID?.trim() || "recoder-pm";
 }
 
 export function parseEnvelopeFromUnknown(
   value: unknown,
   sourcePath = "envelope",
 ): { ok: true; envelope: GatewayEnvelope } | { ok: false; issues: EnvelopeValidationIssue[] } {
-  const issues: EnvelopeValidationIssue[] = [];
-  if (!isRecord(value)) {
+  if (typeof value === "string") {
     return { ok: false, issues: [{ path: sourcePath, message: "must be an object" }] };
   }
 
-  const messageId = asString(value.messageId).trim();
-  const threadId = asString(value.threadId).trim();
-  const intent = asString(value.intent).trim();
-  if (!messageId) issues.push({ path: `${sourcePath}.messageId`, message: "must be a non-empty string" });
-  if (!threadId) issues.push({ path: `${sourcePath}.threadId`, message: "must be a non-empty string" });
-  if (!intent || !VALID_RECORDER_INTENTS.has(intent)) {
-    issues.push({
-      path: `${sourcePath}.intent`,
-      message: "must be one of plan, execute, review, handoff, status, sync, tool_call, tool_result, error",
-    });
+  const normalized = normalizeLegacyInboundEnvelope(value, {
+    workspaceId: resolveIngressWorkspaceId(),
+    sourcePath,
+  }) as NormalizeLegacyInboundEnvelopeResult;
+  if (!normalized.ok) {
+    return { ok: false, issues: normalized.issues };
   }
-
-  const fromInput = value.from;
-  const toInput = value.to;
-  if (!isRecord(fromInput)) {
-    issues.push({ path: `${sourcePath}.from`, message: "must be an object" });
-  }
-  if (!isRecord(toInput)) {
-    issues.push({ path: `${sourcePath}.to`, message: "must be an object" });
-  }
-
-  const fromId = isRecord(fromInput) ? asString(fromInput.id).trim() : "";
-  const toId = isRecord(toInput) ? asString(toInput.id).trim() : "";
-  if (!fromId) issues.push({ path: `${sourcePath}.from.id`, message: "must be a non-empty string" });
-  if (!toId) issues.push({ path: `${sourcePath}.to.id`, message: "must be a non-empty string" });
-
-  const payloadInput = value.payload;
-  if (!Array.isArray(payloadInput)) {
-    issues.push({ path: `${sourcePath}.payload`, message: "must be an array" });
-  }
-
-  const createdAtInput = asString(value.createdAt).trim();
-  const createdAt = createdAtInput || new Date().toISOString();
-  if (createdAtInput && Number.isNaN(Date.parse(createdAtInput))) {
-    issues.push({ path: `${sourcePath}.createdAt`, message: "must be a valid ISO-8601 timestamp string" });
-  }
-
-  if (issues.length > 0) return { ok: false, issues };
-
-  const fromRecord = fromInput as Record<string, unknown>;
-  const toRecord = toInput as Record<string, unknown>;
-  const metadata = isRecord(value.metadata) ? value.metadata : undefined;
-  const traceRaw = value.trace;
-  const trace = isRecord(traceRaw) && asString(traceRaw.traceId).trim()
-    ? {
-        traceId: asString(traceRaw.traceId).trim(),
-        parentMessageId: asString(traceRaw.parentMessageId).trim() || undefined,
-      }
-    : undefined;
 
   return {
     ok: true,
-    envelope: {
-      envelopeVersion: asString(value.envelopeVersion).trim() || RECODER_A2A_ENVELOPE_VERSION,
-      protocolVersion: asString(value.protocolVersion).trim() || RECODER_A2A_PROTOCOL_VERSION,
-      messageId,
-      threadId,
-      createdAt,
-      from: {
-        id: fromId,
-        name: asString(fromRecord.name).trim() || fromId,
-        platform: normalizePlatform(fromRecord.platform),
-        instanceId: asString(fromRecord.instanceId).trim() || undefined,
-        team: asString(fromRecord.team).trim() || undefined,
-        version: asString(fromRecord.version).trim() || undefined,
-      },
-      to: {
-        id: toId,
-        name: asString(toRecord.name).trim() || toId,
-        platform: normalizePlatform(toRecord.platform),
-        instanceId: asString(toRecord.instanceId).trim() || undefined,
-        team: asString(toRecord.team).trim() || undefined,
-        version: asString(toRecord.version).trim() || undefined,
-      },
-      intent: intent as GatewayEnvelope["intent"],
-      payload: payloadInput as any,
-      metadata,
-      trace,
-    },
+    envelope: normalized.legacyEnvelope as GatewayEnvelope,
   };
 }
 

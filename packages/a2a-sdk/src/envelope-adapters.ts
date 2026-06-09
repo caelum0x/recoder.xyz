@@ -27,8 +27,22 @@ export interface LegacyInboundEnvelope {
   messageId: string;
   threadId: string;
   createdAt?: string;
-  from: { id: string; platform: string; name?: string; instanceId?: string };
-  to: { id: string; platform: string; name?: string; instanceId?: string };
+  from: {
+    id: string;
+    platform: string;
+    name?: string;
+    instanceId?: string;
+    team?: string;
+    version?: string;
+  };
+  to: {
+    id: string;
+    platform: string;
+    name?: string;
+    instanceId?: string;
+    team?: string;
+    version?: string;
+  };
   intent?: string;
   payload: unknown[];
   metadata?: Record<string, unknown>;

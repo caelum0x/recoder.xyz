@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 const { mockUseSession, mockLaunchWebIdeButton } = vi.hoisted(() => ({
@@ -39,6 +39,11 @@ describe('DashboardPage', () => {
     });
 
     render(<DashboardPage />);
+
+    expect(screen.getByText('All Recoder Products')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Spaces' })).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Agents' })).toBeDefined();
+    expect(screen.queryByText('Launch Platforms')).toBeNull();
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalled();

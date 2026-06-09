@@ -1,8 +1,10 @@
 import type { RecoderA2AEnvelope } from "@recoder/shared/a2a";
 import { NextResponse } from "next/server";
 import {
+	buildInvalidA2AEnvelopeError,
 	checkAndStoreEnvelopeIdempotency,
 	handleA2AIntent,
+	parseEnvelopeFromUnknown,
 	verifyIncomingA2ARequest,
 } from "@/lib/a2a/gateway";
 
@@ -16,12 +18,20 @@ export async function POST(request: Request) {
 		return NextResponse.json({ ok: false, error: verification.error }, { status: verification.status });
 	}
 
-	let envelope: RecoderA2AEnvelope;
+	let parsedBody: unknown;
 	try {
-		envelope = JSON.parse(rawBody) as RecoderA2AEnvelope;
+		parsedBody = JSON.parse(rawBody) as unknown;
 	} catch {
 		return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
 	}
+
+	const parsedEnvelope = parseEnvelopeFromUnknown(parsedBody, "body");
+	if (!parsedEnvelope.ok) {
+		return NextResponse.json(buildInvalidA2AEnvelopeError({ issues: parsedEnvelope.issues }), {
+			status: 400,
+		});
+	}
+	const envelope = parsedEnvelope.envelope as RecoderA2AEnvelope;
 
 	const idempotency = await checkAndStoreEnvelopeIdempotency(envelope);
 	if (!idempotency.accepted) {

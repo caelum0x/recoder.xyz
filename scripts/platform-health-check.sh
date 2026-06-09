@@ -75,7 +75,11 @@ run_check() {
 echo "Running active-surface platform health checks..."
 
 failures=0
-run_check "recoder-web" "recoder-web" "npm run build" false || failures=$((failures + 1))
+if [[ -d "$ROOT_DIR/recoder-web" ]]; then
+  run_check "recoder-web" "recoder-web" "npm run build" false || failures=$((failures + 1))
+else
+  update_report "recoder-web" "warning" "Directory missing: recoder-web (retired surface)" "0"
+fi
 run_check "recoder-agents" "recoder-agents" "npm run build" false || failures=$((failures + 1))
 run_check "apps-mobile" "apps/mobile" "npm run typecheck" false || failures=$((failures + 1))
 run_check "apps-desktop" "apps/desktop" "npm run lint" false || failures=$((failures + 1))

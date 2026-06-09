@@ -231,7 +231,7 @@ elif [[ -f "$WEB_ENV_ALT" ]]; then
   WEB_ACTIVE="$WEB_ENV_ALT"
 else
   WEB_ACTIVE=""
-  fail "Main branch — No recoder-web env file found"
+  warn "Main branch — No recoder-web env file found (retired surface optional)"
 fi
 
 ISK_FILES=()
