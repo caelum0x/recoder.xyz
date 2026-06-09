@@ -29,9 +29,8 @@ export const siteConfig = {
       title: 'Ecosystem',
       links: [
         { id: 3, title: 'Recoder Home', url: RECODER_ECOSYSTEM_URLS.home },
-        { id: 4, title: 'Recoder Web', url: RECODER_ECOSYSTEM_URLS.web },
-        { id: 5, title: 'Recoder Agency', url: RECODER_ECOSYSTEM_URLS.agency },
-        { id: 6, title: 'Recoder PM', url: RECODER_ECOSYSTEM_URLS.pm },
+        { id: 4, title: 'Recoder Agency', url: RECODER_ECOSYSTEM_URLS.agency },
+        { id: 5, title: 'Recoder PM', url: RECODER_ECOSYSTEM_URLS.pm },
       ],
     },
     {

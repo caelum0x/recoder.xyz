@@ -1,9 +1,11 @@
 import type { TaskEnvelope, TaskEvidenceItem, TaskStateTransition } from '@recoder/shared/a2a';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { getApprovalGateService } from './approval-gate.service';
 import { getDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
 import { getAgentBridgeService } from './agent-bridge.service';
+import { getMemoryCandidateService } from './memory-candidate.service';
 import { getOrchestrationHistorySummary, listBridgeSessionsForBinding } from '../a2a-gateway';
 import { getApproval as getPolicyApproval } from '../policy/approval-store.js';
 
@@ -184,6 +186,105 @@ function summarizeTaskPrompt(task: TaskEnvelope): string {
   return typeof payloadRecord?.text === 'string' ? payloadRecord.text : '';
 }
 
+function parseInstructionBundleArtifact(artifacts: Array<{ key: string; content: string; path?: string; metadata?: Record<string, unknown> }>) {
+  const artifact = artifacts.find((item) => item.key.startsWith('instruction-bundle:'));
+  if (!artifact) return null;
+
+  try {
+    const parsed = JSON.parse(artifact.content) as InstructionBundle;
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.agent_specific_prompt !== 'string') {
+      return null;
+    }
+    return {
+      artifact,
+      bundle: parsed,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function resolveInstructionSummary(task: TaskEnvelope) {
+  const metadataBundle = readRecord(task.metadata?.instructionBundle);
+  const artifacts = task.result?.artifacts ?? [];
+  const artifactBundle = parseInstructionBundleArtifact(artifacts as Array<{ key: string; content: string; path?: string; metadata?: Record<string, unknown> }>);
+  const bundle = artifactBundle?.bundle ?? null;
+
+  const sharedGoal =
+    (bundle && typeof bundle.shared_goal === 'string' ? bundle.shared_goal : null) ??
+    (typeof metadataBundle?.sharedGoal === 'string' ? metadataBundle.sharedGoal : null);
+
+  const verificationCommands =
+    (bundle?.verification_commands ?? []).filter((value): value is string => typeof value === 'string') ||
+    [];
+  const forbiddenActions =
+    (bundle?.forbidden_actions ?? []).filter((value): value is string => typeof value === 'string') ||
+    [];
+  const sourceFiles =
+    (bundle?.provenance?.source_files ?? []).filter(
+      (value): value is { path: string; sha: string } =>
+        Boolean(value && typeof value.path === 'string' && typeof value.sha === 'string'),
+    ) || [];
+  const sourceRefs =
+    (bundle?.system_context_refs ?? []).filter(
+      (value): value is NonNullable<InstructionBundle['system_context_refs']>[number] =>
+        Boolean(value && typeof value.ref_id === 'string' && typeof value.kind === 'string'),
+    ) || [];
+  const approvalGates =
+    (bundle?.approval_gates ?? []).map((gate) => ({
+      approvalId: gate.approval_id,
+      title: gate.title,
+      status: gate.status,
+      requiredAt: gate.required_at,
+      reason: gate.reason,
+    })) || [];
+  const memoryRefs =
+    (bundle?.memory_used ?? []).map((memory) => ({
+      memoryId: memory.memory_id,
+      scope: memory.scope,
+      title: memory.title,
+    })) || [];
+
+  const provenance = readRecord(metadataBundle?.provenance);
+
+  if (
+    !sharedGoal &&
+    verificationCommands.length === 0 &&
+    forbiddenActions.length === 0 &&
+    sourceFiles.length === 0 &&
+    sourceRefs.length === 0 &&
+    approvalGates.length === 0 &&
+    memoryRefs.length === 0 &&
+    !provenance
+  ) {
+    return null;
+  }
+
+  return {
+    sharedGoal,
+    promptLength: bundle?.agent_specific_prompt?.length ?? null,
+    verificationCommands,
+    forbiddenActions,
+    sourceFiles,
+    sourceRefs: sourceRefs.map((ref) => ({
+      refId: ref.ref_id,
+      kind: ref.kind,
+      path: ref.path ?? null,
+      sha: ref.sha ?? null,
+    })),
+    approvalGates,
+    memoryRefs,
+    compilerVersion:
+      (bundle?.provenance?.compiler_version ?? null) ??
+      (typeof provenance?.compilerVersion === 'string' ? provenance.compilerVersion : null),
+    compiledAt:
+      (bundle?.provenance?.compiled_at ?? null) ??
+      (typeof provenance?.compiledAt === 'string' ? provenance.compiledAt : null),
+    artifactKey: artifactBundle?.artifact.key ?? null,
+    artifactPath: artifactBundle?.artifact.path ?? null,
+  };
+}
+
 function buildTaskTimeline(input: {
   task: TaskEnvelope;
   transitions: TaskStateTransition[];
@@ -202,6 +303,10 @@ function buildTaskTimeline(input: {
     reviewPath: string | null;
     suggestedAction: string | null;
   }>;
+  instructions?: {
+    compiledAt: string | null;
+    sharedGoal: string | null;
+  } | null;
 }) {
   const timeline: Array<Record<string, unknown>> = [];
   const prompt = summarizeTaskPrompt(input.task);
@@ -235,6 +340,15 @@ function buildTaskTimeline(input: {
       type: reviewEvent.type ?? 'review.event',
       title: reviewEvent.type ?? 'review.event',
       detail: reviewEvent.branchName ?? reviewEvent.reviewTarget ?? reviewEvent.note ?? null,
+    });
+  }
+
+  if (input.instructions?.compiledAt) {
+    timeline.push({
+      at: input.instructions.compiledAt,
+      type: 'instructions.compiled',
+      title: 'Instruction bundle compiled',
+      detail: input.instructions.sharedGoal ?? input.task.id,
     });
   }
 
@@ -387,6 +501,8 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
           };
         })
     : [];
+  const instructions = resolveInstructionSummary(task);
+  const memoryCandidates = getMemoryCandidateService().listByTask(task.id);
 
   return {
     task,
@@ -596,6 +712,8 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
           }
         : null,
     },
+    instructions,
+    memoryCandidates,
     controlPlane: orchestration
       ? {
           historyVersion:
@@ -634,6 +752,12 @@ export async function buildTaskRunContext(task: TaskEnvelope) {
       preview,
       filesChanged,
       reviewHistory,
+      instructions: instructions
+        ? {
+            compiledAt: instructions.compiledAt,
+            sharedGoal: instructions.sharedGoal,
+          }
+        : null,
     }),
   };
 }
@@ -685,6 +809,8 @@ export async function buildTaskRunSummary(task: TaskEnvelope) {
     delivery: context.delivery,
     assignee: context.assignee,
     runtime: context.runtime,
+    instructions: context.instructions,
+    memoryCandidates: context.memoryCandidates,
     controlPlane: context.controlPlane
       ? {
           historyVersion: context.controlPlane.historyVersion,

@@ -16,6 +16,9 @@
  */
 
 import { logger as baseLogger } from '../../logger';
+import { compileInstructionBundleForTask } from '../compiled-instructions';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
+import { createTaskEnvelope, type TaskEnvelope } from '@recoder/shared/a2a';
 
 const logger = baseLogger.child({ component: 'a2a-scatter-gather' });
 
@@ -80,6 +83,23 @@ export interface ScatterGatherExecution {
   totalDurationMs?: number;
 }
 
+export interface ScatterGatherTaskExecutionRequest {
+  patternId: string;
+  executionId: string;
+  agentId: string;
+  prompt: string;
+  envelope: TaskEnvelope;
+  instructionBundle: InstructionBundle | null;
+}
+
+export type ScatterGatherTaskExecutor =
+  | ((agentId: string, prompt: string) => Promise<string>)
+  | ((request: ScatterGatherTaskExecutionRequest) => Promise<string>);
+
+type StructuredScatterGatherTaskExecutor = ((request: ScatterGatherTaskExecutionRequest) => Promise<string>) & {
+  __agentOsStructured?: boolean;
+};
+
 // ---------------------------------------------------------------------------
 // ID generator
 // ---------------------------------------------------------------------------
@@ -143,7 +163,7 @@ export class ScatterGatherOrchestrator {
   async execute(
     patternId: string,
     prompt: string,
-    executor: (agentId: string, prompt: string) => Promise<string>,
+    executor: ScatterGatherTaskExecutor,
   ): Promise<ScatterGatherExecution> {
     const pattern = this.patterns.get(patternId);
     if (!pattern) {
@@ -202,6 +222,7 @@ export class ScatterGatherOrchestrator {
       const agentStart = Date.now();
       const agentPrompt = target.prompt ?? prompt;
       const weight = target.weight ?? 1.0;
+      const request = this.buildTaskExecutionRequest(execution, target.agentId, agentPrompt);
 
       try {
         let result: string;
@@ -209,13 +230,13 @@ export class ScatterGatherOrchestrator {
         if (useTimeout) {
           // Wrap in a race with a timeout
           result = await Promise.race([
-            executor(target.agentId, agentPrompt),
+            this.invokeTaskExecutor(executor, request),
             new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error('SCATTER_TIMEOUT')), pattern.timeoutMs!),
             ),
           ]);
         } else {
-          result = await executor(target.agentId, agentPrompt);
+          result = await this.invokeTaskExecutor(executor, request);
         }
 
         return {
@@ -317,6 +338,64 @@ export class ScatterGatherOrchestrator {
     this.patterns.clear();
     this.executions.clear();
     logger.debug('Scatter-gather orchestrator state reset');
+  }
+
+  private buildTaskExecutionRequest(
+    execution: ScatterGatherExecution,
+    agentId: string,
+    prompt: string,
+  ): ScatterGatherTaskExecutionRequest {
+    const envelope = createTaskEnvelope({
+      id: generateExecutionId(),
+      workspace_id: 'scatter-gather-orchestrator',
+      thread_id: `scatter-gather-${execution.executionId}`,
+      trace_id: execution.executionId,
+      requester: {
+        agent_id: 'scatter-gather-orchestrator',
+        platform: 'recoder_backend',
+        name: 'Scatter Gather Orchestrator',
+      },
+      assignee: {
+        agent_id: agentId,
+        platform: 'custom',
+      },
+      connector: {
+        connector_id: `scatter-target:${agentId}`,
+        platform: 'custom',
+        protocol: 'rest',
+      },
+      payload: {
+        kind: 'text',
+        text: prompt,
+      },
+      metadata: {
+        patternId: execution.patternId,
+        executionId: execution.executionId,
+        source: 'scatter-gather-orchestrator',
+      },
+      tags: ['scatter-gather-target'],
+    });
+
+    return {
+      patternId: execution.patternId,
+      executionId: execution.executionId,
+      agentId,
+      prompt,
+      envelope,
+      instructionBundle: compileInstructionBundleForTask(envelope),
+    };
+  }
+
+  private async invokeTaskExecutor(
+    executor: ScatterGatherTaskExecutor,
+    request: ScatterGatherTaskExecutionRequest,
+  ): Promise<string> {
+    return (executor as StructuredScatterGatherTaskExecutor).__agentOsStructured === true
+      ? (executor as StructuredScatterGatherTaskExecutor)(request)
+      : (executor as (agentId: string, prompt: string) => Promise<string>)(
+          request.agentId,
+          request.prompt,
+        );
   }
 
   // -------------------------------------------------------------------------

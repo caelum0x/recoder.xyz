@@ -38,10 +38,35 @@
 			"import": "./dist/audit-helpers.mjs",
 			"require": "./dist/audit-helpers.js"
 		},
+		"./agent-profile": {
+			"types": "./dist/agent-profile.d.ts",
+			"import": "./dist/agent-profile.mjs",
+			"require": "./dist/agent-profile.js"
+		},
+		"./task-intent": {
+			"types": "./dist/task-intent.d.ts",
+			"import": "./dist/task-intent.mjs",
+			"require": "./dist/task-intent.js"
+		},
+		"./policy": {
+			"types": "./dist/policy.d.ts",
+			"import": "./dist/policy.mjs",
+			"require": "./dist/policy.js"
+		},
+		"./instruction-bundle": {
+			"types": "./dist/instruction-bundle.d.ts",
+			"import": "./dist/instruction-bundle.mjs",
+			"require": "./dist/instruction-bundle.js"
+		},
 		"./validation": {
 			"types": "./dist/validation.d.ts",
 			"import": "./dist/validation.mjs",
 			"require": "./dist/validation.js"
+		},
+		"./bridge-contract": {
+			"types": "./dist/bridge-contract.d.ts",
+			"import": "./dist/bridge-contract.mjs",
+			"require": "./dist/bridge-contract.js"
 		}
 	},
 	"files": ["dist"],
@@ -63,7 +88,9 @@
 		"agent-to-agent",
 		"sdk",
 		"task-envelope",
-		"audit-event"
+		"audit-event",
+		"instruction-bundle",
+		"agent-profile"
 	],
 	"repository": {
 		"type": "git",

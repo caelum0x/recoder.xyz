@@ -19,6 +19,9 @@ import { trackLlmCall, trackSandboxExec } from '../metering/openmeter-client.js'
 import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
 import { v4 as uuid } from 'uuid';
 import { getOpenRouterByokKey } from './byok.js';
+import { compileInstructionBundleForTask } from './compiled-instructions.js';
+import { createTaskEnvelope, type TaskEnvelope } from '@recoder/shared/a2a';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
 
 const logger = createLogger('workflow-step-executor');
 
@@ -146,6 +149,83 @@ interface ExecutionResult {
   context: Record<string, unknown>;
 }
 
+type StructuredWorkflowStepTaskExecutor = ((request: {
+  workflowId: string;
+  executionId: string;
+  stepName: string;
+  agentId: string;
+  prompt: string;
+  envelope: TaskEnvelope;
+  instructionBundle: InstructionBundle | null;
+  context: Record<string, unknown>;
+}) => Promise<string>) & {
+  __agentOsStructured?: boolean;
+};
+
+function buildWorkflowStepTaskEnvelope(input: {
+  stepName: string;
+  stepType: WorkflowStep['type'];
+  config: Record<string, unknown>;
+  context: Record<string, unknown>;
+  promptText: string;
+  assigneeId: string;
+}): TaskEnvelope {
+  const metadata = {
+    ...(typeof input.config.title === 'string' ? { title: input.config.title } : {}),
+    ...(typeof input.config.goal === 'string' ? { goal: input.config.goal } : {}),
+    ...(typeof input.config.intent === 'string' ? { intent: input.config.intent } : {}),
+    ...(Array.isArray(input.config.acceptance) ? { acceptance: input.config.acceptance } : {}),
+    ...(Array.isArray(input.config.acceptance_criteria) ? { acceptance_criteria: input.config.acceptance_criteria } : {}),
+    ...(Array.isArray(input.config.verify) ? { verify: input.config.verify } : {}),
+    ...(Array.isArray(input.config.verification_commands) ? { verification_commands: input.config.verification_commands } : {}),
+    ...(Array.isArray(input.config.forbidden_actions) ? { forbidden_actions: input.config.forbidden_actions } : {}),
+    ...(Array.isArray(input.config.forbidden_paths) ? { forbidden_paths: input.config.forbidden_paths } : {}),
+    ...(Array.isArray(input.config.approval_required) ? { approval_required: input.config.approval_required } : {}),
+    ...(Array.isArray(input.config.browser_checks) ? { browser_checks: input.config.browser_checks } : {}),
+    ...(Array.isArray(input.config.pathRules) ? { pathRules: input.config.pathRules } : {}),
+    ...(Array.isArray(input.config.recentFailures) ? { recentFailures: input.config.recentFailures } : {}),
+    source: 'workflow-step-executor',
+    stepName: input.stepName,
+    stepType: input.stepType,
+  };
+
+  return createTaskEnvelope({
+    id: `wfstep_${uuid().replace(/-/g, '').slice(0, 16)}`,
+    workspace_id:
+      typeof input.context._workspaceId === 'string'
+        ? input.context._workspaceId
+        : 'workflow-step-executor',
+    thread_id:
+      typeof input.context._threadId === 'string'
+        ? input.context._threadId
+        : `workflow-step-${Date.now()}`,
+    trace_id:
+      typeof input.context._taskId === 'string'
+        ? input.context._taskId
+        : `workflow-step-${Date.now()}`,
+    requester: {
+      agent_id: 'workflow-step-executor',
+      platform: 'recoder_backend',
+      name: 'Workflow Step Executor',
+    },
+    assignee: {
+      agent_id: input.assigneeId,
+      platform: 'custom',
+    },
+    connector: {
+      connector_id: `${input.stepType}:${input.assigneeId}`,
+      platform: 'custom',
+      protocol: 'rest',
+    },
+    payload: {
+      kind: 'text',
+      text: input.promptText,
+    },
+    metadata,
+    tags: [`workflow-step:${input.stepType}`],
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Step executors
 // ---------------------------------------------------------------------------
@@ -177,10 +257,20 @@ async function executeLlmStep(
     /\{\{(\w+)\}\}/g,
     (_, key) => (context[key] != null ? String(context[key]) : `{{${key}}}`),
   );
+  const envelope = buildWorkflowStepTaskEnvelope({
+    stepName: String(config.name ?? 'llm-step'),
+    stepType: 'llm',
+    config,
+    context,
+    promptText: resolvedPrompt,
+    assigneeId: model,
+  });
+  const instructionBundle = compileInstructionBundleForTask(envelope);
+  const effectivePrompt = instructionBundle?.agent_specific_prompt || resolvedPrompt;
 
   const messages: Array<{ role: string; content: string }> = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
-  messages.push({ role: 'user', content: resolvedPrompt });
+  messages.push({ role: 'user', content: effectivePrompt });
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -234,6 +324,7 @@ async function executeLlmStep(
     content,
     model,
     usage: data.usage,
+    instructionBundle,
   };
 }
 
@@ -437,15 +528,24 @@ async function executeTriggerStep(
   }
 
   const input = config.input ? String(config.input) : JSON.stringify(context);
-  const execution = await engine.execute(
-    workflowId,
-    input,
-    async (agentId, prompt) => {
-      // Use the LLM executor for task steps within triggered workflows
-      const result = await executeLlmStep({ prompt, model: config.model ?? 'anthropic/claude-sonnet-4-20250514' }, context);
+  const structuredExecutor = Object.assign(
+    async (request: {
+      prompt: string;
+      instructionBundle: InstructionBundle | null;
+    }) => {
+      const result = await executeLlmStep(
+        {
+          prompt: request.instructionBundle?.agent_specific_prompt ?? request.prompt,
+          model: config.model ?? 'anthropic/claude-sonnet-4-20250514',
+          name: 'trigger-step-task',
+        },
+        context,
+      );
       return typeof result === 'string' ? result : JSON.stringify(result);
     },
+    { __agentOsStructured: true },
   );
+  const execution = await engine.execute(workflowId, input, structuredExecutor);
 
   return {
     triggered: true,

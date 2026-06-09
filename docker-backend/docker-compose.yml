@@ -9,7 +9,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - PORT=3100
-      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:3001,https://recoder.xyz,https://web.recoder.xyz,https://agents.recoder.xyz,https://frontend.recoder.xyz,https://pm.recoder.xyz,https://agency.recoder.xyz,https://studio.recoder.xyz,https://openclaw.recoder.xyz,https://api.recoder.xyz,https://backend.recoder.xyz
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,https://recoder.xyz,https://agents.recoder.xyz,https://frontend.recoder.xyz,https://pm.recoder.xyz,https://agency.recoder.xyz,https://studio.recoder.xyz,https://openclaw.recoder.xyz,https://api.recoder.xyz,https://backend.recoder.xyz
     restart: unless-stopped
 
   # Build the base image first

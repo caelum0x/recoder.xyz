@@ -23,6 +23,12 @@ import { getAgentRegistryService } from './agent-registry.service';
 import { getApprovalGateService } from './approval-gate.service';
 import { loadA2ADispatches, saveA2ADispatches } from './a2a-persistence';
 import { getRecentContext } from './memory-store';
+import {
+  buildInstructionBundleArtifact,
+  buildInstructionBundleMetadata,
+  compileInstructionBundleForTask,
+  INSTRUCTION_BUNDLE_TRIGGER,
+} from './compiled-instructions';
 import { createLogger } from '../logger';
 import type {
   OrchestrationPattern,
@@ -35,6 +41,7 @@ import type {
   RecoderAgentPlatform,
 } from '@recoder/shared/a2a';
 import type { CreateTaskInput } from './task-lifecycle.service';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
 
 const logger = createLogger('a2a-multi-dispatch');
 const docker = new Docker();
@@ -56,6 +63,7 @@ async function dispatchTaskToBridgeAgent(input: {
   agentId: string;
   taskId: string;
   prompt: string;
+  instructionBundle?: InstructionBundle | null;
   priority: string;
   ownerId: string;
   worktreeInfo?: WorktreeInfo;
@@ -65,10 +73,11 @@ async function dispatchTaskToBridgeAgent(input: {
   if (!bridge.isAgentOnline(input.agentId)) return;
 
   let memoryContext: Array<{ content: string; type: string; score?: number }> = [];
+  const memoryQuery = input.instructionBundle?.shared_goal || input.prompt;
   try {
     if (input.ownerId) {
       const memories = await getRecentContext({
-        query: input.prompt,
+        query: memoryQuery,
         userId: input.ownerId,
         limit: 10,
       });
@@ -85,7 +94,7 @@ async function dispatchTaskToBridgeAgent(input: {
   bridge.sendToAgent(input.agentId, {
     type: 'task.assigned',
     taskId: input.taskId,
-    prompt: input.prompt,
+    prompt: input.instructionBundle?.agent_specific_prompt || input.prompt,
     context: {
       workspaceId: input.workspaceId,
       dispatchId: input.dispatchId,
@@ -95,6 +104,7 @@ async function dispatchTaskToBridgeAgent(input: {
         worktreePath: input.worktreeInfo.worktreePath,
       } : {}),
       ...(input.routingReason ? { routingReason: input.routingReason } : {}),
+      ...(input.instructionBundle ? { instructionBundle: input.instructionBundle } : {}),
       ...(memoryContext.length > 0 ? { memories: memoryContext } : {}),
     },
   });
@@ -336,6 +346,7 @@ export class MultiDispatchService {
     const worktreeManager = getWorktreeManagerService();
     const taskIds: string[] = [];
     const worktrees: Record<string, WorktreeInfo> = {};
+    const compiledBundles = new Map<string, InstructionBundle | null>();
 
     for (const agentId of agentIds) {
       const platform = selectedPlatforms[agentId];
@@ -376,8 +387,31 @@ export class MultiDispatchService {
       if (!created.ok) {
         throw new Error(created.error.message);
       }
-      const task = created.data;
+      let task = created.data;
       taskIds.push(task.id);
+
+      const compiledBundle = compileInstructionBundleForTask(task);
+      compiledBundles.set(task.id, compiledBundle);
+      if (compiledBundle) {
+        const updatedMetadata = taskLifecycle.updateTaskMetadata(task.id, {
+          metadataPatch: {
+            instructionBundle: buildInstructionBundleMetadata(compiledBundle),
+          },
+          triggeredBy: INSTRUCTION_BUNDLE_TRIGGER,
+          reason: 'Compiled instruction bundle attached to multi-dispatch task metadata',
+        });
+        if (updatedMetadata.ok) {
+          task = updatedMetadata.data;
+        }
+        const appendedArtifacts = taskLifecycle.appendTaskArtifacts(task.id, {
+          artifacts: [buildInstructionBundleArtifact(task.id, compiledBundle)],
+          triggeredBy: INSTRUCTION_BUNDLE_TRIGGER,
+          reason: 'Compiled instruction bundle artifact attached to multi-dispatch task',
+        });
+        if (appendedArtifacts.ok) {
+          task = appendedArtifacts.data;
+        }
+      }
 
       // Create an isolated worktree for this agent's task when enabled
       let worktreeInfo: WorktreeInfo | undefined;
@@ -470,6 +504,7 @@ export class MultiDispatchService {
               agentId,
               taskId: task.id,
               prompt: request.prompt,
+              instructionBundle: compiledBundles.get(task.id) ?? null,
               priority: request.priority ?? 'normal',
               ownerId: ws.ownerId,
               worktreeInfo,
@@ -486,6 +521,7 @@ export class MultiDispatchService {
           agentId,
           taskId: task.id,
           prompt: request.prompt,
+          instructionBundle: compiledBundles.get(task.id) ?? null,
           priority: request.priority ?? 'normal',
           ownerId: ws.ownerId,
           worktreeInfo,

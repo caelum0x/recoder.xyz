@@ -1,152 +1,136 @@
-# Agent Instructions
+# Recoder Agent Instructions
+
+This file is the canonical cross-agent policy for this repo. Runtime-specific files may add narrow behavior, but they should extend this file instead of duplicating it:
+
+- `CLAUDE.md` imports this file for Claude Code.
+- `.codex/AGENTS.md` points back to this file for Codex.
+- Deeper `AGENTS.md` or `CLAUDE.md` files may add path-scoped rules for a subtree.
+
+## Issue Tracking
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
-## Quick Reference
+### Quick Reference
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd vc status          # Optional: inspect pending Dolt-backed issue state
+bd ready --json
+bd show <id> --json
+bd update <id> --claim --json
+bd close <id> --reason "Completed" --json
+bd vc status
 ```
 
 ## Non-Interactive Shell Commands
 
-**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
-
-Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
-
-**Use these forms instead:**
-```bash
-# Force overwrite without prompting
-cp -f source dest           # NOT: cp source dest
-mv -f source dest           # NOT: mv source dest
-rm -f file                  # NOT: rm file
-
-# For recursive operations
-rm -rf directory            # NOT: rm -r directory
-cp -rf source dest          # NOT: cp -r source dest
-```
-
-**Other commands that may prompt:**
-- `scp` - use `-o BatchMode=yes` for non-interactive
-- `ssh` - use `-o BatchMode=yes` to fail instead of prompting
-- `apt-get` - use `-y` flag
-- `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
-
-<!-- BEGIN BEADS INTEGRATION -->
-## Issue Tracking with bd (beads)
-
-**IMPORTANT**: This project uses **bd (beads)** for ALL issue tracking. Do NOT use markdown TODOs, task lists, or other tracking methods.
-
-### Why bd?
-
-- Dependency-aware: Track blockers and relationships between issues
-- Version-controlled: Built on Dolt with cell-level merge
-- Agent-optimized: JSON output, ready work detection, discovered-from links
-- Prevents duplicate tracking systems and confusion
-
-### Quick Start
-
-**Check for ready work:**
+Always use non-interactive flags with file operations.
 
 ```bash
-bd ready --json
+cp -f source dest
+mv -f source dest
+rm -f file
+rm -rf directory
+cp -rf source dest
+scp -o BatchMode=yes ...
+ssh -o BatchMode=yes ...
+apt-get -y ...
+HOMEBREW_NO_AUTO_UPDATE=1 brew ...
 ```
 
-**Create new issues:**
+## Issue Tracking with bd
 
-```bash
-bd create "Issue title" --description="Detailed context" -t bug|feature|task -p 0-4 --json
-bd create "Issue title" --description="What this issue is about" -p 1 --deps discovered-from:bd-123 --json
-```
+Use `bd` for all task tracking in this repo.
 
-**Claim and update:**
+- Check ready work with `bd ready --json`.
+- Claim work atomically with `bd update <id> --claim --json`.
+- Link newly discovered work with `--deps discovered-from:<parent-id>`.
+- Do not create markdown TODO trackers or use external issue trackers.
 
-```bash
-bd update <id> --claim --json
-bd update bd-42 --priority 1 --json
-```
+## Agent OS Model
 
-**Complete work:**
+Recoder should behave like an agent control plane, not a prompt library.
 
-```bash
-bd close bd-42 --reason "Completed" --json
-```
+- Humans provide task intent, scope, constraints, verification, and approval requirements.
+- Recoder compiles that input into runtime-specific instruction bundles.
+- Claude Code, Codex, Recoder Code, browser agents, and future runtimes are execution surfaces.
+- Every meaningful run should end with verification, artifacts, and an audit trail.
+- Durable memory must be reviewable and evidence-backed, not silent runtime state.
 
-### Issue Types
+## Runtime Overlays
 
-- `bug` - Something broken
-- `feature` - New functionality
-- `task` - Work item (tests, docs, refactoring)
-- `epic` - Large feature with subtasks
-- `chore` - Maintenance (dependencies, tooling)
+- `CLAUDE.md`: Claude-specific behavior only. It must import `@AGENTS.md`.
+- `.codex/AGENTS.md`: Codex-specific overrides only. It must point back to `../AGENTS.md`.
+- Path-scoped instruction files should stay local, additive, and short.
 
-### Priorities
+## Project Snapshot
 
-- `0` - Critical (security, data loss, broken builds)
-- `1` - High (major features, important bugs)
-- `2` - Medium (default, nice-to-have)
-- `3` - Low (polish, optimization)
-- `4` - Backlog (future ideas)
+- Monorepo for the Recoder platform (`recoder.xyz`) with multiple deployed surfaces.
+- Main production surfaces:
+  - `app/` -> `https://recoder.xyz`
+  - `recoder-agents/` -> `https://agents.recoder.xyz`
+  - `recoder-agency/` -> `https://agency.recoder.xyz`
+  - `recoder-pm/` -> `https://pm.recoder.xyz`
+  - `recoder-web/` -> `https://web.recoder.xyz`
+  - `docker-backend/` for service runtime and agent orchestration
 
-### Workflow for AI Agents
+## Core Engineering Philosophy
 
-1. **Check ready work**: `bd ready` shows unblocked issues
-2. **Claim your task atomically**: `bd update <id> --claim`
-3. **Work on it**: Implement, test, document
-4. **Discover new work?** Create linked issue:
-   - `bd create "Found bug" --description="Details about what was found" -p 1 --deps discovered-from:<parent-id>`
-5. **Complete**: `bd close <id> --reason "Done"`
+- Less is more. Keep implementations small and obvious.
+- Prefer simple data structures and explicit control flow.
+- Minimize dependencies and abstractions unless they clearly pay for themselves.
+- Fail fast, surface truthful health, and never fake success.
+- Prefer task specs, policies, hooks, and verification over repeated manual prompting.
+- Preserve scoped instruction files that carry local rules; do not replace them with global prompt text.
 
-### Auto-Sync
+## Critical Architecture Rules
 
-bd automatically syncs with git:
+1. `recoder.xyz` is the auth source of truth.
+2. Keep `user` and `users` as separate models.
+3. Validate cross-subdomain auth behavior with scripts before claiming completion.
+4. Never hardcode localhost for production links or callbacks.
+5. Billing and runtime health must fail safe when keys or dependencies are missing.
+6. Memory updates must be proposed with evidence before they become durable defaults.
 
-- Exports to `.beads/issues.jsonl` after changes (5s debounce)
-- Imports from JSONL when newer (e.g., after `git pull`)
-- No manual export/import needed!
-- On this repo's installed CLI (`bd 0.59.0`), auto-sync is the normal workflow.
-- If you need an explicit Dolt commit/push workflow, use `bd vc commit` or `bd dolt commit`/`bd dolt push`.
+## Working Rules for Agents
 
-### Important Rules
+1. Start from a task spec when possible: goal, scope, constraints, verification, approvals, artifacts.
+2. Prefer compiled instruction bundles and repeatable skills over ad hoc long prompts.
+3. Keep write scope narrow. Avoid concurrent write-heavy agents on the same files.
+4. Treat forbidden paths, auth, billing, and security-sensitive files as approval-gated unless the task says otherwise.
+5. Produce artifacts that let another agent or human audit what happened.
+6. When tools exist for hooks, memory, approvals, or A2A messaging, use them instead of inventing side channels.
 
-- ✅ Use bd for ALL task tracking
-- ✅ Always use `--json` flag for programmatic use
-- ✅ Link discovered work with `discovered-from` dependencies
-- ✅ Check `bd ready` before asking "what should I work on?"
-- ❌ Do NOT create markdown TODO lists
-- ❌ Do NOT use external issue trackers
-- ❌ Do NOT duplicate tracking systems
+## Verification Defaults
 
-For more details, see README.md and docs/QUICKSTART.md.
+Use the narrowest checks that prove the touched behavior. Prefer existing repo scripts when relevant.
 
-## Landing the Plane (Session Completion)
+Common verification entry points:
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+- `pnpm format`
+- `pnpm check-types`
+- `pnpm test`
+- `scripts/verify-phase14-runtime.sh`
+- `scripts/sso-logout-matrix.sh`
+- `scripts/verify-auth-email-reset-e2e.sh`
+- `scripts/verify-byok-e2e.sh`
+- `scripts/verify-cli-device-flow-e2e.sh`
+- `scripts/production-external-closeout.sh`
 
-**MANDATORY WORKFLOW:**
+## Coordination Surfaces
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd vc status   # optional visibility only; auto-sync handles JSONL import/export
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+- When A2A inbox tools are available, check for pending work before starting new work.
+- When gstack `/browse` is available, prefer it over ad hoc browser integrations.
+- Use runtime-specific hooks for deterministic policy enforcement, artifact capture, and delivery summaries.
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+## Landing The Plane
 
-<!-- END BEADS INTEGRATION -->
+When ending a work session with code changes:
+
+1. File follow-up `bd` issues for remaining work.
+2. Run the relevant quality gates.
+3. Update and close the claimed `bd` issue when done.
+4. `git pull --rebase`
+5. `bd vc status`
+6. `git push`
+7. Verify `git status` shows the branch is up to date with origin.
+
+Do not stop before the work is committed and pushed.

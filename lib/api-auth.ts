@@ -353,16 +353,14 @@ async function authenticateWithJWT(
 function detectProductType(request: NextRequest): string {
   const hostname = request.nextUrl.hostname;
   
-  if (hostname.includes('web.recoder.xyz')) return 'web';
   if (hostname.includes('chat.recoder.xyz')) return 'chat';
   if (hostname.includes('cli.recoder.xyz')) return 'cli';
   
   // Default based on path
   if (request.nextUrl.pathname.startsWith('/api/chat')) return 'chat';
-  if (request.nextUrl.pathname.startsWith('/api/web')) return 'web';
   if (request.nextUrl.pathname.startsWith('/api/cli')) return 'cli';
   
-  return 'web'; // default
+  return 'main'; // default
 }
 
 // Middleware wrapper for Next.js API routes

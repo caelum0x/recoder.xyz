@@ -1,0 +1,37 @@
+services:
+  agent-gateway:
+    build:
+      context: ..
+      dockerfile: docker-backend/Dockerfile
+    command: pnpm --filter @recoder/agent-gateway start
+    environment:
+      NODE_ENV: production
+      AGENT_GATEWAY_PORT: 4317
+    ports:
+      - "4317:4317"
+    depends_on:
+      - agent-os-postgres
+
+  agent-worker:
+    build:
+      context: ..
+      dockerfile: docker-backend/Dockerfile
+    command: pnpm --filter @recoder/agent-worker start
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - agent-os-postgres
+
+  agent-os-postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: recoder_agent_os
+      POSTGRES_USER: recoder
+      POSTGRES_PASSWORD: recoder_dev_only
+    ports:
+      - "54329:5432"
+    volumes:
+      - agent_os_postgres:/var/lib/postgresql/data
+
+volumes:
+  agent_os_postgres:

@@ -26,6 +26,7 @@ import {
 import { createTraceMiddleware } from './trace-context.middleware';
 import { createRateLimitMiddleware, type RateLimitConfig } from './rate-limiter.service';
 import { extractA2AIdentity } from './rbac.middleware';
+import { createSignedA2AIngressMiddleware } from './signed-ingress.middleware';
 
 // Sub-routers -- imported from their individual source files (not the barrel)
 import { taskLifecycleRouter } from './task-lifecycle.routes';
@@ -125,6 +126,7 @@ export function createA2AGateway(config?: GatewayConfig): Router {
   // -------------------------------------------------------------------------
   if (enableAuth) {
     router.use(extractA2AIdentity);
+    router.use(createSignedA2AIngressMiddleware());
     logger.debug('A2A gateway: auth identity extraction enabled');
   }
 

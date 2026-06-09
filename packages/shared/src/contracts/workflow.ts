@@ -1,7 +1,7 @@
 /**
  * Shared workflow contract version constants.
  *
- * All consumers (docker-backend, desktop, recoder-web) should
+ * All consumers (docker-backend, desktop, Spaces) should
  * import and reference these constants so parity checks can compare
  * versions instead of brittle string-matching.
  */

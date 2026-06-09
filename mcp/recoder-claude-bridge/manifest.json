@@ -1,0 +1,12 @@
+{
+  "id": "recoder-claude-bridge",
+  "kind": "runtime-bridge",
+  "runtime": "claude_code",
+  "instructionSources": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".claude/rules/*",
+    ".claude/skills/recoder-platform/*"
+  ],
+  "ownsCanonicalState": false
+}

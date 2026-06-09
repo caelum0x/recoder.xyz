@@ -10,9 +10,10 @@
       "details": {
         "sourceTaskId": "task_mox8d45i0006b0a3"
       },
-      "status": "pending",
+      "status": "expired",
       "createdAt": "2026-05-08T18:10:18.823Z",
-      "timeoutMs": 10000
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-03T16:20:10.035Z"
     }
   ],
   [
@@ -35,6 +36,654 @@
       "timeoutMs": 300000,
       "resolvedAt": "2026-05-08T18:10:25.262Z",
       "resolvedBy": "human-reviewer"
+    }
+  ],
+  [
+    "approval_290f0cfccb1544b3",
+    {
+      "approvalId": "approval_290f0cfccb1544b3",
+      "workspaceId": "ws_0460cf4aa5ba451f",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:20:10.035Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.346Z"
+    }
+  ],
+  [
+    "approval_8ddc21b457784026",
+    {
+      "approvalId": "approval_8ddc21b457784026",
+      "workspaceId": "ws_bb06380d06a34838",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:20:10.059Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.346Z"
+    }
+  ],
+  [
+    "approval_c86d70008fe242af",
+    {
+      "approvalId": "approval_c86d70008fe242af",
+      "workspaceId": "ws_6204c1e8855043e7",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:20:10.071Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.347Z"
+    }
+  ],
+  [
+    "approval_6305ce821d6a4d38",
+    {
+      "approvalId": "approval_6305ce821d6a4d38",
+      "workspaceId": "ws_ad7e8fd170934f6d",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:20:49.490Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.347Z"
+    }
+  ],
+  [
+    "approval_5da11fb96da2444c",
+    {
+      "approvalId": "approval_5da11fb96da2444c",
+      "workspaceId": "ws_fa7d48c086cb4798",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:20:49.516Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.347Z"
+    }
+  ],
+  [
+    "approval_8a8e7a0b9ff34cff",
+    {
+      "approvalId": "approval_8a8e7a0b9ff34cff",
+      "workspaceId": "ws_16988fa7e80f4c06",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:20:49.527Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.347Z"
+    }
+  ],
+  [
+    "approval_48207a2a9151483a",
+    {
+      "approvalId": "approval_48207a2a9151483a",
+      "workspaceId": "ws_f47737c6c61d4988",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:21:21.202Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.347Z"
+    }
+  ],
+  [
+    "approval_8922a38f4f724b8d",
+    {
+      "approvalId": "approval_8922a38f4f724b8d",
+      "workspaceId": "ws_d9c13d3347354fa1",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:21:21.227Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.347Z"
+    }
+  ],
+  [
+    "approval_6c84f05bd7b84f3e",
+    {
+      "approvalId": "approval_6c84f05bd7b84f3e",
+      "workspaceId": "ws_bd34f45ceb1948a4",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:21:21.237Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T16:30:57.347Z"
+    }
+  ],
+  [
+    "approval_cc581456f81e4a7a",
+    {
+      "approvalId": "approval_cc581456f81e4a7a",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mpya9hky0006a1b9"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:30:57.348Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-03T16:47:12.844Z"
+    }
+  ],
+  [
+    "approval_27d93855de3b47a3",
+    {
+      "approvalId": "approval_27d93855de3b47a3",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mpyauea4000667f2"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T16:47:12.845Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-03T17:06:10.564Z"
+    }
+  ],
+  [
+    "approval_ed72a36f53e746c2",
+    {
+      "approvalId": "approval_ed72a36f53e746c2",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mpybis5g0006bd9a"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:10.565Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-03T17:09:26.014Z"
+    }
+  ],
+  [
+    "approval_f09c24a7c2fe49b6",
+    {
+      "approvalId": "approval_f09c24a7c2fe49b6",
+      "workspaceId": "ws_0d8dc70fa2f441f5",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:10.650Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.414Z"
+    }
+  ],
+  [
+    "approval_a5e00e1685534bea",
+    {
+      "approvalId": "approval_a5e00e1685534bea",
+      "workspaceId": "ws_4902ccff7497402c",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:10.834Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.415Z"
+    }
+  ],
+  [
+    "approval_e74a44ba709a4819",
+    {
+      "approvalId": "approval_e74a44ba709a4819",
+      "workspaceId": "ws_bbd2508d1e314ac2",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:10.949Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.415Z"
+    }
+  ],
+  [
+    "approval_1d04a7f9ce264d95",
+    {
+      "approvalId": "approval_1d04a7f9ce264d95",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mpybitbd000658a2"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:12.073Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-03T17:09:26.015Z"
+    }
+  ],
+  [
+    "approval_6714926ea04c46ac",
+    {
+      "approvalId": "approval_6714926ea04c46ac",
+      "workspaceId": "ws_69bb2b92c01e4af4",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:12.350Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.415Z"
+    }
+  ],
+  [
+    "approval_8c4cde1748b641ca",
+    {
+      "approvalId": "approval_8c4cde1748b641ca",
+      "workspaceId": "ws_36b49b475d824041",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:12.409Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.416Z"
+    }
+  ],
+  [
+    "approval_6689a3214bb448a9",
+    {
+      "approvalId": "approval_6689a3214bb448a9",
+      "workspaceId": "ws_132dcbd8209a4895",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:06:12.429Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.416Z"
+    }
+  ],
+  [
+    "approval_b100e67ff7a943ed",
+    {
+      "approvalId": "approval_b100e67ff7a943ed",
+      "workspaceId": "ws_0f0b06e1e2884bd3",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review the current task",
+        "channelId": "a8e6644f-41f6-4a82-acf2-a232fffb2705",
+        "threadId": "9311c9ad-8a88-4421-bcc4-ddde647b46c7",
+        "sourceTaskId": "task_mpybix2j0000857f",
+        "handoffType": "delegate"
+      },
+      "status": "granted",
+      "createdAt": "2026-06-03T17:06:16.940Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:06:16.943Z",
+      "resolvedBy": "human-reviewer"
+    }
+  ],
+  [
+    "approval_a7f5d3e1c94d4294",
+    {
+      "approvalId": "approval_a7f5d3e1c94d4294",
+      "workspaceId": "ws_c82e6ddaf52a44b4",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review the current task",
+        "channelId": "ab8c9545-d797-494c-ad24-16c7cff2bc85",
+        "threadId": "b9610fee-df8f-40f7-904f-a69f4db37573",
+        "sourceTaskId": "task_mpybiy5x00000cd2",
+        "handoffType": "delegate"
+      },
+      "status": "granted",
+      "createdAt": "2026-06-03T17:06:18.358Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:06:18.360Z",
+      "resolvedBy": "human-reviewer"
+    }
+  ],
+  [
+    "approval_211241d9324045a1",
+    {
+      "approvalId": "approval_211241d9324045a1",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mpybmyym00065427"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:09:26.015Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-03T17:18:14.416Z"
+    }
+  ],
+  [
+    "approval_08f360073c1d48ba",
+    {
+      "approvalId": "approval_08f360073c1d48ba",
+      "workspaceId": "ws_049d63bb0dbd4548",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:09:26.051Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.416Z"
+    }
+  ],
+  [
+    "approval_32ad84971ed84b6e",
+    {
+      "approvalId": "approval_32ad84971ed84b6e",
+      "workspaceId": "ws_4f72012752974f6f",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:09:26.077Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.416Z"
+    }
+  ],
+  [
+    "approval_b2e82fdaf33f46ea",
+    {
+      "approvalId": "approval_b2e82fdaf33f46ea",
+      "workspaceId": "ws_67f7e27856b945c7",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:09:26.090Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:14.417Z"
+    }
+  ],
+  [
+    "approval_2000cfc45be84588",
+    {
+      "approvalId": "approval_2000cfc45be84588",
+      "workspaceId": "ws_9829e2fe56654ed4",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review the current task",
+        "channelId": "c212c7dd-550c-47ba-bbc4-afcdab707a15",
+        "threadId": "e4efa56f-3aab-421c-b6fa-09e135c9169f",
+        "sourceTaskId": "task_mpybn1gk00002420",
+        "handoffType": "delegate"
+      },
+      "status": "granted",
+      "createdAt": "2026-06-03T17:09:29.253Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:09:29.254Z",
+      "resolvedBy": "human-reviewer"
+    }
+  ],
+  [
+    "approval_d9cad4c59e4f4551",
+    {
+      "approvalId": "approval_d9cad4c59e4f4551",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mpybyaoe0006b555"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:18:14.417Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-06T18:44:31.795Z"
+    }
+  ],
+  [
+    "approval_738a84ae9da149c5",
+    {
+      "approvalId": "approval_738a84ae9da149c5",
+      "workspaceId": "ws_52ba04fb72a646a3",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:18:14.449Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-06T18:44:31.796Z"
+    }
+  ],
+  [
+    "approval_24a3c46585a743dc",
+    {
+      "approvalId": "approval_24a3c46585a743dc",
+      "workspaceId": "ws_382689adc02a4e27",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:18:14.486Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-06T18:44:31.797Z"
+    }
+  ],
+  [
+    "approval_48db3f83765c4ffe",
+    {
+      "approvalId": "approval_48db3f83765c4ffe",
+      "workspaceId": "ws_922efdd146cc45dd",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-03T17:18:14.508Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-06T18:44:31.797Z"
+    }
+  ],
+  [
+    "approval_56504f241e73422e",
+    {
+      "approvalId": "approval_56504f241e73422e",
+      "workspaceId": "ws_a654c3885a074eea",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review the current task",
+        "channelId": "70b45684-486c-4dc4-96d2-81beaaf6f37c",
+        "threadId": "6ae2a639-d6c4-45f3-a9b3-66d6c71b2000",
+        "sourceTaskId": "task_mpybyd1e00006157",
+        "handoffType": "delegate"
+      },
+      "status": "granted",
+      "createdAt": "2026-06-03T17:18:17.476Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-03T17:18:17.477Z",
+      "resolvedBy": "human-reviewer"
+    }
+  ],
+  [
+    "approval_fc66e4aa33974dca",
+    {
+      "approvalId": "approval_fc66e4aa33974dca",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mq2pctki000893a8"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-06T18:44:31.797Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-06T18:46:42.179Z"
+    }
+  ],
+  [
+    "approval_55a2d04268724ed2",
+    {
+      "approvalId": "approval_55a2d04268724ed2",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mq2pfm6a0008fd9a"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-06T18:46:42.180Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-06T18:52:23.743Z"
+    }
+  ],
+  [
+    "approval_01ce246b16b646f8",
+    {
+      "approvalId": "approval_01ce246b16b646f8",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mq2pmxq600081434"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-06T18:52:23.744Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-06T18:59:06.716Z"
+    }
+  ],
+  [
+    "approval_d4ae8386d3914e8d",
+    {
+      "approvalId": "approval_d4ae8386d3914e8d",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mq2pvknv0008d1a8"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-06T18:59:06.717Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-06T19:03:03.807Z"
+    }
+  ],
+  [
+    "approval_ff74e1573c124900",
+    {
+      "approvalId": "approval_ff74e1573c124900",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mq2q0nlr0008c8bd"
+      },
+      "status": "expired",
+      "createdAt": "2026-06-06T19:03:03.809Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-06T19:03:44.567Z"
+    }
+  ],
+  [
+    "approval_af6d705d8da749a8",
+    {
+      "approvalId": "approval_af6d705d8da749a8",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mq2q1j1y00082d18"
+      },
+      "status": "pending",
+      "createdAt": "2026-06-06T19:03:44.567Z",
+      "timeoutMs": 10000
     }
   ]
 ]

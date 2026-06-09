@@ -1,0 +1,43 @@
+licenses:
+  - componentId: beads
+    license: unknown
+    source: manual
+  - componentId: git-nexus
+    license: MIT
+    source: declared
+  - componentId: pal
+    license: MIT
+    source: declared
+  - componentId: mcp
+    license: MIT
+    source: declared
+  - componentId: a2a
+    license: MIT
+    source: declared
+  - componentId: claude-code
+    license: proprietary
+    source: manual
+  - componentId: codex
+    license: proprietary
+    source: manual
+  - componentId: recoder-code
+    license: proprietary
+    source: manual
+  - componentId: playwright-mcp
+    license: unknown
+    source: manual
+  - componentId: daytona
+    license: unknown
+    source: manual
+  - componentId: e2b
+    license: unknown
+    source: manual
+  - componentId: mem0
+    license: unknown
+    source: manual
+  - componentId: openziti-zrok
+    license: unknown
+    source: manual
+  - componentId: observability
+    license: mixed
+    source: manual

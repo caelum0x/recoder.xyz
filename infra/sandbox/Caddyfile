@@ -1,0 +1,3 @@
+:80 {
+  respond "recoder sandbox proxy placeholder" 200
+}

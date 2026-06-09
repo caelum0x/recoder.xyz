@@ -22,6 +22,8 @@ export {
   TASK_STATES,
   TERMINAL_TASK_STATES,
   isTerminalState,
+  TaskArtifactTypeEnum,
+  TASK_ARTIFACT_TYPES,
   ALLOWED_STATE_TRANSITIONS,
   isValidTransition,
   transitionTaskEnvelope,
@@ -31,12 +33,28 @@ export {
   type TaskConnectorInfo,
   type TaskAgentRef,
   type TaskResult,
+  type TaskArtifactType,
   type TaskArtifact,
   type TaskPolicySnapshot,
   type TaskErrorInfo,
   type TaskEnvelope,
   type CreateTaskEnvelopeInput,
 } from './task-envelope';
+
+export {
+  type AgentCard,
+  type AgentCardSecurityScheme,
+  type AgentCardSkill,
+} from './agent-card';
+
+export {
+  type A2AMessage,
+  type MessagePart,
+} from './message-part';
+
+export {
+  type ArtifactPart,
+} from './artifact-part';
 
 export {
   AUDIT_EVENT_VERSION,
@@ -72,3 +90,13 @@ export {
   type A2AErrorCodeMeta,
   type A2AError,
 } from './error-taxonomy';
+
+export {
+  SIGNED_ENVELOPE_VERSION,
+  createSignedEnvelope,
+  isSignedEnvelope,
+  type SignedEnvelopeAlgorithm,
+  type SignedEnvelopeSignature,
+  type SignedEnvelope,
+  type CreateSignedEnvelopeInput,
+} from './signed-envelope';

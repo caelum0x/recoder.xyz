@@ -95,6 +95,46 @@ describe('TaskDetailDialog', () => {
           },
         },
         review: null,
+        instructions: {
+          sharedGoal: 'Compile agent instructions from repo policy',
+          compilerVersion: '0.1.0',
+          compiledAt: '2026-06-06T00:00:00.000Z',
+          promptLength: 1280,
+          artifactPath: '.recoder/artifacts/instruction-bundle-task-123.json',
+          verificationCommands: ['pnpm test', 'pnpm check-types'],
+          sourceFiles: [
+            { path: 'AGENTS.md', sha: 'abc123' },
+            { path: '.codex/AGENTS.md', sha: 'def456' },
+          ],
+          approvalGates: [
+            {
+              approvalId: 'approval-123',
+              title: 'Push approval',
+              status: 'pending',
+              requiredAt: 'before_push',
+              reason: 'Push approval required',
+            },
+          ],
+          memoryRefs: [
+            { memoryId: 'memory-1', scope: 'repo', title: 'Use pnpm test' },
+          ],
+          forbiddenActions: ['Do not modify .env*'],
+        },
+        memoryCandidates: [
+          {
+            candidateId: 'memory_candidate_1',
+            scope: 'repo',
+            title: 'recoder-web build command',
+            body: 'Use `pnpm -F recoder-web build` for production route validation.',
+            status: 'approved',
+            proposedBy: 'codex',
+            reviewedBy: 'pm-agent',
+            reviewReason: 'Verified against task evidence',
+            approvedMemoryId: 'mem_approved_1',
+            createdAt: '2026-06-06T00:00:00.000Z',
+            updatedAt: '2026-06-06T00:05:00.000Z',
+          },
+        ],
         runtime: {
           filesChanged: [],
           artifacts: [],
@@ -125,6 +165,16 @@ describe('TaskDetailDialog', () => {
     expect(screen.getByText('#7')).toBeTruthy();
     expect(screen.getByText('approval-123')).toBeTruthy();
     expect(screen.getByText('signed')).toBeTruthy();
+    expect(screen.getByText('Instruction Bundle')).toBeTruthy();
+    expect(screen.getByText('Compile agent instructions from repo policy')).toBeTruthy();
+    expect(screen.getByText('.recoder/artifacts/instruction-bundle-task-123.json')).toBeTruthy();
+    expect(screen.getByText('AGENTS.md')).toBeTruthy();
+    expect(screen.getByText('repo:Use pnpm test')).toBeTruthy();
+    expect(screen.getByText('Do not modify .env*')).toBeTruthy();
+    expect(screen.getByText('Memory Candidates')).toBeTruthy();
+    expect(screen.getByText('recoder-web build command')).toBeTruthy();
+    expect(screen.getByText('Use `pnpm -F recoder-web build` for production route validation.')).toBeTruthy();
+    expect(screen.getByText(/Approved memory: mem_approved_1/)).toBeTruthy();
     expect(screen.getAllByText(/preview\.recoder\.xyz/).length).toBeGreaterThan(0);
     expect(screen.getByText('Pull request attached')).toBeTruthy();
     expect(screen.getByText('Refresh protected preview')).toBeTruthy();

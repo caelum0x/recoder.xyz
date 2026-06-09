@@ -64,6 +64,7 @@ const capability_matcher_service_1 = require("./capability-matcher.service");
 const multi_dispatch_service_1 = require("./multi-dispatch.service");
 const approval_gate_service_1 = require("./approval-gate.service");
 const a2a_event_bus_1 = require("./a2a-event-bus");
+const preview_deployment_service_1 = require("../edge/preview-deployment.service");
 const task_lifecycle_middleware_1 = require("./task-lifecycle.middleware");
 const logger_1 = require("../logger");
 const memory_store_1 = require("./memory-store");
@@ -155,6 +156,9 @@ function parseTaskArtifacts(value) {
         });
     }
     return artifacts;
+}
+function buildPreviewArtifactContent(record) {
+    return JSON.stringify(record, null, 2);
 }
 function emitReviewLifecycleEvents(input) {
     const review = readRecord(input.metadataPatch.handoff);
@@ -697,6 +701,173 @@ exports.taskLifecycleRouter.post('/:taskId/artifacts', (req, res) => {
         sendError(res, 500, (0, a2a_1.buildA2AError)({
             code: a2a_1.A2AErrorCodeEnum.InternalError,
             message: 'Internal server error while appending task artifacts',
+        }));
+    }
+});
+// ---------------------------------------------------------------------------
+// POST /:taskId/preview-deploy -- Attach a preview deployment artifact
+// ---------------------------------------------------------------------------
+exports.taskLifecycleRouter.post('/:taskId/preview-deploy', async (req, res) => {
+    try {
+        const { taskId } = req.params;
+        const taskResult = (0, task_lifecycle_service_1.getTaskLifecycleService)().getTask(taskId);
+        if (!taskResult.ok) {
+            sendError(res, taskResult.httpStatus, taskResult.error);
+            return;
+        }
+        const body = typeof req.body === 'string'
+            ? (() => {
+                try {
+                    return JSON.parse(req.body);
+                }
+                catch {
+                    return null;
+                }
+            })()
+            : req.body;
+        if (!body || typeof body !== 'object') {
+            sendError(res, 400, (0, a2a_1.buildA2AError)({
+                code: a2a_1.A2AErrorCodeEnum.InvalidEnvelope,
+                message: 'Invalid JSON body',
+            }));
+            return;
+        }
+        const projectId = typeof body.projectId === 'string' && body.projectId.trim().length > 0
+            ? body.projectId.trim()
+            : null;
+        if (!projectId) {
+            sendError(res, 400, (0, a2a_1.buildA2AError)({
+                code: a2a_1.A2AErrorCodeEnum.MissingEnvelopeField,
+                message: 'projectId is required',
+            }));
+            return;
+        }
+        const task = taskResult.data;
+        const createdBy = typeof body.createdBy === 'string' && body.createdBy.trim().length > 0
+            ? body.createdBy.trim()
+            : task.assignee.agent_id;
+        const protectionMode = body.protectionMode === 'public' || body.protectionMode === 'private' || body.protectionMode === 'signed'
+            ? body.protectionMode
+            : undefined;
+        const previewDeployment = (0, preview_deployment_service_1.getPreviewDeploymentService)().create({
+            projectId,
+            taskId: task.id,
+            workspaceId: task.workspace_id,
+            threadId: task.thread_id,
+            traceId: task.trace_id,
+            branchName: typeof body.branchName === 'string' ? body.branchName : undefined,
+            prUrl: typeof body.prUrl === 'string' ? body.prUrl : undefined,
+            prNumber: typeof body.prNumber === 'number' ? body.prNumber : undefined,
+            protectionMode,
+            createdBy,
+            metadata: readRecord(body.metadata),
+        });
+        const previewLink = {
+            url: previewDeployment.protectedPreviewUrl,
+            label: 'Protected preview deployment',
+            source: 'preview-deploy',
+            metadata: {
+                deploymentId: previewDeployment.id,
+                projectId: previewDeployment.projectId,
+                basePreviewUrl: previewDeployment.basePreviewUrl,
+                edgeHost: previewDeployment.edgeHost,
+                protectionMode: previewDeployment.protectionMode,
+                ...(typeof previewDeployment.prNumber === 'number' ? { prNumber: previewDeployment.prNumber } : {}),
+                ...(previewDeployment.prUrl ? { prUrl: previewDeployment.prUrl } : {}),
+                ...(previewDeployment.branchName ? { branchName: previewDeployment.branchName } : {}),
+            },
+        };
+        const previewUpdate = (0, task_lifecycle_service_1.getTaskLifecycleService)().appendTaskPreview(taskId, {
+            preview: [previewLink],
+            triggeredBy: createdBy,
+            reason: 'Preview deployment attached',
+        });
+        if (!previewUpdate.ok) {
+            sendError(res, previewUpdate.httpStatus, previewUpdate.error);
+            return;
+        }
+        const artifact = {
+            key: previewDeployment.artifactKey,
+            artifact_type: 'custom',
+            mime_type: 'application/json',
+            content: buildPreviewArtifactContent({
+                type: 'deployment_preview',
+                deploymentId: previewDeployment.id,
+                projectId: previewDeployment.projectId,
+                basePreviewUrl: previewDeployment.basePreviewUrl,
+                protectedPreviewUrl: previewDeployment.protectedPreviewUrl,
+                protectionMode: previewDeployment.protectionMode,
+                edgeHost: previewDeployment.edgeHost,
+                prUrl: previewDeployment.prUrl || null,
+                prNumber: previewDeployment.prNumber ?? null,
+                branchName: previewDeployment.branchName || null,
+            }),
+            path: `.recoder/artifacts/${previewDeployment.id}.json`,
+            metadata: {
+                type: 'deployment_preview',
+                deploymentId: previewDeployment.id,
+                previewUrl: previewDeployment.protectedPreviewUrl,
+                basePreviewUrl: previewDeployment.basePreviewUrl,
+                protectionMode: previewDeployment.protectionMode,
+                edgeHost: previewDeployment.edgeHost,
+            },
+        };
+        const artifactUpdate = (0, task_lifecycle_service_1.getTaskLifecycleService)().appendTaskArtifacts(taskId, {
+            artifacts: [artifact],
+            triggeredBy: createdBy,
+            reason: 'Preview deployment artifact attached',
+        });
+        if (!artifactUpdate.ok) {
+            sendError(res, artifactUpdate.httpStatus, artifactUpdate.error);
+            return;
+        }
+        const metadataUpdate = (0, task_lifecycle_service_1.getTaskLifecycleService)().updateTaskMetadata(taskId, {
+            metadataPatch: {
+                deploymentPreview: {
+                    deploymentId: previewDeployment.id,
+                    projectId: previewDeployment.projectId,
+                    basePreviewUrl: previewDeployment.basePreviewUrl,
+                    protectedPreviewUrl: previewDeployment.protectedPreviewUrl,
+                    protectionMode: previewDeployment.protectionMode,
+                    edgeHost: previewDeployment.edgeHost,
+                    ...(typeof previewDeployment.prNumber === 'number' ? { prNumber: previewDeployment.prNumber } : {}),
+                    ...(previewDeployment.prUrl ? { prUrl: previewDeployment.prUrl } : {}),
+                    ...(previewDeployment.branchName ? { branchName: previewDeployment.branchName } : {}),
+                },
+            },
+            triggeredBy: createdBy,
+            reason: 'Preview deployment registered',
+        });
+        if (!metadataUpdate.ok) {
+            sendError(res, metadataUpdate.httpStatus, metadataUpdate.error);
+            return;
+        }
+        (0, a2a_event_bus_1.getA2AEventBus)().publish({
+            id: `evt_${Date.now()}_preview_${taskId}`,
+            type: a2a_event_bus_1.A2AEventType.ArtifactAttached,
+            timestamp: new Date().toISOString(),
+            taskId,
+            workspaceId: task.workspace_id,
+            data: {
+                taskId,
+                deploymentId: previewDeployment.id,
+                previewUrl: previewDeployment.protectedPreviewUrl,
+                basePreviewUrl: previewDeployment.basePreviewUrl,
+                edgeHost: previewDeployment.edgeHost,
+                protectionMode: previewDeployment.protectionMode,
+                triggeredBy: createdBy,
+            },
+        });
+        sendSuccess(res, {
+            task: metadataUpdate.data,
+            previewDeployment,
+        }, 201);
+    }
+    catch (err) {
+        logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/preview-deploy');
+        sendError(res, 500, (0, a2a_1.buildA2AError)({
+            code: a2a_1.A2AErrorCodeEnum.InternalError,
+            message: 'Internal server error while attaching preview deployment',
         }));
     }
 });

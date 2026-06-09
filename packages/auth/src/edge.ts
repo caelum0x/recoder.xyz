@@ -24,7 +24,6 @@ export const COOKIE_DOMAIN = ".recoder.xyz";
  */
 export const SURFACE_ORIGINS = {
   app: "https://recoder.xyz",
-  web: "https://web.recoder.xyz",
   agents: "https://agents.recoder.xyz",
   frontend: "https://frontend.recoder.xyz", // legacy alias for agents
   agency: "https://agency.recoder.xyz",
