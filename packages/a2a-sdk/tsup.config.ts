@@ -14,6 +14,7 @@ export default defineConfig([
 			"src/policy.ts",
 			"src/instruction-bundle.ts",
 			"src/validation.ts",
+			"src/ingress-contract/index.ts",
 		],
 		format: ["cjs", "esm"],
 		dts: true,

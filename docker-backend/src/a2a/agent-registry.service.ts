@@ -487,6 +487,20 @@ export class AgentRegistryService {
     return true;
   }
 
+  /**
+   * Test/ops helper: force an agent to read as offline. Clears its heartbeat
+   * tracker record and backdates its stored heartbeat one timeout window past
+   * the boundary so getHealth() reports offline regardless of clock skew.
+   */
+  forceOffline(agentId: string): boolean {
+    const agent = this.registry.get(agentId);
+    if (!agent) return false;
+    getHeartbeatTracker().removeAgent(agentId);
+    const staleMs = Date.now() - HEARTBEAT_TIMEOUT_MS - 1000;
+    this.heartbeats.set(agentId, new Date(staleMs).toISOString());
+    return true;
+  }
+
   getHealth(agentId: string): AgentHeartbeat {
     const tracker = getHeartbeatTracker();
     const trackerRecord = tracker.getRecord(agentId);

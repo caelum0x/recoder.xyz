@@ -67,6 +67,11 @@
 			"types": "./dist/bridge-contract.d.ts",
 			"import": "./dist/bridge-contract.mjs",
 			"require": "./dist/bridge-contract.js"
+		},
+		"./ingress": {
+			"types": "./dist/ingress-contract/index.d.ts",
+			"import": "./dist/ingress-contract/index.mjs",
+			"require": "./dist/ingress-contract/index.js"
 		}
 	},
 	"files": ["dist"],

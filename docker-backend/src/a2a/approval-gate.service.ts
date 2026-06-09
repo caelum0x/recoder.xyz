@@ -32,7 +32,7 @@ export interface CreateApprovalInput {
 
 type ApprovalCallback = (approval: ApprovalRequest) => void;
 
-function extractApprovalTaskId(request: { details: Record<string, unknown> }): string | null {
+export function extractApprovalTaskId(request: { details: Record<string, unknown> }): string | null {
   const sourceTaskId =
     typeof request.details.sourceTaskId === 'string'
       ? request.details.sourceTaskId

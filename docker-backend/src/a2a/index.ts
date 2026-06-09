@@ -44,6 +44,29 @@ export {
   type RedisTaskStoreOptions,
 } from './redis-task-store';
 
+// Task timeline read-model
+export {
+  buildTaskTimeline,
+  type TimelineEvent,
+  type TimelineEventType,
+  type TimelineEventStatus,
+  type TaskTimeline,
+} from './task-timeline.service';
+
+// Run history read-model
+export {
+  buildRunHistory,
+  type RunHistory,
+  type RunHistoryEntry,
+  type RunHistoryFilter,
+} from './run-history.service';
+
+// Assignment router (capability/workspace-aware candidate selection)
+export {
+  getAssignmentRouterService,
+  type AssignmentRouterService,
+} from './assignment-router.service';
+
 // Routes
 export { taskLifecycleRouter } from './task-lifecycle.routes';
 
