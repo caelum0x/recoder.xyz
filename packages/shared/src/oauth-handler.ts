@@ -101,7 +101,7 @@ export class OAuthHandler extends EventEmitter {
     
     // Default redirect URIs per platform
     const defaultRedirectUris = {
-      web: `${process.env['RECODER_WEB_URL'] || 'http://localhost:3000'}/auth/callback/${provider}`,
+      spaces: `${process.env['RECODER_SPACES_URL'] || 'http://localhost:3000/dashboard/spaces'}/auth/callback/${provider}`,
       cli: `${process.env['RECODER_API_URL'] || 'http://localhost:3100'}/oauth/callback/${provider}`,
       mobile: `recoder://oauth/callback/${provider}`,
       desktop: `recoder://oauth/callback/${provider}`,
@@ -373,7 +373,7 @@ export class OAuthHandler extends EventEmitter {
    */
   private getRedirectUri(provider: string, platform: string): string {
     const defaultRedirectUris = {
-      web: `${process.env['RECODER_WEB_URL'] || 'http://localhost:3000'}/auth/callback/${provider}`,
+      spaces: `${process.env['RECODER_SPACES_URL'] || 'http://localhost:3000/dashboard/spaces'}/auth/callback/${provider}`,
       cli: `${process.env['RECODER_API_URL'] || 'http://localhost:3100'}/oauth/callback/${provider}`,
       mobile: `recoder://oauth/callback/${provider}`,
       desktop: `recoder://oauth/callback/${provider}`,

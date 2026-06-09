@@ -1,0 +1,6 @@
+name: recoder-agent-os-full-oss
+
+include:
+  - ../../infra/docker-compose.agent-os.yml
+  - ../../infra/docker-compose.observability.yml
+  - ../../infra/docker-compose.sandbox.yml

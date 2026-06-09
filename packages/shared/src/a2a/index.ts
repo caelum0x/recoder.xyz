@@ -2,7 +2,7 @@
  * @module @recoder/shared/a2a
  *
  * Shared A2A (Agent-to-Agent) protocol types, enums, and utilities.
- * Used by docker-backend, recoder-web, and MCP packages.
+ * Used by docker-backend, Spaces, and MCP packages.
  */
 
 // ---------------------------------------------------------------------------

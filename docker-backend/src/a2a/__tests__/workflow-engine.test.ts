@@ -8,6 +8,32 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const workflowInstructionMocks = vi.hoisted(() => {
+  const compileInstructionBundleForTask = vi.fn(() => ({
+    shared_goal: 'Process workflow task',
+    agent_specific_prompt: 'Read AGENTS.md and process workflow task.',
+    system_context_refs: [{ ref_id: 'AGENTS.md', kind: 'agents_md', path: 'AGENTS.md', sha: 'abc123' }],
+    acceptance_criteria: ['Process workflow task'],
+    verification_commands: ['pnpm test'],
+    forbidden_actions: ['Do not edit .env*'],
+    approval_gates: [],
+    memory_used: [],
+    provenance: {
+      source_files: [{ path: 'AGENTS.md', sha: 'abc123' }],
+      compiled_at: '2026-06-06T00:00:00.000Z',
+      compiler_version: '0.1.0',
+    },
+  }));
+
+  return {
+    compileInstructionBundleForTask,
+  };
+});
+
+vi.mock('../compiled-instructions', () => ({
+  compileInstructionBundleForTask: workflowInstructionMocks.compileInstructionBundleForTask,
+}));
+
 import {
   WorkflowEngine,
   getWorkflowEngine,
@@ -118,6 +144,29 @@ describe('Workflow execution', () => {
     expect(result.stepResults).toHaveLength(1);
     expect(result.stepResults[0].status).toBe('completed');
     expect(result.finalOutput).toBe('Result: Process: hello');
+  });
+
+  it('should build a task envelope and compiled instruction bundle for structured task executors', async () => {
+    engine.registerWorkflow(makeWorkflow());
+
+    const structuredExecutor = vi.fn(async (request: any) => {
+      expect(request.workflowId).toBe('wf-1');
+      expect(request.stepId).toBe('task-1');
+      expect(request.envelope.id).toMatch(/^wftask_/);
+      expect(request.envelope.payload).toMatchObject({ kind: 'text', text: 'Process: hello' });
+      expect(request.instructionBundle).toMatchObject({
+        shared_goal: 'Process workflow task',
+        agent_specific_prompt: 'Read AGENTS.md and process workflow task.',
+      });
+      return `Structured: ${request.instructionBundle.agent_specific_prompt}`;
+    });
+    (structuredExecutor as any).__agentOsStructured = true;
+
+    const result = await engine.execute('wf-1', 'hello', structuredExecutor as any);
+
+    expect(structuredExecutor).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('completed');
+    expect(result.finalOutput).toBe('Structured: Read AGENTS.md and process workflow task.');
   });
 
   // 5. Execute multi-task workflow (output chains)

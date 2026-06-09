@@ -1,0 +1,69 @@
+owners:
+  agent-os:
+    label: Agent OS Platform
+    paths:
+      - packages/agent-os
+      - packages/agent-instructions
+      - packages/agent-policy
+      - packages/agent-events
+      - packages/agent-mcp
+      - packages/a2a-sdk
+      - apps/agent-gateway
+      - apps/agent-worker
+      - docker-backend/src/agent-os
+  agents:
+    label: Agents Cockpit
+    paths:
+      - recoder-agents
+  pm:
+    label: PM Control Plane
+    paths:
+      - recoder-pm
+  agency:
+    label: Agency Delivery
+    paths:
+      - recoder-agency
+  runtime:
+    label: Runtime and Sandbox
+    paths:
+      - docker-backend/src/a2a
+      - packages/agent-runtimes
+      - packages/agent-sandbox
+      - daytona-projects
+  infra:
+    label: Infrastructure
+    paths:
+      - infra
+      - nginx
+      - monitoring
+      - .github/workflows
+      - .husky
+      - .devcontainer
+  instruction:
+    label: Instruction and Skills
+    paths:
+      - AGENTS.md
+      - CLAUDE.md
+      - .claude
+      - .codex
+      - .mcp.json
+      - .recoderhints
+      - skills
+      - recoder-skill
+  repo-intelligence:
+    label: Repo Intelligence
+    paths:
+      - shared
+      - packages/shared
+      - internal-packages
+      - lib
+      - tools
+      - turbo
+      - config
+      - tests
+  release:
+    label: Release and Packaging
+    paths:
+      - homebrew-recoder
+      - .expo
+      - .env.desktop-release.example

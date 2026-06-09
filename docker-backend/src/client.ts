@@ -1,6 +1,6 @@
 /**
  * Docker Backend Client SDK
- * Use this in recoder-web to connect to Docker backend
+ * Use this from Recoder Spaces surfaces to connect to Docker backend.
  */
 
 export interface DockerClientConfig {

@@ -58,6 +58,8 @@ export {
   TASK_STATES,
   TERMINAL_TASK_STATES,
   isTerminalState,
+  TaskArtifactTypeEnum,
+  TASK_ARTIFACT_TYPES,
   ALLOWED_STATE_TRANSITIONS,
   isValidTransition,
   transitionTaskEnvelope,
@@ -67,6 +69,7 @@ export {
   type TaskConnectorInfo,
   type TaskAgentRef,
   type TaskResult,
+  type TaskArtifactType,
   type TaskArtifact,
   type TaskPolicySnapshot,
   type TaskErrorInfo,
@@ -105,7 +108,104 @@ export {
   type A2AErrorCode,
   type A2AErrorCodeMeta,
   type A2AError,
+
+  // -- signed-envelope --------------------------------------------------------
+  SIGNED_ENVELOPE_VERSION,
+  createSignedEnvelope,
+  isSignedEnvelope,
+  type SignedEnvelopeAlgorithm,
+  type SignedEnvelopeSignature,
+  type SignedEnvelope,
+  type CreateSignedEnvelopeInput,
 } from './schemas';
+
+// ---------------------------------------------------------------------------
+// Canonical Agent OS contracts
+// ---------------------------------------------------------------------------
+
+export {
+  AgentVendorSurfaceEnum,
+  AGENT_VENDOR_SURFACES,
+  AgentRuntimeKindEnum,
+  AGENT_RUNTIME_KINDS,
+  AgentCapabilityKindEnum,
+  AGENT_CAPABILITY_KINDS,
+  ToolCapabilityModeEnum,
+  TOOL_CAPABILITY_MODES,
+  MemoryScopeEnum,
+  MEMORY_SCOPES,
+  createAgentProfile,
+  type AgentVendorSurface,
+  type AgentRuntimeKind,
+  type AgentCapabilityKind,
+  type ToolCapabilityMode,
+  type MemoryScope,
+  type AgentCapability,
+  type ToolCapability,
+  type AgentProfile,
+  type CreateAgentProfileInput,
+} from './agent-profile';
+
+export {
+  TaskIntentEnum,
+  TASK_INTENTS,
+  isTaskIntent,
+  type TaskIntent,
+} from './task-intent';
+
+export {
+  PermissionEffectEnum,
+  PERMISSION_EFFECTS,
+  ToolPermissionModeEnum,
+  TOOL_PERMISSION_MODES,
+  ApprovalRequirementAtEnum,
+  APPROVAL_REQUIREMENT_TIMINGS,
+  ApprovalDecisionEnum,
+  ApprovalGateStatusEnum,
+  APPROVAL_GATE_STATUSES,
+  ApprovalPolicyModeEnum,
+  APPROVAL_POLICY_MODES,
+  CwdPolicyModeEnum,
+  CWD_POLICY_MODES,
+  RuntimeHealthStatusEnum,
+  RUNTIME_HEALTH_STATUSES,
+  type PermissionEffect,
+  type ToolPermissionMode,
+  type ApprovalRequirementAt,
+  type ApprovalDecision,
+  type ApprovalGateStatus,
+  type ApprovalPolicyMode,
+  type CwdPolicyMode,
+  type RuntimeHealthStatus,
+  type PathPermissionRule,
+  type ToolPermissionRule,
+  type AgentPermissionPolicy,
+  type ApprovalRule,
+  type ApprovalPolicy,
+  type CwdPolicy,
+  type RuntimeHealth,
+  type ApprovalGate,
+} from './policy';
+
+export {
+  InstructionSourceKindEnum,
+  INSTRUCTION_SOURCE_KINDS,
+  MemoryReferenceScopeEnum,
+  MEMORY_REFERENCE_SCOPES,
+  createInstructionBundle,
+  type InstructionSourceKind,
+  type MemoryReferenceScope,
+  type InstructionSourceRef,
+  type MemoryRef,
+  type InstructionProvenanceSourceFile,
+  type InstructionBundleProvenance,
+  type InstructionBundle,
+  type CreateInstructionBundleInput,
+} from './instruction-bundle';
+
+export * from './client';
+export * from './server';
+export * from './signing';
 
 // ---------------------------------------------------------------------------
 // SDK helpers: State mapping
@@ -200,6 +300,12 @@ export {
   assertAuditEvent,
   validateA2AError,
   isValidA2AError,
+  validateAgentProfile,
+  isValidAgentProfile,
+  assertAgentProfile,
+  validateInstructionBundle,
+  isValidInstructionBundle,
+  assertInstructionBundle,
 } from './validation';
 
 // ---------------------------------------------------------------------------
@@ -223,3 +329,66 @@ export {
   type NormalizeLegacyInboundEnvelopeResult,
   normalizeLegacyInboundEnvelope,
 } from './legacy-ingress';
+
+// ---------------------------------------------------------------------------
+// SDK helpers: Bridge and orchestration contracts
+// ---------------------------------------------------------------------------
+
+export {
+  A2A_BRIDGE_CONTRACT_VERSION,
+  A2A_BRIDGE_ENDPOINTS,
+  A2A_BRIDGE_ENDPOINT_PATTERNS,
+  bridgeHeartbeatPath,
+  bridgeJobResultPath,
+  createApprovalCheckpoint,
+  createHandoffCheckpoint,
+  createRunHistoryEvent,
+  createRuntimeEvidence,
+  isA2ABridgeEndpoint,
+  isBridgeHeartbeatRequest,
+  isBridgeJob,
+  isRunHistoryEvent,
+  orchestrationHistoryPath,
+  orchestrationHistoryStreamPath,
+  orchestrationOverridePath,
+  orchestrationRecomputePath,
+  type A2ABridgeEndpoint,
+  type ApprovalCheckpoint,
+  type ApprovalCheckpointState,
+  type BridgeAgentStatus,
+  type BridgeHeartbeatListResponse,
+  type BridgeHeartbeatRecord,
+  type BridgeHeartbeatRequest,
+  type BridgeJob,
+  type BridgeJobCreateRequest,
+  type BridgeJobCreateResponse,
+  type BridgeJobResultRequest,
+  type BridgeJobResultResponse,
+  type BridgeJobStatus,
+  type BridgeOwnershipScope,
+  type BridgePairRequest,
+  type BridgePairResponse,
+  type BridgePolicyDocument,
+  type BridgePolicyEffect,
+  type BridgePolicyRule,
+  type BridgeSession,
+  type BridgeSessionListResponse,
+  type BridgeSessionStatus,
+  type CreateApprovalCheckpointInput,
+  type CreateHandoffCheckpointInput,
+  type CreateRunHistoryEventInput,
+  type CreateRuntimeEvidenceInput,
+  type HandoffCheckpoint,
+  type HandoffCheckpointState,
+  type OrchestrationHistoryRequest,
+  type OrchestrationHistoryResponse,
+  type OrchestrationOverrideRequest,
+  type OrchestrationOverrideResponse,
+  type OrchestrationRecomputeRequest,
+  type OrchestrationRecomputeResponse,
+  type RunHistoryEvent,
+  type RunHistoryEventKind,
+  type RuntimeEvidence,
+  type RuntimeEvidenceArtifactRef,
+  type RuntimeEvidenceKind,
+} from './bridge-contract';

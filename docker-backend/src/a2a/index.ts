@@ -225,6 +225,17 @@ export {
 // Codex Connector Routes
 export { codexConnectorRouter } from './codex-connector.routes';
 
+// Runtime adapter contract
+export {
+  type AgentRuntimeAdapter,
+  type RuntimeStartInput,
+  type RuntimeHandle,
+  type RunEvent,
+  type RuntimeHealthSnapshot,
+} from './runtime-adapter';
+export { ClaudeRuntimeAdapter } from './claude-runtime-adapter';
+export { CodexRuntimeAdapter } from './codex-runtime-adapter';
+
 // OpenCode Connector Runtime (experimental)
 export {
   OpencodeConnectorRuntime,

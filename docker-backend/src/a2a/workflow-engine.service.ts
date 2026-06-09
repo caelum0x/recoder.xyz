@@ -23,6 +23,12 @@
 import { EventEmitter } from 'events';
 import { createLogger } from '../logger';
 import { generateId } from './task-lifecycle.service';
+import { compileInstructionBundleForTask } from './compiled-instructions';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
+import {
+  createTaskEnvelope,
+  type TaskEnvelope,
+} from '@recoder/shared/a2a';
 
 const logger = createLogger('a2a-workflow-engine');
 
@@ -111,6 +117,25 @@ export interface WorkflowExecution {
   completedAt?: string;
   totalDurationMs?: number;
 }
+
+export interface WorkflowTaskExecutionRequest {
+  workflowId: string;
+  executionId: string;
+  stepId: string;
+  agentId: string;
+  prompt: string;
+  envelope: TaskEnvelope;
+  instructionBundle: InstructionBundle | null;
+  context: Record<string, string>;
+}
+
+export type WorkflowTaskExecutor =
+  | ((agentId: string, prompt: string) => Promise<string>)
+  | ((request: WorkflowTaskExecutionRequest) => Promise<string>);
+
+type StructuredWorkflowTaskExecutor = ((request: WorkflowTaskExecutionRequest) => Promise<string>) & {
+  __agentOsStructured?: boolean;
+};
 
 export type WorkflowEventName =
   | 'workflow:started'
@@ -252,7 +277,7 @@ export class WorkflowEngine extends EventEmitter {
   async execute(
     workflowId: string,
     input: string,
-    executor: (agentId: string, prompt: string) => Promise<string>,
+    executor: WorkflowTaskExecutor,
   ): Promise<WorkflowExecution> {
     const definition = this.workflows.get(workflowId);
     if (!definition) {
@@ -381,7 +406,7 @@ export class WorkflowEngine extends EventEmitter {
     execution: WorkflowExecution,
     steps: WorkflowStep[],
     currentInput: string,
-    executor: (agentId: string, prompt: string) => Promise<string>,
+    executor: WorkflowTaskExecutor,
     errorStrategy: 'fail-fast' | 'continue',
     workflowStartedAt: Date,
   ): Promise<string> {
@@ -491,17 +516,24 @@ export class WorkflowEngine extends EventEmitter {
     execution: WorkflowExecution,
     step: WorkflowStep,
     currentInput: string,
-    executor: (agentId: string, prompt: string) => Promise<string>,
+    executor: WorkflowTaskExecutor,
     errorStrategy: 'fail-fast' | 'continue',
     workflowStartedAt: Date,
   ): Promise<string> {
     switch (step.type) {
       case 'task': {
         const resolvedPrompt = step.prompt.replace(/\{\{input\}\}/g, currentInput);
+        const executionRequest = this.buildTaskExecutionRequest(
+          execution,
+          step,
+          resolvedPrompt,
+        );
+        const effectivePrompt =
+          executionRequest.instructionBundle?.agent_specific_prompt ?? resolvedPrompt;
 
         if (step.timeoutMs) {
           return await Promise.race([
-            executor(step.agentId, resolvedPrompt),
+            this.invokeTaskExecutor(executor, executionRequest, effectivePrompt),
             new Promise<never>((_, reject) =>
               setTimeout(
                 () => reject(new Error(`Step ${step.stepId} timed out after ${step.timeoutMs}ms`)),
@@ -511,7 +543,7 @@ export class WorkflowEngine extends EventEmitter {
           ]);
         }
 
-        return await executor(step.agentId, resolvedPrompt);
+        return await this.invokeTaskExecutor(executor, executionRequest, effectivePrompt);
       }
 
       case 'pipeline': {
@@ -632,6 +664,76 @@ export class WorkflowEngine extends EventEmitter {
     } catch {
       // Not JSON or no context key -- skip
     }
+  }
+
+  private buildTaskExecutionRequest(
+    execution: WorkflowExecution,
+    step: WorkflowTaskStep,
+    prompt: string,
+  ): WorkflowTaskExecutionRequest {
+    const workspaceId = execution.context._workspaceId || 'workflow-engine';
+    const threadId = execution.context._threadId || `workflow-${execution.executionId}`;
+    const requesterPlatform = (execution.context._requesterPlatform as any) || 'recoder_backend';
+    const assigneePlatform = (execution.context._assigneePlatform as any) || 'custom';
+    const envelope = createTaskEnvelope({
+      id: generateId('wftask'),
+      workspace_id: workspaceId,
+      thread_id: threadId,
+      trace_id: execution.executionId,
+      requester: {
+        agent_id: 'workflow-engine',
+        platform: requesterPlatform,
+        name: 'Workflow Engine',
+      },
+      assignee: {
+        agent_id: step.agentId,
+        platform: assigneePlatform,
+      },
+      connector: {
+        connector_id: `workflow-step:${step.stepId}`,
+        platform: assigneePlatform,
+        protocol: 'rest',
+      },
+      payload: {
+        kind: 'text',
+        text: prompt,
+      },
+      metadata: {
+        workflowId: execution.workflowId,
+        executionId: execution.executionId,
+        stepId: step.stepId,
+        source: 'workflow-engine',
+      },
+      tags: ['workflow-task-step'],
+    });
+    const instructionBundle = compileInstructionBundleForTask(envelope);
+
+    return {
+      workflowId: execution.workflowId,
+      executionId: execution.executionId,
+      stepId: step.stepId,
+      agentId: step.agentId,
+      prompt,
+      envelope,
+      instructionBundle,
+      context: { ...execution.context },
+    };
+  }
+
+  private async invokeTaskExecutor(
+    executor: WorkflowTaskExecutor,
+    request: WorkflowTaskExecutionRequest,
+    _effectivePrompt: string,
+  ): Promise<string> {
+    const result =
+      (executor as StructuredWorkflowTaskExecutor).__agentOsStructured === true
+        ? await (executor as StructuredWorkflowTaskExecutor)(request)
+        : await (executor as (agentId: string, prompt: string) => Promise<string>)(
+            request.agentId,
+            request.prompt,
+          );
+
+    return result;
   }
 
   // -------------------------------------------------------------------------

@@ -1,0 +1,15 @@
+export {
+  A2AErrorCategoryEnum,
+  A2AErrorCodeEnum,
+  A2AErrorSeverityEnum,
+  A2AStructuredError,
+  A2A_ERROR_CODE_REGISTRY,
+  buildA2AError,
+  getErrorCodeMeta,
+  isA2AErrorCode,
+  type A2AError,
+  type A2AErrorCategory,
+  type A2AErrorCode,
+  type A2AErrorCodeMeta,
+  type A2AErrorSeverity,
+} from './error-taxonomy';

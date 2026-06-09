@@ -29,11 +29,13 @@ exports.requireJsonBody = requireJsonBody;
 exports.requireFields = requireFields;
 exports.getClientIp = getClientIp;
 exports.asyncApiHandler = asyncApiHandler;
+exports.publicApiSecurityHeadersMiddleware = publicApiSecurityHeadersMiddleware;
 const crypto_1 = __importDefault(require("crypto"));
 const api_keys_js_1 = require("./api-keys.js");
 const rate_limiter_js_1 = require("./rate-limiter.js");
 const app_keys_js_1 = require("./app-keys.js");
 const logger_js_1 = require("../logger.js");
+const edge_security_js_1 = require("../edge/edge-security.js");
 const logger = (0, logger_js_1.createLogger)('public-api');
 // ==================== Error Helpers ====================
 /**
@@ -321,6 +323,12 @@ const ROUTE_RATE_LIMITS_PER_MINUTE = {
         team: 90,
         enterprise: 200,
     },
+    projectPreviewDeploy: {
+        free: 10,
+        developer: 30,
+        team: 90,
+        enterprise: 200,
+    },
 };
 function setModernRateLimitHeaders(res, limit, remaining, resetAtSeconds) {
     res.setHeader('RateLimit-Limit', limit.toString());
@@ -532,6 +540,10 @@ function asyncApiHandler(fn) {
         });
     };
 }
+function publicApiSecurityHeadersMiddleware(_req, res, next) {
+    (0, edge_security_js_1.applyEdgeSecurityHeaders)(res);
+    next();
+}
 // ==================== Combined Middleware ====================
 /**
  * Standard middleware stack for public API routes
@@ -541,6 +553,7 @@ exports.standardMiddleware = [
     requestIdMiddleware,
     authenticateApiKey,
     rateLimitMiddleware,
+    publicApiSecurityHeadersMiddleware,
     requestLoggingMiddleware,
 ];
 /**
@@ -551,6 +564,7 @@ exports.sandboxCreationMiddleware = [
     authenticateApiKey,
     rateLimitMiddleware,
     sandboxLimitMiddleware,
+    publicApiSecurityHeadersMiddleware,
     requestLoggingMiddleware,
     requireScope('sandboxes:write', 'admin'),
 ];

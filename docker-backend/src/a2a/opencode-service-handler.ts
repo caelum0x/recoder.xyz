@@ -4,7 +4,7 @@
  * Extracted pure function that handles a Deep Coding prompt via the
  * centralized opencode service. This is the hot path used by:
  *
- *   - recoder-web   → POST /api/opencode/:projectId (server.ts)
+ *   - Spaces/runtime routes → POST /api/opencode/:projectId (server.ts)
  *   - recoder-agents → POST /api/opencode/:projectId (via backend)
  *   - A2A connector → POST /api/a2a/connectors/opencode/execute
  *

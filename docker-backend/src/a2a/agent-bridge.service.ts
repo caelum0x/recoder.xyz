@@ -36,7 +36,31 @@ import { getHeartbeatTracker } from './heartbeat-tracker.service';
 import { getTaskLifecycleService } from './task-lifecycle.service';
 import { createLogger } from '../logger';
 import { getRecentContext } from './memory-store';
-import { TaskStateEnum, type TaskArtifact, type TaskErrorInfo, type TaskResult } from '@recoder/shared/a2a';
+import { getAgentRegistryService } from './agent-registry.service';
+import { TaskStateEnum, type TaskArtifact, type TaskErrorInfo, type TaskResult, type RecoderAgentPlatform } from '@recoder/shared/a2a';
+
+/**
+ * Known A2A platform identifiers. A bridge agentId that matches one of these is
+ * registered under that platform so PLATFORM_DEFAULTS apply; anything else is
+ * registered as 'custom'. Mirrors RecoderAgentPlatform from @recoder/shared/a2a.
+ */
+const KNOWN_BRIDGE_PLATFORMS = new Set<RecoderAgentPlatform>([
+  'claude_code',
+  'codex',
+  'cursor',
+  'windsurf',
+  'replit',
+  'recoder_web',
+  'recoder_pm',
+  'recoder_agency',
+  'custom',
+]);
+
+function resolveBridgePlatform(agentId: string): RecoderAgentPlatform {
+  return KNOWN_BRIDGE_PLATFORMS.has(agentId as RecoderAgentPlatform)
+    ? (agentId as RecoderAgentPlatform)
+    : 'custom';
+}
 
 const logger = createLogger('agent-bridge');
 
@@ -284,6 +308,19 @@ export class AgentBridgeService {
       { agentId, sessionId: resolvedSessionId, userId, workspaces: workspaceIds.length, capabilities: capabilities.length },
       'agent registered via bridge',
     );
+
+    // Sync into the HTTP-queryable Agent Registry so bridge-connected agents are
+    // discoverable via GET /api/a2a/agents (REST) and not only in the bridge map.
+    try {
+      getAgentRegistryService().selfRegister({
+        agentId,
+        name: label || agentId,
+        platform: resolveBridgePlatform(agentId),
+        ...(capabilities.length > 0 ? { tags: capabilities } : {}),
+      });
+    } catch (err) {
+      logger.warn({ agentId, err }, 'failed to sync bridge agent into agent registry (non-fatal)');
+    }
 
     // Pre-warm agent memory context in background (fire-and-forget)
     if (userId && userId !== 'system') {

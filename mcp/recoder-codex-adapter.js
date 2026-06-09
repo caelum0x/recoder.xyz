@@ -7,15 +7,78 @@
  *
  * Usage:
  *   export RECODER_API_TOKEN=YOUR_SESSION_TOKEN
- *   export DAYTONA_API_KEY=dyt_8532...
+ *   export RECODER_DAYTONA_URL=http://127.0.0.1:3900/api
+ *   export DAYTONA_API_KEY=dyt_...
  *   node mcp/recoder-codex-adapter.js
  */
 
-const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
-const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
-const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://77.42.23.19:3900/api';
+const crypto = require('node:crypto');
+
+const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'http://127.0.0.1:3002';
+const API_URL = process.env.RECODER_API_URL || 'http://127.0.0.1:3001';
+const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || '';
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
 const API_TOKEN = process.env.RECODER_API_TOKEN || '';
+const A2A_SIGNING_SECRET = process.env.RECODER_A2A_SIGNING_SECRET || '';
+const ALLOW_UNAUTHENTICATED_LOCAL = process.env.RECODER_ALLOW_UNAUTHENTICATED_LOCAL === 'true';
+
+function isLocalUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function requireRecoderAuth(baseUrl) {
+  if (API_TOKEN) return;
+  if (ALLOW_UNAUTHENTICATED_LOCAL && isLocalUrl(baseUrl)) return;
+  throw new Error('RECODER_API_TOKEN is required for Recoder A2A calls');
+}
+
+function signRequest({ method, url, body = '' }) {
+  if (!A2A_SIGNING_SECRET) return {};
+  const timestamp = new Date().toISOString();
+  const payload = `${method.toUpperCase()}\n${new URL(url).pathname}\n${timestamp}\n${body}`;
+  const signature = crypto.createHmac('sha256', A2A_SIGNING_SECRET).update(payload).digest('hex');
+  return {
+    'X-Recoder-A2A-Timestamp': timestamp,
+    'X-Recoder-A2A-Signature': signature,
+  };
+}
+
+function recoderHeaders(baseUrl, options = {}) {
+  requireRecoderAuth(baseUrl);
+  const headers = {
+    ...(options.contentType ? { 'Content-Type': options.contentType } : {}),
+    ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+  };
+  return {
+    ...headers,
+    ...signRequest({
+      method: options.method || 'GET',
+      url: options.url || baseUrl,
+      body: options.body || '',
+    }),
+  };
+}
+
+async function fetchJson(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.RECODER_MCP_TIMEOUT_MS || 30000));
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${data?.error?.message || data?.message || res.statusText}`);
+    }
+    return data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 let buffer = '';
 process.stdin.setEncoding('utf8');
@@ -26,7 +89,14 @@ process.stdin.on('data', (chunk) => {
     const line = buffer.slice(0, idx).trim();
     buffer = buffer.slice(idx + 1);
     if (line) {
-      try { handleMessage(JSON.parse(line)); } catch {}
+      try {
+        const msg = JSON.parse(line);
+        Promise.resolve(handleMessage(msg)).catch((err) => {
+          respondError(readJsonRpcId(msg), -32000, err.message || 'Tool execution failed');
+        });
+      } catch (err) {
+        respondError(null, -32700, 'Parse error', { message: err.message });
+      }
     }
   }
 });
@@ -35,8 +105,26 @@ function respond(id, result) {
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
 }
 
+function respondError(id, code, message, data) {
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: id ?? null, error: { code, message, data } }) + '\n');
+}
+
+function readJsonRpcId(msg) {
+  if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return null;
+  return Object.prototype.hasOwnProperty.call(msg, 'id') ? msg.id : null;
+}
+
 async function handleMessage(msg) {
+  if (!msg || typeof msg !== 'object' || Array.isArray(msg)) {
+    respondError(null, -32600, 'Invalid Request');
+    return;
+  }
+
   const { id, method, params } = msg;
+  if (typeof method !== 'string') {
+    respondError(id, -32600, 'Invalid Request', { reason: 'method must be a string' });
+    return;
+  }
 
   if (method === 'initialize') {
     respond(id, {
@@ -61,61 +149,96 @@ async function handleMessage(msg) {
       let result;
       switch (name) {
         case 'recoder_list_agents': {
-          const res = await fetch(`${DOCKER_URL}/api/a2a/agents`);
-          result = await res.json();
+          const url = `${DOCKER_URL}/api/a2a/agents`;
+          result = await fetchJson(url, {
+            headers: recoderHeaders(DOCKER_URL, { method: 'GET', url }),
+          });
           break;
         }
         case 'recoder_list_tasks': {
-          const res = await fetch(`${DOCKER_URL}/api/a2a/tasks`);
-          result = await res.json();
+          const url = `${DOCKER_URL}/api/a2a/tasks`;
+          result = await fetchJson(url, {
+            headers: recoderHeaders(DOCKER_URL, { method: 'GET', url }),
+          });
           break;
         }
         case 'recoder_send_task': {
-          const res = await fetch(`${DOCKER_URL}/api/a2a/tasks`, {
+          const url = `${DOCKER_URL}/api/a2a/tasks`;
+          const body = JSON.stringify({ target: args.target_agent, task: args.task, from: 'codex' });
+          result = await fetchJson(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target: args.target_agent, task: args.task, from: 'codex' }),
+            headers: recoderHeaders(DOCKER_URL, {
+              method: 'POST',
+              url,
+              contentType: 'application/json',
+              body,
+            }),
+            body,
           });
-          result = await res.json();
           break;
         }
         case 'recoder_create_thread': {
           const formData = new URLSearchParams();
           formData.append('prompt', args.prompt);
-          const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          if (API_TOKEN) headers['Authorization'] = `Bearer ${API_TOKEN}`;
-          const res = await fetch(`${API_URL}/v1/agent/start`, { method: 'POST', headers, body: formData.toString() });
-          result = await res.json();
+          const url = `${API_URL}/v1/agent/start`;
+          const body = formData.toString();
+          result = await fetchJson(url, {
+            method: 'POST',
+            headers: recoderHeaders(API_URL, {
+              method: 'POST',
+              url,
+              contentType: 'application/x-www-form-urlencoded',
+              body,
+            }),
+            body,
+          });
           break;
         }
         case 'recoder_sandbox_run': {
-          if (!DAYTONA_KEY) { respond(id, { error: 'DAYTONA_API_KEY not set' }); return; }
-          const createRes = await fetch(`${DAYTONA_URL}/sandbox`, {
+          if (!DAYTONA_URL) { respondError(id, -32001, 'RECODER_DAYTONA_URL not set'); return; }
+          if (!DAYTONA_KEY) { respondError(id, -32001, 'DAYTONA_API_KEY not set'); return; }
+          const daytonaApiUrl = normalizeDaytonaApiUrl(DAYTONA_URL);
+          const sandbox = await fetchJson(`${daytonaApiUrl}/sandbox`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${DAYTONA_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ snapshot: 'daytonaio/sandbox:0.5.0-slim', public: true, autoStopInterval: 5 }),
           });
-          const sandbox = await createRes.json();
           await new Promise(r => setTimeout(r, 10000));
-          const base = DAYTONA_URL.replace('/api', '');
-          const execRes = await fetch(`${base}/api/toolbox/${sandbox.id}/toolbox/process/execute`, {
+          const base = daytonaApiUrl.replace(/\/api\/?$/, '');
+          result = await fetchJson(`${base}/api/toolbox/${sandbox.id}/toolbox/process/execute`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${DAYTONA_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ command: args.command }),
           });
-          result = await execRes.json();
-          await fetch(`${DAYTONA_URL}/sandbox/${sandbox.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${DAYTONA_KEY}` } }).catch(() => {});
+          await fetch(`${daytonaApiUrl}/sandbox/${sandbox.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${DAYTONA_KEY}` } }).catch(() => {});
           break;
         }
         default:
-          respond(id, { error: `Unknown tool: ${name}` });
+          respondError(id, -32601, `Unknown tool: ${name}`);
           return;
       }
       respond(id, result);
     } catch (err) {
-      respond(id, { error: err.message });
+      respondError(id, -32000, err.message || 'Tool execution failed');
     }
+    return;
   }
+
+  respondError(id, -32601, `Unknown method: ${method}`);
 }
 
 process.stderr.write('[recoder-codex] Adapter ready. 5 tools available.\n');
+
+function normalizeDaytonaApiUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch (err) {
+    throw new Error(`Invalid RECODER_DAYTONA_URL: ${err.message}`);
+  }
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+  if (!parsed.pathname.endsWith('/api')) {
+    parsed.pathname = `${parsed.pathname}/api`.replace(/\/+/g, '/');
+  }
+  return parsed.toString().replace(/\/$/, '');
+}

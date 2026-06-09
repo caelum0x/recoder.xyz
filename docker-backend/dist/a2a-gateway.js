@@ -8,6 +8,10 @@ exports.buildInvalidA2AEnvelopeError = buildInvalidA2AEnvelopeError;
 exports.verifyIncomingRequest = verifyIncomingRequest;
 exports.checkAndStoreEnvelopeIdempotency = checkAndStoreEnvelopeIdempotency;
 exports.handleA2AIntent = handleA2AIntent;
+exports.getOrchestrationHistorySummary = getOrchestrationHistorySummary;
+exports.appendControlPlaneLifecycleEvent = appendControlPlaneLifecycleEvent;
+exports.appendTaskScopedControlPlaneLifecycleEvent = appendTaskScopedControlPlaneLifecycleEvent;
+exports.appendControlPlaneEvidence = appendControlPlaneEvidence;
 exports.listBridgeSessionsForBinding = listBridgeSessionsForBinding;
 exports.getDockerBackendAgentCard = getDockerBackendAgentCard;
 exports.__createSignatureForTest = __createSignatureForTest;
@@ -15,8 +19,10 @@ exports.__resetA2ATestState = __resetA2ATestState;
 const express_1 = require("express");
 const ioredis_1 = __importDefault(require("ioredis"));
 const a2a_1 = require("@recoder/shared/a2a");
+const a2a_sdk_1 = require("@recoder/a2a-sdk");
 const workspace_service_1 = require("./a2a/workspace.service");
 const agent_registry_service_1 = require("./a2a/agent-registry.service");
+const task_lifecycle_service_1 = require("./a2a/task-lifecycle.service");
 const router = (0, express_1.Router)();
 exports.a2aRouter = router;
 // A2A Agent Card (standard A2A protocol discovery)
@@ -138,6 +144,126 @@ function normalizePlatform(value) {
     }
     return 'custom';
 }
+function normalizeCapabilities(value) {
+    return Array.from(new Set(asStringArray(value))).sort((a, b) => a.localeCompare(b));
+}
+function buildBridgeCapabilitySkills(capabilities) {
+    return capabilities.map((capability) => ({
+        id: capability,
+        name: capability,
+        description: capability,
+        tags: [capability, 'bridge-capability'],
+    }));
+}
+function stripBridgeManagedTags(tags) {
+    return tags.filter((tag) => (tag !== 'bridge' &&
+        !tag.startsWith('bridge:') &&
+        !tag.startsWith('workspace:') &&
+        !tag.startsWith('project:') &&
+        !tag.startsWith('capability:')));
+}
+function stripBridgeManagedSkills(skills, existingTags) {
+    const previousCapabilityIds = new Set(existingTags
+        .filter((tag) => tag.startsWith('capability:'))
+        .map((tag) => tag.slice('capability:'.length)));
+    return skills.filter((skill) => {
+        if (previousCapabilityIds.has(skill.id))
+            return false;
+        return !skill.tags.includes('bridge-capability');
+    });
+}
+function buildBridgeDurableIdentity(input) {
+    return [
+        input.agentId || 'anonymous',
+        input.agentPlatform || 'custom',
+        input.workspaceId || 'global',
+        input.projectId || 'global',
+        input.scope || 'unscoped',
+    ].join(':');
+}
+function readMetadataWorkspaceId(metadata) {
+    const direct = asOptionalString(metadata?.workspaceId);
+    if (direct)
+        return direct;
+    return asOptionalString(metadata?.workspace_id);
+}
+function adaptGatewayEnvelopeToCanonicalTaskEnvelope(envelope) {
+    const metadata = isRecord(envelope.metadata) ? envelope.metadata : {};
+    const workspaceId = readMetadataWorkspaceId(metadata) || 'global';
+    const traceId = asOptionalString(envelope.trace?.traceId) ||
+        asOptionalString(metadata.traceId) ||
+        asOptionalString(metadata.trace_id) ||
+        `trace-${envelope.messageId}`;
+    return {
+        envelope_version: envelope.envelopeVersion || '1.0.0',
+        id: envelope.messageId,
+        workspace_id: workspaceId,
+        thread_id: envelope.threadId,
+        trace_id: traceId,
+        parent_id: asOptionalString(envelope.trace?.parentMessageId) || undefined,
+        state: 'submitted',
+        history: [],
+        requester: {
+            agent_id: envelope.from.id,
+            platform: envelope.from.platform,
+            ...(envelope.from.name ? { name: envelope.from.name } : {}),
+            ...(envelope.from.instanceId ? { instance_id: envelope.from.instanceId } : {}),
+        },
+        assignee: {
+            agent_id: envelope.to.id,
+            platform: envelope.to.platform,
+            ...(envelope.to.name ? { name: envelope.to.name } : {}),
+            ...(envelope.to.instanceId ? { instance_id: envelope.to.instanceId } : {}),
+        },
+        connector: {
+            connector_id: `${envelope.to.platform}:${envelope.to.id}`,
+            platform: envelope.to.platform,
+            protocol: 'a2a',
+            name: envelope.to.name,
+            metadata: {
+                intent: envelope.intent,
+                protocolVersion: envelope.protocolVersion,
+            },
+        },
+        payload: (Array.isArray(envelope.payload) ? envelope.payload : []),
+        created_at: envelope.createdAt,
+        updated_at: envelope.createdAt,
+        metadata: {
+            ...metadata,
+            intent: envelope.intent,
+            protocolVersion: envelope.protocolVersion,
+            envelopeVersion: envelope.envelopeVersion,
+            from: envelope.from,
+            to: envelope.to,
+        },
+        tags: ['gateway-ingress', `intent:${envelope.intent}`],
+    };
+}
+function mapValidationIssuesToEnvelopeIssues(issues, sourcePath) {
+    return issues.map((issue) => ({
+        path: issue.path.startsWith('$') ? sourcePath : `${sourcePath}.${issue.path}`,
+        message: issue.message,
+    }));
+}
+function buildCanonicalA2AError(input) {
+    return (0, a2a_sdk_1.buildA2AError)({
+        code: input.code,
+        message: input.message,
+        details: input.detail,
+    });
+}
+function respondCanonicalA2AError(res, status, input) {
+    const a2aError = buildCanonicalA2AError({
+        code: input.code,
+        message: input.message,
+        detail: input.detail,
+    });
+    res.status(status).json({
+        ok: false,
+        error: input.legacyError || input.message,
+        a2aError,
+    });
+}
 function parseEnvelopeFromUnknown(value, sourcePath = 'envelope') {
     const issues = [];
     if (!isRecord(value)) {
@@ -191,35 +317,43 @@ function parseEnvelopeFromUnknown(value, sourcePath = 'envelope') {
             parentMessageId: asString(traceRaw.parentMessageId).trim() || undefined,
         }
         : undefined;
+    const envelope = {
+        envelopeVersion: asString(value.envelopeVersion).trim() || RECODER_A2A_ENVELOPE_VERSION,
+        protocolVersion: asString(value.protocolVersion).trim() || RECODER_A2A_PROTOCOL_VERSION,
+        messageId,
+        threadId,
+        createdAt,
+        from: {
+            id: fromId,
+            name: asString(fromRecord.name).trim() || fromId,
+            platform: normalizePlatform(fromRecord.platform),
+            instanceId: asString(fromRecord.instanceId).trim() || undefined,
+            team: asString(fromRecord.team).trim() || undefined,
+            version: asString(fromRecord.version).trim() || undefined,
+        },
+        to: {
+            id: toId,
+            name: asString(toRecord.name).trim() || toId,
+            platform: normalizePlatform(toRecord.platform),
+            instanceId: asString(toRecord.instanceId).trim() || undefined,
+            team: asString(toRecord.team).trim() || undefined,
+            version: asString(toRecord.version).trim() || undefined,
+        },
+        intent,
+        payload: payloadInput,
+        metadata,
+        trace,
+    };
+    const canonicalValidation = (0, a2a_sdk_1.validateTaskEnvelope)(adaptGatewayEnvelopeToCanonicalTaskEnvelope(envelope), { strictVersion: false });
+    if (!canonicalValidation.valid) {
+        return {
+            ok: false,
+            issues: mapValidationIssuesToEnvelopeIssues(canonicalValidation.issues, sourcePath),
+        };
+    }
     return {
         ok: true,
-        envelope: {
-            envelopeVersion: asString(value.envelopeVersion).trim() || RECODER_A2A_ENVELOPE_VERSION,
-            protocolVersion: asString(value.protocolVersion).trim() || RECODER_A2A_PROTOCOL_VERSION,
-            messageId,
-            threadId,
-            createdAt,
-            from: {
-                id: fromId,
-                name: asString(fromRecord.name).trim() || fromId,
-                platform: normalizePlatform(fromRecord.platform),
-                instanceId: asString(fromRecord.instanceId).trim() || undefined,
-                team: asString(fromRecord.team).trim() || undefined,
-                version: asString(fromRecord.version).trim() || undefined,
-            },
-            to: {
-                id: toId,
-                name: asString(toRecord.name).trim() || toId,
-                platform: normalizePlatform(toRecord.platform),
-                instanceId: asString(toRecord.instanceId).trim() || undefined,
-                team: asString(toRecord.team).trim() || undefined,
-                version: asString(toRecord.version).trim() || undefined,
-            },
-            intent,
-            payload: payloadInput,
-            metadata,
-            trace,
-        },
+        envelope,
     };
 }
 function respondInvalidEnvelope(res, issues, error = 'Invalid A2A envelope') {
@@ -697,6 +831,7 @@ function selectTargets(input) {
 async function persistOrchestrationState(input) {
     const key = `${ORCHESTRATION_KEY_PREFIX}:${input.threadId}:${input.traceId}`;
     const value = JSON.stringify({
+        workspaceId: input.workspaceId,
         threadId: input.threadId,
         traceId: input.traceId,
         mode: input.mode,
@@ -704,6 +839,8 @@ async function persistOrchestrationState(input) {
         results: input.results,
         merge: input.merge ?? null,
         overrideHistory: input.overrideHistory ?? [],
+        lifecycle: input.lifecycle ?? [],
+        evidence: input.evidence ?? [],
         scope: input.scope ?? null,
         updatedAt: new Date().toISOString(),
     });
@@ -1039,6 +1176,25 @@ async function getOrchestrationState(input) {
         return null;
     return JSON.parse(hit.value);
 }
+async function getOrchestrationHistorySummary(input) {
+    const state = await getOrchestrationState(input);
+    if (!state)
+        return null;
+    const history = buildOrchestrationHistoryPayload({
+        threadId: input.threadId,
+        traceId: input.traceId,
+        state,
+        cursor: 0,
+        limit: 1,
+    });
+    return {
+        historyVersion: history.historyVersion,
+        workspaceId: history.workspaceId,
+        threadId: history.threadId,
+        traceId: history.traceId,
+        summary: history.summary,
+    };
+}
 async function upsertOrchestrationStateRecord(input) {
     const key = `${ORCHESTRATION_KEY_PREFIX}:${input.threadId}:${input.traceId}`;
     const value = JSON.stringify({
@@ -1064,6 +1220,45 @@ function extractResultsFromState(state) {
     const value = state.results;
     return Array.isArray(value) ? value : [];
 }
+function extractLifecycleFromState(state) {
+    const value = state.lifecycle;
+    if (!Array.isArray(value))
+        return [];
+    return value
+        .map((entry) => ({
+        id: String(entry?.id || ''),
+        at: String(entry?.at || ''),
+        eventType: String(entry?.eventType || ''),
+        workspaceId: String(entry?.workspaceId || ''),
+        threadId: String(entry?.threadId || ''),
+        traceId: String(entry?.traceId || ''),
+        taskId: asOptionalString(entry?.taskId),
+        actorId: asOptionalString(entry?.actorId),
+        state: asOptionalString(entry?.state),
+        detail: isRecord(entry?.detail) ? entry.detail : null,
+    }))
+        .filter((entry) => Boolean(entry.id && entry.at && entry.eventType && entry.workspaceId && entry.threadId && entry.traceId));
+}
+function extractEvidenceFromState(state) {
+    const value = state.evidence;
+    if (!Array.isArray(value))
+        return [];
+    return value
+        .map((entry) => ({
+        id: String(entry?.id || ''),
+        at: String(entry?.at || ''),
+        workspaceId: String(entry?.workspaceId || ''),
+        threadId: String(entry?.threadId || ''),
+        traceId: String(entry?.traceId || ''),
+        taskId: asOptionalString(entry?.taskId),
+        agentId: asOptionalString(entry?.agentId),
+        kind: String(entry?.kind || ''),
+        label: String(entry?.label || ''),
+        ref: asOptionalString(entry?.ref),
+        metadata: isRecord(entry?.metadata) ? entry.metadata : null,
+    }))
+        .filter((entry) => Boolean(entry.id && entry.at && entry.workspaceId && entry.threadId && entry.traceId && entry.kind && entry.label));
+}
 function extractOverrideHistoryFromState(state) {
     const value = state.overrideHistory;
     if (!Array.isArray(value))
@@ -1082,6 +1277,93 @@ function extractOverrideHistoryFromState(state) {
         reason: String(entry?.reason || ''),
     }))
         .filter((entry) => Boolean(entry.at && entry.by && entry.winnerAgentId));
+}
+function buildLifecycleTimelineEntry(entry) {
+    return {
+        at: entry.at,
+        type: entry.eventType,
+        detail: entry.detail || null,
+        taskId: entry.taskId || null,
+        actorId: entry.actorId || null,
+        state: entry.state || null,
+    };
+}
+function buildEvidenceTimelineEntry(entry) {
+    return {
+        at: entry.at,
+        type: 'evidence.attached',
+        detail: {
+            kind: entry.kind,
+            label: entry.label,
+            ref: entry.ref || null,
+            metadata: entry.metadata || null,
+            taskId: entry.taskId || null,
+            agentId: entry.agentId || null,
+        },
+    };
+}
+function extractEvidencePayloadItems(value, fallbackTaskId, fallbackAgentId) {
+    if (!isRecord(value))
+        return [];
+    const previewUrl = asOptionalString(value.previewUrl) ||
+        asOptionalString(value.preview?.url);
+    const gitStatus = asOptionalString(value.gitStatus) || asOptionalString(value.git_status);
+    const gitBranch = asOptionalString(value.gitBranch) || asOptionalString(value.git_branch);
+    const cloneUrl = asOptionalString(value.cloneUrl) || asOptionalString(value.clone_url);
+    const runtimeType = asOptionalString(value.runtimeType) || asOptionalString(value.runtime_type);
+    const sessionId = asOptionalString(value.sessionId) || asOptionalString(value.session_id);
+    const sandboxId = asOptionalString(value.sandboxId) || asOptionalString(value.sandbox_id);
+    const artifacts = Array.isArray(value.artifacts) ? value.artifacts : [];
+    const evidence = [];
+    if (previewUrl) {
+        evidence.push({
+            kind: 'preview',
+            label: 'Preview URL',
+            ref: previewUrl,
+            metadata: {
+                ...(fallbackTaskId ? { taskId: fallbackTaskId } : {}),
+                ...(fallbackAgentId ? { agentId: fallbackAgentId } : {}),
+            },
+        });
+    }
+    if (gitStatus || gitBranch || cloneUrl) {
+        evidence.push({
+            kind: 'runtime',
+            label: gitBranch ? `Git provenance (${gitBranch})` : 'Git provenance',
+            ref: gitBranch ? `git:${gitBranch}` : 'git',
+            metadata: {
+                ...(gitStatus ? { gitStatus } : {}),
+                ...(gitBranch ? { gitBranch } : {}),
+                ...(cloneUrl ? { cloneUrl } : {}),
+            },
+        });
+    }
+    if (runtimeType || sessionId || sandboxId) {
+        evidence.push({
+            kind: 'runtime',
+            label: runtimeType ? `Runtime session (${runtimeType})` : 'Runtime session',
+            ref: sessionId || sandboxId || runtimeType || 'runtime',
+            metadata: {
+                ...(runtimeType ? { runtimeType } : {}),
+                ...(sessionId ? { sessionId } : {}),
+                ...(sandboxId ? { sandboxId } : {}),
+            },
+        });
+    }
+    for (const artifact of artifacts) {
+        if (!isRecord(artifact))
+            continue;
+        const key = asOptionalString(artifact.key);
+        if (!key)
+            continue;
+        evidence.push({
+            kind: asOptionalString(artifact.artifact_type) || 'artifact',
+            label: asOptionalString(artifact.path) || key,
+            ref: key,
+            metadata: isRecord(artifact.metadata) ? artifact.metadata : null,
+        });
+    }
+    return evidence;
 }
 function getRequestScope(req) {
     const scope = String(req.header(A2A_SCOPE_HEADER) || '').trim();
@@ -1126,16 +1408,23 @@ function buildOrchestrationHistoryPayload(input) {
     const overrideHistory = extractOverrideHistoryFromState(input.state);
     const merge = (input.state.merge || null);
     const results = extractResultsFromState(input.state);
+    const lifecycle = extractLifecycleFromState(input.state);
+    const evidence = extractEvidenceFromState(input.state);
     const timelineAll = [
         {
             at: String(input.state.updatedAt || new Date().toISOString()),
             type: 'orchestration_snapshot',
             detail: {
+                workspaceId: String(input.state.workspaceId || ''),
                 mode: String(input.state.mode || ''),
                 targets: input.state.targets || [],
                 resultCount: results.length,
+                lifecycleCount: lifecycle.length,
+                evidenceCount: evidence.length,
             },
         },
+        ...lifecycle.map((entry) => buildLifecycleTimelineEntry(entry)),
+        ...evidence.map((entry) => buildEvidenceTimelineEntry(entry)),
         ...overrideHistory.map((entry) => ({
             at: entry.at,
             type: 'merge_override',
@@ -1154,15 +1443,27 @@ function buildOrchestrationHistoryPayload(input) {
     const nextCursor = normalizedCursor + timeline.length < totalTimelineCount ? normalizedCursor + timeline.length : null;
     return {
         historyVersion: '2026-02-14.v1',
+        workspaceId: String(input.state.workspaceId || ''),
         threadId: input.threadId,
         traceId: input.traceId,
         summary: {
+            workspaceId: String(input.state.workspaceId || ''),
             mode: String(input.state.mode || ''),
             winnerAgentId: merge ? String(merge.winnerAgentId || '') : null,
             overridden: merge ? Boolean(merge.overridden) : false,
             conflictReasons: merge && Array.isArray(merge.conflictReasons) ? merge.conflictReasons : [],
             collaboration: merge ? merge.collaboration || null : null,
             resultCount: results.length,
+            lifecycleCount: lifecycle.length,
+            evidenceCount: evidence.length,
+            lifecycleByType: lifecycle.reduce((acc, entry) => {
+                acc[entry.eventType] = (acc[entry.eventType] || 0) + 1;
+                return acc;
+            }, {}),
+            evidenceByKind: evidence.reduce((acc, entry) => {
+                acc[entry.kind] = (acc[entry.kind] || 0) + 1;
+                return acc;
+            }, {}),
             successfulAgents: results.filter((row) => Boolean(row.ok)).map((row) => String(row.agentId || '')),
             totalOverrideCount: overrideHistory.length,
             totalTimelineCount,
@@ -1173,8 +1474,119 @@ function buildOrchestrationHistoryPayload(input) {
             nextCursor,
         },
         overrideHistory,
+        lifecycle,
+        evidence,
         timeline,
     };
+}
+async function resolveTaskCorrelation(taskId) {
+    const task = (0, task_lifecycle_service_1.getTaskLifecycleService)().getTask(taskId);
+    if (!task.ok)
+        return null;
+    return {
+        workspaceId: task.data.workspace_id,
+        threadId: task.data.thread_id,
+        traceId: task.data.trace_id,
+        taskId: task.data.id,
+    };
+}
+async function appendControlPlaneLifecycleEvent(input) {
+    const state = await getOrchestrationState({ threadId: input.threadId, traceId: input.traceId });
+    if (!state)
+        return;
+    const lifecycle = extractLifecycleFromState(state);
+    lifecycle.push({
+        id: `lifecycle-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+        at: new Date().toISOString(),
+        eventType: input.eventType,
+        workspaceId: input.workspaceId,
+        threadId: input.threadId,
+        traceId: input.traceId,
+        taskId: input.taskId || null,
+        actorId: input.actorId || null,
+        state: input.state || null,
+        detail: input.detail || null,
+    });
+    await upsertOrchestrationStateRecord({
+        threadId: input.threadId,
+        traceId: input.traceId,
+        state: {
+            ...state,
+            lifecycle,
+        },
+    });
+    await publishOrchestrationHistoryUpdate({
+        threadId: input.threadId,
+        traceId: input.traceId,
+        eventType: input.eventType,
+        detail: {
+            ...(input.detail || {}),
+            ...(input.taskId ? { taskId: input.taskId } : {}),
+            ...(input.actorId ? { actorId: input.actorId } : {}),
+            ...(input.state ? { state: input.state } : {}),
+        },
+    });
+}
+async function appendTaskScopedControlPlaneLifecycleEvent(input) {
+    const correlation = await resolveTaskCorrelation(input.taskId);
+    if (!correlation)
+        return;
+    await appendControlPlaneLifecycleEvent({
+        ...correlation,
+        eventType: input.eventType,
+        actorId: input.actorId || null,
+        state: input.state || null,
+        detail: input.detail,
+    });
+}
+async function appendControlPlaneEvidence(input) {
+    if (input.evidence.length === 0)
+        return;
+    const state = await getOrchestrationState({ threadId: input.threadId, traceId: input.traceId });
+    if (!state)
+        return;
+    const evidence = extractEvidenceFromState(state);
+    const seen = new Set(evidence.map((entry) => `${entry.kind}:${entry.ref || entry.label}:${entry.taskId || ''}`));
+    let appended = false;
+    for (const item of input.evidence) {
+        const key = `${item.kind}:${item.ref || item.label}:${input.taskId || ''}`;
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        appended = true;
+        evidence.push({
+            id: `evidence-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+            at: new Date().toISOString(),
+            workspaceId: input.workspaceId,
+            threadId: input.threadId,
+            traceId: input.traceId,
+            taskId: input.taskId || null,
+            agentId: input.agentId || null,
+            kind: item.kind,
+            label: item.label,
+            ref: item.ref || null,
+            metadata: item.metadata || null,
+        });
+    }
+    if (!appended)
+        return;
+    await upsertOrchestrationStateRecord({
+        threadId: input.threadId,
+        traceId: input.traceId,
+        state: {
+            ...state,
+            evidence,
+        },
+    });
+    await publishOrchestrationHistoryUpdate({
+        threadId: input.threadId,
+        traceId: input.traceId,
+        eventType: 'evidence.attached',
+        detail: {
+            taskId: input.taskId || null,
+            totalEvidence: evidence.length,
+        },
+    });
 }
 function subscribeOrchestrationHistory(input) {
     const key = orchestrationStateKey(input.threadId, input.traceId);
@@ -1511,20 +1923,69 @@ async function listBridgeSessionsForBinding(input) {
             return false;
         return true;
     });
-    return Promise.all(filtered.map(async (session) => ({
-        ...session,
-        heartbeat: await getBridgeHeartbeat(session.bridgeId),
-    })));
+    return Promise.all(filtered.map(async (session) => {
+        const registryAgent = session.agentId ? (0, agent_registry_service_1.getAgentRegistryService)().getWithHealth(session.agentId) : undefined;
+        return {
+            ...session,
+            agentName: registryAgent?.identity.name || session.agentName || null,
+            agentPlatform: registryAgent
+                ? normalizePlatform(registryAgent.identity.platform)
+                : session.agentPlatform || null,
+            heartbeat: await getBridgeHeartbeat(session.bridgeId),
+            registry: registryAgent
+                ? {
+                    registered: true,
+                    online: registryAgent.health.online,
+                    lastHeartbeat: registryAgent.health.lastHeartbeat,
+                    reconnectCount: registryAgent.lifecycle.reconnectCount,
+                    registrationCount: registryAgent.lifecycle.registrationCount,
+                }
+                : {
+                    registered: false,
+                    online: false,
+                    lastHeartbeat: null,
+                    reconnectCount: 0,
+                    registrationCount: 0,
+                },
+        };
+    }));
+}
+async function validateBridgeSessionConflicts(input) {
+    if (!input.agentId)
+        return { ok: true };
+    const sessions = await listBridgeSessions();
+    for (const session of sessions) {
+        if (session.agentId !== input.agentId)
+            continue;
+        if (session.durableIdentity === input.durableIdentity)
+            continue;
+        if ((session.agentPlatform || null) !== (input.agentPlatform || null)) {
+            return {
+                ok: false,
+                status: 409,
+                error: `Conflicting platform claim for agent ${input.agentId}`,
+            };
+        }
+        if ((session.workspaceId || null) !== (input.workspaceId || null)) {
+            return {
+                ok: false,
+                status: 409,
+                error: `Conflicting workspace claim for agent ${input.agentId}`,
+            };
+        }
+        if ((session.projectId || null) !== (input.projectId || null)) {
+            return {
+                ok: false,
+                status: 409,
+                error: `Conflicting project claim for agent ${input.agentId}`,
+            };
+        }
+    }
+    return { ok: true };
 }
 async function findReusableBridgeSession(input) {
-    if (!input.agentId)
-        return null;
     const sessions = await listBridgeSessions();
-    return (sessions.find((session) => session.bridgeId === input.bridgeId &&
-        (session.scope || null) === input.scope &&
-        (session.agentId || null) === input.agentId &&
-        (session.workspaceId || null) === input.workspaceId &&
-        (session.projectId || null) === input.projectId) || null);
+    return sessions.find((session) => session.durableIdentity === input.durableIdentity) || null;
 }
 async function emitAuditEvent(event, details) {
     const auditEvent = {
@@ -1665,6 +2126,14 @@ function reconcileBridgeSessionRegistryBinding(input) {
     const registry = (0, agent_registry_service_1.getAgentRegistryService)();
     const existing = registry.get(input.agentId);
     const desiredPlatform = input.agentPlatform || 'custom';
+    const normalizedCapabilities = normalizeCapabilities(input.capabilities);
+    const bridgeTags = Array.from(new Set([
+        'bridge',
+        `bridge:${input.bridgeId}`,
+        ...(input.workspaceId ? [`workspace:${input.workspaceId}`] : []),
+        ...(input.projectId ? [`project:${input.projectId}`] : []),
+        ...normalizedCapabilities.map((capability) => `capability:${capability}`),
+    ].filter(Boolean)));
     if (existing) {
         if (existing.identity.platform !== desiredPlatform) {
             return {
@@ -1673,27 +2142,34 @@ function reconcileBridgeSessionRegistryBinding(input) {
                 error: `Agent platform mismatch for ${input.agentId}`,
             };
         }
-        registry.recordHeartbeat(input.agentId);
+        registry.register({
+            identity: {
+                ...existing.identity,
+                name: input.agentName || existing.identity.name,
+            },
+            card: {
+                ...existing.card,
+                name: input.agentName || existing.card.name,
+                skills: [
+                    ...stripBridgeManagedSkills(existing.card.skills, existing.tags),
+                    ...buildBridgeCapabilitySkills(normalizedCapabilities),
+                ],
+            },
+            protocol: existing.protocol,
+            tier: existing.tier,
+            tags: [
+                ...stripBridgeManagedTags(existing.tags),
+                ...bridgeTags,
+            ],
+        });
         return { ok: true };
     }
-    const tags = Array.from(new Set([
-        'bridge',
-        `bridge:${input.bridgeId}`,
-        ...(input.workspaceId ? [`workspace:${input.workspaceId}`] : []),
-        ...(input.projectId ? [`project:${input.projectId}`] : []),
-        ...input.capabilities.map((capability) => `capability:${capability}`),
-    ].filter(Boolean)));
     registry.selfRegister({
         agentId: input.agentId,
         name: input.agentName || input.agentId,
         platform: desiredPlatform,
-        tags,
-        skills: input.capabilities.map((capability) => ({
-            id: capability,
-            name: capability,
-            description: capability,
-            tags: [capability],
-        })),
+        tags: bridgeTags,
+        skills: buildBridgeCapabilitySkills(normalizedCapabilities),
     });
     return { ok: true };
 }
@@ -1797,17 +2273,35 @@ router.post('/bridge/pair', async (req, res) => {
     const workspaceId = asOptionalString(parsedBody.workspaceId);
     const projectId = asOptionalString(parsedBody.projectId);
     const capabilities = asStringArray(parsedBody.capabilities);
+    const normalizedCapabilities = normalizeCapabilities(parsedBody.capabilities);
     const metadata = isRecord(parsedBody.metadata)
         ? parsedBody.metadata
         : undefined;
+    const durableIdentity = buildBridgeDurableIdentity({
+        agentId,
+        agentPlatform,
+        workspaceId,
+        projectId,
+        scope: requestedScope,
+    });
     const bindingValidation = validateBridgeSessionInput({ agentId, workspaceId, projectId });
     if (!bindingValidation.ok) {
-        res.status(bindingValidation.status).json({ ok: false, error: bindingValidation.error });
+        respondCanonicalA2AError(res, bindingValidation.status, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.InvalidEnvelope,
+            message: bindingValidation.error,
+        });
         return;
     }
     const workspaceValidation = validateBridgeSessionWorkspaceBinding({ agentId, workspaceId, projectId });
     if (!workspaceValidation.ok) {
-        res.status(workspaceValidation.status).json({ ok: false, error: workspaceValidation.error });
+        respondCanonicalA2AError(res, workspaceValidation.status, {
+            code: workspaceValidation.status === 403
+                ? a2a_sdk_1.A2AErrorCodeEnum.AuthorizationDenied
+                : workspaceValidation.status === 404
+                    ? a2a_sdk_1.A2AErrorCodeEnum.TaskNotFound
+                    : a2a_sdk_1.A2AErrorCodeEnum.InvalidStateTransition,
+            message: workspaceValidation.error,
+        });
         return;
     }
     const registryValidation = reconcileBridgeSessionRegistryBinding({
@@ -1820,7 +2314,26 @@ router.post('/bridge/pair', async (req, res) => {
         projectId,
     });
     if (!registryValidation.ok) {
-        res.status(registryValidation.status).json({ ok: false, error: registryValidation.error });
+        respondCanonicalA2AError(res, registryValidation.status, {
+            code: registryValidation.status === 409
+                ? a2a_sdk_1.A2AErrorCodeEnum.InvalidStateTransition
+                : a2a_sdk_1.A2AErrorCodeEnum.AgentNotFound,
+            message: registryValidation.error,
+        });
+        return;
+    }
+    const conflictValidation = await validateBridgeSessionConflicts({
+        agentId,
+        agentPlatform,
+        workspaceId,
+        projectId,
+        durableIdentity,
+    });
+    if (!conflictValidation.ok) {
+        respondCanonicalA2AError(res, conflictValidation.status, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.InvalidStateTransition,
+            message: conflictValidation.error,
+        });
         return;
     }
     const ttlMs = Number(parsedBody.ttlMs || BRIDGE_SESSION_TTL_MS);
@@ -1828,16 +2341,11 @@ router.post('/bridge/pair', async (req, res) => {
     const now = Date.now();
     const reuseExisting = parsedBody.reuseExisting !== false;
     const reusableSession = reuseExisting
-        ? await findReusableBridgeSession({
-            bridgeId,
-            scope: requestedScope,
-            agentId,
-            workspaceId,
-            projectId,
-        })
+        ? await findReusableBridgeSession({ durableIdentity })
         : null;
     const session = {
         token: reusableSession?.token || newBridgeSessionToken(),
+        durableIdentity,
         bridgeId,
         scope: requestedScope,
         agentId,
@@ -1852,10 +2360,12 @@ router.post('/bridge/pair', async (req, res) => {
         issuedBy: String(parsedBody.issuedBy || 'admin'),
     };
     await storeBridgeSession(session);
+    const registryAgent = agentId ? (0, agent_registry_service_1.getAgentRegistryService)().getWithHealth(agentId) : undefined;
     res.status(reusableSession ? 200 : 201).json({
         ok: true,
         reused: Boolean(reusableSession),
         bridgeId: session.bridgeId,
+        durableIdentity: session.durableIdentity,
         token: session.token,
         scope: session.scope || null,
         agentId: session.agentId || null,
@@ -1864,9 +2374,25 @@ router.post('/bridge/pair', async (req, res) => {
         workspaceId: session.workspaceId || null,
         projectId: session.projectId || null,
         capabilities: session.capabilities || [],
+        normalizedCapabilities,
         metadata: session.metadata || null,
         expiresAt: session.expiresAt,
         createdAt: session.createdAt,
+        registry: registryAgent
+            ? {
+                registered: true,
+                online: registryAgent.health.online,
+                lastHeartbeat: registryAgent.health.lastHeartbeat,
+                reconnectCount: registryAgent.lifecycle.reconnectCount,
+                registrationCount: registryAgent.lifecycle.registrationCount,
+            }
+            : {
+                registered: false,
+                online: false,
+                lastHeartbeat: null,
+                reconnectCount: 0,
+                registrationCount: 0,
+            },
     });
 });
 router.get('/bridge/sessions', async (req, res) => {
@@ -1880,14 +2406,16 @@ router.get('/bridge/sessions', async (req, res) => {
         const registryAgent = session.agentId ? (0, agent_registry_service_1.getAgentRegistryService)().getWithHealth(session.agentId) : undefined;
         return {
             bridgeId: session.bridgeId,
+            durableIdentity: session.durableIdentity,
             scope: session.scope || null,
             agentId: session.agentId || null,
-            agentName: session.agentName || registryAgent?.identity.name || null,
-            agentPlatform: session.agentPlatform || registryAgent?.identity.platform || null,
+            agentName: registryAgent?.identity.name || session.agentName || null,
+            agentPlatform: registryAgent?.identity.platform || session.agentPlatform || null,
             workspaceId: session.workspaceId || null,
             projectId: session.projectId || null,
             issuedBy: session.issuedBy,
             capabilities: session.capabilities || [],
+            normalizedCapabilities: normalizeCapabilities(session.capabilities || []),
             metadata: session.metadata || null,
             createdAt: session.createdAt,
             expiresAt: session.expiresAt,
@@ -1985,6 +2513,42 @@ router.post('/bridge/jobs/:jobId/result', async (req, res) => {
     if (resultEnvelope?.messageId && resultEnvelope.threadId) {
         await dispatchIntentToBackend(resultEnvelope);
     }
+    const resultMetadata = resultEnvelope?.metadata && isRecord(resultEnvelope.metadata)
+        ? resultEnvelope.metadata
+        : {};
+    const resultWorkspaceId = readMetadataWorkspaceId(resultMetadata);
+    const resultTraceId = asOptionalString(resultEnvelope?.trace?.traceId) ||
+        asOptionalString(resultMetadata.traceId) ||
+        asOptionalString(resultMetadata.trace_id);
+    const resultTaskId = asOptionalString(resultMetadata.taskId) ||
+        asOptionalString(resultMetadata.task_id);
+    if (resultEnvelope?.threadId && resultTraceId && resultWorkspaceId) {
+        await appendControlPlaneLifecycleEvent({
+            workspaceId: resultWorkspaceId,
+            threadId: resultEnvelope.threadId,
+            traceId: resultTraceId,
+            eventType: Boolean(parsedBody.ok) ? 'bridge.result.accepted' : 'bridge.result.failed',
+            taskId: resultTaskId,
+            actorId: auth.session?.agentId || null,
+            detail: {
+                jobId,
+                bridgeId: auth.session?.bridgeId || null,
+                messageId: resultEnvelope.messageId,
+                ok: Boolean(parsedBody.ok),
+            },
+        });
+        await appendControlPlaneEvidence({
+            workspaceId: resultWorkspaceId,
+            threadId: resultEnvelope.threadId,
+            traceId: resultTraceId,
+            taskId: resultTaskId,
+            agentId: auth.session?.agentId || null,
+            evidence: [
+                ...extractEvidencePayloadItems(parsedBody, resultTaskId || null, auth.session?.agentId || null),
+                ...extractEvidencePayloadItems(resultMetadata, resultTaskId || null, auth.session?.agentId || null),
+            ],
+        });
+    }
     await emitAuditEvent('bridge_result_accepted', {
         jobId,
         ok: Boolean(parsedBody.ok),
@@ -2063,6 +2627,18 @@ router.post('/bridge/heartbeat', async (req, res) => {
             return;
         }
     }
+    if (boundSession) {
+        const heartbeatCapabilities = normalizeCapabilities(parsedBody.capabilities);
+        const nextSession = {
+            ...boundSession,
+            capabilities: heartbeatCapabilities.length > 0 ? heartbeatCapabilities : boundSession.capabilities || [],
+            metadata: {
+                ...(boundSession.metadata || {}),
+                lastHeartbeatAt: new Date().toISOString(),
+            },
+        };
+        await storeBridgeSession(nextSession);
+    }
     const mergedPayload = {
         ...parsedBody,
         ...(boundSession?.agentId ? { agentId: boundSession.agentId } : {}),
@@ -2076,7 +2652,9 @@ router.post('/bridge/heartbeat', async (req, res) => {
         agentId: boundSession?.agentId || payloadAgentId || null,
         workspaceId: boundSession?.workspaceId || payloadWorkspaceId || null,
         projectId: boundSession?.projectId || payloadProjectId || null,
-        capabilities: parsedBody.capabilities || boundSession?.capabilities || null,
+        capabilities: normalizeCapabilities(parsedBody.capabilities).length > 0
+            ? normalizeCapabilities(parsedBody.capabilities)
+            : boundSession?.capabilities || null,
     });
     res.status(200).json({ ok: true, bridgeId });
 });
@@ -2347,7 +2925,11 @@ router.post('/orchestrate', async (req, res) => {
             messageId: envelope.messageId,
             threadId: envelope.threadId,
         });
-        res.status(409).json({ ok: false, error: 'No available agents for requested mode', mode });
+        respondCanonicalA2AError(res, 409, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.AgentNotFound,
+            message: 'No available agents for requested mode',
+            detail: { mode },
+        });
         return;
     }
     const policy = await validateOrchestrationPolicy({ envelope, mode, selectedTargets: selected });
@@ -2360,7 +2942,13 @@ router.post('/orchestrate', async (req, res) => {
             messageId: envelope.messageId,
             threadId: envelope.threadId,
         });
-        res.status(policy.status).json({ ok: false, error: policy.error, mode });
+        respondCanonicalA2AError(res, policy.status, {
+            code: policy.status === 409
+                ? a2a_sdk_1.A2AErrorCodeEnum.InvalidStateTransition
+                : a2a_sdk_1.A2AErrorCodeEnum.PolicyDenied,
+            message: policy.error,
+            detail: { mode, intent: envelope.intent },
+        });
         return;
     }
     const endpointByAgent = {
@@ -2373,6 +2961,7 @@ router.post('/orchestrate', async (req, res) => {
     const traceId = String(envelope?.metadata?.traceId || '') ||
         String(parsedBody.traceId || '') ||
         `trace-${envelope.messageId}`;
+    const workspaceId = readMetadataWorkspaceId(envelope.metadata) || 'global';
     const results = [];
     for (const agentId of selected) {
         const startedAt = Date.now();
@@ -2485,7 +3074,9 @@ router.post('/orchestrate', async (req, res) => {
         }
     }
     const merge = computeDeterministicMerge({ mode, results, primaryAgent });
+    const anySuccess = results.some((row) => Boolean(row.ok));
     await persistOrchestrationState({
+        workspaceId,
         threadId: envelope.threadId,
         traceId,
         mode,
@@ -2494,8 +3085,42 @@ router.post('/orchestrate', async (req, res) => {
         merge,
         overrideHistory: [],
         scope: effectiveScope.scope,
+        lifecycle: [
+            {
+                id: `lifecycle-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+                at: new Date().toISOString(),
+                eventType: 'orchestration.started',
+                workspaceId,
+                threadId: envelope.threadId,
+                traceId,
+                taskId: asOptionalString((envelope.metadata || {}).taskId) || null,
+                actorId: envelope.from.id,
+                state: 'submitted',
+                detail: {
+                    mode,
+                    targets: selected,
+                    messageId: envelope.messageId,
+                    intent: envelope.intent,
+                },
+            },
+            {
+                id: `lifecycle-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+                at: new Date().toISOString(),
+                eventType: anySuccess ? 'orchestration.completed' : 'orchestration.failed',
+                workspaceId,
+                threadId: envelope.threadId,
+                traceId,
+                taskId: asOptionalString((envelope.metadata || {}).taskId) || null,
+                actorId: envelope.from.id,
+                state: anySuccess ? 'working' : 'failed',
+                detail: {
+                    selected,
+                    mergeWinner: merge ? merge.winnerAgentId || null : null,
+                    success: anySuccess,
+                },
+            },
+        ],
     });
-    const anySuccess = results.some((row) => Boolean(row.ok));
     await emitAuditEvent('orchestrate_completed', {
         mode,
         messageId: envelope.messageId,
@@ -2985,7 +3610,14 @@ router.post('/envelope', async (req, res) => {
         rawBody,
     });
     if (!verification.ok) {
-        res.status(verification.status).json({ ok: false, error: verification.error });
+        respondCanonicalA2AError(res, verification.status, {
+            code: verification.status === 401
+                ? a2a_sdk_1.A2AErrorCodeEnum.AuthenticationFailed
+                : verification.status === 403
+                    ? a2a_sdk_1.A2AErrorCodeEnum.AuthorizationDenied
+                    : (0, a2a_sdk_1.mapHttpError)(verification.status, verification.error).code,
+            message: verification.error,
+        });
         return;
     }
     let envelope;
@@ -2999,12 +3631,18 @@ router.post('/envelope', async (req, res) => {
         envelope = parsedEnvelope.envelope;
     }
     catch {
-        res.status(400).json({ ok: false, error: 'Invalid JSON body' });
+        respondCanonicalA2AError(res, 400, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.InvalidPayload,
+            message: 'Invalid JSON body',
+        });
         return;
     }
     const idempotency = await checkAndStoreEnvelopeIdempotency(envelope);
     if (!idempotency.accepted) {
-        res.status(400).json({ ok: false, error: 'messageId is required' });
+        respondCanonicalA2AError(res, 400, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.MissingEnvelopeField,
+            message: 'messageId is required',
+        });
         return;
     }
     const intent = await handleA2AIntent(envelope);
@@ -3029,12 +3667,18 @@ router.post('/dispatch', async (req, res) => {
         })()
         : req.body;
     if (!parsedBody || typeof parsedBody !== 'object') {
-        res.status(400).json({ ok: false, error: 'Invalid JSON body' });
+        respondCanonicalA2AError(res, 400, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.InvalidPayload,
+            message: 'Invalid JSON body',
+        });
         return;
     }
     const targetUrl = String(parsedBody.targetUrl || '').trim();
     if (!targetUrl) {
-        res.status(400).json({ ok: false, error: 'targetUrl is required' });
+        respondCanonicalA2AError(res, 400, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.MissingEnvelopeField,
+            message: 'targetUrl is required',
+        });
         return;
     }
     const envelopeParse = parseEnvelopeFromUnknown(parsedBody.envelope, 'envelope');
@@ -3044,12 +3688,18 @@ router.post('/dispatch', async (req, res) => {
     }
     const envelope = envelopeParse.envelope;
     if (!isAllowedTarget(targetUrl)) {
-        res.status(403).json({ ok: false, error: 'targetUrl not in egress allowlist' });
+        respondCanonicalA2AError(res, 403, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.AuthorizationDenied,
+            message: 'targetUrl not in egress allowlist',
+        });
         return;
     }
     const secret = process.env.RECODER_A2A_SHARED_SECRET || '';
     if (!secret) {
-        res.status(503).json({ ok: false, error: 'RECODER_A2A_SHARED_SECRET is not configured' });
+        respondCanonicalA2AError(res, 503, {
+            code: a2a_sdk_1.A2AErrorCodeEnum.ConfigurationError,
+            message: 'RECODER_A2A_SHARED_SECRET is not configured',
+        });
         return;
     }
     const rawBody = JSON.stringify(envelope);

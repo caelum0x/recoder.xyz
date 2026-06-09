@@ -1,0 +1,433 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recoder.xyz/schemas/a2a/recoder-a2a-bridge-contract.schema.json",
+  "title": "Recoder A2A Bridge and Orchestration Contract",
+  "description": "JSON Schema for the Recoder Phase 2 A2A bridge/admin API payloads. Full TaskEnvelope validation remains owned by @recoder/a2a-sdk.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "bridgeJob": { "$ref": "#/$defs/BridgeJob" },
+    "bridgeJobCreateRequest": { "$ref": "#/$defs/BridgeJobCreateRequest" },
+    "bridgeJobResultRequest": { "$ref": "#/$defs/BridgeJobResultRequest" },
+    "bridgeHeartbeatRequest": { "$ref": "#/$defs/BridgeHeartbeatRequest" },
+    "bridgePairRequest": { "$ref": "#/$defs/BridgePairRequest" },
+    "bridgeSession": { "$ref": "#/$defs/BridgeSession" },
+    "policyDocument": { "$ref": "#/$defs/BridgePolicyDocument" },
+    "runtimeEvidence": { "$ref": "#/$defs/RuntimeEvidence" },
+    "approvalCheckpoint": { "$ref": "#/$defs/ApprovalCheckpoint" },
+    "handoffCheckpoint": { "$ref": "#/$defs/HandoffCheckpoint" },
+    "runHistoryEvent": { "$ref": "#/$defs/RunHistoryEvent" },
+    "orchestrationHistoryResponse": { "$ref": "#/$defs/OrchestrationHistoryResponse" },
+    "orchestrationOverrideRequest": { "$ref": "#/$defs/OrchestrationOverrideRequest" },
+    "orchestrationRecomputeRequest": { "$ref": "#/$defs/OrchestrationRecomputeRequest" }
+  },
+  "$defs": {
+    "Metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "TaskEnvelopeRef": {
+      "type": "object",
+      "required": ["id", "workspace_id", "thread_id", "trace_id", "state"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "workspace_id": { "type": "string", "minLength": 1 },
+        "thread_id": { "type": "string", "minLength": 1 },
+        "trace_id": { "type": "string", "minLength": 1 },
+        "state": {
+          "type": "string",
+          "enum": ["submitted", "working", "input-required", "completed", "failed", "cancelled"]
+        }
+      }
+    },
+    "TaskAgentRef": {
+      "type": "object",
+      "required": ["agent_id", "platform"],
+      "additionalProperties": true,
+      "properties": {
+        "agent_id": { "type": "string", "minLength": 1 },
+        "platform": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "instance_id": { "type": "string" }
+      }
+    },
+    "TaskErrorInfo": {
+      "type": "object",
+      "required": ["code", "category", "message", "severity", "retryable"],
+      "additionalProperties": true,
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "retryable": { "type": "boolean" }
+      }
+    },
+    "TaskArtifact": {
+      "type": "object",
+      "required": ["key", "artifact_type", "mime_type", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "artifact_type": {
+          "type": "string",
+          "enum": [
+            "patch",
+            "file",
+            "plan",
+            "report",
+            "log",
+            "pull_request",
+            "preview",
+            "screenshot",
+            "verification",
+            "custom"
+          ]
+        },
+        "mime_type": { "type": "string" },
+        "content": { "type": "string" },
+        "path": { "type": "string" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgeOwnershipScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "userId": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgeJob": {
+      "type": "object",
+      "required": ["jobId", "agentId", "envelope"],
+      "additionalProperties": false,
+      "properties": {
+        "jobId": { "type": "string", "minLength": 1 },
+        "agentId": { "type": "string", "minLength": 1 },
+        "envelope": { "$ref": "#/$defs/TaskEnvelopeRef" },
+        "traceId": { "type": "string" },
+        "scope": { "$ref": "#/$defs/BridgeOwnershipScope" },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "claimed", "running", "completed", "failed", "cancelled", "expired"]
+        },
+        "attempts": { "type": "integer", "minimum": 0 },
+        "createdAt": { "type": "string" },
+        "claimedAt": { "type": "string" },
+        "expiresAt": { "type": "string" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgeJobCreateRequest": {
+      "type": "object",
+      "required": ["agentId", "envelope"],
+      "additionalProperties": false,
+      "properties": {
+        "agentId": { "type": "string", "minLength": 1 },
+        "envelope": { "$ref": "#/$defs/TaskEnvelopeRef" },
+        "scope": { "$ref": "#/$defs/BridgeOwnershipScope" },
+        "priority": { "type": "integer" },
+        "expiresAt": { "type": "string" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgeJobResultRequest": {
+      "type": "object",
+      "required": ["bridgeId", "jobId", "ok"],
+      "additionalProperties": false,
+      "properties": {
+        "bridgeId": { "type": "string", "minLength": 1 },
+        "jobId": { "type": "string", "minLength": 1 },
+        "traceId": { "type": ["string", "null"] },
+        "ok": { "type": "boolean" },
+        "resultEnvelope": { "$ref": "#/$defs/TaskEnvelopeRef" },
+        "result": { "type": "object", "additionalProperties": true },
+        "error": { "$ref": "#/$defs/TaskErrorInfo" },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/TaskArtifact" } },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/RuntimeEvidence" } },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgeHeartbeatRequest": {
+      "type": "object",
+      "required": ["bridgeId", "capabilities"],
+      "additionalProperties": false,
+      "properties": {
+        "bridgeId": { "type": "string", "minLength": 1 },
+        "agentId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "status": { "type": "string", "enum": ["online", "degraded", "offline"] },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "startedAt": { "type": "string" },
+        "observedAt": { "type": "string" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgePairRequest": {
+      "type": "object",
+      "required": ["bridgeId"],
+      "additionalProperties": false,
+      "properties": {
+        "bridgeId": { "type": "string", "minLength": 1 },
+        "pairingCode": { "type": "string" },
+        "agentId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgeHeartbeatRecord": {
+      "type": "object",
+      "required": ["bridgeId", "capabilities", "heartbeatId", "receivedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "bridgeId": { "type": "string", "minLength": 1 },
+        "agentId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "status": { "type": "string", "enum": ["online", "degraded", "offline"] },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "startedAt": { "type": "string" },
+        "observedAt": { "type": "string" },
+        "metadata": { "$ref": "#/$defs/Metadata" },
+        "heartbeatId": { "type": "string", "minLength": 1 },
+        "receivedAt": { "type": "string" },
+        "sessionId": { "type": "string" }
+      }
+    },
+    "BridgeSession": {
+      "type": "object",
+      "required": ["sessionId", "bridgeId", "status", "scope", "createdAt", "updatedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 1 },
+        "bridgeId": { "type": "string", "minLength": 1 },
+        "tokenId": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["paired", "online", "degraded", "stale", "offline", "revoked"]
+        },
+        "scope": { "$ref": "#/$defs/BridgeOwnershipScope" },
+        "latestHeartbeat": { "$ref": "#/$defs/BridgeHeartbeatRecord" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "expiresAt": { "type": "string" },
+        "revokedAt": { "type": "string" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgePolicyRule": {
+      "type": "object",
+      "required": ["id", "effect", "action", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "effect": { "type": "string", "enum": ["allow", "deny", "require_approval"] },
+        "action": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "priority": { "type": "integer" },
+        "pathGlobs": { "type": "array", "items": { "type": "string" } },
+        "agentIds": { "type": "array", "items": { "type": "string" } },
+        "workspaceIds": { "type": "array", "items": { "type": "string" } },
+        "runtimeKinds": { "type": "array", "items": { "type": "string" } },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "BridgePolicyDocument": {
+      "type": "object",
+      "required": ["version", "updatedAt", "defaultEffect", "rules"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "defaultEffect": { "type": "string", "enum": ["allow", "deny", "require_approval"] },
+        "rules": { "type": "array", "items": { "$ref": "#/$defs/BridgePolicyRule" } },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "RuntimeEvidence": {
+      "type": "object",
+      "required": ["evidenceId", "kind", "source", "summary", "capturedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "evidenceId": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "clone_provenance",
+            "git_status",
+            "stdout",
+            "stderr",
+            "file_mutation",
+            "preview_link",
+            "screenshot",
+            "browser_trace",
+            "desktop_artifact",
+            "verification_output",
+            "custom"
+          ]
+        },
+        "source": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "capturedAt": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "taskId": { "type": "string" },
+        "runId": { "type": "string" },
+        "traceId": { "type": "string" },
+        "artifact": {
+          "type": "object",
+          "required": ["artifactId"],
+          "additionalProperties": false,
+          "properties": {
+            "artifactId": { "type": "string", "minLength": 1 },
+            "key": { "type": "string" },
+            "uri": { "type": "string" },
+            "mimeType": { "type": "string" }
+          }
+        },
+        "data": { "$ref": "#/$defs/Metadata" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "ApprovalCheckpoint": {
+      "type": "object",
+      "required": ["approvalId", "taskId", "state", "requestedBy", "requestedAt", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "approvalId": { "type": "string", "minLength": 1 },
+        "taskId": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "enum": ["requested", "approved", "rejected", "cancelled", "expired"] },
+        "requestedBy": { "$ref": "#/$defs/TaskAgentRef" },
+        "requestedAt": { "type": "string" },
+        "reason": { "type": "string", "minLength": 1 },
+        "decidedBy": { "$ref": "#/$defs/TaskAgentRef" },
+        "decidedAt": { "type": "string" },
+        "decisionReason": { "type": "string" },
+        "policy": { "type": "object", "additionalProperties": true },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "HandoffCheckpoint": {
+      "type": "object",
+      "required": ["handoffId", "taskId", "state", "to", "requestedAt", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "handoffId": { "type": "string", "minLength": 1 },
+        "taskId": { "type": "string", "minLength": 1 },
+        "state": { "type": "string", "enum": ["requested", "accepted", "rejected", "completed", "cancelled"] },
+        "from": { "$ref": "#/$defs/TaskAgentRef" },
+        "to": { "$ref": "#/$defs/TaskAgentRef" },
+        "requestedAt": { "type": "string" },
+        "reason": { "type": "string", "minLength": 1 },
+        "decidedAt": { "type": "string" },
+        "decisionReason": { "type": "string" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "RunHistoryEvent": {
+      "type": "object",
+      "required": ["eventId", "kind", "workspaceId", "threadId", "traceId", "createdAt"],
+      "additionalProperties": false,
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "envelope.received",
+            "task.state_changed",
+            "bridge.job_created",
+            "bridge.job_claimed",
+            "bridge.result_received",
+            "bridge.heartbeat",
+            "approval.requested",
+            "approval.approved",
+            "approval.rejected",
+            "approval.cancelled",
+            "approval.expired",
+            "handoff.requested",
+            "handoff.accepted",
+            "handoff.rejected",
+            "handoff.completed",
+            "handoff.cancelled",
+            "artifact.created",
+            "runtime.evidence",
+            "policy.checked",
+            "override.applied",
+            "recompute.requested",
+            "run.completed",
+            "run.failed"
+          ]
+        },
+        "workspaceId": { "type": "string", "minLength": 1 },
+        "threadId": { "type": "string", "minLength": 1 },
+        "traceId": { "type": "string", "minLength": 1 },
+        "createdAt": { "type": "string" },
+        "taskId": { "type": "string" },
+        "runId": { "type": "string" },
+        "envelopeId": { "type": "string" },
+        "actor": { "$ref": "#/$defs/TaskAgentRef" },
+        "state": { "type": "string" },
+        "bridgeSession": { "type": "object", "additionalProperties": true },
+        "bridgeJob": { "type": "object", "additionalProperties": true },
+        "approval": { "$ref": "#/$defs/ApprovalCheckpoint" },
+        "handoff": { "$ref": "#/$defs/HandoffCheckpoint" },
+        "evidence": { "$ref": "#/$defs/RuntimeEvidence" },
+        "artifact": { "$ref": "#/$defs/TaskArtifact" },
+        "policy": { "type": "object", "additionalProperties": true },
+        "auditEvent": { "type": "object", "additionalProperties": true },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "OrchestrationHistoryResponse": {
+      "type": "object",
+      "required": ["threadId", "traceId", "events", "hasMore"],
+      "additionalProperties": false,
+      "properties": {
+        "threadId": { "type": "string", "minLength": 1 },
+        "traceId": { "type": "string", "minLength": 1 },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/RunHistoryEvent" } },
+        "cursor": { "type": "string" },
+        "hasMore": { "type": "boolean" }
+      }
+    },
+    "OrchestrationOverrideRequest": {
+      "type": "object",
+      "required": ["threadId", "traceId", "requestedBy", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "threadId": { "type": "string", "minLength": 1 },
+        "traceId": { "type": "string", "minLength": 1 },
+        "requestedBy": { "$ref": "#/$defs/TaskAgentRef" },
+        "reason": { "type": "string", "minLength": 1 },
+        "targetState": { "type": "string" },
+        "assignee": { "$ref": "#/$defs/TaskAgentRef" },
+        "policyOverride": { "type": "object", "additionalProperties": true },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    },
+    "OrchestrationRecomputeRequest": {
+      "type": "object",
+      "required": ["threadId", "traceId", "requestedBy", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "threadId": { "type": "string", "minLength": 1 },
+        "traceId": { "type": "string", "minLength": 1 },
+        "requestedBy": { "$ref": "#/$defs/TaskAgentRef" },
+        "reason": { "type": "string", "minLength": 1 },
+        "fromEventId": { "type": "string" },
+        "dryRun": { "type": "boolean" },
+        "metadata": { "$ref": "#/$defs/Metadata" }
+      }
+    }
+  }
+}

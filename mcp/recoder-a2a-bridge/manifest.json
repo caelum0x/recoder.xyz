@@ -1,0 +1,14 @@
+{
+  "id": "recoder-a2a-bridge",
+  "kind": "a2a-bridge",
+  "contract": "TaskEnvelope",
+  "ownsCanonicalState": false,
+  "entrypoints": [
+    "/api/a2a/agents",
+    "/api/a2a/message",
+    "/api/a2a/message/stream",
+    "/api/a2a/tasks/:taskId",
+    "/api/a2a/tasks/:taskId/cancel",
+    "/api/a2a/tasks/:taskId/subscribe"
+  ]
+}

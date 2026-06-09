@@ -58,6 +58,9 @@ const daytona_runtime_js_1 = require("./daytona-runtime.js");
 const preview_rewrite_js_1 = require("./preview-rewrite.js");
 const zrok_preview_js_1 = require("./zrok-preview.js");
 const byok_provider_keys_js_1 = require("./public-api/byok-provider-keys.js");
+const preview_deployment_service_js_1 = require("./edge/preview-deployment.service.js");
+const preview_access_js_1 = require("./edge/preview-access.js");
+const edge_security_js_1 = require("./edge/edge-security.js");
 const docker = new dockerode_1.default();
 const autoStartAttempts = new Map();
 const autoStartPromises = new Map();
@@ -965,7 +968,44 @@ function setupPreviewProxy(app, containers) {
             }
         });
     });
-    app.use('/preview/:projectId', async (req, res, next) => {
+    async function authorizePreviewRequest(req, res, projectId) {
+        const latestDeployment = (0, preview_deployment_service_js_1.getPreviewDeploymentService)().getLatestByProject(projectId);
+        const securityPolicy = (0, edge_security_js_1.getEdgeSecurityPolicy)();
+        const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+        const limit = (0, edge_security_js_1.checkEdgeSlidingWindowLimit)(`preview:${projectId}:${clientIp}`, securityPolicy.previewRateLimitPerMinute, 60_000);
+        if (!limit.allowed) {
+            res.status(429).send(friendlyPreviewPage(projectId, `Preview rate limit exceeded. Try again in ${Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000))} seconds.`));
+            return false;
+        }
+        const protectionMode = latestDeployment?.protectionMode || 'public';
+        if (protectionMode === 'public') {
+            return true;
+        }
+        const routeToken = typeof req.params?.previewAccessToken === 'string' && req.params.previewAccessToken.trim().length > 0
+            ? req.params.previewAccessToken.trim()
+            : null;
+        const queryToken = typeof req.query?.preview_access_token === 'string' && req.query.preview_access_token.trim().length > 0
+            ? req.query.preview_access_token.trim()
+            : null;
+        const headerToken = typeof req.headers['x-recoder-preview-token'] === 'string' && req.headers['x-recoder-preview-token'].trim().length > 0
+            ? req.headers['x-recoder-preview-token'].trim()
+            : null;
+        const previewToken = routeToken || queryToken || headerToken;
+        if (!previewToken) {
+            res.status(403).send(friendlyPreviewPage(projectId, 'This preview is protected. Use the protected preview link issued by Recoder.'));
+            return false;
+        }
+        const verification = (0, preview_access_js_1.verifyPreviewAccessToken)(previewToken, {
+            projectId,
+            deploymentId: latestDeployment?.id,
+        });
+        if (!verification.ok) {
+            res.status(403).send(friendlyPreviewPage(projectId, verification.error));
+            return false;
+        }
+        return true;
+    }
+    async function handleProjectPreviewRoute(req, res, next, proxyPrefix) {
         const projectId = getValidatedPreviewProjectId(req.params.projectId);
         if (!projectId) {
             return res
@@ -981,6 +1021,12 @@ function setupPreviewProxy(app, containers) {
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
         res.setHeader('Surrogate-Control', 'no-store');
+        (0, edge_security_js_1.applyEdgeSecurityHeaders)(res, {
+            privatePreview: typeof req.params?.previewAccessToken === 'string' && req.params.previewAccessToken.length > 0,
+        });
+        if (!await authorizePreviewRequest(req, res, projectId)) {
+            return;
+        }
         if (!entry) {
             console.warn(`[Preview] Request for unknown project: ${projectId}`);
             // Try Docker first, then Daytona (agent-created sandboxes)
@@ -1059,7 +1105,7 @@ function setupPreviewProxy(app, containers) {
                 // Proxy inline — no redirect to docker.recoder.xyz (avoids X-Frame-Options cross-origin block)
                 console.log(`[Preview] Daytona preview ready, proxying inline for ${projectId}`);
                 const subPath = getProxySubPath(req);
-                return handleSandboxPreview(req, res, containers, subPath, `${DOCKER_PUBLIC_URL}/preview/${projectId}`);
+                return handleSandboxPreview(req, res, containers, subPath, proxyPrefix);
             }
             // Dev server not running — try to auto-start
             console.log(`[Preview] Daytona dev server not ready for ${projectId}, attempting auto-start...`);
@@ -1214,7 +1260,7 @@ function setupPreviewProxy(app, containers) {
                                 ? req.url.split('?')[0].replace(/^\/+/, '')
                                 : '';
                             const modifiedBody = (0, preview_rewrite_js_1.rewritePreviewBody)(body, {
-                                proxyPrefix: `${DOCKER_PUBLIC_URL}/preview/${projectId}`,
+                                proxyPrefix,
                                 contentType,
                                 requestPath,
                                 errorCaptureScript: ERROR_CAPTURE_SCRIPT,
@@ -1277,6 +1323,12 @@ function setupPreviewProxy(app, containers) {
             console.log(`♻️ Reusing cached proxy for ${cacheKey}`);
         }
         return proxy(req, res, next);
+    }
+    app.use('/preview/:projectId', async (req, res, next) => {
+        return handleProjectPreviewRoute(req, res, next, `${DOCKER_PUBLIC_URL}/preview/${encodeURIComponent(req.params.projectId)}`);
+    });
+    app.use('/preview-access/:previewAccessToken/:projectId', async (req, res, next) => {
+        return handleProjectPreviewRoute(req, res, next, `${DOCKER_PUBLIC_URL}/preview-access/${encodeURIComponent(req.params.previewAccessToken)}/${encodeURIComponent(req.params.projectId)}`);
     });
     // Helper: proxy request to Daytona sandbox dev server port
     async function handleSandboxPreview(req, res, containers, subPath, proxyPrefix) {
@@ -1395,6 +1447,7 @@ function setupPreviewProxy(app, containers) {
         if (!projectId) {
             return res.status(400).json({ error: 'Invalid sandbox project ID' });
         }
+        const latestDeployment = (0, preview_deployment_service_js_1.getPreviewDeploymentService)().getLatestByProject(projectId);
         let entry = containers.get(projectId);
         if (!entry) {
             entry = await (0, container_recovery_js_1.recoverContainerFromDocker)(docker, projectId, containers);
@@ -1442,11 +1495,25 @@ function setupPreviewProxy(app, containers) {
             const port = entry?.port || 5173;
             const preview = await (0, daytona_preview_js_1.getDaytonaPreviewAccess)(entry, port);
             entry.daytonaPreviewUrl = preview.url;
-            return res.json({ url: preview.url, port, daytona: true, signed: preview.signed });
+            return res.json({
+                url: latestDeployment?.protectedPreviewUrl || preview.url,
+                baseUrl: preview.url,
+                protectedUrl: latestDeployment?.protectedPreviewUrl || null,
+                edgeHost: latestDeployment?.edgeHost || null,
+                port,
+                daytona: true,
+                signed: preview.signed,
+            });
         }
         const port = entry?.port || 0;
         const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
-        res.json({ url: `${baseUrl}/preview/${projectId}`, port });
+        res.json({
+            url: latestDeployment?.protectedPreviewUrl || `${baseUrl}/preview/${projectId}`,
+            baseUrl: `${baseUrl}/preview/${projectId}`,
+            protectedUrl: latestDeployment?.protectedPreviewUrl || null,
+            edgeHost: latestDeployment?.edgeHost || null,
+            port,
+        });
     });
     // Sandbox preview proxy — forwards requests to Daytona sandbox dev server
     // This avoids needing *.sandbox.recoder.xyz wildcard SSL cert.
@@ -1456,12 +1523,18 @@ function setupPreviewProxy(app, containers) {
         if (!projectId) {
             return res.status(400).json({ error: 'Invalid sandbox project ID' });
         }
+        if (!await authorizePreviewRequest(req, res, projectId)) {
+            return;
+        }
         return handleSandboxPreview(req, res, containers, '', `/api/sandbox-preview/${projectId}`);
     });
     app.all('/api/sandbox-preview/:projectId/*', async (req, res) => {
         const projectId = getValidatedPreviewProjectId(req.params.projectId);
         if (!projectId) {
             return res.status(400).json({ error: 'Invalid sandbox project ID' });
+        }
+        if (!await authorizePreviewRequest(req, res, projectId)) {
+            return;
         }
         const subPath = getProxySubPath(req);
         return handleSandboxPreview(req, res, containers, subPath, `/api/sandbox-preview/${projectId}`);

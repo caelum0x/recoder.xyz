@@ -315,6 +315,36 @@ describe('A2A route integrations', () => {
     expect(state.jsonData.error.message).toMatch(/not running/i);
   });
 
+  it('executes codex tasks from an instruction bundle without a raw prompt', async () => {
+    mocks.codexRuntime.isRunning.mockReturnValue(true);
+    mocks.codexRuntime.executeTask.mockClear();
+
+    const req = makeReq({
+      method: 'POST',
+      body: JSON.stringify({
+        taskId: 't_bundle',
+        requester: { id: 'api-caller', platform: 'recoder_web', name: 'API Caller' },
+        instructionBundle: {
+          shared_goal: 'Fix signup crash',
+          agent_specific_prompt: 'Read AGENTS.md and fix signup crash.',
+        },
+      }),
+    });
+    const { res, state } = makeRes();
+    await runStack(codexConnectorRouter, '/execute', 'post', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(mocks.codexRuntime.executeTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 't_bundle',
+        prompt: 'Read AGENTS.md and fix signup crash.',
+        instructionBundle: expect.objectContaining({
+          shared_goal: 'Fix signup crash',
+        }),
+      }),
+    );
+  });
+
   it('returns 400 on codex approval without approved boolean', async () => {
     mocks.codexRuntime.isRunning.mockReturnValue(true);
     const req = makeReq({

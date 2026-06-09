@@ -900,6 +900,72 @@ class TaskLifecycleService {
         }));
         return { ok: true, data: updated };
     }
+    appendTaskPreview(taskId, input) {
+        const envelope = this.store.get(taskId);
+        if (!envelope) {
+            return {
+                ok: false,
+                httpStatus: 404,
+                error: (0, a2a_1.buildA2AError)({
+                    code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
+                    message: `Task not found: ${taskId}`,
+                    details: { task_id: taskId },
+                }),
+            };
+        }
+        if (input.preview.length === 0) {
+            return { ok: true, data: envelope };
+        }
+        const existingResult = envelope.result ?? {};
+        const mergedPreview = new Map();
+        for (const preview of existingResult.preview ?? []) {
+            mergedPreview.set(preview.url, preview);
+        }
+        for (const preview of input.preview) {
+            mergedPreview.set(preview.url, preview);
+        }
+        const now = new Date().toISOString();
+        const updated = {
+            ...envelope,
+            updated_at: now,
+            result: enrichTaskResult(envelope, {
+                ...existingResult,
+                preview: [...mergedPreview.values()],
+            }),
+        };
+        this.store.set(taskId, updated);
+        this.emitAudit((0, a2a_1.createAuditEvent)({
+            id: generateId('evt'),
+            event_type: a2a_1.AuditEventTypeEnum.TaskProgress,
+            severity: a2a_1.AuditSeverityEnum.Info,
+            actor: {
+                kind: a2a_1.AuditActorKindEnum.System,
+                id: input.triggeredBy || 'preview-api',
+                name: input.triggeredBy || 'preview-api',
+            },
+            target: {
+                kind: a2a_1.AuditTargetKindEnum.Task,
+                id: taskId,
+            },
+            trace_id: updated.trace_id,
+            workspace_id: updated.workspace_id,
+            thread_id: updated.thread_id,
+            task_id: taskId,
+            metadata: {
+                reason: input.reason || 'Task preview attached',
+                preview_urls: input.preview.map((preview) => preview.url),
+                metadata_patch: {
+                    preview: input.preview.map((preview) => ({
+                        url: preview.url,
+                        label: preview.label || null,
+                        source: preview.source || null,
+                    })),
+                },
+            },
+            now,
+        }));
+        return { ok: true, data: updated };
+    }
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
@@ -948,15 +1014,43 @@ class TaskLifecycleService {
         if (existingClaim && existingClaim.sessionId === sessionId) {
             return { ok: true, data: envelope };
         }
+        const claimedAt = new Date().toISOString();
+        const claim = { sessionId, agentId, claimedAt };
         const updated = {
             ...envelope,
+            updated_at: claimedAt,
             metadata: {
                 ...envelope.metadata,
-                claimedBy: { sessionId, agentId, claimedAt: new Date().toISOString() },
+                claimedBy: claim,
             },
         };
         this.store.set(taskId, updated);
         logger.info({ task_id: taskId, sessionId, agentId }, 'task claimed');
+        this.emitAudit((0, a2a_1.createAuditEvent)({
+            id: generateId('evt'),
+            event_type: a2a_1.AuditEventTypeEnum.TaskProgress,
+            severity: a2a_1.AuditSeverityEnum.Info,
+            actor: {
+                kind: a2a_1.AuditActorKindEnum.System,
+                id: agentId,
+                name: agentId,
+            },
+            target: {
+                kind: a2a_1.AuditTargetKindEnum.Task,
+                id: taskId,
+            },
+            trace_id: updated.trace_id,
+            workspace_id: updated.workspace_id,
+            thread_id: updated.thread_id,
+            task_id: taskId,
+            metadata: {
+                reason: 'Task claimed',
+                metadata_patch: {
+                    claimedBy: claim,
+                },
+            },
+            now: claimedAt,
+        }));
         return { ok: true, data: updated };
     }
     /** Expose the store for testing / advanced use. */

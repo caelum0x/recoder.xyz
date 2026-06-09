@@ -1,5 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const instructionMocks = vi.hoisted(() => ({
+  compileInstructionBundleForTask: vi.fn(() => ({
+    shared_goal: 'Workflow step goal',
+    agent_specific_prompt: 'Read AGENTS.md and execute this workflow step.',
+    system_context_refs: [{ ref_id: 'AGENTS.md', kind: 'agents_md', path: 'AGENTS.md', sha: 'abc123' }],
+    acceptance_criteria: ['Execute workflow step'],
+    verification_commands: ['pnpm test'],
+    forbidden_actions: ['Do not edit .env*'],
+    approval_gates: [],
+    memory_used: [],
+    provenance: {
+      source_files: [{ path: 'AGENTS.md', sha: 'abc123' }],
+      compiled_at: '2026-06-06T00:00:00.000Z',
+      compiler_version: '0.1.0',
+    },
+  })),
+}));
+
+vi.mock('../compiled-instructions.js', () => ({
+  compileInstructionBundleForTask: instructionMocks.compileInstructionBundleForTask,
+}));
+
+vi.mock('../byok.js', () => ({
+  getOpenRouterByokKey: vi.fn(async () => 'test-openrouter-key'),
+}));
+
 vi.mock('../../metering/openmeter-client.js', () => ({
   trackLlmCall: vi.fn(),
   trackSandboxExec: vi.fn(),
@@ -17,6 +43,7 @@ vi.mock('../a2a-event-bus.js', () => ({
 }));
 
 import { executeWorkflowSteps } from '../workflow-step-executor.js';
+import { resetWorkflowEngine } from '../workflow-engine.service.js';
 import { trackLlmCall, trackSandboxExec } from '../../metering/openmeter-client.js';
 
 describe('workflow-step-executor metering', () => {
@@ -34,6 +61,7 @@ describe('workflow-step-executor metering', () => {
     vi.unstubAllEnvs();
     vi.clearAllMocks();
     vi.restoreAllMocks();
+    resetWorkflowEngine();
   });
 
   it('tracks llm steps with measured token usage and duration', async () => {
@@ -72,6 +100,9 @@ describe('workflow-step-executor metering', () => {
     const llmCall = vi.mocked(trackLlmCall).mock.calls[0]?.[0];
     expect(llmCall?.durationMs).toEqual(expect.any(Number));
     expect(llmCall?.durationMs).toBeGreaterThanOrEqual(0);
+
+    const fetchBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(fetchBody.messages[0]?.content).toBe('Read AGENTS.md and execute this workflow step.');
   });
 
   it('tracks code steps with measured duration and sandbox exit code', async () => {
@@ -161,5 +192,49 @@ describe('workflow-step-executor metering', () => {
         done: true,
       }),
     }));
+  });
+
+  it('uses structured executor mode for triggered workflow tasks', async () => {
+    const { getWorkflowEngine } = await import('../workflow-engine.service.js');
+    const engine = getWorkflowEngine();
+    engine.registerWorkflow({
+      workflowId: 'nested-workflow',
+      name: 'Nested Workflow',
+      steps: [
+        {
+          type: 'task',
+          stepId: 'nested-task',
+          agentId: 'agent-nested',
+          prompt: 'Nested {{input}}',
+        },
+      ],
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: 'nested answer' } }],
+        usage: { prompt_tokens: 5, completion_tokens: 3 },
+      }),
+    } as unknown as Response);
+
+    const result = await executeWorkflowSteps(
+      [
+        {
+          name: 'trigger-step',
+          type: 'trigger',
+          config: {
+            workflowId: 'nested-workflow',
+            input: 'child-input',
+            model: 'openai/gpt-4o-mini',
+          },
+        },
+      ],
+      { _userId: 'user-4', _projectId: 'project-4' },
+    );
+
+    expect(result.success).toBe(true);
+    const fetchBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(fetchBody.messages[0]?.content).toBe('Read AGENTS.md and execute this workflow step.');
   });
 });

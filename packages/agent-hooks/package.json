@@ -1,0 +1,43 @@
+{
+  "name": "@recoder/agent-hooks",
+  "version": "0.1.0",
+  "description": "Deterministic Recoder Agent OS hook policy helpers",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./secret-scan": {
+      "types": "./dist/secret-scan.d.ts",
+      "import": "./dist/secret-scan.mjs",
+      "require": "./dist/secret-scan.js"
+    },
+    "./artifact-capture": {
+      "types": "./dist/artifact-capture.d.ts",
+      "import": "./dist/artifact-capture.mjs",
+      "require": "./dist/artifact-capture.js"
+    },
+    "./memory-candidate": {
+      "types": "./dist/memory-candidate.d.ts",
+      "import": "./dist/memory-candidate.mjs",
+      "require": "./dist/memory-candidate.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "node --test --experimental-strip-types src/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
