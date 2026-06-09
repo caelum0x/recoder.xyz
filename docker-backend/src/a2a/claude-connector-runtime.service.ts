@@ -23,6 +23,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
 import { envelopeToClaudeCode, claudeCodeToEnvelope } from '@recoder/shared/a2a';
 import {
   createAuditEvent,
@@ -97,6 +98,7 @@ export interface ClaudeConnectorState {
 export interface ExecuteTaskInput {
   taskId: string;
   prompt: string;
+  instructionBundle?: InstructionBundle;
   toolName?: string;
   toolArgs?: Record<string, unknown>;
   requester: RecoderAgentIdentity;
@@ -361,6 +363,7 @@ export class ClaudeConnectorRuntime extends EventEmitter {
       workspaceId: input.workspaceId,
       threadId: input.threadId,
     });
+    const effectivePrompt = input.instructionBundle?.agent_specific_prompt || input.prompt;
 
     // Transition the task to 'working' via the lifecycle service
     const lifecycle = getTaskLifecycleService();
@@ -370,15 +373,15 @@ export class ClaudeConnectorRuntime extends EventEmitter {
 
     try {
       // Determine which tool to call
-      const toolName = input.toolName || this.selectDefaultTool(input.prompt);
-      let toolArgs = input.toolArgs || this.buildToolArgs(toolName, input.prompt);
+      const toolName = input.toolName || this.selectDefaultTool(effectivePrompt);
+      let toolArgs = input.toolArgs || this.buildToolArgs(toolName, effectivePrompt);
 
       // Inject input artifacts into the prompt context if provided
       if (input.artifacts?.length) {
         const artifactContext = input.artifacts
           .map((a) => `[Artifact: ${a.key} (${a.artifact_type})]:\n${a.content}`)
           .join('\n\n');
-        const augmentedPrompt = `${input.prompt}\n\n--- Attached Artifacts ---\n${artifactContext}`;
+        const augmentedPrompt = `${effectivePrompt}\n\n--- Attached Artifacts ---\n${artifactContext}`;
         toolArgs = { ...toolArgs };
         // Update the prompt-like field with artifact context
         if ('prompt' in toolArgs) toolArgs.prompt = augmentedPrompt;

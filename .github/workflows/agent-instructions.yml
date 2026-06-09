@@ -1,0 +1,41 @@
+name: Agent Instructions
+
+on:
+  pull_request:
+    paths:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".codex/AGENTS.md"
+      - ".gitignore"
+      - "docs/agent-os.md"
+      - "scripts/check-agent-instructions.ts"
+      - "package.json"
+      - ".github/workflows/agent-instructions.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".codex/AGENTS.md"
+      - ".gitignore"
+      - "docs/agent-os.md"
+      - "scripts/check-agent-instructions.ts"
+      - "package.json"
+      - ".github/workflows/agent-instructions.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Verify instruction spine
+        run: node --experimental-strip-types scripts/check-agent-instructions.ts

@@ -240,7 +240,7 @@ services:
       - OPENCODE_SERVICE_URL=${OPENCODE_SERVICE_URL:-http://recoder-opencode:4096}
       - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-opencode}
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-recoder_opencode_key}
-      # Public URL for preview and artifact references while recoder-web is deactivated.
+      # Public URL for preview and artifact references.
       - PUBLIC_URL=${NEXT_PUBLIC_AGENCY_URL:-https://agency.recoder.xyz}
       # SearXNG self-hosted search (same Docker network, port 8080 internally)
       - SEARXNG_URL=http://searxng:8080
@@ -269,10 +269,6 @@ services:
           cpus: "1"
           memory: 512M
     stop_grace_period: 45s
-
-  # recoder-web is intentionally not deployed in production for now.
-  # Keep the code in-repo, but do not consume server space or advertise the lane
-  # until the runtime path is reliable again.
 
   # Next.js agents dashboard — app.recoder.xyz
   recoder-agents:

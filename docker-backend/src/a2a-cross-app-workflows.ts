@@ -186,7 +186,7 @@ async function agencyToAgentsAnalyze(trigger: WorkflowTrigger): Promise<Workflow
 
 /**
  * Web → PM: Create a project feature from generated code.
- * Triggered when recoder-web creates a project (project.created event),
+ * Triggered when Spaces creates a project (project.created event),
  * so PM can track it as a feature/deliverable.
  */
 async function webToPmCodeToProject(trigger: WorkflowTrigger): Promise<WorkflowResult> {

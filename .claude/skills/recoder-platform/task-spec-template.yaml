@@ -1,0 +1,33 @@
+title: ""
+intent: platform_hardening
+space_id: ""
+repo: caelum0x/recoder.xyz
+goal: ""
+
+target_paths: []
+forbidden_paths:
+  - ".env*"
+  - "secrets/**"
+  - "**/*private-key*"
+
+acceptance: []
+
+verification:
+  commands: []
+  browser_checks: []
+
+approval_required:
+  - before pushing branches
+  - before opening pull requests
+  - before editing billing/auth/security-sensitive files
+  - before deployment
+
+artifact_required:
+  - instruction_bundle
+  - summary
+  - changed_files
+  - verification_output
+
+handoff:
+  reviewer: pm_agent
+  final_owner: human

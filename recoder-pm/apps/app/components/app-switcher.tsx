@@ -13,12 +13,6 @@ import { SubscriptionBadge } from "./subscription-badge";
 const currentAppId = "pm";
 const apps = [
   {
-    id: "web",
-    label: "Web",
-    description: "AI Workspace",
-    href: "https://web.recoder.xyz",
-  },
-  {
     id: "agency",
     label: "Agency",
     description: "AI Agency Platform",

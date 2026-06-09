@@ -124,7 +124,6 @@ export class SessionSyncManager {
   ): Promise<{ success: boolean; syncedDomains: string[] }> {
     const recoderDomains = [
       'recoder.xyz',
-      'web.recoder.xyz',
       'chat.recoder.xyz',
       'cli.recoder.xyz'
     ].filter(domain => domain !== currentDomain);
@@ -178,7 +177,6 @@ export class SessionSyncManager {
   async logoutAcrossDomains(userId: string, currentDomain: string): Promise<void> {
     const recoderDomains = [
       'recoder.xyz',
-      'web.recoder.xyz', 
       'chat.recoder.xyz',
       'cli.recoder.xyz'
     ].filter(domain => domain !== currentDomain);

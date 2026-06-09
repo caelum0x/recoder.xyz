@@ -19,6 +19,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
 import type { RecoderAgentIdentity } from '@recoder/shared/a2a';
 import {
   createAuditEvent,
@@ -77,6 +78,7 @@ export interface CodexConnectorState {
 export interface CodexExecuteInput {
   taskId: string;
   prompt: string;
+  instructionBundle?: InstructionBundle;
   requester: RecoderAgentIdentity;
   workspaceId?: string;
   threadId?: string;
@@ -280,6 +282,7 @@ export class CodexConnectorRuntime extends EventEmitter {
       threadId: input.threadId,
     });
     this.lastActivity = new Date().toISOString();
+    const effectivePrompt = input.instructionBundle?.agent_specific_prompt || input.prompt;
 
     try {
       const codexTask = {
@@ -287,7 +290,7 @@ export class CodexConnectorRuntime extends EventEmitter {
         sessionId: `recoder-session-${Date.now()}`,
         message: {
           role: 'user' as const,
-          parts: [{ text: input.prompt }],
+          parts: [{ text: effectivePrompt }],
         },
         artifacts: input.artifacts?.map((a) => ({
           filename: a.filename,

@@ -23,8 +23,47 @@ const types_js_1 = require("./types.js");
 const task_lifecycle_service_js_1 = require("../a2a/task-lifecycle.service.js");
 const slo_metrics_js_1 = require("../a2a/slo-metrics.js");
 const approval_gate_service_js_1 = require("../a2a/approval-gate.service.js");
+const a2a_gateway_js_1 = require("../a2a-gateway.js");
 const logger = (0, logger_js_1.createLogger)('policy:approval-routes');
 exports.approvalRouter = (0, express_1.Router)();
+function syncPolicyApprovalToTaskMetadata(approval, reason) {
+    const taskResult = (0, task_lifecycle_service_js_1.getTaskLifecycleService)().getTask(approval.task_id);
+    if (!taskResult.ok) {
+        return;
+    }
+    (0, task_lifecycle_service_js_1.getTaskLifecycleService)().updateTaskMetadata(approval.task_id, {
+        metadataPatch: {
+            approval: {
+                approvalId: approval.id,
+                status: approval.status,
+                action: approval.action,
+                resource: approval.resource,
+                grantedBy: approval.granted_by,
+                grantedAt: approval.granted_at,
+                expiresAt: approval.expires_at,
+                revokedAt: approval.revoked_at,
+                revokedBy: approval.revoked_by,
+                source: 'policy',
+            },
+        },
+        triggeredBy: approval.revoked_by || approval.granted_by,
+        reason,
+    });
+}
+function appendPolicyApprovalLifecycleEvent(approval, eventType, actorId) {
+    void (0, a2a_gateway_js_1.appendTaskScopedControlPlaneLifecycleEvent)({
+        taskId: approval.task_id,
+        eventType,
+        actorId,
+        detail: {
+            approvalId: approval.id,
+            action: approval.action,
+            resource: approval.resource,
+            status: approval.status,
+            source: 'policy',
+        },
+    });
+}
 // ---------------------------------------------------------------------------
 // POST /approvals - Create/grant an approval
 // ---------------------------------------------------------------------------
@@ -114,6 +153,8 @@ exports.approvalRouter.post('/', (req, res) => {
         }
         // Emit audit event
         (0, audit_emitter_js_1.emitApprovalCreatedAudit)(approval);
+        syncPolicyApprovalToTaskMetadata(approval, 'Policy approval created');
+        appendPolicyApprovalLifecycleEvent(approval, 'policy.approval.created', approval.granted_by);
         logger.info({
             approvalId: approval.id,
             taskId: approval.task_id,
@@ -225,6 +266,8 @@ exports.approvalRouter.post('/:taskId/revoke', (req, res) => {
             const revoked = (0, approval_store_js_1.revokeApproval)(approvalId, revokedBy);
             if (revoked) {
                 (0, audit_emitter_js_1.emitApprovalRevokedAudit)(revoked, revokedBy);
+                syncPolicyApprovalToTaskMetadata(revoked, 'Policy approval revoked');
+                appendPolicyApprovalLifecycleEvent(revoked, 'policy.approval.revoked', revokedBy);
                 logger.info({ approvalId, taskId, revokedBy }, 'single approval revoked via API');
             }
             res.status(200).json({
@@ -245,7 +288,15 @@ exports.approvalRouter.post('/:taskId/revoke', (req, res) => {
         // Emit audit events for each revoked approval
         for (const approval of activeApprovals) {
             // Re-fetch to get updated status
-            (0, audit_emitter_js_1.emitApprovalRevokedAudit)({ ...approval, status: 'revoked', revoked_at: new Date().toISOString(), revoked_by: revokedBy }, revokedBy);
+            const revokedApproval = {
+                ...approval,
+                status: 'revoked',
+                revoked_at: new Date().toISOString(),
+                revoked_by: revokedBy,
+            };
+            (0, audit_emitter_js_1.emitApprovalRevokedAudit)(revokedApproval, revokedBy);
+            syncPolicyApprovalToTaskMetadata(revokedApproval, 'All policy approvals revoked for task');
+            appendPolicyApprovalLifecycleEvent(revokedApproval, 'policy.approval.revoked', revokedBy);
         }
         logger.info({ taskId, revokedBy, revokedCount }, 'task approvals revoked via API');
         res.status(200).json({

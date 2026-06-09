@@ -5,6 +5,7 @@
 		"moduleResolution": "bundler",
 		"moduleDetection": "force",
 		"lib": ["esnext"],
+		"types": [],
 		"sourceMap": true,
 		"declaration": true,
 		"declarationMap": true,

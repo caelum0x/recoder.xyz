@@ -20,7 +20,7 @@ COPY packages ./packages
 COPY internal-packages ./internal-packages
 
 # Create stubs for workspace members we don't need
-RUN for dir in production-engine docker-backend recoder-web recoder-chat app apps/mobile recoder-studio apps/ui.giselles.ai scripts deployment; do \
+RUN for dir in production-engine docker-backend recoder-chat app apps/mobile recoder-studio apps/ui.giselles.ai scripts deployment; do \
       mkdir -p "$dir" && echo '{"name":"stub-'$(echo $dir | tr / -)'","version":"0.0.0","private":true}' > "$dir/package.json"; \
     done
 

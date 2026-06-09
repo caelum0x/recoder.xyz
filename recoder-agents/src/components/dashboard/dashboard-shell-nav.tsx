@@ -11,11 +11,13 @@ const NAV_ITEMS = [
     label: 'Dashboard',
     match: (pathname: string) =>
       !pathname.startsWith('/agents') &&
+      !pathname.startsWith('/agent-os') &&
       !pathname.startsWith('/workflows') &&
       !pathname.startsWith('/squads') &&
       !pathname.startsWith('/team') &&
       !pathname.startsWith('/capabilities'),
   },
+  { href: '/agent-os', label: 'Agent OS', match: (pathname: string) => pathname.startsWith('/agent-os') },
   { href: '/agents', label: 'Agents', match: (pathname: string) => pathname.startsWith('/agents') },
   { href: '/workflows', label: 'Workflows', match: (pathname: string) => pathname.startsWith('/workflows') },
   { href: '/squads', label: 'Squads', match: (pathname: string) => pathname.startsWith('/squads') },

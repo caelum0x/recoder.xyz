@@ -1,0 +1,12 @@
+{
+  "id": "recoder-codex-adapter",
+  "kind": "runtime-adapter",
+  "runtime": "codex",
+  "entrypoint": "../recoder-codex-adapter.js",
+  "instructionSources": [
+    "AGENTS.md",
+    ".codex/AGENTS.md",
+    ".codex/hooks/*"
+  ],
+  "ownsCanonicalState": false
+}

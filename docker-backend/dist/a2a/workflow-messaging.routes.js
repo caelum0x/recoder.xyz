@@ -21,6 +21,23 @@ const agent_messaging_service_1 = require("./agent-messaging.service");
 const delegation_chain_service_1 = require("./delegation-chain.service");
 const agent_registry_service_1 = require("./agent-registry.service");
 const task_lifecycle_service_1 = require("./task-lifecycle.service");
+const a2a_gateway_1 = require("../a2a-gateway");
+function mapDelegationStatusToLifecycleEvent(status) {
+    switch (status) {
+        case 'accepted':
+            return 'handoff.accepted';
+        case 'completed':
+            return 'handoff.completed';
+        case 'rejected':
+        case 'failed':
+        case 'cancelled':
+            return 'handoff.declined';
+        case 'pending':
+        case 'in-progress':
+        default:
+            return 'handoff.initiated';
+    }
+}
 function syncDelegationToTaskMetadata(delegation, patch, reason) {
     const sourceTaskId = delegation.metadata?.sourceTaskId;
     if (!sourceTaskId)
@@ -38,6 +55,24 @@ function syncDelegationToTaskMetadata(delegation, patch, reason) {
         },
         triggeredBy: 'workflow-messaging',
         reason,
+    });
+    void (0, a2a_gateway_1.appendTaskScopedControlPlaneLifecycleEvent)({
+        taskId: sourceTaskId,
+        eventType: mapDelegationStatusToLifecycleEvent(delegation.status),
+        actorId: delegation.toAgentId,
+        state: delegation.status === 'completed'
+            ? 'completed'
+            : delegation.status === 'rejected' || delegation.status === 'failed' || delegation.status === 'cancelled'
+                ? 'failed'
+                : 'working',
+        detail: {
+            delegationId: delegation.delegationId,
+            targetAgentId: delegation.toAgentId,
+            status: delegation.status,
+            intent: delegation.metadata?.intent || 'handoff',
+            ...(delegation.error ? { error: delegation.error } : {}),
+            ...(delegation.result ? { result: delegation.result } : {}),
+        },
     });
 }
 // ---------------------------------------------------------------------------

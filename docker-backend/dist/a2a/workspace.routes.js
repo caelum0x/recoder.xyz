@@ -167,11 +167,17 @@ async function buildWorkspaceControlPlaneSnapshot(wsId) {
         if (task.state === 'working' || task.state === 'input-required') {
             acc.activeTasks += 1;
         }
+        if (task.claim) {
+            acc.claimedTasks += 1;
+        }
         acc.evidenceItems += typeof task.runtime?.evidenceCount === 'number' ? task.runtime.evidenceCount : 0;
         acc.previews += typeof task.runtime?.previewCount === 'number' ? task.runtime.previewCount : 0;
         acc.artifacts += typeof task.runtime?.artifactCount === 'number' ? task.runtime.artifactCount : 0;
         acc.logEvidence += typeof task.runtime?.logCount === 'number' ? task.runtime.logCount : 0;
         acc.runtimeEvidence += typeof task.runtime?.runtimeCount === 'number' ? task.runtime.runtimeCount : 0;
+        acc.orchestrationRuns += task.controlPlane ? 1 : 0;
+        acc.orchestrationLifecycleEvents += typeof task.controlPlane?.lifecycleCount === 'number' ? task.controlPlane.lifecycleCount : 0;
+        acc.orchestrationEvidenceItems += typeof task.controlPlane?.evidenceCount === 'number' ? task.controlPlane.evidenceCount : 0;
         return acc;
     }, {
         totalAgents: agents.length,
@@ -179,8 +185,11 @@ async function buildWorkspaceControlPlaneSnapshot(wsId) {
         offlineAgents: agents.filter((agent) => agent.status === 'offline').length,
         localBridgeSessions: agents.reduce((sum, agent) => sum + agent.connectedSessionCount, 0),
         pairedBridgeSessions: bridgeSessions.length,
+        healthyPairedBridgeSessions: bridgeSessions.filter((session) => session.registry.online).length,
+        unhealthyPairedBridgeSessions: bridgeSessions.filter((session) => !session.registry.online).length,
         totalTasks: 0,
         activeTasks: 0,
+        claimedTasks: 0,
         tasksByState,
         pendingApprovals: approvals.filter((approval) => approval.status === 'pending' || approval.status === 'escalated').length,
         totalApprovals: approvals.length,
@@ -191,6 +200,9 @@ async function buildWorkspaceControlPlaneSnapshot(wsId) {
         artifacts: 0,
         logEvidence: 0,
         runtimeEvidence: 0,
+        orchestrationRuns: 0,
+        orchestrationLifecycleEvents: 0,
+        orchestrationEvidenceItems: 0,
     });
     return {
         workspace: ws,
@@ -201,6 +213,7 @@ async function buildWorkspaceControlPlaneSnapshot(wsId) {
         handoffs,
         bridgeSessions: bridgeSessions.map((session) => ({
             bridgeId: session.bridgeId,
+            durableIdentity: session.durableIdentity,
             scope: session.scope || null,
             agentId: session.agentId || null,
             agentName: session.agentName || null,
@@ -208,10 +221,12 @@ async function buildWorkspaceControlPlaneSnapshot(wsId) {
             workspaceId: session.workspaceId || null,
             projectId: session.projectId || null,
             capabilities: session.capabilities || [],
+            normalizedCapabilities: session.capabilities || [],
             metadata: session.metadata || null,
             createdAt: session.createdAt,
             expiresAt: session.expiresAt,
             heartbeat: session.heartbeat,
+            registry: session.registry,
         })),
     };
 }
@@ -248,10 +263,13 @@ function buildWorkspaceContextPackageFromSnapshot(snapshot) {
             assignee_agent_id: task.assignee_agent_id,
             createdAt: task.createdAt,
             updatedAt: task.updatedAt,
+            claim: task.claim ?? null,
             approvalStatus: task.approval?.status ?? null,
             handoffStatus: task.handoff?.status ?? null,
             review: task.review ?? null,
+            delivery: task.delivery ?? null,
             runtime: task.runtime ?? null,
+            controlPlane: task.controlPlane ?? null,
         })),
         pendingApprovals: snapshot.approvals
             .filter((approval) => approval.status === 'pending' || approval.status === 'escalated')
@@ -281,12 +299,15 @@ function buildWorkspaceContextPackageFromSnapshot(snapshot) {
         })),
         bridgeSessions: snapshot.bridgeSessions.map((session) => ({
             bridgeId: session.bridgeId,
+            durableIdentity: session.durableIdentity,
             agentId: session.agentId,
             agentName: session.agentName,
             agentPlatform: session.agentPlatform,
             workspaceId: session.workspaceId,
             projectId: session.projectId,
             capabilities: session.capabilities,
+            normalizedCapabilities: session.normalizedCapabilities,
+            registry: session.registry,
             createdAt: session.createdAt,
             expiresAt: session.expiresAt,
         })),
@@ -639,6 +660,18 @@ exports.workspaceRouter.post('/:wsId/handoffs', (req, res) => {
                 channelId: ws.defaultChannelId,
                 sourceTaskId: taskId,
                 intent: intent === 'delegate' || intent === 'review' ? intent : 'handoff',
+            },
+        });
+        void (0, a2a_gateway_1.appendTaskScopedControlPlaneLifecycleEvent)({
+            taskId,
+            eventType: 'handoff.initiated',
+            actorId: toAgentId,
+            state: 'working',
+            detail: {
+                delegationId: delegation.delegationId,
+                intent: intent === 'delegate' || intent === 'review' ? intent : 'handoff',
+                fromAgentId,
+                toAgentId,
             },
         });
         sendSuccess(res, mapDelegationToHandoffRecord(delegation, ws.workspaceId), 201);

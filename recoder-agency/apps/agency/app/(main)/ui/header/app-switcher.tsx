@@ -7,12 +7,6 @@ const currentAppId = "agency";
 
 const switcherApps = [
 	{
-		id: "web",
-		label: "Web",
-		description: "AI Workspace",
-		href: "https://web.recoder.xyz",
-	},
-	{
 		id: "agency",
 		label: "Agency",
 		description: "AI Agency Platform",

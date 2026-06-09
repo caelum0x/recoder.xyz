@@ -2,6 +2,8 @@ packages:
   - docker-backend
   - app
   - recoder-agents
+  - apps/agent-gateway
+  - apps/agent-worker
   - apps/mobile
   - apps/ui.giselles.ai
   - shared

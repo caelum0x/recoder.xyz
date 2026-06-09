@@ -108,9 +108,47 @@ export interface TaskResult {
   artifacts?: TaskArtifact[];
 }
 
+export type TaskArtifactType =
+  | 'patch'
+  | 'file'
+  | 'plan'
+  | 'report'
+  | 'log'
+  | 'pull_request'
+  | 'preview'
+  | 'screenshot'
+  | 'verification'
+  | 'custom';
+
+export const TaskArtifactTypeEnum = {
+  Patch: 'patch' as const satisfies TaskArtifactType,
+  File: 'file' as const satisfies TaskArtifactType,
+  Plan: 'plan' as const satisfies TaskArtifactType,
+  Report: 'report' as const satisfies TaskArtifactType,
+  Log: 'log' as const satisfies TaskArtifactType,
+  PullRequest: 'pull_request' as const satisfies TaskArtifactType,
+  Preview: 'preview' as const satisfies TaskArtifactType,
+  Screenshot: 'screenshot' as const satisfies TaskArtifactType,
+  Verification: 'verification' as const satisfies TaskArtifactType,
+  Custom: 'custom' as const satisfies TaskArtifactType,
+} as const;
+
+export const TASK_ARTIFACT_TYPES: readonly TaskArtifactType[] = [
+  TaskArtifactTypeEnum.Patch,
+  TaskArtifactTypeEnum.File,
+  TaskArtifactTypeEnum.Plan,
+  TaskArtifactTypeEnum.Report,
+  TaskArtifactTypeEnum.Log,
+  TaskArtifactTypeEnum.PullRequest,
+  TaskArtifactTypeEnum.Preview,
+  TaskArtifactTypeEnum.Screenshot,
+  TaskArtifactTypeEnum.Verification,
+  TaskArtifactTypeEnum.Custom,
+] as const;
+
 export interface TaskArtifact {
   key: string;
-  artifact_type: 'patch' | 'file' | 'plan' | 'report' | 'log' | 'custom';
+  artifact_type: TaskArtifactType;
   mime_type: string;
   content: string;
   path?: string;

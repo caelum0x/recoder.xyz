@@ -1,0 +1,23 @@
+{
+  "id": "recoder-mcp-server",
+  "kind": "mcp-server",
+  "package": "@recoder/agent-mcp",
+  "ownsCanonicalState": false,
+  "servers": [
+    "recoder.tasks",
+    "recoder.runs",
+    "recoder.artifacts",
+    "recoder.approvals",
+    "recoder.memory",
+    "recoder.git_nexus",
+    "recoder.beads",
+    "recoder.github",
+    "recoder.repo",
+    "recoder.browser",
+    "recoder.preview",
+    "recoder.deploy",
+    "recoder.billing",
+    "recoder.logs",
+    "recoder.oss"
+  ]
+}

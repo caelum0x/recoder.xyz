@@ -128,7 +128,7 @@ class UnifiedConfigManager {
             security: {
                 encryptApiKeys: true,
                 allowRemoteExecution: false,
-                trustedDomains: ['recoder.xyz', 'api.recoder.xyz', 'web.recoder.xyz'],
+                trustedDomains: ['recoder.xyz', 'api.recoder.xyz', 'agents.recoder.xyz', 'pm.recoder.xyz', 'agency.recoder.xyz'],
                 maxTokenUsage: 1000000
             }
         };

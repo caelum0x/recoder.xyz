@@ -1,7 +1,7 @@
 /**
  * Unified Configuration System for Recoder.xyz Ecosystem
  * 
- * Provides consistent configuration across CLI, Web Platform, and VS Code Extension
+ * Provides consistent configuration across CLI, Spaces, and VS Code Extension
  */
 
 import * as os from 'os';
@@ -57,7 +57,7 @@ export interface RecoderConfig {
     telemetry: boolean;
   };
   
-  web: {
+  spaces: {
     theme: 'light' | 'dark' | 'auto';
     autoSave: boolean;
     showPreview: boolean;
@@ -199,7 +199,7 @@ export class UnifiedConfigManager {
         telemetry: true
       },
       
-      web: {
+      spaces: {
         theme: 'auto',
         autoSave: true,
         showPreview: true
@@ -226,7 +226,7 @@ export class UnifiedConfigManager {
       security: {
         encryptApiKeys: true,
         allowRemoteExecution: false,
-        trustedDomains: ['recoder.xyz', 'api.recoder.xyz', 'web.recoder.xyz'],
+        trustedDomains: ['recoder.xyz', 'api.recoder.xyz', 'agents.recoder.xyz', 'pm.recoder.xyz', 'agency.recoder.xyz'],
         maxTokenUsage: 1000000
       }
     };
@@ -253,9 +253,9 @@ export class UnifiedConfigManager {
         ...defaults.cli,
         ...existingConfig.cli
       },
-      web: {
-        ...defaults.web,
-        ...existingConfig.web
+      spaces: {
+        ...defaults.spaces,
+        ...existingConfig.spaces
       },
       extension: {
         ...defaults.extension,

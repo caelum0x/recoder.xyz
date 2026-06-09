@@ -1,5 +1,6 @@
 import {
   ActivityIcon,
+  BrainCircuitIcon,
   ChartAreaIcon,
   ClockIcon,
   CogIcon,
@@ -10,6 +11,7 @@ import {
   HomeIcon,
   MessageCircleIcon,
   MicIcon,
+  ShieldCheckIcon,
   SparkleIcon,
   SparklesIcon,
   TablePropertiesIcon,
@@ -96,6 +98,20 @@ export const proposals: SidebarPage = {
   label: "Proposals",
   href: "/proposals",
   active: (pathname) => pathname.startsWith("/proposals"),
+};
+
+export const agentApprovals: SidebarPage = {
+  icon: ShieldCheckIcon,
+  label: "Approvals",
+  href: "/approvals",
+  active: (pathname) => pathname.startsWith("/approvals"),
+};
+
+export const memoryCandidates: SidebarPage = {
+  icon: BrainCircuitIcon,
+  label: "Memory",
+  href: "/memory-candidates",
+  active: (pathname) => pathname.startsWith("/memory-candidates"),
 };
 
 export const changelog: SidebarPage = {

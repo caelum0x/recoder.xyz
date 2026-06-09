@@ -1,0 +1,8 @@
+# Recoder Agent OS project hook commands.
+# Keep personal Codex/OMX settings in local .codex/config.toml.
+
+[recoder.agent_os_hooks]
+pre_tool_use = "node --import tsx .codex/hooks/pre-tool-use.ts"
+post_tool_use = "node --import tsx .codex/hooks/post-tool-use.ts"
+stop = "node --import tsx .codex/hooks/stop.ts"
+memory_candidate = "node --import tsx .codex/hooks/memory-candidate.ts"

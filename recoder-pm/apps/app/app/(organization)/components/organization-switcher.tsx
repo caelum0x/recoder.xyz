@@ -24,12 +24,6 @@ const apps = [
     current: false,
   },
   {
-    label: "Web",
-    description: "Web AI IDE",
-    href: "https://web.recoder.xyz",
-    current: false,
-  },
-  {
     label: "PM",
     description: "Product Management",
     href: "https://pm.recoder.xyz",

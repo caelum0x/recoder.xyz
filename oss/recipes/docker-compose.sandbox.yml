@@ -1,0 +1,3 @@
+# Canonical recipe alias. The runnable compose file lives in infra/.
+include:
+  - ../../infra/docker-compose.sandbox.yml
