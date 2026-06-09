@@ -24,6 +24,7 @@ export interface CapabilitiesResponse {
   agentSkills: { available: boolean; trackedAgents: number };
   zeroTrustNetwork: { available: boolean; configured: boolean; controllerUrl?: string; reason?: string };
   billing?: { available: boolean; configured: boolean; server: string; organizationId?: string; reason?: string };
+  agentCollaboration?: { available: boolean; squads: number };
 }
 
 async function fetchCapabilities(): Promise<CapabilitiesResponse> {

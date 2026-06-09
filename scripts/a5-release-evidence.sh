@@ -55,10 +55,13 @@ echo "production_scope: $PRODUCTION_SCOPE" | tee -a "$LOG_FILE"
 
 run_step "A5 structure: required repos present" /bin/zsh -lc '
   set -euo pipefail
-  req=(backend docker-backend apps/mobile recoder-agency recoder-pm recoder-web)
+  req=(backend docker-backend apps/mobile recoder-agency recoder-pm)
   for d in "${req[@]}"; do
     [[ -d "$d" ]] || { echo "missing directory: $d" >&2; exit 1; }
   done
+  if [[ -d "recoder-web" ]]; then
+    echo "WARN retired optional surface still present: recoder-web"
+  fi
   if [[ ! -d "app" && ! -d "apps/frontend" ]]; then
     echo "missing frontend directory: expected app or apps/frontend" >&2
     exit 1

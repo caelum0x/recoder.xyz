@@ -55,6 +55,17 @@ is_allowed_runtime_path() {
   esac
 }
 
+is_retired_surface_path() {
+  case "$1" in
+    recoder-web|recoder-web/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 is_known_nested_repo_path() {
   case "$1" in
     recoder-web/starters)
@@ -100,11 +111,13 @@ trap 'rm -f "$UNEXPECTED_NULL_LIST"' EXIT
 runtime_count=0
 nested_count=0
 generated_count=0
+retired_count=0
 unexpected_count=0
 
 runtime_items=""
 nested_items=""
 generated_items=""
+retired_items=""
 unexpected_items=""
 
 while IFS= read -r -d '' entry; do
@@ -122,6 +135,12 @@ while IFS= read -r -d '' entry; do
   if is_known_nested_repo_path "$path"; then
     nested_count=$((nested_count + 1))
     nested_items="${nested_items}${line}"$'\n'
+    continue
+  fi
+
+  if is_retired_surface_path "$path"; then
+    retired_count=$((retired_count + 1))
+    retired_items="${retired_items}${line}"$'\n'
     continue
   fi
 
@@ -158,6 +177,12 @@ if [[ -n "$generated_items" ]]; then
   printf '%s' "$generated_items"
 fi
 
+if [[ -n "$retired_items" ]]; then
+  echo
+  echo "-- Retired Surface Drift ($retired_count) --"
+  printf '%s' "$retired_items"
+fi
+
 if [[ -n "$unexpected_items" ]]; then
   echo
   echo "-- Unexpected Source Drift ($unexpected_count) --"
@@ -178,11 +203,11 @@ if [[ "$BACKUP_UNEXPECTED" == true && "$unexpected_count" -gt 0 ]]; then
   echo "  archive:  $archive_path"
 fi
 
-if [[ "$unexpected_count" -gt 0 || "$generated_count" -gt 0 ]]; then
+if [[ "$unexpected_count" -gt 0 || "$generated_count" -gt 0 || "$retired_count" -gt 0 ]]; then
   echo
-  echo "checkout-drift: FAIL (unexpected=${unexpected_count}, generated=${generated_count}, nested=${nested_count}, runtime=${runtime_count})"
+  echo "checkout-drift: FAIL (unexpected=${unexpected_count}, generated=${generated_count}, retired=${retired_count}, nested=${nested_count}, runtime=${runtime_count})"
   exit 1
 fi
 
 echo
-echo "checkout-drift: PASS (unexpected=0, generated=0, nested=${nested_count}, runtime=${runtime_count})"
+echo "checkout-drift: PASS (unexpected=0, generated=0, retired=0, nested=${nested_count}, runtime=${runtime_count})"

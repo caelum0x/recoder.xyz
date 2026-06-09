@@ -831,6 +831,13 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
   });
 }
 
+function promoteQueryToken(req: express.Request, _res: express.Response, next: express.NextFunction) {
+  if (!req.headers.authorization && typeof req.query.token === 'string' && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+}
+
 // Admin authorization middleware - requires authenticated user to be in ADMIN_USER_IDS
 const ADMIN_USER_IDS = new Set(
   (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean)
@@ -1912,6 +1919,79 @@ async function getOrRecoverContainer(projectId: string): Promise<ContainerEntry 
   }
 
   return undefined;
+}
+
+/**
+ * Provision a brand-new Daytona sandbox for a project that has none. This is a
+ * focused, headless version of the web-IDE container route's creation path —
+ * it intentionally omits the route's ownership-reservation and zrok extras so
+ * it can be called from non-HTTP flows (e.g. squad dispatch with
+ * `createSandbox`). The proven web-IDE route is left untouched; this is purely
+ * additive. Returns the registered ContainerEntry, or undefined if Daytona is
+ * not configured. Throws on creation failure so callers can report truthfully.
+ */
+async function provisionDaytonaSandboxForProject(
+  projectId: string,
+  userId: string,
+): Promise<ContainerEntry | undefined> {
+  if (!isDaytonaConfigured()) return undefined;
+
+  const dc = getDaytonaClient();
+  const sandbox = await dc.createSandbox({
+    labels: { projectId, userId, source: 'squad-dispatch' },
+    public: true,
+    resources: { disk: DAYTONA_WEB_IDE_DISK_GB },
+  });
+
+  // Wait for the sandbox to reach a running state before returning.
+  if (sandbox.state !== 'started' && sandbox.state !== 'running') {
+    try {
+      await dc.getOrStartSandbox(sandbox.id, 30000);
+    } catch (waitErr: any) {
+      logger.warn({ sandboxId: sandbox.id, err: waitErr?.message }, 'provisioned sandbox readiness wait failed, proceeding');
+    }
+  }
+
+  const workDir = await dc.getWorkDir(sandbox.id).catch(() => DAYTONA_WORKSPACE_ROOT);
+  dc.rememberWorkDir(sandbox.id, workDir);
+  if (workDir !== DAYTONA_WORKSPACE_ROOT) {
+    try {
+      await dc.execCommand(
+        sandbox.id,
+        `test -e ${DAYTONA_WORKSPACE_ROOT} || ln -sf '${workDir.replace(/'/g, "'\\''")}' ${DAYTONA_WORKSPACE_ROOT}`,
+        { timeoutSecs: 10 },
+      );
+    } catch (symlinkErr: any) {
+      logger.warn({ sandboxId: sandbox.id, workDir, err: symlinkErr?.message }, 'provisioned sandbox /workspace alias failed');
+    }
+  }
+
+  const defaultPort = 5173;
+  const preview = await getDaytonaPreviewAccess({ id: sandbox.id }, defaultPort).catch((err: any) => {
+    logger.warn({ sandboxId: sandbox.id, err: err?.message }, 'provisioned sandbox preview fallback');
+    return { url: dc.getPreviewUrl(sandbox.id, defaultPort) } as { url: string };
+  });
+
+  const entry: ContainerEntry = {
+    id: sandbox.id,
+    lastActive: Date.now(),
+    port: defaultPort,
+    ptyPort: 0,
+    backgroundDev: false,
+    userId,
+    daytona: true,
+    daytonaPreviewUrl: preview.url,
+    daytonaDevSessionId: buildDaytonaDevServerSessionId(projectId),
+    daytonaWorkDir: workDir,
+  };
+  containers.set(projectId, entry);
+  daytonaSandboxIds.add(sandbox.id);
+  registerDaytonaId(sandbox.id);
+  registerUserContainer(userId, projectId);
+  persistContainers();
+
+  logger.info({ sandboxId: sandbox.id, projectId, source: 'squad-dispatch' }, 'provisioned new Daytona sandbox for project');
+  return entry;
 }
 
 // Track containers being created to prevent race conditions
@@ -13979,7 +14059,7 @@ app.ws('/agent-bridge', async (ws: WebSocket, req: express.Request) => {
 });
 
 // GET /api/a2a/bridge/agents — live connected bridge sessions
-app.get('/api/a2a/bridge/agents', async (_req: express.Request, res: express.Response) => {
+app.get('/api/a2a/bridge/agents', authenticateRequest, async (_req: express.Request, res: express.Response) => {
   try {
     const sessions = getAgentBridgeService().listConnectedSessions();
     res.json({
@@ -15533,18 +15613,23 @@ app.post('/api/a2a/openclaw/hub/preview', (req, res) => {
   res.json({ ok: true, targets });
 });
 
-app.use('/api/a2a', sseStreamRouter);
+app.use('/api/a2a', promoteQueryToken, authenticateRequest, sseStreamRouter);
 app.use('/api/a2a/connectors/claude', claudeConnectorRouter);
 app.use('/api/a2a/connectors/codex', codexConnectorRouter);
 app.use('/api/a2a/connectors/opencode', opencodeConnectorRouter);
 app.use('/api/a2a/connectors/cursor', cursorConnectorRouter);
 app.use('/api/a2a/connectors/windsurf', windsurfConnectorRouter);
 app.use('/api/a2a/connectors/replit', replitConnectorRouter);
-app.use('/api/a2a/adapters/rest', restAdapterRouter);
-app.use('/api/a2a/adapters/git', gitAdapterRouter);
+// These adapters can register REST/Git integrations against arbitrary
+// targets/repo paths and drive operations on them, so they MUST require auth.
+// (The standalone a2a-gateway process guards the same routers via its own
+// extractA2AIdentity middleware; the main server has no such guard, so add it
+// here explicitly.) No frontend/external consumers — purely additive hardening.
+app.use('/api/a2a/adapters/rest', authenticateRequest, restAdapterRouter);
+app.use('/api/a2a/adapters/git', authenticateRequest, gitAdapterRouter);
 app.use('/api/a2a/context', contextBridgeRouter);
-app.use('/api/a2a/workspaces', a2aWorkspaceRouter);
-app.use('/api/spaces', a2aWorkspaceRouter);
+app.use('/api/a2a/workspaces', promoteQueryToken, authenticateRequest, a2aWorkspaceRouter);
+app.use('/api/spaces', promoteQueryToken, authenticateRequest, a2aWorkspaceRouter);
 app.use('/api/a2a/memory', authenticateRequest, memoryRouter);
 app.use('/api/a2a/code-search', codeSearchRouter);
 app.use('/api/a2a/search', searchRouter);
@@ -16137,7 +16222,343 @@ app.get('/api/capabilities', asyncHandler(async (_req: express.Request, res: exp
     agentSkills: { available: true, trackedAgents: (await import('./agent-skill-profile.js')).listProfiles().length },
     zeroTrustNetwork: await (await import('./ziti-client.js')).zitiHealth(),
     billing: await (await import('./polar-client.js')).polarHealth(),
+    agentCollaboration: {
+      available: true,
+      squads: (await import('./a2a/squad.service.js')).listSquads().length,
+    },
   });
+}));
+
+// ── Squads API (agent + human teams) ────────────────────────────────────────
+// Named teams with a leader, per-member roles, and an activity log. Work can be
+// assigned to a team, not just a single agent.
+
+app.get('/api/a2a/squads', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listSquads } = await import('./a2a/squad.service.js');
+  sendSuccess(res, { squads: listSquads(req.userId) });
+}));
+
+app.post('/api/a2a/squads', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name, description, leaderId, members } = req.body ?? {};
+  if (typeof name !== 'string' || !name.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+  }
+  if (members !== undefined && !Array.isArray(members)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'members must be an array'));
+  }
+  const { createSquad } = await import('./a2a/squad.service.js');
+  sendSuccess(res, createSquad({ name, description, leaderId, members, ownerId: req.userId! }));
+}));
+
+app.post('/api/a2a/squads/import', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const data = req.body ?? {};
+  if (typeof data.name !== 'string' || !data.name.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+  }
+  if (data.members !== undefined && !Array.isArray(data.members)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'members must be an array'));
+  }
+  const { importSquad } = await import('./a2a/squad.service.js');
+  sendSuccess(res, importSquad(data, req.userId!));
+}));
+
+app.get('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getSquad } = await import('./a2a/squad.service.js');
+  const squad = getSquad(req.params.id);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  if (req.query.withPresence === 'true') {
+    const { buildPresenceMap } = await import('./a2a/presence.service.js');
+    const agentIds = squad.members.filter((m) => m.kind === 'agent').map((m) => m.id);
+    const presence = await buildPresenceMap(agentIds);
+    return sendSuccess(res, { ...squad, presence });
+  }
+  sendSuccess(res, squad);
+}));
+
+app.patch('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { name, description, leaderId } = req.body ?? {};
+  const { updateSquad } = await import('./a2a/squad.service.js');
+  const squad = updateSquad(req.params.id, { name, description, leaderId }, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+app.delete('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { deleteSquad } = await import('./a2a/squad.service.js');
+  sendSuccess(res, { deleted: deleteSquad(req.params.id) });
+}));
+
+app.post('/api/a2a/squads/:id/clone', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { cloneSquad } = await import('./a2a/squad.service.js');
+  const squad = cloneSquad(req.params.id, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+app.get('/api/a2a/squads/:id/export', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { exportSquad } = await import('./a2a/squad.service.js');
+  const portable = exportSquad(req.params.id);
+  if (!portable) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, portable);
+}));
+
+app.post('/api/a2a/squads/:id/members', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { id, kind, role } = req.body ?? {};
+  if (typeof id !== 'string' || !id.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'member id (string) is required'));
+  }
+  const { addMember } = await import('./a2a/squad.service.js');
+  const squad = addMember(req.params.id, { id, kind, role }, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+app.patch('/api/a2a/squads/:id/members/:memberId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { role } = req.body ?? {};
+  if (typeof role !== 'string' || !role.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'role (string) is required'));
+  }
+  const { setMemberRole } = await import('./a2a/squad.service.js');
+  const squad = setMemberRole(req.params.id, req.params.memberId, role, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad or member not found'));
+  sendSuccess(res, squad);
+}));
+
+app.delete('/api/a2a/squads/:id/members/:memberId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { removeMember } = await import('./a2a/squad.service.js');
+  const squad = removeMember(req.params.id, req.params.memberId, req.userId!);
+  if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
+  sendSuccess(res, squad);
+}));
+
+// ── Squad task dispatch (assign work to a team) ─────────────────────────────
+
+app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { task, strategy, projectId, execute, createSandbox } = req.body ?? {};
+  if (typeof task !== 'string' || !task.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'task (string) is required'));
+  }
+  if (strategy !== undefined && !['all', 'leader', 'round-robin', 'best-match'].includes(strategy)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'strategy must be all|leader|round-robin|best-match'));
+  }
+  const { dispatchToSquad } = await import('./a2a/squad-dispatch.service.js');
+  const result = await dispatchToSquad({ squadId: req.params.id, task: task.trim(), strategy, createdBy: req.userId! });
+  if (!result.ok) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.reason ?? 'dispatch failed'));
+
+  // Optional real execution on a project's coding runtime. Session-on-demand:
+  // if no ready session exists, start one on the project's EXISTING container
+  // (reuses the proven session-start path; never creates a sandbox from
+  // nothing). We resolve readiness synchronously so the response can report the
+  // TRUTH — requested/started/reason — and only the long agent run is deferred.
+  const execution: { requested: boolean; started: boolean; reason?: string } = {
+    requested: execute === true && typeof projectId === 'string' && !!projectId,
+    started: false,
+  };
+  if (execution.requested) {
+    try {
+      const { getRuntime } = await import('./a2a/coding-runtime.js');
+      const selection = codingRuntimeSelectionByProject.get(projectId);
+      const runtimeType = selection?.runtimeType ?? 'opencode';
+      const runtime = getRuntime(runtimeType as never);
+      const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
+
+      if (!runtime) {
+        execution.reason = `coding runtime '${runtimeType}' unavailable`;
+      } else {
+        let state = runtime.getState(projectId);
+        if (!state || state.status !== 'ready') {
+          let entry = await getOrRecoverContainer(projectId);
+          // Container-from-nothing: opt-in `createSandbox` provisions a fresh
+          // sandbox when the project has none, so dispatch can run end-to-end
+          // without first opening the project in the web IDE.
+          if (!entry && createSandbox === true) {
+            try {
+              entry = await provisionDaytonaSandboxForProject(projectId, req.userId!);
+              if (!entry) execution.reason = 'sandbox provisioning unavailable (Daytona not configured)';
+            } catch (provErr) {
+              execution.reason = 'sandbox provisioning failed';
+              logger.warn({ provErr, projectId }, 'squad dispatch sandbox provisioning failed');
+            }
+          }
+          if (!entry && !execution.reason) {
+            execution.reason = 'no sandbox for this project — dispatch with createSandbox:true to provision one, or open it in the IDE first';
+          } else if (entry) {
+            await runtime.startSession({
+              projectId,
+              sandboxId: entry.id,
+              sandboxExecUrl: `${daytonaUrl}/api/toolbox/${entry.id}/toolbox/process/execute`,
+              daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+            });
+            state = runtime.getState(projectId);
+          }
+        }
+
+        if (!execution.reason && state && state.status === 'ready') {
+          execution.started = true;
+          const readySandboxId = state.sandboxId;
+          // Readiness is confirmed; defer only the long-running agent prompt.
+          void runtime
+            .sendPrompt({
+              projectId,
+              prompt: task.trim(),
+              sandboxExecUrl: `${daytonaUrl}/api/toolbox/${readySandboxId}/toolbox/process/execute`,
+              daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
+            })
+            .catch((err) => logger.warn({ err, projectId }, 'squad dispatch sendPrompt failed'));
+        } else if (!execution.reason) {
+          execution.reason = 'coding runtime session not ready';
+        }
+      }
+    } catch (err) {
+      execution.reason = 'execution attempt failed';
+      logger.warn({ err, projectId }, 'squad dispatch on-demand coding-runtime execution failed');
+    }
+  }
+
+  // `executed` kept for backward compatibility; `execution` carries the truth.
+  sendSuccess(res, { ...result.squadTask, deliveredTo: result.deliveredTo ?? [], executed: execution.started, execution });
+}));
+
+// Cross-squad board: every task across the caller's squads, enriched with the
+// squad name so the frontend doesn't need an N+1 join. Scoped to squads the
+// caller owns so the board never leaks another user's dispatches.
+app.get('/api/a2a/squad-tasks', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listAllSquadTasks } = await import('./a2a/squad-dispatch.service.js');
+  const { listSquads } = await import('./a2a/squad.service.js');
+  const squads = listSquads(req.userId!);
+  const nameById = new Map(squads.map((s) => [s.id, s.name]));
+  const tasks = listAllSquadTasks(squads.map((s) => s.id)).map((t) => ({
+    ...t,
+    squadName: nameById.get(t.squadId) ?? t.squadId,
+  }));
+  sendSuccess(res, { tasks });
+}));
+
+app.get('/api/a2a/squads/:id/tasks', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { listSquadTasks } = await import('./a2a/squad-dispatch.service.js');
+  sendSuccess(res, { tasks: listSquadTasks(req.params.id) });
+}));
+
+// Per-agent run history: every squad-task assignment for one agent, newest
+// first, enriched with the squad name. Powers the agent drill-down beyond skills.
+app.get('/api/a2a/agents/:agentId/assignments', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getAgentAssignments } = await import('./a2a/squad-dispatch.service.js');
+  const { listSquads } = await import('./a2a/squad.service.js');
+  const nameById = new Map(listSquads(req.userId!).map((s) => [s.id, s.name]));
+  const assignments = getAgentAssignments(req.params.agentId).map((a) => ({
+    ...a,
+    squadName: nameById.get(a.squadId) ?? a.squadId,
+  }));
+  sendSuccess(res, { assignments });
+}));
+
+app.get('/api/a2a/squads/:id/stats', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getSquadStats } = await import('./a2a/squad-dispatch.service.js');
+  sendSuccess(res, getSquadStats(req.params.id));
+}));
+
+app.post('/api/a2a/squad-tasks/:taskId/assignments/:memberId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { status } = req.body ?? {};
+  if (!['queued', 'in_progress', 'completed', 'failed'].includes(status)) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'status must be queued|in_progress|completed|failed'));
+  }
+  const { transitionAssignment } = await import('./a2a/squad-dispatch.service.js');
+  const result = await transitionAssignment(req.params.taskId, req.params.memberId, status, req.userId!);
+  if (!result.ok) return sendError(res, createError(ErrorCode.NOT_FOUND, result.reason ?? 'transition failed'));
+  sendSuccess(res, result.squadTask);
+}));
+
+// ── Collaboration activity feed (across all squads) ─────────────────────────
+
+app.get('/api/a2a/collaboration/feed', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getCollabFeed } = await import('./a2a/collab-feed.service.js');
+  const limit = Number(req.query.limit) || 50;
+  sendSuccess(res, { feed: await getCollabFeed({ ownerId: req.userId, limit }) });
+}));
+
+app.get('/api/a2a/collaboration/summary', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getCollabSummary } = await import('./a2a/collab-feed.service.js');
+  sendSuccess(res, await getCollabSummary({ ownerId: req.userId }));
+}));
+
+app.get('/api/a2a/collaboration/events', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { recentCollabEvents } = await import('./a2a/collab-events.service.js');
+  sendSuccess(res, { events: recentCollabEvents(Number(req.query.limit) || 50) });
+}));
+
+app.get('/api/a2a/collaboration/roster', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getRoster } = await import('./a2a/collab-feed.service.js');
+  sendSuccess(res, { roster: await getRoster({ ownerId: req.userId }) });
+}));
+
+// ── Workflow step runner (llm/http/code/branch/trigger/squad steps) ─────────
+// Exposes the step executor so composed step lists (incl. squad steps) run via HTTP.
+
+app.post('/api/workflows/run-steps', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { steps, context } = req.body ?? {};
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'steps (non-empty array) is required'));
+  }
+  const valid = steps.every((s) => s && typeof s.type === 'string' && typeof s.name === 'string' && typeof s.config === 'object');
+  if (!valid) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'each step needs { type, name, config }'));
+  }
+  const { executeWorkflowSteps } = await import('./a2a/workflow-step-executor.js');
+  const ctx = { ...(context && typeof context === 'object' ? context : {}), _userId: req.userId };
+  const result = await executeWorkflowSteps(steps, ctx);
+  sendSuccess(res, result);
+}));
+
+// Live Server-Sent Events stream of collaboration events (real-time consumers).
+app.get('/api/a2a/collaboration/stream', promoteQueryToken, authenticateRequest, (req: AuthenticatedRequest, res: express.Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as express.Response & { flushHeaders?: () => void }).flushHeaders?.();
+
+  const send = (event: unknown) => {
+    try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* client gone */ }
+  };
+
+  void import('./a2a/collab-events.service.js').then(({ recentCollabEvents, subscribeCollab }) => {
+    recentCollabEvents(20).reverse().forEach(send);
+    const unsubscribe = subscribeCollab(send);
+    const keepAlive = setInterval(() => {
+      try { res.write(': keepalive\n\n'); } catch { /* ignore */ }
+    }, 25_000);
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      unsubscribe();
+    });
+  });
+});
+
+// ── Agent Presence API (availability × workload) ────────────────────────────
+
+app.get('/api/a2a/presence', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const idsParam = (req.query.agentIds as string | undefined) ?? '';
+  const agentIds = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+  if (agentIds.length === 0) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'agentIds (comma-separated) is required'));
+  }
+  const { buildPresenceMap } = await import('./a2a/presence.service.js');
+  sendSuccess(res, { presence: await buildPresenceMap(agentIds) });
+}));
+
+app.get('/api/a2a/presence/:agentId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getPresence } = await import('./a2a/presence.service.js');
+  sendSuccess(res, await getPresence(req.params.agentId));
+}));
+
+app.post('/api/a2a/presence/:agentId/workload', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { active, queued } = req.body ?? {};
+  const { setWorkload, getPresence } = await import('./a2a/presence.service.js');
+  setWorkload(req.params.agentId, {
+    active: typeof active === 'number' ? active : undefined,
+    queued: typeof queued === 'number' ? queued : undefined,
+  });
+  sendSuccess(res, await getPresence(req.params.agentId));
 }));
 
 // ── Billing (Polar) API ─────────────────────────────────────────────────────
@@ -16233,6 +16654,14 @@ app.get('/api/agent-skills', authenticateRequest, asyncHandler(async (_req: Auth
   sendSuccess(res, { profiles: listProfiles() });
 }));
 
+// Registered before /:agentId so "leaderboard" isn't captured as an agentId.
+app.get('/api/agent-skills/leaderboard', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { getLeaderboard } = await import('./agent-skill-profile.js');
+  sendSuccess(res, {
+    leaderboard: getLeaderboard({ skill: req.query.skill as string | undefined, limit: Number(req.query.limit) || 20 }),
+  });
+}));
+
 app.get('/api/agent-skills/:agentId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const { getAgentProfile } = await import('./agent-skill-profile.js');
   const profile = getAgentProfile(req.params.agentId);
@@ -16257,17 +16686,34 @@ app.get('/api/llm/providers', authenticateRequest, asyncHandler(async (_req: Aut
   sendSuccess(res, { health: llmRouterHealth(), providers: listProviders() });
 }));
 
+app.post('/api/llm/route', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  const { prompt, provider } = req.body ?? {};
+  if (typeof prompt !== 'string' || !prompt.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'prompt (string) is required'));
+  }
+  const { recommendModel } = await import('./llm-router.js');
+  sendSuccess(res, recommendModel({ prompt, provider }));
+}));
+
 app.post('/api/llm/chat', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { model, messages, provider, apiKey, temperature, maxTokens, timeoutMs } = req.body ?? {};
-  if (typeof model !== 'string' || !model.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model (string) is required'));
+  const { model, messages, provider, apiKey, temperature, maxTokens, timeoutMs, autoModel } = req.body ?? {};
+  // autoModel: pick a model by prompt complexity when no explicit model given.
+  let resolvedModel = model;
+  if ((!resolvedModel || autoModel === true) && Array.isArray(messages) && messages.length > 0) {
+    const { recommendModel } = await import('./llm-router.js');
+    const lastUser = [...messages].reverse().find((m: { role?: string; content?: string }) => m.role === 'user');
+    const rec = recommendModel({ prompt: String(lastUser?.content ?? ''), provider });
+    resolvedModel = `${rec.provider}/${rec.model}`;
+  }
+  if (typeof resolvedModel !== 'string' || !resolvedModel.trim()) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model (string) is required (or pass autoModel:true)'));
   }
   if (!Array.isArray(messages) || messages.length === 0) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
   }
   const { chatComplete } = await import('./llm-router.js');
   const result = await chatComplete({
-    model,
+    model: resolvedModel,
     messages,
     provider,
     apiKey,
@@ -16388,12 +16834,12 @@ app.delete('/api/a2a/terminals/:sessionId', authenticateRequest, asyncHandler(as
   sendSuccess(res, { ok: true });
 }));
 
-app.get('/api/a2a/terminals', asyncHandler(async (_req, res) => {
+app.get('/api/a2a/terminals', authenticateRequest, asyncHandler(async (_req, res) => {
   const { listTerminals, getSummary } = await import('./a2a/agent-terminal-registry.js');
   sendSuccess(res, { terminals: listTerminals(), summary: getSummary() });
 }));
 
-app.get('/api/a2a/terminals/summary', asyncHandler(async (_req, res) => {
+app.get('/api/a2a/terminals/summary', authenticateRequest, asyncHandler(async (_req, res) => {
   const { getSummary } = await import('./a2a/agent-terminal-registry.js');
   sendSuccess(res, getSummary());
 }));

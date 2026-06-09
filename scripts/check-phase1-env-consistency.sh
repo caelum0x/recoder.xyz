@@ -88,29 +88,37 @@ APP_ENV="$(first_file_with_key "INTERNAL_SERVICE_KEY" "${APP_ENV_FILES[@]}" || t
 WEB_ENV="$(first_file_with_key "INTERNAL_SERVICE_KEY" "${WEB_ENV_FILES[@]}" || true)"
 DOCKER_ENV="$(first_file_with_key "INTERNAL_SERVICE_KEY" "${DOCKER_ENV_FILES[@]}" || true)"
 
-if [[ -z "$APP_ENV" || -z "$WEB_ENV" || -z "$DOCKER_ENV" ]]; then
-  echo "could not find required env files for app/recoder-web/docker-backend" >&2
+if [[ -z "$APP_ENV" || -z "$DOCKER_ENV" ]]; then
+  echo "could not find required env files for app/docker-backend" >&2
   echo "app file: ${APP_ENV:-missing}" >&2
-  echo "web file: ${WEB_ENV:-missing}" >&2
+  echo "web file: ${WEB_ENV:-missing (optional retired surface)}" >&2
   echo "docker file: ${DOCKER_ENV:-missing}" >&2
   exit 1
 fi
 
 APP_INTERNAL_SERVICE_KEY="$(read_env_value "$APP_ENV" "INTERNAL_SERVICE_KEY")"
-WEB_INTERNAL_SERVICE_KEY="$(read_env_value "$WEB_ENV" "INTERNAL_SERVICE_KEY")"
 DOCKER_INTERNAL_SERVICE_KEY="$(read_env_value "$DOCKER_ENV" "INTERNAL_SERVICE_KEY")"
+WEB_INTERNAL_SERVICE_KEY=""
+if [[ -n "$WEB_ENV" ]]; then
+  WEB_INTERNAL_SERVICE_KEY="$(read_env_value "$WEB_ENV" "INTERNAL_SERVICE_KEY")"
+fi
 
 require_nonempty "app INTERNAL_SERVICE_KEY ($APP_ENV)" "$APP_INTERNAL_SERVICE_KEY"
-require_nonempty "recoder-web INTERNAL_SERVICE_KEY ($WEB_ENV)" "$WEB_INTERNAL_SERVICE_KEY"
 require_nonempty "docker-backend INTERNAL_SERVICE_KEY ($DOCKER_ENV)" "$DOCKER_INTERNAL_SERVICE_KEY"
+if [[ -n "$WEB_ENV" ]]; then
+  require_nonempty "recoder-web INTERNAL_SERVICE_KEY ($WEB_ENV)" "$WEB_INTERNAL_SERVICE_KEY"
+fi
 
-if [[ "$APP_INTERNAL_SERVICE_KEY" != "$WEB_INTERNAL_SERVICE_KEY" || "$APP_INTERNAL_SERVICE_KEY" != "$DOCKER_INTERNAL_SERVICE_KEY" ]]; then
+if [[ "$APP_INTERNAL_SERVICE_KEY" != "$DOCKER_INTERNAL_SERVICE_KEY" ]] || \
+   [[ -n "$WEB_ENV" && "$APP_INTERNAL_SERVICE_KEY" != "$WEB_INTERNAL_SERVICE_KEY" ]]; then
   echo "INTERNAL_SERVICE_KEY mismatch across services" >&2
   echo "app:    $APP_ENV" >&2
-  echo "web:    $WEB_ENV" >&2
+  echo "web:    ${WEB_ENV:-skipped}" >&2
   echo "docker: $DOCKER_ENV" >&2
   echo "app key:    len=${#APP_INTERNAL_SERVICE_KEY} fp=$(fingerprint "$APP_INTERNAL_SERVICE_KEY")" >&2
-  echo "web key:    len=${#WEB_INTERNAL_SERVICE_KEY} fp=$(fingerprint "$WEB_INTERNAL_SERVICE_KEY")" >&2
+  if [[ -n "$WEB_ENV" ]]; then
+    echo "web key:    len=${#WEB_INTERNAL_SERVICE_KEY} fp=$(fingerprint "$WEB_INTERNAL_SERVICE_KEY")" >&2
+  fi
   echo "docker key: len=${#DOCKER_INTERNAL_SERVICE_KEY} fp=$(fingerprint "$DOCKER_INTERNAL_SERVICE_KEY")" >&2
   exit 1
 fi
@@ -146,14 +154,17 @@ if [[ -n "$BILLING_MODE_RAW" ]]; then
 fi
 
 echo "app env:    $APP_ENV"
-echo "web env:    $WEB_ENV"
+echo "web env:    ${WEB_ENV:-skipped (optional retired surface)}"
 echo "docker env: $DOCKER_ENV"
 echo "queue backend: $QUEUE_BACKEND"
 echo "redis url configured: $( [[ -n "$REDIS_URL_VALUE" ]] && echo true || echo false )"
 echo "INTERNAL_SERVICE_KEY consistency: ok"
 
 APP_MAIN_SITE_INTERNAL_URL="$(read_env_value "$APP_ENV" "MAIN_SITE_INTERNAL_URL")"
-WEB_MAIN_SITE_INTERNAL_URL="$(read_env_value "$WEB_ENV" "MAIN_SITE_INTERNAL_URL")"
+WEB_MAIN_SITE_INTERNAL_URL=""
+if [[ -n "$WEB_ENV" ]]; then
+  WEB_MAIN_SITE_INTERNAL_URL="$(read_env_value "$WEB_ENV" "MAIN_SITE_INTERNAL_URL")"
+fi
 DOCKER_MAIN_SITE_INTERNAL_URL="$(read_env_value "$DOCKER_ENV" "MAIN_SITE_INTERNAL_URL")"
 
 if [[ -n "$WEB_MAIN_SITE_INTERNAL_URL" && -n "$DOCKER_MAIN_SITE_INTERNAL_URL" && "$WEB_MAIN_SITE_INTERNAL_URL" != "$DOCKER_MAIN_SITE_INTERNAL_URL" ]]; then

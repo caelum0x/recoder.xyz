@@ -211,7 +211,6 @@ while :; do
       '$REPO_ROOT/recoder-agency'
       '$REPO_ROOT/recoder-pm'
       '$REPO_ROOT/recoder-skill'
-      '$REPO_ROOT/recoder-web'
       '$REPO_ROOT/tools'
       '$REPO_ROOT/plan.md'
       )
@@ -262,9 +261,14 @@ while :; do
   run_optional_pnpm_lane "A2" "recoder-agency check-types" "$REPO_ROOT/recoder-agency" "check-types"
   record_lane_result $? "A2"
 
-  run_lane "A1" "recoder-web unit tests" \
-    pnpm -C "$REPO_ROOT/recoder-web" test
-  record_lane_result $? "A1"
+  if [[ -d "$REPO_ROOT/recoder-web" ]]; then
+    run_lane "A1" "recoder-web unit tests" \
+      pnpm -C "$REPO_ROOT/recoder-web" test
+    record_lane_result $? "A1"
+  else
+    skip_lane "A1" "recoder-web unit tests" "retired surface missing"
+    record_lane_result $? "A1"
+  fi
 
   run_lane "A1" "docker-backend unit tests" \
     pnpm -C "$REPO_ROOT/docker-backend" test -- --runInBand
