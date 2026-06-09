@@ -1,0 +1,9 @@
+{
+  "id": "recoder-mcp-shared",
+  "kind": "shared-contracts",
+  "canonicalPackages": [
+    "@recoder/a2a-sdk",
+    "@recoder/agent-mcp",
+    "@recoder/agent-os"
+  ]
+}

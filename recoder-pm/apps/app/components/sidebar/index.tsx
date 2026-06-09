@@ -54,6 +54,18 @@ export const Sidebar = ({ user, organization }: SidebarProps) => {
         </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel className="text-muted-foreground">
+            Agent OS
+          </SidebarGroupLabel>
+          <SidebarMenu>
+            {[navigation.agentApprovals, navigation.memoryCandidates].map(
+              (item) => (
+                <SidebarItem key={item.label} {...item} />
+              )
+            )}
+          </SidebarMenu>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-muted-foreground">
             Ship
           </SidebarGroupLabel>
           <SidebarMenu>

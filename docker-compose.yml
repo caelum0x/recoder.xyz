@@ -141,32 +141,6 @@ services:
         delay: 5s
         max_attempts: 3
 
-  # Web Dashboard (Optional)
-  web:
-    build:
-      context: ./packages/web
-      dockerfile: Dockerfile
-    container_name: recoder-web
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://localhost:3001
-      - NEXT_PUBLIC_WS_URL=ws://localhost:3001
-    depends_on:
-      - backend
-    networks:
-      - recoder-backend
-    restart: unless-stopped
-    profiles:
-      - web
-    # Development-friendly volumes (enabled via 'dev' profile)
-    volumes:
-      - ./:/app:cached
-      - web_node_modules:/app/packages/web/node_modules
-      - pnpm_store:/pnpm-store
-
-
   # Monitoring with Prometheus
   prometheus:
     image: prom/prometheus:latest
@@ -337,9 +311,6 @@ volumes:
   solana_data:
     driver: local
     name: recoder-solana-data
-  web_node_modules:
-    driver: local
-    name: recoder-web-node-modules
   pnpm_store:
     driver: local
     name: recoder-pnpm-store

@@ -26,6 +26,29 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const scatterInstructionMocks = vi.hoisted(() => {
+  const compileInstructionBundleForTask = vi.fn(() => ({
+    shared_goal: 'Scatter task goal',
+    agent_specific_prompt: 'Read AGENTS.md and execute the scatter task.',
+    system_context_refs: [{ ref_id: 'AGENTS.md', kind: 'agents_md', path: 'AGENTS.md', sha: 'abc123' }],
+    acceptance_criteria: ['Execute scatter task'],
+    verification_commands: ['pnpm test'],
+    forbidden_actions: ['Do not edit .env*'],
+    approval_gates: [],
+    memory_used: [],
+    provenance: {
+      source_files: [{ path: 'AGENTS.md', sha: 'abc123' }],
+      compiled_at: '2026-06-06T00:00:00.000Z',
+      compiler_version: '0.1.0',
+    },
+  }));
+  return { compileInstructionBundleForTask };
+});
+
+vi.mock('../compiled-instructions', () => ({
+  compileInstructionBundleForTask: scatterInstructionMocks.compileInstructionBundleForTask,
+}));
+
 import {
   ScatterGatherOrchestrator,
   getScatterGatherOrchestrator,
@@ -163,6 +186,33 @@ describe('wait-all strategy', () => {
     expect(failedResult).toBeDefined();
     expect(failedResult!.status).toBe('failed');
     expect(failedResult!.error).toBe('fail');
+  });
+
+  it('passes compiled instruction bundles to structured scatter-gather executors', async () => {
+    orch.registerPattern(
+      makePattern({
+        targets: [{ agentId: 'agent-1' }],
+      }),
+    );
+
+    const structuredExecutor = vi.fn(async (request: any) => {
+      expect(request.patternId).toBe('test-pattern');
+      expect(request.agentId).toBe('agent-1');
+      expect(request.prompt).toBe('Hello agents');
+      expect(request.envelope.payload).toMatchObject({ kind: 'text', text: 'Hello agents' });
+      expect(request.instructionBundle).toMatchObject({
+        shared_goal: 'Scatter task goal',
+        agent_specific_prompt: 'Read AGENTS.md and execute the scatter task.',
+      });
+      return 'structured scatter result';
+    });
+    (structuredExecutor as any).__agentOsStructured = true;
+
+    const exec = await orch.execute('test-pattern', 'Hello agents', structuredExecutor as any);
+
+    expect(structuredExecutor).toHaveBeenCalledTimes(1);
+    expect(exec.status).toBe('completed');
+    expect(exec.aggregatedOutput).toBe('structured scatter result');
   });
 });
 

@@ -55,6 +55,7 @@ import {
 import { createLogger } from '../logger';
 import { getA2ARetentionWindowConfig, redactSensitiveData } from './data-hygiene';
 import { loadA2ATasks, saveA2ATasks } from './a2a-persistence';
+import { getMemoryCandidateService, type MemoryCandidateScope } from './memory-candidate.service';
 
 const logger = createLogger('a2a-task-lifecycle');
 
@@ -290,6 +291,82 @@ function enrichTaskResult(
     ...result,
     ...(preview.length > 0 ? { preview } : {}),
     evidence,
+  };
+}
+
+interface StructuredMemoryCandidateInput {
+  scope: MemoryCandidateScope;
+  title: string;
+  body: string;
+  artifactId?: string;
+}
+
+function isMemoryCandidateScope(value: unknown): value is MemoryCandidateScope {
+  return value === 'space' || value === 'repo' || value === 'user' || value === 'org';
+}
+
+function parseStructuredMemoryCandidate(value: unknown): StructuredMemoryCandidateInput | null {
+  const record = readRecord(value);
+  if (!record) return null;
+
+  const scope = record.scope;
+  const title = readString(record.title);
+  const body = readString(record.body) ?? readString(record.content);
+  const artifactId =
+    readString(record.artifactId) ??
+    readString(record.artifact_id) ??
+    undefined;
+
+  if (!isMemoryCandidateScope(scope) || !title || !body) {
+    return null;
+  }
+
+  return {
+    scope,
+    title,
+    body,
+    artifactId,
+  };
+}
+
+function collectStructuredMemoryCandidates(result: TaskResult): StructuredMemoryCandidateInput[] {
+  const data = readRecord(result.data);
+  if (!data) return [];
+
+  const single = parseStructuredMemoryCandidate(data.memoryCandidate ?? data.memory_candidate);
+  const pluralRaw = Array.isArray(data.memoryCandidates)
+    ? data.memoryCandidates
+    : Array.isArray(data.memory_candidates)
+      ? data.memory_candidates
+      : [];
+  const plural = pluralRaw
+    .map((item) => parseStructuredMemoryCandidate(item))
+    .filter((item): item is StructuredMemoryCandidateInput => item !== null);
+
+  return single ? [single, ...plural] : plural;
+}
+
+function buildMemoryCandidateArtifact(input: {
+  candidateId: string;
+  scope: MemoryCandidateScope;
+  title: string;
+  body: string;
+  createdAt: string;
+}): TaskArtifact {
+  return {
+    key: `memory-candidate:${input.candidateId}`,
+    artifact_type: 'custom',
+    mime_type: 'application/json',
+    path: `.recoder/artifacts/memory-candidate-${input.candidateId}.json`,
+    content: JSON.stringify(input, null, 2),
+    metadata: {
+      type: 'memory_candidate',
+      candidateId: input.candidateId,
+      scope: input.scope,
+      status: 'pending',
+      title: input.title,
+      createdAt: input.createdAt,
+    },
   };
 }
 
@@ -908,6 +985,57 @@ export class TaskLifecycleService {
 
     // 6. Persist
     this.store.set(taskId, updated);
+
+    if (input.target_state === TaskStateEnum.Completed && updated.result) {
+      const structuredCandidates = collectStructuredMemoryCandidates(updated.result);
+      if (structuredCandidates.length > 0) {
+        const memoryCandidateService = getMemoryCandidateService();
+        const metadata = readRecord(updated.metadata);
+        const taskArtifacts: TaskArtifact[] = [];
+
+        for (const candidateInput of structuredCandidates) {
+          try {
+            const candidate = memoryCandidateService.createCandidate({
+              taskId,
+              scope: candidateInput.scope,
+              title: candidateInput.title,
+              body: candidateInput.body,
+              evidence: {
+                taskId,
+                artifactId: candidateInput.artifactId,
+              },
+              proposedBy: input.triggered_by || 'task-lifecycle',
+              ...(readString(metadata?.userId) ? { userId: readString(metadata?.userId) } : {}),
+              ...(readString(metadata?.ownerId) ? { userId: readString(metadata?.ownerId) } : {}),
+              ...(readString(updated.assignee.agent_id) ? { agentId: updated.assignee.agent_id } : {}),
+            });
+
+            taskArtifacts.push(
+              buildMemoryCandidateArtifact({
+                candidateId: candidate.candidateId,
+                scope: candidate.scope,
+                title: candidate.title,
+                body: candidate.body,
+                createdAt: candidate.createdAt,
+              }),
+            );
+          } catch (err) {
+            logger.warn({ err, taskId }, 'failed to auto-propose structured memory candidate');
+          }
+        }
+
+        if (taskArtifacts.length > 0) {
+          const appended = this.appendTaskArtifacts(taskId, {
+            artifacts: taskArtifacts,
+            triggeredBy: input.triggered_by || 'task-lifecycle',
+            reason: 'Structured memory candidate proposed from completed task',
+          });
+          if (appended.ok) {
+            updated = appended.data;
+          }
+        }
+      }
+    }
 
     logger.info(
       {

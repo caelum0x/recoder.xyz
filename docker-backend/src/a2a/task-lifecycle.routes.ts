@@ -42,6 +42,13 @@ import { getCapabilityMatcher } from './capability-matcher.service';
 import { deriveRoutingPlan } from './multi-dispatch.service';
 import { getApprovalGateService } from './approval-gate.service';
 import { getA2AEventBus, A2AEventType } from './a2a-event-bus';
+import { getMemoryCandidateService, type MemoryCandidateScope } from './memory-candidate.service';
+import {
+  buildInstructionBundleArtifact,
+  buildInstructionBundleMetadata,
+  compileInstructionBundleForTask,
+  INSTRUCTION_BUNDLE_TRIGGER,
+} from './compiled-instructions';
 import { getPreviewDeploymentService } from '../edge/preview-deployment.service';
 import {
   validateCreateTaskBody,
@@ -171,6 +178,10 @@ function parseTaskArtifacts(value: unknown): TaskArtifact[] | null {
 
 function buildPreviewArtifactContent(record: Record<string, unknown>): string {
   return JSON.stringify(record, null, 2);
+}
+
+function isMemoryCandidateScope(value: unknown): value is MemoryCandidateScope {
+  return value === 'space' || value === 'repo' || value === 'user' || value === 'org';
 }
 
 function emitReviewLifecycleEvents(input: {
@@ -433,17 +444,37 @@ async function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): Promise<void> {
 
   const prompt = extractBridgePrompt(task.payload);
   const intent = extractBridgeIntent(task.payload);
+  const lifecycle = getTaskLifecycleService();
+  const compiledInstructionBundle = compileInstructionBundleForTask(task);
+
+  if (compiledInstructionBundle) {
+    lifecycle.updateTaskMetadata(task.id, {
+      metadataPatch: {
+        instructionBundle: buildInstructionBundleMetadata(compiledInstructionBundle),
+      },
+      triggeredBy: INSTRUCTION_BUNDLE_TRIGGER,
+      reason: 'Compiled instruction bundle attached to task metadata',
+    });
+    lifecycle.appendTaskArtifacts(task.id, {
+      artifacts: [buildInstructionBundleArtifact(task.id, compiledInstructionBundle)],
+      triggeredBy: INSTRUCTION_BUNDLE_TRIGGER,
+      reason: 'Compiled instruction bundle artifact attached',
+    });
+  }
 
   // Fetch agent's recent memory context before dispatch
   const connected = bridge.getAgent(assigneeId);
-  const memoryContext = connected?.userId && prompt
-    ? await getRecentContext({ query: prompt, userId: connected.userId })
+  const memoryQuery = compiledInstructionBundle?.shared_goal || prompt;
+  const memoryContext = connected?.userId && memoryQuery
+    ? await getRecentContext({ query: memoryQuery, userId: connected.userId })
     : [];
+  const effectivePrompt =
+    compiledInstructionBundle?.agent_specific_prompt || prompt;
 
   const delivered = bridge.sendToAgent(assigneeId, {
     type: 'task.assigned',
     taskId: task.id,
-    prompt,
+    prompt: effectivePrompt,
     ...(intent ? { intent } : {}),
     context: {
       source: 'a2a-rest',
@@ -453,6 +484,7 @@ async function dispatchTaskToBridgeIfOnline(task: TaskEnvelope): Promise<void> {
       trace_id: task.trace_id,
       connector: task.connector,
       payload: task.payload,
+      ...(compiledInstructionBundle ? { instructionBundle: compiledInstructionBundle } : {}),
       ...(memoryContext.length > 0 ? { memoryContext } : {}),
     },
   });
@@ -690,6 +722,247 @@ taskLifecycleRouter.get(
       sendError(res, 500, buildA2AError({
         code: A2AErrorCodeEnum.InternalError,
         message: 'Internal server error while fetching task context',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// GET /:taskId/memory-candidates -- List reviewed/pending memory candidates
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.get(
+  '/:taskId/memory-candidates',
+  (req: Request, res: Response) => {
+    try {
+      const taskResult = getTaskLifecycleService().getTask(req.params.taskId);
+      if (!taskResult.ok) {
+        sendError(res, taskResult.httpStatus, taskResult.error);
+        return;
+      }
+
+      const candidates = getMemoryCandidateService().listByTask(req.params.taskId);
+      sendSuccess(res, {
+        taskId: req.params.taskId,
+        candidates,
+      });
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in GET /api/a2a/tasks/:taskId/memory-candidates');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: 'Internal server error while listing memory candidates',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/memory-candidates -- Propose a reviewed memory candidate
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/memory-candidates',
+  (req: Request, res: Response) => {
+    try {
+      const taskId = req.params.taskId;
+      const taskResult = getTaskLifecycleService().getTask(taskId);
+      if (!taskResult.ok) {
+        sendError(res, taskResult.httpStatus, taskResult.error);
+        return;
+      }
+
+      const { scope, title, body, evidence, proposedBy, userId, agentId } = req.body || {};
+      if (!isMemoryCandidateScope(scope)) {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.InvalidParams,
+          message: 'scope must be one of: space, repo, user, org',
+        }));
+        return;
+      }
+      if (typeof title !== 'string' || !title.trim() || typeof body !== 'string' || !body.trim()) {
+        sendError(res, 400, buildA2AError({
+          code: A2AErrorCodeEnum.InvalidParams,
+          message: 'title and body are required',
+        }));
+        return;
+      }
+
+      const evidenceRecord = readRecord(evidence);
+      const candidate = getMemoryCandidateService().createCandidate({
+        taskId,
+        scope,
+        title: title.trim(),
+        body: body.trim(),
+        evidence: {
+          taskId,
+          artifactId:
+            typeof evidenceRecord?.artifactId === 'string'
+              ? evidenceRecord.artifactId
+              : typeof evidenceRecord?.artifact_id === 'string'
+                ? evidenceRecord.artifact_id
+                : undefined,
+        },
+        proposedBy:
+          typeof proposedBy === 'string' && proposedBy.trim().length > 0
+            ? proposedBy.trim()
+            : 'external-client',
+        ...(typeof userId === 'string' && userId.trim().length > 0 ? { userId: userId.trim() } : {}),
+        ...(typeof agentId === 'string' && agentId.trim().length > 0 ? { agentId: agentId.trim() } : {}),
+      });
+
+      getTaskLifecycleService().appendTaskArtifacts(taskId, {
+        artifacts: [
+          {
+            key: `memory-candidate:${candidate.candidateId}`,
+            artifact_type: 'custom',
+            mime_type: 'application/json',
+            path: `.recoder/artifacts/memory-candidate-${candidate.candidateId}.json`,
+            content: JSON.stringify(candidate, null, 2),
+            metadata: {
+              type: 'memory_candidate',
+              candidateId: candidate.candidateId,
+              scope: candidate.scope,
+              status: candidate.status,
+              title: candidate.title,
+              createdAt: candidate.createdAt,
+            },
+          },
+        ],
+        triggeredBy: candidate.proposedBy,
+        reason: 'Memory candidate proposed',
+      });
+
+      sendSuccess(res, candidate, 201);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId }, 'unhandled error in POST /api/a2a/tasks/:taskId/memory-candidates');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: err instanceof Error ? err.message : 'Internal server error while creating memory candidate',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/memory-candidates/:candidateId/approve -- Approve and persist
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/memory-candidates/:candidateId/approve',
+  async (req: Request, res: Response) => {
+    try {
+      const taskId = req.params.taskId;
+      const taskResult = getTaskLifecycleService().getTask(taskId);
+      if (!taskResult.ok) {
+        sendError(res, taskResult.httpStatus, taskResult.error);
+        return;
+      }
+
+      const reviewedBy =
+        typeof req.body?.reviewedBy === 'string' && req.body.reviewedBy.trim().length > 0
+          ? req.body.reviewedBy.trim()
+          : 'external-reviewer';
+      const reviewReason =
+        typeof req.body?.reviewReason === 'string' && req.body.reviewReason.trim().length > 0
+          ? req.body.reviewReason.trim()
+          : undefined;
+
+      const candidate = await getMemoryCandidateService().approve(
+        req.params.candidateId,
+        reviewedBy,
+        reviewReason,
+      );
+
+      getTaskLifecycleService().appendTaskArtifacts(taskId, {
+        artifacts: [
+          {
+            key: `memory-candidate-review:${candidate.candidateId}`,
+            artifact_type: 'custom',
+            mime_type: 'application/json',
+            path: `.recoder/artifacts/memory-candidate-review-${candidate.candidateId}.json`,
+            content: JSON.stringify(candidate, null, 2),
+            metadata: {
+              type: 'memory_candidate_review',
+              candidateId: candidate.candidateId,
+              status: candidate.status,
+              approvedMemoryId: candidate.approvedMemoryId,
+              reviewedBy: candidate.reviewedBy,
+              updatedAt: candidate.updatedAt,
+            },
+          },
+        ],
+        triggeredBy: reviewedBy,
+        reason: 'Memory candidate approved',
+      });
+
+      sendSuccess(res, candidate);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId, candidateId: req.params.candidateId }, 'unhandled error in POST /api/a2a/tasks/:taskId/memory-candidates/:candidateId/approve');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: err instanceof Error ? err.message : 'Internal server error while approving memory candidate',
+      }));
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /:taskId/memory-candidates/:candidateId/reject -- Reject candidate
+// ---------------------------------------------------------------------------
+
+taskLifecycleRouter.post(
+  '/:taskId/memory-candidates/:candidateId/reject',
+  (req: Request, res: Response) => {
+    try {
+      const taskId = req.params.taskId;
+      const taskResult = getTaskLifecycleService().getTask(taskId);
+      if (!taskResult.ok) {
+        sendError(res, taskResult.httpStatus, taskResult.error);
+        return;
+      }
+
+      const reviewedBy =
+        typeof req.body?.reviewedBy === 'string' && req.body.reviewedBy.trim().length > 0
+          ? req.body.reviewedBy.trim()
+          : 'external-reviewer';
+      const reviewReason =
+        typeof req.body?.reviewReason === 'string' && req.body.reviewReason.trim().length > 0
+          ? req.body.reviewReason.trim()
+          : undefined;
+
+      const candidate = getMemoryCandidateService().reject(
+        req.params.candidateId,
+        reviewedBy,
+        reviewReason,
+      );
+
+      getTaskLifecycleService().appendTaskArtifacts(taskId, {
+        artifacts: [
+          {
+            key: `memory-candidate-review:${candidate.candidateId}`,
+            artifact_type: 'custom',
+            mime_type: 'application/json',
+            path: `.recoder/artifacts/memory-candidate-review-${candidate.candidateId}.json`,
+            content: JSON.stringify(candidate, null, 2),
+            metadata: {
+              type: 'memory_candidate_review',
+              candidateId: candidate.candidateId,
+              status: candidate.status,
+              reviewedBy: candidate.reviewedBy,
+              updatedAt: candidate.updatedAt,
+            },
+          },
+        ],
+        triggeredBy: reviewedBy,
+        reason: 'Memory candidate rejected',
+      });
+
+      sendSuccess(res, candidate);
+    } catch (err) {
+      logger.error({ err, taskId: req.params.taskId, candidateId: req.params.candidateId }, 'unhandled error in POST /api/a2a/tasks/:taskId/memory-candidates/:candidateId/reject');
+      sendError(res, 500, buildA2AError({
+        code: A2AErrorCodeEnum.InternalError,
+        message: err instanceof Error ? err.message : 'Internal server error while rejecting memory candidate',
       }));
     }
   },

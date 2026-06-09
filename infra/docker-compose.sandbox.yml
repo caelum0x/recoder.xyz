@@ -1,0 +1,14 @@
+services:
+  playwright-runner:
+    image: mcr.microsoft.com/playwright:v1.49.1-jammy
+    working_dir: /workspace
+    command: ["sleep", "infinity"]
+    volumes:
+      - ..:/workspace
+
+  sandbox-proxy:
+    image: caddy:2.8
+    ports:
+      - "4380:80"
+    volumes:
+      - ./sandbox/Caddyfile:/etc/caddy/Caddyfile:ro

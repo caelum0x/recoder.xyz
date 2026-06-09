@@ -8,6 +8,29 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const pipelineInstructionMocks = vi.hoisted(() => {
+  const compileInstructionBundleForTask = vi.fn(() => ({
+    shared_goal: 'Pipeline task goal',
+    agent_specific_prompt: 'Read AGENTS.md and execute the pipeline task.',
+    system_context_refs: [{ ref_id: 'AGENTS.md', kind: 'agents_md', path: 'AGENTS.md', sha: 'abc123' }],
+    acceptance_criteria: ['Execute pipeline task'],
+    verification_commands: ['pnpm test'],
+    forbidden_actions: ['Do not edit .env*'],
+    approval_gates: [],
+    memory_used: [],
+    provenance: {
+      source_files: [{ path: 'AGENTS.md', sha: 'abc123' }],
+      compiled_at: '2026-06-06T00:00:00.000Z',
+      compiler_version: '0.1.0',
+    },
+  }));
+  return { compileInstructionBundleForTask };
+});
+
+vi.mock('../compiled-instructions', () => ({
+  compileInstructionBundleForTask: pipelineInstructionMocks.compileInstructionBundleForTask,
+}));
+
 import {
   PipelineOrchestrator,
   getPipelineOrchestrator,
@@ -192,6 +215,30 @@ describe('Pipeline execution (success)', () => {
     expect(exec.stepResults).toHaveLength(0);
     expect(exec.finalOutput).toBe('pass-through');
     expect(exec.completedAt).toBeTruthy();
+  });
+
+  it('passes a compiled instruction bundle to structured pipeline executors', async () => {
+    const def = makePipeline();
+    orchestrator.registerPipeline(def);
+
+    const structuredExecutor = vi.fn(async (request: any) => {
+      expect(request.pipelineId).toBe('pipe-1');
+      expect(request.stepId).toBe('step-1');
+      expect(request.prompt).toBe('Process: input');
+      expect(request.envelope.payload).toMatchObject({ kind: 'text', text: 'Process: input' });
+      expect(request.instructionBundle).toMatchObject({
+        shared_goal: 'Pipeline task goal',
+        agent_specific_prompt: 'Read AGENTS.md and execute the pipeline task.',
+      });
+      return 'structured pipeline result';
+    });
+    (structuredExecutor as any).__agentOsStructured = true;
+
+    const exec = await orchestrator.execute('pipe-1', 'input', structuredExecutor as any);
+
+    expect(structuredExecutor).toHaveBeenCalledTimes(1);
+    expect(exec.status).toBe('completed');
+    expect(exec.finalOutput).toBe('structured pipeline result');
   });
 });
 

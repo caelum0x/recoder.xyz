@@ -18,7 +18,6 @@ export const ALLOWED_ORIGINS: readonly string[] = [
   'https://www.recoder.xyz',
   'https://agents.recoder.xyz',
   'https://app.recoder.xyz',
-  'https://web.recoder.xyz',
   'https://agency.recoder.xyz',
   'https://pm.recoder.xyz',
   'https://docker.recoder.xyz',
@@ -26,7 +25,6 @@ export const ALLOWED_ORIGINS: readonly string[] = [
     ? []
     : [
         'http://localhost:3000',
-        'http://localhost:5173',
         'http://localhost:3100',
       ]),
 ];

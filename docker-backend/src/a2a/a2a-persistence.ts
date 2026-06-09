@@ -28,6 +28,7 @@ const TASKS_STORE = 'a2a-tasks';
 const APPROVALS_STORE = 'a2a-approvals';
 const EVENTS_STORE = 'a2a-events';
 const AGENT_REGISTRY_STORE = 'a2a-agent-registry';
+const MEMORY_CANDIDATES_STORE = 'a2a-memory-candidates';
 
 /** Maximum number of recent events persisted to disk. */
 const MAX_PERSISTED_EVENTS = 1000;
@@ -187,4 +188,21 @@ export function saveA2AAgentRegistryState(input: {
     },
     DEBOUNCE_MS,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Memory candidates
+// ---------------------------------------------------------------------------
+
+export function loadA2AMemoryCandidates<T>(): Map<string, T> {
+  const entries = loadStore<[string, T][]>(MEMORY_CANDIDATES_STORE, []);
+  try {
+    return new Map(entries);
+  } catch {
+    return new Map();
+  }
+}
+
+export function saveA2AMemoryCandidates<T>(candidates: Map<string, T>): void {
+  saveStore(MEMORY_CANDIDATES_STORE, [...candidates.entries()]);
 }

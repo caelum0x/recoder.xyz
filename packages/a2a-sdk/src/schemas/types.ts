@@ -47,7 +47,17 @@ export interface RecoderCommandPayload {
 
 export interface RecoderArtifactPayload {
   kind: 'artifact';
-  artifactType: 'patch' | 'file' | 'plan' | 'report';
+  artifactType:
+    | 'patch'
+    | 'file'
+    | 'plan'
+    | 'report'
+    | 'log'
+    | 'pull_request'
+    | 'preview'
+    | 'screenshot'
+    | 'verification'
+    | 'custom';
   mimeType: string;
   content: string;
   path?: string;

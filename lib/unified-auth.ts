@@ -1,6 +1,6 @@
 /**
  * Unified Authentication System for Recoder.xyz Ecosystem
- * Enables seamless authentication across main website, chat, and web builder platforms
+ * Enables seamless authentication across main website, chat, and Spaces surfaces
  */
 
 // Types for cross-platform authentication
@@ -13,7 +13,7 @@ export interface UnifiedUser {
   platforms: {
     main: boolean;
     chat: boolean;
-    web: boolean;
+    spaces: boolean;
   };
   subscription?: {
     plan: string;
@@ -48,9 +48,9 @@ export const PLATFORMS: Record<string, PlatformConfig> = {
     authEndpoint: '/api/auth',
     apiEndpoint: '/api'
   },
-  web: {
-    name: 'web',
-    url: process.env.WEB_BUILDER_URL || 'http://localhost:5173',
+  spaces: {
+    name: 'spaces',
+    url: process.env.SPACES_URL || 'http://localhost:3000/dashboard/spaces',
     authEndpoint: '/api/auth',
     apiEndpoint: '/api'
   }

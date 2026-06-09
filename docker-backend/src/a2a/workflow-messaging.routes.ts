@@ -14,7 +14,10 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { getWorkflowEngine } from './workflow-engine.service';
+import {
+  getWorkflowEngine,
+  type WorkflowTaskExecutionRequest,
+} from './workflow-engine.service';
 import { getAgentMessagingService } from './agent-messaging.service';
 import { getDelegationChainService } from './delegation-chain.service';
 import { getAgentRegistryService } from './agent-registry.service';
@@ -101,7 +104,26 @@ function syncDelegationToTaskMetadata(
  * For agents without an endpoint, creates the task and returns a reference
  * for async polling.
  */
-async function executeAgentTask(agentId: string, prompt: string): Promise<string> {
+async function executeAgentTask(
+  agentIdOrRequest: string | WorkflowTaskExecutionRequest,
+  promptArg?: string,
+): Promise<string> {
+  const request =
+    typeof agentIdOrRequest === 'string'
+      ? {
+          workflowId: 'legacy-workflow',
+          executionId: 'legacy-execution',
+          stepId: 'legacy-step',
+          agentId: agentIdOrRequest,
+          prompt: promptArg ?? '',
+          envelope: null,
+          instructionBundle: null,
+          context: {},
+        }
+      : agentIdOrRequest;
+  const agentId = request.agentId;
+  const prompt = request.instructionBundle?.agent_specific_prompt ?? request.prompt;
+  const requestContext = request.context as Record<string, string>;
   const registry = getAgentRegistryService();
   const agent = registry.get(agentId);
 
@@ -119,8 +141,8 @@ async function executeAgentTask(agentId: string, prompt: string): Promise<string
   // Create task using the legacy input format (compatible with existing service)
   const task = taskService.createTask({
     prompt,
-    workspace_id: 'default',
-    thread_id: `workflow-${Date.now()}`,
+    workspace_id: requestContext._workspaceId || 'default',
+    thread_id: requestContext._threadId || `workflow-${Date.now()}`,
     assignee_agent_id: agentId,
     requester_agent_id: 'workflow-engine',
   });
@@ -134,7 +156,11 @@ async function executeAgentTask(agentId: string, prompt: string): Promise<string
       const response = await fetch(`${agent.card.url}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: task.id, prompt }),
+        body: JSON.stringify({
+          taskId: task.id,
+          prompt,
+          ...(request.instructionBundle ? { instructionBundle: request.instructionBundle } : {}),
+        }),
         signal: controller.signal,
       });
       clearTimeout(timeout);

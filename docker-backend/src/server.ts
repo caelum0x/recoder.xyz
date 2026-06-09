@@ -63,6 +63,7 @@ import { moltbookAuthRouter } from './public-api/routes/auth-moltbook.js';
 import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
+import { createAgentMcpRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
 import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, agentRegistryRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
@@ -10013,6 +10014,11 @@ syncManager.on('sync-event', (event) => {
 
 // ==================== MCP Server Management ====================
 
+// Agent OS MCP host registry endpoints. These must be registered before the
+// project-scoped /api/mcp/:projectId/* routes so names like /servers and
+// /tools are not interpreted as project IDs.
+app.use('/api/mcp', authenticateRequest, createAgentMcpRouter());
+
 // Get available MCP servers (marketplace catalog)
 app.get('/api/mcp/catalog', authenticateRequest, (_req: AuthenticatedRequest, res) => {
   const preinstalled = Object.entries(PREINSTALLED_SERVERS).map(([id, config]) => ({
@@ -15584,6 +15590,11 @@ app.use('/api/v1/auth', moltbookAuthRouter);
 app.use('/api/v1', requestIdMiddleware, authenticateApiKey as any, rateLimitMiddleware as any, requestLoggingMiddleware as any);
 app.use('/api/v1/sandboxes', sandboxRouter);
 app.use('/api/v1/projects', projectRouter);
+
+// Agent OS API layer: canonical control-plane surface for tasks, agents,
+// runs, approvals, artifacts, memory, instructions, policy, events, workflows.
+app.use('/api/agent-os', createAgentOsRouter());
+app.use('/internal/agent-os', createInternalAgentOsRouter());
 
 // Identity token endpoints (requires API key auth, but /verify uses app key auth internally)
 app.use('/api/v1/identity', identityRouter);

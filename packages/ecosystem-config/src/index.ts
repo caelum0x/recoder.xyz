@@ -1,6 +1,5 @@
 export type EcosystemAppId =
   | "home"
-  | "web"
   | "agency"
   | "pm"
   | "ui"
@@ -80,7 +79,6 @@ export const RECODER_STUDIO_POSITIONING =
 
 export const RECODER_ECOSYSTEM_URLS = {
   home: "https://recoder.xyz",
-  web: "https://web.recoder.xyz",
   agency: "https://agency.recoder.xyz",
   pm: "https://pm.recoder.xyz",
   ui: "https://ui.recoder.xyz",
@@ -112,19 +110,9 @@ export const RECODER_SETTINGS_URLS = {
     account: `${RECODER_ECOSYSTEM_URLS.agency}/settings/account`,
     team: `${RECODER_ECOSYSTEM_URLS.agency}/settings/team`,
   },
-  web: {
-    main: `${RECODER_ECOSYSTEM_URLS.web}/settings`,
-    mcp: `${RECODER_ECOSYSTEM_URLS.web}/settings/mcp`,
-  },
 } as const;
 
 export const RECODER_ECOSYSTEM_APPS: readonly EcosystemApp[] = [
-  {
-    id: "web",
-    label: "Web",
-    description: "AI Workspace",
-    href: RECODER_ECOSYSTEM_URLS.web,
-  },
   {
     id: "agency",
     label: "Agency",

@@ -107,6 +107,12 @@ export default function WorkflowsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
+            <Link href="/workflows/runner">
+              <Play className="mr-2 h-4 w-4" />
+              Step Runner
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
             <Link href="/workflows/templates">
               <LayoutTemplate className="mr-2 h-4 w-4" />
               Templates

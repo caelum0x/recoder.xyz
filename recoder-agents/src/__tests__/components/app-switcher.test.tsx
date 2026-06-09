@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@recoder/ecosystem-config', () => ({
   getSwitcherApps: vi.fn(() => [
-    { id: 'web', label: 'Web', description: 'AI Workspace', href: 'https://web.recoder.xyz' },
     { id: 'agency', label: 'Agency', description: 'AI Agency Platform', href: 'https://agency.recoder.xyz' },
     { id: 'pm', label: 'PM', description: 'Product Management', href: 'https://pm.recoder.xyz' },
     { id: 'agents', label: 'Agents', description: 'AI Agent IDE', href: 'https://agents.recoder.xyz' },

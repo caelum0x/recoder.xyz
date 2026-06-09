@@ -5,7 +5,9 @@ This folder provides a portable communication contract for cross-agent orchestra
 ## What is included
 
 - `schemas/recoder-a2a-envelope.schema.json`: JSON Schema for the Recoder envelope.
+- `schemas/recoder-a2a-bridge-contract.schema.json`: JSON Schema for bridge jobs, sessions, approvals, handoffs, runtime evidence, and orchestration history.
 - `js/codex-claude-bridge.mjs`: JavaScript bridge example for Codex <-> Claude Code.
+- `js/bridge-contract.mjs`: JavaScript endpoint helper for the Recoder A2A bridge/admin API.
 - `python/codex_claude_bridge.py`: Python bridge example for Codex <-> Claude Code.
 
 ## Shared package contract
@@ -13,11 +15,24 @@ This folder provides a portable communication contract for cross-agent orchestra
 Primary TypeScript contract:
 - `shared/src/a2a/types.ts`
 - `shared/src/a2a/bridge.ts`
+- `packages/a2a-sdk/src/bridge-contract.ts`
 
 Import with:
 
 ```ts
 import { codexToEnvelope, envelopeToClaudeCode } from '@recoder/shared/a2a';
+```
+
+Bridge/admin API imports should use `@recoder/a2a-sdk/bridge-contract` when the
+package build is available:
+
+```ts
+import {
+  A2A_BRIDGE_ENDPOINTS,
+  bridgeJobResultPath,
+  createRunHistoryEvent,
+  createRuntimeEvidence,
+} from '@recoder/a2a-sdk/bridge-contract';
 ```
 
 ## Smoke usage
@@ -76,6 +91,11 @@ Bridge API contract expected by this daemon:
 - `GET /api/a2a/bridge/jobs/next` -> `204` (no scope-matching job) or JSON `{ jobId, agentId, envelope, traceId?, scope? }`
 - `POST /api/a2a/bridge/jobs/:jobId/result` (result envelope)
 - `POST /api/a2a/bridge/heartbeat`
+
+The importable contract is split across:
+- TypeScript: `packages/a2a-sdk/src/bridge-contract.ts`
+- JSON Schema: `tools/a2a-interop/schemas/recoder-a2a-bridge-contract.schema.json`
+- JavaScript endpoint helper: `tools/a2a-interop/js/bridge-contract.mjs`
 
 Admin APIs related to bridge operations:
 - `GET /api/a2a/policy`

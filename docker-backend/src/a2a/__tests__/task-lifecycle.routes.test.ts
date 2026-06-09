@@ -10,7 +10,20 @@ const mocks = vi.hoisted(() => {
     getSessionsForAgent: vi.fn(() => []),
   };
 
-  return { bridge, bridgeAgent };
+  const memory = {
+    getRecentContext: vi.fn(async () => []),
+    rememberEntry: vi.fn(async (params: { content: string; type: string; tags: string[]; agentId: string; userId: string }) => ({
+      id: 'mem_approved_1',
+      content: params.content,
+      type: params.type,
+      tags: params.tags,
+      agentId: params.agentId,
+      userId: params.userId,
+      createdAt: '2026-06-06T00:00:00.000Z',
+    })),
+  };
+
+  return { bridge, bridgeAgent, memory };
 });
 
 vi.mock('../../logger', () => ({
@@ -27,11 +40,17 @@ vi.mock('../agent-bridge.service', () => ({
   getAgentBridgeService: () => mocks.bridge,
 }));
 
+vi.mock('../memory-store', () => ({
+  getRecentContext: (...args: unknown[]) => mocks.memory.getRecentContext(...args),
+  rememberEntry: (...args: unknown[]) => mocks.memory.rememberEntry(...args),
+}));
+
 import type { Router } from 'express';
 import { taskLifecycleRouter } from '../task-lifecycle.routes';
 import { getTaskLifecycleService, resetTaskLifecycleService } from '../task-lifecycle.service';
 import { getApprovalGateService, resetApprovalGateService } from '../approval-gate.service';
 import { getDelegationChainService, resetDelegationChainService } from '../delegation-chain.service';
+import { resetMemoryCandidateService } from '../memory-candidate.service';
 import { resetPreviewDeploymentService } from '../../edge/preview-deployment.service';
 
 type MockReq = EventEmitter & {
@@ -130,6 +149,7 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     resetTaskLifecycleService();
     resetApprovalGateService();
     resetDelegationChainService();
+    resetMemoryCandidateService();
     resetPreviewDeploymentService();
     vi.clearAllMocks();
     mocks.bridgeAgent.status = 'online';
@@ -161,13 +181,20 @@ describe('taskLifecycleRouter bridge dispatch', () => {
       'codex',
       expect.objectContaining({
         type: 'task.assigned',
-        prompt: 'hello from claude',
+        prompt: expect.stringContaining('Read AGENTS.md as canonical policy'),
         intent: 'execute',
         context: expect.objectContaining({
           source: 'a2a-rest',
           from: 'claude_code',
           workspace_id: 'ws_default',
           thread_id: 'thread_123',
+          instructionBundle: expect.objectContaining({
+            shared_goal: 'hello from claude',
+            system_context_refs: expect.arrayContaining([
+              expect.objectContaining({ path: 'AGENTS.md' }),
+              expect.objectContaining({ path: '.codex/AGENTS.md' }),
+            ]),
+          }),
         }),
       }),
     );
@@ -337,6 +364,253 @@ describe('taskLifecycleRouter bridge dispatch', () => {
     });
     expect(
       state.jsonData.data.timeline.some((entry: any) => entry.type === 'github.pull_request' && String(entry.detail).includes('#42')),
+    ).toBe(true);
+  });
+
+  it('returns compiled instruction bundle provenance and verification details in task context', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_instructions',
+      thread_id: 'thread_instructions',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Compile instruction context' },
+      metadata: {
+        instructionBundle: {
+          sharedGoal: 'Compile instruction context',
+          verificationCommands: ['pnpm test'],
+          provenance: {
+            compilerVersion: '0.1.0',
+            compiledAt: '2026-06-06T00:00:00.000Z',
+          },
+        },
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    service.appendTaskArtifacts(created.data.id, {
+      triggeredBy: 'test',
+      reason: 'Attach compiled instruction bundle',
+      artifacts: [
+        {
+          key: `instruction-bundle:${created.data.id}`,
+          artifact_type: 'custom',
+          mime_type: 'application/json',
+          path: `.recoder/artifacts/instruction-bundle-${created.data.id}.json`,
+          content: JSON.stringify({
+            shared_goal: 'Compile instruction context',
+            agent_specific_prompt: 'Read AGENTS.md and compile the task.',
+            system_context_refs: [
+              { ref_id: 'AGENTS.md', kind: 'agents_md', path: 'AGENTS.md', sha: 'abc123' },
+              { ref_id: '.codex/AGENTS.md', kind: 'codex_override', path: '.codex/AGENTS.md', sha: 'def456' },
+            ],
+            acceptance_criteria: ['Instruction bundle visible in context'],
+            verification_commands: ['pnpm test', 'pnpm check-types'],
+            forbidden_actions: ['Do not modify .env*'],
+            approval_gates: [
+              {
+                approval_id: 'approval-1',
+                title: 'Push approval',
+                status: 'pending',
+                required_at: 'before_push',
+                reason: 'Push approval required',
+              },
+            ],
+            memory_used: [
+              {
+                memory_id: 'memory-1',
+                scope: 'repo',
+                title: 'Use pnpm test',
+              },
+            ],
+            provenance: {
+              source_files: [
+                { path: 'AGENTS.md', sha: 'abc123' },
+                { path: '.codex/AGENTS.md', sha: 'def456' },
+              ],
+              compiled_at: '2026-06-06T00:00:00.000Z',
+              compiler_version: '0.1.0',
+            },
+          }),
+        },
+      ],
+    });
+
+    const req = makeReq({
+      method: 'GET',
+      params: { taskId: created.data.id },
+    });
+    const { res, state } = makeRes();
+
+    await runStack(taskLifecycleRouter, '/:taskId/context', 'get', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.data.instructions).toMatchObject({
+      sharedGoal: 'Compile instruction context',
+      compilerVersion: '0.1.0',
+      compiledAt: '2026-06-06T00:00:00.000Z',
+      artifactKey: `instruction-bundle:${created.data.id}`,
+    });
+    expect(state.jsonData.data.instructions.verificationCommands).toEqual([
+      'pnpm test',
+      'pnpm check-types',
+    ]);
+    expect(state.jsonData.data.instructions.sourceFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'AGENTS.md', sha: 'abc123' }),
+        expect.objectContaining({ path: '.codex/AGENTS.md', sha: 'def456' }),
+      ]),
+    );
+    expect(
+      state.jsonData.data.timeline.some((entry: any) => entry.type === 'instructions.compiled'),
+    ).toBe(true);
+  });
+
+  it('proposes, approves, and exposes reviewed memory candidates in task context', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_memory',
+      thread_id: 'thread_memory',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Remember the repo build command' },
+      metadata: {},
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const proposeReq = makeReq({
+      method: 'POST',
+      params: { taskId: created.data.id },
+      body: {
+        scope: 'repo',
+        title: 'recoder-web build command',
+        body: 'Use `pnpm -F recoder-web build` for production route validation.',
+        evidence: { artifactId: 'artifact_test_output_1' },
+        proposedBy: 'codex',
+        agentId: 'codex',
+        userId: 'user-123',
+      },
+    });
+    const proposeRes = makeRes();
+    await runStack(taskLifecycleRouter, '/:taskId/memory-candidates', 'post', proposeReq, proposeRes.res);
+
+    expect(proposeRes.state.statusCode).toBe(201);
+    const candidateId = proposeRes.state.jsonData.data.candidateId as string;
+    expect(candidateId).toMatch(/^memory_candidate_/);
+
+    const approveReq = makeReq({
+      method: 'POST',
+      params: { taskId: created.data.id, candidateId },
+      body: {
+        reviewedBy: 'pm-agent',
+        reviewReason: 'Verified against task evidence',
+      },
+    });
+    const approveRes = makeRes();
+    await runStack(
+      taskLifecycleRouter,
+      '/:taskId/memory-candidates/:candidateId/approve',
+      'post',
+      approveReq,
+      approveRes.res,
+    );
+
+    expect(approveRes.state.statusCode).toBe(200);
+    expect(mocks.memory.rememberEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Use `pnpm -F recoder-web build` for production route validation.',
+        userId: 'user-123',
+        agentId: 'codex',
+      }),
+    );
+    expect(approveRes.state.jsonData.data).toMatchObject({
+      status: 'approved',
+      reviewedBy: 'pm-agent',
+      approvedMemoryId: 'mem_approved_1',
+    });
+
+    const contextReq = makeReq({
+      method: 'GET',
+      params: { taskId: created.data.id },
+    });
+    const contextRes = makeRes();
+    await runStack(taskLifecycleRouter, '/:taskId/context', 'get', contextReq, contextRes.res);
+
+    expect(contextRes.state.statusCode).toBe(200);
+    expect(contextRes.state.jsonData.data.memoryCandidates).toEqual([
+      expect.objectContaining({
+        candidateId,
+        scope: 'repo',
+        title: 'recoder-web build command',
+        status: 'approved',
+        approvedMemoryId: 'mem_approved_1',
+      }),
+    ]);
+  });
+
+  it('auto-proposes pending memory candidates from structured completion results', async () => {
+    const service = getTaskLifecycleService();
+    const created = service.createTask({
+      workspace_id: 'ws_memory_auto',
+      thread_id: 'thread_memory_auto',
+      requester: { agent_id: 'agent-a', platform: 'recoder_pm' },
+      assignee: { agent_id: 'agent-b', platform: 'codex' },
+      connector: { connector_id: 'codex-1', platform: 'codex', protocol: 'jsonrpc' },
+      payload: { kind: 'text', text: 'Complete task and propose memory' },
+      metadata: {
+        userId: 'user-456',
+      },
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const started = service.startTask(created.data.id, 'codex');
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const completed = service.completeTask(
+      created.data.id,
+      {
+        text: 'Done',
+        data: {
+          memoryCandidate: {
+            scope: 'repo',
+            title: 'preferred typecheck command',
+            body: 'Use `pnpm check-types` before delivery.',
+            artifactId: 'artifact_test_output_auto',
+          },
+        },
+      },
+      'codex',
+    );
+
+    expect(completed.ok).toBe(true);
+    expect(mocks.memory.rememberEntry).not.toHaveBeenCalled();
+
+    const req = makeReq({
+      method: 'GET',
+      params: { taskId: created.data.id },
+    });
+    const { res, state } = makeRes();
+    await runStack(taskLifecycleRouter, '/:taskId/context', 'get', req, res);
+
+    expect(state.statusCode).toBe(200);
+    expect(state.jsonData.data.memoryCandidates).toEqual([
+      expect.objectContaining({
+        scope: 'repo',
+        title: 'preferred typecheck command',
+        body: 'Use `pnpm check-types` before delivery.',
+        status: 'pending',
+      }),
+    ]);
+    expect(
+      (state.jsonData.data.runtime?.artifacts ?? []).some((artifact: any) =>
+        String(artifact.key).startsWith('memory-candidate:'),
+      ),
     ).toBe(true);
   });
 

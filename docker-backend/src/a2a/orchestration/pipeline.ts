@@ -14,6 +14,9 @@
 
 import { logger as baseLogger } from '../../logger';
 import { generateId } from '../task-lifecycle.service';
+import { compileInstructionBundleForTask } from '../compiled-instructions';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
+import { createTaskEnvelope, type TaskEnvelope } from '@recoder/shared/a2a';
 
 const logger = baseLogger.child({ component: 'a2a-pipeline' });
 
@@ -74,6 +77,24 @@ export interface PipelineExecution {
   completedAt?: string;
   totalDurationMs?: number;
 }
+
+export interface PipelineTaskExecutionRequest {
+  pipelineId: string;
+  executionId: string;
+  stepId: string;
+  agentId: string;
+  prompt: string;
+  envelope: TaskEnvelope;
+  instructionBundle: InstructionBundle | null;
+}
+
+export type PipelineTaskExecutor =
+  | ((agentId: string, prompt: string) => Promise<string>)
+  | ((request: PipelineTaskExecutionRequest) => Promise<string>);
+
+type StructuredPipelineTaskExecutor = ((request: PipelineTaskExecutionRequest) => Promise<string>) & {
+  __agentOsStructured?: boolean;
+};
 
 // ---------------------------------------------------------------------------
 // Output transforms
@@ -168,7 +189,7 @@ export class PipelineOrchestrator {
   async execute(
     pipelineId: string,
     input: string,
-    executor: (agentId: string, prompt: string) => Promise<string>,
+    executor: PipelineTaskExecutor,
   ): Promise<PipelineExecution> {
     const definition = this.pipelines.get(pipelineId);
     if (!definition) {
@@ -246,8 +267,9 @@ export class PipelineOrchestrator {
       try {
         // Create a timeout race if step.timeoutMs is specified
         const timeoutMs = step.timeoutMs ?? 30000;
+        const request = this.buildTaskExecutionRequest(execution, step, resolvedPrompt);
         const result = await Promise.race([
-          executor(step.agentId, resolvedPrompt),
+          this.invokeTaskExecutor(executor, request),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error(`Step ${step.stepId} timed out after ${timeoutMs}ms`)), timeoutMs),
           ),
@@ -388,6 +410,66 @@ export class PipelineOrchestrator {
     this.executions.clear();
     this.cancelledIds.clear();
     logger.debug('PipelineOrchestrator reset');
+  }
+
+  private buildTaskExecutionRequest(
+    execution: PipelineExecution,
+    step: PipelineStep,
+    prompt: string,
+  ): PipelineTaskExecutionRequest {
+    const envelope = createTaskEnvelope({
+      id: generateId('pipe-task'),
+      workspace_id: 'pipeline-orchestrator',
+      thread_id: `pipeline-${execution.executionId}`,
+      trace_id: execution.executionId,
+      requester: {
+        agent_id: 'pipeline-orchestrator',
+        platform: 'recoder_backend',
+        name: 'Pipeline Orchestrator',
+      },
+      assignee: {
+        agent_id: step.agentId,
+        platform: 'custom',
+      },
+      connector: {
+        connector_id: `pipeline-step:${step.stepId}`,
+        platform: 'custom',
+        protocol: 'rest',
+      },
+      payload: {
+        kind: 'text',
+        text: prompt,
+      },
+      metadata: {
+        pipelineId: execution.pipelineId,
+        executionId: execution.executionId,
+        stepId: step.stepId,
+        source: 'pipeline-orchestrator',
+      },
+      tags: ['pipeline-step'],
+    });
+
+    return {
+      pipelineId: execution.pipelineId,
+      executionId: execution.executionId,
+      stepId: step.stepId,
+      agentId: step.agentId,
+      prompt,
+      envelope,
+      instructionBundle: compileInstructionBundleForTask(envelope),
+    };
+  }
+
+  private async invokeTaskExecutor(
+    executor: PipelineTaskExecutor,
+    request: PipelineTaskExecutionRequest,
+  ): Promise<string> {
+    return (executor as StructuredPipelineTaskExecutor).__agentOsStructured === true
+      ? (executor as StructuredPipelineTaskExecutor)(request)
+      : (executor as (agentId: string, prompt: string) => Promise<string>)(
+          request.agentId,
+          request.prompt,
+        );
   }
 }
 

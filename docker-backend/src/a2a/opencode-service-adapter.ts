@@ -13,7 +13,7 @@
  *      This is the legacy path (opencode-connector.service.ts).
  *
  * This file implements mode 1 — the "opencode as a backend service" path
- * that recoder-web, recoder-agents, and the A2A layer all converge on.
+ * that Recoder Spaces, recoder-agents, and the A2A layer all converge on.
  *
  * Uses the shared @recoder/shared/opencode-client for the HTTP transport
  * so the implementation stays in sync across packages.

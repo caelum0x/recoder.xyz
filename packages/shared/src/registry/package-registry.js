@@ -101,26 +101,6 @@ class PackageRegistry {
                 }
             },
             {
-                name: '@recoder/web',
-                version: '1.0.0',
-                description: 'Recoder Web Platform for browser-based development',
-                platform: 'web',
-                dependencies: {
-                    '@recoder/shared': '^1.0.0',
-                    'next': '^14.0.0',
-                    'react': '^18.0.0'
-                },
-                installPath: path.join(this.registryPath, 'web'),
-                installedAt: Date.now(),
-                enabled: true,
-                recoder: {
-                    type: 'core',
-                    category: 'development',
-                    tags: ['web', 'react', 'nextjs'],
-                    compatibility: ['browser', 'node >= 18']
-                }
-            },
-            {
                 name: '@recoder/vscode',
                 version: '1.0.0',
                 description: 'Recoder VS Code Extension with multi-AI intelligence',

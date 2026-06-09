@@ -7,7 +7,6 @@ vi.mock('@/lib/runtime-urls', () => ({
 vi.mock('@recoder/ecosystem-config', () => ({
   RECODER_ECOSYSTEM_URLS: {
     home: 'https://recoder.xyz',
-    web: 'https://web.recoder.xyz',
     agency: 'https://agency.recoder.xyz',
     pm: 'https://pm.recoder.xyz',
     agents: 'https://agents.recoder.xyz',
@@ -31,11 +30,10 @@ describe('siteConfig', () => {
       (s) => s.title === 'Ecosystem'
     );
     expect(ecosystemSection).toBeDefined();
-    expect(ecosystemSection!.links.length).toBeGreaterThanOrEqual(4);
+    expect(ecosystemSection!.links.length).toBeGreaterThanOrEqual(3);
 
     const urls = ecosystemSection!.links.map((l) => l.url);
     expect(urls).toContain('https://recoder.xyz');
-    expect(urls).toContain('https://web.recoder.xyz');
     expect(urls).toContain('https://agency.recoder.xyz');
     expect(urls).toContain('https://pm.recoder.xyz');
   });

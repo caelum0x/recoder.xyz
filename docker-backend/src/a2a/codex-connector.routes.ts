@@ -18,6 +18,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import type { InstructionBundle } from '@recoder/a2a-sdk';
 import {
   A2AErrorCodeEnum,
   buildA2AError,
@@ -59,6 +60,13 @@ function sendError(res: Response, httpStatus: number, error: A2AError): void {
   res.status(httpStatus).json(response);
 }
 
+function readInstructionBundle(value: unknown): InstructionBundle | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return typeof (value as Record<string, unknown>).agent_specific_prompt === 'string'
+    ? (value as InstructionBundle)
+    : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -86,12 +94,17 @@ codexConnectorRouter.post('/execute', async (req: Request, res: Response) => {
     }
 
     const { prompt, taskId, requester, artifacts } = req.body || {};
+    const instructionBundle = readInstructionBundle(req.body?.instructionBundle);
+    const effectivePrompt =
+      typeof prompt === 'string' && prompt.trim().length > 0
+        ? prompt
+        : instructionBundle?.agent_specific_prompt;
 
-    if (!prompt || typeof prompt !== 'string') {
+    if (!effectivePrompt) {
       sendError(res, 400, buildA2AError({
         code: A2AErrorCodeEnum.MissingEnvelopeField,
-        message: 'Missing required field: prompt (string)',
-        details: { missing_fields: ['prompt'] },
+        message: 'Missing required field: prompt (string) or instructionBundle.agent_specific_prompt',
+        details: { missing_fields: ['prompt', 'instructionBundle.agent_specific_prompt'] },
       }));
       return;
     }
@@ -119,7 +132,7 @@ codexConnectorRouter.post('/execute', async (req: Request, res: Response) => {
           platform: 'codex',
           protocol: 'jsonrpc',
         },
-        payload: { kind: 'text', text: prompt },
+        payload: { kind: 'text', text: effectivePrompt },
         tags: ['codex-connector'],
       });
 
@@ -133,7 +146,8 @@ codexConnectorRouter.post('/execute', async (req: Request, res: Response) => {
 
     const input: CodexExecuteInput = {
       taskId: effectiveTaskId,
-      prompt,
+      prompt: effectivePrompt,
+      instructionBundle,
       workspaceId: req.body.workspace_id,
       threadId: req.body.thread_id,
       requester: {

@@ -3,6 +3,8 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
+import { A2A_BRIDGE_ENDPOINTS, bridgeJobResultPath } from './bridge-contract.mjs';
+
 const POLL_INTERVAL_MS = Number(process.env.RECODER_A2A_BRIDGE_POLL_MS || 1500);
 const HEARTBEAT_INTERVAL_MS = Number(process.env.RECODER_A2A_BRIDGE_HEARTBEAT_MS || 15000);
 const COMMAND_TIMEOUT_MS = Number(process.env.RECODER_A2A_BRIDGE_COMMAND_TIMEOUT_MS || 120000);
@@ -41,7 +43,7 @@ function authHeaders(extra = {}) {
 
 async function sendHeartbeat() {
   try {
-    await fetch(`${BRIDGE_URL}/api/a2a/bridge/heartbeat`, {
+    await fetch(`${BRIDGE_URL}${A2A_BRIDGE_ENDPOINTS.heartbeat}`, {
       method: 'POST',
       headers: authHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify({
@@ -139,7 +141,7 @@ async function reportResult(job, execution) {
     },
   };
 
-  const response = await fetch(`${BRIDGE_URL}/api/a2a/bridge/jobs/${encodeURIComponent(job.jobId)}/result`, {
+  const response = await fetch(`${BRIDGE_URL}${bridgeJobResultPath(job.jobId)}`, {
     method: 'POST',
     headers: authHeaders({ 'content-type': 'application/json' }),
     body: JSON.stringify(body),
@@ -152,7 +154,7 @@ async function reportResult(job, execution) {
 }
 
 async function pollOnce() {
-  const response = await fetch(`${BRIDGE_URL}/api/a2a/bridge/jobs/next`, {
+  const response = await fetch(`${BRIDGE_URL}${A2A_BRIDGE_ENDPOINTS.jobsNext}`, {
     method: 'GET',
     headers: authHeaders(),
   });

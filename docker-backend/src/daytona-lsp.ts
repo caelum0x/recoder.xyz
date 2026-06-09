@@ -2,7 +2,7 @@
  * Daytona LSP Integration
  *
  * Provides code intelligence (completions, symbols, diagnostics) for
- * web.recoder.xyz using Daytona's LSP server capabilities.
+ * Spaces using Daytona's LSP server capabilities.
  *
  * Architecture:
  * - LSP endpoints are served by the main Daytona API at port 3900:

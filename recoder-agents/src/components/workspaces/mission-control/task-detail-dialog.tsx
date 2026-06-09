@@ -124,6 +124,51 @@ interface TaskContextData {
     filesChanged?: string[];
     artifacts?: TaskArtifact[];
   } | null;
+  instructions?: {
+    sharedGoal?: string | null;
+    promptLength?: number | null;
+    verificationCommands?: string[];
+    forbiddenActions?: string[];
+    sourceFiles?: Array<{
+      path?: string | null;
+      sha?: string | null;
+    }>;
+    sourceRefs?: Array<{
+      refId?: string | null;
+      kind?: string | null;
+      path?: string | null;
+      sha?: string | null;
+    }>;
+    approvalGates?: Array<{
+      approvalId?: string | null;
+      title?: string | null;
+      status?: string | null;
+      requiredAt?: string | null;
+      reason?: string | null;
+    }>;
+    memoryRefs?: Array<{
+      memoryId?: string | null;
+      scope?: string | null;
+      title?: string | null;
+    }>;
+    compilerVersion?: string | null;
+    compiledAt?: string | null;
+    artifactKey?: string | null;
+    artifactPath?: string | null;
+  } | null;
+  memoryCandidates?: Array<{
+    candidateId?: string | null;
+    scope?: string | null;
+    title?: string | null;
+    body?: string | null;
+    status?: string | null;
+    proposedBy?: string | null;
+    reviewedBy?: string | null;
+    reviewReason?: string | null;
+    approvedMemoryId?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  }>;
 }
 
 interface TaskDetailDialogProps {
@@ -612,6 +657,179 @@ export function TaskDetailDialog({ taskId, workspaceId, open, onOpenChange }: Ta
                 )}
               </section>
             </div>
+
+            <section className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <FileDiff className="h-4 w-4" />
+                Instruction Bundle
+              </div>
+              {data.instructions ? (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Shared goal:</span>{' '}
+                      <span>{data.instructions.sharedGoal ?? '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Compiler version:</span>{' '}
+                      <span className="font-mono">{data.instructions.compilerVersion ?? '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Compiled at:</span>{' '}
+                      <span>{data.instructions.compiledAt ?? '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Prompt length:</span>{' '}
+                      <span>{data.instructions.promptLength ?? '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Artifact:</span>{' '}
+                      <span className="font-mono break-all">
+                        {data.instructions.artifactPath ?? data.instructions.artifactKey ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void copyToClipboard('Instruction artifact', data.instructions?.artifactPath ?? data.instructions?.artifactKey)}
+                      >
+                        <Copy className="mr-1 h-3.5 w-3.5" />
+                        Copy artifact path
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <p className="font-medium">Verification</p>
+                      {data.instructions.verificationCommands?.length ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {data.instructions.verificationCommands.map((command) => (
+                            <span key={command} className="rounded bg-muted px-2 py-1 font-mono text-xs">
+                              {command}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">No verification commands recorded.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-medium">Instruction Sources</p>
+                      {data.instructions.sourceFiles?.length ? (
+                        <div className="mt-1 space-y-1">
+                          {data.instructions.sourceFiles.map((source) => (
+                            <div key={`${source.path}:${source.sha}`} className="rounded bg-muted/50 px-2 py-1">
+                              <div className="font-mono text-xs">{source.path ?? '—'}</div>
+                              <div className="text-[11px] text-muted-foreground">{source.sha ?? '—'}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">No source provenance recorded.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-medium">Memory Refs</p>
+                      {data.instructions.memoryRefs?.length ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {data.instructions.memoryRefs.map((memory) => (
+                            <span key={`${memory.memoryId}:${memory.scope}`} className="rounded bg-muted px-2 py-1 text-xs">
+                              {memory.scope}:{memory.title}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">No reviewed memory refs attached.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-sm lg:col-span-2">
+                    <div>
+                      <p className="font-medium">Approval Gates</p>
+                      {data.instructions.approvalGates?.length ? (
+                        <div className="mt-1 space-y-1">
+                          {data.instructions.approvalGates.map((gate) => (
+                            <div key={gate.approvalId ?? gate.title} className="rounded bg-muted/50 px-2 py-1">
+                              <div>{gate.title ?? gate.approvalId ?? '—'}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {gate.status ?? '—'} · {gate.requiredAt ?? '—'} · {gate.reason ?? '—'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">No approval gates recorded in the bundle.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="font-medium">Forbidden Actions</p>
+                      {data.instructions.forbiddenActions?.length ? (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {data.instructions.forbiddenActions.map((action) => (
+                            <span key={action} className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-300">
+                              {action}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">No forbidden actions recorded.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No compiled instruction bundle is attached to this task yet.
+                </p>
+              )}
+            </section>
+
+            <section className="rounded-lg border p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <ShieldCheck className="h-4 w-4" />
+                Memory Candidates
+              </div>
+              {data.memoryCandidates?.length ? (
+                <div className="space-y-3">
+                  {data.memoryCandidates.map((candidate) => (
+                    <div
+                      key={candidate.candidateId ?? candidate.title ?? Math.random()}
+                      className="rounded border bg-muted/30 p-3 text-sm"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{candidate.title ?? candidate.candidateId ?? 'Untitled candidate'}</span>
+                        <span className="rounded bg-muted px-2 py-0.5 text-xs">{candidate.scope ?? '—'}</span>
+                        <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
+                          {candidate.status ?? '—'}
+                        </span>
+                      </div>
+                      {candidate.body ? (
+                        <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{candidate.body}</p>
+                      ) : null}
+                      <div className="mt-2 grid gap-1 text-xs text-muted-foreground md:grid-cols-2">
+                        <span>Proposed by: {candidate.proposedBy ?? '—'}</span>
+                        <span>Reviewed by: {candidate.reviewedBy ?? '—'}</span>
+                        <span>Created: {candidate.createdAt ?? '—'}</span>
+                        <span>Updated: {candidate.updatedAt ?? '—'}</span>
+                        <span>Approved memory: {candidate.approvedMemoryId ?? '—'}</span>
+                        <span>Reason: {candidate.reviewReason ?? '—'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No reviewed memory candidates are attached to this task yet.
+                </p>
+              )}
+            </section>
 
             <section className="rounded-lg border p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">
