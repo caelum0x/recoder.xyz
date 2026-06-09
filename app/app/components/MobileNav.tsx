@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Menu, X, LayoutDashboard, Bot, BarChart3, Settings, Key, FolderOpen, Sparkles, User, Terminal, Cpu, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { signOut } from '@/lib/session-provider';
+import { detectLocaleFromPathname, localizePath, stripLocalePrefix } from '@/lib/locale-paths';
 
 const bottomTabs = [
   { href: '/dashboard/overview', label: 'Overview', icon: LayoutDashboard },
@@ -17,7 +18,7 @@ const bottomTabs = [
 const drawerLinks = [
   { section: 'Dashboard', items: [
     { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-    { href: '/dashboard/api-keys', label: 'API Keys', icon: Key },
+    { href: '/settings/ai-providers', label: 'API Keys', icon: Key },
     { href: '/dashboard/projects', label: 'Projects', icon: FolderOpen },
     { href: '/dashboard/usage', label: 'Usage', icon: BarChart3 },
     { href: '/dashboard/analytics', label: 'Analytics', icon: Cpu },
@@ -35,9 +36,12 @@ const drawerLinks = [
 export function MobileNav() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
+  const locale = detectLocaleFromPathname(pathname);
 
-  // Strip locale prefix for matching
-  const pathWithoutLocale = pathname.replace(/^\/[a-z]{2}(?:\/|$)/, '/');
+  const pathWithoutLocale = stripLocalePrefix(pathname);
+  const localHref = useCallback((href: string) => (
+    href.startsWith('/') ? localizePath(href, locale) : href
+  ), [locale]);
 
   const isActive = useCallback((href: string, exact?: boolean) => {
     if (exact) return pathWithoutLocale === href;
@@ -89,7 +93,7 @@ export function MobileNav() {
           >
             {/* Drawer Header */}
             <div className="flex items-center justify-between h-16 px-4 border-b border-white/10">
-              <Link href="/" className="flex items-center">
+              <Link href={localHref('/')} className="flex items-center">
                 <img src="/logo.png" alt="Recoder" className="w-7 h-7 rounded-lg" />
               </Link>
               <button
@@ -132,7 +136,7 @@ export function MobileNav() {
                       return (
                         <Link
                           key={link.href}
-                          href={link.href}
+                          href={localHref(link.href)}
                           className={cn(
                             'flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                             active
@@ -177,7 +181,7 @@ export function MobileNav() {
             return (
               <Link
                 key={tab.href}
-                href={tab.href}
+                href={localHref(tab.href)}
                 className={cn(
                   'flex flex-col items-center justify-center flex-1 h-full space-y-0.5 transition-colors',
                   active ? 'text-orange-500' : 'text-gray-500 hover:text-gray-300'

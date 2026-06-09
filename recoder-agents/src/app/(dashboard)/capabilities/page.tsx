@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Workflow as WorkflowIcon,
   CreditCard,
+  Users,
   CheckCircle2,
   AlertTriangle,
   XCircle,
@@ -135,6 +136,14 @@ function buildCards(data: CapabilitiesResponse): CapabilityCard[] {
       detail: data.billing?.available
         ? `Connected · ${data.billing.server.replace(/^https?:\/\//, '')}`
         : data.billing?.reason ?? 'Not configured',
+    },
+    {
+      key: 'agentCollaboration',
+      label: 'Squads & collaboration',
+      description: 'Agent+human teams with presence, roles, and activity.',
+      icon: Users,
+      status: data.agentCollaboration?.available ? 'on' : 'off',
+      detail: `${data.agentCollaboration?.squads ?? 0} squad${(data.agentCollaboration?.squads ?? 0) === 1 ? '' : 's'}`,
     },
   ];
 }

@@ -1,21 +1,8 @@
 # Recoder Paid-User Remaining Work
 
-Last updated: 2026-05-14
+Last updated: 2026-06-03
 
-## Current Shipped Baseline
-
-The current product direction is no longer generic session or token resale. Recoder now sells the control plane around Spaces, connected agents, approvals, artifact retention, and preview deploy capacity.
-
-Shipped through `recoder-7xqf`:
-
-- Spaces are the primary signed-in conversion path.
-- Connecting an agent is the first activation milestone.
-- Dashboard and Spaces surfaces show the task -> artifact -> PR -> preview -> approval loop.
-- Subscription entitlements are normalized around workspaces, connected agents, approvals, retention, and preview deploys.
-- Legacy session and token quota fields still exist for compatibility, but auth, billing, CLI quota/proxy, user quota, usage tracking, analytics, and plan config now derive those fields from the same commercial entitlement model.
-- Preview deploy artifacts and private preview access are represented as run/task evidence instead of separate deploy-only state.
-- `recoder-edge` exists as a scaffold for preview routing and security policy, but live edge rollout is not complete.
-- 2026-06-02 update: an agent capability layer is wired into `docker-backend` (additive, fail-safe, surfaced at `GET /api/capabilities`): Qwen Code + Gemini CLI coding runtimes, E2B secure runner (`/api/e2b/*`), browser verification (`/api/browser/verify*`), mem0 memory (`/api/memory/mem0/*`), Context7 docs (`/api/context7/*`), and a workspace Workflows UI in recoder-agents. These are capability substrate; none change the paid-user launch gate below, which is still about the end-to-end Spaces loop.
+This doc tracks only what is NOT done before paid users. (Shipped baseline + the agent capability/collaboration layer live in git history.)
 
 ## What Remains Before Paid Users
 
@@ -35,28 +22,26 @@ The next launch gate is a paid-user loop that a real user can complete without i
 
 ## Priority Order
 
-1. Funnel analytics and KPI visibility.
-   Track homepage -> signup -> choose plan -> create Space -> connect agent -> first task -> first artifact -> first approval. This maps to ready issue `recoder-krxl`.
-
-2. GitHub repo connection and PR artifacts.
+1. GitHub repo connection and PR artifacts.
    Add repo connection, branch mapping, PR creation/attachment, review state, check state, and issue/task linking as first-class run artifacts.
+   - 2026-06-03 update: workspace settings now expose a repo/PR panel backed by `/api/git/*` so a user can connect a repo by clone URL, inspect origin/branch state, select a workspace task, reuse its branch context when opening a PR, inspect PR reviews/checks, and attach a GitHub issue to a task as a first-class artifact/metadata link. Remaining work is the broader end-to-end product path and deeper issue/linking polish, not the absence of a user-facing repo/PR/issue surface.
 
-3. Main task timeline.
+2. Main task timeline.
    Make the product path visibly show task -> artifact -> PR -> preview -> approval from shared run history, not demo-only or per-page state.
+   - 2026-06-03 update: mission-control task detail now surfaces attached GitHub issue/PR metadata, preview deployment state, approval linkage, and human-readable PR/preview timeline entries from shared task context. Task pipeline cards also show issue/PR/preview badges directly from shared delivery state. Remaining work is the broader end-to-end product path, not the absence of those shared run-context fields.
 
-4. PM and Agency shared ingress.
-   Move PM and Agency A2A ingress normalization onto the shared contract so approvals, handoffs, and client review loops cannot drift into local state. This maps to ready issue `recoder-9s5j`.
-
-5. Live preview and edge rollout.
+3. Live preview and edge rollout.
    Activate preview host routing, TLS/DNS, private preview access, rate limits, WAF hooks, and production rollout for the in-repo edge scaffold. This maps to ready issue `recoder-zvss`.
+   - 2026-06-03 update: mission-control task detail can now create or refresh a protected preview deployment through the existing shared task preview route, using the workspace project id and task branch/PR context. The remaining work is live edge routing, DNS/TLS, and production rollout evidence, not the absence of a user-facing preview action.
    - 2026-05-31 update: the retired browser coding host now redirects to the dashboard. The remaining preview/edge work should attach evidence to Spaces/shared run history, not revive the retired app.
 
-6. Deploy hygiene.
+4. Deploy hygiene.
    Resolve the local<->prod git divergence that still makes full Hetzner deploys risky from this branch. This maps to issue `recoder-js56`.
    - 2026-05-31 update: the Daytona control plane and runner are recovered on Hetzner. `daytona-api`, proxy, db, redis, dex, minio, registry, and runner are healthy; a disposable sandbox create reached `started` and was destroyed.
    - 2026-05-31 update: `docker-backend` is healthy in production and the retired browser coding container/image has been removed. The remaining work is deploy hygiene/reconciliation, not missing Daytona infra.
+   - 2026-06-03 update: checkout-drift and env/deploy helper scripts now classify retired `recoder-web` remnants separately and stop hard-requiring that retired surface for local env/script checks. The remaining work is host reconciliation and production proof, not those stale local-script assumptions.
 
-7. Production traffic and abuse controls.
+5. Production traffic and abuse controls.
    Add Cloudflare/CrowdSec/open-appsec style mitigation rules after real traffic signals are instrumented. This maps to ready issues `recoder-a9rp` and `recoder-rbc2`.
    - 2026-05-31 (recoder-rbc2, analysis done): Investigated the suspected "Finland" abuse signal via Cloudflare analytics. It was NOT external abuse — it was the prod box (Hetzner Helsinki, IPv6 2a01:4f9:c013:9cb6::1) self-polling `/api/platform/activity` and getting 403'd by Bot Fight Mode. No mitigation rule added (a FI block would self-block production). The 403 root cause was fixed instead (internal loopback calls + INTERNAL_SERVICE_KEY). Real abuse-mitigation rules remain deferred until a genuine external signal appears.
 
@@ -80,4 +65,4 @@ When roadmap documents conflict, use this order:
 2. `docs/remaining.md` for the current paid-user launch gate.
 3. `docs/prd.md` for product requirements.
 4. `docs/product.md` for public narrative.
-5. `docs/big-plan.md` and `docs/todo` as backlog/reference material.
+5. `docs/todo` as backlog/reference material.

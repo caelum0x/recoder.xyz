@@ -58,6 +58,61 @@ check "ziti"                "/api/ziti/health"             0
 check "billing/polar"       "/api/billing/polar/health"    0
 check "coding-runtime list" "/api/coding-runtime/runtimes" 0
 check "llm/providers"       "/api/llm/providers"           1
+check "squads list"         "/api/a2a/squads"              1
+check "collaboration feed"  "/api/a2a/collaboration/feed"  1
+check "collaboration summary" "/api/a2a/collaboration/summary" 1
+check "collaboration events" "/api/a2a/collaboration/events" 1
+check "collaboration roster" "/api/a2a/collaboration/roster" 1
+check "skills leaderboard"  "/api/agent-skills/leaderboard" 1
+echo
+
+# Optional: exercise the full squad lifecycle (create → member → dispatch →
+# transition → presence → collaboration feed → run-steps → delete).
+if [ -n "$AUTH" ]; then
+  echo "Squad + dispatch + workflow lifecycle:"
+  sq=$(curl -s -m 15 "${auth_args[@]}" -H 'content-type: application/json' \
+    -d '{"name":"smoke-squad","description":"smoke test"}' "$BASE/api/a2a/squads")
+  sid=$(echo "$sq" | jq -r '(.data // .).id // empty')
+  if [ -n "$sid" ]; then
+    echo "  created squad $sid"
+    curl -s -m 15 "${auth_args[@]}" -H 'content-type: application/json' \
+      -d '{"id":"agent-smoke-1","kind":"agent","role":"builder"}' "$BASE/api/a2a/squads/$sid/members" >/dev/null
+
+    # Dispatch a task to the squad, then drive one assignment to completion.
+    disp=$(curl -s -m 15 "${auth_args[@]}" -H 'content-type: application/json' \
+      -d '{"task":"smoke task","strategy":"all"}' "$BASE/api/a2a/squads/$sid/dispatch")
+    stid=$(echo "$disp" | jq -r '(.data // .).id // empty')
+    echo "  dispatched: $(echo "$disp" | jq -c '(.data // .) | {status, delivered: (.deliveredTo|length), assignments: (.assignments|length)}' 2>/dev/null | head -c 120)"
+    if [ -n "$stid" ]; then
+      curl -s -m 15 "${auth_args[@]}" -H 'content-type: application/json' -d '{"status":"in_progress"}' \
+        "$BASE/api/a2a/squad-tasks/$stid/assignments/agent-smoke-1" >/dev/null
+      done=$(curl -s -m 15 "${auth_args[@]}" -H 'content-type: application/json' -d '{"status":"completed"}' \
+        "$BASE/api/a2a/squad-tasks/$stid/assignments/agent-smoke-1")
+      echo "  task status: $(echo "$done" | jq -r '(.data // .).status' 2>/dev/null)"
+    fi
+
+    pres=$(curl -s -m 15 "${auth_args[@]}" "$BASE/api/a2a/presence?agentIds=agent-smoke-1")
+    echo "  presence: $(echo "$pres" | jq -c '(.data // .).presence."agent-smoke-1" | {availability, workload}' 2>/dev/null | head -c 100)"
+
+    # Run a workflow step list that dispatches to the squad.
+    steps="{\"steps\":[{\"type\":\"squad\",\"name\":\"fanout\",\"config\":{\"squadId\":\"$sid\",\"task\":\"do it\",\"strategy\":\"leader\"}}]}"
+    rs=$(curl -s -m 30 "${auth_args[@]}" -H 'content-type: application/json' -d "$steps" "$BASE/api/workflows/run-steps")
+    echo "  run-steps: $(echo "$rs" | jq -c '(.data // .) | {success, steps: (.results|length)}' 2>/dev/null | head -c 100)"
+
+    # Assert stats reflect the completed assignment.
+    st=$(curl -s -m 15 "${auth_args[@]}" "$BASE/api/a2a/squads/$sid/stats")
+    completed=$(echo "$st" | jq -r '(.data // .).assignments.completed // 0' 2>/dev/null)
+    echo "  stats: $(echo "$st" | jq -c '(.data // .) | {totalTasks, completionRate, completed: .assignments.completed}' 2>/dev/null | head -c 120)"
+    [ "${completed:-0}" -ge 1 ] && echo "    ✓ stats reflect the completed assignment" || echo "    ✗ expected >=1 completed assignment in stats"
+
+    curl -s -m 15 "${auth_args[@]}" -X DELETE "$BASE/api/a2a/squads/$sid" >/dev/null
+    echo "  cleaned up squad $sid"
+  else
+    echo "  ✗ squad create failed (auth? got: $(echo "$sq" | head -c 60))"
+  fi
+else
+  echo "(Skipping squad lifecycle — set AUTH to exercise it.)"
+fi
 echo
 
 # Optional: exercise the coding-runtime flow with auto-enrichment.

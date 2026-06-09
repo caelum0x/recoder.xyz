@@ -61,11 +61,25 @@ interface ProviderBlock {
   config: Record<string, unknown>;
 }
 
-/** Resolve an OSS LLM provider from available self-hosted/BYO config. */
+function googleKey(): string | undefined {
+  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+}
+
+/**
+ * Resolve an OSS LLM provider from available BYO/self-hosted config. Cloud-first
+ * (OpenAI / OpenRouter / Google) so it runs on servers without local inference;
+ * Ollama only when explicitly chosen or it's the only thing configured.
+ */
 function resolveOssLlm(): ProviderBlock | null {
   const override = process.env.MEM0_LLM_PROVIDER;
-  if ((override === 'ollama') || (!override && process.env.OLLAMA_BASE_URL && !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY)) {
+  const google = googleKey();
+  const noCloud = !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY && !google;
+
+  if (override === 'ollama' || (!override && process.env.OLLAMA_BASE_URL && noCloud)) {
     return { provider: 'ollama', config: { baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434', model: process.env.MEM0_LLM_MODEL || 'llama3.1' } };
+  }
+  if (override === 'google' || (!override && google && !process.env.OPENAI_API_KEY && !process.env.OPENROUTER_API_KEY)) {
+    if (google) return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_LLM_MODEL || 'gemini-2.0-flash' } };
   }
   if (process.env.OPENAI_API_KEY) {
     return { provider: 'openai', config: { apiKey: process.env.OPENAI_API_KEY, model: process.env.MEM0_LLM_MODEL || 'gpt-4o-mini' } };
@@ -73,17 +87,31 @@ function resolveOssLlm(): ProviderBlock | null {
   if (process.env.OPENROUTER_API_KEY) {
     return { provider: 'openai', config: { apiKey: process.env.OPENROUTER_API_KEY, baseURL: 'https://openrouter.ai/api/v1', model: process.env.MEM0_LLM_MODEL || 'openai/gpt-4o-mini' } };
   }
+  if (google) {
+    return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_LLM_MODEL || 'gemini-2.0-flash' } };
+  }
   return null;
 }
 
-/** Resolve an OSS embedder. Note: OpenRouter has no embeddings API, so embeddings need OpenAI or Ollama. */
+/**
+ * Resolve an OSS embedder. OpenRouter has NO embeddings API, so embeddings come
+ * from OpenAI, Google/Gemini, or Ollama — letting servers use a cloud key.
+ */
 function resolveOssEmbedder(): ProviderBlock | null {
   const override = process.env.MEM0_EMBEDDER_PROVIDER;
-  if (override === 'ollama' || (!override && process.env.OLLAMA_BASE_URL && !process.env.OPENAI_API_KEY)) {
+  const google = googleKey();
+
+  if (override === 'ollama' || (!override && process.env.OLLAMA_BASE_URL && !process.env.OPENAI_API_KEY && !google)) {
     return { provider: 'ollama', config: { baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434', model: process.env.MEM0_EMBED_MODEL || 'nomic-embed-text' } };
+  }
+  if (override === 'google' || (!override && google && !process.env.OPENAI_API_KEY)) {
+    if (google) return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_EMBED_MODEL || 'gemini-embedding-001' } };
   }
   if (process.env.OPENAI_API_KEY) {
     return { provider: 'openai', config: { apiKey: process.env.OPENAI_API_KEY, model: process.env.MEM0_EMBED_MODEL || 'text-embedding-3-small' } };
+  }
+  if (google) {
+    return { provider: 'google', config: { apiKey: google, model: process.env.MEM0_EMBED_MODEL || 'gemini-embedding-001' } };
   }
   return null;
 }

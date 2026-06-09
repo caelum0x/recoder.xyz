@@ -21,6 +21,10 @@ if [[ "$TARGET" == "local" ]]; then
 
   for c in recoder-app recoder-docker-backend recoder-web recoder-redis; do
     echo "=== ${c} ==="
+    if ! docker inspect "$c" >/dev/null 2>&1; then
+      echo "(missing; skipped)"
+      continue
+    fi
     docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$c" 2>/dev/null \
       | sed -E 's/=.*$/=SET/' \
       | grep -E '^(DATABASE_URL|AUTH_DATABASE_URL|REDIS_PASSWORD|REDIS_URL|BETTER_AUTH_SECRET|NEXTAUTH_SECRET|SESSION_SYNC_SECRET|INTERNAL_SERVICE_KEY|JWT_SECRET|JWT_REFRESH_SECRET|ENCRYPTION_KEY|ENCRYPTION_SALT|GITHUB_SECRET|GOOGLE_CLIENT_SECRET|GOOGLE_CLIENT_SECRET_LOCAL|DISCORD_CLIENT_SECRET|OPENAI_API_KEY|ANTHROPIC_API_KEY|GROQ_API_KEY|GOOGLE_API_KEY|OPENROUTER_API_KEY|DODO_.*|PADDLE_.*|POLAR_.*|RECODER_A2A_SHARED_SECRET|RECODER_A2A_WORKER_TOKEN|RECODER_A2A_ADMIN_TOKEN|RECODER_A2A_BRIDGE_TOKEN|SMTP_.*|ALERT_WEBHOOK_URL|ALERT_EMAIL)=' \
@@ -34,6 +38,10 @@ if [[ "$TARGET" == "remote" ]]; then
     set -e
     for c in recoder-app recoder-docker-backend recoder-web recoder-redis; do
       echo "=== ${c} ==="
+      if ! docker inspect "$c" >/dev/null 2>&1; then
+        echo "(missing; skipped)"
+        continue
+      fi
       docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" "$c" 2>/dev/null \
         | sed -E "s/=.*$/=SET/" \
         | grep -E "^(DATABASE_URL|AUTH_DATABASE_URL|REDIS_PASSWORD|REDIS_URL|BETTER_AUTH_SECRET|NEXTAUTH_SECRET|SESSION_SYNC_SECRET|INTERNAL_SERVICE_KEY|JWT_SECRET|JWT_REFRESH_SECRET|ENCRYPTION_KEY|ENCRYPTION_SALT|GITHUB_SECRET|GOOGLE_CLIENT_SECRET|GOOGLE_CLIENT_SECRET_LOCAL|DISCORD_CLIENT_SECRET|OPENAI_API_KEY|ANTHROPIC_API_KEY|GROQ_API_KEY|GOOGLE_API_KEY|OPENROUTER_API_KEY|DODO_.*|PADDLE_.*|POLAR_.*|RECODER_A2A_SHARED_SECRET|RECODER_A2A_WORKER_TOKEN|RECODER_A2A_ADMIN_TOKEN|RECODER_A2A_BRIDGE_TOKEN|SMTP_.*|ALERT_WEBHOOK_URL|ALERT_EMAIL)=" \

@@ -21,6 +21,14 @@ export const localeFlags: Record<Locale, string> = {
   de: '🇩🇪'
 };
 
+export function resolveMessagesLocale(locale: Locale): Locale {
+  if (locale === 'tr') {
+    return 'en';
+  }
+
+  return locale;
+}
+
 export default getRequestConfig(async ({ requestLocale }) => {
   // Get the locale from the request
   let locale = await requestLocale;
@@ -30,8 +38,10 @@ export default getRequestConfig(async ({ requestLocale }) => {
     locale = defaultLocale;
   }
 
+  const messagesLocale = resolveMessagesLocale(locale as Locale);
+
   return {
     locale,
-    messages: (await import(`./messages/${locale}.json`)).default
+    messages: (await import(`./messages/${messagesLocale}.json`)).default
   };
 });

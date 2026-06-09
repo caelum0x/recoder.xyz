@@ -33,7 +33,7 @@ cat > "${OUTPUT_FILE}" <<EOF
     "no_skip_closeout_precondition": true,
     "a2a_smoke_test": "${A2A_STATUS}",
     "redis_persistence": "${A2A_STATUS}",
-    "services_deployed": ["docker-backend", "recoder-web", "recoder-agents"]
+    "services_deployed": ["docker-backend", "recoder-agents"]
   }
 }
 EOF
