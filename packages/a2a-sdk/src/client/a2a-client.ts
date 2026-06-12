@@ -25,8 +25,11 @@ export class A2AClient {
       headers: this.headers(),
     });
     if (!response.ok) throw new Error(`A2A listTasks failed: ${response.status}`);
-    const body = await response.json();
-    return Array.isArray(body?.data) ? body.data : body;
+    const body = await response.json() as unknown;
+    if (isTaskEnvelopeListResponse(body)) {
+      return body.data;
+    }
+    return Array.isArray(body) ? body as TaskEnvelope[] : [];
   }
 
   async sendMessage(envelope: TaskEnvelope): Promise<unknown> {
@@ -47,4 +50,8 @@ export class A2AClient {
     if (!response.ok) throw new Error(`A2A cancelTask failed: ${response.status}`);
     return response.json();
   }
+}
+
+function isTaskEnvelopeListResponse(value: unknown): value is { data: TaskEnvelope[] } {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { data?: unknown }).data);
 }

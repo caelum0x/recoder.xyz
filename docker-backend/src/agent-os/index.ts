@@ -4,4 +4,6 @@ export * from './routes/mcp-control.routes';
 export * from './routes/internal.routes';
 export * from './controllers/agent-os.controller';
 export * from './repositories/in-memory-agent-os.repository';
+export * from './repositories/json-file-agent-os.repository';
+export * from './repositories/postgres-agent-os.repository';
 export * from './service-container';

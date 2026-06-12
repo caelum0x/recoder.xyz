@@ -15,28 +15,32 @@ export const memoryCandidateSchema: SchemaGuard<MemoryCandidate> = {
       (record) => requireString(record, 'candidateId'),
       (record) => requireString(record, 'scope'),
       (record) =>
-        typeof record.scope === 'string' && VALID_MEMORY_SCOPES.has(record.scope)
+        typeof record['scope'] === 'string' && VALID_MEMORY_SCOPES.has(record['scope'])
           ? null
           : { path: 'scope', message: `Expected one of: ${MEMORY_SCOPES.join(', ')}.` },
       (record) => requireString(record, 'title'),
       (record) => requireString(record, 'body'),
       (record) => requireString(record, 'status'),
       (record) =>
-        typeof record.status === 'string' && VALID_MEMORY_CANDIDATE_STATUSES.has(record.status)
+        typeof record['status'] === 'string' && VALID_MEMORY_CANDIDATE_STATUSES.has(record['status'])
           ? null
           : { path: 'status', message: `Expected one of: ${MEMORY_CANDIDATE_STATUSES.join(', ')}.` },
       (record) =>
-        isRecord(record.evidence)
+        isRecord(record['evidence'])
           ? null
           : { path: 'evidence', message: 'Expected an evidence object.' },
-      (record) =>
-        isRecord(record.evidence) && typeof record.evidence.taskId === 'string' && record.evidence.taskId.length > 0
+      (record) => {
+        const evidence = record['evidence'];
+        return isRecord(evidence) && typeof evidence['taskId'] === 'string' && evidence['taskId'].length > 0
           ? null
-          : { path: 'evidence.taskId', message: 'Expected a non-empty string.' },
-      (record) =>
-        isRecord(record.evidence) && typeof record.evidence.artifactId === 'string' && record.evidence.artifactId.length > 0
+          : { path: 'evidence.taskId', message: 'Expected a non-empty string.' };
+      },
+      (record) => {
+        const evidence = record['evidence'];
+        return isRecord(evidence) && typeof evidence['artifactId'] === 'string' && evidence['artifactId'].length > 0
           ? null
-          : { path: 'evidence.artifactId', message: 'Expected a non-empty string.' },
+          : { path: 'evidence.artifactId', message: 'Expected a non-empty string.' };
+      },
       (record) => requireString(record, 'proposedBy'),
       (record) => requireString(record, 'proposedAt'),
     ]);

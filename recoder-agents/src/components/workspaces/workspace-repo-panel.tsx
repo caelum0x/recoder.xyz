@@ -74,7 +74,7 @@ export function WorkspaceRepoPanel({ projectId, workspaceId }: WorkspaceRepoPane
     const untracked = status?.untracked?.length ?? 0;
     return modified + staged + untracked;
   }, [status]);
-  const tasks = (taskPipeline.data ?? []) as WorkspaceTask[];
+  const tasks = (taskPipeline.data ?? []) as unknown as WorkspaceTask[];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const selectedTaskBranch =
     selectedTask?.review?.worktree?.branchName ??

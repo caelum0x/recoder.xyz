@@ -1,5 +1,9 @@
-import type { ContextPack } from '@recoder/git-nexus';
 import { collectIssues, requireArray, requireString, type SchemaGuard } from './schema-guard';
+
+type ContextPack = {
+  taskId: string;
+  sourceRefs: Array<Record<string, unknown>>;
+};
 
 export const contextPackSchema: SchemaGuard<ContextPack> = {
   name: 'ContextPack',
@@ -10,4 +14,3 @@ export const contextPackSchema: SchemaGuard<ContextPack> = {
     ]);
   },
 };
-

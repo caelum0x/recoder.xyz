@@ -16,22 +16,21 @@ export function createInternalAgentOsRouter(): Router {
   const router = Router();
   router.use(requireInternalServiceKey);
 
-  router.post('/outbox/drain', (req, res) => {
+  router.post('/outbox/drain', async (req, res) => {
     const limit = readPositiveInteger(req.body?.limit, 100);
     const now = typeof req.body?.now === 'string' ? req.body.now : new Date().toISOString();
     const markAsFailed = req.body?.status === 'failed' || req.body?.fail === true;
     const failureReason = typeof req.body?.error === 'string' ? req.body.error : 'outbox drain failed by request';
-    const pending = agentOsContainer.repository
-      .listOutbox()
+    const pending = (await agentOsContainer.repository.listOutbox())
       .filter((record) => record.status === 'pending')
       .slice(0, limit);
 
-    const records = pending.map((record) => {
+    const records = await Promise.all(pending.map(async (record) => {
       const updated = markAsFailed
         ? markOutboxFailed(record, failureReason, now)
         : markOutboxPublished(record, now);
-      return agentOsContainer.repository.upsertOutbox(updated);
-    });
+      return await agentOsContainer.repository.upsertOutbox(updated);
+    }));
 
     res.json({
       success: true,
@@ -39,7 +38,7 @@ export function createInternalAgentOsRouter(): Router {
         status: 'drained',
         operation: 'outbox.drain',
         processed: records.length,
-        remainingPending: agentOsContainer.repository.listOutbox().filter((record) => record.status === 'pending').length,
+        remainingPending: (await agentOsContainer.repository.listOutbox()).filter((record) => record.status === 'pending').length,
         records,
       },
     });

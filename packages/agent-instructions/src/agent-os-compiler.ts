@@ -11,7 +11,9 @@ import type {
   InstructionSourceKind,
   MemoryReferenceScope,
   TaskIntent,
+  ToolPermissionMode,
 } from '@recoder/a2a-sdk';
+import { TOOL_PERMISSION_MODES } from '@recoder/a2a-sdk';
 
 import {
   compileInstructionBundle,
@@ -205,7 +207,7 @@ function mapAgentProfile(task: AgentOsTaskSpec, agent: AgentOsAgentProfile): A2A
       tool_rules: agent.permissions.toolRules.map((rule) => ({
         tool_name: rule.toolName,
         effect: rule.effect,
-        modes: rule.modes,
+        modes: normalizeToolPermissionModes(rule.modes),
         reason: rule.reason,
         requires_approval: rule.requiresApproval,
       })),
@@ -244,7 +246,13 @@ function mapAgentProfile(task: AgentOsTaskSpec, agent: AgentOsAgentProfile): A2A
       details: agent.health.details,
     },
     last_seen_at: agent.lastSeenAt,
-  };
+};
+
+function normalizeToolPermissionModes(modes?: string[]): ToolPermissionMode[] | undefined {
+  if (!modes) return undefined;
+  const allowedModes = new Set<string>(TOOL_PERMISSION_MODES);
+  return modes.filter((mode): mode is ToolPermissionMode => allowedModes.has(mode));
+}
 }
 
 function mapAgentMemoryScope(scope: AgentOsMemoryScope): A2AAgentProfile['memory_scope'] {
