@@ -15,7 +15,10 @@ import {
   type ApprovalCheckpoint,
   type HandoffCheckpoint,
   type RuntimeEvidence,
+  type RuntimeEvidenceArtifactRef,
+  type TaskAgentRef,
   type TaskEnvelope,
+  type TaskPolicySnapshot,
   type ValidationIssue,
 } from '@recoder/a2a-sdk';
 import { getWorkspaceService, resetWorkspaceService } from './a2a/workspace.service';
@@ -1828,9 +1831,21 @@ function normalizeRuntimeEvidenceRecord(value: Record<string, unknown>): Runtime
     taskId: asOptionalString(value.taskId) || undefined,
     runId: asOptionalString(value.runId) || undefined,
     traceId: asOptionalString(value.traceId) || undefined,
-    artifact: isRecord(value.artifact) ? (value.artifact as RuntimeEvidence['artifact']) : undefined,
+    artifact: normalizeRuntimeEvidenceArtifactRef(value.artifact),
     data: isRecord(value.data) ? (value.data as Record<string, unknown>) : undefined,
     metadata: isRecord(value.metadata) ? (value.metadata as Record<string, unknown>) : undefined,
+  };
+}
+
+function normalizeRuntimeEvidenceArtifactRef(value: unknown): RuntimeEvidenceArtifactRef | undefined {
+  if (!isRecord(value)) return undefined;
+  const artifactId = asOptionalString(value.artifactId);
+  if (!artifactId) return undefined;
+  return {
+    artifactId,
+    key: asOptionalString(value.key) || undefined,
+    uri: asOptionalString(value.uri) || undefined,
+    mimeType: asOptionalString(value.mimeType) || undefined,
   };
 }
 
@@ -1874,19 +1889,49 @@ function normalizeApprovalCheckpoint(value: Record<string, unknown>): ApprovalCh
   const state = asOptionalString(value.state);
   const reason = asOptionalString(value.reason);
   const requestedAt = asOptionalString(value.requestedAt);
-  if (!approvalId || !taskId || !state || !reason || !requestedAt || !isRecord(value.requestedBy)) return null;
+  const requestedBy = normalizeTaskAgentRef(value.requestedBy);
+  if (!approvalId || !taskId || !state || !reason || !requestedAt || !requestedBy) return null;
   return {
     approvalId,
     taskId,
     state: state as ApprovalCheckpoint['state'],
-    requestedBy: value.requestedBy as ApprovalCheckpoint['requestedBy'],
+    requestedBy,
     requestedAt,
     reason,
-    decidedBy: isRecord(value.decidedBy) ? (value.decidedBy as ApprovalCheckpoint['decidedBy']) : undefined,
+    decidedBy: normalizeTaskAgentRef(value.decidedBy),
     decidedAt: asOptionalString(value.decidedAt) || undefined,
     decisionReason: asOptionalString(value.decisionReason) || undefined,
-    policy: isRecord(value.policy) ? (value.policy as ApprovalCheckpoint['policy']) : undefined,
+    policy: normalizeTaskPolicySnapshot(value.policy),
     metadata: isRecord(value.metadata) ? (value.metadata as Record<string, unknown>) : undefined,
+  };
+}
+
+function normalizeTaskAgentRef(value: unknown): TaskAgentRef | undefined {
+  if (!isRecord(value)) return undefined;
+  const agentId = asOptionalString(value.agent_id) || asOptionalString(value.agentId);
+  const platform = asOptionalString(value.platform);
+  if (!agentId || !platform) return undefined;
+  return {
+    agent_id: agentId,
+    platform: platform as TaskAgentRef['platform'],
+    name: asOptionalString(value.name) || undefined,
+    instance_id: asOptionalString(value.instance_id) || asOptionalString(value.instanceId) || undefined,
+  };
+}
+
+function normalizeTaskPolicySnapshot(value: unknown): TaskPolicySnapshot | undefined {
+  if (!isRecord(value)) return undefined;
+  const action = asOptionalString(value.action);
+  const rule = asOptionalString(value.rule);
+  const reason = asOptionalString(value.reason);
+  const checkedAt = asOptionalString(value.checked_at) || asOptionalString(value.checkedAt);
+  if (!action || typeof value.approved !== 'boolean' || !rule || !reason || !checkedAt) return undefined;
+  return {
+    action,
+    approved: value.approved,
+    rule,
+    reason,
+    checked_at: checkedAt,
   };
 }
 
@@ -1913,13 +1958,14 @@ function normalizeHandoffCheckpoint(value: Record<string, unknown>): HandoffChec
   const state = asOptionalString(value.state);
   const reason = asOptionalString(value.reason);
   const requestedAt = asOptionalString(value.requestedAt);
-  if (!handoffId || !taskId || !state || !reason || !requestedAt || !isRecord(value.to)) return null;
+  const to = normalizeTaskAgentRef(value.to);
+  if (!handoffId || !taskId || !state || !reason || !requestedAt || !to) return null;
   return {
     handoffId,
     taskId,
     state: state as HandoffCheckpoint['state'],
-    from: isRecord(value.from) ? (value.from as HandoffCheckpoint['from']) : undefined,
-    to: value.to as HandoffCheckpoint['to'],
+    from: normalizeTaskAgentRef(value.from),
+    to,
     requestedAt,
     reason,
     decidedAt: asOptionalString(value.decidedAt) || undefined,

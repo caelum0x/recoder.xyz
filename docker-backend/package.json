@@ -10,6 +10,7 @@
     "docker:build": "docker build -t recoder-node-base ./docker",
     "smoke:queue": "bash scripts/smoke-public-queue.sh",
     "a2a:worker": "tsx src/a2a-intent-worker.ts",
+    "agent-os:persistence-smoke": "tsx scripts/agent-os-persistence-smoke.ts",
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:coverage": "vitest --coverage",

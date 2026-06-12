@@ -1,23 +1,47 @@
+import { Pool } from 'pg';
 import { InMemoryAgentOsRepository } from './repositories/in-memory-agent-os.repository';
 import { JsonFileAgentOsRepository } from './repositories/json-file-agent-os.repository';
+import { PostgresAgentOsRepository } from './repositories/postgres-agent-os.repository';
 import type { AgentOsRepository } from './repositories/agent-os.repository';
 import { WorkLockService } from '@recoder/agent-os';
 
+export type AgentOsRepositoryDriver = 'memory' | 'json' | 'postgres';
+
 export type AgentOsServiceContainer = {
   repository: AgentOsRepository;
+  repositoryDriver: AgentOsRepositoryDriver;
   workLocks: WorkLockService;
 };
 
 export const agentOsContainer: AgentOsServiceContainer = {
-  repository: createRepository(),
+  ...createRepository(),
   workLocks: new WorkLockService(),
 };
 
-function createRepository(): AgentOsRepository {
-  const stateFilePath = process.env.AGENT_OS_STATE_FILE;
-  if (stateFilePath) {
-    return new JsonFileAgentOsRepository(stateFilePath);
+function createRepository(): Pick<AgentOsServiceContainer, 'repository' | 'repositoryDriver'> {
+  const configuredDriver = process.env.AGENT_OS_REPOSITORY?.trim().toLowerCase();
+  const databaseUrl = process.env.AGENT_OS_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (configuredDriver === 'postgres' || databaseUrl) {
+    if (!databaseUrl) {
+      throw new Error('AGENT_OS_REPOSITORY=postgres requires AGENT_OS_DATABASE_URL or DATABASE_URL.');
+    }
+
+    return {
+      repository: new PostgresAgentOsRepository(new Pool({ connectionString: databaseUrl })),
+      repositoryDriver: 'postgres',
+    };
   }
 
-  return new InMemoryAgentOsRepository();
+  const stateFilePath = process.env.AGENT_OS_STATE_FILE;
+  if (stateFilePath) {
+    return {
+      repository: new JsonFileAgentOsRepository(stateFilePath),
+      repositoryDriver: 'json',
+    };
+  }
+
+  return {
+    repository: new InMemoryAgentOsRepository(),
+    repositoryDriver: 'memory',
+  };
 }

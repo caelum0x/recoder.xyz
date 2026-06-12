@@ -11,12 +11,12 @@ export const artifactSchema: SchemaGuard<Artifact> = {
       (record) => requireString(record, 'taskId'),
       (record) => requireString(record, 'kind'),
       (record) =>
-        typeof record.kind === 'string' && VALID_ARTIFACT_KINDS.has(record.kind)
+        typeof record['kind'] === 'string' && VALID_ARTIFACT_KINDS.has(record['kind'])
           ? null
           : { path: 'kind', message: `Expected one of: ${ARTIFACT_KINDS.join(', ')}.` },
       (record) => requireString(record, 'mimeType'),
       (record) =>
-        typeof record.public === 'boolean'
+        typeof record['public'] === 'boolean'
           ? null
           : { path: 'public', message: 'Expected a boolean.' },
       (record) => requireString(record, 'createdAt'),
