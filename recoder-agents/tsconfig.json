@@ -18,6 +18,10 @@
     "jsx": "preserve",
     "incremental": true,
     "ignoreDeprecations": "5.0",
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
     "plugins": [
       {
         "name": "next"

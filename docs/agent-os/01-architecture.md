@@ -38,7 +38,7 @@ Runtime state updates should use `POST /api/agent-os/runs/:runId/transition` ins
 
 Runtime event ingestion should use `POST /api/agent-os/events` when adapters or workflow nodes already emit `RunEvent` objects. The route stores the event and applies it to the referenced run through `RunService` when `runId` is present. Events such as `started`, `needs_input`, `approval_requested`, `verified`, `completed`, and `failed` can advance run state only through legal transitions; illegal event-to-state jumps are preserved as events without mutating the run.
 
-Outbox visibility should use `GET /api/agent-os/outbox`. The gateway and backend append CloudEvent-backed `OutboxRecord`s when task, run, artifact, approval, memory, and run-event records are created or changed. This is the in-memory phase-one equivalent of the Postgres `event_outbox` table.
+Outbox visibility should use `GET /api/agent-os/outbox`. The gateway and backend append CloudEvent-backed `OutboxRecord`s when task, run, artifact, approval, memory, and run-event records are created or changed. `docker-backend` selects memory, JSON-file, or Postgres persistence at startup; Postgres uses the `event_outbox` table from the Agent OS migration.
 
 Run visibility should use `GET /api/agent-os/runs/:runId/history` or `GET /api/agent-os/tasks/:taskId/history`. The history response merges run state, events, artifacts, approvals, policy decisions, memory review, instruction bundles, and work locks so PM, Agents, and Agency share one audit trail for PRs, previews, approvals, and handoffs.
 

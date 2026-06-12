@@ -9,6 +9,7 @@ export default defineConfig([
 			"src/error-mapping.ts",
 			"src/envelope-builders.ts",
 			"src/audit-helpers.ts",
+			"src/bridge-contract.ts",
 			"src/agent-profile.ts",
 			"src/task-intent.ts",
 			"src/policy.ts",

@@ -15,7 +15,10 @@ Minimum tables:
 - approval_requests
 - artifacts
 - runtime_evidence
+- github_delivery_links
 - work_signals
+- policy_decisions
+- oss_components
 - memory_items
 - memory_candidates
 - events
@@ -23,4 +26,10 @@ Minimum tables:
 - mcp_servers
 - mcp_tool_calls
 
-The current `InMemoryAgentOsRepository` is an adoption boundary, not the final storage implementation.
+Repository selection:
+
+- Default: in-memory repository for local development.
+- `AGENT_OS_STATE_FILE=/path/state.json`: JSON-file repository for lightweight durability.
+- `AGENT_OS_REPOSITORY=postgres` with `AGENT_OS_DATABASE_URL` or `DATABASE_URL`: Postgres repository backed by this schema.
+
+Run this migration before enabling the Postgres repository. Startup intentionally fails if `AGENT_OS_REPOSITORY=postgres` is set without a database URL.

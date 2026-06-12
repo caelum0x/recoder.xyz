@@ -33,11 +33,13 @@ import {
 import { createRecoderComponentRegistry } from '@recoder/oss-registry';
 import { buildAgentOsCockpitSummary } from '@recoder/ui-agent-os';
 import type { AgentOsRepository } from '../repositories/agent-os.repository';
+import type { AgentOsRepositoryDriver } from '../service-container';
 
 export class AgentOsController {
   constructor(
     private readonly repository: AgentOsRepository,
     private readonly workLockService?: WorkLockService,
+    private readonly repositoryDriver?: AgentOsRepositoryDriver,
   ) {}
 
   private readonly agentProfiles = new AgentProfileReconciliationService();
@@ -51,48 +53,49 @@ export class AgentOsController {
   private readonly runService = new RunService();
   private readonly workSignalService = new WorkSignalService();
 
-  health = (_req: Request, res: Response) => {
+  health = async (_req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
         status: 'healthy',
         service: 'agent-os',
+        repository: this.repositoryDriver ?? 'unknown',
         timestamp: new Date().toISOString(),
       },
     });
   };
 
-  summary = (_req: Request, res: Response) => {
-    const registry = createRecoderComponentRegistry(this.repository.listOssComponents());
+  summary = async (_req: Request, res: Response) => {
+    const registry = createRecoderComponentRegistry((await this.repository.listOssComponents()));
     res.json({
       success: true,
       data: buildAgentOsCockpitSummary({
-        agents: this.repository.listAgents(),
-        tasks: this.repository.listTasks(),
-        runs: this.repository.listRuns(),
-        instructionBundles: this.repository.listInstructionBundles(),
-        approvals: this.repository.listApprovals(),
-        artifacts: this.repository.listArtifacts(),
-        runtimeEvidence: this.repository.listRuntimeEvidence(),
-        workSignals: this.refreshWorkSignals(),
-        memoryCandidates: this.repository.listMemoryCandidates(),
-        policyDecisions: this.repository.listPolicyDecisions(),
-        workLocks: this.repository.listWorkLocks(),
+        agents: (await this.repository.listAgents()),
+        tasks: (await this.repository.listTasks()),
+        runs: (await this.repository.listRuns()),
+        instructionBundles: (await this.repository.listInstructionBundles()),
+        approvals: (await this.repository.listApprovals()),
+        artifacts: (await this.repository.listArtifacts()),
+        runtimeEvidence: (await this.repository.listRuntimeEvidence()),
+        workSignals: await this.refreshWorkSignals(),
+        memoryCandidates: (await this.repository.listMemoryCandidates()),
+        policyDecisions: (await this.repository.listPolicyDecisions()),
+        workLocks: (await this.repository.listWorkLocks()),
         ossComponents: registry.list(),
         securityRisks: registry.securityRisks(),
       }),
     });
   };
 
-  agents = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listAgents() });
+  agents = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listAgents()) });
   };
 
-  upsertAgent = (req: Request, res: Response) => {
-    res.status(201).json({ success: true, data: this.repository.upsertAgent(req.body) });
+  upsertAgent = async (req: Request, res: Response) => {
+    res.status(201).json({ success: true, data: (await this.repository.upsertAgent(req.body)) });
   };
 
-  reconcileAgent = (req: Request, res: Response) => {
+  reconcileAgent = async (req: Request, res: Response) => {
     try {
       const incoming = isRecord(req.body?.incoming) ? req.body.incoming : req.body?.profile;
       if (!isRecord(incoming)) {
@@ -101,12 +104,12 @@ export class AgentOsController {
       }
 
       const result = this.agentProfiles.reconcile({
-        existingAgents: this.repository.listAgents(),
+        existingAgents: (await this.repository.listAgents()),
         incoming: incoming as AgentProfile,
         binding: isRecord(req.body?.binding) ? req.body.binding as { workspaceId?: string; projectId?: string; sessionScope?: string } : undefined,
         policyMode: req.body?.policyMode === 'replace_with_incoming' ? 'replace_with_incoming' : 'preserve_existing',
       });
-      this.repository.upsertAgent(result.profile);
+      (await this.repository.upsertAgent(result.profile));
       res.status(result.action === 'created' ? 201 : 200).json({ success: true, data: result });
     } catch (error) {
       res.status(400).json({
@@ -116,17 +119,17 @@ export class AgentOsController {
     }
   };
 
-  spaces = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listSpaces() });
+  spaces = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listSpaces()) });
   };
 
-  upsertSpace = (req: Request, res: Response) => {
-    res.status(201).json({ success: true, data: this.repository.upsertSpace(req.body) });
+  upsertSpace = async (req: Request, res: Response) => {
+    res.status(201).json({ success: true, data: (await this.repository.upsertSpace(req.body)) });
   };
 
-  connectGitHubRepository = (req: Request, res: Response) => {
+  connectGitHubRepository = async (req: Request, res: Response) => {
     try {
-      const space = this.repository.listSpaces().find((candidate) => candidate.spaceId === req.params.spaceId);
+      const space = (await this.repository.listSpaces()).find((candidate) => candidate.spaceId === req.params.spaceId);
       if (!space) {
         res.status(404).json({ success: false, error: `space not found: ${req.params.spaceId}` });
         return;
@@ -138,7 +141,7 @@ export class AgentOsController {
         defaultBranch: optionalString(req.body?.defaultBranch),
         url: optionalString(req.body?.url),
       });
-      res.status(201).json({ success: true, data: this.repository.upsertSpace(updated) });
+      res.status(201).json({ success: true, data: (await this.repository.upsertSpace(updated)) });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -147,14 +150,14 @@ export class AgentOsController {
     }
   };
 
-  tasks = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listTasks() });
+  tasks = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listTasks()) });
   };
 
-  upsertTask = (req: Request, res: Response) => {
+  upsertTask = async (req: Request, res: Response) => {
     try {
-      const task = this.repository.upsertTask(req.body);
-      this.appendTaskOutbox(task);
+      const task = (await this.repository.upsertTask(req.body));
+      await this.appendTaskOutbox(task);
       res.status(201).json({ success: true, data: task });
     } catch (error) {
       res.status(400).json({
@@ -164,17 +167,17 @@ export class AgentOsController {
     }
   };
 
-  routeTask = (req: Request, res: Response) => {
+  routeTask = async (req: Request, res: Response) => {
     try {
-      const task = this.resolveTask(req.body);
+      const task = await this.resolveTask(req.body);
       const route = this.routingService.route({
         task,
-        agents: this.repository.listAgents(),
-        space: this.repository.listSpaces().find((candidate) => candidate.spaceId === task.spaceId),
+        agents: (await this.repository.listAgents()),
+        space: (await this.repository.listSpaces()).find((candidate) => candidate.spaceId === task.spaceId),
         requestedAssigneeAgentId: optionalString(req.body?.assigneeAgentId) ?? optionalString(req.body?.requestedAssigneeAgentId),
         requiredCapabilityIds: stringArray(req.body?.requiredCapabilityIds),
       });
-      const run = this.markRoutedRun(req.body, route);
+      const run = await this.markRoutedRun(req.body, route);
       res.json({ success: true, data: { route, run } });
     } catch (error) {
       res.status(400).json({
@@ -184,14 +187,14 @@ export class AgentOsController {
     }
   };
 
-  runs = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listRuns() });
+  runs = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listRuns()) });
   };
 
-  upsertRun = (req: Request, res: Response) => {
+  upsertRun = async (req: Request, res: Response) => {
     try {
-      const run = this.repository.upsertRun(req.body);
-      this.appendTaskRunOutbox(run);
+      const run = (await this.repository.upsertRun(req.body));
+      await this.appendTaskRunOutbox(run);
       res.status(201).json({ success: true, data: run });
     } catch (error) {
       res.status(400).json({
@@ -201,19 +204,19 @@ export class AgentOsController {
     }
   };
 
-  runHistory = (req: Request, res: Response) => {
-    const run = this.repository.listRuns().find((candidate) => candidate.runId === req.params.runId);
+  runHistory = async (req: Request, res: Response) => {
+    const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === req.params.runId);
     if (!run) {
       res.status(404).json({ success: false, error: `run not found: ${req.params.runId}` });
       return;
     }
 
-    res.json({ success: true, data: this.buildRunHistory(run) });
+    res.json({ success: true, data: await this.buildRunHistory(run) });
   };
 
-  claimRun = (req: Request, res: Response) => {
+  claimRun = async (req: Request, res: Response) => {
     try {
-      const run = this.markClaimedRun(req.params.runId, req.body);
+      const run = await this.markClaimedRun(req.params.runId, req.body);
       res.json({ success: true, data: run });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'run_claim_failed';
@@ -221,9 +224,9 @@ export class AgentOsController {
     }
   };
 
-  transitionRun = (req: Request, res: Response) => {
+  transitionRun = async (req: Request, res: Response) => {
     try {
-      const run = this.markRequestedRunTransition(req.params.runId, req.body);
+      const run = await this.markRequestedRunTransition(req.params.runId, req.body);
       res.json({ success: true, data: run });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'run_transition_failed';
@@ -231,9 +234,9 @@ export class AgentOsController {
     }
   };
 
-  createVerificationResult = (req: Request, res: Response) => {
+  createVerificationResult = async (req: Request, res: Response) => {
     try {
-      const run = this.repository.listRuns().find((candidate) => candidate.runId === req.params.runId);
+      const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === req.params.runId);
       if (!run) {
         res.status(404).json({ success: false, error: `run not found: ${req.params.runId}` });
         return;
@@ -252,12 +255,12 @@ export class AgentOsController {
         passed: typeof req.body?.passed === 'boolean' ? req.body.passed : undefined,
         metadata: isRecord(req.body?.metadata) ? req.body.metadata : undefined,
       });
-      this.repository.upsertArtifact(artifact);
-      this.appendArtifactOutbox(artifact);
-      this.appendArtifactEvent(run, artifact, 'verification_result');
+      (await this.repository.upsertArtifact(artifact));
+      await this.appendArtifactOutbox(artifact);
+      await this.appendArtifactEvent(run, artifact, 'verification_result');
 
-      const transitionedRun = this.maybeTransitionRunForArtifact(run, req.body, artifact);
-      res.status(201).json({ success: true, data: { artifact, run: transitionedRun ?? this.repository.listRuns().find((candidate) => candidate.runId === run.runId) ?? run } });
+      const transitionedRun = await this.maybeTransitionRunForArtifact(run, req.body, artifact);
+      res.status(201).json({ success: true, data: { artifact, run: transitionedRun ?? (await this.repository.listRuns()).find((candidate) => candidate.runId === run.runId) ?? run } });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -266,24 +269,24 @@ export class AgentOsController {
     }
   };
 
-  taskHistory = (req: Request, res: Response) => {
-    const runs = this.repository.listRuns().filter((candidate) => candidate.taskId === req.params.taskId);
+  taskHistory = async (req: Request, res: Response) => {
+    const runs = (await this.repository.listRuns()).filter((candidate) => candidate.taskId === req.params.taskId);
     if (runs.length === 0) {
       res.status(404).json({ success: false, error: `task history not found: ${req.params.taskId}` });
       return;
     }
 
-    res.json({ success: true, data: runs.map((run) => this.buildRunHistory(run)) });
+    res.json({ success: true, data: await Promise.all(runs.map((run) => this.buildRunHistory(run))) });
   };
 
-  approvals = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listApprovals() });
+  approvals = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listApprovals()) });
   };
 
-  upsertApproval = (req: Request, res: Response) => {
+  upsertApproval = async (req: Request, res: Response) => {
     try {
-      const approval = this.repository.upsertApproval(req.body);
-      this.appendApprovalOutbox(approval);
+      const approval = (await this.repository.upsertApproval(req.body));
+      await this.appendApprovalOutbox(approval);
       res.status(201).json({ success: true, data: approval });
     } catch (error) {
       res.status(400).json({
@@ -293,22 +296,22 @@ export class AgentOsController {
     }
   };
 
-  approve = (req: Request, res: Response) => {
-    this.decideApproval(req, res, 'approved');
+  approve = async (req: Request, res: Response) => {
+    await this.decideApproval(req, res, 'approved');
   };
 
-  reject = (req: Request, res: Response) => {
-    this.decideApproval(req, res, 'rejected');
+  reject = async (req: Request, res: Response) => {
+    await this.decideApproval(req, res, 'rejected');
   };
 
-  artifacts = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listArtifacts() });
+  artifacts = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listArtifacts()) });
   };
 
-  upsertArtifact = (req: Request, res: Response) => {
+  upsertArtifact = async (req: Request, res: Response) => {
     try {
-      const artifact = this.repository.upsertArtifact(req.body);
-      this.appendArtifactOutbox(artifact);
+      const artifact = (await this.repository.upsertArtifact(req.body));
+      await this.appendArtifactOutbox(artifact);
       res.status(201).json({ success: true, data: artifact });
     } catch (error) {
       res.status(400).json({
@@ -318,11 +321,11 @@ export class AgentOsController {
     }
   };
 
-  runtimeEvidence = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listRuntimeEvidence() });
+  runtimeEvidence = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listRuntimeEvidence()) });
   };
 
-  createRuntimeEvidence = (req: Request, res: Response) => {
+  createRuntimeEvidence = async (req: Request, res: Response) => {
     try {
       const evidence = this.runtimeEvidenceService.create({
         taskId: requiredString(req.body?.taskId, 'taskId'),
@@ -336,8 +339,8 @@ export class AgentOsController {
         observedAt: optionalString(req.body?.observedAt),
         metadata: isRecord(req.body?.metadata) ? req.body.metadata : undefined,
       });
-      const stored = this.repository.upsertRuntimeEvidence(evidence);
-      this.appendRuntimeEvidenceOutbox(stored);
+      const stored = (await this.repository.upsertRuntimeEvidence(evidence));
+      await this.appendRuntimeEvidenceOutbox(stored);
       res.status(201).json({ success: true, data: stored });
     } catch (error) {
       res.status(400).json({
@@ -347,7 +350,7 @@ export class AgentOsController {
     }
   };
 
-  createPullRequestArtifact = (req: Request, res: Response) => {
+  createPullRequestArtifact = async (req: Request, res: Response) => {
     try {
       const artifact = this.artifactService.createPullRequest({
         taskId: requiredString(req.body?.taskId, 'taskId'),
@@ -361,9 +364,9 @@ export class AgentOsController {
         createdBy: optionalString(req.body?.createdBy) ?? optionalString(req.body?.agentId) ?? 'agent-os',
         metadata: isRecord(req.body?.metadata) ? req.body.metadata : undefined,
       });
-      this.repository.upsertArtifact(artifact);
-      this.appendArtifactOutbox(artifact);
-      const run = this.markDeliveredRun(req.body, artifact);
+      (await this.repository.upsertArtifact(artifact));
+      await this.appendArtifactOutbox(artifact);
+      const run = await this.markDeliveredRun(req.body, artifact);
       res.status(201).json({ success: true, data: { artifact, run } });
     } catch (error) {
       res.status(400).json({
@@ -373,7 +376,7 @@ export class AgentOsController {
     }
   };
 
-  createPreviewArtifact = (req: Request, res: Response) => {
+  createPreviewArtifact = async (req: Request, res: Response) => {
     try {
       const artifact = this.artifactService.createPreview({
         taskId: requiredString(req.body?.taskId, 'taskId'),
@@ -385,9 +388,9 @@ export class AgentOsController {
         createdBy: optionalString(req.body?.createdBy) ?? optionalString(req.body?.agentId) ?? 'agent-os',
         metadata: isRecord(req.body?.metadata) ? req.body.metadata : undefined,
       });
-      this.repository.upsertArtifact(artifact);
-      this.appendArtifactOutbox(artifact);
-      const run = this.markDeliveredRun(req.body, artifact);
+      (await this.repository.upsertArtifact(artifact));
+      await this.appendArtifactOutbox(artifact);
+      const run = await this.markDeliveredRun(req.body, artifact);
       res.status(201).json({ success: true, data: { artifact, run } });
     } catch (error) {
       res.status(400).json({
@@ -397,20 +400,20 @@ export class AgentOsController {
     }
   };
 
-  githubDeliveryLinks = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listGitHubDeliveryLinks() });
+  githubDeliveryLinks = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listGitHubDeliveryLinks()) });
   };
 
-  createGitHubDeliveryLink = (req: Request, res: Response) => {
+  createGitHubDeliveryLink = async (req: Request, res: Response) => {
     try {
-      const task = this.resolveTask(req.body);
+      const task = await this.resolveTask(req.body);
       const run = optionalString(req.body?.runId)
-        ? this.repository.listRuns().find((candidate) => candidate.runId === req.body.runId)
+        ? (await this.repository.listRuns()).find((candidate) => candidate.runId === req.body.runId)
         : undefined;
       const link = this.githubDeliveryService.createLink({
         task,
         run,
-        space: this.repository.listSpaces().find((candidate) => candidate.spaceId === task.spaceId),
+        space: (await this.repository.listSpaces()).find((candidate) => candidate.spaceId === task.spaceId),
         repoId: optionalString(req.body?.repoId),
         repository: optionalString(req.body?.repository),
         branch: optionalString(req.body?.branch),
@@ -420,7 +423,7 @@ export class AgentOsController {
         createdBy: optionalString(req.body?.createdBy) ?? optionalString(req.body?.agentId) ?? 'agent-os',
         metadata: isRecord(req.body?.metadata) ? req.body.metadata : undefined,
       });
-      res.status(201).json({ success: true, data: this.repository.upsertGitHubDeliveryLink(link) });
+      res.status(201).json({ success: true, data: (await this.repository.upsertGitHubDeliveryLink(link)) });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -429,12 +432,12 @@ export class AgentOsController {
     }
   };
 
-  attachGitHubPullRequest = (req: Request, res: Response) => {
+  attachGitHubPullRequest = async (req: Request, res: Response) => {
     try {
-      const link = this.requiredGitHubDeliveryLink(req.params.linkId);
-      const artifact = this.resolveOrCreatePullRequestArtifact(req.body, link);
+      const link = await this.requiredGitHubDeliveryLink(req.params.linkId);
+      const artifact = await this.resolveOrCreatePullRequestArtifact(req.body, link);
       const updated = this.githubDeliveryService.attachPullRequest(link, artifact);
-      res.json({ success: true, data: { link: this.repository.upsertGitHubDeliveryLink(updated), artifact } });
+      res.json({ success: true, data: { link: (await this.repository.upsertGitHubDeliveryLink(updated)), artifact } });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -443,12 +446,12 @@ export class AgentOsController {
     }
   };
 
-  attachGitHubPreview = (req: Request, res: Response) => {
+  attachGitHubPreview = async (req: Request, res: Response) => {
     try {
-      const link = this.requiredGitHubDeliveryLink(req.params.linkId);
-      const artifact = this.resolveOrCreatePreviewArtifact(req.body, link);
+      const link = await this.requiredGitHubDeliveryLink(req.params.linkId);
+      const artifact = await this.resolveOrCreatePreviewArtifact(req.body, link);
       const updated = this.githubDeliveryService.attachPreview(link, artifact);
-      res.json({ success: true, data: { link: this.repository.upsertGitHubDeliveryLink(updated), artifact } });
+      res.json({ success: true, data: { link: (await this.repository.upsertGitHubDeliveryLink(updated)), artifact } });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -457,11 +460,11 @@ export class AgentOsController {
     }
   };
 
-  syncGitHubChecks = (req: Request, res: Response) => {
+  syncGitHubChecks = async (req: Request, res: Response) => {
     try {
-      const link = this.requiredGitHubDeliveryLink(req.params.linkId);
+      const link = await this.requiredGitHubDeliveryLink(req.params.linkId);
       const updated = this.githubDeliveryService.syncChecks(link, Array.isArray(req.body?.checks) ? req.body.checks : []);
-      res.json({ success: true, data: this.repository.upsertGitHubDeliveryLink(updated) });
+      res.json({ success: true, data: (await this.repository.upsertGitHubDeliveryLink(updated)) });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -470,11 +473,11 @@ export class AgentOsController {
     }
   };
 
-  syncGitHubReviews = (req: Request, res: Response) => {
+  syncGitHubReviews = async (req: Request, res: Response) => {
     try {
-      const link = this.requiredGitHubDeliveryLink(req.params.linkId);
+      const link = await this.requiredGitHubDeliveryLink(req.params.linkId);
       const updated = this.githubDeliveryService.syncReviews(link, Array.isArray(req.body?.reviews) ? req.body.reviews : []);
-      res.json({ success: true, data: this.repository.upsertGitHubDeliveryLink(updated) });
+      res.json({ success: true, data: (await this.repository.upsertGitHubDeliveryLink(updated)) });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -483,14 +486,14 @@ export class AgentOsController {
     }
   };
 
-  linkGitHubIssue = (req: Request, res: Response) => {
+  linkGitHubIssue = async (req: Request, res: Response) => {
     try {
-      const link = this.requiredGitHubDeliveryLink(req.params.linkId);
+      const link = await this.requiredGitHubDeliveryLink(req.params.linkId);
       const updated = this.githubDeliveryService.linkIssue(link, {
         issueNumber: typeof req.body?.issueNumber === 'string' || typeof req.body?.issueNumber === 'number' ? req.body.issueNumber : undefined,
         issueUrl: optionalString(req.body?.issueUrl),
       });
-      res.json({ success: true, data: this.repository.upsertGitHubDeliveryLink(updated) });
+      res.json({ success: true, data: (await this.repository.upsertGitHubDeliveryLink(updated)) });
     } catch (error) {
       res.status(400).json({
         success: false,
@@ -499,14 +502,14 @@ export class AgentOsController {
     }
   };
 
-  workSignals = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.refreshWorkSignals() });
+  workSignals = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: await this.refreshWorkSignals() });
   };
 
-  upsertWorkSignal = (req: Request, res: Response) => {
+  upsertWorkSignal = async (req: Request, res: Response) => {
     try {
-      const signal = this.repository.upsertWorkSignal(req.body);
-      this.appendWorkSignalOutbox(signal);
+      const signal = (await this.repository.upsertWorkSignal(req.body));
+      await this.appendWorkSignalOutbox(signal);
       res.status(201).json({ success: true, data: signal });
     } catch (error) {
       res.status(400).json({
@@ -516,10 +519,10 @@ export class AgentOsController {
     }
   };
 
-  resolveWorkSignal = (req: Request, res: Response) => {
+  resolveWorkSignal = async (req: Request, res: Response) => {
     try {
-      this.refreshWorkSignals();
-      const signal = this.repository.getWorkSignal(req.params.signalId);
+      await this.refreshWorkSignals();
+      const signal = (await this.repository.getWorkSignal(req.params.signalId));
       if (!signal) {
         res.status(404).json({ success: false, error: `work signal not found: ${req.params.signalId}` });
         return;
@@ -532,8 +535,8 @@ export class AgentOsController {
         resolvedBy: requiredString(req.body?.resolvedBy, 'resolvedBy'),
         resolvedAt: optionalString(req.body?.resolvedAt),
       });
-      const stored = this.repository.upsertWorkSignal(resolved);
-      this.appendWorkSignalOutbox(stored);
+      const stored = (await this.repository.upsertWorkSignal(resolved));
+      await this.appendWorkSignalOutbox(stored);
       res.json({ success: true, data: stored });
     } catch (error) {
       res.status(400).json({
@@ -543,20 +546,20 @@ export class AgentOsController {
     }
   };
 
-  memory = (_req: Request, res: Response) => {
+  memory = async (_req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        items: this.repository.listMemoryItems(),
-        candidates: this.repository.listMemoryCandidates(),
+        items: (await this.repository.listMemoryItems()),
+        candidates: (await this.repository.listMemoryCandidates()),
       },
     });
   };
 
-  upsertMemoryCandidate = (req: Request, res: Response) => {
+  upsertMemoryCandidate = async (req: Request, res: Response) => {
     try {
-      const candidate = this.repository.upsertMemoryCandidate(req.body);
-      this.appendMemoryCandidateOutbox(candidate);
+      const candidate = (await this.repository.upsertMemoryCandidate(req.body));
+      await this.appendMemoryCandidateOutbox(candidate);
       res.status(201).json({ success: true, data: candidate });
     } catch (error) {
       res.status(400).json({
@@ -566,10 +569,10 @@ export class AgentOsController {
     }
   };
 
-  upsertMemoryItem = (req: Request, res: Response) => {
+  upsertMemoryItem = async (req: Request, res: Response) => {
     try {
-      const item = this.repository.upsertMemoryItem(req.body);
-      this.appendMemoryItemOutbox(item);
+      const item = (await this.repository.upsertMemoryItem(req.body));
+      await this.appendMemoryItemOutbox(item);
       res.status(201).json({ success: true, data: item });
     } catch (error) {
       res.status(400).json({
@@ -579,9 +582,9 @@ export class AgentOsController {
     }
   };
 
-  reviewMemoryCandidate = (req: Request, res: Response) => {
+  reviewMemoryCandidate = async (req: Request, res: Response) => {
     try {
-      const candidate = this.repository.listMemoryCandidates().find((item) => item.candidateId === req.params.candidateId);
+      const candidate = (await this.repository.listMemoryCandidates()).find((item) => item.candidateId === req.params.candidateId);
       if (!candidate) {
         res.status(404).json({ success: false, error: `memory candidate not found: ${req.params.candidateId}` });
         return;
@@ -595,11 +598,11 @@ export class AgentOsController {
         memoryId: optionalString(req.body?.memoryId),
         supersedesMemoryId: optionalString(req.body?.supersedesMemoryId),
       });
-      this.repository.upsertMemoryCandidate(result.candidate);
-      this.appendMemoryCandidateOutbox(result.candidate);
+      (await this.repository.upsertMemoryCandidate(result.candidate));
+      await this.appendMemoryCandidateOutbox(result.candidate);
       if (result.memory) {
-        this.repository.upsertMemoryItem(result.memory);
-        this.appendMemoryItemOutbox(result.memory);
+        (await this.repository.upsertMemoryItem(result.memory));
+        await this.appendMemoryItemOutbox(result.memory);
       }
       res.json({ success: true, data: result });
     } catch (error) {
@@ -610,14 +613,14 @@ export class AgentOsController {
     }
   };
 
-  instructions = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listInstructionBundles() });
+  instructions = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listInstructionBundles()) });
   };
 
-  upsertInstructionBundle = (req: Request, res: Response) => {
+  upsertInstructionBundle = async (req: Request, res: Response) => {
     try {
-      const bundle = this.repository.upsertInstructionBundle(req.body);
-      const artifact = this.maybeCreateInstructionBundleArtifact(bundle, req.body);
+      const bundle = (await this.repository.upsertInstructionBundle(req.body));
+      const artifact = await this.maybeCreateInstructionBundleArtifact(bundle, req.body);
       res.status(201).json({ success: true, data: { bundle, artifact } });
     } catch (error) {
       res.status(400).json({
@@ -627,15 +630,15 @@ export class AgentOsController {
     }
   };
 
-  compileInstructionBundle = (req: Request, res: Response) => {
+  compileInstructionBundle = async (req: Request, res: Response) => {
     try {
-      const result = compileAgentOsInstructionBundle(this.buildInstructionCompileInput(req.body));
-      this.repository.upsertInstructionBundle(result.runtimeBundle);
-      const artifact = this.maybeCreateInstructionBundleArtifact(result.runtimeBundle, {
+      const result = compileAgentOsInstructionBundle(await this.buildInstructionCompileInput(req.body));
+      (await this.repository.upsertInstructionBundle(result.runtimeBundle));
+      const artifact = await this.maybeCreateInstructionBundleArtifact(result.runtimeBundle, {
         ...req.body,
         auditBundle: result.auditBundle,
       });
-      const run = this.markCompiledRun(req.body, result.runtimeBundle.bundleId);
+      const run = await this.markCompiledRun(req.body, result.runtimeBundle.bundleId);
       res.status(201).json({ success: true, data: { ...result, artifact, run } });
     } catch (error) {
       res.status(400).json({
@@ -645,18 +648,18 @@ export class AgentOsController {
     }
   };
 
-  policies = (_req: Request, res: Response) => {
+  policies = async (_req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        policies: this.repository.listSpacePolicies(),
-        decisions: this.repository.listPolicyDecisions(),
-        workLocks: this.repository.listWorkLocks(),
+        policies: (await this.repository.listSpacePolicies()),
+        decisions: (await this.repository.listPolicyDecisions()),
+        workLocks: (await this.repository.listWorkLocks()),
       },
     });
   };
 
-  upsertPolicy = (req: Request, res: Response) => {
+  upsertPolicy = async (req: Request, res: Response) => {
     try {
       const { spaceId, policy } = req.body as { spaceId?: string; policy?: SpacePolicy };
       if (!spaceId || !policy) {
@@ -665,7 +668,7 @@ export class AgentOsController {
       }
       res.status(201).json({
         success: true,
-        data: this.repository.upsertSpacePolicy(spaceId, policy),
+        data: (await this.repository.upsertSpacePolicy(spaceId, policy)),
       });
     } catch (error) {
       res.status(404).json({
@@ -675,10 +678,10 @@ export class AgentOsController {
     }
   };
 
-  upsertPolicyDecision = (req: Request, res: Response) => {
+  upsertPolicyDecision = async (req: Request, res: Response) => {
     try {
-      const decision = this.repository.upsertPolicyDecision(req.body);
-      const approval = this.maybeCreateApprovalFromPolicyDecision(decision, req.body);
+      const decision = (await this.repository.upsertPolicyDecision(req.body));
+      const approval = await this.maybeCreateApprovalFromPolicyDecision(decision, req.body);
       res.status(201).json({ success: true, data: { decision, approval } });
     } catch (error) {
       res.status(400).json({
@@ -688,15 +691,15 @@ export class AgentOsController {
     }
   };
 
-  workLocks = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listWorkLocks() });
+  workLocks = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listWorkLocks()) });
   };
 
-  upsertWorkLock = (req: Request, res: Response) => {
-    res.status(201).json({ success: true, data: this.repository.upsertWorkLock(req.body) });
+  upsertWorkLock = async (req: Request, res: Response) => {
+    res.status(201).json({ success: true, data: (await this.repository.upsertWorkLock(req.body)) });
   };
 
-  acquireWorkLock = (req: Request, res: Response) => {
+  acquireWorkLock = async (req: Request, res: Response) => {
     if (!this.workLockService) {
       res.status(503).json({ success: false, error: 'work_lock_service_unavailable' });
       return;
@@ -705,9 +708,9 @@ export class AgentOsController {
     try {
       const result = this.workLockService.acquire({
         ...req.body,
-        existingLocks: this.repository.listWorkLocks(),
+        existingLocks: (await this.repository.listWorkLocks()),
       });
-      this.repository.replaceWorkLocks(result.locks);
+      (await this.repository.replaceWorkLocks(result.locks));
       res.status(201).json({ success: true, data: result.lock });
     } catch (error) {
       res.status(409).json({
@@ -718,7 +721,7 @@ export class AgentOsController {
     }
   };
 
-  releaseWorkLock = (req: Request, res: Response) => {
+  releaseWorkLock = async (req: Request, res: Response) => {
     if (!this.workLockService) {
       res.status(503).json({ success: false, error: 'work_lock_service_unavailable' });
       return;
@@ -730,23 +733,23 @@ export class AgentOsController {
       return;
     }
 
-    const locks = this.workLockService.release(this.repository.listWorkLocks(), {
+    const locks = this.workLockService.release((await this.repository.listWorkLocks()), {
       lockId,
       ownerAgentId: typeof req.body?.ownerAgentId === 'string' ? req.body.ownerAgentId : undefined,
       taskId: typeof req.body?.taskId === 'string' ? req.body.taskId : undefined,
     });
-    this.repository.replaceWorkLocks(locks);
+    (await this.repository.replaceWorkLocks(locks));
     res.json({ success: true, data: locks });
   };
 
-  events = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listEvents() });
+  events = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listEvents()) });
   };
 
-  appendEvent = (req: Request, res: Response) => {
-    const event = this.repository.appendEvent(req.body);
-    this.appendRunEventOutbox(event);
-    const application = this.applyRunEvent(event);
+  appendEvent = async (req: Request, res: Response) => {
+    const event = (await this.repository.appendEvent(req.body));
+    await this.appendRunEventOutbox(event);
+    const application = await this.applyRunEvent(event);
     res.status(201).json({
       success: true,
       data: {
@@ -758,12 +761,12 @@ export class AgentOsController {
     });
   };
 
-  outbox = (_req: Request, res: Response) => {
-    res.json({ success: true, data: this.repository.listOutbox() });
+  outbox = async (_req: Request, res: Response) => {
+    res.json({ success: true, data: (await this.repository.listOutbox()) });
   };
 
-  oss = (_req: Request, res: Response) => {
-    const registry = createRecoderComponentRegistry(this.repository.listOssComponents());
+  oss = async (_req: Request, res: Response) => {
+    const registry = createRecoderComponentRegistry((await this.repository.listOssComponents()));
     res.json({
       success: true,
       data: {
@@ -775,8 +778,8 @@ export class AgentOsController {
     });
   };
 
-  ossComponent = (req: Request, res: Response) => {
-    const component = this.repository.getOssComponent(req.params.componentId);
+  ossComponent = async (req: Request, res: Response) => {
+    const component = (await this.repository.getOssComponent(req.params.componentId));
     if (!component) {
       res.status(404).json({ success: false, error: `component not found: ${req.params.componentId}` });
       return;
@@ -784,11 +787,11 @@ export class AgentOsController {
     res.json({ success: true, data: component });
   };
 
-  upsertOssComponent = (req: Request, res: Response) => {
-    res.status(201).json({ success: true, data: this.repository.upsertOssComponent(req.body) });
+  upsertOssComponent = async (req: Request, res: Response) => {
+    res.status(201).json({ success: true, data: (await this.repository.upsertOssComponent(req.body)) });
   };
 
-  workflows = (_req: Request, res: Response) => {
+  workflows = async (_req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
@@ -798,64 +801,64 @@ export class AgentOsController {
     });
   };
 
-  private appendRunEventOutbox(event: RunEvent): void {
-    this.repository.appendOutbox(createOutboxRecord(mapRunEventToCloudEvent(event)));
+  private async appendRunEventOutbox(event: RunEvent): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapRunEventToCloudEvent(event))));
   }
 
-  private appendTaskOutbox(task: TaskSpec): void {
-    this.repository.appendOutbox(createOutboxRecord(mapTaskCreatedToCloudEvent({ data: task })));
+  private async appendTaskOutbox(task: TaskSpec): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapTaskCreatedToCloudEvent({ data: task }))));
   }
 
-  private appendTaskRunOutbox(run: TaskRun): void {
-    this.repository.appendOutbox(createOutboxRecord(mapTaskRunStateToCloudEvent({ data: run })));
+  private async appendTaskRunOutbox(run: TaskRun): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapTaskRunStateToCloudEvent({ data: run }))));
   }
 
-  private appendArtifactOutbox(artifact: Artifact): void {
-    this.repository.appendOutbox(createOutboxRecord(mapArtifactToCloudEvent({ data: artifact })));
+  private async appendArtifactOutbox(artifact: Artifact): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapArtifactToCloudEvent({ data: artifact }))));
   }
 
-  private appendRuntimeEvidenceOutbox(evidence: RuntimeEvidence): void {
-    this.repository.appendOutbox(createOutboxRecord(mapRuntimeEvidenceToCloudEvent({ data: evidence })));
+  private async appendRuntimeEvidenceOutbox(evidence: RuntimeEvidence): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapRuntimeEvidenceToCloudEvent({ data: evidence }))));
   }
 
-  private appendWorkSignalOutbox(signal: WorkSignal): void {
-    this.repository.appendOutbox(createOutboxRecord(mapWorkSignalToCloudEvent({ data: signal })));
+  private async appendWorkSignalOutbox(signal: WorkSignal): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapWorkSignalToCloudEvent({ data: signal }))));
   }
 
-  private appendApprovalOutbox(approval: Approval): void {
-    this.repository.appendOutbox(createOutboxRecord(mapApprovalToCloudEvent({ data: approval })));
+  private async appendApprovalOutbox(approval: Approval): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapApprovalToCloudEvent({ data: approval }))));
   }
 
-  private appendMemoryCandidateOutbox(candidate: MemoryCandidate): void {
-    this.repository.appendOutbox(createOutboxRecord(mapMemoryCandidateToCloudEvent({ data: candidate })));
+  private async appendMemoryCandidateOutbox(candidate: MemoryCandidate): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapMemoryCandidateToCloudEvent({ data: candidate }))));
   }
 
-  private appendMemoryItemOutbox(item: MemoryItem): void {
-    this.repository.appendOutbox(createOutboxRecord(mapMemoryItemAcceptedToCloudEvent({ data: item })));
+  private async appendMemoryItemOutbox(item: MemoryItem): Promise<void> {
+    (await this.repository.appendOutbox(createOutboxRecord(mapMemoryItemAcceptedToCloudEvent({ data: item }))));
   }
 
-  private applyRunEvent(event: RunEvent): ReturnType<RunService['applyEvent']> | undefined {
+  private async applyRunEvent(event: RunEvent): Promise<ReturnType<RunService['applyEvent']> | undefined> {
     if (!event.runId) {
       return undefined;
     }
 
-    const run = this.repository.listRuns().find((candidate) => candidate.runId === event.runId);
+    const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === event.runId);
     if (!run) {
       return undefined;
     }
 
     const application = this.runService.applyEvent(run, event);
-    this.repository.upsertRun(application.run);
+    (await this.repository.upsertRun(application.run));
     if (application.applied) {
-      this.appendTaskRunOutbox(application.run);
+      await this.appendTaskRunOutbox(application.run);
     }
     return application;
   }
 
-  private maybeCreateApprovalFromPolicyDecision(
+  private async maybeCreateApprovalFromPolicyDecision(
     decision: PolicyDecision,
     body: Record<string, unknown>,
-  ): Approval | undefined {
+  ): Promise<Approval | undefined> {
     if (body.createApproval === false) {
       return undefined;
     }
@@ -873,15 +876,15 @@ export class AgentOsController {
     if (!approval) {
       return undefined;
     }
-    const stored = this.repository.upsertApproval(approval);
-    this.appendApprovalOutbox(stored);
+    const stored = (await this.repository.upsertApproval(approval));
+    await this.appendApprovalOutbox(stored);
     return stored;
   }
 
-  private maybeCreateInstructionBundleArtifact(
+  private async maybeCreateInstructionBundleArtifact(
     bundle: InstructionBundle,
     body: Record<string, unknown>,
-  ): Artifact | undefined {
+  ): Promise<Artifact | undefined> {
     if (body.createArtifact === false) {
       return undefined;
     }
@@ -895,84 +898,84 @@ export class AgentOsController {
       public: body.public === true,
       metadata: isRecord(body.metadata) ? body.metadata : undefined,
     });
-    const stored = this.repository.upsertArtifact(artifact);
-    this.appendArtifactOutbox(stored);
+    const stored = (await this.repository.upsertArtifact(artifact));
+    await this.appendArtifactOutbox(stored);
     return stored;
   }
 
-  private buildInstructionCompileInput(body: Record<string, unknown>): CompileAgentOsInstructionBundleInput {
+  private async buildInstructionCompileInput(body: Record<string, unknown>): Promise<CompileAgentOsInstructionBundleInput> {
     return {
       ...body,
-      task: this.resolveTask(body),
-      agent: this.resolveAgent(body),
+      task: await this.resolveTask(body),
+      agent: await this.resolveAgent(body),
       repoRoot: typeof body.repoRoot === 'string' && body.repoRoot.length > 0 ? body.repoRoot : process.cwd(),
     } as CompileAgentOsInstructionBundleInput;
   }
 
-  private buildRunHistory(run: TaskRun) {
+  private async buildRunHistory(run: TaskRun) {
     return this.historyService.build({
       run,
-      task: this.repository.listTasks().find((candidate) => candidate.taskId === run.taskId),
-      events: this.repository.listEvents(),
-      artifacts: this.repository.listArtifacts(),
-      runtimeEvidence: this.repository.listRuntimeEvidence(),
-      approvals: this.repository.listApprovals(),
-      policyDecisions: this.repository.listPolicyDecisions(),
-      memoryCandidates: this.repository.listMemoryCandidates(),
-      memoryItems: this.repository.listMemoryItems(),
-      instructionBundles: this.repository.listInstructionBundles(),
-      githubDeliveryLinks: this.repository.listGitHubDeliveryLinks(),
-      workLocks: this.repository.listWorkLocks(),
+      task: (await this.repository.listTasks()).find((candidate) => candidate.taskId === run.taskId),
+      events: (await this.repository.listEvents()),
+      artifacts: (await this.repository.listArtifacts()),
+      runtimeEvidence: (await this.repository.listRuntimeEvidence()),
+      approvals: (await this.repository.listApprovals()),
+      policyDecisions: (await this.repository.listPolicyDecisions()),
+      memoryCandidates: (await this.repository.listMemoryCandidates()),
+      memoryItems: (await this.repository.listMemoryItems()),
+      instructionBundles: (await this.repository.listInstructionBundles()),
+      githubDeliveryLinks: (await this.repository.listGitHubDeliveryLinks()),
+      workLocks: (await this.repository.listWorkLocks()),
     });
   }
 
-  private requiredGitHubDeliveryLink(linkId: string): GitHubDeliveryLink {
-    const link = this.repository.getGitHubDeliveryLink(linkId);
+  private async requiredGitHubDeliveryLink(linkId: string): Promise<GitHubDeliveryLink> {
+    const link = (await this.repository.getGitHubDeliveryLink(linkId));
     if (!link) {
       throw new Error(`github delivery link not found: ${linkId}`);
     }
     return link;
   }
 
-  private refreshWorkSignals(): WorkSignal[] {
+  private async refreshWorkSignals(): Promise<WorkSignal[]> {
     const detected: WorkSignal[] = this.workSignalService.detect({
-      tasks: this.repository.listTasks(),
-      runs: this.repository.listRuns(),
-      artifacts: this.repository.listArtifacts(),
-      approvals: this.repository.listApprovals(),
-      githubDeliveryLinks: this.repository.listGitHubDeliveryLinks(),
-      runtimeEvidence: this.repository.listRuntimeEvidence(),
-      policyDecisions: this.repository.listPolicyDecisions(),
-      existingSignals: this.repository.listWorkSignals(),
+      tasks: (await this.repository.listTasks()),
+      runs: (await this.repository.listRuns()),
+      artifacts: (await this.repository.listArtifacts()),
+      approvals: (await this.repository.listApprovals()),
+      githubDeliveryLinks: (await this.repository.listGitHubDeliveryLinks()),
+      runtimeEvidence: (await this.repository.listRuntimeEvidence()),
+      policyDecisions: (await this.repository.listPolicyDecisions()),
+      existingSignals: (await this.repository.listWorkSignals()),
     });
     const detectedIds = new Set(detected.map((signal: WorkSignal) => signal.signalId));
 
-    for (const signal of this.repository.listWorkSignals()) {
+    for (const signal of (await this.repository.listWorkSignals())) {
       if (signal.metadata?.generatedBy === 'work_signal_service' && !detectedIds.has(signal.signalId)) {
-        this.repository.deleteWorkSignal(signal.signalId);
+        (await this.repository.deleteWorkSignal(signal.signalId));
       }
     }
 
     for (const signal of detected) {
-      const isNewSignal = !this.repository.getWorkSignal(signal.signalId);
-      const stored = this.repository.upsertWorkSignal(signal);
+      const isNewSignal = !(await this.repository.getWorkSignal(signal.signalId));
+      const stored = (await this.repository.upsertWorkSignal(signal));
       if (isNewSignal) {
-        this.appendWorkSignalOutbox(stored);
+        await this.appendWorkSignalOutbox(stored);
       }
     }
 
-    return this.repository.listWorkSignals().sort((a: WorkSignal, b: WorkSignal) => (
+    return (await this.repository.listWorkSignals()).sort((a: WorkSignal, b: WorkSignal) => (
       workSignalSeverityRank(a.severity) - workSignalSeverityRank(b.severity)
       || a.detectedAt.localeCompare(b.detectedAt)
     ));
   }
 
-  private appendStateTransitionEvent(
+  private async appendStateTransitionEvent(
     fromState: TaskRunState,
     run: TaskRun,
     reason: string,
     data: Record<string, unknown> = {},
-  ): void {
+  ): Promise<void> {
     const event: RunEvent = {
       eventId: `event_${run.runId}_${fromState}_${run.state}_${Date.now()}`,
       type: 'state_transition',
@@ -989,12 +992,12 @@ export class AgentOsController {
         ...data,
       },
     };
-    this.repository.appendEvent(event);
-    this.appendRunEventOutbox(event);
-    this.appendTaskRunOutbox(run);
+    (await this.repository.appendEvent(event));
+    await this.appendRunEventOutbox(event);
+    await this.appendTaskRunOutbox(run);
   }
 
-  private appendArtifactEvent(run: TaskRun, artifact: Artifact, reason: string): void {
+  private async appendArtifactEvent(run: TaskRun, artifact: Artifact, reason: string): Promise<void> {
     const event: RunEvent = {
       eventId: `event_${run.runId}_artifact_${artifact.artifactId}_${Date.now()}`,
       type: 'artifact',
@@ -1011,11 +1014,11 @@ export class AgentOsController {
         metadata: artifact.metadata,
       },
     };
-    this.repository.appendEvent(event);
-    this.appendRunEventOutbox(event);
+    (await this.repository.appendEvent(event));
+    await this.appendRunEventOutbox(event);
   }
 
-  private maybeTransitionRunForArtifact(run: TaskRun, body: Record<string, unknown>, artifact: Artifact): TaskRun | undefined {
+  private async maybeTransitionRunForArtifact(run: TaskRun, body: Record<string, unknown>, artifact: Artifact): Promise<TaskRun | undefined> {
     const requestedState = optionalString(body.transitionState) ?? optionalString(body.state);
     if (!requestedState) {
       return undefined;
@@ -1033,17 +1036,17 @@ export class AgentOsController {
         verificationCommand: artifact.metadata?.command,
       },
     });
-    const updated = this.repository.upsertRun(transitioned);
-    this.appendStateTransitionEvent(run.state, updated, 'verification_result', {
+    const updated = (await this.repository.upsertRun(transitioned));
+    await this.appendStateTransitionEvent(run.state, updated, 'verification_result', {
       artifactId: artifact.artifactId,
     });
     return updated;
   }
 
-  private resolveOrCreatePullRequestArtifact(body: Record<string, unknown>, link: GitHubDeliveryLink): Artifact {
+  private async resolveOrCreatePullRequestArtifact(body: Record<string, unknown>, link: GitHubDeliveryLink): Promise<Artifact> {
     const artifactId = optionalString(body.artifactId);
     if (artifactId) {
-      const artifact = this.repository.listArtifacts().find((candidate) => candidate.artifactId === artifactId);
+      const artifact = (await this.repository.listArtifacts()).find((candidate) => candidate.artifactId === artifactId);
       if (!artifact) {
         throw new Error(`artifact not found: ${artifactId}`);
       }
@@ -1062,15 +1065,15 @@ export class AgentOsController {
       createdBy: optionalString(body.createdBy) ?? optionalString(body.agentId) ?? 'agent-os',
       metadata: isRecord(body.metadata) ? body.metadata : undefined,
     });
-    const stored = this.repository.upsertArtifact(artifact);
-    this.appendArtifactOutbox(stored);
+    const stored = (await this.repository.upsertArtifact(artifact));
+    await this.appendArtifactOutbox(stored);
     return stored;
   }
 
-  private resolveOrCreatePreviewArtifact(body: Record<string, unknown>, link: GitHubDeliveryLink): Artifact {
+  private async resolveOrCreatePreviewArtifact(body: Record<string, unknown>, link: GitHubDeliveryLink): Promise<Artifact> {
     const artifactId = optionalString(body.artifactId);
     if (artifactId) {
-      const artifact = this.repository.listArtifacts().find((candidate) => candidate.artifactId === artifactId);
+      const artifact = (await this.repository.listArtifacts()).find((candidate) => candidate.artifactId === artifactId);
       if (!artifact) {
         throw new Error(`artifact not found: ${artifactId}`);
       }
@@ -1087,14 +1090,14 @@ export class AgentOsController {
       createdBy: optionalString(body.createdBy) ?? optionalString(body.agentId) ?? 'agent-os',
       metadata: isRecord(body.metadata) ? body.metadata : undefined,
     });
-    const stored = this.repository.upsertArtifact(artifact);
-    this.appendArtifactOutbox(stored);
+    const stored = (await this.repository.upsertArtifact(artifact));
+    await this.appendArtifactOutbox(stored);
     return stored;
   }
 
-  private decideApproval(req: Request, res: Response, status: 'approved' | 'rejected'): void {
+  private async decideApproval(req: Request, res: Response, status: 'approved' | 'rejected'): Promise<void> {
     try {
-      const approval = this.repository.listApprovals().find((candidate) => candidate.approvalId === req.params.approvalId);
+      const approval = (await this.repository.listApprovals()).find((candidate) => candidate.approvalId === req.params.approvalId);
       if (!approval) {
         res.status(404).json({ success: false, error: `approval not found: ${req.params.approvalId}` });
         return;
@@ -1106,9 +1109,9 @@ export class AgentOsController {
         requiredString(req.body?.decidedBy, 'decidedBy'),
         optionalString(req.body?.reason) ?? optionalString(req.body?.decisionReason),
       );
-      this.repository.upsertApproval(decided);
-      this.appendApprovalOutbox(decided);
-      const run = this.markApprovalDecisionRun(decided, status);
+      (await this.repository.upsertApproval(decided));
+      await this.appendApprovalOutbox(decided);
+      const run = await this.markApprovalDecisionRun(decided, status);
       res.json({ success: true, data: { approval: decided, run } });
     } catch (error) {
       res.status(400).json({
@@ -1118,7 +1121,7 @@ export class AgentOsController {
     }
   }
 
-  private markCompiledRun(body: Record<string, unknown>, instructionBundleId: string) {
+  private async markCompiledRun(body: Record<string, unknown>, instructionBundleId: string) {
     const requestedRunId = typeof body.runId === 'string' ? body.runId : undefined;
     const taskId = typeof body.taskId === 'string'
       ? body.taskId
@@ -1126,8 +1129,8 @@ export class AgentOsController {
         ? body.task.taskId
         : undefined;
     const run = requestedRunId
-      ? this.repository.listRuns().find((candidate) => candidate.runId === requestedRunId)
-      : this.repository.listRuns().find((candidate) => candidate.taskId === taskId && candidate.state === 'created');
+      ? (await this.repository.listRuns()).find((candidate) => candidate.runId === requestedRunId)
+      : (await this.repository.listRuns()).find((candidate) => candidate.taskId === taskId && candidate.state === 'created');
 
     if (!run || !isAllowedTaskRunTransition(run.state, 'compiled')) {
       return undefined;
@@ -1138,15 +1141,15 @@ export class AgentOsController {
         instructionBundleId,
       },
     });
-    const updated = this.repository.upsertRun({
+    const updated = await this.repository.upsertRun({
       ...transitioned,
       instructionBundleId,
     });
-    this.appendStateTransitionEvent(run.state, updated, 'instruction_compile', { instructionBundleId });
+    await this.appendStateTransitionEvent(run.state, updated, 'instruction_compile', { instructionBundleId });
     return updated;
   }
 
-  private markRoutedRun(body: Record<string, unknown>, route: ReturnType<TaskRoutingService['route']>): TaskRun | undefined {
+  private async markRoutedRun(body: Record<string, unknown>, route: ReturnType<TaskRoutingService['route']>): Promise<TaskRun | undefined> {
     if (body.routeRun !== true && body.transitionToRouted !== true) {
       return undefined;
     }
@@ -1156,8 +1159,8 @@ export class AgentOsController {
 
     const requestedRunId = optionalString(body.runId);
     const run = requestedRunId
-      ? this.repository.listRuns().find((candidate) => candidate.runId === requestedRunId)
-      : this.repository.listRuns().find((candidate) => candidate.taskId === route.taskId && candidate.state === 'compiled');
+      ? (await this.repository.listRuns()).find((candidate) => candidate.runId === requestedRunId)
+      : (await this.repository.listRuns()).find((candidate) => candidate.taskId === route.taskId && candidate.state === 'compiled');
 
     if (!run || !isAllowedTaskRunTransition(run.state, 'routed')) {
       return undefined;
@@ -1170,25 +1173,25 @@ export class AgentOsController {
         routePolicyFindings: route.policyFindings,
       },
     });
-    const updated = this.repository.upsertRun({
+    const updated = await this.repository.upsertRun({
       ...transitioned,
       assigneeAgentId: route.selectedAgentId,
     });
-    this.appendStateTransitionEvent(run.state, updated, 'task_route', {
+    await this.appendStateTransitionEvent(run.state, updated, 'task_route', {
       selectedAgentId: route.selectedAgentId,
       blocked: route.blocked,
     });
     return updated;
   }
 
-  private markClaimedRun(runId: string, body: Record<string, unknown>): TaskRun {
+  private async markClaimedRun(runId: string, body: Record<string, unknown>): Promise<TaskRun> {
     const agentId = requiredString(body.agentId, 'agentId');
-    const run = this.repository.listRuns().find((candidate) => candidate.runId === runId);
+    const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === runId);
     if (!run) {
       throw new Error(`run not found: ${runId}`);
     }
 
-    const agent = this.repository.listAgents().find((candidate) => candidate.agentId === agentId);
+    const agent = (await this.repository.listAgents()).find((candidate) => candidate.agentId === agentId);
     if (!agent) {
       throw new Error(`agent not found: ${agentId}`);
     }
@@ -1199,7 +1202,7 @@ export class AgentOsController {
       throw new Error(`run is assigned to ${run.assigneeAgentId}`);
     }
 
-    const task = this.repository.listTasks().find((candidate) => candidate.taskId === run.taskId);
+    const task = (await this.repository.listTasks()).find((candidate) => candidate.taskId === run.taskId);
     if (task && !supportsAgentIntent(agent, task.intent)) {
       throw new Error(`agent does not support task intent ${task.intent}`);
     }
@@ -1216,16 +1219,16 @@ export class AgentOsController {
         claimConnectorId: agent.connectorId,
       },
     });
-    const updated = this.repository.upsertRun({
+    const updated = await this.repository.upsertRun({
       ...transitioned,
       assigneeAgentId: agentId,
     });
-    this.appendStateTransitionEvent(run.state, updated, 'run_claim', { agentId });
+    await this.appendStateTransitionEvent(run.state, updated, 'run_claim', { agentId });
     return updated;
   }
 
-  private markRequestedRunTransition(runId: string, body: Record<string, unknown>): TaskRun {
-    const run = this.repository.listRuns().find((candidate) => candidate.runId === runId);
+  private async markRequestedRunTransition(runId: string, body: Record<string, unknown>): Promise<TaskRun> {
+    const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === runId);
     if (!run) {
       throw new Error(`run not found: ${runId}`);
     }
@@ -1244,17 +1247,17 @@ export class AgentOsController {
         transitionedAt: now,
       },
     });
-    const updated = this.repository.upsertRun({
+    const updated = await this.repository.upsertRun({
       ...transitioned,
       assigneeAgentId: optionalString(body.assigneeAgentId) ?? transitioned.assigneeAgentId,
     });
-    this.appendStateTransitionEvent(run.state, updated, 'run_transition', {
+    await this.appendStateTransitionEvent(run.state, updated, 'run_transition', {
       requestedBy: optionalString(body.agentId) ?? optionalString(body.requestedBy),
     });
     return updated;
   }
 
-  private markDeliveredRun(body: Record<string, unknown>, artifact: Artifact): TaskRun | undefined {
+  private async markDeliveredRun(body: Record<string, unknown>, artifact: Artifact): Promise<TaskRun | undefined> {
     if (body.deliver !== true && body.transitionToDelivered !== true) {
       return undefined;
     }
@@ -1262,7 +1265,7 @@ export class AgentOsController {
       return undefined;
     }
 
-    const run = this.repository.listRuns().find((candidate) => candidate.runId === artifact.runId);
+    const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === artifact.runId);
     if (!run || !isAllowedTaskRunTransition(run.state, 'delivered')) {
       return undefined;
     }
@@ -1277,20 +1280,20 @@ export class AgentOsController {
         lastDeliveryArtifactKind: artifact.kind,
       },
     });
-    const updated = this.repository.upsertRun(transitioned);
-    this.appendStateTransitionEvent(run.state, updated, 'delivery_artifact', {
+    const updated = (await this.repository.upsertRun(transitioned));
+    await this.appendStateTransitionEvent(run.state, updated, 'delivery_artifact', {
       artifactId: artifact.artifactId,
       artifactKind: artifact.kind,
     });
     return updated;
   }
 
-  private markApprovalDecisionRun(approval: { approvalId: string; runId?: string; decidedBy?: string; decidedAt?: string }, status: 'approved' | 'rejected'): TaskRun | undefined {
+  private async markApprovalDecisionRun(approval: { approvalId: string; runId?: string; decidedBy?: string; decidedAt?: string }, status: 'approved' | 'rejected'): Promise<TaskRun | undefined> {
     if (!approval.runId) {
       return undefined;
     }
 
-    const run = this.repository.listRuns().find((candidate) => candidate.runId === approval.runId);
+    const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === approval.runId);
     if (!run || !isAllowedTaskRunTransition(run.state, status)) {
       return undefined;
     }
@@ -1303,32 +1306,32 @@ export class AgentOsController {
         approvalDecidedAt: approval.decidedAt,
       },
     });
-    const updated = this.repository.upsertRun(transitioned);
-    this.appendStateTransitionEvent(run.state, updated, 'approval_decision', {
+    const updated = (await this.repository.upsertRun(transitioned));
+    await this.appendStateTransitionEvent(run.state, updated, 'approval_decision', {
       approvalId: approval.approvalId,
       approvalStatus: status,
     });
     return updated;
   }
 
-  private resolveTask(body: Record<string, unknown>): TaskSpec {
+  private async resolveTask(body: Record<string, unknown>): Promise<TaskSpec> {
     if (isRecord(body.task)) {
       return body.task as TaskSpec;
     }
     const taskId = typeof body.taskId === 'string' ? body.taskId : undefined;
-    const task = taskId ? this.repository.listTasks().find((candidate) => candidate.taskId === taskId) : undefined;
+    const task = taskId ? (await this.repository.listTasks()).find((candidate) => candidate.taskId === taskId) : undefined;
     if (!task) {
       throw new Error('task or taskId for an existing task is required');
     }
     return task;
   }
 
-  private resolveAgent(body: Record<string, unknown>): AgentProfile {
+  private async resolveAgent(body: Record<string, unknown>): Promise<AgentProfile> {
     if (isRecord(body.agent)) {
       return body.agent as AgentProfile;
     }
     const agentId = typeof body.agentId === 'string' ? body.agentId : undefined;
-    const agent = agentId ? this.repository.listAgents().find((candidate) => candidate.agentId === agentId) : undefined;
+    const agent = agentId ? (await this.repository.listAgents()).find((candidate) => candidate.agentId === agentId) : undefined;
     if (!agent) {
       throw new Error('agent or agentId for an existing agent is required');
     }

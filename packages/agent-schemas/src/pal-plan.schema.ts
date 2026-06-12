@@ -1,5 +1,17 @@
-import type { PALPlan } from '@recoder/pal';
 import { collectIssues, requireArray, requireString, type SchemaGuard } from './schema-guard';
+
+type PALPlan = {
+  taskId: string;
+  primaryRuntime: string;
+  reviewerRuntime?: string;
+  browserVerification: boolean;
+  sandbox: string;
+  skills: string[];
+  mcpTools: string[];
+  approvalGateIds: string[];
+  risk: string;
+  generatedAt: string;
+};
 
 export const palPlanSchema: SchemaGuard<PALPlan> = {
   name: 'PALPlan',
@@ -16,4 +28,3 @@ export const palPlanSchema: SchemaGuard<PALPlan> = {
     ]);
   },
 };
-

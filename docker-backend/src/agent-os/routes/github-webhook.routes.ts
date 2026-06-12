@@ -25,7 +25,7 @@ const githubDelivery = new GitHubDeliveryService();
 export function createAgentOsGitHubWebhookRouter(): Router {
   const router = Router();
 
-  router.post('/', (req, res) => {
+  router.post('/', async (req, res) => {
     if (!GITHUB_WEBHOOK_SECRET) {
       res.status(503).json({ success: false, error: 'agent_os_github_webhook_secret_missing' });
       return;
@@ -47,7 +47,7 @@ export function createAgentOsGitHubWebhookRouter(): Router {
     }
 
     try {
-      const result = ingestGitHubWebhook(event, payload);
+      const result = await ingestGitHubWebhook(event, payload);
       res.status(result.matched ? 200 : 202).json({ success: true, data: result });
     } catch (error) {
       res.status(400).json({
@@ -60,32 +60,32 @@ export function createAgentOsGitHubWebhookRouter(): Router {
   return router;
 }
 
-function ingestGitHubWebhook(event: string, payload: Record<string, unknown>): { event: string; matched: boolean; linkId?: string; status?: GitHubDeliveryLink['status'] } {
+async function ingestGitHubWebhook(event: string, payload: Record<string, unknown>): Promise<{ event: string; matched: boolean; linkId?: string; status?: GitHubDeliveryLink['status'] }> {
   if (event === 'ping') {
     return { event, matched: true };
   }
 
   if (event === 'pull_request') {
-    return ingestPullRequestWebhook(event, payload);
+    return await ingestPullRequestWebhook(event, payload);
   }
 
   if (event === 'pull_request_review') {
-    return ingestPullRequestReviewWebhook(event, payload);
+    return await ingestPullRequestReviewWebhook(event, payload);
   }
 
   if (event === 'check_run' || event === 'check_suite' || event === 'status') {
-    return ingestCheckWebhook(event, payload);
+    return await ingestCheckWebhook(event, payload);
   }
 
   return { event, matched: false };
 }
 
-function ingestPullRequestWebhook(event: string, payload: Record<string, unknown>) {
+async function ingestPullRequestWebhook(event: string, payload: Record<string, unknown>) {
   const pullRequest = record(payload.pull_request);
   const repository = repositoryFullName(payload);
   const branch = stringAt(record(pullRequest.head), 'ref');
   const number = numberOrString(pullRequest.number);
-  const link = findDeliveryLink(repository, branch, number);
+  const link = await findDeliveryLink(repository, branch, number);
   if (!link) {
     return { event, matched: false };
   }
@@ -106,21 +106,21 @@ function ingestPullRequestWebhook(event: string, payload: Record<string, unknown
       merged: booleanAt(pullRequest, 'merged'),
     },
   });
-  const storedArtifact = agentOsContainer.repository.upsertArtifact(artifact);
-  appendArtifactOutbox(storedArtifact);
+  const storedArtifact = await agentOsContainer.repository.upsertArtifact(artifact);
+  await appendArtifactOutbox(storedArtifact);
 
   const updated = githubDelivery.attachPullRequest(link, storedArtifact, stringAt(pullRequest, 'updated_at') ?? undefined);
-  const stored = agentOsContainer.repository.upsertGitHubDeliveryLink(updated);
+  const stored = await agentOsContainer.repository.upsertGitHubDeliveryLink(updated);
   return { event, matched: true, linkId: stored.linkId, status: stored.status };
 }
 
-function ingestPullRequestReviewWebhook(event: string, payload: Record<string, unknown>) {
+async function ingestPullRequestReviewWebhook(event: string, payload: Record<string, unknown>) {
   const pullRequest = record(payload.pull_request);
   const review = record(payload.review);
   const repository = repositoryFullName(payload);
   const branch = stringAt(record(pullRequest.head), 'ref');
   const number = numberOrString(pullRequest.number);
-  const link = findDeliveryLink(repository, branch, number);
+  const link = await findDeliveryLink(repository, branch, number);
   if (!link) {
     return { event, matched: false };
   }
@@ -138,15 +138,15 @@ function ingestPullRequestReviewWebhook(event: string, payload: Record<string, u
     incoming,
   ];
   const updated = githubDelivery.syncReviews(link, reviews, incoming.submittedAt);
-  const stored = agentOsContainer.repository.upsertGitHubDeliveryLink(updated);
+  const stored = await agentOsContainer.repository.upsertGitHubDeliveryLink(updated);
   return { event, matched: true, linkId: stored.linkId, status: stored.status };
 }
 
-function ingestCheckWebhook(event: string, payload: Record<string, unknown>) {
+async function ingestCheckWebhook(event: string, payload: Record<string, unknown>) {
   const repository = repositoryFullName(payload);
   const check = payload.check_run ? record(payload.check_run) : record(payload.check_suite);
   const branch = stringAt(check, 'head_branch') ?? stringAt(record(payload), 'branch');
-  const link = findDeliveryLink(repository, branch, undefined);
+  const link = await findDeliveryLink(repository, branch, undefined);
   if (!link) {
     return { event, matched: false };
   }
@@ -166,12 +166,12 @@ function ingestCheckWebhook(event: string, payload: Record<string, unknown>) {
     incoming,
   ];
   const updated = githubDelivery.syncChecks(link, checks, incoming.completedAt);
-  const stored = agentOsContainer.repository.upsertGitHubDeliveryLink(updated);
+  const stored = await agentOsContainer.repository.upsertGitHubDeliveryLink(updated);
   return { event, matched: true, linkId: stored.linkId, status: stored.status };
 }
 
-function findDeliveryLink(repository?: string, branch?: string, pullRequestNumber?: string | number): GitHubDeliveryLink | null {
-  return agentOsContainer.repository.listGitHubDeliveryLinks().find((link) => {
+async function findDeliveryLink(repository?: string, branch?: string, pullRequestNumber?: string | number): Promise<GitHubDeliveryLink | null> {
+  return (await agentOsContainer.repository.listGitHubDeliveryLinks()).find((link: GitHubDeliveryLink) => {
     if (repository && link.repository !== repository) {
       return false;
     }
@@ -182,8 +182,8 @@ function findDeliveryLink(repository?: string, branch?: string, pullRequestNumbe
   }) ?? null;
 }
 
-function appendArtifactOutbox(artifact: Artifact): void {
-  agentOsContainer.repository.appendOutbox(createOutboxRecord(mapArtifactToCloudEvent({ data: artifact })));
+async function appendArtifactOutbox(artifact: Artifact): Promise<void> {
+  await agentOsContainer.repository.appendOutbox(createOutboxRecord(mapArtifactToCloudEvent({ data: artifact })));
 }
 
 function verifyGitHubSignature(rawBody: Buffer, signature: string | undefined): boolean {

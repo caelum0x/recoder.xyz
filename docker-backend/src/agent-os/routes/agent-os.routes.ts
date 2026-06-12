@@ -4,7 +4,11 @@ import { agentOsContainer } from '../service-container';
 
 export function createAgentOsRouter(): Router {
   const router = Router();
-  const controller = new AgentOsController(agentOsContainer.repository, agentOsContainer.workLocks);
+  const controller = new AgentOsController(
+    agentOsContainer.repository,
+    agentOsContainer.workLocks,
+    agentOsContainer.repositoryDriver,
+  );
 
   router.get('/health', controller.health);
   router.get('/summary', controller.summary);

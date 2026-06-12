@@ -420,7 +420,7 @@ export function AgentOsControlPlane() {
                         .slice(0, 5)
                         .map((approval) => (
                           <div key={approval.approvalId as string} className="flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm">
-                            <span className="truncate">{(approval.action as string) || approval.approvalId}</span>
+                            <span className="truncate">{String(approval.action || approval.approvalId || '')}</span>
                             <Badge variant="outline" className="rounded px-2 py-0.5 text-[11px]">
                               {approval.status as string}
                             </Badge>
