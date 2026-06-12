@@ -8,6 +8,7 @@ import type {
   RuntimeEvidence,
   TaskRun,
   TaskSpec,
+  WorkSignal,
   WorkLock,
 } from '@recoder/agent-os';
 import type { ComponentSecurityRisk, RecoderComponentDescriptor } from '@recoder/oss-registry';
@@ -20,6 +21,7 @@ export type AgentOsCockpitInput = {
   approvals?: Approval[];
   artifacts?: Artifact[];
   runtimeEvidence?: RuntimeEvidence[];
+  workSignals?: WorkSignal[];
   memoryCandidates?: MemoryCandidate[];
   policyDecisions?: PolicyDecision[];
   workLocks?: WorkLock[];
@@ -37,6 +39,7 @@ export type AgentOsCockpitSummary = {
     waitingApprovals: number;
     artifacts: number;
     runtimeEvidence: number;
+    openWorkSignals: number;
     memoryCandidates: number;
     ossComponents: number;
     highRiskComponents: number;
@@ -44,6 +47,7 @@ export type AgentOsCockpitSummary = {
   agents: AgentCockpitCard[];
   runs: RunCockpitCard[];
   approvals: ApprovalCockpitCard[];
+  workSignals: WorkSignalCockpitCard[];
   instructionBundles: InstructionCockpitCard[];
   policyRestrictions: PolicyRestrictionCard[];
   memoryCandidates: MemoryCandidateCard[];
@@ -83,6 +87,19 @@ export type ApprovalCockpitCard = {
   reason: string;
   requiredAt: Approval['requiredAt'];
   requestedAt: string;
+};
+
+export type WorkSignalCockpitCard = {
+  signalId: string;
+  taskId: string;
+  runId?: string;
+  title: string;
+  severity: WorkSignal['severity'];
+  status: WorkSignal['status'];
+  detectedReason: WorkSignal['detectedReason'];
+  source: WorkSignal['source'];
+  recommendedNextAction: string;
+  detectedAt: string;
 };
 
 export type InstructionCockpitCard = {
@@ -147,6 +164,7 @@ export function buildAgentOsCockpitSummary(input: AgentOsCockpitInput): AgentOsC
   const approvals = input.approvals ?? [];
   const artifacts = input.artifacts ?? [];
   const runtimeEvidence = input.runtimeEvidence ?? [];
+  const workSignals = input.workSignals ?? [];
   const instructionBundles = input.instructionBundles ?? [];
   const memoryCandidates = input.memoryCandidates ?? [];
   const ossComponents = input.ossComponents ?? [];
@@ -162,6 +180,7 @@ export function buildAgentOsCockpitSummary(input: AgentOsCockpitInput): AgentOsC
       waitingApprovals: approvals.filter((approval) => approval.status === 'pending' || approval.status === 'escalated').length,
       artifacts: artifacts.length,
       runtimeEvidence: runtimeEvidence.length,
+      openWorkSignals: workSignals.filter((signal) => signal.status === 'open').length,
       memoryCandidates: memoryCandidates.length,
       ossComponents: ossComponents.length,
       highRiskComponents: securityRisks.filter((risk) => risk.risk === 'high').length,
@@ -199,6 +218,18 @@ export function buildAgentOsCockpitSummary(input: AgentOsCockpitInput): AgentOsC
       reason: approval.reason,
       requiredAt: approval.requiredAt,
       requestedAt: approval.requestedAt,
+    })),
+    workSignals: workSignals.map((signal) => ({
+      signalId: signal.signalId,
+      taskId: signal.taskId,
+      runId: signal.runId,
+      title: signal.title,
+      severity: signal.severity,
+      status: signal.status,
+      detectedReason: signal.detectedReason,
+      source: signal.source,
+      recommendedNextAction: signal.recommendedNextAction,
+      detectedAt: signal.detectedAt,
     })),
     instructionBundles: instructionBundles.map((bundle) => ({
       bundleId: bundle.bundleId,

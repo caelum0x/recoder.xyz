@@ -15,6 +15,7 @@ import type {
   TaskRun,
   TaskRunState,
   TaskSpec,
+  WorkSignal,
   WorkLock,
 } from '@recoder/agent-os';
 import {
@@ -29,6 +30,7 @@ import {
   RunHistoryService,
   TaskRoutingService,
   transitionTaskRun,
+  WorkSignalService,
   WorkLockService,
 } from '@recoder/agent-os';
 import {
@@ -45,6 +47,7 @@ import {
   mapRunEventToCloudEvent,
   mapTaskCreatedToCloudEvent,
   mapTaskRunStateToCloudEvent,
+  mapWorkSignalToCloudEvent,
   type OutboxRecord,
 } from '@recoder/agent-events';
 import {
@@ -61,6 +64,7 @@ export type AgentOsGatewayState = {
   artifacts: Map<string, Artifact>;
   runtimeEvidence: Map<string, RuntimeEvidence>;
   githubDeliveryLinks: Map<string, GitHubDeliveryLink>;
+  workSignals: Map<string, WorkSignal>;
   approvals: Map<string, Approval>;
   memoryItems: Map<string, MemoryItem>;
   memoryCandidates: Map<string, MemoryCandidate>;
@@ -81,6 +85,7 @@ export function createAgentOsGatewayState(): AgentOsGatewayState {
     artifacts: new Map(),
     runtimeEvidence: new Map(),
     githubDeliveryLinks: new Map(),
+    workSignals: new Map(),
     approvals: new Map(),
     memoryItems: new Map(),
     memoryCandidates: new Map(),
@@ -107,6 +112,7 @@ export function createAgentOsResourceRouter(
   const memory = new MemoryService();
   const runs = new RunService();
   const routing = new TaskRoutingService();
+  const workSignals = new WorkSignalService();
 
   router.get('/summary', (_req, res) => {
     const registry = createRecoderComponentRegistry(list(state.ossComponents));
@@ -118,6 +124,7 @@ export function createAgentOsResourceRouter(
       approvals: list(state.approvals),
       artifacts: list(state.artifacts),
       runtimeEvidence: list(state.runtimeEvidence),
+      workSignals: refreshWorkSignals(state, workSignals),
       memoryCandidates: list(state.memoryCandidates),
       policyDecisions: list(state.policyDecisions),
       workLocks: list(state.workLocks),
@@ -350,6 +357,42 @@ export function createAgentOsResourceRouter(
       res.status(201).json(ok({ artifact, run }));
     } catch (error) {
       res.status(400).json(fail(error instanceof Error ? error.message : 'preview_artifact_failed'));
+    }
+  });
+
+  router.get('/work-signals', (_req, res) => {
+    res.json(ok(refreshWorkSignals(state, workSignals)));
+  });
+  router.post('/work-signals', (req, res) => {
+    try {
+      const signal = upsert(state.workSignals, req.body, 'signalId') as WorkSignal;
+      appendWorkSignalOutbox(state, signal);
+      res.status(201).json(ok(signal));
+    } catch (error) {
+      res.status(400).json(fail(error instanceof Error ? error.message : 'work_signal_upsert_failed'));
+    }
+  });
+  router.patch('/work-signals/:signalId/status', (req, res) => {
+    try {
+      refreshWorkSignals(state, workSignals);
+      const signal = state.workSignals.get(req.params.signalId);
+      if (!signal) {
+        res.status(404).json(fail(`work signal not found: ${req.params.signalId}`));
+        return;
+      }
+      if (req.body?.status !== 'resolved') {
+        res.status(400).json(fail('Only status=resolved is supported for now'));
+        return;
+      }
+      const resolved = workSignals.resolve(signal, {
+        resolvedBy: requiredString(req.body?.resolvedBy, 'resolvedBy'),
+        resolvedAt: optionalString(req.body?.resolvedAt),
+      });
+      state.workSignals.set(resolved.signalId, resolved);
+      appendWorkSignalOutbox(state, resolved);
+      res.json(ok(resolved));
+    } catch (error) {
+      res.status(400).json(fail(error instanceof Error ? error.message : 'work_signal_status_failed'));
     }
   });
 
@@ -654,6 +697,46 @@ function replaceAll<T>(map: Map<string, T>, values: T[], key: string): void {
   }
 }
 
+function refreshWorkSignals(
+  state: AgentOsGatewayState,
+  workSignals: WorkSignalService,
+): WorkSignal[] {
+  const detected = workSignals.detect({
+    tasks: list(state.tasks),
+    runs: list(state.runs),
+    artifacts: list(state.artifacts),
+    approvals: list(state.approvals),
+    githubDeliveryLinks: list(state.githubDeliveryLinks),
+    runtimeEvidence: list(state.runtimeEvidence),
+    policyDecisions: list(state.policyDecisions),
+    existingSignals: list(state.workSignals),
+  });
+  const detectedIds = new Set(detected.map((signal) => signal.signalId));
+
+  for (const signal of list(state.workSignals)) {
+    if (signal.metadata?.generatedBy === 'work_signal_service' && !detectedIds.has(signal.signalId)) {
+      state.workSignals.delete(signal.signalId);
+    }
+  }
+
+  for (const signal of detected) {
+    const isNewSignal = !state.workSignals.has(signal.signalId);
+    state.workSignals.set(signal.signalId, signal);
+    if (isNewSignal) {
+      appendWorkSignalOutbox(state, signal);
+    }
+  }
+
+  return list(state.workSignals).sort((a, b) => (
+    workSignalSeverityRank(a.severity) - workSignalSeverityRank(b.severity)
+    || a.detectedAt.localeCompare(b.detectedAt)
+  ));
+}
+
+function workSignalSeverityRank(severity: WorkSignal['severity']): number {
+  return { critical: 0, high: 1, medium: 2, low: 3 }[severity];
+}
+
 function appendOutboxRecord(state: AgentOsGatewayState, record: OutboxRecord): OutboxRecord {
   const existing = state.outbox.find((candidate) => candidate.outboxId === record.outboxId);
   if (existing) {
@@ -681,6 +764,10 @@ function appendArtifactOutbox(state: AgentOsGatewayState, artifact: Artifact): O
 
 function appendRuntimeEvidenceOutbox(state: AgentOsGatewayState, evidence: RuntimeEvidence): OutboxRecord {
   return appendOutboxRecord(state, createOutboxRecord(mapRuntimeEvidenceToCloudEvent({ data: evidence })));
+}
+
+function appendWorkSignalOutbox(state: AgentOsGatewayState, signal: WorkSignal): OutboxRecord {
+  return appendOutboxRecord(state, createOutboxRecord(mapWorkSignalToCloudEvent({ data: signal })));
 }
 
 function appendApprovalOutbox(state: AgentOsGatewayState, approval: Approval): OutboxRecord {

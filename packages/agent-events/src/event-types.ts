@@ -14,6 +14,8 @@ export const RECODER_AGENT_EVENT_TYPES = [
   'recoder.verification.started',
   'recoder.verification.completed',
   'recoder.runtime_evidence.created',
+  'recoder.work_signal.opened',
+  'recoder.work_signal.resolved',
   'recoder.memory.candidate.created',
   'recoder.memory.accepted',
   'recoder.run.completed',

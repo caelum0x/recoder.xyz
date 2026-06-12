@@ -249,6 +249,26 @@ create table if not exists runtime_evidence (
   observed_at timestamptz not null default now()
 );
 
+create table if not exists work_signals (
+  signal_id text primary key,
+  task_id text not null references tasks(task_id) on delete cascade,
+  run_id text references task_runs(run_id) on delete set null,
+  space_id text references spaces(space_id) on delete set null,
+  source text not null,
+  source_id text not null,
+  title text not null,
+  severity text not null,
+  status text not null,
+  detected_reason text not null,
+  why_it_matters text not null,
+  recommended_next_action text not null,
+  agent_handoff_prompt text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  detected_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  resolved_by text
+);
+
 create table if not exists memory_items (
   memory_id text primary key,
   scope text not null,
@@ -407,6 +427,9 @@ create index if not exists task_runs_task_status_started_idx on task_runs(task_i
 create index if not exists work_locks_space_repo_path_expires_idx on work_locks(space_id, repo, path_glob, expires_at);
 create index if not exists runtime_evidence_task_kind_observed_idx on runtime_evidence(task_id, kind, observed_at);
 create index if not exists runtime_evidence_run_observed_idx on runtime_evidence(run_id, observed_at);
+create index if not exists work_signals_status_severity_detected_idx on work_signals(status, severity, detected_at);
+create index if not exists work_signals_task_status_detected_idx on work_signals(task_id, status, detected_at);
+create index if not exists work_signals_run_status_detected_idx on work_signals(run_id, status, detected_at);
 create index if not exists events_space_type_created_idx on events(space_id, type, created_at);
 create index if not exists events_task_type_created_idx on events(task_id, type, created_at);
 create index if not exists event_outbox_status_created_idx on event_outbox(status, created_at);

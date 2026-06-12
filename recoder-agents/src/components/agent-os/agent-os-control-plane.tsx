@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
+  AlertTriangle,
   Brain,
   Boxes,
   CheckCircle2,
@@ -27,7 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useCapabilities } from '@/hooks/use-capabilities';
 import { useWorkspaces } from '@/hooks/workspaces/use-workspaces';
-import { useControlPlaneSnapshot } from '@/hooks/workspaces/use-mission-control';
+import { useAgentOsSummary, useControlPlaneSnapshot, type AgentOsWorkSignal } from '@/hooks/workspaces/use-mission-control';
 import { OssComponentRegistry } from '@/components/oss';
 
 type AgentOsTask = Record<string, unknown> & {
@@ -83,6 +84,23 @@ function StateBadge({ state }: { state?: string }) {
   );
 }
 
+function SignalSeverityBadge({ severity }: { severity: AgentOsWorkSignal['severity'] }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'rounded px-2 py-0.5 text-[11px]',
+        severity === 'critical' && 'border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-400',
+        severity === 'high' && 'border-orange-500/50 bg-orange-500/10 text-orange-600 dark:text-orange-400',
+        severity === 'medium' && 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+        severity === 'low' && 'border-sky-500/50 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+      )}
+    >
+      {severity}
+    </Badge>
+  );
+}
+
 function StatTile({
   label,
   value,
@@ -111,6 +129,7 @@ export function AgentOsControlPlane() {
   const workspaces = workspacesData?.workspaces ?? [];
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const { data: snapshot, isLoading: snapshotLoading, refetch, isFetching } = useControlPlaneSnapshot(workspaceId);
+  const { data: agentOsSummary } = useAgentOsSummary();
   const { data: capabilities } = useCapabilities();
 
   useEffect(() => {
@@ -129,6 +148,12 @@ export function AgentOsControlPlane() {
     instructionTask?.instructions?.verificationCommands?.filter(Boolean) ?? [];
   const forbiddenActions = instructionTask?.instructions?.forbiddenActions?.filter(Boolean) ?? [];
   const sourceFiles = instructionTask?.instructions?.sourceFiles ?? [];
+  const workSignals = useMemo(() => {
+    const signals = agentOsSummary?.workSignals ?? [];
+    if (!workspaceId) return signals;
+    return signals.filter((signal) => !signal.spaceId || signal.spaceId === workspaceId);
+  }, [agentOsSummary?.workSignals, workspaceId]);
+  const openWorkSignals = workSignals.filter((signal) => signal.status === 'open');
 
   if (workspacesLoading) {
     return (
@@ -196,7 +221,7 @@ export function AgentOsControlPlane() {
         </div>
       ) : (
         <>
-          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <StatTile
               label="Agents"
               value={snapshot?.summary.onlineAgents ?? 0}
@@ -220,6 +245,12 @@ export function AgentOsControlPlane() {
               value={artifactCount}
               detail={`${previewCount} previews, ${memoryCandidateCount} memory candidates`}
               icon={GitPullRequest}
+            />
+            <StatTile
+              label="Work Signals"
+              value={openWorkSignals.length}
+              detail={`${workSignals.length} tracked blockers from Agent OS detectors`}
+              icon={AlertTriangle}
             />
           </section>
 
@@ -257,6 +288,35 @@ export function AgentOsControlPlane() {
                     ))}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Work Signals</CardTitle>
+                <CardDescription>Detected blockers with agent-ready handoff actions.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {openWorkSignals.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No open work signals for this workspace.</p>
+                ) : (
+                  openWorkSignals.slice(0, 6).map((signal) => (
+                    <div key={signal.signalId} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{signal.title}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {signal.detectedReason.replace(/_/g, ' ')} from {signal.source.replace(/_/g, ' ')}
+                          </p>
+                        </div>
+                        <SignalSeverityBadge severity={signal.severity} />
+                      </div>
+                      <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">
+                        {signal.recommendedNextAction}
+                      </p>
+                    </div>
+                  ))
+                )}
               </CardContent>
             </Card>
           </div>

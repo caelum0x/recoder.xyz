@@ -1,6 +1,6 @@
 export type MemoryItemStatus = 'active' | 'superseded' | 'expired';
 export type MemoryCandidateStatus = 'candidate_created' | 'reviewed' | 'accepted' | 'rejected';
-export type MemoryScope = 'user' | 'org' | 'space' | 'repo' | 'path' | 'agent' | 'task-type';
+export type MemoryItemScope = 'user' | 'org' | 'space' | 'repo' | 'path' | 'agent' | 'task-type';
 
 export const MemoryItemStatusEnum = {
   Active: 'active' as const satisfies MemoryItemStatus,
@@ -29,16 +29,16 @@ export const MEMORY_CANDIDATE_STATUSES: readonly MemoryCandidateStatus[] = [
 ] as const;
 
 export const MemoryScopeEnum = {
-  User: 'user' as const satisfies MemoryScope,
-  Org: 'org' as const satisfies MemoryScope,
-  Space: 'space' as const satisfies MemoryScope,
-  Repo: 'repo' as const satisfies MemoryScope,
-  Path: 'path' as const satisfies MemoryScope,
-  Agent: 'agent' as const satisfies MemoryScope,
-  TaskType: 'task-type' as const satisfies MemoryScope,
+  User: 'user' as const satisfies MemoryItemScope,
+  Org: 'org' as const satisfies MemoryItemScope,
+  Space: 'space' as const satisfies MemoryItemScope,
+  Repo: 'repo' as const satisfies MemoryItemScope,
+  Path: 'path' as const satisfies MemoryItemScope,
+  Agent: 'agent' as const satisfies MemoryItemScope,
+  TaskType: 'task-type' as const satisfies MemoryItemScope,
 } as const;
 
-export const MEMORY_SCOPES: readonly MemoryScope[] = [
+export const MEMORY_SCOPES: readonly MemoryItemScope[] = [
   MemoryScopeEnum.User,
   MemoryScopeEnum.Org,
   MemoryScopeEnum.Space,
@@ -50,7 +50,7 @@ export const MEMORY_SCOPES: readonly MemoryScope[] = [
 
 export type MemoryItem = {
   memoryId: string;
-  scope: MemoryScope;
+  scope: MemoryItemScope;
   title: string;
   body: string;
   status: MemoryItemStatus;
