@@ -63,7 +63,7 @@ import { moltbookAuthRouter } from './public-api/routes/auth-moltbook.js';
 import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
-import { createAgentMcpRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
+import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
 import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, agentRegistryRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
@@ -1723,6 +1723,7 @@ app.get('/api/a2a/.well-known/agent.json', (_req: express.Request, res: express.
 });
 // Keep raw JSON text for signed A2A payload verification
 app.use('/api/a2a', express.text({ type: 'application/json', limit: '2mb' }));
+app.use('/api/agent-os/github/webhook', express.raw({ type: 'application/json', limit: '2mb' }), createAgentOsGitHubWebhookRouter());
 app.use(express.json({ limit: '50mb' }));
 // Tighter body-size limit for public API routes (2 MB vs 50 MB global)
 app.use('/api/v1', express.json({ limit: '2mb' }));
@@ -15593,7 +15594,7 @@ app.use('/api/v1/projects', projectRouter);
 
 // Agent OS API layer: canonical control-plane surface for tasks, agents,
 // runs, approvals, artifacts, memory, instructions, policy, events, workflows.
-app.use('/api/agent-os', createAgentOsRouter());
+app.use('/api/agent-os', authenticateRequest, createAgentOsRouter());
 app.use('/internal/agent-os', createInternalAgentOsRouter());
 
 // Identity token endpoints (requires API key auth, but /verify uses app key auth internally)

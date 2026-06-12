@@ -11,3 +11,4 @@ export * from './work-lock';
 export * from './policy-decision';
 export * from './event';
 export * from './space';
+export * from './work-signal';

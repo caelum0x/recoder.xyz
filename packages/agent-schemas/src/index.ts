@@ -8,6 +8,7 @@ export * from './artifact.schema';
 export * from './approval.schema';
 export * from './memory-candidate.schema';
 export * from './work-lock.schema';
+export * from './work-signal.schema';
 export * from './oss-component.schema';
 export * from './context-pack.schema';
 export * from './pal-plan.schema';

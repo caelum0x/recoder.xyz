@@ -11,6 +11,7 @@ import { runEventSchema } from './run-event.schema';
 import type { SchemaGuard, SchemaResult } from './schema-guard';
 import { taskSpecSchema } from './task-spec.schema';
 import { workLockSchema } from './work-lock.schema';
+import { workSignalSchema } from './work-signal.schema';
 
 export const agentOsCanonicalSchemas = {
   AgentProfile: agentProfileSchema,
@@ -23,6 +24,7 @@ export const agentOsCanonicalSchemas = {
   Approval: approvalSchema,
   MemoryCandidate: memoryCandidateSchema,
   WorkLock: workLockSchema,
+  WorkSignal: workSignalSchema,
   PolicyDecision: policyDecisionSchema,
   OSSComponentDescriptor: ossComponentSchema,
   RecoderComponentDescriptor: recoderComponentSchema,

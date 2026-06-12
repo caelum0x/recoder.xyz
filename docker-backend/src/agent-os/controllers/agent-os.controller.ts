@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import type { AgentProfile, Approval, Artifact, GitHubDeliveryLink, InstructionBundle, MemoryCandidate, MemoryItem, PolicyDecision, RunEvent, RuntimeEvidence, SpacePolicy, TaskRun, TaskRunState, TaskSpec, WorkLockService } from '@recoder/agent-os';
+import type { AgentProfile, Approval, Artifact, GitHubDeliveryLink, InstructionBundle, MemoryCandidate, MemoryItem, PolicyDecision, RunEvent, RuntimeEvidence, SpacePolicy, TaskRun, TaskRunState, TaskSpec, WorkLockService, WorkSignal } from '@recoder/agent-os';
 import {
   AgentProfileReconciliationService,
   ApprovalService,
@@ -12,6 +12,7 @@ import {
   RunService,
   TaskRoutingService,
   transitionTaskRun,
+  WorkSignalService,
 } from '@recoder/agent-os';
 import {
   compileAgentOsInstructionBundle,
@@ -27,14 +28,15 @@ import {
   mapRunEventToCloudEvent,
   mapTaskCreatedToCloudEvent,
   mapTaskRunStateToCloudEvent,
+  mapWorkSignalToCloudEvent,
 } from '@recoder/agent-events';
 import { createRecoderComponentRegistry } from '@recoder/oss-registry';
 import { buildAgentOsCockpitSummary } from '@recoder/ui-agent-os';
-import type { InMemoryAgentOsRepository } from '../repositories/in-memory-agent-os.repository';
+import type { AgentOsRepository } from '../repositories/agent-os.repository';
 
 export class AgentOsController {
   constructor(
-    private readonly repository: InMemoryAgentOsRepository,
+    private readonly repository: AgentOsRepository,
     private readonly workLockService?: WorkLockService,
   ) {}
 
@@ -47,6 +49,7 @@ export class AgentOsController {
   private readonly runtimeEvidenceService = new RuntimeEvidenceService();
   private readonly routingService = new TaskRoutingService();
   private readonly runService = new RunService();
+  private readonly workSignalService = new WorkSignalService();
 
   health = (_req: Request, res: Response) => {
     res.json({
@@ -71,6 +74,7 @@ export class AgentOsController {
         approvals: this.repository.listApprovals(),
         artifacts: this.repository.listArtifacts(),
         runtimeEvidence: this.repository.listRuntimeEvidence(),
+        workSignals: this.refreshWorkSignals(),
         memoryCandidates: this.repository.listMemoryCandidates(),
         policyDecisions: this.repository.listPolicyDecisions(),
         workLocks: this.repository.listWorkLocks(),
@@ -495,6 +499,50 @@ export class AgentOsController {
     }
   };
 
+  workSignals = (_req: Request, res: Response) => {
+    res.json({ success: true, data: this.refreshWorkSignals() });
+  };
+
+  upsertWorkSignal = (req: Request, res: Response) => {
+    try {
+      const signal = this.repository.upsertWorkSignal(req.body);
+      this.appendWorkSignalOutbox(signal);
+      res.status(201).json({ success: true, data: signal });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'work_signal_upsert_failed',
+      });
+    }
+  };
+
+  resolveWorkSignal = (req: Request, res: Response) => {
+    try {
+      this.refreshWorkSignals();
+      const signal = this.repository.getWorkSignal(req.params.signalId);
+      if (!signal) {
+        res.status(404).json({ success: false, error: `work signal not found: ${req.params.signalId}` });
+        return;
+      }
+      if (req.body?.status !== 'resolved') {
+        res.status(400).json({ success: false, error: 'Only status=resolved is supported for now' });
+        return;
+      }
+      const resolved = this.workSignalService.resolve(signal, {
+        resolvedBy: requiredString(req.body?.resolvedBy, 'resolvedBy'),
+        resolvedAt: optionalString(req.body?.resolvedAt),
+      });
+      const stored = this.repository.upsertWorkSignal(resolved);
+      this.appendWorkSignalOutbox(stored);
+      res.json({ success: true, data: stored });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'work_signal_status_failed',
+      });
+    }
+  };
+
   memory = (_req: Request, res: Response) => {
     res.json({
       success: true,
@@ -770,6 +818,10 @@ export class AgentOsController {
     this.repository.appendOutbox(createOutboxRecord(mapRuntimeEvidenceToCloudEvent({ data: evidence })));
   }
 
+  private appendWorkSignalOutbox(signal: WorkSignal): void {
+    this.repository.appendOutbox(createOutboxRecord(mapWorkSignalToCloudEvent({ data: signal })));
+  }
+
   private appendApprovalOutbox(approval: Approval): void {
     this.repository.appendOutbox(createOutboxRecord(mapApprovalToCloudEvent({ data: approval })));
   }
@@ -880,6 +932,39 @@ export class AgentOsController {
       throw new Error(`github delivery link not found: ${linkId}`);
     }
     return link;
+  }
+
+  private refreshWorkSignals(): WorkSignal[] {
+    const detected: WorkSignal[] = this.workSignalService.detect({
+      tasks: this.repository.listTasks(),
+      runs: this.repository.listRuns(),
+      artifacts: this.repository.listArtifacts(),
+      approvals: this.repository.listApprovals(),
+      githubDeliveryLinks: this.repository.listGitHubDeliveryLinks(),
+      runtimeEvidence: this.repository.listRuntimeEvidence(),
+      policyDecisions: this.repository.listPolicyDecisions(),
+      existingSignals: this.repository.listWorkSignals(),
+    });
+    const detectedIds = new Set(detected.map((signal: WorkSignal) => signal.signalId));
+
+    for (const signal of this.repository.listWorkSignals()) {
+      if (signal.metadata?.generatedBy === 'work_signal_service' && !detectedIds.has(signal.signalId)) {
+        this.repository.deleteWorkSignal(signal.signalId);
+      }
+    }
+
+    for (const signal of detected) {
+      const isNewSignal = !this.repository.getWorkSignal(signal.signalId);
+      const stored = this.repository.upsertWorkSignal(signal);
+      if (isNewSignal) {
+        this.appendWorkSignalOutbox(stored);
+      }
+    }
+
+    return this.repository.listWorkSignals().sort((a: WorkSignal, b: WorkSignal) => (
+      workSignalSeverityRank(a.severity) - workSignalSeverityRank(b.severity)
+      || a.detectedAt.localeCompare(b.detectedAt)
+    ));
   }
 
   private appendStateTransitionEvent(
@@ -1183,7 +1268,7 @@ export class AgentOsController {
     }
 
     const previousIds = Array.isArray(run.metadata?.deliveryArtifactIds)
-      ? run.metadata.deliveryArtifactIds.filter((value): value is string => typeof value === 'string')
+      ? run.metadata.deliveryArtifactIds.filter((value: unknown): value is string => typeof value === 'string')
       : [];
     const transitioned = transitionTaskRun(run, 'delivered', {
       metadata: {
@@ -1309,6 +1394,10 @@ function readRuntimeEvidenceStatus(value: unknown): RuntimeEvidence['status'] | 
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
+}
+
+function workSignalSeverityRank(severity: 'critical' | 'high' | 'medium' | 'low'): number {
+  return { critical: 0, high: 1, medium: 2, low: 3 }[severity];
 }
 
 function supportsAgentIntent(agent: AgentProfile, intent: TaskSpec['intent']): boolean {

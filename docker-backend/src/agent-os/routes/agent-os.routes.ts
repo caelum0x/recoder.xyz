@@ -41,6 +41,9 @@ export function createAgentOsRouter(): Router {
   router.post('/github/delivery-links/:linkId/checks', controller.syncGitHubChecks);
   router.post('/github/delivery-links/:linkId/reviews', controller.syncGitHubReviews);
   router.post('/github/delivery-links/:linkId/issue', controller.linkGitHubIssue);
+  router.get('/work-signals', controller.workSignals);
+  router.post('/work-signals', controller.upsertWorkSignal);
+  router.patch('/work-signals/:signalId/status', controller.resolveWorkSignal);
   router.get('/memory', controller.memory);
   router.post('/memory/candidates', controller.upsertMemoryCandidate);
   router.post('/memory/candidates/:candidateId/review', controller.reviewMemoryCandidate);
