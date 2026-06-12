@@ -14,6 +14,8 @@ Minimum tables:
 - work_locks
 - approval_requests
 - artifacts
+- runtime_evidence
+- work_signals
 - memory_items
 - memory_candidates
 - events

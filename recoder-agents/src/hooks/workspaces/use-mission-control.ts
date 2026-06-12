@@ -10,6 +10,7 @@ const missionControlKeys = {
   fleet: (wsId: string) => ['mission-control', 'fleet', wsId] as const,
   pipeline: (wsId: string) => ['mission-control', 'pipeline', wsId] as const,
   metrics: (wsId: string) => ['mission-control', 'metrics', wsId] as const,
+  agentOsSummary: () => ['mission-control', 'agent-os-summary'] as const,
 };
 
 export interface MissionControlSummary {
@@ -42,6 +43,29 @@ export interface MissionControlSnapshot {
   approvals: Record<string, unknown>[];
   handoffs: Record<string, unknown>[];
   bridgeSessions: Record<string, unknown>[];
+}
+
+export interface AgentOsWorkSignal {
+  signalId: string;
+  taskId: string;
+  runId?: string;
+  title: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  status: 'open' | 'resolved';
+  detectedReason: string;
+  source: string;
+  recommendedNextAction: string;
+  detectedAt: string;
+  spaceId?: string;
+}
+
+export interface AgentOsSummary {
+  generatedAt: string;
+  counts: {
+    openWorkSignals: number;
+    [key: string]: number;
+  };
+  workSignals: AgentOsWorkSignal[];
 }
 
 function mapSnapshotAgents(input: Array<string | Record<string, unknown>>): AgentTeamMember[] {
@@ -78,6 +102,18 @@ export function useControlPlaneSnapshot(wsId: string | null) {
     },
     enabled: !!wsId,
     refetchInterval: 5_000,
+  });
+}
+
+export function useAgentOsSummary() {
+  return useQuery({
+    queryKey: missionControlKeys.agentOsSummary(),
+    queryFn: async () => {
+      const res = await dockerBackendApi.get<AgentOsSummary>('/api/agent-os/summary');
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to fetch Agent OS summary');
+    },
+    refetchInterval: 10_000,
   });
 }
 

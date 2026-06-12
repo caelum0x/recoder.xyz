@@ -6,6 +6,7 @@ import type {
   RuntimeEvidence,
   TaskRun,
   TaskSpec,
+  WorkSignal,
 } from '@recoder/agent-os';
 import { createRecoderCloudEvent, type RecoderCloudEvent } from './cloudevent';
 import type { RecoderAgentEventType } from './event-types';
@@ -71,6 +72,22 @@ export function mapRuntimeEvidenceToCloudEvent(
     subject: input.subject ?? evidence.runId ?? evidence.evidenceId,
     time: input.time ?? evidence.observedAt,
     data: evidence,
+  });
+}
+
+export function mapWorkSignalToCloudEvent(
+  input: DomainEventInput<WorkSignal>,
+): RecoderCloudEvent<WorkSignal> {
+  const signal = input.data;
+  return createRecoderCloudEvent({
+    id: input.id ?? `evt_work_signal_${signal.signalId}_${signal.status}`,
+    type: signal.status === 'resolved'
+      ? 'recoder.work_signal.resolved'
+      : 'recoder.work_signal.opened',
+    source: input.source ?? `recoder://task/${signal.taskId}`,
+    subject: input.subject ?? signal.runId ?? signal.signalId,
+    time: input.time ?? signal.resolvedAt ?? signal.detectedAt,
+    data: signal,
   });
 }
 
