@@ -124,8 +124,8 @@ describe('TaskDetailDialog', () => {
           {
             candidateId: 'memory_candidate_1',
             scope: 'repo',
-            title: 'recoder-web build command',
-            body: 'Use `pnpm -F recoder-web build` for production route validation.',
+            title: 'recoder-agents build command',
+            body: 'Use `pnpm -F recoder-agents build` for production route validation.',
             status: 'approved',
             proposedBy: 'codex',
             reviewedBy: 'pm-agent',
@@ -172,8 +172,8 @@ describe('TaskDetailDialog', () => {
     expect(screen.getByText('repo:Use pnpm test')).toBeTruthy();
     expect(screen.getByText('Do not modify .env*')).toBeTruthy();
     expect(screen.getByText('Memory Candidates')).toBeTruthy();
-    expect(screen.getByText('recoder-web build command')).toBeTruthy();
-    expect(screen.getByText('Use `pnpm -F recoder-web build` for production route validation.')).toBeTruthy();
+    expect(screen.getByText('recoder-agents build command')).toBeTruthy();
+    expect(screen.getByText('Use `pnpm -F recoder-agents build` for production route validation.')).toBeTruthy();
     expect(screen.getByText(/Approved memory: mem_approved_1/)).toBeTruthy();
     expect(screen.getAllByText(/preview\.recoder\.xyz/).length).toBeGreaterThan(0);
     expect(screen.getByText('Pull request attached')).toBeTruthy();

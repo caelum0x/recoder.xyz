@@ -4,8 +4,8 @@
  * HTTP + SSE client for docker-backend (Express, port 3001).
  *
  * A2A workspace/channel/task endpoints live on docker-backend, NOT the
- * Python FastAPI backend. This client mirrors the pattern used by
- * recoder-web (docker-api.ts) but is adapted for the Next.js frontend.
+ * Python FastAPI backend. This client follows the earlier docker-api.ts
+ * pattern but is adapted for the Next.js frontend.
  *
  * Auth: reads session token via getSessionAccessToken() and sends it
  * as Authorization: Bearer <token>.
