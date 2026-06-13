@@ -106,6 +106,16 @@ describe('A2A orchestrator routes', () => {
     expect(res.status).toBe(401);
   });
 
+  it('fails closed on /agents when no admin token is configured (recoder-0zso)', async () => {
+    // When RECODER_A2A_ADMIN_TOKEN is unset, admin access must be denied rather
+    // than granted to any caller — even one presenting an arbitrary admin token.
+    delete process.env.RECODER_A2A_ADMIN_TOKEN;
+    const res = await fetch(`${gateway?.baseUrl}/api/a2a/agents`, {
+      headers: { 'x-recoder-a2a-admin-token': 'anything' },
+    });
+    expect(res.status).toBe(503);
+  });
+
   it('lists builtin agents with admin token', async () => {
     const res = await fetch(`${gateway?.baseUrl}/api/a2a/agents`, {
       headers: { 'x-recoder-a2a-admin-token': 'admin-token' },
