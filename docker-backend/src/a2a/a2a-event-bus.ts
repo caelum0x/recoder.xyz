@@ -247,13 +247,18 @@ export class A2AEventBus {
   private readonly _localEventIds = new Set<string>();
   private static readonly LOCAL_ID_CAP = 10_000;
 
-  constructor() {
+  /**
+   * @param options.hydrate - when false, the bus starts empty instead of loading
+   *   persisted events from disk. Defaults to true (production behavior). Tests
+   *   pass false to avoid coupling assertions to on-disk runtime state.
+   */
+  constructor(options: { hydrate?: boolean } = {}) {
     this.emitter = new EventEmitter();
     // Allow many concurrent SSE listeners without warning
     this.emitter.setMaxListeners(0);
 
-    // Hydrate recent events from disk
-    const persisted = loadA2AEvents();
+    // Hydrate recent events from disk (unless explicitly disabled)
+    const persisted = options.hydrate === false ? [] : loadA2AEvents();
     if (persisted.length > 0) {
       const now = Date.now();
       for (const event of persisted) {
