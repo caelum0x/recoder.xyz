@@ -325,7 +325,7 @@ describe('A2AEventBus', () => {
 
       vi.useFakeTimers();
       vi.setSystemTime(new Date('2026-02-25T00:00:00.000Z'));
-      const shortTtlBus = new A2AEventBus();
+      const shortTtlBus = new A2AEventBus({ hydrate: false });
       shortTtlBus.publish(makeEvent({ id: 'evt_1' }));
       expect(shortTtlBus.getRecentEvents(10)).toHaveLength(1);
 
