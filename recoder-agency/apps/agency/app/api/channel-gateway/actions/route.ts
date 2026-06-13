@@ -22,6 +22,7 @@ import {
 import {
 	annotateRecoderTaskMetadata,
 	createAgencyDeliverableRevisionRun,
+	type CreateAgencyDeliverableRevisionRunInput,
 } from "@/lib/agency/recoder-control-plane";
 import { maybeRefreshWeeklyDeliveryMetrics } from "@/lib/agency/weekly-delivery-metrics-refresh";
 
@@ -56,7 +57,10 @@ const formatProjectLink = (projectId: string) => {
 
 async function createDeliverableRevisionRun(input: {
 	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
-	deliverable: Awaited<ReturnType<typeof db.query.deliverables.findFirst>>;
+	// Only the fields forwarded to createAgencyDeliverableRevisionRun are needed.
+	deliverable:
+		| CreateAgencyDeliverableRevisionRunInput["deliverable"]
+		| undefined;
 	feedback: string;
 	source: string;
 }) {
@@ -210,9 +214,7 @@ export async function POST(request: Request) {
 	if (!secret || !provided || secret.length !== provided.length) {
 		return new Response("Unauthorized", { status: 401 });
 	}
-	if (
-		!crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(provided))
-	) {
+	if (!crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(provided))) {
 		return new Response("Unauthorized", { status: 401 });
 	}
 
