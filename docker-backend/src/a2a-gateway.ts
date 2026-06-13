@@ -874,7 +874,16 @@ function verifyAdminToken(req: Request): { ok: true; scope: string | null } | { 
   }
 
   const expected = process.env.RECODER_A2A_ADMIN_TOKEN || '';
-  if (!expected) return { ok: true, scope: null };
+  // Fail closed: when no admin credential is configured, deny admin access
+  // instead of granting it to any caller (recoder-0zso). Production must set
+  // RECODER_A2A_ADMIN_TOKEN (or RECODER_A2A_ADMIN_TOKEN_SCOPES) to enable admin routes.
+  if (!expected) {
+    return {
+      ok: false,
+      status: 503,
+      error: 'Admin access is not configured (set RECODER_A2A_ADMIN_TOKEN)',
+    };
+  }
   if (!provided || provided !== expected) {
     return { ok: false, status: 401, error: 'Unauthorized admin token' };
   }
