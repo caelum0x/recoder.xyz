@@ -9,7 +9,9 @@ import {
   type AgentOsGatewayState,
 } from './agent-os-resources';
 
-export function createAgentOsHttpApp(state: AgentOsGatewayState = createAgentOsGatewayState()) {
+export function createAgentOsHttpApp(
+  state: AgentOsGatewayState = createAgentOsGatewayState(),
+): express.Express {
   const app = express();
   const a2aHandler = new A2AMessageHandler(undefined, createA2AAgentOsProjection(state));
 

@@ -72,7 +72,7 @@ export type AgentOsGatewayState = {
   policyDecisions: Map<string, PolicyDecision>;
   workLocks: Map<string, WorkLock>;
   events: RunEvent[];
-  outbox: OutboxRecord[];
+  outbox: OutboxRecord<unknown>[];
   ossComponents: Map<string, RecoderComponentDescriptor>;
 };
 
@@ -714,7 +714,7 @@ function refreshWorkSignals(
   const detectedIds = new Set(detected.map((signal) => signal.signalId));
 
   for (const signal of list(state.workSignals)) {
-    if (signal.metadata?.generatedBy === 'work_signal_service' && !detectedIds.has(signal.signalId)) {
+    if (signal.metadata?.['generatedBy'] === 'work_signal_service' && !detectedIds.has(signal.signalId)) {
       state.workSignals.delete(signal.signalId);
     }
   }
@@ -737,7 +737,7 @@ function workSignalSeverityRank(severity: WorkSignal['severity']): number {
   return { critical: 0, high: 1, medium: 2, low: 3 }[severity];
 }
 
-function appendOutboxRecord(state: AgentOsGatewayState, record: OutboxRecord): OutboxRecord {
+function appendOutboxRecord(state: AgentOsGatewayState, record: OutboxRecord<unknown>): OutboxRecord<unknown> {
   const existing = state.outbox.find((candidate) => candidate.outboxId === record.outboxId);
   if (existing) {
     return existing;
@@ -746,39 +746,39 @@ function appendOutboxRecord(state: AgentOsGatewayState, record: OutboxRecord): O
   return record;
 }
 
-function appendRunEventOutbox(state: AgentOsGatewayState, event: RunEvent): OutboxRecord {
+function appendRunEventOutbox(state: AgentOsGatewayState, event: RunEvent): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapRunEventToCloudEvent(event)));
 }
 
-function appendTaskOutbox(state: AgentOsGatewayState, task: TaskSpec): OutboxRecord {
+function appendTaskOutbox(state: AgentOsGatewayState, task: TaskSpec): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapTaskCreatedToCloudEvent({ data: task })));
 }
 
-function appendTaskRunOutbox(state: AgentOsGatewayState, run: TaskRun): OutboxRecord {
+function appendTaskRunOutbox(state: AgentOsGatewayState, run: TaskRun): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapTaskRunStateToCloudEvent({ data: run })));
 }
 
-function appendArtifactOutbox(state: AgentOsGatewayState, artifact: Artifact): OutboxRecord {
+function appendArtifactOutbox(state: AgentOsGatewayState, artifact: Artifact): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapArtifactToCloudEvent({ data: artifact })));
 }
 
-function appendRuntimeEvidenceOutbox(state: AgentOsGatewayState, evidence: RuntimeEvidence): OutboxRecord {
+function appendRuntimeEvidenceOutbox(state: AgentOsGatewayState, evidence: RuntimeEvidence): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapRuntimeEvidenceToCloudEvent({ data: evidence })));
 }
 
-function appendWorkSignalOutbox(state: AgentOsGatewayState, signal: WorkSignal): OutboxRecord {
+function appendWorkSignalOutbox(state: AgentOsGatewayState, signal: WorkSignal): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapWorkSignalToCloudEvent({ data: signal })));
 }
 
-function appendApprovalOutbox(state: AgentOsGatewayState, approval: Approval): OutboxRecord {
+function appendApprovalOutbox(state: AgentOsGatewayState, approval: Approval): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapApprovalToCloudEvent({ data: approval })));
 }
 
-function appendMemoryCandidateOutbox(state: AgentOsGatewayState, candidate: MemoryCandidate): OutboxRecord {
+function appendMemoryCandidateOutbox(state: AgentOsGatewayState, candidate: MemoryCandidate): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapMemoryCandidateToCloudEvent({ data: candidate })));
 }
 
-function appendMemoryItemOutbox(state: AgentOsGatewayState, item: MemoryItem): OutboxRecord {
+function appendMemoryItemOutbox(state: AgentOsGatewayState, item: MemoryItem): OutboxRecord<unknown> {
   return appendOutboxRecord(state, createOutboxRecord(mapMemoryItemAcceptedToCloudEvent({ data: item })));
 }
 
@@ -835,7 +835,7 @@ function resolveOrCreatePullRequestArtifact(
   body: Record<string, unknown>,
   link: GitHubDeliveryLink,
 ): Artifact {
-  const artifactId = optionalString(body.artifactId);
+  const artifactId = optionalString(body['artifactId']);
   if (artifactId) {
     const artifact = state.artifacts.get(artifactId);
     if (!artifact) {
@@ -847,14 +847,14 @@ function resolveOrCreatePullRequestArtifact(
   const artifact = artifacts.createPullRequest({
     taskId: link.taskId,
     runId: link.runId,
-    url: requiredString(body.url, 'url'),
-    number: typeof body.number === 'string' || typeof body.number === 'number' ? body.number : undefined,
-    branch: optionalString(body.branch) ?? link.branch,
-    repository: optionalString(body.repository) ?? link.repository,
-    title: optionalString(body.title),
-    public: typeof body.public === 'boolean' ? body.public : false,
-    createdBy: optionalString(body.createdBy) ?? optionalString(body.agentId) ?? 'agent-os',
-    metadata: isRecord(body.metadata) ? body.metadata : undefined,
+    url: requiredString(body['url'], 'url'),
+    number: typeof body['number'] === 'string' || typeof body['number'] === 'number' ? body['number'] : undefined,
+    branch: optionalString(body['branch']) ?? link['branch'],
+    repository: optionalString(body['repository']) ?? link['repository'],
+    title: optionalString(body['title']),
+    public: typeof body['public'] === 'boolean' ? body['public'] : false,
+    createdBy: optionalString(body['createdBy']) ?? optionalString(body['agentId']) ?? 'agent-os',
+    metadata: isRecord(body['metadata']) ? body['metadata'] : undefined,
   });
   state.artifacts.set(artifact.artifactId, artifact);
   appendArtifactOutbox(state, artifact);
@@ -867,7 +867,7 @@ function resolveOrCreatePreviewArtifact(
   body: Record<string, unknown>,
   link: GitHubDeliveryLink,
 ): Artifact {
-  const artifactId = optionalString(body.artifactId);
+  const artifactId = optionalString(body['artifactId']);
   if (artifactId) {
     const artifact = state.artifacts.get(artifactId);
     if (!artifact) {
@@ -879,12 +879,12 @@ function resolveOrCreatePreviewArtifact(
   const artifact = artifacts.createPreview({
     taskId: link.taskId,
     runId: link.runId,
-    url: requiredString(body.url, 'url'),
-    provider: optionalString(body.provider),
-    environment: optionalString(body.environment),
-    public: typeof body.public === 'boolean' ? body.public : false,
-    createdBy: optionalString(body.createdBy) ?? optionalString(body.agentId) ?? 'agent-os',
-    metadata: isRecord(body.metadata) ? body.metadata : undefined,
+    url: requiredString(body['url'], 'url'),
+    provider: optionalString(body['provider']),
+    environment: optionalString(body['environment']),
+    public: typeof body['public'] === 'boolean' ? body['public'] : false,
+    createdBy: optionalString(body['createdBy']) ?? optionalString(body['agentId']) ?? 'agent-os',
+    metadata: isRecord(body['metadata']) ? body['metadata'] : undefined,
   });
   state.artifacts.set(artifact.artifactId, artifact);
   appendArtifactOutbox(state, artifact);
@@ -909,8 +909,8 @@ function decideApprovalRequest(
     const decided = approvalService.decide(
       approval,
       status,
-      requiredString(body?.decidedBy, 'decidedBy'),
-      optionalString(body?.reason) ?? optionalString(body?.decisionReason),
+      requiredString(body?.['decidedBy'], 'decidedBy'),
+      optionalString(body?.['reason']) ?? optionalString(body?.['decisionReason']),
     );
     state.approvals.set(decided.approvalId, decided);
     appendApprovalOutbox(state, decided);
@@ -927,16 +927,16 @@ function maybeCreateApprovalFromPolicyDecision(
   decision: PolicyDecision,
   body: Record<string, unknown>,
 ): Approval | undefined {
-  if (body.createApproval === false) {
+  if (body['createApproval'] === false) {
     return undefined;
   }
 
   const approval = approvalService.requestFromPolicyDecision({
     decision,
-    runId: optionalString(body.runId),
-    requestedBy: optionalString(body.requestedBy),
-    requiredAt: readApprovalRequiredAt(body.requiredAt),
-    target: readApprovalTarget(body.target) ?? readApprovalTarget(decision.metadata),
+    runId: optionalString(body['runId']),
+    requestedBy: optionalString(body['requestedBy']),
+    requiredAt: readApprovalRequiredAt(body['requiredAt']),
+    target: readApprovalTarget(body['target']) ?? readApprovalTarget(decision.metadata),
     metadata: {
       source: 'policy_decision_ingress',
     },
@@ -956,18 +956,18 @@ function maybeCreateInstructionBundleArtifact(
   bundle: InstructionBundle,
   body: Record<string, unknown>,
 ): Artifact | undefined {
-  if (body.createArtifact === false) {
+  if (body['createArtifact'] === false) {
     return undefined;
   }
 
   const artifact = artifacts.createInstructionBundle({
     taskId: bundle.taskId,
-    runId: optionalString(body.runId),
+    runId: optionalString(body['runId']),
     bundle,
-    auditBundle: body.auditBundle,
-    createdBy: optionalString(body.createdBy) ?? bundle.agentId,
-    public: body.public === true,
-    metadata: isRecord(body.metadata) ? body.metadata : undefined,
+    auditBundle: body['auditBundle'],
+    createdBy: optionalString(body['createdBy']) ?? bundle.agentId,
+    public: body['public'] === true,
+    metadata: isRecord(body['metadata']) ? body['metadata'] : undefined,
   });
   state.artifacts.set(artifact.artifactId, artifact);
   appendArtifactOutbox(state, artifact);
@@ -984,17 +984,17 @@ function compileInstructionRequest(
     ...body,
     task,
     agent,
-    repoRoot: typeof body.repoRoot === 'string' && body.repoRoot.length > 0 ? body.repoRoot : process.cwd(),
+    repoRoot: typeof body['repoRoot'] === 'string' && body['repoRoot'].length > 0 ? body['repoRoot'] : process.cwd(),
   } as CompileAgentOsInstructionBundleInput;
 
   return compileAgentOsInstructionBundle(input);
 }
 
 function resolveTask(state: AgentOsGatewayState, body: Record<string, unknown>): TaskSpec {
-  if (isRecord(body.task)) {
-    return body.task as TaskSpec;
+  if (isRecord(body['task'])) {
+    return body['task'] as TaskSpec;
   }
-  const taskId = typeof body.taskId === 'string' ? body.taskId : undefined;
+  const taskId = typeof body['taskId'] === 'string' ? body['taskId'] : undefined;
   const task = taskId ? state.tasks.get(taskId) : undefined;
   if (!task) {
     throw new Error('task or taskId for an existing task is required');
@@ -1003,10 +1003,10 @@ function resolveTask(state: AgentOsGatewayState, body: Record<string, unknown>):
 }
 
 function resolveAgent(state: AgentOsGatewayState, body: Record<string, unknown>): AgentProfile {
-  if (isRecord(body.agent)) {
-    return body.agent as AgentProfile;
+  if (isRecord(body['agent'])) {
+    return body['agent'] as AgentProfile;
   }
-  const agentId = typeof body.agentId === 'string' ? body.agentId : undefined;
+  const agentId = typeof body['agentId'] === 'string' ? body['agentId'] : undefined;
   const agent = agentId ? state.agents.get(agentId) : undefined;
   if (!agent) {
     throw new Error('agent or agentId for an existing agent is required');
@@ -1057,9 +1057,9 @@ function readApprovalTarget(value: unknown): Approval['target'] | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
-  const path = optionalString(value.path);
-  const command = optionalString(value.command);
-  const toolName = optionalString(value.toolName);
+  const path = optionalString(value['path']);
+  const command = optionalString(value['command']);
+  const toolName = optionalString(value['toolName']);
   return path || command || toolName ? { path, command, toolName } : undefined;
 }
 
@@ -1079,11 +1079,11 @@ function markCompiledRun(
   body: Record<string, unknown>,
   instructionBundleId: string,
 ): TaskRun | undefined {
-  const requestedRunId = typeof body.runId === 'string' ? body.runId : undefined;
-  const taskId = typeof body.taskId === 'string'
-    ? body.taskId
-    : isRecord(body.task) && typeof body.task.taskId === 'string'
-      ? body.task.taskId
+  const requestedRunId = typeof body['runId'] === 'string' ? body['runId'] : undefined;
+  const taskId = typeof body['taskId'] === 'string'
+    ? body['taskId']
+    : isRecord(body['task']) && typeof body['task']['taskId'] === 'string'
+      ? body['task']['taskId']
       : undefined;
   const run = requestedRunId
     ? state.runs.get(requestedRunId)
@@ -1114,14 +1114,14 @@ function markRoutedRun(
   body: Record<string, unknown>,
   route: ReturnType<TaskRoutingService['route']>,
 ): TaskRun | undefined {
-  if (body.routeRun !== true && body.transitionToRouted !== true) {
+  if (body['routeRun'] !== true && body['transitionToRouted'] !== true) {
     return undefined;
   }
   if (route.blocked || !route.selectedAgentId) {
     return undefined;
   }
 
-  const requestedRunId = optionalString(body.runId);
+  const requestedRunId = optionalString(body['runId']);
   const run = requestedRunId
     ? state.runs.get(requestedRunId)
     : list(state.runs).find((candidate) => candidate.taskId === route.taskId && candidate.state === 'compiled');
@@ -1154,7 +1154,7 @@ function markClaimedRun(
   runId: string,
   body: Record<string, unknown>,
 ): TaskRun {
-  const agentId = requiredString(body.agentId, 'agentId');
+  const agentId = requiredString(body['agentId'], 'agentId');
   const run = state.runs.get(runId);
   if (!run) {
     throw new Error(`run not found: ${runId}`);
@@ -1209,27 +1209,27 @@ function markRequestedRunTransition(
     throw new Error(`run not found: ${runId}`);
   }
 
-  const nextState = requiredString(body.state, 'state') as TaskRunState;
+  const nextState = requiredString(body['state'], 'state') as TaskRunState;
   if (!isAllowedTaskRunTransition(run.state, nextState)) {
     throw new Error(`Invalid task run transition: ${run.state} -> ${nextState}`);
   }
 
-  const now = optionalString(body.now) ?? new Date().toISOString();
+  const now = optionalString(body['now']) ?? new Date().toISOString();
   const transitioned = transitionTaskRun(run, nextState, {
     now,
     metadata: {
-      ...(isRecord(body.metadata) ? body.metadata : {}),
-      transitionRequestedBy: optionalString(body.agentId) ?? optionalString(body.requestedBy) ?? 'agent-os',
+      ...(isRecord(body['metadata']) ? body['metadata'] : {}),
+      transitionRequestedBy: optionalString(body['agentId']) ?? optionalString(body['requestedBy']) ?? 'agent-os',
       transitionedAt: now,
     },
   });
   const updated = {
     ...transitioned,
-    assigneeAgentId: optionalString(body.assigneeAgentId) ?? transitioned.assigneeAgentId,
+    assigneeAgentId: optionalString(body['assigneeAgentId']) ?? transitioned['assigneeAgentId'],
   };
   state.runs.set(updated.runId, updated);
   appendStateTransitionEvent(state, run.state, updated, 'run_transition', {
-    requestedBy: optionalString(body.agentId) ?? optionalString(body.requestedBy),
+    requestedBy: optionalString(body['agentId']) ?? optionalString(body['requestedBy']),
   });
   return updated;
 }
@@ -1239,7 +1239,7 @@ function markDeliveredRun(
   body: Record<string, unknown>,
   artifact: Artifact,
 ): TaskRun | undefined {
-  if (body.deliver !== true && body.transitionToDelivered !== true) {
+  if (body['deliver'] !== true && body['transitionToDelivered'] !== true) {
     return undefined;
   }
   if (!artifact.runId) {
@@ -1251,8 +1251,8 @@ function markDeliveredRun(
     return undefined;
   }
 
-  const previousIds = Array.isArray(run.metadata?.deliveryArtifactIds)
-    ? run.metadata.deliveryArtifactIds.filter((value): value is string => typeof value === 'string')
+  const previousIds = Array.isArray(run.metadata?.['deliveryArtifactIds'])
+    ? run.metadata['deliveryArtifactIds'].filter((value): value is string => typeof value === 'string')
     : [];
   const transitioned = transitionTaskRun(run, 'delivered', {
     metadata: {
@@ -1333,7 +1333,7 @@ function maybeTransitionRunForArtifact(
   body: Record<string, unknown>,
   artifact: Artifact,
 ): TaskRun | undefined {
-  const requestedState = optionalString(body.transitionState) ?? optionalString(body.state);
+  const requestedState = optionalString(body['transitionState']) ?? optionalString(body['state']);
   if (!requestedState) {
     return undefined;
   }
@@ -1346,8 +1346,8 @@ function maybeTransitionRunForArtifact(
   const transitioned = transitionTaskRun(run, nextState, {
     metadata: {
       verificationArtifactId: artifact.artifactId,
-      verificationPassed: artifact.metadata?.passed,
-      verificationCommand: artifact.metadata?.command,
+      verificationPassed: artifact.metadata?.['passed'],
+      verificationCommand: artifact.metadata?.['command'],
     },
   });
   state.runs.set(transitioned.runId, transitioned);
