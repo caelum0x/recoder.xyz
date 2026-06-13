@@ -268,14 +268,6 @@ Status:
 
 - Active phase. This is the foundation layer for the rest of the product.
 
-### Current Implementation Progress
-
-- `docker-backend/src/a2a-gateway.ts` now binds paired bridge sessions to optional control-plane ownership metadata: `agentId`, `workspaceId`, `projectId`, `capabilities`, and arbitrary session metadata.
-- Bridge session pairing now reuses an existing token on reconnect when the same bridge, scope, agent, workspace, and project binding reconnects. This moves the bridge lane away from duplicate session registration and toward durable session identity.
-- Bridge heartbeats now inherit paired session ownership and reject mismatched `agentId`, `workspaceId`, or `projectId` claims instead of silently accepting conflicting identity.
-- Bridge session pairing now validates control-plane ownership against the workspace registry: bound workspaces must exist, `projectId` must match the workspace when provided, and the bound agent must already be a member of that workspace.
-- Session visibility now exposes the paired ownership metadata and the latest heartbeat together, which gives Agents and PM a stronger base for shared session visibility.
-
 ### What Is Still Missing In Phase 2
 
 - Bridge session identity is stronger, but it is not yet fully unified with the broader agent registry service, registry-backed health model, or durable registry reconciliation.
@@ -529,15 +521,6 @@ Coding task format:
 | Reuse shared workspace and project handoff primitives | agency project/workspace handoff surfaces | Make Agency consume control-plane ownership and workspace membership instead of inventing separate assignment semantics. | Project and workspace handoff preserve assignee identity, artifact links, and run history across Agency workflows. | Depends on stable workspace identity and agent membership primitives. |
 | Keep Agency downstream from the shared execution model | agency orchestration and delivery workflow design | Prevent Agency from becoming a parallel execution system with incompatible state or audit semantics. | Agency delivery workflows are backed by the same A2A history, artifacts, approvals, and handoffs used by PM and Agents. | Depends on Phase 2 remaining the canonical platform contract. |
 
-### Current Implementation Progress
-
-- Agency now consumes shared control-plane summaries from workspace snapshots when available and falls back to task contexts when not.
-- Admin and client project surfaces now show richer shared run state, including approvals, handoffs, evidence, artifacts, logs, previews, and session visibility.
-- Admin and client delivery-package exports now assemble project packages from shared run artifacts instead of a separate artifact store.
-- Client review decisions now write back into shared task metadata so approval/rejection lives on the shared run model, not only on Agency-side rows.
-- Rejected deliverables now create real follow-up shared runs across client portal, conversational review, and channel-gateway entrypoints.
-- Admin project handoff runs now create shared A2A tasks in the linked workspace instead of local-only assignment notes.
-
 ## Phase 4: Planning, Governance, and Runtime-Class Expansion
 
 Outcome:
@@ -565,18 +548,6 @@ Coding task format:
 | Keep human observation separate from automation semantics | VNC, operator tooling, and desktop-lane surfaces | Treat VNC as an observation and intervention surface, not as the source of truth for run state. | A desktop or browser run can be watched or inspected through VNC or similar tooling without making the observation surface the canonical run-history or approval system. | Depends on the control plane remaining the source of truth for state and audit history. |
 | Promote optional runtime classes after control-plane maturity | coding, browser, desktop, and computer-use integrations | Attach additional runtime classes to the same control plane once identity, history, policy, and approval semantics are stable. | A later browser or computer-use run can execute end to end without bypassing the shared control plane. | Depends on Phase 2 stability and deferred runtime backlog results when those integrations matter. |
 
-### Current Implementation Progress
-
-- Planning runs now exist as explicit shared A2A tasks from Agency admin project pages.
-- Governance runs now exist as explicit shared A2A tasks from Agency admin project pages and can also be triggered from cost-guardrail policy changes.
-- Project handoff runs now exist as explicit shared A2A tasks from Agency admin project pages.
-- Browser-task runs now exist as explicit shared A2A tasks with browser-oriented routing hints and upstream-informed runtime parameters from `agent-browser-upstream`.
-- Desktop/computer-use runs now exist as explicit shared A2A tasks with desktop-oriented routing hints and upstream-informed runtime parameters from `agent-computer-use-upstream`.
-- Delivery Ops can now launch project-set planning, governance, browser, and computer-use runs for the currently filtered risk set, not just single-project runs.
-- Agency transition history now surfaces control-plane governance metadata directly, including approval/handoff counts, evidence counts, cost guardrail state, and follow-up task IDs.
-- Project pages now expose project-scoped routing policy management directly, turning policy visibility into a real governance control surface.
-- Shared run launchers are now centralized through one Agency helper so planning, governance, handoff, browser, and desktop runs use a consistent task-creation path.
-
 ## Strategic Next Steps
 
 1. Deepen the browser-task lane so shared browser runs produce richer verified artifacts, not just routed tasks.
@@ -602,16 +573,6 @@ Coding task format:
 ## Roadmap-To-Code Status
 
 The previous roadmap-to-code handoff is now incorporated into this document and [remaining.md](/Users/arhansubasi/recoder.xyz/docs/remaining.md:1).
-
-Completed from that handoff:
-
-- shared bridge identity reconciliation and registry-first session visibility
-- preview deploy artifacts and protected preview access
-- `recoder-edge` scaffold for preview routing and route security policy
-- signed-in Space creation as the primary conversion path
-- connected agent records as the activation milestone
-- commercial entitlement enforcement for Spaces and connected agents
-- commercial quota compatibility across auth, billing, CLI, user quota, usage, analytics, and plan config
 
 Still active:
 
