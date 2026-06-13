@@ -79,7 +79,3 @@ Expected flow:
 - Make approvals first-class workflow states.
 - Store enough provenance to audit every run.
 - Fail safe and report truthful health.
-
-The instruction spine (canonical `AGENTS.md`, `CLAUDE.md` import contract,
-`.codex/AGENTS.md` override, and the drift-guard validator) is in place; verify
-with `pnpm agent:instructions:check`.
