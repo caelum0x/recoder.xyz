@@ -18,6 +18,7 @@ import { applyProjectTransitionWithAudit } from "./project-transition";
 import {
 	annotateRecoderTaskMetadata,
 	createAgencyDeliverableRevisionRun,
+	type CreateAgencyDeliverableRevisionRunInput,
 } from "./recoder-control-plane";
 import {
 	normalizeProjectStatus,
@@ -43,7 +44,11 @@ type OrchestratorResult = {
 
 async function createDeliverableRevisionRun(input: {
 	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
-	deliverable: Awaited<ReturnType<typeof db.query.deliverables.findFirst>>;
+	// Only the fields forwarded to createAgencyDeliverableRevisionRun are needed,
+	// so accept any caller that supplies that subset (full rows or scoped selects).
+	deliverable:
+		| CreateAgencyDeliverableRevisionRunInput["deliverable"]
+		| undefined;
 	feedback: string;
 	source: string;
 }): Promise<string | null> {
@@ -208,7 +213,7 @@ async function handleCreateBrief(params: {
 			brief: params.description,
 			clientName: params.name,
 			model: params.model,
-		}).catch(() => {})
+		}).catch(() => {}),
 	);
 
 	triggerQuoteGeneration({

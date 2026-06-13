@@ -1,3 +1,5 @@
+import type { TaskId } from "@recoder/protocol";
+
 const DEFAULT_BASE_URL =
 	process.env.DOCKER_BACKEND_URL ||
 	(process.env.NODE_ENV === "production"
@@ -266,7 +268,10 @@ export async function getRecoderTaskContext(
 			},
 		);
 		if (!response.ok) return null;
-		const json = (await response.json()) as { success?: boolean; data?: RecoderTaskContext };
+		const json = (await response.json()) as {
+			success?: boolean;
+			data?: RecoderTaskContext;
+		};
 		return json.success && json.data ? json.data : null;
 	} catch {
 		return null;
@@ -305,7 +310,7 @@ export async function annotateRecoderTaskMetadata(input: {
 
 export async function createRecoderTask(
 	input: CreateRecoderTaskInput,
-): Promise<{ taskId: string; state: string } | null> {
+): Promise<{ taskId: TaskId; state: string } | null> {
 	try {
 		const response = await fetch(`${DEFAULT_BASE_URL}/api/a2a/tasks`, {
 			method: "POST",
@@ -337,7 +342,7 @@ export async function createRecoderTask(
 		};
 		if (!json.success || !json.data?.id) return null;
 		return {
-			taskId: json.data.id,
+			taskId: json.data.id as TaskId,
 			state: json.data.state ?? "submitted",
 		};
 	} catch {
@@ -347,7 +352,7 @@ export async function createRecoderTask(
 
 export async function createAgencyWorkspaceRun(
 	input: CreateAgencyWorkspaceRunInput,
-): Promise<{ taskId: string; state: string } | null> {
+): Promise<{ taskId: TaskId; state: string } | null> {
 	return createRecoderTask({
 		workspaceId: input.workspaceId,
 		threadId: `${input.threadPrefix}-${input.entityId}-${Date.now()}`,
@@ -392,7 +397,7 @@ function buildRevisionRoutingHints(deliverableType: string | null | undefined) {
 
 export async function createAgencyDeliverableRevisionRun(
 	input: CreateAgencyDeliverableRevisionRunInput,
-): Promise<{ taskId: string; state: string } | null> {
+): Promise<{ taskId: TaskId; state: string } | null> {
 	const prompt = [
 		`Client requested revisions for deliverable "${input.deliverable.name}".`,
 		`Project: ${input.projectName}.`,
@@ -401,7 +406,9 @@ export async function createAgencyDeliverableRevisionRun(
 		input.deliverable.content
 			? `Current deliverable content:\n${input.deliverable.content.slice(0, 2000)}`
 			: null,
-	].filter(Boolean).join("\n\n");
+	]
+		.filter(Boolean)
+		.join("\n\n");
 
 	return createAgencyWorkspaceRun({
 		workspaceId: input.workspaceId,
@@ -527,8 +534,10 @@ export function summarizeRecoderTaskContexts(
 		summary.artifactCount += context.runtime?.artifactCount ?? 0;
 		summary.logCount += context.runtime?.logCount ?? 0;
 		summary.runtimeCount += context.runtime?.runtimeCount ?? 0;
-		summary.localBridgeSessions += context.assignee?.localBridgeSessions?.length ?? 0;
-		summary.pairedBridgeSessions += context.assignee?.pairedBridgeSessions?.length ?? 0;
+		summary.localBridgeSessions +=
+			context.assignee?.localBridgeSessions?.length ?? 0;
+		summary.pairedBridgeSessions +=
+			context.assignee?.pairedBridgeSessions?.length ?? 0;
 	}
 
 	return summary;
@@ -562,7 +571,9 @@ export async function buildRecoderProjectDeliveryPackage(input: {
 	}>;
 }): Promise<RecoderProjectDeliveryPackage> {
 	const contexts = await Promise.all(
-		input.deliverables.map((deliverable) => getRecoderTaskContext(deliverable.taskId)),
+		input.deliverables.map((deliverable) =>
+			getRecoderTaskContext(deliverable.taskId),
+		),
 	);
 	const summary = await buildRecoderProjectControlSummary({
 		workspaceId: input.workspaceId ?? null,
@@ -587,11 +598,18 @@ export async function buildRecoderProjectDeliveryPackage(input: {
 				handoffStatus: context?.links?.delegation?.status ?? null,
 				assigneeName: context?.assignee?.name ?? null,
 				agentOnline: context?.assignee?.registry?.online ?? null,
-				previewUrls: context?.task.result?.preview?.map((preview) => preview.url) ?? [],
+				previewUrls:
+					context?.task.result?.preview?.map((preview) => preview.url) ?? [],
 				filesChanged: context?.runtime?.filesChanged ?? [],
 				gitBranch: context?.runtime?.git?.branch ?? null,
-				reviewBranch: context?.review?.worktree?.branchName ?? context?.review?.merge?.branchName ?? null,
-				reviewPath: context?.review?.worktree?.worktreePath ?? context?.review?.handoff?.reviewPath ?? null,
+				reviewBranch:
+					context?.review?.worktree?.branchName ??
+					context?.review?.merge?.branchName ??
+					null,
+				reviewPath:
+					context?.review?.worktree?.worktreePath ??
+					context?.review?.handoff?.reviewPath ??
+					null,
 				reviewStatus: context?.review?.handoff?.status ?? null,
 				mergeStatus: context?.review?.merge?.status ?? null,
 				reviewHistory: context?.review?.history ?? [],
@@ -611,10 +629,12 @@ export async function buildRecoderProjectDeliveryPackage(input: {
 			(deliverable) => deliverable.controlPlane.reviewStatus === "review-ready",
 		).length,
 		mergeRequestedCount: deliverables.filter(
-			(deliverable) => deliverable.controlPlane.mergeStatus === "merge-requested",
+			(deliverable) =>
+				deliverable.controlPlane.mergeStatus === "merge-requested",
 		).length,
 		readyToMergeCount: deliverables.filter(
-			(deliverable) => deliverable.controlPlane.mergeStatus === "ready-to-merge",
+			(deliverable) =>
+				deliverable.controlPlane.mergeStatus === "ready-to-merge",
 		).length,
 		branches: Array.from(
 			new Set(

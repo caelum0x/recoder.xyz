@@ -32,6 +32,7 @@ import {
 import {
 	annotateRecoderTaskMetadata,
 	createAgencyDeliverableRevisionRun,
+	type CreateAgencyDeliverableRevisionRunInput,
 } from "@/lib/agency/recoder-control-plane";
 import { maybeRefreshWeeklyDeliveryMetrics } from "@/lib/agency/weekly-delivery-metrics-refresh";
 import { getAMBDispatcher } from "../../../../../../lib/amb-singleton";
@@ -228,7 +229,10 @@ const formatProjectLink = (projectId: string) => {
 
 async function createDeliverableRevisionRun(input: {
 	project: Awaited<ReturnType<typeof db.query.projects.findFirst>>;
-	deliverable: Awaited<ReturnType<typeof db.query.deliverables.findFirst>>;
+	// Only the fields forwarded to createAgencyDeliverableRevisionRun are needed.
+	deliverable:
+		| CreateAgencyDeliverableRevisionRunInput["deliverable"]
+		| undefined;
 	feedback: string;
 	source: string;
 }) {
@@ -374,9 +378,7 @@ export async function POST(request: Request) {
 	if (!secret || !provided || secret.length !== provided.length) {
 		return new Response("Unauthorized", { status: 401 });
 	}
-	if (
-		!crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(provided))
-	) {
+	if (!crypto.timingSafeEqual(Buffer.from(secret), Buffer.from(provided))) {
 		return new Response("Unauthorized", { status: 401 });
 	}
 
@@ -1119,7 +1121,14 @@ export async function POST(request: Request) {
 		}
 
 		const milestoneDeliverables = await db
-			.select({ dbId: deliverables.dbId, id: deliverables.id })
+			.select({
+				dbId: deliverables.dbId,
+				id: deliverables.id,
+				taskId: deliverables.taskId,
+				name: deliverables.name,
+				type: deliverables.type,
+				content: deliverables.content,
+			})
 			.from(deliverables)
 			.where(
 				and(
@@ -1896,9 +1905,7 @@ export async function POST(request: Request) {
 			// Execute the intent via the agent orchestrator
 			const workflowId = `conv_${conversationDbId}`;
 			const taskId = `msg_${payload.messageId}`;
-			const ambDispatcher = isAmbDispatchEnabled()
-				? getAMBDispatcher()
-				: null;
+			const ambDispatcher = isAmbDispatchEnabled() ? getAMBDispatcher() : null;
 			if (ambDispatcher) {
 				void ambDispatcher.onWorkflowStart(
 					workflowId,
@@ -2020,7 +2027,9 @@ function triggerAsyncQuoteGeneration(params: {
 			);
 			const model = await createOpenRouterModel("openai/gpt-4o-mini");
 			if (!model) {
-				console.warn("Skipping quote generation: no BYOK OpenRouter key configured");
+				console.warn(
+					"Skipping quote generation: no BYOK OpenRouter key configured",
+				);
 				return;
 			}
 			const { generateQuoteFromBrief } = await import(
