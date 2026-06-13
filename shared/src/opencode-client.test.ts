@@ -2,7 +2,7 @@
  * Tests for the shared opencode HTTP client.
  *
  * This client is used by any package that needs to talk to an opencode
- * HTTP service — docker-backend, recoder-web, recoder-agents, etc.
+ * HTTP service — docker-backend, recoder-agents, etc.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
