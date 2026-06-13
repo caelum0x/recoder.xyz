@@ -104,20 +104,6 @@ These are surfaces and layers around one workspace, not separate flagship produc
 - Those runtime issues should not block Phase 2 or later control-plane work unless a hard dependency appears.
 - The active execution lane starts with shared A2A contracts, durable agent identity, PM approvals and handoffs, shared workspace ownership, and cross-surface run history inside Recoder Spaces that Agency can consume next.
 
-## Production Snapshot
-
-| Surface | URL or scope | Current truth |
-| --- | --- | --- |
-| Hub | `recoder.xyz` | Core auth and main-site flows are live. |
-| Agents | `agents.recoder.xyz` | Authenticated core flow is verified live, including `/v1/agent/start` and follow-up chat rendering. This is the operator and agent-control surface for workspace membership, session visibility, approvals, handoffs, and run activity. |
-| PM | `pm.recoder.xyz` | Feature-route `Invalid URL` crash is fixed live. `View in portal` still needs positive UI verification. This is the human approval, reject, decision, and handoff surface, not just a downstream viewer. |
-| Agency | `agency.recoder.xyz` | Previously verified on key authenticated routes. It is the Phase 3 consumer of shared control-plane primitives for delivery packaging, client approval loops, and artifact-backed handoff. |
-| Shared A2A control plane | `packages/a2a-sdk`, `tools/a2a-interop` | Active implementation lane. Canonical envelope, validation, error taxonomy, state mapping, signed ingress expectations, bridge contracts, orchestration history, and session visibility live here. |
-| API Backend | `api.recoder.xyz` | No new public API blocker beyond control-plane and runtime coordination. |
-| Spaces | `legacy web IDE runtime lane` | Deferred runtime-backlog surface. First-turn authenticated build requests reach the coding runtime, but preview proof is still not reliable enough to trust the lane end to end. |
-| Docker Backend | `docker.recoder.xyz` | Deferred runtime-backlog surface. Daytona preview routing is explicit and signed preview flow is live, but build-mode runtime and preview responsiveness remain the main backend risk. |
-| Docs | `docs.recoder.xyz` | Live. |
-
 ## Active Product Proof
 
 Near-term platform work is only complete when the evidence shows:
@@ -307,24 +293,7 @@ Coding task format:
 
 The runtime issues below are still real. They stay documented because they may matter later, but they are not the active gate for Phase 2 or Phase 3 control-plane execution.
 
-### Verified Working Paths
-
-- the legacy web-IDE `create-sandbox` endpoint can return `200`.
-- `docker.recoder.xyz/api/container` can create or recover a Daytona-backed project mapping.
-- first-turn browser build requests now emit `/api/chat`.
-- Daytona preview health can return signed preview URLs for the candidate ports.
-- `agents.recoder.xyz` authenticated start flow and follow-up chat rendering are verified live.
-
 ### Active Runtime Blockers
-
-> 2026-05-31 root cause (recoder-g69j / gm8z): The Daytona control plane (`/root/daytona/docker/docker-compose.yaml`, project `daytona`) is down at the core, for TWO compounding reasons:
-> 1. **Partial deployment** — only 5 of ~14 services were up (api, proxy, redis, registry-ui, ssh-gateway). `db` (Postgres), `runner` (the privileged sandbox executor), `dex`, and `registry` were never started. `daytona-api-1` crash-looped 44,917× on `getaddrinfo EAI_AGAIN db`. FIXED PARTIALLY 2026-05-31: brought up the `db` service (`docker compose up -d db`, fresh `daytona_db_data` volume) — this stopped the crash-loop (api restarts 44,917 → 0).
-> 2. **Broken bridge networking** — the remaining blocker. From inside `daytona-api-1`, TCP connects to BOTH `db:5432` and `redis:6379` time out even though docker DNS resolves the names and the services answer locally (redis PONG). Recreating api/redis did not help. This is inter-container connectivity failure on `daytona_daytona-network` (iptables/bridge corruption), which also explains the proxy's `dial tcp …:3000 i/o timeout`. So `:3900/api/config` stays unreachable and no sandboxes can be created → build-mode 200s with "Container not found".
->
-> RESOLVED 2026-05-31 (control plane): recreated the daytona stack network (`docker compose down` removed the corrupted `daytona_daytona-network`; `up -d` rebuilt it) with a temp swapfile + prod OOM-shielding. Inter-container TCP now works (api→db:5432 and api→redis:6379 both CONNECT OK, were TIMEOUT). Brought up the missing services in dependency order — db, redis, dex, registry, **minio** (api had a fatal `EAI_AGAIN minio` S3 error), api, proxy. **daytona-api is now healthy and `:3900/api/config` returns 200**; proxy is healthy too. Production (recoder-app/agents/pm/agency) stayed up throughout; temp swap removed and OOM shields reset afterward.
->
->
-> RESOLVED 2026-05-31 (runner and sandbox creation): built the missing `dist/libs/computer-use-amd64` artifact in a Go container, rebuilt `daytona-runner-custom:latest` from `/root/daytona/apps/runner/Dockerfile`, patched the runner compose entrypoint to use `/usr/local/bin/dockerd-entrypoint.sh & /usr/local/bin/daytona-runner`, and started `daytona-runner-1` healthy on `:3003`. The API/runner path is verified end to end: a disposable admin API key created a Daytona sandbox from `daytonaio/sandbox:0.5.0-slim`, the runner completed the `CREATE_SANDBOX` job, the sandbox reached `started`, and cleanup destroyed the sandbox and removed verifier API keys. Also corrected the freshly seeded Personal organization per-sandbox quotas from `0` to the configured defaults so valid sandbox creates are not forbidden. Remaining runtime work is now product-lane proof: rerun the Spaces build verifier and fix any app-level mutation/preview issues it exposes.
 
 #### 1. Build-mode runtime can still end without responding preview proof
 

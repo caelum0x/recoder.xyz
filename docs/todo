@@ -1,39 +1,33 @@
 # Recoder — Open Work (not-done only)
 
-Backlog of outstanding work only. Shipped history lives in git + commit messages + closed `bd` issues.
-Source-of-truth order: plan.md (execution) → remaining.md (paid-user gate) → prd.md/product.md (product) → this file.
+Outstanding work only. Shipped history lives in git + closed `bd` issues — not here.
+Source-of-truth order: plan.md → remaining.md → prd.md/product.md → this file.
 
 ## Paid-user launch gate (blocks first paid users)
 
-Each item below is the *remaining* slice; the supporting implementation has shipped and is covered by local tests.
-
-- **GitHub delivery** — deployed GitHub adapter/webhook verification against the production PR-artifact flow. (Shipped: typed repo connection, task↔branch delivery links, PR/preview artifacts, check/review sync, issue linking, signed-payload webhook ingestion + local regression.)
-- **Task timeline** — deployed UI/API verification of the shared `task → A2A ingress → runtime events → artifact → PR → preview → approval` timeline against real paid-user data (not demo/per-page state). (Shipped: shared run history, gateway→Agent OS projection, `/api/agent-os/events` legal state changes, RunHistoryService regression.)
-- **CloudEvent outbox** — production enablement + NATS JetStream verification on the deployed stack. (Shipped: `GET /api/agent-os/outbox`, durable `recoder.>` drain, opt-in drain loop via `AGENT_OS_OUTBOX_DRAIN_ENABLED` / `_INTERVAL_MS`.)
-- **Instruction provenance** — deployed UI verification of compiled InstructionBundle artifacts. (Shipped: compile/ingest → `instruction_bundle` artifact storage with source/memory/approval/provenance + content hash, summary + Agents control-plane rows.)
-- **Runtime evidence** — deployed runtime-adapter coverage/proof for real sandbox sessions across every paid-user runtime. (Shipped: runtime-evidence model + `/api/agent-os/runtime-evidence`, A2A terminal-result persistence into evidence + outbox.)
-- **MCP approval loop** — deployed PM verification against real MCP tool calls. (Shipped: canonical `PolicyDecision` records, `needs_approval` vs hard deny, PM approve/reject wired to `/api/agent-os/approvals/:id/{approve,reject}`.)
-- **Live edge/preview rollout** — DNS, TLS, protected preview hosts, rate limits, WAF hooks, production verification (`recoder-zvss`). *Infra access required.*
-- **Hetzner deploy hygiene** — resolve local↔prod git divergence so full deploys don't need scoped checkout/build handling (`recoder-js56`). *Infra access required.*
-- **Production traffic/abuse controls** — real-traffic threshold tuning + production alert review (`recoder-a9rp`, `recoder-rbc2`). (Shipped: rate-limit→abuse escalation/blocklist, opt-in payload inspection via `ABUSE_PAYLOAD_INSPECTION_ENABLED`.)
+- GitHub delivery: deployed adapter/webhook verification against the production PR-artifact flow; deeper issue/linking polish.
+- Task timeline: deployed UI/API verification of `task → A2A → runtime events → artifact → PR → preview → approval` against real paid-user data.
+- CloudEvent outbox: production enablement + NATS JetStream verification on the deployed stack.
+- Instruction provenance: deployed UI verification of compiled InstructionBundle artifacts.
+- Runtime evidence: deployed runtime-adapter coverage for real sandbox sessions across every paid-user runtime.
+- MCP approval loop: deployed PM verification against real MCP tool calls.
+- Live edge/preview rollout: DNS, TLS, protected preview hosts, rate limits, WAF hooks, production verification (`recoder-zvss`).
+- Hetzner deploy hygiene: reconcile local↔prod git divergence so full deploys don't need scoped checkout/build handling (`recoder-js56`).
+- Production traffic/abuse controls: real-traffic threshold tuning + production alert review (`recoder-a9rp`, `recoder-rbc2`).
 
 ## Security / hardening
 
-- **[recoder-0zso] `/api/a2a/*` auth — remaining surface closure.** Done: admin auth fails closed when `RECODER_A2A_ADMIN_TOKEN` is unset; bridge tokens are session/secret-verified (no anon bypass); 29/35 routes use `authenticateRequest` with the REST/git/terminal/workspace/search/scratchpad/connector/orchestration/workflow slices closed and owner-scoped workspace access. **Still open:** broad per-route enforcement on the legacy `/api/a2a/*` task + workspace *mutating* routes that internal services (agency/agents/pm) currently call **without** auth headers — requires an internal-service-key auth path + full product-loop runtime verification before enforcing (must not break server-to-server calls). `.well-known/agent.json` stays public by spec.
+- [recoder-0zso] `/api/a2a/*` auth — broad per-route enforcement on the legacy task + workspace *mutating* routes that internal services (agency/agents/pm) currently call without auth headers. Needs an internal-service-key auth path + full product-loop runtime verification before enforcing. `.well-known/agent.json` stays public by spec.
 
 ## Capability layer — follow-ups (prod, infra access required)
 
-- Self-host on prod: bring up Qdrant + ziti (NOT Ollama/vLLM — 16GB/no-GPU box); set cloud LLM + Gemini keys per `docker-backend/.env.capabilities.recoder-server`.
+- Bring up Qdrant + ziti on prod (NOT Ollama/vLLM — 16GB/no-GPU box); set cloud LLM + Gemini keys per `docker-backend/.env.capabilities.recoder-server`.
 - Stand up OpenZiti controller end-to-end + provision a runner (`scripts/provision-ziti-runner.sh`); needs CA trust (`NODE_EXTRA_CA_CERTS`).
 - Free prod disk (94% used; 135GB is vcpeer — do not touch) before enabling capability backends.
 
-## Known non-blocking issues (filed in bd)
+## Open issues (filed in bd)
 
-- **[recoder-6eyv]** `packages/protocol` DTS build broken by ai-sdk v3→v5 type drift (`LanguageModelV2Usage` / `UIMessage`). Not part of `build:agent-os`. Fix = align catalog `ai` + `@ai-sdk/provider` versions or update the imports.
-- **[recoder-2wxl]** 4 pre-existing `docker-backend` test failures (suite otherwise 2937/2941): agent-bridge heartbeat metadata precedence (bridge vs registry default — design decision), canvas-routes parallel-run flake, stale BYOK error-message assertion (billing intent).
-- **[recoder-26j7]** Remaining retired-`recoder-web` removal (app already deleted): legacy CLI `packages/recoder-code/.../commands/web` IDE launchers, agency build-trigger, `scripts/a2a-smoke-test.ts`, and the `deploy-*.sh` targets (deploy scripts = approval-gated). Keep the unrelated `recoder-web-search` tool.
-- **[recoder-1ht0]** Remaining Agent OS scaffold app-integration checks: recoder-agents OSS-registry UI, PAL tool grants, MCP audit-hook behavior, route-ownership decisions. (Build/type/test gates already green — see below.)
-
-## Verified-green baseline (do not re-litigate; for context)
-
-`build:agent-os` (~22 pkgs) · agent-os contracts 10/10 · evals 7/7 · `agent:instructions:check`; tsc 0 errors across app / recoder-agents / recoder-pm / recoder-agency / docker-backend; test suites: agency 253/253, recoder-agents 195/195, shared 160/160, a2a routes 34/34, docker-backend 2937/2941. Fresh-checkout build no longer broken (`.gitignore` secret-glob over-match fixed, `recoder-0n1f` closed).
+- [recoder-6eyv] `packages/protocol` DTS build broken by ai-sdk v3→v5 type drift (`LanguageModelV2Usage` / `UIMessage`).
+- [recoder-2wxl] agent-bridge heartbeat metadata precedence (bridge vs registry default), canvas-routes parallel-run flake, stale BYOK error-message assertion.
+- [recoder-26j7] retired-`recoder-web` removal: CLI `commands/web` IDE launchers, agency build-trigger, `scripts/a2a-smoke-test.ts`, `deploy-*.sh` targets (approval-gated). Keep the unrelated `recoder-web-search` tool.
+- [recoder-1ht0] Agent OS scaffold app-integration checks: recoder-agents OSS-registry UI, PAL tool grants, MCP audit-hook behavior, route-ownership decisions.
