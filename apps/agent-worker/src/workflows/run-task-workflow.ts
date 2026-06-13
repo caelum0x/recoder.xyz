@@ -44,10 +44,10 @@ function createRuntimeResolver(
   runtimes: Record<string, RuntimeAdapterPort>,
 ): NonNullable<AgentOsWorkflowRunnerPorts['resolveRuntime']> {
   return async (node) => {
-    const runtimeId = readString(node.config.runtimeId)
-      ?? readString(node.config.adapterId)
-      ?? readString(node.config.agentId)
-      ?? readString(node.config.kind);
+    const runtimeId = readString(node.config['runtimeId'])
+      ?? readString(node.config['adapterId'])
+      ?? readString(node.config['agentId'])
+      ?? readString(node.config['kind']);
     return runtimeId ? runtimes[runtimeId] : undefined;
   };
 }
@@ -57,17 +57,17 @@ async function requestApprovalNode(
   context: WorkflowExecutionContext,
 ): Promise<WorkflowNodeHandlerResult> {
   const now = new Date().toISOString();
-  const taskId = context.task?.taskId ?? readString(node.config.taskId) ?? 'task_unknown';
+  const taskId = context.task?.['taskId'] ?? readString(node.config['taskId']) ?? 'task_unknown';
   const approval: Approval = {
-    approvalId: readString(node.config.approvalId) ?? `approval_${context.workflowRunId}_${node.nodeId}`,
+    approvalId: readString(node.config['approvalId']) ?? `approval_${context.workflowRunId}_${node.nodeId}`,
     taskId,
     runId: context.workflowRunId,
     status: 'pending',
-    reason: readString(node.config.reason) ?? node.label,
-    requestedBy: readString(node.config.requestedBy) ?? 'agent-worker',
+    reason: readString(node.config['reason']) ?? node.label,
+    requestedBy: readString(node.config['requestedBy']) ?? 'agent-worker',
     requestedAt: now,
-    requiredAt: readApprovalRequiredAt(node.config.requiredAt),
-    target: readApprovalTarget(node.config.target),
+    requiredAt: readApprovalRequiredAt(node.config['requiredAt']),
+    target: readApprovalTarget(node.config['target']),
     metadata: {
       workflowId: context.definition.workflowId,
       nodeId: node.nodeId,
@@ -126,7 +126,7 @@ function createWorkerArtifact(
   content: Record<string, unknown>,
 ): Artifact {
   const now = new Date().toISOString();
-  const taskId = context.task?.taskId ?? readString(node.config.taskId) ?? 'task_unknown';
+  const taskId = context.task?.['taskId'] ?? readString(node.config['taskId']) ?? 'task_unknown';
 
   return {
     artifactId: `artifact_${context.workflowRunId}_${node.nodeId}`,
@@ -174,9 +174,9 @@ function readApprovalTarget(value: unknown): Approval['target'] | undefined {
     return undefined;
   }
   return {
-    path: readString(value.path),
-    command: readString(value.command),
-    toolName: readString(value.toolName),
+    path: readString(value['path']),
+    command: readString(value['command']),
+    toolName: readString(value['toolName']),
   };
 }
 
