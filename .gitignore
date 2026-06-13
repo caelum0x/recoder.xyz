@@ -103,6 +103,11 @@ database.json
 *api_key*
 credentials.json
 service-account*.json
+
+# Exceptions: legitimate source files whose names contain "secret"/"token" but
+# carry no credential material. These must stay in version control or builds
+# break on a fresh checkout. (Broader cleanup tracked in beads.)
+!packages/agent-policy/src/rules/secret-access.ts
 *password*
 *passwd*
 
