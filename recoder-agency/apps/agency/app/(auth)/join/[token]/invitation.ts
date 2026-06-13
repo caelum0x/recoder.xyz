@@ -1,0 +1,147 @@
+import { and, type ExtractTablesWithRelations, eq, isNull } from "drizzle-orm";
+import type { PgTransaction } from "drizzle-orm/pg-core";
+import type { VercelPgQueryResultHKT } from "drizzle-orm/vercel-postgres";
+import {
+	db,
+	db as dbInstance,
+	invitations,
+	type TeamRole,
+	teamMemberships,
+	teams,
+} from "@/db";
+import { getSessionUser } from "@/lib/auth/server";
+import type { CurrentTeam, TeamId } from "@/services/teams";
+import { handleMemberChange } from "@/services/teams/member-change";
+import type * as schema from "../../../../db/schema";
+import { JoinError } from "./errors";
+
+type InvitationToken = {
+	token: string;
+	teamId: TeamId;
+	teamDbId: number;
+	teamName: string;
+	invitedEmail: string;
+	expiredAt: Date;
+	role: TeamRole;
+};
+
+export async function fetchInvitationToken(
+	token: string,
+	tx:
+		| PgTransaction<
+				VercelPgQueryResultHKT,
+				typeof schema,
+				ExtractTablesWithRelations<typeof schema>
+		  >
+		| typeof db = dbInstance,
+	withLock = false,
+): Promise<InvitationToken | null> {
+	const baseQuery = tx
+		.select({
+			token: invitations.token,
+			teamDbId: invitations.teamDbId,
+			invitedEmail: invitations.email,
+			expiredAt: invitations.expiredAt,
+			revokedAt: invitations.revokedAt,
+			role: invitations.role,
+			teamName: teams.name,
+			teamId: teams.id,
+		})
+		.from(invitations)
+		.innerJoin(teams, eq(invitations.teamDbId, teams.dbId))
+		.where(and(eq(invitations.token, token), isNull(invitations.revokedAt)))
+		.limit(1);
+
+	const query = withLock ? baseQuery.for("update") : baseQuery;
+
+	const result = await query;
+	const row = result[0];
+	if (!row) {
+		return null;
+	}
+
+	return {
+		token: row.token,
+		teamId: row.teamId as TeamId,
+		teamDbId: row.teamDbId,
+		teamName: row.teamName,
+		invitedEmail: row.invitedEmail,
+		expiredAt: row.expiredAt,
+		role: row.role,
+	};
+}
+
+async function fetchTeamWithSubscription(
+	teamDbId: number,
+): Promise<CurrentTeam | null> {
+	const [team] = await db
+		.select({
+			id: teams.id,
+			dbId: teams.dbId,
+			name: teams.name,
+			avatarUrl: teams.avatarUrl,
+			plan: teams.plan,
+			activeSubscriptionId: teams.activeSubscriptionId,
+			activeCustomerId: teams.activeCustomerId,
+		})
+		.from(teams)
+		.where(eq(teams.dbId, teamDbId));
+
+	if (!team) {
+		return null;
+	}
+
+	return {
+		id: team.id as TeamId,
+		dbId: team.dbId,
+		name: team.name,
+		avatarUrl: team.avatarUrl,
+		plan: team.plan,
+		activeSubscriptionId: team.activeSubscriptionId,
+		activeCustomerId: team.activeCustomerId,
+	};
+}
+
+export async function acceptInvitation(token: string) {
+	if (token.trim() === "") {
+		throw new JoinError("expired");
+	}
+
+	let user: { id: string; dbId: number; email: string | null };
+	try {
+		user = await getSessionUser();
+	} catch {
+		throw new JoinError("wrong_email");
+	}
+
+	const invitationTeamDbId = await db.transaction(async (tx) => {
+		const invitation = await fetchInvitationToken(token, tx, true);
+		if (!invitation || invitation.expiredAt < new Date()) {
+			throw new JoinError("expired");
+		}
+		if (user.email !== invitation.invitedEmail) {
+			throw new JoinError("wrong_email");
+		}
+
+		await tx
+			.insert(teamMemberships)
+			.values({
+				userDbId: user.dbId,
+				teamDbId: invitation.teamDbId,
+				role: invitation.role,
+			})
+			.onConflictDoNothing(); // ignore if the user is already a member of the team
+		await tx
+			.update(invitations)
+			.set({ revokedAt: new Date() })
+			.where(eq(invitations.token, token));
+
+		return invitation.teamDbId;
+	});
+
+	// Fetch team data and handle member change for usage-based billing outside of transaction
+	const teamData = await fetchTeamWithSubscription(invitationTeamDbId);
+	if (teamData) {
+		await handleMemberChange(teamData);
+	}
+}
