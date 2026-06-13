@@ -555,8 +555,10 @@ type ParsedBridgeResultEnvelope = {
   legacyEnvelope?: GatewayEnvelope;
   canonicalEnvelope?: TaskEnvelope;
   threadId: string;
-  traceId: string;
-  workspaceId: string;
+  // Optional: only present when the bridge result carries full run context.
+  // Run-history attachment is skipped when these are absent (see route guard).
+  traceId: string | null;
+  workspaceId: string | null;
   taskId: string | null;
   messageId: string;
   metadata: Record<string, unknown>;
@@ -602,19 +604,16 @@ function parseBridgeResultEnvelopeFromUnknown(
     asOptionalString(legacy.envelope.trace?.traceId) ||
     asOptionalString(metadata.traceId) ||
     asOptionalString(metadata.trace_id);
-  if (!workspaceId) {
-    return { ok: false, issues: [{ path: `${sourcePath}.metadata.workspaceId`, message: 'is required for bridge result history' }] };
-  }
-  if (!traceId) {
-    return { ok: false, issues: [{ path: `${sourcePath}.trace.traceId`, message: 'is required for bridge result history' }] };
-  }
+  // workspaceId/traceId are optional: a bridge result without full run context
+  // is still accepted (stored + dispatched); run-history attachment downstream
+  // is guarded on their presence, so it is simply skipped when they are absent.
   return {
     ok: true,
     parsed: {
       legacyEnvelope: legacy.envelope,
       threadId: legacy.envelope.threadId,
-      traceId,
-      workspaceId,
+      traceId: traceId ?? null,
+      workspaceId: workspaceId ?? null,
       taskId:
         asOptionalString(metadata.taskId) ||
         asOptionalString(metadata.task_id),
