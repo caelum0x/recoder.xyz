@@ -80,17 +80,6 @@ Expected flow:
 - Store enough provenance to audit every run.
 - Fail safe and report truthful health.
 
-## Current PR Scope
-
-This instruction-spine pass establishes the base layer needed for later work:
-
-- canonical root policy in `AGENTS.md`
-- Claude import contract in `CLAUDE.md`
-- Codex override file in `.codex/AGENTS.md`
-- a validation script that fails when the spine drifts
-
-Verification command:
-
-```bash
-pnpm agent:instructions:check
-```
+The instruction spine (canonical `AGENTS.md`, `CLAUDE.md` import contract,
+`.codex/AGENTS.md` override, and the drift-guard validator) is in place; verify
+with `pnpm agent:instructions:check`.
