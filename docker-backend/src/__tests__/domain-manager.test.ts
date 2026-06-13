@@ -106,7 +106,7 @@ describe('Domain Manager - CRUD Operations', () => {
       expect(result.domain!.projectId).toBe('project-1');
       expect(result.domain!.userId).toBe('user-1');
       expect(result.domain!.status).toBe('pending_dns');
-      expect(result.domain!.cnameTarget).toBe('web.recoder.xyz');
+      expect(result.domain!.cnameTarget).toBe('docker.recoder.xyz');
       expect(result.domain!.txtVerificationValue).toMatch(/^recoder-verify=/);
     });
 
@@ -303,7 +303,7 @@ describe('Domain Manager - DNS Verification', () => {
   it('should verify domain via CNAME record', async () => {
     domainManager.addDomain('myapp.example.com', 'project-1', 'user-1');
 
-    mockCnameResolve = vi.fn(async () => ['web.recoder.xyz']);
+    mockCnameResolve = vi.fn(async () => ['docker.recoder.xyz']);
 
     const result = await domainManager.verifyDns('myapp.example.com');
     expect(result.verified).toBe(true);
@@ -313,7 +313,7 @@ describe('Domain Manager - DNS Verification', () => {
   it('should verify domain via CNAME with trailing dot', async () => {
     domainManager.addDomain('myapp.example.com', 'project-1', 'user-1');
 
-    mockCnameResolve = vi.fn(async () => ['web.recoder.xyz.']);
+    mockCnameResolve = vi.fn(async () => ['docker.recoder.xyz.']);
 
     const result = await domainManager.verifyDns('myapp.example.com');
     expect(result.verified).toBe(true);
@@ -361,7 +361,7 @@ describe('Domain Manager - DNS Verification', () => {
 
   it('should update domain status to dns_verified on success', async () => {
     domainManager.addDomain('myapp.example.com', 'project-1', 'user-1');
-    mockCnameResolve = vi.fn(async () => ['web.recoder.xyz']);
+    mockCnameResolve = vi.fn(async () => ['docker.recoder.xyz']);
 
     await domainManager.verifyDns('myapp.example.com');
 
@@ -393,7 +393,7 @@ describe('Domain Manager - SSL Provisioning', () => {
     domainManager.addDomain('myapp.example.com', 'project-1', 'user-1');
 
     // Verify DNS first
-    mockCnameResolve = vi.fn(async () => ['web.recoder.xyz']);
+    mockCnameResolve = vi.fn(async () => ['docker.recoder.xyz']);
     await domainManager.verifyDns('myapp.example.com');
 
     // Clear ACME_EMAIL

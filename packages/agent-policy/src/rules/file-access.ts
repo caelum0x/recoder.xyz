@@ -18,6 +18,10 @@ function hasWriteLock(input: PolicyInput): boolean {
 export function evaluateFileAccess(input: PolicyInput): PolicyDecision | null {
   const path = input.target.path;
   if (path) {
+    const forbidden = (input.task?.forbiddenPaths ?? []).find((glob) => globMatch(glob, path));
+    if (forbidden) {
+      return decision(input, 'deny', `Path is forbidden by task spec: ${path}`, [{ path }]);
+    }
     const matched = input.actor.permissions.pathRules.find((rule) => globMatch(rule.glob, path));
     if (matched?.effect === 'deny') {
       return decision(input, 'deny', matched.reason ?? `Path denied by policy: ${path}`, [{ path }]);
