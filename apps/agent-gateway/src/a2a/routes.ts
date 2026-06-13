@@ -24,8 +24,8 @@ export type A2ARouterOptions = {
 
 function unwrapPayload<T>(body: unknown, options: A2ARouterOptions): T {
   const verification = verifyGatewaySignedEnvelope<T>(body, {
-    secret: options.signingSecret ?? process.env.RECODER_A2A_SHARED_SECRET,
-    requireSignature: options.requireSignedEnvelope ?? process.env.RECODER_A2A_REQUIRE_SIGNATURE === 'true',
+    secret: options.signingSecret ?? process.env['RECODER_A2A_SHARED_SECRET'],
+    requireSignature: options.requireSignedEnvelope ?? process.env['RECODER_A2A_REQUIRE_SIGNATURE'] === 'true',
   });
   if (!verification.ok) {
     const error = new Error(verification.error);

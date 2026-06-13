@@ -230,33 +230,33 @@ function ensureProjectionRun(state: AgentOsGatewayState, task: TaskEnvelope, spe
 function taskSpecFromEnvelope(task: TaskEnvelope): TaskSpec {
   const metadata = record(task.metadata);
   const data = payloadData(task.payload);
-  const taskData = record(data.task) ?? record(data.taskSpec);
+  const taskData = record(data['task']) ?? record(data['taskSpec']);
   const text = payloadText(task.payload);
-  const title = stringValue(taskData?.title)
-    ?? stringValue(data.title)
-    ?? stringValue(metadata?.title)
+  const title = stringValue(taskData?.['title'])
+    ?? stringValue(data['title'])
+    ?? stringValue(metadata?.['title'])
     ?? firstLine(text)
     ?? `A2A task ${task.id}`;
 
   return {
     taskId: task.id,
     title,
-    intent: taskIntent(stringValue(taskData?.intent) ?? stringValue(data.intent) ?? stringValue(metadata?.intent)),
-    goal: stringValue(taskData?.goal) ?? stringValue(data.goal) ?? stringValue(data.prompt) ?? text ?? title,
+    intent: taskIntent(stringValue(taskData?.['intent']) ?? stringValue(data['intent']) ?? stringValue(metadata?.['intent'])),
+    goal: stringValue(taskData?.['goal']) ?? stringValue(data['goal']) ?? stringValue(data['prompt']) ?? text ?? title,
     spaceId: task.workspace_id,
-    repo: stringValue(taskData?.repo) ?? stringValue(data.repo) ?? stringValue(metadata?.repo),
-    branchPolicy: branchPolicy(stringValue(taskData?.branchPolicy) ?? stringValue(taskData?.branch_policy) ?? stringValue(data.branchPolicy)),
-    targetPaths: stringList(taskData?.targetPaths) ?? stringList(taskData?.target_paths) ?? stringList(data.targetPaths) ?? [],
-    forbiddenPaths: stringList(taskData?.forbiddenPaths) ?? stringList(taskData?.forbidden_paths) ?? stringList(data.forbiddenPaths) ?? [],
-    acceptanceCriteria: stringList(taskData?.acceptanceCriteria) ?? stringList(taskData?.acceptance) ?? stringList(data.acceptanceCriteria) ?? [],
+    repo: stringValue(taskData?.['repo']) ?? stringValue(data['repo']) ?? stringValue(metadata?.['repo']),
+    branchPolicy: branchPolicy(stringValue(taskData?.['branchPolicy']) ?? stringValue(taskData?.['branch_policy']) ?? stringValue(data['branchPolicy'])),
+    targetPaths: stringList(taskData?.['targetPaths']) ?? stringList(taskData?.['target_paths']) ?? stringList(data['targetPaths']) ?? [],
+    forbiddenPaths: stringList(taskData?.['forbiddenPaths']) ?? stringList(taskData?.['forbidden_paths']) ?? stringList(data['forbiddenPaths']) ?? [],
+    acceptanceCriteria: stringList(taskData?.['acceptanceCriteria']) ?? stringList(taskData?.['acceptance']) ?? stringList(data['acceptanceCriteria']) ?? [],
     verification: {
       commands: verificationCommands(taskData) ?? verificationCommands(data) ?? [],
-      browserChecks: stringList(record(taskData?.verification)?.browserChecks) ?? stringList(record(data.verification)?.browserChecks),
-      evidenceRequired: stringList(record(taskData?.verification)?.evidenceRequired) ?? stringList(record(data.verification)?.evidenceRequired),
+      browserChecks: stringList(record(taskData?.['verification'])?.['browserChecks']) ?? stringList(record(data['verification'])?.['browserChecks']),
+      evidenceRequired: stringList(record(taskData?.['verification'])?.['evidenceRequired']) ?? stringList(record(data['verification'])?.['evidenceRequired']),
     },
-    approvalRequired: stringList(taskData?.approvalRequired) ?? stringList(taskData?.approval_required) ?? stringList(data.approvalRequired) ?? [],
-    artifactRequired: stringList(taskData?.artifactRequired) ?? stringList(taskData?.artifact_required) ?? stringList(data.artifactRequired) ?? [],
-    handoff: handoffFromRecord(record(taskData?.handoff) ?? record(data.handoff)),
+    approvalRequired: stringList(taskData?.['approvalRequired']) ?? stringList(taskData?.['approval_required']) ?? stringList(data['approvalRequired']) ?? [],
+    artifactRequired: stringList(taskData?.['artifactRequired']) ?? stringList(taskData?.['artifact_required']) ?? stringList(data['artifactRequired']) ?? [],
+    handoff: handoffFromRecord(record(taskData?.['handoff']) ?? record(data['handoff'])),
     metadata: {
       ...metadata,
       source: 'a2a',
@@ -443,11 +443,11 @@ function runtimeEvidenceFromA2A(
     kind,
     status: runtimeEvidenceStatusFromArtifact(a2aArtifact),
     title: `A2A ${a2aArtifact.artifact_type}`,
-    summary: artifact.path ?? (typeof artifact.metadata?.url === 'string' ? artifact.metadata.url : undefined),
+    summary: artifact.path ?? (typeof artifact.metadata?.['url'] === 'string' ? artifact.metadata['url'] : undefined),
     source: {
       runtimeId: task.assignee.agent_id,
       adapterId: task.connector.connector_id,
-      url: typeof artifact.metadata?.url === 'string' ? artifact.metadata.url : undefined,
+      url: typeof artifact.metadata?.['url'] === 'string' ? artifact.metadata['url'] : undefined,
     },
     artifactIds: [artifact.artifactId],
     observedAt,
@@ -478,14 +478,14 @@ function runtimeEvidenceKindForA2AArtifact(type: TaskArtifact['artifact_type']):
 }
 
 function runtimeEvidenceStatusFromArtifact(artifact: TaskArtifact): RuntimeEvidence['status'] {
-  const status = artifact.metadata?.status;
+  const status = artifact.metadata?.['status'];
   if (status === 'passed' || status === 'failed' || status === 'warning' || status === 'observed') {
     return status;
   }
-  if (artifact.metadata?.passed === true) {
+  if (artifact.metadata?.['passed'] === true) {
     return 'passed';
   }
-  if (artifact.metadata?.passed === false) {
+  if (artifact.metadata?.['passed'] === false) {
     return 'failed';
   }
   return 'observed';
@@ -549,8 +549,8 @@ function handoffFromRecord(value: Record<string, unknown> | undefined): TaskSpec
   if (!value) {
     return undefined;
   }
-  const reviewer = stringValue(value.reviewer);
-  const finalOwner = stringValue(value.finalOwner) ?? stringValue(value.final_owner);
+  const reviewer = stringValue(value['reviewer']);
+  const finalOwner = stringValue(value['finalOwner']) ?? stringValue(value['final_owner']);
   return reviewer || finalOwner ? { reviewer, finalOwner } : undefined;
 }
 
@@ -558,10 +558,10 @@ function verificationCommands(value: Record<string, unknown> | undefined): strin
   if (!value) {
     return undefined;
   }
-  const verification = record(value.verification);
-  return stringList(verification?.commands)
-    ?? stringList(value.verificationCommands)
-    ?? stringList(value.verify);
+  const verification = record(value['verification']);
+  return stringList(verification?.['commands'])
+    ?? stringList(value['verificationCommands'])
+    ?? stringList(value['verify']);
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
