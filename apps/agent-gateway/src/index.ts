@@ -21,7 +21,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const app = createAgentOsHttpApp();
   const sessions = new AgentSessionRegistry();
   const mcp = createDefaultMcpRegistry();
-  const port = Number(process.env.AGENT_GATEWAY_PORT ?? 4317);
+  const port = Number(process.env['AGENT_GATEWAY_PORT'] ?? 4317);
 
   app.get('/api/agent-os/sessions', (_req, res) => {
     res.json({ success: true, data: sessions.list() });

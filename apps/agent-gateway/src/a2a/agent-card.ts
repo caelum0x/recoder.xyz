@@ -1,4 +1,4 @@
-import type { AgentCard } from '@recoder/a2a-sdk';
+import type { AgentCard } from '@recoder/a2a-sdk/schemas';
 
 export type AgentGatewayCardOptions = {
   baseUrl?: string;
@@ -6,7 +6,7 @@ export type AgentGatewayCardOptions = {
 };
 
 export function createAgentGatewayCard(options: AgentGatewayCardOptions = {}): AgentCard {
-  const baseUrl = options.baseUrl ?? process.env.RECODER_AGENT_GATEWAY_URL ?? 'http://localhost:4317';
+  const baseUrl = options.baseUrl ?? process.env['RECODER_AGENT_GATEWAY_URL'] ?? 'http://localhost:4317';
 
   return {
     id: 'recoder-agent-gateway',
@@ -59,8 +59,8 @@ export function createAgentGatewayCard(options: AgentGatewayCardOptions = {}): A
 }
 
 export function isExtendedAgentCardAuthorized(headers: Record<string, string | string[] | undefined>): boolean {
-  const auth = headers.authorization;
+  const auth = headers['authorization'];
   const token = Array.isArray(auth) ? auth[0] : auth;
-  const expected = process.env.RECODER_API_TOKEN ?? process.env.AGENT_GATEWAY_TOKEN;
+  const expected = process.env['RECODER_API_TOKEN'] ?? process.env['AGENT_GATEWAY_TOKEN'];
   return Boolean(expected && token === `Bearer ${expected}`);
 }
