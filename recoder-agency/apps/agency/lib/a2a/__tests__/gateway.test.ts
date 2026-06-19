@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { beforeEach, test } from "vitest";
 import type { RecoderA2AEnvelope } from "@recoder/shared/a2a";
 import {
 	__createSignatureForTest,
@@ -59,7 +59,7 @@ async function buildHeaders(rawBody: string, opts?: {
 // Setup
 // ---------------------------------------------------------------------------
 
-test.beforeEach(() => {
+beforeEach(() => {
 	process.env.RECODER_A2A_SHARED_SECRET = SECRET;
 	process.env.RECODER_A2A_ALLOWED_AGENTS = "sender";
 	delete process.env.RECODER_A2A_EGRESS_ALLOWLIST;

@@ -200,12 +200,17 @@ class A2AEventBus {
     /** Track event IDs published by this instance to avoid re-emitting our own NATS messages. */
     _localEventIds = new Set();
     static LOCAL_ID_CAP = 10_000;
-    constructor() {
+    /**
+     * @param options.hydrate - when false, the bus starts empty instead of loading
+     *   persisted events from disk. Defaults to true (production behavior). Tests
+     *   pass false to avoid coupling assertions to on-disk runtime state.
+     */
+    constructor(options = {}) {
         this.emitter = new events_1.EventEmitter();
         // Allow many concurrent SSE listeners without warning
         this.emitter.setMaxListeners(0);
-        // Hydrate recent events from disk
-        const persisted = (0, a2a_persistence_1.loadA2AEvents)();
+        // Hydrate recent events from disk (unless explicitly disabled)
+        const persisted = options.hydrate === false ? [] : (0, a2a_persistence_1.loadA2AEvents)();
         if (persisted.length > 0) {
             const now = Date.now();
             for (const event of persisted) {

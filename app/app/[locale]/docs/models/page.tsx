@@ -1,6 +1,11 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, Sparkles, Zap, Brain, DollarSign, Clock, Shield, CheckCircle } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
+
+export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/docs/models' },
+};
 
 export default function ModelsGuidePage() {
   return (

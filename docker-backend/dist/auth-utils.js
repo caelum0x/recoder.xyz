@@ -5,9 +5,12 @@ exports.getProjectIdFromRequest = getProjectIdFromRequest;
 exports.isLikelySandboxProjectId = isLikelySandboxProjectId;
 exports.getAnonymousIdFromRequest = getAnonymousIdFromRequest;
 exports.resolveA2ASystemSession = resolveA2ASystemSession;
+exports.resolveInternalServiceSession = resolveInternalServiceSession;
 exports.isStrictAuthMode = isStrictAuthMode;
+const node_crypto_1 = require("node:crypto");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const SAFE_INTERNAL_SERVICE_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 exports.RECODER_ANONYMOUS_ID_COOKIE = 'recoder_anonymous_id';
 exports.RECODER_ANONYMOUS_ID_HEADER = 'x-recoder-anonymous-id';
 function parseCookies(cookieHeader) {
@@ -124,10 +127,55 @@ function resolveA2ASystemSession(token, query = {}) {
         sessionId,
     };
 }
+function resolveInternalServiceSession(req, configuredKey = process.env.INTERNAL_SERVICE_KEY) {
+    const normalizedKey = configuredKey?.trim();
+    if (!normalizedKey) {
+        return null;
+    }
+    const provided = readInternalServiceKey(req);
+    if (!provided || !safeEqual(provided, normalizedKey)) {
+        return null;
+    }
+    const serviceId = readInternalServiceId(req) ?? 'service';
+    return {
+        userId: `internal:${serviceId}`,
+        sessionId: `internal:${serviceId}`,
+    };
+}
 function isStrictAuthMode() {
-    // Allow explicit override via STRICT_AUTH=false (needed for web.recoder.xyz anonymous container creation)
+    // Allow explicit override via STRICT_AUTH=false for local sandbox development.
     if (process.env.STRICT_AUTH === 'false')
         return false;
     const nodeEnv = process.env.NODE_ENV || 'development';
     return process.env.REQUIRE_AUTH === 'true' || nodeEnv === 'production';
+}
+function readInternalServiceKey(req) {
+    const fromHeader = firstHeaderValue(req.headers['x-internal-service-key']);
+    if (fromHeader) {
+        return fromHeader;
+    }
+    const authorization = firstHeaderValue(req.headers.authorization);
+    if (authorization?.startsWith('Bearer ')) {
+        return authorization.slice('Bearer '.length).trim() || undefined;
+    }
+    return undefined;
+}
+function readInternalServiceId(req) {
+    const fromHeader = firstHeaderValue(req.headers['x-internal-service-id'])
+        ?? firstHeaderValue(req.headers['x-internal-service-name']);
+    if (!fromHeader) {
+        return undefined;
+    }
+    return SAFE_INTERNAL_SERVICE_ID_RE.test(fromHeader) ? fromHeader : undefined;
+}
+function firstHeaderValue(value) {
+    if (Array.isArray(value)) {
+        return value.find((entry) => entry.trim().length > 0)?.trim();
+    }
+    return value?.trim() || undefined;
+}
+function safeEqual(left, right) {
+    const leftBuffer = Buffer.from(left);
+    const rightBuffer = Buffer.from(right);
+    return leftBuffer.length === rightBuffer.length && (0, node_crypto_1.timingSafeEqual)(leftBuffer, rightBuffer);
 }

@@ -47,6 +47,7 @@ export function GenerationRunner({ generation }: { generation: Generation }) {
 			);
 			return null;
 		}
+		case "squadStep":
 		case "end":
 			return null;
 		default: {

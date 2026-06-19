@@ -24,6 +24,8 @@ exports.loadA2AEvents = loadA2AEvents;
 exports.saveA2AEvents = saveA2AEvents;
 exports.loadA2AAgentRegistryState = loadA2AAgentRegistryState;
 exports.saveA2AAgentRegistryState = saveA2AAgentRegistryState;
+exports.loadA2AMemoryCandidates = loadA2AMemoryCandidates;
+exports.saveA2AMemoryCandidates = saveA2AMemoryCandidates;
 const persistence_js_1 = require("../persistence.js");
 // ---------------------------------------------------------------------------
 // Store names (resolve to data/a2a-*.json)
@@ -34,6 +36,7 @@ const TASKS_STORE = 'a2a-tasks';
 const APPROVALS_STORE = 'a2a-approvals';
 const EVENTS_STORE = 'a2a-events';
 const AGENT_REGISTRY_STORE = 'a2a-agent-registry';
+const MEMORY_CANDIDATES_STORE = 'a2a-memory-candidates';
 /** Maximum number of recent events persisted to disk. */
 const MAX_PERSISTED_EVENTS = 1000;
 /** Debounce delay for high-frequency writes (tasks, events). */
@@ -155,4 +158,19 @@ function saveA2AAgentRegistryState(input) {
         heartbeats: [...input.heartbeats.entries()],
         lifecycle: [...input.lifecycle.entries()],
     }, DEBOUNCE_MS);
+}
+// ---------------------------------------------------------------------------
+// Memory candidates
+// ---------------------------------------------------------------------------
+function loadA2AMemoryCandidates() {
+    const entries = (0, persistence_js_1.loadStore)(MEMORY_CANDIDATES_STORE, []);
+    try {
+        return new Map(entries);
+    }
+    catch {
+        return new Map();
+    }
+}
+function saveA2AMemoryCandidates(candidates) {
+    (0, persistence_js_1.saveStore)(MEMORY_CANDIDATES_STORE, [...candidates.entries()]);
 }

@@ -18,6 +18,8 @@ exports.getPipelineOrchestrator = getPipelineOrchestrator;
 exports.resetPipelineOrchestrator = resetPipelineOrchestrator;
 const logger_1 = require("../../logger");
 const task_lifecycle_service_1 = require("../task-lifecycle.service");
+const compiled_instructions_1 = require("../compiled-instructions");
+const a2a_1 = require("@recoder/shared/a2a");
 const logger = logger_1.logger.child({ component: 'a2a-pipeline' });
 // ---------------------------------------------------------------------------
 // Output transforms
@@ -160,8 +162,9 @@ class PipelineOrchestrator {
             try {
                 // Create a timeout race if step.timeoutMs is specified
                 const timeoutMs = step.timeoutMs ?? 30000;
+                const request = this.buildTaskExecutionRequest(execution, step, resolvedPrompt);
                 const result = await Promise.race([
-                    executor(step.agentId, resolvedPrompt),
+                    this.invokeTaskExecutor(executor, request),
                     new Promise((_, reject) => setTimeout(() => reject(new Error(`Step ${step.stepId} timed out after ${timeoutMs}ms`)), timeoutMs)),
                 ]);
                 const stepCompletedAt = new Date();
@@ -275,6 +278,53 @@ class PipelineOrchestrator {
         this.executions.clear();
         this.cancelledIds.clear();
         logger.debug('PipelineOrchestrator reset');
+    }
+    buildTaskExecutionRequest(execution, step, prompt) {
+        const envelope = (0, a2a_1.createTaskEnvelope)({
+            id: (0, task_lifecycle_service_1.generateId)('pipe-task'),
+            workspace_id: 'pipeline-orchestrator',
+            thread_id: `pipeline-${execution.executionId}`,
+            trace_id: execution.executionId,
+            requester: {
+                agent_id: 'pipeline-orchestrator',
+                platform: 'recoder_backend',
+                name: 'Pipeline Orchestrator',
+            },
+            assignee: {
+                agent_id: step.agentId,
+                platform: 'custom',
+            },
+            connector: {
+                connector_id: `pipeline-step:${step.stepId}`,
+                platform: 'custom',
+                protocol: 'rest',
+            },
+            payload: {
+                kind: 'text',
+                text: prompt,
+            },
+            metadata: {
+                pipelineId: execution.pipelineId,
+                executionId: execution.executionId,
+                stepId: step.stepId,
+                source: 'pipeline-orchestrator',
+            },
+            tags: ['pipeline-step'],
+        });
+        return {
+            pipelineId: execution.pipelineId,
+            executionId: execution.executionId,
+            stepId: step.stepId,
+            agentId: step.agentId,
+            prompt,
+            envelope,
+            instructionBundle: (0, compiled_instructions_1.compileInstructionBundleForTask)(envelope),
+        };
+    }
+    async invokeTaskExecutor(executor, request) {
+        return executor.__agentOsStructured === true
+            ? executor(request)
+            : executor(request.agentId, request.prompt);
     }
 }
 exports.PipelineOrchestrator = PipelineOrchestrator;

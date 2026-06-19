@@ -1,6 +1,11 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, Sparkles, Terminal, Globe, Repeat, CheckCircle, AlertCircle, Zap, Code, Cloud } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
+
+export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/docs/web-cli-sync' },
+};
 
 export default function WebCLISyncGuidePage() {
   return (

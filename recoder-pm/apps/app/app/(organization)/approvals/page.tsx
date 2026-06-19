@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { Button } from "@repo/design-system/components/ui/button";
+import { decideAgentOsApproval } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,14 @@ type AgentOsApproval = {
   requestedBy?: string;
   requestedAt?: string;
   requiredAt?: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  decisionReason?: string;
+  target?: {
+    path?: string;
+    command?: string;
+    toolName?: string;
+  };
 };
 
 type AgentOsResponse<T> = {
@@ -63,6 +73,9 @@ async function loadApprovals(): Promise<{
 
 const ApprovalsPage = async () => {
   const { source, approvals, error } = await loadApprovals();
+  const pendingCount = approvals.filter((approval) =>
+    approval.status === "pending" || approval.status === "escalated"
+  ).length;
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-6 p-6 py-16">
@@ -88,7 +101,7 @@ const ApprovalsPage = async () => {
             </p>
           </div>
           <div className="rounded-full border px-3 py-1 font-medium text-sm">
-            {approvals.length} approvals
+            {pendingCount} pending · {approvals.length} total
           </div>
         </div>
 
@@ -110,15 +123,68 @@ const ApprovalsPage = async () => {
                 className="rounded-lg border p-4"
                 key={approval.approvalId ?? `${approval.taskId}-${approval.requestedAt}`}
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="m-0 font-medium">{approval.reason ?? "Approval request"}</h3>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="grid gap-1">
+                    <h3 className="m-0 font-medium">{approval.reason ?? "Approval request"}</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Task {approval.taskId ?? "unknown"} · Required {approval.requiredAt ?? "by policy"}
+                    </p>
+                  </div>
                   <span className="rounded-full bg-muted px-2 py-1 text-xs">
                     {approval.status ?? "unknown"}
                   </span>
                 </div>
-                <p className="mt-2 text-muted-foreground text-sm">
-                  Task {approval.taskId ?? "unknown"} · Required {approval.requiredAt ?? "by policy"}
-                </p>
+
+                <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">Requested by</dt>
+                    <dd>{approval.requestedBy ?? "unknown"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Requested at</dt>
+                    <dd>{approval.requestedAt ?? "unknown"}</dd>
+                  </div>
+                  {approval.target?.toolName || approval.target?.command || approval.target?.path ? (
+                    <div className="sm:col-span-2">
+                      <dt className="text-muted-foreground">Target</dt>
+                      <dd className="font-mono text-xs">
+                        {approval.target.toolName ?? approval.target.command ?? approval.target.path}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {approval.decidedAt ? (
+                    <div className="sm:col-span-2">
+                      <dt className="text-muted-foreground">Decision</dt>
+                      <dd>
+                        {approval.decidedBy ?? "unknown"} · {approval.decidedAt}
+                        {approval.decisionReason ? ` · ${approval.decisionReason}` : ""}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+
+                {approval.approvalId && (approval.status === "pending" || approval.status === "escalated") ? (
+                  <form action={decideAgentOsApproval} className="mt-4 grid gap-3 border-t pt-4">
+                    <input name="approvalId" type="hidden" value={approval.approvalId} />
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-muted-foreground">Decision reason</span>
+                      <input
+                        className="rounded-md border bg-background px-3 py-2"
+                        name="reason"
+                        placeholder="Optional"
+                        type="text"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button name="decision" type="submit" value="approve">
+                        Approve
+                      </Button>
+                      <Button name="decision" type="submit" value="reject" variant="destructive">
+                        Reject
+                      </Button>
+                    </div>
+                  </form>
+                ) : null}
               </article>
             ))
           )}

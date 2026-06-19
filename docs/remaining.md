@@ -16,10 +16,15 @@ production verification plus the edge/deploy infra below.
 ## Priority order
 
 1. **GitHub repo connection + PR artifacts** — deployed GitHub adapter/webhook
-   verification against the production PR-artifact flow; deeper issue/linking polish.
+   verification against the production PR-artifact flow; `pnpm --dir docker-backend
+   run agent-os:verify-paid-loop` now provides the repeatable API-level
+   PR/preview/delivery-link evidence path; deeper issue/linking polish.
 
 2. **Main task timeline** — deployed UI/API verification of the
-   `task → artifact → PR → preview → approval` path against real paid-user data.
+   `task → instruction bundle → runtime evidence → artifact → PR → preview →
+   approval → history/outbox` path against real paid-user data. The Agent OS UI
+   now renders the API summary evidence cards locally; production proof is still
+   required.
 
 3. **Live preview + edge rollout** (`recoder-zvss`) — live edge host routing,
    DNS/TLS, private preview hosts, rate limits, WAF hooks, production rollout
@@ -38,6 +43,14 @@ production verification plus the edge/deploy infra below.
 Hosted sandbox runner breadth · full browser-task lane · desktop/computer-use lane ·
 marketplace · full Cloudflare-like edge product · Recoder Launch / GTM Radar ·
 broad Agency OS features beyond review/approval/client-safe delivery.
+
+> Correction (2026-06-19): "Hosted sandbox runner breadth" here covers only the
+> *expansion* of the sandbox lane, not its baseline. The base Daytona sandbox
+> stack (8 containers) was STOPPED and its images REMOVED on 2026-06-19 to free
+> disk at zero traffic — it is now dormant/re-provision-on-demand, not running.
+> It is NOT deleted from the roadmap, but it must be re-stood-up before the
+> paid-user runtime works. Treat re-provisioning the base Daytona runner as
+> launch-blocking, separate from the deferred breadth above.
 
 ## Operating rule
 

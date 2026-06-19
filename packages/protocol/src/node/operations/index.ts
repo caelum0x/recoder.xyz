@@ -6,5 +6,6 @@ export * from "./end";
 export * from "./image-generation";
 export * from "./operation-node";
 export * from "./query";
+export * from "./squad-step";
 export * from "./text-generation";
 export * from "./trigger";

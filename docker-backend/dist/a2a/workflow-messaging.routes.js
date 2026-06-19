@@ -91,7 +91,22 @@ function syncDelegationToTaskMetadata(delegation, patch, reason) {
  * For agents without an endpoint, creates the task and returns a reference
  * for async polling.
  */
-async function executeAgentTask(agentId, prompt) {
+async function executeAgentTask(agentIdOrRequest, promptArg) {
+    const request = typeof agentIdOrRequest === 'string'
+        ? {
+            workflowId: 'legacy-workflow',
+            executionId: 'legacy-execution',
+            stepId: 'legacy-step',
+            agentId: agentIdOrRequest,
+            prompt: promptArg ?? '',
+            envelope: null,
+            instructionBundle: null,
+            context: {},
+        }
+        : agentIdOrRequest;
+    const agentId = request.agentId;
+    const prompt = request.instructionBundle?.agent_specific_prompt ?? request.prompt;
+    const requestContext = request.context;
     const registry = (0, agent_registry_service_1.getAgentRegistryService)();
     const agent = registry.get(agentId);
     if (!agent) {
@@ -105,8 +120,8 @@ async function executeAgentTask(agentId, prompt) {
     // Create task using the legacy input format (compatible with existing service)
     const task = taskService.createTask({
         prompt,
-        workspace_id: 'default',
-        thread_id: `workflow-${Date.now()}`,
+        workspace_id: requestContext._workspaceId || 'default',
+        thread_id: requestContext._threadId || `workflow-${Date.now()}`,
         assignee_agent_id: agentId,
         requester_agent_id: 'workflow-engine',
     });
@@ -118,7 +133,11 @@ async function executeAgentTask(agentId, prompt) {
             const response = await fetch(`${agent.card.url}/tasks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ taskId: task.id, prompt }),
+                body: JSON.stringify({
+                    taskId: task.id,
+                    prompt,
+                    ...(request.instructionBundle ? { instructionBundle: request.instructionBundle } : {}),
+                }),
                 signal: controller.signal,
             });
             clearTimeout(timeout);

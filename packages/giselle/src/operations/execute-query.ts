@@ -254,6 +254,7 @@ async function resolveQuery(
 
 			case "trigger":
 			case "action":
+			case "squadStep":
 			case "appEntry": {
 				const result = await generationContentResolver(
 					contextNode.id,

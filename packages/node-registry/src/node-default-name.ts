@@ -7,6 +7,7 @@ import {
 	isEndNode,
 	isImageGenerationNode,
 	isQueryNode,
+	isSquadStepNode,
 	isTextGenerationNode,
 	isTriggerNode,
 	isVectorStoreNode,
@@ -95,6 +96,11 @@ export function defaultName(node: NodeLike) {
 						throw new Error(`Expected end node, got ${node.type}`);
 					}
 					return node.name ?? "End";
+				case "squadStep":
+					if (!isSquadStepNode(node)) {
+						throw new Error(`Expected squad step node, got ${node.type}`);
+					}
+					return node.name ?? "Squad Step";
 				case "appEntry":
 					return node.name ?? "Start";
 				default: {

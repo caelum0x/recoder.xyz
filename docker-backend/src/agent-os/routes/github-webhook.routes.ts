@@ -60,7 +60,10 @@ export function createAgentOsGitHubWebhookRouter(): Router {
   return router;
 }
 
-async function ingestGitHubWebhook(event: string, payload: Record<string, unknown>): Promise<{ event: string; matched: boolean; linkId?: string; status?: GitHubDeliveryLink['status'] }> {
+export async function ingestGitHubWebhook(
+  event: string,
+  payload: Record<string, unknown>,
+): Promise<{ event: string; matched: boolean; linkId?: string; status?: GitHubDeliveryLink['status'] }> {
   if (event === 'ping') {
     return { event, matched: true };
   }
@@ -109,7 +112,14 @@ async function ingestPullRequestWebhook(event: string, payload: Record<string, u
   const storedArtifact = await agentOsContainer.repository.upsertArtifact(artifact);
   await appendArtifactOutbox(storedArtifact);
 
-  const updated = githubDelivery.attachPullRequest(link, storedArtifact, stringAt(pullRequest, 'updated_at') ?? undefined);
+  let updated = githubDelivery.attachPullRequest(link, storedArtifact, stringAt(pullRequest, 'updated_at') ?? undefined);
+  const linkedIssue = inferLinkedIssueFromPullRequest(pullRequest, repository);
+  if (linkedIssue && !updated.issueNumber) {
+    updated = githubDelivery.linkIssue(updated, {
+      ...linkedIssue,
+      now: stringAt(pullRequest, 'updated_at') ?? undefined,
+    });
+  }
   const stored = await agentOsContainer.repository.upsertGitHubDeliveryLink(updated);
   return { event, matched: true, linkId: stored.linkId, status: stored.status };
 }
@@ -204,6 +214,39 @@ function repositoryFullName(payload: Record<string, unknown>): string | undefine
   const owner = stringAt(record(repository.owner), 'login');
   const name = stringAt(repository, 'name');
   return owner && name ? `${owner}/${name}` : undefined;
+}
+
+function inferLinkedIssueFromPullRequest(
+  pullRequest: Record<string, unknown>,
+  repository?: string,
+): { issueNumber: number; issueUrl: string } | undefined {
+  const body = stringAt(pullRequest, 'body');
+  if (!body || !repository) {
+    return undefined;
+  }
+
+  const escapedRepository = escapeRegExp(repository);
+  const keyword = String.raw`(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)`;
+  const closingRef = new RegExp(String.raw`\b${keyword}\s+(?:${escapedRepository})?#(\d+)\b`, 'i');
+  const explicitUrl = new RegExp(String.raw`https://github\.com/${escapedRepository}/issues/(\d+)\b`, 'i');
+  const match = closingRef.exec(body) ?? explicitUrl.exec(body);
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  const issueNumber = Number(match[1]);
+  if (!Number.isSafeInteger(issueNumber) || issueNumber <= 0) {
+    return undefined;
+  }
+
+  return {
+    issueNumber,
+    issueUrl: `https://github.com/${repository}/issues/${issueNumber}`,
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function normalizeReviewState(value?: string): GitHubReviewSummary['state'] {

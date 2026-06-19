@@ -139,7 +139,7 @@ describe("node-conversion", () => {
 
 			expect(result.content.languageModel.provider).toBe("anthropic");
 			expect(result.content.languageModel.id).toBe(
-				"anthropic/claude-sonnet-4-5",
+				"anthropic/claude-sonnet-4.5",
 			);
 		});
 

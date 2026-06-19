@@ -4,6 +4,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/docs/api-reference' },
   title: 'API Reference | Recoder',
   description:
     'Complete REST API reference for the Recoder platform. Covers authentication, API key management, CLI device-flow auth, billing, user profiles, and health checks.',

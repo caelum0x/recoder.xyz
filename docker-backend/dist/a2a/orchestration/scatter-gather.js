@@ -20,6 +20,8 @@ exports.ScatterGatherOrchestrator = void 0;
 exports.getScatterGatherOrchestrator = getScatterGatherOrchestrator;
 exports.resetScatterGatherOrchestrator = resetScatterGatherOrchestrator;
 const logger_1 = require("../../logger");
+const compiled_instructions_1 = require("../compiled-instructions");
+const a2a_1 = require("@recoder/shared/a2a");
 const logger = logger_1.logger.child({ component: 'a2a-scatter-gather' });
 // ---------------------------------------------------------------------------
 // ID generator
@@ -120,17 +122,18 @@ class ScatterGatherOrchestrator {
             const agentStart = Date.now();
             const agentPrompt = target.prompt ?? prompt;
             const weight = target.weight ?? 1.0;
+            const request = this.buildTaskExecutionRequest(execution, target.agentId, agentPrompt);
             try {
                 let result;
                 if (useTimeout) {
                     // Wrap in a race with a timeout
                     result = await Promise.race([
-                        executor(target.agentId, agentPrompt),
+                        this.invokeTaskExecutor(executor, request),
                         new Promise((_, reject) => setTimeout(() => reject(new Error('SCATTER_TIMEOUT')), pattern.timeoutMs)),
                     ]);
                 }
                 else {
-                    result = await executor(target.agentId, agentPrompt);
+                    result = await this.invokeTaskExecutor(executor, request);
                 }
                 return {
                     agentId: target.agentId,
@@ -217,6 +220,51 @@ class ScatterGatherOrchestrator {
         this.patterns.clear();
         this.executions.clear();
         logger.debug('Scatter-gather orchestrator state reset');
+    }
+    buildTaskExecutionRequest(execution, agentId, prompt) {
+        const envelope = (0, a2a_1.createTaskEnvelope)({
+            id: generateExecutionId(),
+            workspace_id: 'scatter-gather-orchestrator',
+            thread_id: `scatter-gather-${execution.executionId}`,
+            trace_id: execution.executionId,
+            requester: {
+                agent_id: 'scatter-gather-orchestrator',
+                platform: 'recoder_backend',
+                name: 'Scatter Gather Orchestrator',
+            },
+            assignee: {
+                agent_id: agentId,
+                platform: 'custom',
+            },
+            connector: {
+                connector_id: `scatter-target:${agentId}`,
+                platform: 'custom',
+                protocol: 'rest',
+            },
+            payload: {
+                kind: 'text',
+                text: prompt,
+            },
+            metadata: {
+                patternId: execution.patternId,
+                executionId: execution.executionId,
+                source: 'scatter-gather-orchestrator',
+            },
+            tags: ['scatter-gather-target'],
+        });
+        return {
+            patternId: execution.patternId,
+            executionId: execution.executionId,
+            agentId,
+            prompt,
+            envelope,
+            instructionBundle: (0, compiled_instructions_1.compileInstructionBundleForTask)(envelope),
+        };
+    }
+    async invokeTaskExecutor(executor, request) {
+        return executor.__agentOsStructured === true
+            ? executor(request)
+            : executor(request.agentId, request.prompt);
     }
     // -------------------------------------------------------------------------
     // Private helpers

@@ -1,5 +1,10 @@
+import type { Metadata } from 'next';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
+
+export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/terms' },
+};
 
 export default function TermsPage() {
   return (

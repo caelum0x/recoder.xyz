@@ -1,6 +1,8 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
-import { markOutboxFailed, markOutboxPublished } from '@recoder/agent-events';
+import { markOutboxFailed } from '@recoder/agent-events';
 import { agentOsContainer } from '../service-container';
+import { drainAgentOsOutbox } from '../outbox-drain.service';
+import { createNatsOutboxPublisher } from '../nats-outbox-publisher';
 
 function requireInternalServiceKey(req: Request, res: Response, next: NextFunction) {
   const configured = process.env.INTERNAL_SERVICE_KEY;
@@ -21,27 +23,50 @@ export function createInternalAgentOsRouter(): Router {
     const now = typeof req.body?.now === 'string' ? req.body.now : new Date().toISOString();
     const markAsFailed = req.body?.status === 'failed' || req.body?.fail === true;
     const failureReason = typeof req.body?.error === 'string' ? req.body.error : 'outbox drain failed by request';
-    const pending = (await agentOsContainer.repository.listOutbox())
-      .filter((record) => record.status === 'pending')
-      .slice(0, limit);
 
-    const records = await Promise.all(pending.map(async (record) => {
-      const updated = markAsFailed
-        ? markOutboxFailed(record, failureReason, now)
-        : markOutboxPublished(record, now);
-      return await agentOsContainer.repository.upsertOutbox(updated);
-    }));
+    if (markAsFailed) {
+      const pending = (await agentOsContainer.repository.listOutbox())
+        .filter((record) => record.status === 'pending')
+        .slice(0, limit);
 
-    res.json({
-      success: true,
-      data: {
-        status: 'drained',
-        operation: 'outbox.drain',
-        processed: records.length,
-        remainingPending: (await agentOsContainer.repository.listOutbox()).filter((record) => record.status === 'pending').length,
-        records,
-      },
-    });
+      const records = await Promise.all(pending.map(async (record) => {
+        const updated = markOutboxFailed(record, failureReason, now);
+        return await agentOsContainer.repository.upsertOutbox(updated);
+      }));
+
+      res.json({
+        success: true,
+        data: {
+          status: 'marked_failed',
+          operation: 'outbox.drain',
+          processed: records.length,
+          remainingPending: (await agentOsContainer.repository.listOutbox()).filter((record) => record.status === 'pending').length,
+          records,
+        },
+      });
+      return;
+    }
+
+    let natsHandle: Awaited<ReturnType<typeof createNatsOutboxPublisher>> | null = null;
+    try {
+      natsHandle = await createNatsOutboxPublisher();
+      const result = await drainAgentOsOutbox(agentOsContainer.repository, natsHandle.publisher, { limit, now });
+      res.json({
+        success: true,
+        data: {
+          status: result.failed > 0 ? 'partial_failure' : 'drained',
+          ...result,
+          processed: result.attempted,
+        },
+      });
+    } catch (error) {
+      res.status(503).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'outbox drain unavailable',
+      });
+    } finally {
+      await natsHandle?.close().catch(() => undefined);
+    }
   });
 
   router.post('/runs/tick', (_req, res) => {

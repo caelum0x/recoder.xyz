@@ -2,8 +2,15 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { dockerBackendApi, connectDockerSSE, type DockerSSEConnection } from '@/lib/docker-backend-api';
-import { useAgentTeamStore, type AgentTeamMember } from '@/stores/agent-team-store';
+import {
+  dockerBackendApi,
+  connectDockerSSE,
+  type DockerSSEConnection,
+} from '@/lib/docker-backend-api';
+import {
+  useAgentTeamStore,
+  type AgentTeamMember,
+} from '@/stores/agent-team-store';
 
 const missionControlKeys = {
   snapshot: (wsId: string) => ['mission-control', 'snapshot', wsId] as const,
@@ -59,6 +66,103 @@ export interface AgentOsWorkSignal {
   spaceId?: string;
 }
 
+export interface AgentOsInstructionBundle {
+  bundleId: string;
+  taskId: string;
+  agentId: string;
+  runtime: string;
+  sourceCount: number;
+  memoryRefCount: number;
+  verificationCommands: string[];
+  forbiddenActions: string[];
+  compiledAt: string;
+}
+
+export interface AgentOsInstructionBundleArtifact {
+  artifactId: string;
+  taskId: string;
+  runId?: string;
+  bundleId?: string;
+  path?: string;
+  contentHash?: string;
+  createdAt: string;
+  createdBy: string;
+  compilerVersion?: string;
+  runtime?: string;
+  sourceCount?: number;
+  memoryRefCount?: number;
+  approvalGateCount?: number;
+}
+
+export interface AgentOsRuntimeEvidence {
+  evidenceId: string;
+  taskId: string;
+  runId?: string;
+  kind: string;
+  status: 'observed' | 'passed' | 'failed' | 'warning';
+  title: string;
+  summary?: string;
+  observedAt: string;
+  runtimeId?: string;
+  adapterId?: string;
+  sandboxId?: string;
+  sessionId?: string;
+  command?: string;
+  url?: string;
+  artifactIds: string[];
+}
+
+export interface AgentOsDeliveryArtifact {
+  artifactId: string;
+  taskId: string;
+  runId?: string;
+  kind: 'pull_request' | 'preview' | 'verification';
+  url?: string;
+  title?: string;
+  repository?: string;
+  branch?: string;
+  number?: string | number;
+  provider?: string;
+  environment?: string;
+  passed?: boolean;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface AgentOsRunSummary {
+  runId: string;
+  taskId: string;
+  title?: string;
+  state: string;
+  assigneeAgentId?: string;
+  instructionBundleId?: string;
+  artifactCount: number;
+  runtimeEvidenceCount: number;
+  approvalCount: number;
+  updatedAt: string;
+}
+
+export interface AgentOsApprovalSummary {
+  approvalId: string;
+  taskId: string;
+  runId?: string;
+  status: string;
+  reason: string;
+  requiredAt: string;
+  requestedAt: string;
+}
+
+export interface AgentOsOssComponent {
+  componentId: string;
+  name: string;
+  contract: string;
+  owner?: string;
+  status: string;
+  risk?: 'low' | 'medium' | 'high';
+  canExecuteCode: boolean;
+  canTouchProduction: boolean;
+}
+
 export interface AgentOsSummary {
   generatedAt: string;
   counts: {
@@ -66,18 +170,37 @@ export interface AgentOsSummary {
     [key: string]: number;
   };
   workSignals: AgentOsWorkSignal[];
+  runs: AgentOsRunSummary[];
+  approvals: AgentOsApprovalSummary[];
+  instructionBundles: AgentOsInstructionBundle[];
+  instructionBundleArtifacts: AgentOsInstructionBundleArtifact[];
+  runtimeEvidence: AgentOsRuntimeEvidence[];
+  deliveryArtifacts: AgentOsDeliveryArtifact[];
+  ossComponents: AgentOsOssComponent[];
 }
 
-function mapSnapshotAgents(input: Array<string | Record<string, unknown>>): AgentTeamMember[] {
+function mapSnapshotAgents(
+  input: Array<string | Record<string, unknown>>,
+): AgentTeamMember[] {
   return input.map((a) => ({
     agentId: typeof a === 'string' ? a : (a.agentId as string),
-    name: typeof a === 'string' ? a : (a.name as string) ?? (a.agentId as string),
-    platform: typeof a === 'string' ? 'custom' : (a.platform as string) ?? 'custom',
-    status: typeof a === 'string' ? ('idle' as const) : ((a.status as AgentTeamMember['status']) ?? 'idle'),
-    skills: typeof a === 'string' ? [] : (a.skills as string[]) ?? (a.capabilities as string[]) ?? [],
-    isLocal: typeof a === 'string' ? false : (a.isLocal as boolean) ?? false,
-    capabilities: typeof a === 'string' ? [] : (a.capabilities as string[]) ?? [],
-    lastSeen: typeof a === 'string' ? undefined : (a.lastSeen as string | undefined),
+    name:
+      typeof a === 'string' ? a : ((a.name as string) ?? (a.agentId as string)),
+    platform:
+      typeof a === 'string' ? 'custom' : ((a.platform as string) ?? 'custom'),
+    status:
+      typeof a === 'string'
+        ? ('idle' as const)
+        : ((a.status as AgentTeamMember['status']) ?? 'idle'),
+    skills:
+      typeof a === 'string'
+        ? []
+        : ((a.skills as string[]) ?? (a.capabilities as string[]) ?? []),
+    isLocal: typeof a === 'string' ? false : ((a.isLocal as boolean) ?? false),
+    capabilities:
+      typeof a === 'string' ? [] : ((a.capabilities as string[]) ?? []),
+    lastSeen:
+      typeof a === 'string' ? undefined : (a.lastSeen as string | undefined),
   }));
 }
 
@@ -91,14 +214,20 @@ export function useControlPlaneSnapshot(wsId: string | null) {
         `/api/a2a/workspaces/${wsId}/control-plane`,
       );
       if (res.success && res.data) {
-        const members = mapSnapshotAgents((res.data.agents as unknown as Array<string | Record<string, unknown>>) ?? []);
+        const members = mapSnapshotAgents(
+          (res.data.agents as unknown as Array<
+            string | Record<string, unknown>
+          >) ?? [],
+        );
         setAgents(members);
         return {
           ...res.data,
           agents: members,
         };
       }
-      throw new Error(res.error?.message || 'Failed to fetch control-plane snapshot');
+      throw new Error(
+        res.error?.message || 'Failed to fetch control-plane snapshot',
+      );
     },
     enabled: !!wsId,
     refetchInterval: 5_000,
@@ -109,7 +238,9 @@ export function useAgentOsSummary() {
   return useQuery({
     queryKey: missionControlKeys.agentOsSummary(),
     queryFn: async () => {
-      const res = await dockerBackendApi.get<AgentOsSummary>('/api/agent-os/summary');
+      const res = await dockerBackendApi.get<AgentOsSummary>(
+        '/api/agent-os/summary',
+      );
       if (res.success && res.data) return res.data;
       throw new Error(res.error?.message || 'Failed to fetch Agent OS summary');
     },
@@ -127,7 +258,9 @@ export function useAgentFleet(wsId: string | null) {
         `/api/a2a/workspaces/${wsId}/agents`,
       );
       if (res.success && res.data) {
-        const members = mapSnapshotAgents(res.data.agents as unknown as Array<string | Record<string, unknown>>);
+        const members = mapSnapshotAgents(
+          res.data.agents as unknown as Array<string | Record<string, unknown>>,
+        );
         setAgents(members);
         return members;
       }
@@ -142,9 +275,9 @@ export function useTaskPipeline(wsId: string | null) {
   return useQuery({
     queryKey: missionControlKeys.pipeline(wsId ?? ''),
     queryFn: async () => {
-      const res = await dockerBackendApi.get<{ tasks: Record<string, unknown>[] }>(
-        `/api/a2a/workspaces/${wsId}/tasks`,
-      );
+      const res = await dockerBackendApi.get<{
+        tasks: Record<string, unknown>[];
+      }>(`/api/a2a/workspaces/${wsId}/tasks`);
       if (res.success && res.data) return res.data.tasks;
       throw new Error(res.error?.message || 'Failed to fetch tasks');
     },
@@ -157,7 +290,8 @@ export function useSLOMetrics(wsId: string | null) {
   return useQuery({
     queryKey: missionControlKeys.metrics(wsId ?? ''),
     queryFn: async () => {
-      const res = await dockerBackendApi.get<Record<string, unknown>>('/api/a2a/metrics');
+      const res =
+        await dockerBackendApi.get<Record<string, unknown>>('/api/a2a/metrics');
       if (res.success && res.data) return res.data;
       throw new Error(res.error?.message || 'Failed to fetch metrics');
     },
@@ -184,34 +318,33 @@ export function useActivityTimeline(
       try {
         const data = JSON.parse(event.data);
         onEvent?.(data);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
-    const connection = connectDockerSSE(
-      `/api/a2a/workspaces/${wsId}/stream`,
-      {
-        'task.submitted': forward,
-        'task.started': forward,
-        'artifact.attached': forward,
-        'evidence.attached': forward,
-        'task.completed': forward,
-        'task.failed': forward,
-        'task.input-required': forward,
-        'message.new': forward,
-        'handoff.initiated': forward,
-        'handoff.accepted': forward,
-        'handoff.completed': forward,
-        'handoff.declined': forward,
-        'review.accepted': forward,
-        'merge.requested': forward,
-        'approval.requested': forward,
-        'approval.granted': forward,
-        'approval.rejected': forward,
-        'approval.escalated': forward,
-        'agent.online': forward,
-        'agent.offline': forward,
-      },
-    );
+    const connection = connectDockerSSE(`/api/a2a/workspaces/${wsId}/stream`, {
+      'task.submitted': forward,
+      'task.started': forward,
+      'artifact.attached': forward,
+      'evidence.attached': forward,
+      'task.completed': forward,
+      'task.failed': forward,
+      'task.input-required': forward,
+      'message.new': forward,
+      'handoff.initiated': forward,
+      'handoff.accepted': forward,
+      'handoff.completed': forward,
+      'handoff.declined': forward,
+      'review.accepted': forward,
+      'merge.requested': forward,
+      'approval.requested': forward,
+      'approval.granted': forward,
+      'approval.rejected': forward,
+      'approval.escalated': forward,
+      'agent.online': forward,
+      'agent.offline': forward,
+    });
 
     connectionRef.current = connection;
 

@@ -449,6 +449,14 @@ type ProcessPromptTaskResult =
   | { outcome: 'failed' | 'cancelled'; error: string }
   | { outcome: 'retry'; error: string };
 
+function getPromptTaskErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (message.startsWith('No BYOK provider key found.')) {
+    return message;
+  }
+  return 'Prompt execution failed';
+}
+
 function isRetryablePromptError(error: unknown): boolean {
   if (!error) return false;
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
@@ -609,7 +617,7 @@ async function processPromptTask(taskId: string, options?: { allowRetry?: boolea
   } catch (error) {
     const errorMessage = abortController.signal.aborted
       ? 'Task cancelled by user'
-      : 'Prompt execution failed';
+      : getPromptTaskErrorMessage(error);
 
     if (abortController.signal.aborted) {
       task.status = 'failed';

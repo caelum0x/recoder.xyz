@@ -1,5 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Terminal, ArrowRight, Copy, Download } from 'lucide-react';
+
+export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/docs/cli' },
+};
 
 export default function CLIDocsPage() {
   return (

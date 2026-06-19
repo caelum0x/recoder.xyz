@@ -54,6 +54,8 @@ const openmeter_client_js_1 = require("../metering/openmeter-client.js");
 const a2a_event_bus_1 = require("./a2a-event-bus");
 const uuid_1 = require("uuid");
 const byok_js_1 = require("./byok.js");
+const compiled_instructions_js_1 = require("./compiled-instructions.js");
+const a2a_1 = require("@recoder/shared/a2a");
 const logger = (0, logger_1.createLogger)('workflow-step-executor');
 // ---------------------------------------------------------------------------
 // Streaming LLM response consumer
@@ -139,6 +141,58 @@ function getDaytonaUrl() {
 function getDaytonaKey() {
     return process.env.DAYTONA_API_KEY ?? '';
 }
+function buildWorkflowStepTaskEnvelope(input) {
+    const metadata = {
+        ...(typeof input.config.title === 'string' ? { title: input.config.title } : {}),
+        ...(typeof input.config.goal === 'string' ? { goal: input.config.goal } : {}),
+        ...(typeof input.config.intent === 'string' ? { intent: input.config.intent } : {}),
+        ...(Array.isArray(input.config.acceptance) ? { acceptance: input.config.acceptance } : {}),
+        ...(Array.isArray(input.config.acceptance_criteria) ? { acceptance_criteria: input.config.acceptance_criteria } : {}),
+        ...(Array.isArray(input.config.verify) ? { verify: input.config.verify } : {}),
+        ...(Array.isArray(input.config.verification_commands) ? { verification_commands: input.config.verification_commands } : {}),
+        ...(Array.isArray(input.config.forbidden_actions) ? { forbidden_actions: input.config.forbidden_actions } : {}),
+        ...(Array.isArray(input.config.forbidden_paths) ? { forbidden_paths: input.config.forbidden_paths } : {}),
+        ...(Array.isArray(input.config.approval_required) ? { approval_required: input.config.approval_required } : {}),
+        ...(Array.isArray(input.config.browser_checks) ? { browser_checks: input.config.browser_checks } : {}),
+        ...(Array.isArray(input.config.pathRules) ? { pathRules: input.config.pathRules } : {}),
+        ...(Array.isArray(input.config.recentFailures) ? { recentFailures: input.config.recentFailures } : {}),
+        source: 'workflow-step-executor',
+        stepName: input.stepName,
+        stepType: input.stepType,
+    };
+    return (0, a2a_1.createTaskEnvelope)({
+        id: `wfstep_${(0, uuid_1.v4)().replace(/-/g, '').slice(0, 16)}`,
+        workspace_id: typeof input.context._workspaceId === 'string'
+            ? input.context._workspaceId
+            : 'workflow-step-executor',
+        thread_id: typeof input.context._threadId === 'string'
+            ? input.context._threadId
+            : `workflow-step-${Date.now()}`,
+        trace_id: typeof input.context._taskId === 'string'
+            ? input.context._taskId
+            : `workflow-step-${Date.now()}`,
+        requester: {
+            agent_id: 'workflow-step-executor',
+            platform: 'recoder_backend',
+            name: 'Workflow Step Executor',
+        },
+        assignee: {
+            agent_id: input.assigneeId,
+            platform: 'custom',
+        },
+        connector: {
+            connector_id: `${input.stepType}:${input.assigneeId}`,
+            platform: 'custom',
+            protocol: 'rest',
+        },
+        payload: {
+            kind: 'text',
+            text: input.promptText,
+        },
+        metadata,
+        tags: [`workflow-step:${input.stepType}`],
+    });
+}
 // ---------------------------------------------------------------------------
 // Step executors
 // ---------------------------------------------------------------------------
@@ -161,10 +215,20 @@ async function executeLlmStep(config, context) {
         throw new Error('No BYOK OpenRouter key available for workflow LLM step');
     // Inject context variables into prompt via {{key}} placeholders
     const resolvedPrompt = prompt.replace(/\{\{(\w+)\}\}/g, (_, key) => (context[key] != null ? String(context[key]) : `{{${key}}}`));
+    const envelope = buildWorkflowStepTaskEnvelope({
+        stepName: String(config.name ?? 'llm-step'),
+        stepType: 'llm',
+        config,
+        context,
+        promptText: resolvedPrompt,
+        assigneeId: model,
+    });
+    const instructionBundle = (0, compiled_instructions_js_1.compileInstructionBundleForTask)(envelope);
+    const effectivePrompt = instructionBundle?.agent_specific_prompt || resolvedPrompt;
     const messages = [];
     if (systemPrompt)
         messages.push({ role: 'system', content: systemPrompt });
-    messages.push({ role: 'user', content: resolvedPrompt });
+    messages.push({ role: 'user', content: effectivePrompt });
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -208,6 +272,7 @@ async function executeLlmStep(config, context) {
         content,
         model,
         usage: data.usage,
+        instructionBundle,
     };
 }
 async function executeHttpStep(config, context) {
@@ -303,32 +368,58 @@ async function executeCodeStep(config, context) {
     });
     return { stdout, stderr, exitCode };
 }
-function executeBranchStep(config, context) {
-    const condition = String(config.condition ?? '');
+/** Safely evaluate a boolean condition against context in a sandboxed VM. */
+function evaluateCondition(condition, context) {
     if (!condition)
-        throw new Error('branch step requires config.condition');
-    // Safe evaluation: only simple comparisons and context lookups
-    // Resolve the condition against context values
-    let result = false;
+        return false;
     try {
         const vm = require('vm');
         const sandbox = Object.freeze({
             context: Object.freeze({ ...context }),
             input: Object.freeze(context._lastOutput ?? ''),
         });
-        result = !!vm.runInNewContext(`!!(${condition})`, sandbox, {
-            timeout: 100,
-            displayErrors: false,
-        });
+        return !!vm.runInNewContext(`!!(${condition})`, sandbox, { timeout: 100, displayErrors: false });
     }
     catch (err) {
-        logger.warn({ condition, error: err instanceof Error ? err.message : String(err) }, 'Branch condition evaluation failed');
-        result = false;
+        logger.warn({ condition, error: err instanceof Error ? err.message : String(err) }, 'Condition evaluation failed');
+        return false;
     }
+}
+function executeBranchStep(config, context) {
+    const condition = String(config.condition ?? '');
+    if (!condition)
+        throw new Error('branch step requires config.condition');
+    const result = evaluateCondition(condition, context);
     return {
         condition,
         result,
         branch: result ? (config.thenLabel ?? 'then') : (config.elseLabel ?? 'else'),
+    };
+}
+/**
+ * Conditional step (openfang StepMode): evaluate `config.condition`, then run
+ * `config.then[]` (true) or `config.else[]` (false) sub-steps sequentially.
+ */
+async function executeConditionalStep(config, ctx) {
+    const condition = String(config.condition ?? '');
+    if (!condition)
+        throw new Error('conditional step requires config.condition');
+    const passed = evaluateCondition(condition, ctx);
+    const branch = passed ? config.then : config.else;
+    const subSteps = Array.isArray(branch) ? branch : [];
+    const results = [];
+    for (const s of subSteps) {
+        try {
+            results.push({ name: s.name, type: s.type, output: await dispatchStep(s, ctx) });
+        }
+        catch (err) {
+            results.push({ name: s.name, type: s.type, error: err instanceof Error ? err.message : String(err) });
+        }
+    }
+    return {
+        content: `condition ${passed ? 'true → then' : 'false → else'} (${subSteps.length} step(s))`,
+        passed,
+        results,
     };
 }
 async function executeTriggerStep(config, context) {
@@ -343,11 +434,15 @@ async function executeTriggerStep(config, context) {
         return { triggered: false, error: `Workflow ${workflowId} not registered` };
     }
     const input = config.input ? String(config.input) : JSON.stringify(context);
-    const execution = await engine.execute(workflowId, input, async (agentId, prompt) => {
-        // Use the LLM executor for task steps within triggered workflows
-        const result = await executeLlmStep({ prompt, model: config.model ?? 'anthropic/claude-sonnet-4-20250514' }, context);
+    const structuredExecutor = Object.assign(async (request) => {
+        const result = await executeLlmStep({
+            prompt: request.instructionBundle?.agent_specific_prompt ?? request.prompt,
+            model: config.model ?? 'anthropic/claude-sonnet-4-20250514',
+            name: 'trigger-step-task',
+        }, context);
         return typeof result === 'string' ? result : JSON.stringify(result);
-    });
+    }, { __agentOsStructured: true });
+    const execution = await engine.execute(workflowId, input, structuredExecutor);
     return {
         triggered: true,
         executionId: execution.executionId,
@@ -364,6 +459,65 @@ async function executeTriggerStep(config, context) {
  * Each step's output is merged into the shared context as `_lastOutput`.
  * Returns the full execution result.
  */
+/**
+ * Squad step: dispatch the (variable-resolved) task to a squad, fanning out to
+ * its agent members by strategy. Connects workflows to the collaboration layer.
+ */
+async function executeSquadStep(config, context) {
+    const squadId = String(config.squadId ?? '');
+    const rawTask = String(config.task ?? '');
+    const strategy = ['all', 'leader', 'round-robin', 'best-match'].includes(String(config.strategy))
+        ? config.strategy
+        : 'all';
+    if (!squadId)
+        throw new Error('squad step requires config.squadId');
+    if (!rawTask)
+        throw new Error('squad step requires config.task');
+    const task = rawTask.replace(/\{\{(\w+)\}\}/g, (_, key) => (context[key] != null ? String(context[key]) : `{{${key}}}`));
+    const createdBy = typeof context._userId === 'string' ? context._userId : 'workflow';
+    const { dispatchToSquad } = await Promise.resolve().then(() => __importStar(require('./squad-dispatch.service.js')));
+    const result = await dispatchToSquad({ squadId, task, strategy, createdBy });
+    if (!result.ok)
+        throw new Error(result.reason ?? 'squad dispatch failed');
+    return {
+        content: `Dispatched to squad ${squadId} via ${strategy} (${result.deliveredTo?.length ?? 0} delivered)`,
+        squadTaskId: result.squadTask?.id,
+        deliveredTo: result.deliveredTo ?? [],
+    };
+}
+/** Dispatch a single step to its executor (shared by sequential + parallel). */
+async function dispatchStep(step, ctx) {
+    switch (step.type) {
+        case 'llm': return executeLlmStep(step.config, ctx);
+        case 'http': return executeHttpStep(step.config, ctx);
+        case 'code': return executeCodeStep(step.config, ctx);
+        case 'branch': return executeBranchStep(step.config, ctx);
+        case 'trigger': return executeTriggerStep(step.config, ctx);
+        case 'squad': return executeSquadStep(step.config, ctx);
+        case 'parallel': return executeParallelStep(step.config, ctx);
+        case 'conditional': return executeConditionalStep(step.config, ctx);
+        default: throw new Error(`Unknown step type: ${step.type}`);
+    }
+}
+/**
+ * Parallel step (openfang StepMode): run `config.steps[]` concurrently against
+ * the same context. Sub-step failures are isolated (Promise.allSettled) and
+ * reported per-step; the overall step succeeds with a results array.
+ */
+async function executeParallelStep(config, ctx) {
+    const subSteps = Array.isArray(config.steps) ? config.steps : [];
+    if (subSteps.length === 0)
+        throw new Error('parallel step requires a non-empty config.steps[]');
+    const settled = await Promise.allSettled(subSteps.map((s) => dispatchStep(s, ctx)));
+    const results = settled.map((r, i) => ({
+        name: subSteps[i]?.name ?? `parallel-${i}`,
+        type: subSteps[i]?.type,
+        ...(r.status === 'fulfilled'
+            ? { output: r.value }
+            : { error: r.reason instanceof Error ? r.reason.message : String(r.reason) }),
+    }));
+    return { content: `Ran ${subSteps.length} step(s) in parallel`, results };
+}
 async function executeWorkflowSteps(steps, context = {}) {
     const results = [];
     const ctx = { ...context };
@@ -371,26 +525,7 @@ async function executeWorkflowSteps(steps, context = {}) {
     for (const step of steps) {
         const start = Date.now();
         try {
-            let output;
-            switch (step.type) {
-                case 'llm':
-                    output = await executeLlmStep(step.config, ctx);
-                    break;
-                case 'http':
-                    output = await executeHttpStep(step.config, ctx);
-                    break;
-                case 'code':
-                    output = await executeCodeStep(step.config, ctx);
-                    break;
-                case 'branch':
-                    output = executeBranchStep(step.config, ctx);
-                    break;
-                case 'trigger':
-                    output = await executeTriggerStep(step.config, ctx);
-                    break;
-                default:
-                    throw new Error(`Unknown step type: ${step.type}`);
-            }
+            const output = await dispatchStep(step, ctx);
             const durationMs = Date.now() - start;
             // Merge output into context for next step
             if (output && typeof output === 'object') {

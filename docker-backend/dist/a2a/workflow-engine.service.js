@@ -27,6 +27,8 @@ exports.resetWorkflowEngine = resetWorkflowEngine;
 const events_1 = require("events");
 const logger_1 = require("../logger");
 const task_lifecycle_service_1 = require("./task-lifecycle.service");
+const compiled_instructions_1 = require("./compiled-instructions");
+const a2a_1 = require("@recoder/shared/a2a");
 const logger = (0, logger_1.createLogger)('a2a-workflow-engine');
 // ---------------------------------------------------------------------------
 // Safe condition evaluator
@@ -308,13 +310,15 @@ class WorkflowEngine extends events_1.EventEmitter {
         switch (step.type) {
             case 'task': {
                 const resolvedPrompt = step.prompt.replace(/\{\{input\}\}/g, currentInput);
+                const executionRequest = this.buildTaskExecutionRequest(execution, step, resolvedPrompt);
+                const effectivePrompt = executionRequest.instructionBundle?.agent_specific_prompt ?? resolvedPrompt;
                 if (step.timeoutMs) {
                     return await Promise.race([
-                        executor(step.agentId, resolvedPrompt),
+                        this.invokeTaskExecutor(executor, executionRequest, effectivePrompt),
                         new Promise((_, reject) => setTimeout(() => reject(new Error(`Step ${step.stepId} timed out after ${step.timeoutMs}ms`)), step.timeoutMs)),
                     ]);
                 }
-                return await executor(step.agentId, resolvedPrompt);
+                return await this.invokeTaskExecutor(executor, executionRequest, effectivePrompt);
             }
             case 'pipeline': {
                 // Simulated -- real pipeline orchestrator is not wired in yet
@@ -391,6 +395,60 @@ class WorkflowEngine extends events_1.EventEmitter {
         catch {
             // Not JSON or no context key -- skip
         }
+    }
+    buildTaskExecutionRequest(execution, step, prompt) {
+        const workspaceId = execution.context._workspaceId || 'workflow-engine';
+        const threadId = execution.context._threadId || `workflow-${execution.executionId}`;
+        const requesterPlatform = execution.context._requesterPlatform || 'recoder_backend';
+        const assigneePlatform = execution.context._assigneePlatform || 'custom';
+        const envelope = (0, a2a_1.createTaskEnvelope)({
+            id: (0, task_lifecycle_service_1.generateId)('wftask'),
+            workspace_id: workspaceId,
+            thread_id: threadId,
+            trace_id: execution.executionId,
+            requester: {
+                agent_id: 'workflow-engine',
+                platform: requesterPlatform,
+                name: 'Workflow Engine',
+            },
+            assignee: {
+                agent_id: step.agentId,
+                platform: assigneePlatform,
+            },
+            connector: {
+                connector_id: `workflow-step:${step.stepId}`,
+                platform: assigneePlatform,
+                protocol: 'rest',
+            },
+            payload: {
+                kind: 'text',
+                text: prompt,
+            },
+            metadata: {
+                workflowId: execution.workflowId,
+                executionId: execution.executionId,
+                stepId: step.stepId,
+                source: 'workflow-engine',
+            },
+            tags: ['workflow-task-step'],
+        });
+        const instructionBundle = (0, compiled_instructions_1.compileInstructionBundleForTask)(envelope);
+        return {
+            workflowId: execution.workflowId,
+            executionId: execution.executionId,
+            stepId: step.stepId,
+            agentId: step.agentId,
+            prompt,
+            envelope,
+            instructionBundle,
+            context: { ...execution.context },
+        };
+    }
+    async invokeTaskExecutor(executor, request, _effectivePrompt) {
+        const result = executor.__agentOsStructured === true
+            ? await executor(request)
+            : await executor(request.agentId, request.prompt);
+        return result;
     }
     // -------------------------------------------------------------------------
     // Execution queries

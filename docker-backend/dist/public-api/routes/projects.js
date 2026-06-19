@@ -234,6 +234,13 @@ function updateActivity(project) {
     project.lastActivityAt = Date.now();
     saveProjectsStore();
 }
+function getPromptTaskErrorMessage(error) {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    if (message.startsWith('No BYOK provider key found.')) {
+        return message;
+    }
+    return 'Prompt execution failed';
+}
 function isRetryablePromptError(error) {
     if (!error)
         return false;
@@ -374,7 +381,7 @@ async function processPromptTask(taskId, options) {
     catch (error) {
         const errorMessage = abortController.signal.aborted
             ? 'Task cancelled by user'
-            : 'Prompt execution failed';
+            : getPromptTaskErrorMessage(error);
         if (abortController.signal.aborted) {
             task.status = 'failed';
             task.error = 'Task cancelled by user';

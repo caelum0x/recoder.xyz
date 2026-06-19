@@ -566,6 +566,14 @@ async function resolveQuery(
 				replaceKeywordValues.push({ replaceKeyword, value: text });
 				break;
 			}
+			case "squadStep": {
+				const result = await generationContentResolver(
+					contextNode.id,
+					sourceKeyword.outputId,
+				);
+				replaceKeywordValues.push({ replaceKeyword, value: result ?? "" });
+				break;
+			}
 			case "end": {
 				replaceKeywordValues.push({ replaceKeyword, value: "" });
 				break;

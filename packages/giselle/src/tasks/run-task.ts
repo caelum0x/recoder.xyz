@@ -113,6 +113,8 @@ async function executeStep(args: {
 				break;
 			case "appEntry":
 				break;
+			case "squadStep":
+				break;
 			case "end":
 				break;
 			default: {

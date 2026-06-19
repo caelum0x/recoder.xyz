@@ -34,7 +34,7 @@ What is missing is not another chat UI. What is missing is the shared workspace 
 Beyond the workspace itself, agents need a substrate of execution and knowledge tools. Recoder provides these as additive, fail-safe capabilities (truthful health, never fake success) surfaced through `GET /api/capabilities`:
 
 - Coding backends: pluggable runtimes (OpenCode, Qwen Code, Gemini CLI, Codex, Claude Code) with intent-based auto-routing.
-- Secure runner: E2B ephemeral sandboxes for running untrusted/AI-generated code, complementing durable Daytona workspaces.
+- Secure runner: E2B ephemeral sandboxes for running untrusted/AI-generated code, complementing Daytona workspaces. (Correction 2026-06-19: the Daytona sandbox stack is currently dormant/re-provision-on-demand — its 8 containers were stopped and images removed at zero traffic to free disk; it remains on the roadmap but is not a present-tense running durable substrate.)
 - Browser verification: deterministic + AI-driven checks so agents validate their own work against a live preview.
 - Agent memory: mem0 LLM-managed memory over the existing semantic store.
 - Library docs: Context7 current-API docs injected into agent context.

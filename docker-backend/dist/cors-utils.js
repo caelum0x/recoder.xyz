@@ -20,7 +20,6 @@ exports.ALLOWED_ORIGINS = [
     'https://www.recoder.xyz',
     'https://agents.recoder.xyz',
     'https://app.recoder.xyz',
-    'https://web.recoder.xyz',
     'https://agency.recoder.xyz',
     'https://pm.recoder.xyz',
     'https://docker.recoder.xyz',
@@ -28,7 +27,6 @@ exports.ALLOWED_ORIGINS = [
         ? []
         : [
             'http://localhost:3000',
-            'http://localhost:5173',
             'http://localhost:3100',
         ]),
 ];

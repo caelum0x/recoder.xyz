@@ -56,6 +56,7 @@ export default function SquadsPage() {
         name: data.name,
         description: data.description,
         leaderId: data.leaderId,
+        projectId: data.projectId,
         members: Array.isArray(data.members) ? data.members : [],
       });
       toast.success(`Imported "${created.name}"`);
@@ -277,6 +278,11 @@ function SquadCard({ squad, presenceByAgent }: { squad: Squad; presenceByAgent?:
             <span className="truncate">led by {squad.leaderId}</span>
           </div>
         )}
+        {squad.projectId && (
+          <div className="truncate font-mono text-[11px] text-muted-foreground">
+            project {squad.projectId}
+          </div>
+        )}
       </CardContent>
       <CardFooter className="gap-2 border-t pt-3">
         <Button size="sm" variant="outline" className="flex-1" asChild>
@@ -297,6 +303,7 @@ function CreateSquadDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   const create = useCreateSquad();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [projectId, setProjectId] = useState('');
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -304,10 +311,15 @@ function CreateSquadDialog({ open, onOpenChange }: { open: boolean; onOpenChange
       return;
     }
     try {
-      await create.mutateAsync({ name: name.trim(), description: description.trim() || undefined });
+      await create.mutateAsync({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        projectId: projectId.trim() || undefined,
+      });
       toast.success(`Created "${name.trim()}"`);
       setName('');
       setDescription('');
+      setProjectId('');
       onOpenChange(false);
     } catch {
       toast.error('Create failed (backend unreachable?)');
@@ -329,6 +341,10 @@ function CreateSquadDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">Description <span className="text-muted-foreground">(optional)</span></label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this squad do?" rows={3} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium">Default project <span className="text-muted-foreground">(optional)</span></label>
+            <Input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="project id for runtime execution" />
           </div>
         </div>
         <DialogFooter>

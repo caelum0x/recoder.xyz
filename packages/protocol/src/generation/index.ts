@@ -1,5 +1,3 @@
-import type { LanguageModelV2Usage } from "@ai-sdk/provider";
-import type { UIMessage } from "ai";
 import * as z from "zod/v4";
 import { NodeId } from "../node";
 import { GenerationContextLike, GenerationOrigin } from "./context";
@@ -10,8 +8,13 @@ export * from "./context";
 export * from "./generation-id";
 export * from "./output";
 
-export const Message = z.custom<UIMessage>();
-export type Message = z.infer<typeof Message>;
+export interface Message {
+	id: string;
+	role?: string;
+	parts?: unknown[];
+	[key: string]: unknown;
+}
+export const Message = z.custom<Message>();
 
 // Error schema
 export const GenerationError = z.object({
@@ -20,8 +23,15 @@ export const GenerationError = z.object({
 	dump: z.any().optional(),
 });
 
-export const GenerationUsage = z.custom<LanguageModelV2Usage>();
-export type GenerationUsage = z.infer<typeof GenerationUsage>;
+export interface GenerationUsage {
+	inputTokens?: number;
+	outputTokens?: number;
+	totalTokens?: number;
+	reasoningTokens?: number;
+	cachedInputTokens?: number;
+	[key: string]: unknown;
+}
+export const GenerationUsage = z.custom<GenerationUsage>();
 
 export const GenerationBase = z.object({
 	id: GenerationId.schema,

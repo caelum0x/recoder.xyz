@@ -366,6 +366,71 @@ describe('Auth Migration Mode Scenarios', () => {
     });
   });
 
+  describe('resolveInternalServiceSession', () => {
+    it('accepts x-internal-service-key with an explicit service id', async () => {
+      const { resolveInternalServiceSession } = await import('../auth-utils');
+
+      const req = {
+        headers: {
+          'x-internal-service-key': 'internal-key-123',
+          'x-internal-service-id': 'recoder-pm',
+        },
+      } as any;
+
+      expect(resolveInternalServiceSession(req, 'internal-key-123')).toEqual({
+        userId: 'internal:recoder-pm',
+        sessionId: 'internal:recoder-pm',
+      });
+    });
+
+    it('accepts Authorization bearer as an internal service key fallback', async () => {
+      const { resolveInternalServiceSession } = await import('../auth-utils');
+
+      const req = {
+        headers: {
+          authorization: 'Bearer internal-key-123',
+        },
+      } as any;
+
+      expect(resolveInternalServiceSession(req, 'internal-key-123')).toEqual({
+        userId: 'internal:service',
+        sessionId: 'internal:service',
+      });
+    });
+
+    it('rejects missing and mismatched internal service keys', async () => {
+      const { resolveInternalServiceSession } = await import('../auth-utils');
+
+      expect(resolveInternalServiceSession({ headers: {} } as any, 'internal-key-123')).toBeNull();
+      expect(resolveInternalServiceSession({
+        headers: {
+          'x-internal-service-key': 'wrong-key-123',
+        },
+      } as any, 'internal-key-123')).toBeNull();
+      expect(resolveInternalServiceSession({
+        headers: {
+          'x-internal-service-key': 'internal-key-123',
+        },
+      } as any, '')).toBeNull();
+    });
+
+    it('falls back to the default service id when the provided service id is unsafe', async () => {
+      const { resolveInternalServiceSession } = await import('../auth-utils');
+
+      const req = {
+        headers: {
+          'x-internal-service-key': 'internal-key-123',
+          'x-internal-service-name': '../../pm',
+        },
+      } as any;
+
+      expect(resolveInternalServiceSession(req, 'internal-key-123')).toEqual({
+        userId: 'internal:service',
+        sessionId: 'internal:service',
+      });
+    });
+  });
+
   describe('WebSocket Auth Scenarios', () => {
     it('should handle WebSocket upgrade without token in migration mode', async () => {
       process.env.NODE_ENV = 'development';

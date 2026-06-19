@@ -2,6 +2,8 @@
 
 Recoder Agent OS is the control plane for agent work. Claude Code, Codex, Recoder Code, OpenCode, Qwen Code, Gemini CLI, browser agents, sandboxes, and MCP servers are runtimes or connectors.
 
+> Note (2026-06-19): Only Claude Code and Codex are production runtime adapters today. Recoder Code, OpenCode, Qwen Code, and Gemini CLI are experimental/planned, not yet production.
+
 Recoder owns:
 
 - agent identity and capabilities

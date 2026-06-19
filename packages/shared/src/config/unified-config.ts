@@ -1,7 +1,7 @@
 /**
  * Unified Configuration System for Recoder.xyz Ecosystem
  * 
- * Provides consistent configuration across CLI, Spaces, and VS Code Extension
+ * Provides consistent configuration across CLI, Web Platform, and VS Code Extension
  */
 
 import * as os from 'os';
@@ -57,7 +57,7 @@ export interface RecoderConfig {
     telemetry: boolean;
   };
   
-  spaces: {
+  web: {
     theme: 'light' | 'dark' | 'auto';
     autoSave: boolean;
     showPreview: boolean;
@@ -199,7 +199,7 @@ export class UnifiedConfigManager {
         telemetry: true
       },
       
-      spaces: {
+      web: {
         theme: 'auto',
         autoSave: true,
         showPreview: true
@@ -237,6 +237,10 @@ export class UnifiedConfigManager {
    */
   private mergeWithDefaults(existingConfig: Partial<RecoderConfig>): RecoderConfig {
     const defaults = this.getDefaultConfig();
+    const legacyConfig = existingConfig as Partial<RecoderConfig> & {
+      spaces?: RecoderConfig['web'];
+    };
+    const existingWebConfig = existingConfig.web ?? legacyConfig.spaces;
     
     return {
       ...defaults,
@@ -253,9 +257,9 @@ export class UnifiedConfigManager {
         ...defaults.cli,
         ...existingConfig.cli
       },
-      spaces: {
-        ...defaults.spaces,
-        ...existingConfig.spaces
+      web: {
+        ...defaults.web,
+        ...existingWebConfig
       },
       extension: {
         ...defaults.extension,

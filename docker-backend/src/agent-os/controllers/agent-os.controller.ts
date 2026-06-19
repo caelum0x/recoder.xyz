@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import type { AgentProfile, Approval, Artifact, GitHubDeliveryLink, InstructionBundle, MemoryCandidate, MemoryItem, PolicyDecision, RunEvent, RuntimeEvidence, SpacePolicy, TaskRun, TaskRunState, TaskSpec, WorkLockService, WorkSignal } from '@recoder/agent-os';
+import type { AgentProfile, Approval, Artifact, CreateRuntimeEvidenceInput, GitHubDeliveryLink, InstructionBundle, MemoryCandidate, MemoryItem, PolicyDecision, RunEvent, RuntimeEvidence, SpacePolicy, TaskRun, TaskRunState, TaskSpec, WorkLockService, WorkSignal } from '@recoder/agent-os';
 import {
   AgentProfileReconciliationService,
   ApprovalService,
@@ -747,18 +747,28 @@ export class AgentOsController {
   };
 
   appendEvent = async (req: Request, res: Response) => {
-    const event = (await this.repository.appendEvent(req.body));
-    await this.appendRunEventOutbox(event);
-    const application = await this.applyRunEvent(event);
-    res.status(201).json({
-      success: true,
-      data: {
-        event,
-        run: application?.run,
-        eventAppliedToRun: application?.applied ?? false,
-        eventApplicationReason: application?.reason,
-      },
-    });
+    try {
+      const runtimeEvidenceInputs = this.runtimeEvidenceInputsFromRunEvent(req.body as RunEvent);
+      const event = (await this.repository.appendEvent(req.body));
+      await this.appendRunEventOutbox(event);
+      const runtimeEvidence = await this.projectRuntimeEvidenceFromRunEvent(runtimeEvidenceInputs);
+      const application = await this.applyRunEvent(event);
+      res.status(201).json({
+        success: true,
+        data: {
+          event,
+          run: application?.run,
+          eventAppliedToRun: application?.applied ?? false,
+          eventApplicationReason: application?.reason,
+          runtimeEvidence,
+        },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'run_event_append_failed',
+      });
+    }
   };
 
   outbox = async (_req: Request, res: Response) => {
@@ -853,6 +863,53 @@ export class AgentOsController {
       await this.appendTaskRunOutbox(application.run);
     }
     return application;
+  }
+
+  private runtimeEvidenceInputsFromRunEvent(event: RunEvent): CreateRuntimeEvidenceInput[] {
+    return runtimeEvidencePayloads(event.data).map((payload, index) => {
+      if (!isRecord(payload)) {
+        throw new Error(`runtimeEvidence[${index}] object is required`);
+      }
+      const kind = requiredString(payload.kind, `runtimeEvidence[${index}].kind`) as RuntimeEvidence['kind'];
+      const metadata = isRecord(payload.metadata) ? payload.metadata : {};
+      return {
+        evidenceId: optionalString(payload.evidenceId),
+        taskId: optionalString(payload.taskId) ?? event.taskId,
+        runId: optionalString(payload.runId) ?? event.runId,
+        kind,
+        status: readRuntimeEvidenceStatus(payload.status),
+        title: optionalString(payload.title),
+        summary: optionalString(payload.summary),
+        source: readRuntimeEvidenceSource(payload.source, event),
+        artifactIds: stringArray(payload.artifactIds),
+        observedAt: optionalString(payload.observedAt) ?? event.createdAt,
+        metadata: {
+          ...metadata,
+          sourceRunEventId: event.eventId,
+          sourceRunEventType: event.type,
+          ...(event.agentId ? { sourceAgentId: event.agentId } : {}),
+        },
+      };
+    });
+  }
+
+  private async projectRuntimeEvidenceFromRunEvent(inputs: CreateRuntimeEvidenceInput[]): Promise<RuntimeEvidence[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const existingEvidenceIds = new Set((await this.repository.listRuntimeEvidence()).map((evidence) => evidence.evidenceId));
+    const projected: RuntimeEvidence[] = [];
+    for (const input of inputs) {
+      const evidence = this.runtimeEvidenceService.create(input);
+      const stored = (await this.repository.upsertRuntimeEvidence(evidence));
+      if (!existingEvidenceIds.has(stored.evidenceId)) {
+        await this.appendRuntimeEvidenceOutbox(stored);
+        existingEvidenceIds.add(stored.evidenceId);
+      }
+      projected.push(stored);
+    }
+    return projected;
   }
 
   private async maybeCreateApprovalFromPolicyDecision(
@@ -1393,6 +1450,43 @@ function readRuntimeEvidenceStatus(value: unknown): RuntimeEvidence['status'] | 
     return value;
   }
   return undefined;
+}
+
+function runtimeEvidencePayloads(data: unknown): unknown[] {
+  if (!isRecord(data)) {
+    return [];
+  }
+
+  const payloads: unknown[] = [];
+  const direct = data.runtimeEvidence;
+  if (Array.isArray(direct)) {
+    payloads.push(...direct);
+  } else if (direct !== undefined) {
+    payloads.push(direct);
+  }
+
+  const items = data.runtimeEvidenceItems;
+  if (Array.isArray(items)) {
+    payloads.push(...items);
+  }
+
+  return payloads;
+}
+
+function readRuntimeEvidenceSource(value: unknown, event: RunEvent): RuntimeEvidence['source'] {
+  if (isRecord(value)) {
+    return value as RuntimeEvidence['source'];
+  }
+
+  const data = isRecord(event.data) ? event.data : {};
+  return {
+    ...(optionalString(data.runtimeId) ? { runtimeId: optionalString(data.runtimeId) } : {}),
+    ...(event.agentId ? { adapterId: event.agentId } : {}),
+    ...(optionalString(data.sandboxId) ? { sandboxId: optionalString(data.sandboxId) } : {}),
+    ...(optionalString(data.sessionId) ? { sessionId: optionalString(data.sessionId) } : {}),
+    ...(optionalString(data.command) ? { command: optionalString(data.command) } : {}),
+    ...(optionalString(data.url) ? { url: optionalString(data.url) } : {}),
+  };
 }
 
 function stringArray(value: unknown): string[] {
