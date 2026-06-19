@@ -20,6 +20,7 @@ function getNodeIconColor(node: NodeLike): string {
 			case "contentGeneration":
 			case "imageGeneration":
 			case "action":
+			case "squadStep":
 				return "text-inverse";
 			case "dataQuery":
 			case "trigger":
@@ -74,6 +75,8 @@ function getNodeIconBackground(node: NodeLike): string {
 			case "trigger":
 				return "bg-trigger-node-1";
 			case "action":
+				return "bg-action-node-1";
+			case "squadStep":
 				return "bg-action-node-1";
 			case "query":
 				return "bg-query-node-1";

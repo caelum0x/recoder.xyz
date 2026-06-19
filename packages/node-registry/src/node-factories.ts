@@ -48,6 +48,8 @@ import {
 	type Output,
 	OutputId,
 	type QueryNode,
+	isSquadStepNode,
+	type SquadStepNode,
 	type TextGenerationContent,
 	type TextGenerationNode,
 	type TextNode,
@@ -709,6 +711,51 @@ const dataQueryFactoryImpl = {
 	},
 } satisfies NodeFactory<DataQueryNode>;
 
+const squadStepFactoryImpl = {
+	create: (): SquadStepNode => {
+		return {
+			id: NodeId.generate(),
+			type: "operation",
+			content: {
+				type: "squadStep",
+				squadId: "",
+				task: "",
+				strategy: "all",
+			},
+			inputs: [
+				{
+					id: InputId.generate(),
+					label: "Task",
+					accessor: "task",
+				},
+			],
+			outputs: [
+				{
+					id: OutputId.generate(),
+					label: "Result",
+					accessor: "result",
+				},
+			],
+		} satisfies SquadStepNode;
+	},
+	clone: (orig: SquadStepNode): NodeFactoryCloneResult<SquadStepNode> => {
+		const { newIo: newInputs, idMap: inputIdMap } =
+			cloneAndRenewInputIdsWithMap(orig.inputs);
+		const { newIo: newOutputs, idMap: outputIdMap } =
+			cloneAndRenewOutputIdsWithMap(orig.outputs);
+
+		const newNode = {
+			id: NodeId.generate(),
+			type: "operation",
+			name: `Copy of ${orig.name ?? defaultName(orig)}`,
+			content: structuredClone(orig.content),
+			inputs: newInputs,
+			outputs: newOutputs,
+		} satisfies SquadStepNode;
+		return { newNode, inputIdMap, outputIdMap };
+	},
+} satisfies NodeFactory<SquadStepNode>;
+
 const webPageFactoryImpl = {
 	create: (): WebPageNode => ({
 		id: NodeId.generate(),
@@ -930,6 +977,7 @@ const factoryImplementations = {
 	webPage: webPageFactoryImpl,
 	appEntry: appEntryFactoryImpl,
 	contentGeneration: contentGenerationFactoryImpl,
+	squadStep: squadStepFactoryImpl,
 } as const;
 
 type CreateArgMap = {
@@ -948,6 +996,7 @@ type CreateArgMap = {
 	webPage: undefined;
 	appEntry: undefined;
 	contentGeneration: CreateContentGenerationNodeInput;
+	squadStep: undefined;
 };
 
 const nodeTypesRequiringArg = (
@@ -1030,6 +1079,10 @@ export function createDataQueryNode(): DataQueryNode {
 	return dataQueryFactoryImpl.create();
 }
 
+export function createSquadStepNode(): SquadStepNode {
+	return squadStepFactoryImpl.create();
+}
+
 export function createWebPageNode(): WebPageNode {
 	return webPageFactoryImpl.create();
 }
@@ -1077,6 +1130,13 @@ export function cloneNode<N extends Node>(
 		case "dataQuery":
 			if (isDataQueryNode(sourceNode)) {
 				return dataQueryFactoryImpl.clone(
+					sourceNode,
+				) as NodeFactoryCloneResult<N>;
+			}
+			break;
+		case "squadStep":
+			if (isSquadStepNode(sourceNode)) {
+				return squadStepFactoryImpl.clone(
 					sourceNode,
 				) as NodeFactoryCloneResult<N>;
 			}
@@ -1178,6 +1238,8 @@ export const nodeFactories = {
 				return factoryImplementations.query.create();
 			case "dataQuery":
 				return factoryImplementations.dataQuery.create();
+			case "squadStep":
+				return factoryImplementations.squadStep.create();
 			case "end":
 				return factoryImplementations.end.create();
 			case "text":
@@ -1239,6 +1301,11 @@ export const nodeFactories = {
 			case "dataQuery":
 				if (isDataQueryNode(sourceNode)) {
 					return factoryImplementations.dataQuery.clone(sourceNode);
+				}
+				break;
+			case "squadStep":
+				if (isSquadStepNode(sourceNode)) {
+					return factoryImplementations.squadStep.clone(sourceNode);
 				}
 				break;
 			case "end":

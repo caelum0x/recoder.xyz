@@ -1,15 +1,18 @@
 # Self-hosted, keyless capability layer for Recoder's agent capabilities.
 #
-# These are the open-source backends that let the capability layer run WITHOUT
-# any SaaS keys:
+# On-box policy (prod is 16GB / no-GPU): do NOT self-host LLM inference here.
+# Use cloud LLM (BYOK / OpenRouter / Gemini) for the unified router and mem0 OSS
+# LLM + embeddings. This compose only provisions the light, on-box-safe backends:
 #   - Qdrant   -> mem0 OSS vector store (agent memory)
-#   - Ollama   -> local LLM + embeddings (mem0 OSS, unified LLM router)
-#   - vLLM     -> optional GPU inference, OpenAI-compatible (LLM router)
 #   - OpenZiti -> optional zero-trust controller (runner identities)
 #
-# Bring up the core two:   docker compose -f docker-compose.capabilities.yml up -d qdrant ollama
-# Add optional services:   docker compose -f docker-compose.capabilities.yml --profile inference --profile ziti up -d
+# Bring up Qdrant:   docker compose -f docker-compose.capabilities.yml up -d qdrant
+# Add OpenZiti:      docker compose -f docker-compose.capabilities.yml --profile ziti up -d qdrant ziti-controller
 # Then set the matching vars from .env.capabilities.example on the backend.
+#
+# NOTE (2026-06-19): Ollama and vLLM inference services were removed. They were
+# never viable on this no-GPU / 16GB box; run inference via cloud LLM or a
+# separate GPU host instead.
 
 services:
   qdrant:
@@ -23,48 +26,6 @@ services:
       - qdrant-data:/qdrant/storage
     networks:
       - recoder-capabilities
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: recoder-ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    networks:
-      - recoder-capabilities
-    # GPU is optional; uncomment if available:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-
-  # Optional: self-hosted GPU inference, OpenAI-compatible API for the LLM router.
-  # Enable with: --profile inference  (set VLLM_BASE_URL=http://vllm:8000/v1)
-  vllm:
-    image: vllm/vllm-openai:latest
-    container_name: recoder-vllm
-    profiles: ["inference"]
-    restart: unless-stopped
-    command: ["--model", "${VLLM_MODEL:-Qwen/Qwen2.5-Coder-7B-Instruct}"]
-    ports:
-      - "8000:8000"
-    volumes:
-      - vllm-cache:/root/.cache/huggingface
-    networks:
-      - recoder-capabilities
-    # Requires NVIDIA runtime:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
 
   # Optional: OpenZiti zero-trust controller (auto-generates PKI + admin creds;
   # see container logs for the admin password). Enable with: --profile ziti
@@ -97,8 +58,6 @@ services:
 
 volumes:
   qdrant-data:
-  ollama-data:
-  vllm-cache:
   ziti-data:
 
 networks:

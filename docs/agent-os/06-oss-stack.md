@@ -19,7 +19,7 @@ Use OSS for infrastructure, not product ownership.
 - OpenCode
 - Qwen Code
 - Gemini CLI
-- Daytona and E2B
+- Daytona and E2B (Correction 2026-06-19: Daytona sandbox stack stopped/images removed to free disk at zero traffic — dormant, re-provision-on-demand, NOT running; E2B is the cloud fallback. Both remain on the roadmap as adapters.)
 - LangGraph, AutoGen, and CrewAI
 - mem0 and external memory providers
 

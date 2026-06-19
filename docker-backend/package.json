@@ -11,6 +11,8 @@
     "smoke:queue": "bash scripts/smoke-public-queue.sh",
     "a2a:worker": "tsx src/a2a-intent-worker.ts",
     "agent-os:persistence-smoke": "tsx scripts/agent-os-persistence-smoke.ts",
+    "agent-os:verify-paid-loop": "tsx scripts/verify-agent-os-paid-loop.ts",
+    "agent-os:verify-outbox-nats": "tsx scripts/verify-agent-os-outbox-nats.ts",
     "test": "vitest --run",
     "test:watch": "vitest",
     "test:coverage": "vitest --coverage",

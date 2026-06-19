@@ -44,6 +44,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.mapTaskEvidenceToRuntimeEvidenceInput = mapTaskEvidenceToRuntimeEvidenceInput;
 exports.wireA2AEventBridge = wireA2AEventBridge;
 exports.resetA2AEventBridge = resetA2AEventBridge;
 exports.publishChannelMessage = publishChannelMessage;
@@ -57,10 +58,15 @@ exports.publishAgentDeregistered = publishAgentDeregistered;
 exports.publishAgentOnline = publishAgentOnline;
 exports.publishAgentOffline = publishAgentOffline;
 const a2a_event_bus_1 = require("./a2a-event-bus");
+const node_crypto_1 = require("node:crypto");
 const task_lifecycle_service_1 = require("./task-lifecycle.service");
 const heartbeat_tracker_service_1 = require("./heartbeat-tracker.service");
 const logger_1 = require("../logger");
+const agent_os_1 = require("@recoder/agent-os");
+const agent_events_1 = require("@recoder/agent-events");
+const service_container_1 = require("../agent-os/service-container");
 const logger = (0, logger_1.createLogger)('a2a-event-bridge');
+const runtimeEvidenceService = new agent_os_1.RuntimeEvidenceService();
 function toRecord(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return undefined;
@@ -107,6 +113,17 @@ function readEvidenceMetadata(value) {
         return null;
     }
     return value;
+}
+function readString(value) {
+    return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+function readStringArray(value) {
+    if (!Array.isArray(value))
+        return [];
+    return value.filter((item) => typeof item === 'string' && item.trim().length > 0);
+}
+function readBoolean(value) {
+    return typeof value === 'boolean' ? value : undefined;
 }
 function deriveMetadataPatchLifecycleEvents(auditEvent, task) {
     if (auditEvent.event_type !== 'task.progress')
@@ -210,6 +227,149 @@ function extractTaskEvidence(task) {
     }))
         .filter((item) => Boolean(item.kind && item.label));
 }
+function runtimeEvidenceKindForTaskEvidence(item) {
+    const metadata = item.metadata ?? {};
+    const stream = readString(metadata.stream)?.toLowerCase();
+    const itemKind = item.kind.trim().toLowerCase();
+    if (itemKind === 'log') {
+        return stream === 'stderr' ? 'stderr' : 'stdout';
+    }
+    if (itemKind === 'file-change' || itemKind === 'file_mutation') {
+        return 'file_mutation';
+    }
+    if (itemKind === 'preview' || itemKind === 'preview_link') {
+        return 'preview_link';
+    }
+    if (itemKind === 'verification') {
+        return 'verification';
+    }
+    if (itemKind === 'browser-check' || itemKind === 'browser_check') {
+        return 'browser_check';
+    }
+    if (itemKind === 'desktop') {
+        return 'desktop';
+    }
+    if (itemKind === 'artifact') {
+        return readString(metadata.artifactType) === 'log' ? 'stdout' : 'custom';
+    }
+    if (itemKind === 'runtime') {
+        if (readString(metadata.gitStatus) || readString(metadata.gitBranch)) {
+            return 'git_status';
+        }
+        if (readString(metadata.cloneUrl)) {
+            return 'clone_provenance';
+        }
+        return 'custom';
+    }
+    return null;
+}
+function runtimeEvidenceStatusForTaskEvidence(task, kind, metadata) {
+    const status = readString(metadata?.status)?.toLowerCase();
+    if (status === 'observed' || status === 'passed' || status === 'failed' || status === 'warning') {
+        return status;
+    }
+    const passed = readBoolean(metadata?.passed);
+    if (typeof passed === 'boolean') {
+        return passed ? 'passed' : 'failed';
+    }
+    if (task.state === 'failed' && kind === 'stderr') {
+        return 'failed';
+    }
+    return 'observed';
+}
+function runtimeEvidenceSourceForTaskEvidence(item, kind, task) {
+    const metadata = item.metadata ?? {};
+    const url = readString(metadata.url) ??
+        (kind === 'preview_link' ? readString(item.ref) ?? undefined : undefined);
+    return {
+        runtimeId: readString(metadata.runtimeId) ?? readString(metadata.runtimeType) ?? task.assignee.platform,
+        adapterId: readString(metadata.adapterId) ??
+            readString(metadata.connectorId) ??
+            task.connector.connector_id,
+        sandboxId: readString(metadata.sandboxId),
+        sessionId: readString(metadata.sessionId),
+        command: readString(metadata.command),
+        url,
+    };
+}
+function runtimeEvidenceArtifactIdsForTaskEvidence(item) {
+    const metadata = item.metadata ?? {};
+    const ids = [
+        ...readStringArray(metadata.artifactIds),
+        readString(metadata.artifactId),
+        item.kind === 'artifact' ? readString(item.ref) : undefined,
+    ].filter((value) => Boolean(value));
+    return [...new Set(ids)];
+}
+function runtimeEvidenceSummaryForTaskEvidence(item) {
+    const metadata = item.metadata ?? {};
+    return (readString(metadata.excerpt) ??
+        readString(metadata.gitStatus) ??
+        readString(metadata.summary) ??
+        readString(item.ref) ??
+        undefined);
+}
+function deterministicRuntimeEvidenceId(task, item, kind) {
+    const fingerprint = JSON.stringify({
+        taskId: task.id,
+        kind,
+        evidenceKind: item.kind,
+        label: item.label,
+        ref: item.ref ?? null,
+    });
+    return `evidence_a2a_${(0, node_crypto_1.createHash)('sha256').update(fingerprint).digest('hex').slice(0, 24)}`;
+}
+function mapTaskEvidenceToRuntimeEvidenceInput(task, item, runId) {
+    const kind = runtimeEvidenceKindForTaskEvidence(item);
+    if (!kind)
+        return null;
+    const metadata = item.metadata ?? {};
+    return {
+        evidenceId: deterministicRuntimeEvidenceId(task, item, kind),
+        taskId: task.id,
+        runId,
+        kind,
+        status: runtimeEvidenceStatusForTaskEvidence(task, kind, metadata),
+        title: item.label,
+        summary: runtimeEvidenceSummaryForTaskEvidence(item),
+        source: runtimeEvidenceSourceForTaskEvidence(item, kind, task),
+        artifactIds: runtimeEvidenceArtifactIdsForTaskEvidence(item),
+        observedAt: task.updated_at,
+        metadata: {
+            ...metadata,
+            a2aEvidenceKind: item.kind,
+            a2aEvidenceRef: item.ref ?? null,
+            workspaceId: task.workspace_id,
+            threadId: task.thread_id,
+            traceId: task.trace_id,
+            agentId: task.assignee.agent_id,
+            connectorId: task.connector.connector_id,
+        },
+    };
+}
+async function projectTaskEvidenceToAgentOsRuntimeEvidence(task, evidence) {
+    const repository = service_container_1.agentOsContainer.repository;
+    const agentOsTasks = await repository.listTasks();
+    if (!agentOsTasks.some((agentOsTask) => agentOsTask.taskId === task.id)) {
+        return;
+    }
+    const runs = (await repository.listRuns())
+        .filter((run) => run.taskId === task.id)
+        .sort((left, right) => left.updatedAt.localeCompare(right.updatedAt));
+    const runId = runs.length > 0 ? runs[runs.length - 1]?.runId : undefined;
+    const existingEvidenceIds = new Set((await repository.listRuntimeEvidence()).map((item) => item.evidenceId));
+    for (const item of evidence) {
+        const input = mapTaskEvidenceToRuntimeEvidenceInput(task, item, runId);
+        if (!input)
+            continue;
+        const wasExisting = existingEvidenceIds.has(input.evidenceId);
+        const stored = await repository.upsertRuntimeEvidence(runtimeEvidenceService.create(input));
+        existingEvidenceIds.add(stored.evidenceId);
+        if (!wasExisting) {
+            await repository.appendOutbox((0, agent_events_1.createOutboxRecord)((0, agent_events_1.mapRuntimeEvidenceToCloudEvent)({ data: stored })));
+        }
+    }
+}
 async function projectAuditEventToControlPlaneHistory(lifecycleService, auditEvent) {
     const taskId = auditEvent.task_id;
     if (!taskId)
@@ -255,6 +415,7 @@ async function projectAuditEventToControlPlaneHistory(lifecycleService, auditEve
         agentId: task.assignee.agent_id,
         evidence,
     });
+    await projectTaskEvidenceToAgentOsRuntimeEvidence(task, evidence);
 }
 // ---------------------------------------------------------------------------
 // Bridge setup

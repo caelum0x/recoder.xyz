@@ -83,6 +83,70 @@ check_daytona_auth() {
   fail "Core daytona — set DAYTONA_API_KEY or both DAYTONA_JWT_TOKEN and DAYTONA_ORGANIZATION_ID in $file"
 }
 
+check_agent_os_outbox_drain() {
+  local file="$1"
+  local enabled interval
+  enabled="$(get_env_value "$file" "AGENT_OS_OUTBOX_DRAIN_ENABLED")"
+  interval="$(get_env_value "$file" "AGENT_OS_OUTBOX_DRAIN_INTERVAL_MS")"
+
+  if [[ "$enabled" == "true" ]]; then
+    pass "Core events — Agent OS outbox drain enabled"
+    return
+  fi
+
+  if [[ "$interval" =~ ^[0-9]+$ && "$interval" -gt 0 ]]; then
+    pass "Core events — Agent OS outbox drain interval configured"
+    return
+  fi
+
+  fail "Core events — set AGENT_OS_OUTBOX_DRAIN_ENABLED=true or AGENT_OS_OUTBOX_DRAIN_INTERVAL_MS in $file"
+}
+
+check_edge_preview_rollout() {
+  local file="$1"
+  local secret base_domain protection_mode preview_limit crowdsec_enabled openappsec_enabled
+  secret="$(get_env_value "$file" "RECODER_PREVIEW_ACCESS_SECRET")"
+  base_domain="$(get_env_value "$file" "RECODER_EDGE_PREVIEW_BASE_DOMAIN")"
+  protection_mode="$(get_env_value "$file" "RECODER_EDGE_PREVIEW_PROTECTION_MODE")"
+  preview_limit="$(get_env_value "$file" "RECODER_EDGE_PREVIEW_RATE_LIMIT_PER_MINUTE")"
+  crowdsec_enabled="$(get_env_value "$file" "RECODER_EDGE_CROWDSEC_ENABLED")"
+  openappsec_enabled="$(get_env_value "$file" "RECODER_EDGE_OPENAPPSEC_ENABLED")"
+
+  if [[ -z "$secret" ]]; then
+    fail "Core edge — RECODER_PREVIEW_ACCESS_SECRET missing in $file"
+  elif echo "$secret" | grep -qiE 'placeholder|change.?this|your.?|example|todo|xxx|dev-secret'; then
+    fail "Core edge — RECODER_PREVIEW_ACCESS_SECRET placeholder-like value in $file"
+  else
+    pass "Core edge — preview access secret set"
+  fi
+
+  if [[ -z "$base_domain" ]]; then
+    fail "Core edge — RECODER_EDGE_PREVIEW_BASE_DOMAIN missing in $file"
+  elif [[ "$base_domain" == "localhost"* || "$base_domain" == "127.0.0.1"* ]]; then
+    fail "Core edge — RECODER_EDGE_PREVIEW_BASE_DOMAIN must not be localhost"
+  else
+    pass "Core edge — preview base domain set"
+  fi
+
+  if [[ "$protection_mode" == "signed" || "$protection_mode" == "private" ]]; then
+    pass "Core edge — preview protection mode is $protection_mode"
+  else
+    fail "Core edge — set RECODER_EDGE_PREVIEW_PROTECTION_MODE=signed or private in $file"
+  fi
+
+  if [[ "$preview_limit" =~ ^[0-9]+$ && "$preview_limit" -ge 10 ]]; then
+    pass "Core edge — preview rate limit configured"
+  else
+    fail "Core edge — set RECODER_EDGE_PREVIEW_RATE_LIMIT_PER_MINUTE to an integer >= 10 in $file"
+  fi
+
+  if [[ "$crowdsec_enabled" == "true" || "$openappsec_enabled" == "true" ]]; then
+    pass "Core edge — WAF hook enabled"
+  else
+    fail "Core edge — enable RECODER_EDGE_CROWDSEC_ENABLED=true or RECODER_EDGE_OPENAPPSEC_ENABLED=true in $file"
+  fi
+}
+
 echo "== Production Env Gate =="
 echo "repo: $REPO_ROOT"
 echo "scope: $PRODUCTION_SCOPE"
@@ -95,6 +159,9 @@ else
   check_required_var "$ROOT_ENV" "INTERNAL_SERVICE_KEY" "Core auth"
   check_required_var "$ROOT_ENV" "AUTH_DATABASE_URL" "Core auth"
   check_required_var "$ROOT_ENV" "MAIN_SITE_INTERNAL_URL" "Core routing"
+  check_required_var "$ROOT_ENV" "NATS_URL" "Core events"
+  check_agent_os_outbox_drain "$ROOT_ENV"
+  check_edge_preview_rollout "$ROOT_ENV"
   check_daytona_auth "$ROOT_ENV"
 
   RESEND_API_KEY_VALUE="$(get_env_value "$ROOT_ENV" "RESEND_API_KEY")"

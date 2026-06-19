@@ -1,5 +1,8 @@
 {
 	"extends": "@recoder/tsconfig/node-library",
+	"compilerOptions": {
+		"types": ["vitest"]
+	},
 	"include": ["."],
 	"exclude": ["node_modules"]
 }

@@ -1,0 +1,412 @@
+{
+  "agents": [
+    [
+      "recoder-web",
+      {
+        "identity": {
+          "id": "recoder-web",
+          "name": "Recoder Web",
+          "platform": "recoder_web"
+        },
+        "card": {
+          "name": "Recoder Web",
+          "description": "Human-facing workspace surface for tasks, artifacts, and approvals",
+          "protocolVersion": "0.3.0",
+          "version": "1.0.0",
+          "url": "https://recoder.xyz",
+          "skills": [
+            {
+              "id": "workspace-ui",
+              "name": "Workspace UI",
+              "description": "Human-facing workspace and task management",
+              "tags": [
+                "workspace",
+                "ui"
+              ]
+            },
+            {
+              "id": "task-visibility",
+              "name": "Task Visibility",
+              "description": "Surface task, artifact, and approval state",
+              "tags": [
+                "tasks",
+                "visibility"
+              ]
+            }
+          ],
+          "capabilities": {
+            "streaming": false,
+            "pushNotifications": false
+          },
+          "defaultInputModes": [
+            "text"
+          ],
+          "defaultOutputModes": [
+            "text"
+          ]
+        },
+        "protocol": "rest",
+        "tier": "tier1",
+        "status": "supported",
+        "tags": [
+          "workspace",
+          "web",
+          "core"
+        ]
+      }
+    ],
+    [
+      "recoder-agency",
+      {
+        "identity": {
+          "id": "recoder-agency",
+          "name": "Recoder Agency",
+          "platform": "recoder_agency"
+        },
+        "card": {
+          "name": "Recoder Agency",
+          "description": "Multi-agent orchestration layer for coordinating AI agents",
+          "protocolVersion": "0.3.0",
+          "version": "1.0.0",
+          "url": "https://agency.recoder.xyz",
+          "skills": [
+            {
+              "id": "orchestration",
+              "name": "Orchestration",
+              "description": "Multi-agent orchestration",
+              "tags": [
+                "orchestration",
+                "agency"
+              ]
+            },
+            {
+              "id": "agent-routing",
+              "name": "Agent Routing",
+              "description": "Route tasks to appropriate agents",
+              "tags": [
+                "routing",
+                "dispatch"
+              ]
+            }
+          ],
+          "capabilities": {
+            "streaming": false,
+            "pushNotifications": false
+          },
+          "defaultInputModes": [
+            "text"
+          ],
+          "defaultOutputModes": [
+            "text"
+          ]
+        },
+        "protocol": "rest",
+        "tier": "tier1",
+        "status": "supported",
+        "tags": [
+          "orchestration",
+          "agency",
+          "core"
+        ]
+      }
+    ],
+    [
+      "recoder-studio",
+      {
+        "identity": {
+          "id": "recoder-studio",
+          "name": "Recoder Studio",
+          "platform": "custom"
+        },
+        "card": {
+          "name": "Recoder Studio",
+          "description": "Visual workflow builder and agent configuration studio",
+          "protocolVersion": "0.3.0",
+          "version": "1.0.0",
+          "url": "https://studio.recoder.xyz",
+          "skills": [
+            {
+              "id": "workflow-builder",
+              "name": "Workflow Builder",
+              "description": "Visual workflow construction",
+              "tags": [
+                "workflow",
+                "visual"
+              ]
+            },
+            {
+              "id": "agent-config",
+              "name": "Agent Configuration",
+              "description": "Configure agent behaviors",
+              "tags": [
+                "config",
+                "setup"
+              ]
+            }
+          ],
+          "capabilities": {
+            "streaming": false,
+            "pushNotifications": false
+          },
+          "defaultInputModes": [
+            "text"
+          ],
+          "defaultOutputModes": [
+            "text"
+          ]
+        },
+        "protocol": "rest",
+        "tier": "tier2",
+        "status": "supported",
+        "tags": [
+          "studio",
+          "workflow",
+          "visual"
+        ]
+      }
+    ],
+    [
+      "recoder-pm",
+      {
+        "identity": {
+          "id": "recoder-pm",
+          "name": "Recoder PM",
+          "platform": "recoder_pm"
+        },
+        "card": {
+          "name": "Recoder PM",
+          "description": "Project management agent for tracking tasks and milestones",
+          "protocolVersion": "0.3.0",
+          "version": "1.0.0",
+          "url": "https://recoderpm.app",
+          "skills": [
+            {
+              "id": "project-management",
+              "name": "Project Management",
+              "description": "Manage projects and tasks",
+              "tags": [
+                "pm",
+                "management"
+              ]
+            },
+            {
+              "id": "milestone-tracking",
+              "name": "Milestone Tracking",
+              "description": "Track project milestones",
+              "tags": [
+                "milestones",
+                "tracking"
+              ]
+            }
+          ],
+          "capabilities": {
+            "streaming": false,
+            "pushNotifications": false
+          },
+          "defaultInputModes": [
+            "text"
+          ],
+          "defaultOutputModes": [
+            "text"
+          ]
+        },
+        "protocol": "rest",
+        "tier": "tier1",
+        "status": "supported",
+        "tags": [
+          "pm",
+          "management",
+          "core"
+        ]
+      }
+    ],
+    [
+      "openclaw",
+      {
+        "identity": {
+          "id": "openclaw",
+          "name": "OpenClaw",
+          "platform": "custom"
+        },
+        "card": {
+          "name": "OpenClaw",
+          "description": "Open-source AI coding agent with autonomous execution capabilities",
+          "protocolVersion": "0.3.0",
+          "version": "1.0.0",
+          "url": "https://openclaw.recoder.xyz",
+          "skills": [
+            {
+              "id": "autonomous-coding",
+              "name": "Autonomous Coding",
+              "description": "Autonomous code generation and execution",
+              "tags": [
+                "coding",
+                "autonomous"
+              ]
+            },
+            {
+              "id": "task-execution",
+              "name": "Task Execution",
+              "description": "Execute complex development tasks",
+              "tags": [
+                "execution",
+                "tasks"
+              ]
+            }
+          ],
+          "capabilities": {
+            "streaming": false,
+            "pushNotifications": false
+          },
+          "defaultInputModes": [
+            "text"
+          ],
+          "defaultOutputModes": [
+            "text"
+          ]
+        },
+        "protocol": "rest",
+        "tier": "tier2",
+        "status": "supported",
+        "tags": [
+          "openclaw",
+          "autonomous",
+          "coding"
+        ]
+      }
+    ],
+    [
+      "claude_code",
+      {
+        "identity": {
+          "id": "claude_code",
+          "name": "claude_code",
+          "platform": "claude_code"
+        },
+        "card": {
+          "name": "claude_code",
+          "description": "Claude Code agent",
+          "protocolVersion": "0.3.0",
+          "version": "1.0.0",
+          "url": "",
+          "skills": [
+            {
+              "id": "code-review",
+              "name": "Code Review",
+              "description": "Review code and architecture",
+              "tags": [
+                "code",
+                "review"
+              ]
+            }
+          ],
+          "capabilities": {
+            "streaming": false,
+            "pushNotifications": false
+          },
+          "defaultInputModes": [
+            "text"
+          ],
+          "defaultOutputModes": [
+            "text"
+          ]
+        },
+        "protocol": "mcp",
+        "tier": "tier1",
+        "status": "supported",
+        "tags": [
+          "execute",
+          "plan"
+        ]
+      }
+    ]
+  ],
+  "heartbeats": [
+    [
+      "recoder-web",
+      "2026-06-13T18:25:20.423Z"
+    ],
+    [
+      "recoder-agency",
+      "2026-06-13T18:25:20.424Z"
+    ],
+    [
+      "recoder-studio",
+      "2026-06-13T18:25:20.424Z"
+    ],
+    [
+      "recoder-pm",
+      "2026-06-13T18:25:20.424Z"
+    ],
+    [
+      "openclaw",
+      "2026-06-13T18:25:20.424Z"
+    ],
+    [
+      "claude_code",
+      "2026-06-13T18:25:20.427Z"
+    ]
+  ],
+  "lifecycle": [
+    [
+      "recoder-web",
+      {
+        "firstRegisteredAt": "2026-06-12T16:40:11.955Z",
+        "lastRegisteredAt": "2026-06-13T18:25:20.423Z",
+        "lastSeenAt": "2026-06-13T18:25:20.423Z",
+        "reconnectCount": 4,
+        "registrationCount": 5
+      }
+    ],
+    [
+      "recoder-agency",
+      {
+        "firstRegisteredAt": "2026-06-12T16:40:11.955Z",
+        "lastRegisteredAt": "2026-06-13T18:25:20.424Z",
+        "lastSeenAt": "2026-06-13T18:25:20.424Z",
+        "reconnectCount": 4,
+        "registrationCount": 5
+      }
+    ],
+    [
+      "recoder-studio",
+      {
+        "firstRegisteredAt": "2026-06-12T16:40:11.956Z",
+        "lastRegisteredAt": "2026-06-13T18:25:20.424Z",
+        "lastSeenAt": "2026-06-13T18:25:20.424Z",
+        "reconnectCount": 4,
+        "registrationCount": 5
+      }
+    ],
+    [
+      "recoder-pm",
+      {
+        "firstRegisteredAt": "2026-06-12T16:40:11.956Z",
+        "lastRegisteredAt": "2026-06-13T18:25:20.424Z",
+        "lastSeenAt": "2026-06-13T18:25:20.424Z",
+        "reconnectCount": 4,
+        "registrationCount": 5
+      }
+    ],
+    [
+      "openclaw",
+      {
+        "firstRegisteredAt": "2026-06-12T16:40:11.956Z",
+        "lastRegisteredAt": "2026-06-13T18:25:20.424Z",
+        "lastSeenAt": "2026-06-13T18:25:20.424Z",
+        "reconnectCount": 4,
+        "registrationCount": 5
+      }
+    ],
+    [
+      "claude_code",
+      {
+        "firstRegisteredAt": "2026-06-13T16:49:57.237Z",
+        "lastRegisteredAt": "2026-06-13T18:25:20.427Z",
+        "lastSeenAt": "2026-06-13T18:25:20.427Z",
+        "reconnectCount": 3,
+        "registrationCount": 4
+      }
+    ]
+  ]
+}

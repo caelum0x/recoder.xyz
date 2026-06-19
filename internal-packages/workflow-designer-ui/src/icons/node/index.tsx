@@ -4,12 +4,19 @@ import {
 	isContentGenerationNode,
 	isFileNode,
 	isImageGenerationNode,
+	isSquadStepNode,
 	isTextGenerationNode,
 	isTriggerNode,
 	isVectorStoreNode,
 	type NodeLike,
 } from "@recoder/protocol";
-import { DatabaseZapIcon, FlagIcon, PlayIcon, ZapIcon } from "lucide-react";
+import {
+	DatabaseZapIcon,
+	FlagIcon,
+	PlayIcon,
+	UsersRoundIcon,
+	ZapIcon,
+} from "lucide-react";
 import type { SVGProps } from "react";
 import { AnthropicIcon } from "../anthropic";
 import { Flux1Icon } from "../flux1";
@@ -198,6 +205,13 @@ export function NodeIcon({
 					return <DatabaseZapIcon {...props} data-content-type-icon />;
 				case "dataQuery":
 					return <DataQueryIcon {...props} data-content-type-icon />;
+				case "squadStep":
+					if (!isSquadStepNode(node)) {
+						throw new Error(
+							`Expected SquadStepNode, got ${JSON.stringify(node)}`,
+						);
+					}
+					return <UsersRoundIcon {...props} data-content-type-icon />;
 				case "appEntry":
 					return <PlayIcon {...props} data-content-type-icon />;
 				case "end":

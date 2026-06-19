@@ -39,6 +39,7 @@ import { gitOperations } from './git-operations.js';
 import { getWsRateLimiter, getAllWsRateLimitStats } from './security/ws-rate-limiter.js';
 import {
   abusePrevention,
+  alertFromAbuseEvent,
   getAlerts,
   acknowledgeAlert,
   getAlertCounts,
@@ -64,6 +65,7 @@ import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
+import { startAgentOsOutboxDrainLoop } from './agent-os/outbox-drain-loop.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
 import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, agentRegistryRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
@@ -153,6 +155,7 @@ import {
   isLikelySandboxProjectId,
   isStrictAuthMode,
   resolveA2ASystemSession,
+  resolveInternalServiceSession,
 } from './auth-utils.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
 import { bootstrapDaytonaPreview } from './preview';
@@ -758,6 +761,13 @@ function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Res
 }
 
 function authenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  const internalSession = resolveInternalServiceSession(req, INTERNAL_SERVICE_KEY);
+  if (internalSession) {
+    req.userId = internalSession.userId;
+    req.sessionId = internalSession.sessionId;
+    return next();
+  }
+
   // Get token from Authorization header OR cookies (for cross-origin with httpOnly cookies)
   const token = getSessionTokenFromRequest(req);
   const origin = req.headers.origin || '';
@@ -830,6 +840,13 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
     }
     return res.status(500).json({ error: 'Authentication service error' });
   });
+}
+
+function authenticateMutatingRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    return next();
+  }
+  return authenticateRequest(req, res, next);
 }
 
 function promoteQueryToken(req: express.Request, _res: express.Response, next: express.NextFunction) {
@@ -1643,6 +1660,31 @@ const trustProxySetting = getTrustProxySetting();
 app.set('trust proxy', trustProxySetting);
 logger.info({ trustProxy: String(trustProxySetting) }, 'Trust proxy configured');
 
+function getRequestIp(req: express.Request): string {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  if (forwardedFor) {
+    return Array.isArray(forwardedFor)
+      ? forwardedFor[0]
+      : forwardedFor.split(',')[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+function recordRateLimitAbuse(req: express.Request, limitName: string): void {
+  const event = abusePrevention.recordRateLimitHit(
+    {
+      ip: getRequestIp(req),
+      userAgent: req.headers['user-agent'],
+    },
+    {
+      limitName,
+      method: req.method,
+      path: req.path,
+    },
+  );
+  alertFromAbuseEvent(event);
+}
+
 // Rate limiting
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
@@ -1650,13 +1692,24 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests, slow down' },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    recordRateLimitAbuse(req, 'api');
+    res.status(429).json({ error: 'Too many requests, slow down' });
+  },
 });
 
 const containerLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10, // 10 container creates per minute
   message: { error: 'Container creation rate limited' },
+  handler: (req, res) => {
+    recordRateLimitAbuse(req, 'container-create');
+    res.status(429).json({ error: 'Container creation rate limited' });
+  },
 });
+
+const abusePayloadInspectionEnabled =
+  (process.env.ABUSE_PAYLOAD_INSPECTION_ENABLED || '').toLowerCase() === 'true';
 
 // CORS allowlist imported from cors-utils.ts (shared with globalErrorHandler)
 
@@ -1749,17 +1802,33 @@ app.use(metricsMiddleware(metricsCollector));
 
 // Abuse prevention middleware — check IP blocklist on every request
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const ip = req.headers['x-forwarded-for']
-    ? (Array.isArray(req.headers['x-forwarded-for'])
-        ? req.headers['x-forwarded-for'][0]
-        : req.headers['x-forwarded-for'].split(',')[0].trim())
-    : req.ip || req.socket.remoteAddress || 'unknown';
+  const ip = getRequestIp(req);
 
   const blockCheck = abusePrevention.isBlocked({ ip, userAgent: req.headers['user-agent'] });
   if (blockCheck.blocked) {
     res.status(403).json({ error: 'Access denied' });
     return;
   }
+
+  if (
+    abusePayloadInspectionEnabled &&
+    req.path.startsWith('/api/') &&
+    req.body !== undefined &&
+    req.body !== null
+  ) {
+    const payloadCheck = abusePrevention.checkPayload(req.body, {
+      ip,
+      userAgent: req.headers['user-agent'],
+    });
+    if (!payloadCheck.safe) {
+      res.status(400).json({
+        error: 'Suspicious request payload',
+        patterns: payloadCheck.patterns,
+      });
+      return;
+    }
+  }
+
   next();
 });
 
@@ -15607,8 +15676,8 @@ app.use('/api/v1/app-keys', appKeysRouter);
 // external Claude Code / Codex clients) takes precedence over the admin-gated legacy
 // connector registry at a2a-gateway.ts (`GET /agents`, `PUT /agents/:id`).
 app.use('/api/a2a/agents', agentRegistryRouter);
-app.use('/api/a2a', a2aRouter);
-app.use('/api/a2a/tasks', taskLifecycleRouter);
+app.use('/api/a2a', authenticateMutatingRequest, a2aRouter);
+app.use('/api/a2a/tasks', authenticateMutatingRequest, taskLifecycleRouter);
 app.use('/api/a2a/channels', collaborationRouter);
 app.use('/api/a2a', heartbeatRouter);
 app.use('/api/a2a/approvals', approvalRouter);
@@ -15643,12 +15712,12 @@ app.use('/api/a2a/context', contextBridgeRouter);
 app.use('/api/a2a/workspaces', promoteQueryToken, authenticateRequest, a2aWorkspaceRouter);
 app.use('/api/spaces', promoteQueryToken, authenticateRequest, a2aWorkspaceRouter);
 app.use('/api/a2a/memory', authenticateRequest, memoryRouter);
-app.use('/api/a2a/code-search', codeSearchRouter);
-app.use('/api/a2a/search', searchRouter);
+app.use('/api/a2a/code-search', authenticateRequest, codeSearchRouter);
+app.use('/api/a2a/search', authenticateRequest, searchRouter);
 app.use('/api/a2a/webhook', webhookRouter);
-app.use('/api/a2a/scratchpad', scratchpadRouter);
-app.use('/api/a2a/workflows', workflowTriggerRouter);
-app.use('/api/a2a/data', duckdbRouter);
+app.use('/api/a2a/scratchpad', authenticateRequest, scratchpadRouter);
+app.use('/api/a2a/workflows', authenticateRequest, workflowTriggerRouter);
+app.use('/api/a2a/data', authenticateRequest, duckdbRouter);
 app.use('/api/a2a/canvas-update', authenticateRequest, createCanvasRouter({
   canvasHandlerUrl: process.env.RECODER_A2A_CANVAS_HANDLER_URL || '',
   internalServiceKey: process.env.INTERNAL_SERVICE_KEY || '',
@@ -15656,17 +15725,19 @@ app.use('/api/a2a/canvas-update', authenticateRequest, createCanvasRouter({
   readFile: daytonaReadFile,
 }));
 startupInfo('routes.canvas-update', 'registered');
+app.use('/api/a2a/connectors', authenticateRequest);
 app.use('/api/a2a', connectorHealthRouter);
-app.use('/api/a2a/patterns', patternRouter);
+app.use('/api/a2a/patterns', authenticateRequest, patternRouter);
 app.use('/api/a2a', a2aOpenApiRouter);
 app.use('/api/a2a', a2aSloMetricsRouter);
-app.use('/api/a2a/orchestration', orchestrationRouter);
+app.use('/api/a2a/orchestration', authenticateRequest, orchestrationRouter);
+app.use(['/api/a2a/messages', '/api/a2a/delegations', '/api/a2a/handoffs'], authenticateRequest);
 app.use('/api/a2a', workflowMessagingRouter);
 
 // Cross-app A2A workflows (agents↔PM↔agency)
 import { crossAppWorkflowRouter } from './a2a-cross-app-workflows.js';
-app.use('/api/a2a/workflows', crossAppWorkflowRouter);
-app.use('/api/a2a/admin', adminRouter);
+app.use('/api/a2a/workflows', authenticateRequest, crossAppWorkflowRouter);
+app.use('/api/a2a/admin', authenticateRequest, adminRouter);
 
 // Daytona LSP integration for code intelligence
 import { daytonaLspRouter } from './daytona-lsp.js';
@@ -15676,8 +15747,8 @@ app.use('/api/daytona/lsp', authenticateRequest, daytonaLspRouter);
 import { activityFeedRouter } from './unified-activity-feed.js';
 import { dashboardRouter } from './unified-dashboard.js';
 import { edgeRouter } from './edge/edge.routes.js';
-app.use('/api/a2a/activity', activityFeedRouter);
-app.use('/api/a2a/dashboard', dashboardRouter);
+app.use('/api/a2a/activity', authenticateRequest, activityFeedRouter);
+app.use('/api/a2a/dashboard', authenticateRequest, dashboardRouter);
 app.use('/api/edge', edgeRouter);
 
 // ── Coding Runtime API ──────────────────────────────────────────────────────
@@ -16251,15 +16322,18 @@ app.get('/api/a2a/squads', authenticateRequest, asyncHandler(async (req: Authent
 }));
 
 app.post('/api/a2a/squads', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { name, description, leaderId, members } = req.body ?? {};
+  const { name, description, leaderId, projectId, members } = req.body ?? {};
   if (typeof name !== 'string' || !name.trim()) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
   }
   if (members !== undefined && !Array.isArray(members)) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'members must be an array'));
   }
+  if (projectId !== undefined && typeof projectId !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
+  }
   const { createSquad } = await import('./a2a/squad.service.js');
-  sendSuccess(res, createSquad({ name, description, leaderId, members, ownerId: req.userId! }));
+  sendSuccess(res, createSquad({ name, description, leaderId, projectId, members, ownerId: req.userId! }));
 }));
 
 app.post('/api/a2a/squads/import', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
@@ -16269,6 +16343,9 @@ app.post('/api/a2a/squads/import', authenticateRequest, asyncHandler(async (req:
   }
   if (data.members !== undefined && !Array.isArray(data.members)) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'members must be an array'));
+  }
+  if (data.projectId !== undefined && typeof data.projectId !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
   }
   const { importSquad } = await import('./a2a/squad.service.js');
   sendSuccess(res, importSquad(data, req.userId!));
@@ -16288,9 +16365,12 @@ app.get('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: Aut
 }));
 
 app.patch('/api/a2a/squads/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { name, description, leaderId } = req.body ?? {};
+  const { name, description, leaderId, projectId } = req.body ?? {};
+  if (projectId !== undefined && projectId !== null && typeof projectId !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId must be a string or null'));
+  }
   const { updateSquad } = await import('./a2a/squad.service.js');
-  const squad = updateSquad(req.params.id, { name, description, leaderId }, req.userId!);
+  const squad = updateSquad(req.params.id, { name, description, leaderId, projectId }, req.userId!);
   if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
   sendSuccess(res, squad);
 }));
@@ -16315,23 +16395,32 @@ app.get('/api/a2a/squads/:id/export', authenticateRequest, asyncHandler(async (r
 }));
 
 app.post('/api/a2a/squads/:id/members', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { id, kind, role } = req.body ?? {};
+  const { id, kind, role, projectId } = req.body ?? {};
   if (typeof id !== 'string' || !id.trim()) {
     return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'member id (string) is required'));
   }
+  if (projectId !== undefined && typeof projectId !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
+  }
   const { addMember } = await import('./a2a/squad.service.js');
-  const squad = addMember(req.params.id, { id, kind, role }, req.userId!);
+  const squad = addMember(req.params.id, { id, kind, role, projectId }, req.userId!);
   if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad not found'));
   sendSuccess(res, squad);
 }));
 
 app.patch('/api/a2a/squads/:id/members/:memberId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { role } = req.body ?? {};
-  if (typeof role !== 'string' || !role.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'role (string) is required'));
+  const { role, projectId } = req.body ?? {};
+  if (role !== undefined && typeof role !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'role must be a string'));
+  }
+  if (projectId !== undefined && projectId !== null && typeof projectId !== 'string') {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'projectId must be a string or null'));
+  }
+  if (role === undefined && projectId === undefined) {
+    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'role or projectId is required'));
   }
   const { setMemberRole } = await import('./a2a/squad.service.js');
-  const squad = setMemberRole(req.params.id, req.params.memberId, role, req.userId!);
+  const squad = setMemberRole(req.params.id, req.params.memberId, role, req.userId!, { projectId });
   if (!squad) return sendError(res, createError(ErrorCode.NOT_FOUND, 'squad or member not found'));
   sendSuccess(res, squad);
 }));
@@ -16356,52 +16445,69 @@ app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async
   const { dispatchToSquad } = await import('./a2a/squad-dispatch.service.js');
   const result = await dispatchToSquad({ squadId: req.params.id, task: task.trim(), strategy, createdBy: req.userId! });
   if (!result.ok) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.reason ?? 'dispatch failed'));
+  const explicitProjectId = typeof projectId === 'string' && projectId.trim() ? projectId.trim() : undefined;
+  const { resolveSquadDispatchProject } = await import('./a2a/squad.service.js');
+  const resolvedProject = resolveSquadDispatchProject({
+    squadId: req.params.id,
+    assignedMemberIds: result.squadTask?.assignments.map((a) => a.memberId) ?? [],
+    explicitProjectId,
+  });
+  const resolvedProjectId = resolvedProject.projectId;
+  const projectSource = resolvedProject.source;
 
   // Optional real execution on a project's coding runtime. Session-on-demand:
   // if no ready session exists, start one on the project's EXISTING container
   // (reuses the proven session-start path; never creates a sandbox from
   // nothing). We resolve readiness synchronously so the response can report the
   // TRUTH — requested/started/reason — and only the long agent run is deferred.
-  const execution: { requested: boolean; started: boolean; reason?: string } = {
-    requested: execute === true && typeof projectId === 'string' && !!projectId,
+  const execution: { requested: boolean; started: boolean; reason?: string; projectId?: string; projectSource?: string } = {
+    requested: execute === true,
     started: false,
+    projectId: resolvedProjectId,
+    projectSource,
   };
   if (execution.requested) {
     try {
+      if (!resolvedProjectId) {
+        execution.reason = 'no project mapping for this dispatch — set a squad default project, an agent project, or pass projectId';
+      }
       const { getRuntime } = await import('./a2a/coding-runtime.js');
-      const selection = codingRuntimeSelectionByProject.get(projectId);
+      const selection = resolvedProjectId ? codingRuntimeSelectionByProject.get(resolvedProjectId) : undefined;
       const runtimeType = selection?.runtimeType ?? 'opencode';
       const runtime = getRuntime(runtimeType as never);
       const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
 
-      if (!runtime) {
+      if (execution.reason) {
+        // The task is still dispatched to the squad; only runtime execution is skipped.
+      } else if (!runtime) {
         execution.reason = `coding runtime '${runtimeType}' unavailable`;
       } else {
-        let state = runtime.getState(projectId);
+        const runtimeProjectId = resolvedProjectId!;
+        let state = runtime.getState(runtimeProjectId);
         if (!state || state.status !== 'ready') {
-          let entry = await getOrRecoverContainer(projectId);
+          let entry = await getOrRecoverContainer(runtimeProjectId);
           // Container-from-nothing: opt-in `createSandbox` provisions a fresh
           // sandbox when the project has none, so dispatch can run end-to-end
           // without first opening the project in the web IDE.
           if (!entry && createSandbox === true) {
             try {
-              entry = await provisionDaytonaSandboxForProject(projectId, req.userId!);
+              entry = await provisionDaytonaSandboxForProject(runtimeProjectId, req.userId!);
               if (!entry) execution.reason = 'sandbox provisioning unavailable (Daytona not configured)';
             } catch (provErr) {
               execution.reason = 'sandbox provisioning failed';
-              logger.warn({ provErr, projectId }, 'squad dispatch sandbox provisioning failed');
+              logger.warn({ provErr, projectId: runtimeProjectId }, 'squad dispatch sandbox provisioning failed');
             }
           }
           if (!entry && !execution.reason) {
             execution.reason = 'no sandbox for this project — dispatch with createSandbox:true to provision one, or open it in the IDE first';
           } else if (entry) {
             await runtime.startSession({
-              projectId,
+              projectId: runtimeProjectId,
               sandboxId: entry.id,
               sandboxExecUrl: `${daytonaUrl}/api/toolbox/${entry.id}/toolbox/process/execute`,
               daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
             });
-            state = runtime.getState(projectId);
+            state = runtime.getState(runtimeProjectId);
           }
         }
 
@@ -16411,19 +16517,19 @@ app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, asyncHandler(async
           // Readiness is confirmed; defer only the long-running agent prompt.
           void runtime
             .sendPrompt({
-              projectId,
+              projectId: runtimeProjectId,
               prompt: task.trim(),
               sandboxExecUrl: `${daytonaUrl}/api/toolbox/${readySandboxId}/toolbox/process/execute`,
               daytonaApiKey: process.env.DAYTONA_API_KEY ?? '',
             })
-            .catch((err) => logger.warn({ err, projectId }, 'squad dispatch sendPrompt failed'));
+            .catch((err) => logger.warn({ err, projectId: runtimeProjectId }, 'squad dispatch sendPrompt failed'));
         } else if (!execution.reason) {
           execution.reason = 'coding runtime session not ready';
         }
       }
     } catch (err) {
       execution.reason = 'execution attempt failed';
-      logger.warn({ err, projectId }, 'squad dispatch on-demand coding-runtime execution failed');
+      logger.warn({ err, projectId: resolvedProjectId }, 'squad dispatch on-demand coding-runtime execution failed');
     }
   }
 
@@ -19719,6 +19825,15 @@ server.listen(PORT, async () => {
       startupInfo('a2a-consumer', 'skipped', { reason: 'redis_not_configured' });
     }
   }
+
+  const outboxDrainLoop = startAgentOsOutboxDrainLoop();
+  startupInfo(
+    'agent-os-outbox-drain',
+    outboxDrainLoop.enabled ? 'started' : 'skipped',
+    outboxDrainLoop.enabled
+      ? { intervalMs: outboxDrainLoop.config.intervalMs, limit: outboxDrainLoop.config.limit }
+      : { reason: 'set AGENT_OS_OUTBOX_DRAIN_ENABLED=true or AGENT_OS_OUTBOX_DRAIN_INTERVAL_MS' },
+  );
 
   // Wire internal agents to the A2A bridge so they appear as connected
   // and can receive task assignments from the orchestration layer

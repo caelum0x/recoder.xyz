@@ -8,6 +8,7 @@ import {
 	isFileNode,
 	isImageGenerationNode,
 	isQueryNode,
+	isSquadStepNode,
 	isTextGenerationNode,
 	isTextNode,
 	isTriggerNode,
@@ -28,6 +29,7 @@ import { EndNodePropertiesPanel } from "./end-node-properties-panel";
 import { FileNodePropertiesPanel } from "./file-node-properties-panel";
 import { ImageGenerationNodePropertiesPanel } from "./image-generation-node-properties-panel";
 import { QueryNodePropertiesPanel } from "./query-node-properties-panel";
+import { SquadStepNodePropertiesPanel } from "./squad-step-node-properties-panel";
 import { TextGenerationNodePropertiesPanel } from "./text-generation-node-properties-panel";
 import { TextGenerationNodePropertiesPanelV2 } from "./text-generation-node-properties-panel-v2";
 import { TextNodePropertiesPanel } from "./text-node-properties-panel";
@@ -116,6 +118,12 @@ export function PropertiesPanel() {
 			)}
 			{isQueryNode(selectedNodes[0]) && (
 				<QueryNodePropertiesPanel
+					node={selectedNodes[0]}
+					key={selectedNodes[0].id}
+				/>
+			)}
+			{isSquadStepNode(selectedNodes[0]) && (
+				<SquadStepNodePropertiesPanel
 					node={selectedNodes[0]}
 					key={selectedNodes[0].id}
 				/>

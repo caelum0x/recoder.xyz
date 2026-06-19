@@ -8,7 +8,7 @@ import {
 
 describe("team member quotas", () => {
 	const cases = [
-		{ plan: "free", isAvailable: false, maxMembers: 1 },
+		{ plan: "free", isAvailable: true, maxMembers: 10 },
 		{ plan: "pro", isAvailable: false, maxMembers: 1 },
 		{ plan: "team", isAvailable: true, maxMembers: 10 },
 		{ plan: "enterprise", isAvailable: true, maxMembers: 100 },

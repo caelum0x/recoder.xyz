@@ -24,6 +24,7 @@ const a2a_1 = require("@recoder/shared/a2a");
 const trace_context_middleware_1 = require("./trace-context.middleware");
 const rate_limiter_service_1 = require("./rate-limiter.service");
 const rbac_middleware_1 = require("./rbac.middleware");
+const signed_ingress_middleware_1 = require("./signed-ingress.middleware");
 // Sub-routers -- imported from their individual source files (not the barrel)
 const task_lifecycle_routes_1 = require("./task-lifecycle.routes");
 const collaboration_routes_1 = require("./collaboration.routes");
@@ -87,6 +88,7 @@ function createA2AGateway(config) {
     // -------------------------------------------------------------------------
     if (enableAuth) {
         router.use(rbac_middleware_1.extractA2AIdentity);
+        router.use((0, signed_ingress_middleware_1.createSignedA2AIngressMiddleware)());
         logger.debug('A2A gateway: auth identity extraction enabled');
     }
     // -------------------------------------------------------------------------

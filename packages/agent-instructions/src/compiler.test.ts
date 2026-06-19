@@ -17,6 +17,7 @@ import {
 } from '@recoder/a2a-sdk';
 
 import { compileInstructionBundle } from './compiler';
+import { loadPALInstructionSource } from './loaders/pal-loader';
 
 function makeRepoFixture(): string {
   const repoRoot = mkdtempSync(path.join(os.tmpdir(), 'agent-instructions-'));
@@ -73,6 +74,29 @@ function makeAgent(vendorSurface: 'claude_code' | 'codex' | 'recoder_code') {
 }
 
 describe('compileInstructionBundle', () => {
+  it('renders PAL MCP tool grants into instruction provenance', () => {
+    const source = loadPALInstructionSource({
+      taskId: 'task-pal',
+      primaryRuntime: 'codex',
+      reviewerRuntime: 'claude_code',
+      skills: ['implementation'],
+      mcpTools: ['recoder.shell.exec'],
+      mcpToolGrants: [
+        {
+          serverId: 'recoder',
+          toolName: 'shell.exec',
+          mode: 'execute',
+          reason: 'run verification command',
+        },
+      ],
+      risk: 'medium',
+    });
+
+    expect(source.content).toContain('MCP tool grants:');
+    expect(source.content).toContain('- recoder/shell.exec (execute): run verification command');
+    expect(source.ref.path).toBe('pal/task-pal');
+  });
+
   it('compiles a Claude bundle with provenance and loaded instruction refs', () => {
     const repoRoot = makeRepoFixture();
     const bundle = compileInstructionBundle({

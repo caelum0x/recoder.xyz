@@ -13,6 +13,7 @@ export interface SquadMember {
   id: string;
   kind: MemberKind;
   role: string;
+  projectId?: string;
   addedAt: string;
 }
 
@@ -38,6 +39,7 @@ export interface Squad {
   description?: string;
   ownerId: string;
   leaderId?: string;
+  projectId?: string;
   members: SquadMember[];
   activity: SquadActivityEntry[];
   createdAt: string;
@@ -83,9 +85,21 @@ export function useSquad(id: string, withPresence = true) {
 export function useCreateSquad() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; description?: string; members?: Array<{ id: string; kind?: MemberKind; role?: string }> }) =>
+    mutationFn: (body: { name: string; description?: string; projectId?: string; members?: Array<{ id: string; kind?: MemberKind; role?: string; projectId?: string }> }) =>
       dx<Squad>('/a2a/squads', { method: 'POST', body: JSON.stringify(body) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: squadKeys.all }),
+  });
+}
+
+export function useUpdateSquad(squadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name?: string; description?: string; leaderId?: string; projectId?: string | null }) =>
+      dx<Squad>(`/a2a/squads/${squadId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: squadKeys.detail(squadId) });
+      qc.invalidateQueries({ queryKey: squadKeys.all });
+    },
   });
 }
 
@@ -101,7 +115,8 @@ export interface PortableSquad {
   name: string;
   description?: string;
   leaderId?: string;
-  members: Array<{ id: string; kind: MemberKind; role: string }>;
+  projectId?: string;
+  members: Array<{ id: string; kind: MemberKind; role: string; projectId?: string }>;
 }
 
 export function useImportSquad() {
@@ -123,8 +138,20 @@ export function useCloneSquad() {
 export function useAddMember(squadId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (member: { id: string; kind?: MemberKind; role?: string }) =>
+    mutationFn: (member: { id: string; kind?: MemberKind; role?: string; projectId?: string }) =>
       dx<Squad>(`/a2a/squads/${squadId}/members`, { method: 'POST', body: JSON.stringify(member) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: squadKeys.detail(squadId) });
+      qc.invalidateQueries({ queryKey: squadKeys.all });
+    },
+  });
+}
+
+export function useUpdateMember(squadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ memberId, ...body }: { memberId: string; role?: string; projectId?: string | null }) =>
+      dx<Squad>(`/a2a/squads/${squadId}/members/${memberId}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: squadKeys.detail(squadId) });
       qc.invalidateQueries({ queryKey: squadKeys.all });
@@ -158,6 +185,8 @@ export interface ExecutionResult {
   requested: boolean;
   started: boolean;
   reason?: string;
+  projectId?: string;
+  projectSource?: 'request' | 'member' | 'squad';
 }
 
 export interface SquadTask {

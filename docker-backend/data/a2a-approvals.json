@@ -681,9 +681,96 @@
       "details": {
         "sourceTaskId": "task_mq2q1j1y00082d18"
       },
-      "status": "pending",
+      "status": "expired",
       "createdAt": "2026-06-06T19:03:44.567Z",
+      "timeoutMs": 10000,
+      "resolvedAt": "2026-06-13T16:41:24.306Z"
+    }
+  ],
+  [
+    "approval_9ad58a8775334d61",
+    {
+      "approvalId": "approval_9ad58a8775334d61",
+      "workspaceId": "ws_ctx",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "sourceTaskId": "task_mqcl1g0h0008c3b2"
+      },
+      "status": "pending",
+      "createdAt": "2026-06-13T16:41:24.306Z",
       "timeoutMs": 10000
+    }
+  ],
+  [
+    "approval_9b877045fcbb442c",
+    {
+      "approvalId": "approval_9b877045fcbb442c",
+      "workspaceId": "ws_30c776c23f064faf",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "pending",
+      "createdAt": "2026-06-13T16:41:26.214Z",
+      "timeoutMs": 300000
+    }
+  ],
+  [
+    "approval_6f36a9e2a38b40eb",
+    {
+      "approvalId": "approval_6f36a9e2a38b40eb",
+      "workspaceId": "ws_3c01f20c515d44c8",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review current task"
+      },
+      "status": "pending",
+      "createdAt": "2026-06-13T16:41:26.250Z",
+      "timeoutMs": 300000
+    }
+  ],
+  [
+    "approval_b0e2ba323797482c",
+    {
+      "approvalId": "approval_b0e2ba323797482c",
+      "workspaceId": "ws_e1c99122fa32452c",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "Need review before merge"
+      },
+      "status": "pending",
+      "createdAt": "2026-06-13T16:41:26.263Z",
+      "timeoutMs": 300000
+    }
+  ],
+  [
+    "approval_25c26c7505e24aa2",
+    {
+      "approvalId": "approval_25c26c7505e24aa2",
+      "workspaceId": "ws_c214c940b44b4bfe",
+      "requestingAgentId": "agent-a",
+      "targetAgentId": "agent-b",
+      "action": "delegate",
+      "details": {
+        "prompt": "review the current task",
+        "channelId": "36ee6bea-9fa9-4a6e-8964-2e85e7c4244c",
+        "threadId": "51667bb9-87ab-4b7b-a52d-375e1fe5b343",
+        "sourceTaskId": "task_mqcl1k9m0000fe9f",
+        "handoffType": "delegate"
+      },
+      "status": "granted",
+      "createdAt": "2026-06-13T16:41:29.821Z",
+      "timeoutMs": 300000,
+      "resolvedAt": "2026-06-13T16:41:29.823Z",
+      "resolvedBy": "human-reviewer"
     }
   ]
 ]

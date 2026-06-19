@@ -9,18 +9,21 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-type OssComponentStatus = 'active' | 'experimental' | 'vendored' | 'needs-contract';
+type OssComponentStatus = string;
 
 type OssComponentSummary = {
-  id: string;
+  id?: string;
+  componentId?: string;
   name: string;
   contract: string;
-  owner: string;
+  owner?: string;
   status: OssComponentStatus;
-  risk: 'low' | 'medium' | 'high';
+  risk?: 'low' | 'medium' | 'high';
+  canExecuteCode?: boolean;
+  canTouchProduction?: boolean;
 };
 
-const COMPONENTS: OssComponentSummary[] = [
+const FALLBACK_COMPONENTS: OssComponentSummary[] = [
   { id: 'beads-adapter', name: 'Beads Adapter', contract: 'TaskGraph', owner: 'agent-os', status: 'active', risk: 'low' },
   { id: 'git-nexus', name: 'Git Nexus', contract: 'RepoIntelligence', owner: 'agent-os', status: 'active', risk: 'low' },
   { id: 'pal', name: 'PAL Planner', contract: 'Planner', owner: 'agent-os', status: 'active', risk: 'low' },
@@ -41,7 +44,20 @@ function riskVariant(risk: OssComponentSummary['risk']) {
   return 'outline';
 }
 
-export function OssComponentRegistry() {
+function displayRisk(component: OssComponentSummary): 'low' | 'medium' | 'high' {
+  if (component.risk) return component.risk;
+  if (component.canTouchProduction || component.canExecuteCode) return 'high';
+  return 'low';
+}
+
+export function OssComponentRegistry({
+  components,
+}: {
+  components?: OssComponentSummary[];
+}) {
+  const visibleComponents =
+    components && components.length > 0 ? components : FALLBACK_COMPONENTS;
+
   return (
     <Card>
       <CardHeader>
@@ -52,8 +68,11 @@ export function OssComponentRegistry() {
       </CardHeader>
       <CardContent>
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {COMPONENTS.map((component) => (
-            <div key={component.id} className="rounded-lg border p-3">
+          {visibleComponents.map((component) => {
+            const risk = displayRisk(component);
+            const componentId = component.componentId ?? component.id ?? component.name;
+            return (
+            <div key={componentId} className="rounded-lg border p-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">{component.name}</p>
@@ -64,16 +83,16 @@ export function OssComponentRegistry() {
                 </Badge>
               </div>
               <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">Owner: {component.owner}</span>
-                <Badge variant={riskVariant(component.risk)} className="rounded px-2 py-0.5 text-[11px]">
-                  {component.risk} risk
+                <span className="text-muted-foreground">Owner: {component.owner ?? 'unassigned'}</span>
+                <Badge variant={riskVariant(risk)} className="rounded px-2 py-0.5 text-[11px]">
+                  {risk} risk
                 </Badge>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </CardContent>
     </Card>
   );
 }
-

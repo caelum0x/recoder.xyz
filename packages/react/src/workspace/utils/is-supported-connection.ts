@@ -72,10 +72,11 @@ export function isSupportedConnection(
 		}
 	}
 
-	// trigger and action node can be connected to any node (except ImageGenerationNode, handled above)
+	// Trigger, action, and squad-step outputs can feed downstream nodes.
 	if (
 		outputNode.content.type === "trigger" ||
-		outputNode.content.type === "action"
+		outputNode.content.type === "action" ||
+		outputNode.content.type === "squadStep"
 	) {
 		return {
 			canConnect: true,
@@ -258,6 +259,7 @@ export function isSupportedConnection(
 			"text",
 			"trigger",
 			"action",
+			"squadStep",
 			"appEntry",
 			"textGeneration",
 			"contentGeneration",

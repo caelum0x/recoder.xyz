@@ -1,6 +1,4 @@
-import type { LanguageModelV2Source } from "@ai-sdk/provider";
 import { createIdGenerator } from "@recoder/utils";
-import type { ProviderMetadata } from "ai";
 import * as z from "zod/v4";
 import { DataStoreId } from "../data-store";
 import {
@@ -43,6 +41,17 @@ export const ReasoningOutput = GenerationOutputBase.extend({
 	content: z.string(),
 });
 
+export type ProviderMetadata = Record<string, unknown>;
+
+export interface GenerationSource {
+	sourceType?: string;
+	id?: string;
+	url?: string;
+	title?: string;
+	providerMetadata?: ProviderMetadata;
+	[key: string]: unknown;
+}
+
 export interface UrlSource {
 	sourceType: "url";
 	id: string;
@@ -60,7 +69,7 @@ export const UrlSource = z.object({
 
 export const SourceOutput = GenerationOutputBase.extend({
 	type: z.literal("source"),
-	sources: z.array(z.custom<LanguageModelV2Source>()),
+	sources: z.array(z.custom<GenerationSource>()),
 });
 
 const VectorStoreSource = z.union([

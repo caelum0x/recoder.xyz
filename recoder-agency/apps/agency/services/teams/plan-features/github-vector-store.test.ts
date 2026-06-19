@@ -8,7 +8,7 @@ import {
 
 describe("github vector store quotas", () => {
 	const cases = [
-		{ plan: "free", isAvailable: false, maxStores: 0 },
+		{ plan: "free", isAvailable: true, maxStores: 10 },
 		{ plan: "pro", isAvailable: true, maxStores: 3 },
 		{ plan: "team", isAvailable: true, maxStores: 10 },
 		{ plan: "enterprise", isAvailable: true, maxStores: 100 },

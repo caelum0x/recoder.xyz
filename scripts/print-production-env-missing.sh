@@ -10,8 +10,13 @@ ROOT_KEYS=(
   "INTERNAL_SERVICE_KEY"
   "AUTH_DATABASE_URL"
   "MAIN_SITE_INTERNAL_URL"
+  "NATS_URL"
   "DAYTONA_API_URL"
   "DAYTONA_SERVER_URL"
+  "RECODER_PREVIEW_ACCESS_SECRET"
+  "RECODER_EDGE_PREVIEW_BASE_DOMAIN"
+  "RECODER_EDGE_PREVIEW_PROTECTION_MODE"
+  "RECODER_EDGE_PREVIEW_RATE_LIMIT_PER_MINUTE"
 )
 
 AGENCY_KEYS=(
@@ -45,6 +50,24 @@ read_env_value() {
   return 0
 }
 
+get_env_value() {
+  local file="$1"
+  local key="$2"
+
+  [[ -f "$file" ]] || return 1
+  local line
+  line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file" | tail -n 1 || true)"
+  [[ -n "$line" ]] || return 1
+  line="${line#export }"
+  local value="${line#*=}"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
+
 collect_missing() {
   local file="$1"
   shift
@@ -64,11 +87,40 @@ while IFS= read -r key; do
   [[ -n "$key" ]] && MISSING_ROOT+=("$key")
 done < <(collect_missing "$ROOT_ENV" "${ROOT_KEYS[@]}")
 
-ROOT_DAYTONA_API_KEY="$(read_env_value "$ROOT_ENV" "DAYTONA_API_KEY" || true)"
-ROOT_DAYTONA_JWT_TOKEN="$(read_env_value "$ROOT_ENV" "DAYTONA_JWT_TOKEN" || true)"
-ROOT_DAYTONA_ORG_ID="$(read_env_value "$ROOT_ENV" "DAYTONA_ORGANIZATION_ID" || true)"
+ROOT_DAYTONA_API_KEY="$(get_env_value "$ROOT_ENV" "DAYTONA_API_KEY" || true)"
+ROOT_DAYTONA_JWT_TOKEN="$(get_env_value "$ROOT_ENV" "DAYTONA_JWT_TOKEN" || true)"
+ROOT_DAYTONA_ORG_ID="$(get_env_value "$ROOT_ENV" "DAYTONA_ORGANIZATION_ID" || true)"
 if [[ -z "$ROOT_DAYTONA_API_KEY" && ( -z "$ROOT_DAYTONA_JWT_TOKEN" || -z "$ROOT_DAYTONA_ORG_ID" ) ]]; then
   MISSING_ROOT+=("DAYTONA_API_KEY or DAYTONA_JWT_TOKEN+DAYTONA_ORGANIZATION_ID")
+fi
+
+ROOT_AGENT_OS_OUTBOX_DRAIN_ENABLED="$(get_env_value "$ROOT_ENV" "AGENT_OS_OUTBOX_DRAIN_ENABLED" || true)"
+ROOT_AGENT_OS_OUTBOX_DRAIN_INTERVAL="$(get_env_value "$ROOT_ENV" "AGENT_OS_OUTBOX_DRAIN_INTERVAL_MS" || true)"
+if [[ "$ROOT_AGENT_OS_OUTBOX_DRAIN_ENABLED" != "true" && ! "$ROOT_AGENT_OS_OUTBOX_DRAIN_INTERVAL" =~ ^[0-9]+$ ]]; then
+  MISSING_ROOT+=("AGENT_OS_OUTBOX_DRAIN_ENABLED=true or AGENT_OS_OUTBOX_DRAIN_INTERVAL_MS=<ms>")
+fi
+
+ROOT_PREVIEW_ACCESS_SECRET="$(get_env_value "$ROOT_ENV" "RECODER_PREVIEW_ACCESS_SECRET" || true)"
+ROOT_EDGE_PREVIEW_BASE_DOMAIN="$(get_env_value "$ROOT_ENV" "RECODER_EDGE_PREVIEW_BASE_DOMAIN" || true)"
+ROOT_EDGE_PREVIEW_PROTECTION_MODE="$(get_env_value "$ROOT_ENV" "RECODER_EDGE_PREVIEW_PROTECTION_MODE" || true)"
+ROOT_EDGE_PREVIEW_RATE_LIMIT="$(get_env_value "$ROOT_ENV" "RECODER_EDGE_PREVIEW_RATE_LIMIT_PER_MINUTE" || true)"
+ROOT_EDGE_CROWDSEC_ENABLED="$(get_env_value "$ROOT_ENV" "RECODER_EDGE_CROWDSEC_ENABLED" || true)"
+ROOT_EDGE_OPENAPPSEC_ENABLED="$(get_env_value "$ROOT_ENV" "RECODER_EDGE_OPENAPPSEC_ENABLED" || true)"
+
+if [[ -n "$ROOT_PREVIEW_ACCESS_SECRET" ]] && echo "$ROOT_PREVIEW_ACCESS_SECRET" | grep -qiE 'placeholder|change.?this|your.?|example|todo|xxx|dev-secret'; then
+  MISSING_ROOT+=("RECODER_PREVIEW_ACCESS_SECRET=<non-placeholder secret>")
+fi
+if [[ -n "$ROOT_EDGE_PREVIEW_BASE_DOMAIN" && ( "$ROOT_EDGE_PREVIEW_BASE_DOMAIN" == "localhost"* || "$ROOT_EDGE_PREVIEW_BASE_DOMAIN" == "127.0.0.1"* ) ]]; then
+  MISSING_ROOT+=("RECODER_EDGE_PREVIEW_BASE_DOMAIN=<production preview domain>")
+fi
+if [[ -n "$ROOT_EDGE_PREVIEW_PROTECTION_MODE" && "$ROOT_EDGE_PREVIEW_PROTECTION_MODE" != "signed" && "$ROOT_EDGE_PREVIEW_PROTECTION_MODE" != "private" ]]; then
+  MISSING_ROOT+=("RECODER_EDGE_PREVIEW_PROTECTION_MODE=signed or private")
+fi
+if [[ -n "$ROOT_EDGE_PREVIEW_RATE_LIMIT" && ( ! "$ROOT_EDGE_PREVIEW_RATE_LIMIT" =~ ^[0-9]+$ || "$ROOT_EDGE_PREVIEW_RATE_LIMIT" -lt 10 ) ]]; then
+  MISSING_ROOT+=("RECODER_EDGE_PREVIEW_RATE_LIMIT_PER_MINUTE=<integer >= 10>")
+fi
+if [[ "$ROOT_EDGE_CROWDSEC_ENABLED" != "true" && "$ROOT_EDGE_OPENAPPSEC_ENABLED" != "true" ]]; then
+  MISSING_ROOT+=("RECODER_EDGE_CROWDSEC_ENABLED=true or RECODER_EDGE_OPENAPPSEC_ENABLED=true")
 fi
 
 while IFS= read -r key; do

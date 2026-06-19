@@ -1,8 +1,6 @@
 import { MetadataRoute } from 'next';
 
 const baseUrl = 'https://recoder.xyz';
-const locales = ['en', 'tr', 'es', 'zh', 'de'] as const;
-const defaultLocale = 'en';
 
 type ChangeFrequency = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
 
@@ -12,20 +10,10 @@ interface SitemapPage {
   priority: number;
 }
 
-/**
- * Build hreflang alternate links for every locale.
- * Default locale (en) maps to the bare path; others get /locale prefix.
- */
-function buildAlternates(path: string) {
-  const languages: Record<string, string> = {};
-  for (const locale of locales) {
-    const prefix = locale === defaultLocale ? '' : `/${locale}`;
-    languages[locale] = `${baseUrl}${prefix}${path}`;
-  }
-  // x-default points to the default locale version
-  languages['x-default'] = `${baseUrl}${path}`;
-  return { languages };
-}
+// NOTE: hreflang alternates are intentionally not emitted. The locale variants
+// (/tr, /es, /zh, /de) currently fall back to English content, so advertising
+// them as translated alternates would reinforce duplicate-content signals.
+// Only the canonical English URLs are listed below.
 
 // ---------------------------------------------------------------------------
 // Page registry – every public page with its SEO metadata
@@ -65,7 +53,8 @@ const platformPages: SitemapPage[] = [
   { path: '/platform/agency',         changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/api',            changeFrequency: 'weekly',   priority: 0.8 },
   { path: '/platform/pm',             changeFrequency: 'weekly',   priority: 0.8 },
-  { path: '/platform/web',            changeFrequency: 'weekly',   priority: 0.8 },
+  // NOTE: /platform/web is intentionally omitted — it server-redirects to
+  // /dashboard/spaces, so it must not be advertised as an indexable URL.
 ];
 
 // ── CLI pages ─────────────────────────────────────────────────────────────
@@ -156,6 +145,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: currentDate,
     changeFrequency: page.changeFrequency,
     priority: page.priority,
-    alternates: buildAlternates(page.path),
   }));
 }

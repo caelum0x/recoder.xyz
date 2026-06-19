@@ -30,6 +30,7 @@ const agent_registry_service_1 = require("./agent-registry.service");
 const approval_gate_service_1 = require("./approval-gate.service");
 const a2a_persistence_1 = require("./a2a-persistence");
 const memory_store_1 = require("./memory-store");
+const compiled_instructions_1 = require("./compiled-instructions");
 const logger_1 = require("../logger");
 const logger = (0, logger_1.createLogger)('a2a-multi-dispatch');
 const docker = new dockerode_1.default();
@@ -49,10 +50,11 @@ async function dispatchTaskToBridgeAgent(input) {
     if (!bridge.isAgentOnline(input.agentId))
         return;
     let memoryContext = [];
+    const memoryQuery = input.instructionBundle?.shared_goal || input.prompt;
     try {
         if (input.ownerId) {
             const memories = await (0, memory_store_1.getRecentContext)({
-                query: input.prompt,
+                query: memoryQuery,
                 userId: input.ownerId,
                 limit: 10,
             });
@@ -69,7 +71,7 @@ async function dispatchTaskToBridgeAgent(input) {
     bridge.sendToAgent(input.agentId, {
         type: 'task.assigned',
         taskId: input.taskId,
-        prompt: input.prompt,
+        prompt: input.instructionBundle?.agent_specific_prompt || input.prompt,
         context: {
             workspaceId: input.workspaceId,
             dispatchId: input.dispatchId,
@@ -79,6 +81,7 @@ async function dispatchTaskToBridgeAgent(input) {
                 worktreePath: input.worktreeInfo.worktreePath,
             } : {}),
             ...(input.routingReason ? { routingReason: input.routingReason } : {}),
+            ...(input.instructionBundle ? { instructionBundle: input.instructionBundle } : {}),
             ...(memoryContext.length > 0 ? { memories: memoryContext } : {}),
         },
     });
@@ -270,6 +273,7 @@ class MultiDispatchService {
         const worktreeManager = (0, worktree_manager_service_1.getWorktreeManagerService)();
         const taskIds = [];
         const worktrees = {};
+        const compiledBundles = new Map();
         for (const agentId of agentIds) {
             const platform = selectedPlatforms[agentId];
             const createInput = {
@@ -309,8 +313,30 @@ class MultiDispatchService {
             if (!created.ok) {
                 throw new Error(created.error.message);
             }
-            const task = created.data;
+            let task = created.data;
             taskIds.push(task.id);
+            const compiledBundle = (0, compiled_instructions_1.compileInstructionBundleForTask)(task);
+            compiledBundles.set(task.id, compiledBundle);
+            if (compiledBundle) {
+                const updatedMetadata = taskLifecycle.updateTaskMetadata(task.id, {
+                    metadataPatch: {
+                        instructionBundle: (0, compiled_instructions_1.buildInstructionBundleMetadata)(compiledBundle),
+                    },
+                    triggeredBy: compiled_instructions_1.INSTRUCTION_BUNDLE_TRIGGER,
+                    reason: 'Compiled instruction bundle attached to multi-dispatch task metadata',
+                });
+                if (updatedMetadata.ok) {
+                    task = updatedMetadata.data;
+                }
+                const appendedArtifacts = taskLifecycle.appendTaskArtifacts(task.id, {
+                    artifacts: [(0, compiled_instructions_1.buildInstructionBundleArtifact)(task.id, compiledBundle)],
+                    triggeredBy: compiled_instructions_1.INSTRUCTION_BUNDLE_TRIGGER,
+                    reason: 'Compiled instruction bundle artifact attached to multi-dispatch task',
+                });
+                if (appendedArtifacts.ok) {
+                    task = appendedArtifacts.data;
+                }
+            }
             // Create an isolated worktree for this agent's task when enabled
             let worktreeInfo;
             if (useWorktreeIsolation && containerId) {
@@ -383,6 +409,7 @@ class MultiDispatchService {
                             agentId,
                             taskId: task.id,
                             prompt: request.prompt,
+                            instructionBundle: compiledBundles.get(task.id) ?? null,
                             priority: request.priority ?? 'normal',
                             ownerId: ws.ownerId,
                             worktreeInfo,
@@ -401,6 +428,7 @@ class MultiDispatchService {
                     agentId,
                     taskId: task.id,
                     prompt: request.prompt,
+                    instructionBundle: compiledBundles.get(task.id) ?? null,
                     priority: request.priority ?? 'normal',
                     ownerId: ws.ownerId,
                     worktreeInfo,

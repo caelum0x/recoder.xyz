@@ -6,7 +6,7 @@
 	"type": "module",
 	"main": "index.ts",
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
+		"test": "echo \"No tests configured for storage-migration\"",
 		"migrate": "node --env-file=.env --experimental-strip-types ./index.ts"
 	},
 	"keywords": [],

@@ -76,7 +76,29 @@ const heartbeat_tracker_service_1 = require("./heartbeat-tracker.service");
 const task_lifecycle_service_1 = require("./task-lifecycle.service");
 const logger_1 = require("../logger");
 const memory_store_1 = require("./memory-store");
+const agent_registry_service_1 = require("./agent-registry.service");
 const a2a_1 = require("@recoder/shared/a2a");
+/**
+ * Known A2A platform identifiers. A bridge agentId that matches one of these is
+ * registered under that platform so PLATFORM_DEFAULTS apply; anything else is
+ * registered as 'custom'. Mirrors RecoderAgentPlatform from @recoder/shared/a2a.
+ */
+const KNOWN_BRIDGE_PLATFORMS = new Set([
+    'claude_code',
+    'codex',
+    'cursor',
+    'windsurf',
+    'replit',
+    'recoder_web',
+    'recoder_pm',
+    'recoder_agency',
+    'custom',
+]);
+function resolveBridgePlatform(agentId) {
+    return KNOWN_BRIDGE_PLATFORMS.has(agentId)
+        ? agentId
+        : 'custom';
+}
 const logger = (0, logger_1.createLogger)('agent-bridge');
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -242,7 +264,6 @@ class AgentBridgeService {
             this.agentTypeIndex.set(agentId, new Set());
         }
         this.agentTypeIndex.get(agentId).add(resolvedSessionId);
-        this.recordBridgeHeartbeat(agent);
         // Auto-add to workspace member lists
         const wsSvc = (0, workspace_service_1.getWorkspaceService)();
         for (const wsId of workspaceIds) {
@@ -260,6 +281,20 @@ class AgentBridgeService {
             });
         }
         logger.info({ agentId, sessionId: resolvedSessionId, userId, workspaces: workspaceIds.length, capabilities: capabilities.length }, 'agent registered via bridge');
+        // Sync into the HTTP-queryable Agent Registry so bridge-connected agents are
+        // discoverable via GET /api/a2a/agents (REST) and not only in the bridge map.
+        try {
+            (0, agent_registry_service_1.getAgentRegistryService)().selfRegister({
+                agentId,
+                name: label || agentId,
+                platform: resolveBridgePlatform(agentId),
+                ...(capabilities.length > 0 ? { tags: capabilities } : {}),
+            });
+        }
+        catch (err) {
+            logger.warn({ agentId, err }, 'failed to sync bridge agent into agent registry (non-fatal)');
+        }
+        this.recordBridgeHeartbeat(agent);
         // Pre-warm agent memory context in background (fire-and-forget)
         if (userId && userId !== 'system') {
             Promise.resolve().then(() => __importStar(require('./trigger-jobs.js'))).then(({ queueMemoryRefresh }) => queueMemoryRefresh(userId, `session start for ${agentId}`))

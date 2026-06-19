@@ -66,14 +66,16 @@ describe("validateEnv", () => {
 	it("throws when DATABASE_URL is sqlite-style", async () => {
 		process.env.DATABASE_URL = "file:./local.db";
 		const validateEnv = await loadValidateEnv();
-		expect(() => validateEnv()).toThrow("DATABASE_URL must use a PostgreSQL URL");
+		expect(() => validateEnv()).toThrow(
+			"DATABASE_URL looks like a SQLite URL. This app requires PostgreSQL.",
+		);
 	});
 
 	it("throws when AUTH_DATABASE_URL is sqlite-style", async () => {
 		process.env.AUTH_DATABASE_URL = "file:./auth.db";
 		const validateEnv = await loadValidateEnv();
 		expect(() => validateEnv()).toThrow(
-			"AUTH_DATABASE_URL must use a PostgreSQL URL",
+			"AUTH_DATABASE_URL looks like a SQLite URL. This app requires PostgreSQL.",
 		);
 	});
 

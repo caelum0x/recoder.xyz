@@ -2,6 +2,8 @@
 
 Daytona, E2B, and local containers are `SandboxProvider` implementations. They provide execution environments, process logs, file mutation evidence, previews, and snapshots.
 
+> Note (Correction 2026-06-19): The Daytona sandbox stack (8 containers + images) was stopped and removed on 2026-06-19 to free disk at zero traffic. Daytona is currently dormant / re-provision-on-demand, not running. It remains on the roadmap; re-enable it when sandbox workloads return.
+
 Sandbox state is evidence. Recoder Agent OS remains the source of truth for identity, approvals, run lifecycle, and audit history.
 
 Sandbox providers expose optional command, snapshot, and evidence methods. Convert provider evidence into Agent OS artifacts with `createSandboxEvidenceArtifact`; do not persist sandbox-only state as the canonical run record.

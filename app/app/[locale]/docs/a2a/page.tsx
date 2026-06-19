@@ -5,6 +5,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/docs/a2a' },
   title: 'A2A (Agent-to-Agent) - Recoder Documentation',
   description: 'Connect AI tools through the Recoder A2A protocol.',
 };

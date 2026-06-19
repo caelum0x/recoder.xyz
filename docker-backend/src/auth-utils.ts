@@ -1,8 +1,10 @@
+import { timingSafeEqual } from 'node:crypto';
 import type express from 'express';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const SAFE_INTERNAL_SERVICE_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 export const RECODER_ANONYMOUS_ID_COOKIE = 'recoder_anonymous_id';
 export const RECODER_ANONYMOUS_ID_HEADER = 'x-recoder-anonymous-id';
@@ -151,9 +153,66 @@ export function resolveA2ASystemSession(
   };
 }
 
+export function resolveInternalServiceSession(
+  req: express.Request,
+  configuredKey = process.env.INTERNAL_SERVICE_KEY,
+): { userId: string; sessionId: string } | null {
+  const normalizedKey = configuredKey?.trim();
+  if (!normalizedKey) {
+    return null;
+  }
+
+  const provided = readInternalServiceKey(req);
+  if (!provided || !safeEqual(provided, normalizedKey)) {
+    return null;
+  }
+
+  const serviceId = readInternalServiceId(req) ?? 'service';
+  return {
+    userId: `internal:${serviceId}`,
+    sessionId: `internal:${serviceId}`,
+  };
+}
+
 export function isStrictAuthMode(): boolean {
   // Allow explicit override via STRICT_AUTH=false for local sandbox development.
   if (process.env.STRICT_AUTH === 'false') return false;
   const nodeEnv = process.env.NODE_ENV || 'development';
   return process.env.REQUIRE_AUTH === 'true' || nodeEnv === 'production';
+}
+
+function readInternalServiceKey(req: express.Request): string | undefined {
+  const fromHeader = firstHeaderValue(req.headers['x-internal-service-key']);
+  if (fromHeader) {
+    return fromHeader;
+  }
+
+  const authorization = firstHeaderValue(req.headers.authorization);
+  if (authorization?.startsWith('Bearer ')) {
+    return authorization.slice('Bearer '.length).trim() || undefined;
+  }
+
+  return undefined;
+}
+
+function readInternalServiceId(req: express.Request): string | undefined {
+  const fromHeader = firstHeaderValue(req.headers['x-internal-service-id'])
+    ?? firstHeaderValue(req.headers['x-internal-service-name']);
+  if (!fromHeader) {
+    return undefined;
+  }
+  return SAFE_INTERNAL_SERVICE_ID_RE.test(fromHeader) ? fromHeader : undefined;
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    return value.find((entry) => entry.trim().length > 0)?.trim();
+  }
+  return value?.trim() || undefined;
+}
+
+function safeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }

@@ -11,7 +11,8 @@
  * Defaults are based on oh-my-opencode's category routing:
  *   - visual / feature → opencode (strong at writing fresh code)
  *   - bug-fix / debug  → claude-code (strong at investigation)
- *   - test / doc       → omo (fast, short tasks)
+ *   - test             → qwen-code (cost-efficient coding model)
+ *   - doc              → gemini-cli (large context, high throughput)
  *   - refactor         → opencode (balanced)
  *   - other            → native (existing Recoder XML pipeline)
  *
@@ -45,14 +46,14 @@ const DEFAULT_MAPPING = {
         reasoning: 'Refactors work well with opencode\'s multi-file edit capabilities at balanced cost',
     },
     test: {
-        runtime: 'omo',
+        runtime: 'qwen-code',
         tier: 'fast',
-        reasoning: 'Test generation is well-scoped and benefits from OMO\'s speed with a fast model',
+        reasoning: 'Test generation is well-scoped and benefits from Qwen Code\'s strong, cost-efficient coding model',
     },
     doc: {
-        runtime: 'omo',
+        runtime: 'gemini-cli',
         tier: 'fast',
-        reasoning: 'Documentation is well-scoped and benefits from OMO\'s speed with a fast model',
+        reasoning: 'Documentation benefits from Gemini CLI\'s large context window and generous throughput',
     },
     visual: {
         runtime: 'opencode',

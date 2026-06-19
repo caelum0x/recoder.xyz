@@ -21,6 +21,7 @@ import { getAgentBridgeService } from './agent-bridge.service';
 import { createLogger } from '../logger';
 
 const logger = createLogger('a2a-canvas-routes');
+const canvasPersistenceQueues = new Map<string, Promise<void>>();
 
 export interface CanvasRouterOptions {
   canvasHandlerUrl?: string;
@@ -171,6 +172,32 @@ async function persistToSandbox(
   }
 }
 
+async function persistToSandboxSerial(
+  options: CanvasRouterOptions,
+  sandboxId: string,
+  filePath: string,
+  elements: unknown[],
+): Promise<boolean> {
+  const queueKey = JSON.stringify([sandboxId, filePath]);
+  const previous = canvasPersistenceQueues.get(queueKey) ?? Promise.resolve();
+  let releaseCurrent: (() => void) | undefined;
+  const current = new Promise<void>((resolve) => {
+    releaseCurrent = resolve;
+  });
+  const queued = previous.catch(() => {}).then(() => current);
+  canvasPersistenceQueues.set(queueKey, queued);
+
+  try {
+    await previous.catch(() => {});
+    return await persistToSandbox(options, sandboxId, filePath, elements);
+  } finally {
+    releaseCurrent?.();
+    if (canvasPersistenceQueues.get(queueKey) === queued) {
+      canvasPersistenceQueues.delete(queueKey);
+    }
+  }
+}
+
 export function createCanvasRouter(options: CanvasRouterOptions = {}): Router {
   const router = Router();
 
@@ -215,7 +242,7 @@ export function createCanvasRouter(options: CanvasRouterOptions = {}): Router {
     // 2. Persist to sandbox file (if sandboxId + filePath provided)
     let persisted = false;
     if (sandboxId && filePath) {
-      persisted = await persistToSandbox(options, sandboxId, filePath, elements);
+      persisted = await persistToSandboxSerial(options, sandboxId, filePath, elements);
     }
 
     logger.info(

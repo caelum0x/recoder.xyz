@@ -27,8 +27,8 @@ Capability providers are declared in `oss/manifests/oss-components.yaml`.
 - Codex: patch, review, investigation, and verification runtime.
 - Recoder Code: native runtime expected to consume `TaskSpec` and `InstructionBundle` directly.
 - Playwright MCP: browser verification and screenshot evidence.
-- Daytona/E2B: sandbox execution substrates.
-- mem0/pgvector: memory retrieval adapters; Recoder remains canonical memory store.
+- Daytona/E2B: sandbox execution substrates. (Correction 2026-06-19: dormant/re-provision-on-demand, not running — the Daytona stack was stopped and its images removed to free disk at zero traffic; remains on the roadmap.)
+- mem0/pgvector: memory retrieval adapters; Recoder remains canonical memory store. (Correction 2026-06-19: pgvector on self-hosted PostgreSQL is the active memory backend; mem0 is experimental and not deployed.)
 - OpenZiti/zrok: network isolation and tunnel options.
 - Observability stack: health, logs, metrics, traces, and evidence.
 

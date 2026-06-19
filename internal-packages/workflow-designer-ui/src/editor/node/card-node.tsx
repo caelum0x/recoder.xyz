@@ -77,6 +77,7 @@ function useVariant(node: NodeLike) {
 		const isDataStore = node.content.type === "dataStore";
 		const isTrigger = node.content.type === "trigger";
 		const isAction = node.content.type === "action";
+		const isSquadStep = node.content.type === "squadStep";
 		const isQuery = node.content.type === "query";
 		const isDataQuery = node.content.type === "dataQuery";
 
@@ -91,11 +92,18 @@ function useVariant(node: NodeLike) {
 		const isGithubTrigger = isTriggerNode(node, "github");
 
 		const isFillIcon =
-			isText || isFile || isWebPage || isGithub || isVectorStore || isAction;
+			isText ||
+			isFile ||
+			isWebPage ||
+			isGithub ||
+			isVectorStore ||
+			isAction ||
+			isSquadStep;
 		const isStrokeIcon =
 			isTextGeneration ||
 			isImageGeneration ||
 			isTrigger ||
+			isSquadStep ||
 			isQuery ||
 			isDataStore ||
 			isDataQuery;
@@ -108,6 +116,7 @@ function useVariant(node: NodeLike) {
 			isGithub ||
 			isVectorStoreGithub ||
 			isTrigger ||
+			isSquadStep ||
 			isAction;
 
 		return {
@@ -122,6 +131,7 @@ function useVariant(node: NodeLike) {
 			isDataStore,
 			isTrigger,
 			isAction,
+			isSquadStep,
 			isQuery,
 			isDataQuery,
 			isVectorStoreGithub,
@@ -178,6 +188,7 @@ export function NodeComponent({
 		isDataStore: boolean;
 		isTrigger: boolean;
 		isAction: boolean;
+		isSquadStep: boolean;
 		isQuery: boolean;
 		isDataQuery: boolean;
 		isVectorStoreGithub: boolean;
@@ -206,6 +217,7 @@ export function NodeComponent({
 			if (variant.isDataStore) return "var(--color-data-store-node-1)";
 			if (variant.isTrigger) return "var(--color-trigger-node-1)";
 			if (variant.isAction) return "var(--color-action-node-1)";
+			if (variant.isSquadStep) return "var(--color-action-node-1)";
 			if (variant.isQuery) return "var(--color-query-node-1)";
 			if (variant.isDataQuery) return "var(--color-data-query-node-1)";
 			return undefined;
@@ -270,6 +282,7 @@ export function NodeComponent({
 				selected && v.isVectorStoreDocument && "shadow-github-node-1",
 				selected && v.isTrigger && "shadow-trigger-node-1",
 				selected && v.isAction && "shadow-action-node-1",
+				selected && v.isSquadStep && "shadow-action-node-1",
 				selected && v.isQuery && "shadow-query-node-1",
 				selected && v.isDataStore && "shadow-data-store-node-1",
 				selected && v.isDataQuery && "shadow-data-query-node-1",
@@ -288,6 +301,7 @@ export function NodeComponent({
 				highlighted && v.isVectorStoreDocument && "shadow-github-node-1",
 				highlighted && v.isTrigger && "shadow-trigger-node-1",
 				highlighted && v.isAction && "shadow-action-node-1",
+				highlighted && v.isSquadStep && "shadow-action-node-1",
 				highlighted && v.isQuery && "shadow-query-node-1",
 				highlighted && v.isDataStore && "shadow-data-store-node-1",
 				highlighted && v.isDataQuery && "shadow-data-query-node-1",
@@ -352,6 +366,9 @@ export function NodeComponent({
 						v.isAction &&
 						"from-action-node-1/30 via-action-node-1/50 to-action-node-1",
 					!borderGradientStyle &&
+						v.isSquadStep &&
+						"from-action-node-1/30 via-action-node-1/50 to-action-node-1",
+					!borderGradientStyle &&
 						v.isQuery &&
 						"from-query-node-1/30 via-query-node-1/50 to-query-node-1",
 					!borderGradientStyle &&
@@ -388,6 +405,7 @@ export function NodeComponent({
 							v.isVectorStoreDocument && "bg-github-node-1",
 							v.isTrigger && "bg-trigger-node-1",
 							v.isAction && "bg-action-node-1",
+							v.isSquadStep && "bg-action-node-1",
 							v.isQuery && "bg-query-node-1",
 							v.isDataStore && "bg-data-store-node-1",
 							v.isDataQuery && "bg-data-query-node-1",
@@ -411,6 +429,7 @@ export function NodeComponent({
 								v.isTrigger && !v.isGithubTrigger && "stroke-current fill-none",
 								v.isGithubTrigger && "fill-current",
 								v.isAction && "fill-current",
+								v.isSquadStep && "stroke-current fill-none",
 								v.isQuery && "stroke-current fill-none",
 								v.isDataStore && "stroke-current fill-none",
 								v.isDataQuery && "stroke-current fill-none",
@@ -426,6 +445,7 @@ export function NodeComponent({
 								v.isTrigger && !v.isGithubTrigger && "text-inverse",
 								v.isGithubTrigger && "text-background",
 								v.isAction && "text-inverse",
+								v.isSquadStep && "text-inverse",
 								v.isQuery && "text-background",
 								v.isDataStore && "text-background",
 								v.isDataQuery && "text-background",
@@ -519,6 +539,8 @@ function InputOutput({
 										"!border-image-generation-node-1 group-data-[state=connected]:!bg-image-generation-node-1",
 									v.isAction &&
 										"!border-action-node-1 group-data-[state=connected]:!bg-action-node-1",
+									v.isSquadStep &&
+										"!border-action-node-1 group-data-[state=connected]:!bg-action-node-1",
 									v.isQuery &&
 										"!border-query-node-1 group-data-[state=connected]:!bg-query-node-1",
 									v.isDataQuery &&
@@ -571,6 +593,8 @@ function InputOutput({
 							v.isTrigger &&
 								"!border-trigger-node-1 group-data-[state=connected]:!bg-trigger-node-1 group-data-[state=connected]:!border-trigger-node-1",
 							v.isAction &&
+								"!border-action-node-1 group-data-[state=connected]:!bg-action-node-1 group-data-[state=connected]:!border-action-node-1",
+							v.isSquadStep &&
 								"!border-action-node-1 group-data-[state=connected]:!bg-action-node-1 group-data-[state=connected]:!border-action-node-1",
 							v.isQuery &&
 								"!border-query-node-1 group-data-[state=connected]:!bg-query-node-1 group-data-[state=connected]:!border-query-node-1",

@@ -19,6 +19,7 @@ import {
 	ImageGenerationContentReference,
 } from "./image-generation";
 import { QueryContent, QueryContentReference } from "./query";
+import { SquadStepContent, SquadStepContentReference } from "./squad-step";
 import {
 	TextGenerationContent,
 	TextGenerationContentReference,
@@ -35,6 +36,7 @@ const OperationNodeContent = z.discriminatedUnion("type", [
 	AppEntryContent,
 	ContentGenerationContent,
 	EndContent,
+	SquadStepContent,
 ]);
 
 export const OperationNode = NodeBase.extend({
@@ -60,6 +62,7 @@ export const OperationNodeLike = NodeBase.extend({
 			DataQueryContent.shape.type,
 			ContentGenerationContent.shape.type,
 			EndContent.shape.type,
+			SquadStepContent.shape.type,
 		]),
 	}),
 });
@@ -178,6 +181,15 @@ export function isEndNode(args?: unknown): args is EndNode {
 	return result.success;
 }
 
+export const SquadStepNode = OperationNode.extend({
+	content: SquadStepContent,
+});
+export type SquadStepNode = z.infer<typeof SquadStepNode>;
+export function isSquadStepNode(args?: unknown): args is SquadStepNode {
+	const result = SquadStepNode.safeParse(args);
+	return result.success;
+}
+
 const OperationNodeContentReference = z.discriminatedUnion("type", [
 	AppEntryContentReference,
 	TextGenerationContentReference,
@@ -188,6 +200,7 @@ const OperationNodeContentReference = z.discriminatedUnion("type", [
 	DataQueryContentReference,
 	ContentGenerationContentReference,
 	EndContentReference,
+	SquadStepContentReference,
 ]);
 export const OperationNodeReference = NodeReferenceBase.extend({
 	type: OperationNode.shape.type,
