@@ -2,7 +2,7 @@
 /**
  * @module a2a-agent-workers
  *
- * Wires internal Recoder agents (recoder_backend, recoder_web, recoder_pm,
+ * Wires internal Recoder agents (recoder_backend, recoder_pm,
  * recoder_agency) to the A2A agent bridge so they appear as connected agents
  * and can receive task assignments.
  *
@@ -34,17 +34,6 @@ const INTERNAL_AGENTS = [
         buildRequestBody: (task) => ({
             prompt: task.prompt,
             task_id: task.taskId,
-        }),
-    },
-    {
-        agentId: 'recoder_web',
-        capabilities: ['execute', 'plan'],
-        // recoder-web is a Docker container on the same network
-        baseUrl: process.env.RECODER_WEB_INTERNAL_URL || 'http://recoder-web:5173',
-        taskEndpoint: '/api/chat',
-        buildRequestBody: (task) => ({
-            messages: [{ role: 'user', content: task.prompt }],
-            context: task.context,
         }),
     },
     {

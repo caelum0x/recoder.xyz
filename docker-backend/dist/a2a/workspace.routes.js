@@ -44,6 +44,48 @@ function sendError(res, httpStatus, error) {
     const response = { success: false, error };
     res.status(httpStatus).json(response);
 }
+function getAuthenticatedUserId(req) {
+    const userId = req.userId;
+    return typeof userId === 'string' && userId.trim().length > 0 && userId !== 'anonymous'
+        ? userId
+        : undefined;
+}
+function sendWorkspaceAccessDenied(res, workspaceId) {
+    sendError(res, 403, (0, a2a_1.buildA2AError)({
+        code: a2a_1.A2AErrorCodeEnum.AuthorizationDenied,
+        message: `Workspace access denied: ${workspaceId}`,
+    }));
+}
+function resolveOwnerIdOrReject(req, res, requestedOwnerId) {
+    const authenticatedUserId = getAuthenticatedUserId(req);
+    if (!authenticatedUserId) {
+        return requestedOwnerId;
+    }
+    if (requestedOwnerId && requestedOwnerId !== authenticatedUserId) {
+        sendError(res, 403, (0, a2a_1.buildA2AError)({
+            code: a2a_1.A2AErrorCodeEnum.AuthorizationDenied,
+            message: `Owner mismatch: authenticated user ${authenticatedUserId} cannot act as ${requestedOwnerId}`,
+        }));
+        return null;
+    }
+    return authenticatedUserId;
+}
+function getOwnedWorkspaceOrReject(req, res, workspaceId) {
+    const workspace = (0, workspace_service_1.getWorkspaceService)().get(workspaceId);
+    if (!workspace) {
+        sendError(res, 404, (0, a2a_1.buildA2AError)({
+            code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
+            message: `Workspace not found: ${workspaceId}`,
+        }));
+        return null;
+    }
+    const authenticatedUserId = getAuthenticatedUserId(req);
+    if (authenticatedUserId && workspace.ownerId !== authenticatedUserId) {
+        sendWorkspaceAccessDenied(res, workspaceId);
+        return null;
+    }
+    return workspace;
+}
 function mapDelegationStatus(status) {
     switch (status) {
         case 'accepted':
@@ -333,6 +375,9 @@ exports.workspaceRouter.use((req, _res, next) => {
 exports.workspaceRouter.post('/', (req, res) => {
     try {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const ownerId = resolveOwnerIdOrReject(req, res, typeof body?.ownerId === 'string' ? body.ownerId : undefined);
+        if (ownerId === null)
+            return;
         if (!body?.name || !body?.projectId) {
             return sendError(res, 400, (0, a2a_1.buildA2AError)({
                 code: a2a_1.A2AErrorCodeEnum.InvalidParams,
@@ -342,7 +387,7 @@ exports.workspaceRouter.post('/', (req, res) => {
         const ws = (0, workspace_service_1.getWorkspaceService)().create({
             name: body.name,
             projectId: body.projectId,
-            ownerId: body.ownerId ?? 'anonymous',
+            ownerId: ownerId ?? 'anonymous',
             memberAgentIds: body.memberAgentIds,
             settings: body.settings,
         });
@@ -359,7 +404,10 @@ exports.workspaceRouter.post('/', (req, res) => {
 // ── GET / — List workspaces ──────────────────────────────────────────────
 exports.workspaceRouter.get('/', (req, res) => {
     try {
-        const ownerId = req.query.ownerId;
+        const requestedOwnerId = typeof req.query.ownerId === 'string' ? req.query.ownerId : undefined;
+        const ownerId = resolveOwnerIdOrReject(req, res, requestedOwnerId);
+        if (ownerId === null)
+            return;
         const workspaces = (0, workspace_service_1.getWorkspaceService)().list(ownerId);
         sendSuccess(res, { workspaces, total: workspaces.length });
     }
@@ -374,13 +422,9 @@ exports.workspaceRouter.get('/', (req, res) => {
 // ── GET /:wsId — Get workspace ───────────────────────────────────────────
 exports.workspaceRouter.get('/:wsId', (req, res) => {
     try {
-        const ws = (0, workspace_service_1.getWorkspaceService)().get(req.params.wsId);
-        if (!ws) {
-            return sendError(res, 404, (0, a2a_1.buildA2AError)({
-                code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-                message: `Workspace not found: ${req.params.wsId}`,
-            }));
-        }
+        const ws = getOwnedWorkspaceOrReject(req, res, req.params.wsId);
+        if (!ws)
+            return;
         sendSuccess(res, ws);
     }
     catch (err) {
@@ -393,6 +437,8 @@ exports.workspaceRouter.get('/:wsId', (req, res) => {
 // ── PATCH /:wsId — Update workspace ──────────────────────────────────────
 exports.workspaceRouter.patch('/:wsId', (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const ws = (0, workspace_service_1.getWorkspaceService)().update(req.params.wsId, body);
         if (!ws) {
@@ -413,6 +459,8 @@ exports.workspaceRouter.patch('/:wsId', (req, res) => {
 // ── DELETE /:wsId — Delete workspace ─────────────────────────────────────
 exports.workspaceRouter.delete('/:wsId', (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const deleted = (0, workspace_service_1.getWorkspaceService)().delete(req.params.wsId);
         if (!deleted) {
             return sendError(res, 404, (0, a2a_1.buildA2AError)({
@@ -432,6 +480,8 @@ exports.workspaceRouter.delete('/:wsId', (req, res) => {
 // ── POST /:wsId/agents — Add agent ──────────────────────────────────────
 exports.workspaceRouter.post('/:wsId/agents', (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         if (!body?.agentId) {
             return sendError(res, 400, (0, a2a_1.buildA2AError)({
@@ -458,6 +508,8 @@ exports.workspaceRouter.post('/:wsId/agents', (req, res) => {
 // ── DELETE /:wsId/agents/:agentId — Remove agent ────────────────────────
 exports.workspaceRouter.delete('/:wsId/agents/:agentId', (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const ws = (0, workspace_service_1.getWorkspaceService)().removeAgent(req.params.wsId, req.params.agentId);
         if (!ws) {
             return sendError(res, 404, (0, a2a_1.buildA2AError)({
@@ -477,6 +529,8 @@ exports.workspaceRouter.delete('/:wsId/agents/:agentId', (req, res) => {
 // ── GET /:wsId/agents — List agents with status ─────────────────────────
 exports.workspaceRouter.get('/:wsId/agents', (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         buildWorkspaceAgentRows(req.params.wsId).then((agents) => {
             if (!agents) {
                 sendError(res, 404, (0, a2a_1.buildA2AError)({
@@ -503,6 +557,8 @@ exports.workspaceRouter.get('/:wsId/agents', (req, res) => {
 // ── GET /:wsId/control-plane — Unified workspace control-plane snapshot ──
 exports.workspaceRouter.get('/:wsId/control-plane', async (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const snapshot = await buildWorkspaceControlPlaneSnapshot(req.params.wsId);
         if (!snapshot) {
             return sendError(res, 404, (0, a2a_1.buildA2AError)({
@@ -522,6 +578,8 @@ exports.workspaceRouter.get('/:wsId/control-plane', async (req, res) => {
 // ── GET /:wsId/context — Structured Recoder Space context package ───────
 exports.workspaceRouter.get('/:wsId/context', async (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const snapshot = await buildWorkspaceControlPlaneSnapshot(req.params.wsId);
         if (!snapshot) {
             return sendError(res, 404, (0, a2a_1.buildA2AError)({
@@ -541,13 +599,9 @@ exports.workspaceRouter.get('/:wsId/context', async (req, res) => {
 // ── GET /:wsId/channels — List channels ─────────────────────────────────
 exports.workspaceRouter.get('/:wsId/channels', (req, res) => {
     try {
-        const ws = (0, workspace_service_1.getWorkspaceService)().get(req.params.wsId);
-        if (!ws) {
-            return sendError(res, 404, (0, a2a_1.buildA2AError)({
-                code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-                message: `Workspace not found: ${req.params.wsId}`,
-            }));
-        }
+        const ws = getOwnedWorkspaceOrReject(req, res, req.params.wsId);
+        if (!ws)
+            return;
         const channels = (0, collaboration_service_1.getCollaborationSvc)().listChannels();
         sendSuccess(res, { channels, total: channels.length });
     }
@@ -563,13 +617,9 @@ exports.workspaceRouter.use('/:wsId/dispatch', multi_dispatch_routes_1.multiDisp
 // ── GET /:wsId/tasks — List tasks ───────────────────────────────────────
 exports.workspaceRouter.get('/:wsId/tasks', async (req, res) => {
     try {
-        const ws = (0, workspace_service_1.getWorkspaceService)().get(req.params.wsId);
-        if (!ws) {
-            return sendError(res, 404, (0, a2a_1.buildA2AError)({
-                code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-                message: `Workspace not found: ${req.params.wsId}`,
-            }));
-        }
+        const ws = getOwnedWorkspaceOrReject(req, res, req.params.wsId);
+        if (!ws)
+            return;
         const tasks = await buildWorkspaceTaskRows(ws.workspaceId, Number(req.query.limit || 200));
         sendSuccess(res, { tasks, total: tasks.length });
     }
@@ -583,13 +633,9 @@ exports.workspaceRouter.get('/:wsId/tasks', async (req, res) => {
 // ── GET /:wsId/approvals — List workspace approvals ─────────────────────
 exports.workspaceRouter.get('/:wsId/approvals', (req, res) => {
     try {
-        const ws = (0, workspace_service_1.getWorkspaceService)().get(req.params.wsId);
-        if (!ws) {
-            return sendError(res, 404, (0, a2a_1.buildA2AError)({
-                code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-                message: `Workspace not found: ${req.params.wsId}`,
-            }));
-        }
+        const ws = getOwnedWorkspaceOrReject(req, res, req.params.wsId);
+        if (!ws)
+            return;
         const statusQuery = String(req.query.status || '').trim().toLowerCase();
         const approvals = statusQuery === 'pending'
             ? (0, approval_gate_service_1.getApprovalGateService)().listPending(ws.workspaceId)
@@ -606,13 +652,9 @@ exports.workspaceRouter.get('/:wsId/approvals', (req, res) => {
 // ── GET /:wsId/handoffs — List workspace handoffs ───────────────────────
 exports.workspaceRouter.get('/:wsId/handoffs', (req, res) => {
     try {
-        const ws = (0, workspace_service_1.getWorkspaceService)().get(req.params.wsId);
-        if (!ws) {
-            return sendError(res, 404, (0, a2a_1.buildA2AError)({
-                code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-                message: `Workspace not found: ${req.params.wsId}`,
-            }));
-        }
+        const ws = getOwnedWorkspaceOrReject(req, res, req.params.wsId);
+        if (!ws)
+            return;
         const requestedStatus = String(req.query.status || '').trim().toLowerCase();
         const handoffs = buildWorkspaceHandoffRows(ws.workspaceId, requestedStatus === 'active');
         sendSuccess(res, { handoffs, total: handoffs.length });
@@ -627,13 +669,9 @@ exports.workspaceRouter.get('/:wsId/handoffs', (req, res) => {
 // ── POST /:wsId/handoffs — Create workspace handoff ─────────────────────
 exports.workspaceRouter.post('/:wsId/handoffs', (req, res) => {
     try {
-        const ws = (0, workspace_service_1.getWorkspaceService)().get(req.params.wsId);
-        if (!ws) {
-            return sendError(res, 404, (0, a2a_1.buildA2AError)({
-                code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-                message: `Workspace not found: ${req.params.wsId}`,
-            }));
-        }
+        const ws = getOwnedWorkspaceOrReject(req, res, req.params.wsId);
+        if (!ws)
+            return;
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const fromAgentId = String(body?.fromAgentId || '').trim();
         const toAgentId = String(body?.toAgentId || '').trim();
@@ -687,13 +725,8 @@ exports.workspaceRouter.post('/:wsId/handoffs', (req, res) => {
 // GET /:wsId/worktrees — List worktrees
 exports.workspaceRouter.get('/:wsId/worktrees', async (req, res) => {
     try {
-        const ws = (0, workspace_service_1.getWorkspaceService)().get(req.params.wsId);
-        if (!ws) {
-            return sendError(res, 404, (0, a2a_1.buildA2AError)({
-                code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-                message: `Workspace not found: ${req.params.wsId}`,
-            }));
-        }
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         // containerId comes from query param or workspace metadata
         const containerId = req.query.containerId;
         if (!containerId) {
@@ -715,6 +748,8 @@ exports.workspaceRouter.get('/:wsId/worktrees', async (req, res) => {
 // GET /:wsId/worktrees/:taskId/diff — Worktree diff
 exports.workspaceRouter.get('/:wsId/worktrees/:taskId/diff', async (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const containerId = req.query.containerId;
         if (!containerId) {
             return sendError(res, 400, (0, a2a_1.buildA2AError)({
@@ -735,6 +770,8 @@ exports.workspaceRouter.get('/:wsId/worktrees/:taskId/diff', async (req, res) =>
 // POST /:wsId/worktrees/:taskId/merge — Merge worktree to base
 exports.workspaceRouter.post('/:wsId/worktrees/:taskId/merge', async (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const containerId = body?.containerId ?? req.query.containerId;
         if (!containerId) {
@@ -757,6 +794,8 @@ exports.workspaceRouter.post('/:wsId/worktrees/:taskId/merge', async (req, res) 
 // DELETE /:wsId/worktrees/:taskId — Cleanup worktree
 exports.workspaceRouter.delete('/:wsId/worktrees/:taskId', async (req, res) => {
     try {
+        if (!getOwnedWorkspaceOrReject(req, res, req.params.wsId))
+            return;
         const containerId = req.query.containerId;
         if (!containerId) {
             return sendError(res, 400, (0, a2a_1.buildA2AError)({
@@ -777,13 +816,9 @@ exports.workspaceRouter.delete('/:wsId/worktrees/:taskId', async (req, res) => {
 // ── GET /:wsId/stream — SSE workspace event stream ──────────────────────
 exports.workspaceRouter.get('/:wsId/stream', (req, res) => {
     const wsId = req.params.wsId;
-    const ws = (0, workspace_service_1.getWorkspaceService)().get(wsId);
-    if (!ws) {
-        return sendError(res, 404, (0, a2a_1.buildA2AError)({
-            code: a2a_1.A2AErrorCodeEnum.TaskNotFound,
-            message: `Workspace not found: ${wsId}`,
-        }));
-    }
+    const ws = getOwnedWorkspaceOrReject(req, res, wsId);
+    if (!ws)
+        return;
     // SSE headers
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',

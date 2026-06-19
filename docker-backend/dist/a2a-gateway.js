@@ -356,6 +356,66 @@ function parseEnvelopeFromUnknown(value, sourcePath = 'envelope') {
         envelope,
     };
 }
+function parseBridgeResultEnvelopeFromUnknown(value, sourcePath = 'resultEnvelope') {
+    if (isCanonicalTaskEnvelopeShape(value)) {
+        const validation = (0, a2a_sdk_1.validateTaskEnvelope)(value, { strictVersion: false });
+        if (!validation.valid) {
+            return {
+                ok: false,
+                issues: mapValidationIssuesToEnvelopeIssues(validation.issues, sourcePath),
+            };
+        }
+        const metadata = isRecord(value.metadata) ? value.metadata : {};
+        return {
+            ok: true,
+            parsed: {
+                canonicalEnvelope: value,
+                threadId: value.thread_id,
+                traceId: value.trace_id,
+                workspaceId: value.workspace_id,
+                taskId: asOptionalString(metadata.taskId) ||
+                    asOptionalString(metadata.task_id) ||
+                    value.id,
+                messageId: value.id,
+                metadata,
+            },
+        };
+    }
+    const legacy = parseEnvelopeFromUnknown(value, sourcePath);
+    if (!legacy.ok)
+        return legacy;
+    const metadata = legacy.envelope.metadata && isRecord(legacy.envelope.metadata)
+        ? legacy.envelope.metadata
+        : {};
+    const workspaceId = readMetadataWorkspaceId(metadata);
+    const traceId = asOptionalString(legacy.envelope.trace?.traceId) ||
+        asOptionalString(metadata.traceId) ||
+        asOptionalString(metadata.trace_id);
+    // workspaceId/traceId are optional: a bridge result without full run context
+    // is still accepted (stored + dispatched); run-history attachment downstream
+    // is guarded on their presence, so it is simply skipped when they are absent.
+    return {
+        ok: true,
+        parsed: {
+            legacyEnvelope: legacy.envelope,
+            threadId: legacy.envelope.threadId,
+            traceId: traceId ?? null,
+            workspaceId: workspaceId ?? null,
+            taskId: asOptionalString(metadata.taskId) ||
+                asOptionalString(metadata.task_id),
+            messageId: legacy.envelope.messageId,
+            metadata,
+        },
+    };
+}
+function isCanonicalTaskEnvelopeShape(value) {
+    return (isRecord(value) &&
+        typeof value.id === 'string' &&
+        typeof value.workspace_id === 'string' &&
+        typeof value.thread_id === 'string' &&
+        typeof value.trace_id === 'string' &&
+        typeof value.state === 'string');
+}
 function respondInvalidEnvelope(res, issues, error = 'Invalid A2A envelope') {
     res.status(400).json(buildInvalidA2AEnvelopeError({ issues, error }));
 }
@@ -473,15 +533,6 @@ function builtinAgentEntries() {
             updated_at: nowIso,
         },
         {
-            agent_id: 'recoder_web',
-            platform: 'recoder_web',
-            base_url: process.env.RECODER_WEB_URL || '',
-            enabled: true,
-            auth_mode: 'hmac_shared_secret',
-            health: 'unknown',
-            updated_at: nowIso,
-        },
-        {
             agent_id: 'recoder_agency',
             platform: 'recoder_agency',
             base_url: process.env.AGENCY_PUBLIC_URL || '',
@@ -582,8 +633,16 @@ function verifyAdminToken(req) {
         return { ok: true, scope };
     }
     const expected = process.env.RECODER_A2A_ADMIN_TOKEN || '';
-    if (!expected)
-        return { ok: true, scope: null };
+    // Fail closed: when no admin credential is configured, deny admin access
+    // instead of granting it to any caller (recoder-0zso). Production must set
+    // RECODER_A2A_ADMIN_TOKEN (or RECODER_A2A_ADMIN_TOKEN_SCOPES) to enable admin routes.
+    if (!expected) {
+        return {
+            ok: false,
+            status: 503,
+            error: 'Admin access is not configured (set RECODER_A2A_ADMIN_TOKEN)',
+        };
+    }
     if (!provided || provided !== expected) {
         return { ok: false, status: 401, error: 'Unauthorized admin token' };
     }
@@ -1307,6 +1366,27 @@ function extractEvidencePayloadItems(value, fallbackTaskId, fallbackAgentId) {
         return [];
     const previewUrl = asOptionalString(value.previewUrl) ||
         asOptionalString(value.preview?.url);
+    const pullRequestRecord = isRecord(value.pullRequest)
+        ? value.pullRequest
+        : isRecord(value.pull_request)
+            ? value.pull_request
+            : isRecord(value.pr)
+                ? value.pr
+                : null;
+    const pullRequestUrl = asOptionalString(value.pullRequestUrl) ||
+        asOptionalString(value.pull_request_url) ||
+        asOptionalString(value.prUrl) ||
+        asOptionalString(value.pr_url) ||
+        asOptionalString(pullRequestRecord?.url) ||
+        asOptionalString(pullRequestRecord?.html_url);
+    const pullRequestNumberRaw = value.pullRequestNumber ??
+        value.pull_request_number ??
+        value.prNumber ??
+        value.pr_number ??
+        pullRequestRecord?.number;
+    const pullRequestNumber = typeof pullRequestNumberRaw === 'number'
+        ? String(pullRequestNumberRaw)
+        : asOptionalString(pullRequestNumberRaw);
     const gitStatus = asOptionalString(value.gitStatus) || asOptionalString(value.git_status);
     const gitBranch = asOptionalString(value.gitBranch) || asOptionalString(value.git_branch);
     const cloneUrl = asOptionalString(value.cloneUrl) || asOptionalString(value.clone_url);
@@ -1323,6 +1403,19 @@ function extractEvidencePayloadItems(value, fallbackTaskId, fallbackAgentId) {
             metadata: {
                 ...(fallbackTaskId ? { taskId: fallbackTaskId } : {}),
                 ...(fallbackAgentId ? { agentId: fallbackAgentId } : {}),
+            },
+        });
+    }
+    if (pullRequestUrl) {
+        evidence.push({
+            kind: 'pull_request',
+            label: pullRequestNumber ? `Pull request #${pullRequestNumber}` : 'Pull request',
+            ref: pullRequestUrl,
+            metadata: {
+                ...(pullRequestNumber ? { pullRequestNumber } : {}),
+                ...(fallbackTaskId ? { taskId: fallbackTaskId } : {}),
+                ...(fallbackAgentId ? { agentId: fallbackAgentId } : {}),
+                ...(pullRequestRecord ? { pullRequest: pullRequestRecord } : {}),
             },
         });
     }
@@ -1364,6 +1457,207 @@ function extractEvidencePayloadItems(value, fallbackTaskId, fallbackAgentId) {
         });
     }
     return evidence;
+}
+function collectRecordPayloads(value, keys) {
+    if (!isRecord(value))
+        return [];
+    const records = [];
+    for (const key of keys) {
+        const candidate = value[key];
+        if (isRecord(candidate)) {
+            records.push(candidate);
+            continue;
+        }
+        if (Array.isArray(candidate)) {
+            for (const item of candidate) {
+                if (isRecord(item))
+                    records.push(item);
+            }
+        }
+    }
+    return records;
+}
+function uniqueRecordsById(records, idKeys) {
+    const seen = new Set();
+    const result = [];
+    for (const record of records) {
+        const id = idKeys
+            .map((key) => asOptionalString(record[key]))
+            .find(Boolean);
+        const key = id || JSON.stringify(record);
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        result.push(record);
+    }
+    return result;
+}
+function normalizeRuntimeEvidenceRecord(value) {
+    const evidenceId = asOptionalString(value.evidenceId);
+    const kind = asOptionalString(value.kind);
+    const source = asOptionalString(value.source);
+    const summary = asOptionalString(value.summary);
+    const capturedAt = asOptionalString(value.capturedAt);
+    if (!evidenceId || !kind || !source || !summary || !capturedAt)
+        return null;
+    return {
+        evidenceId,
+        kind: kind,
+        source,
+        summary,
+        capturedAt,
+        workspaceId: asOptionalString(value.workspaceId) || undefined,
+        taskId: asOptionalString(value.taskId) || undefined,
+        runId: asOptionalString(value.runId) || undefined,
+        traceId: asOptionalString(value.traceId) || undefined,
+        artifact: normalizeRuntimeEvidenceArtifactRef(value.artifact),
+        data: isRecord(value.data) ? value.data : undefined,
+        metadata: isRecord(value.metadata) ? value.metadata : undefined,
+    };
+}
+function normalizeRuntimeEvidenceArtifactRef(value) {
+    if (!isRecord(value))
+        return undefined;
+    const artifactId = asOptionalString(value.artifactId);
+    if (!artifactId)
+        return undefined;
+    return {
+        artifactId,
+        key: asOptionalString(value.key) || undefined,
+        uri: asOptionalString(value.uri) || undefined,
+        mimeType: asOptionalString(value.mimeType) || undefined,
+    };
+}
+function extractRuntimeEvidenceItems(value, fallbackTaskId, fallbackAgentId) {
+    const records = collectRecordPayloads(value, ['evidence', 'runtimeEvidence', 'runtime_evidence'])
+        .map((record) => normalizeRuntimeEvidenceRecord(record))
+        .filter(Boolean);
+    return records.map((record) => ({
+        kind: record.kind,
+        label: record.summary,
+        ref: record.artifact?.uri || record.artifact?.artifactId || record.evidenceId,
+        metadata: {
+            evidenceId: record.evidenceId,
+            source: record.source,
+            capturedAt: record.capturedAt,
+            ...(record.workspaceId ? { workspaceId: record.workspaceId } : {}),
+            ...(record.taskId || fallbackTaskId ? { taskId: record.taskId || fallbackTaskId } : {}),
+            ...(record.runId ? { runId: record.runId } : {}),
+            ...(record.traceId ? { traceId: record.traceId } : {}),
+            ...(fallbackAgentId ? { agentId: fallbackAgentId } : {}),
+            ...(record.artifact ? { artifact: record.artifact } : {}),
+            ...(record.data ? { data: record.data } : {}),
+            ...(record.metadata ? { metadata: record.metadata } : {}),
+        },
+    }));
+}
+function normalizeApprovalCheckpoint(value) {
+    const approvalId = asOptionalString(value.approvalId);
+    const taskId = asOptionalString(value.taskId);
+    const state = asOptionalString(value.state);
+    const reason = asOptionalString(value.reason);
+    const requestedAt = asOptionalString(value.requestedAt);
+    const requestedBy = normalizeTaskAgentRef(value.requestedBy);
+    if (!approvalId || !taskId || !state || !reason || !requestedAt || !requestedBy)
+        return null;
+    return {
+        approvalId,
+        taskId,
+        state: state,
+        requestedBy,
+        requestedAt,
+        reason,
+        decidedBy: normalizeTaskAgentRef(value.decidedBy),
+        decidedAt: asOptionalString(value.decidedAt) || undefined,
+        decisionReason: asOptionalString(value.decisionReason) || undefined,
+        policy: normalizeTaskPolicySnapshot(value.policy),
+        metadata: isRecord(value.metadata) ? value.metadata : undefined,
+    };
+}
+function normalizeTaskAgentRef(value) {
+    if (!isRecord(value))
+        return undefined;
+    const agentId = asOptionalString(value.agent_id) || asOptionalString(value.agentId);
+    const platform = asOptionalString(value.platform);
+    if (!agentId || !platform)
+        return undefined;
+    return {
+        agent_id: agentId,
+        platform: platform,
+        name: asOptionalString(value.name) || undefined,
+        instance_id: asOptionalString(value.instance_id) || asOptionalString(value.instanceId) || undefined,
+    };
+}
+function normalizeTaskPolicySnapshot(value) {
+    if (!isRecord(value))
+        return undefined;
+    const action = asOptionalString(value.action);
+    const rule = asOptionalString(value.rule);
+    const reason = asOptionalString(value.reason);
+    const checkedAt = asOptionalString(value.checked_at) || asOptionalString(value.checkedAt);
+    if (!action || typeof value.approved !== 'boolean' || !rule || !reason || !checkedAt)
+        return undefined;
+    return {
+        action,
+        approved: value.approved,
+        rule,
+        reason,
+        checked_at: checkedAt,
+    };
+}
+function extractApprovalCheckpoints(value) {
+    return uniqueRecordsById(collectRecordPayloads(value, ['approval', 'approvalCheckpoint', 'approval_checkpoints', 'approvalCheckpoints', 'approvals']), ['approvalId'])
+        .map((record) => normalizeApprovalCheckpoint(record))
+        .filter(Boolean);
+}
+function approvalLifecycleEventType(state) {
+    if (state === 'approved')
+        return 'approval.approved';
+    if (state === 'rejected')
+        return 'approval.rejected';
+    if (state === 'cancelled')
+        return 'approval.cancelled';
+    if (state === 'expired')
+        return 'approval.expired';
+    return 'approval.requested';
+}
+function normalizeHandoffCheckpoint(value) {
+    const handoffId = asOptionalString(value.handoffId);
+    const taskId = asOptionalString(value.taskId);
+    const state = asOptionalString(value.state);
+    const reason = asOptionalString(value.reason);
+    const requestedAt = asOptionalString(value.requestedAt);
+    const to = normalizeTaskAgentRef(value.to);
+    if (!handoffId || !taskId || !state || !reason || !requestedAt || !to)
+        return null;
+    return {
+        handoffId,
+        taskId,
+        state: state,
+        from: normalizeTaskAgentRef(value.from),
+        to,
+        requestedAt,
+        reason,
+        decidedAt: asOptionalString(value.decidedAt) || undefined,
+        decisionReason: asOptionalString(value.decisionReason) || undefined,
+        metadata: isRecord(value.metadata) ? value.metadata : undefined,
+    };
+}
+function extractHandoffCheckpoints(value) {
+    return uniqueRecordsById(collectRecordPayloads(value, ['handoff', 'handoffCheckpoint', 'handoff_checkpoints', 'handoffCheckpoints', 'handoffs']), ['handoffId'])
+        .map((record) => normalizeHandoffCheckpoint(record))
+        .filter(Boolean);
+}
+function handoffLifecycleEventType(state) {
+    if (state === 'accepted')
+        return 'handoff.accepted';
+    if (state === 'rejected')
+        return 'handoff.rejected';
+    if (state === 'completed')
+        return 'handoff.completed';
+    if (state === 'cancelled')
+        return 'handoff.cancelled';
+    return 'handoff.requested';
 }
 function getRequestScope(req) {
     const scope = String(req.header(A2A_SCOPE_HEADER) || '').trim();
@@ -2503,26 +2797,35 @@ router.post('/bridge/jobs/:jobId/result', async (req, res) => {
     });
     let resultEnvelope;
     if (parsedBody.resultEnvelope !== undefined) {
-        const parsedResultEnvelope = parseEnvelopeFromUnknown(parsedBody.resultEnvelope, 'resultEnvelope');
+        const parsedResultEnvelope = parseBridgeResultEnvelopeFromUnknown(parsedBody.resultEnvelope, 'resultEnvelope');
         if (!parsedResultEnvelope.ok) {
             respondInvalidEnvelope(res, parsedResultEnvelope.issues, 'Invalid bridge result envelope');
             return;
         }
-        resultEnvelope = parsedResultEnvelope.envelope;
+        resultEnvelope = parsedResultEnvelope.parsed;
     }
-    if (resultEnvelope?.messageId && resultEnvelope.threadId) {
-        await dispatchIntentToBackend(resultEnvelope);
+    if (resultEnvelope?.legacyEnvelope?.messageId && resultEnvelope.legacyEnvelope.threadId) {
+        await dispatchIntentToBackend(resultEnvelope.legacyEnvelope);
     }
-    const resultMetadata = resultEnvelope?.metadata && isRecord(resultEnvelope.metadata)
-        ? resultEnvelope.metadata
-        : {};
-    const resultWorkspaceId = readMetadataWorkspaceId(resultMetadata);
-    const resultTraceId = asOptionalString(resultEnvelope?.trace?.traceId) ||
-        asOptionalString(resultMetadata.traceId) ||
-        asOptionalString(resultMetadata.trace_id);
-    const resultTaskId = asOptionalString(resultMetadata.taskId) ||
-        asOptionalString(resultMetadata.task_id);
+    const resultMetadata = resultEnvelope?.metadata || {};
+    const resultWorkspaceId = resultEnvelope?.workspaceId || null;
+    const resultTraceId = resultEnvelope?.traceId || null;
+    const resultTaskId = resultEnvelope?.taskId || null;
     if (resultEnvelope?.threadId && resultTraceId && resultWorkspaceId) {
+        const evidenceItems = [
+            ...extractEvidencePayloadItems(parsedBody, resultTaskId || null, auth.session?.agentId || null),
+            ...extractEvidencePayloadItems(resultMetadata, resultTaskId || null, auth.session?.agentId || null),
+            ...extractRuntimeEvidenceItems(parsedBody, resultTaskId || null, auth.session?.agentId || null),
+            ...extractRuntimeEvidenceItems(resultMetadata, resultTaskId || null, auth.session?.agentId || null),
+        ];
+        const approvalCheckpoints = Array.from(new Map([
+            ...extractApprovalCheckpoints(parsedBody),
+            ...extractApprovalCheckpoints(resultMetadata),
+        ].map((approval) => [approval.approvalId, approval])).values());
+        const handoffCheckpoints = Array.from(new Map([
+            ...extractHandoffCheckpoints(parsedBody),
+            ...extractHandoffCheckpoints(resultMetadata),
+        ].map((handoff) => [handoff.handoffId, handoff])).values());
         await appendControlPlaneLifecycleEvent({
             workspaceId: resultWorkspaceId,
             threadId: resultEnvelope.threadId,
@@ -2534,6 +2837,7 @@ router.post('/bridge/jobs/:jobId/result', async (req, res) => {
                 jobId,
                 bridgeId: auth.session?.bridgeId || null,
                 messageId: resultEnvelope.messageId,
+                envelopeShape: resultEnvelope.canonicalEnvelope ? 'task_envelope' : 'gateway_envelope',
                 ok: Boolean(parsedBody.ok),
             },
         });
@@ -2543,11 +2847,40 @@ router.post('/bridge/jobs/:jobId/result', async (req, res) => {
             traceId: resultTraceId,
             taskId: resultTaskId,
             agentId: auth.session?.agentId || null,
-            evidence: [
-                ...extractEvidencePayloadItems(parsedBody, resultTaskId || null, auth.session?.agentId || null),
-                ...extractEvidencePayloadItems(resultMetadata, resultTaskId || null, auth.session?.agentId || null),
-            ],
+            evidence: evidenceItems,
         });
+        for (const approval of approvalCheckpoints) {
+            await appendControlPlaneLifecycleEvent({
+                workspaceId: resultWorkspaceId,
+                threadId: resultEnvelope.threadId,
+                traceId: resultTraceId,
+                eventType: approvalLifecycleEventType(approval.state),
+                taskId: approval.taskId || resultTaskId,
+                actorId: approval.decidedBy?.agent_id || approval.requestedBy.agent_id || auth.session?.agentId || null,
+                state: approval.state,
+                detail: {
+                    jobId,
+                    bridgeId: auth.session?.bridgeId || null,
+                    approval,
+                },
+            });
+        }
+        for (const handoff of handoffCheckpoints) {
+            await appendControlPlaneLifecycleEvent({
+                workspaceId: resultWorkspaceId,
+                threadId: resultEnvelope.threadId,
+                traceId: resultTraceId,
+                eventType: handoffLifecycleEventType(handoff.state),
+                taskId: handoff.taskId || resultTaskId,
+                actorId: handoff.from?.agent_id || handoff.to.agent_id || auth.session?.agentId || null,
+                state: handoff.state,
+                detail: {
+                    jobId,
+                    bridgeId: auth.session?.bridgeId || null,
+                    handoff,
+                },
+            });
+        }
     }
     await emitAuditEvent('bridge_result_accepted', {
         jobId,

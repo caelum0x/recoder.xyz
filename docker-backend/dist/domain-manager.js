@@ -36,7 +36,7 @@ const resolveCname = (0, util_1.promisify)(dns_1.default.resolveCname);
 const resolveTxt = (0, util_1.promisify)(dns_1.default.resolveTxt);
 // ==================== Constants ====================
 const STORE_NAME = 'domains';
-const CNAME_TARGET = 'web.recoder.xyz';
+const CNAME_TARGET = process.env.PREVIEW_CNAME_TARGET || 'docker.recoder.xyz';
 const TXT_PREFIX = 'recoder-verify=';
 const NGINX_CUSTOM_DOMAINS_DIR = process.env.NGINX_CUSTOM_DOMAINS_DIR || '/etc/nginx/conf.d/custom-domains';
 const CERTBOT_WEBROOT = process.env.CERTBOT_WEBROOT || '/var/www/html';

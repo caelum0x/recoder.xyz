@@ -133,6 +133,7 @@ function CanvasNode({
 		const isVideoGeneration = contentType === "videoGeneration";
 		const isTrigger = contentType === "trigger";
 		const isAction = contentType === "action";
+		const isSquadStep = contentType === "squadStep";
 		const isQuery = contentType === "query";
 
 		const isVectorStoreGithub =
@@ -141,7 +142,13 @@ function CanvasNode({
 			isVectorStore && vectorStoreSourceProvider === "githubPullRequest";
 
 		const isFillIcon =
-			isText || isFile || isWebPage || isGithub || isVectorStore || isAction;
+			isText ||
+			isFile ||
+			isWebPage ||
+			isGithub ||
+			isVectorStore ||
+			isAction ||
+			isSquadStep;
 		const isStrokeIcon =
 			isTextGeneration ||
 			isImageGeneration ||
@@ -149,6 +156,7 @@ function CanvasNode({
 			isAudioGeneration ||
 			isVideoGeneration ||
 			isTrigger ||
+			isSquadStep ||
 			isQuery;
 
 		const isDarkIconText = isText || isFile || isWebPage || isQuery;
@@ -162,6 +170,7 @@ function CanvasNode({
 			isAudioGeneration ||
 			isVideoGeneration ||
 			isTrigger ||
+			isSquadStep ||
 			isAction;
 
 		return {
@@ -177,6 +186,7 @@ function CanvasNode({
 			isVideoGeneration,
 			isTrigger,
 			isAction,
+			isSquadStep,
 			isQuery,
 			isVectorStoreGithub,
 			isVectorStoreGithubPullRequest,
@@ -202,6 +212,7 @@ function CanvasNode({
 			case "videoGeneration":
 			case "trigger":
 			case "action":
+			case "squadStep":
 			case "query":
 				return contentType;
 			case "vectorStore":
@@ -245,6 +256,8 @@ function CanvasNode({
 					"from-trigger-node-1/60 to-trigger-node-2 shadow-trigger-node-1",
 				v.isAction &&
 					"from-action-node-1 to-action-node-2 shadow-action-node-1",
+				v.isSquadStep &&
+					"from-action-node-1 to-action-node-2 shadow-action-node-1",
 				v.isQuery && "from-query-node-1 to-query-node-2 shadow-query-node-1",
 				selected && "shadow-[0px_0px_16px_0px]",
 				selected && v.isTrigger && "shadow-[0px_0px_16px_0px_hsl(220,15%,50%)]",
@@ -281,6 +294,7 @@ function CanvasNode({
 						"from-video-generation-node-1/40 to-video-generation-node-1",
 					v.isTrigger && "from-trigger-node-1/60 to-trigger-node-1",
 					v.isAction && "from-action-node-1/40 to-action-node-1",
+					v.isSquadStep && "from-action-node-1/40 to-action-node-1",
 					v.isQuery && "from-query-node-1/40 to-query-node-1",
 				)}
 			/>
@@ -303,6 +317,7 @@ function CanvasNode({
 							v.isVideoGeneration && "bg-video-generation-node-1",
 							v.isTrigger && "bg-trigger-node-1",
 							v.isAction && "bg-action-node-1",
+							v.isSquadStep && "bg-action-node-1",
 							v.isQuery && "bg-query-node-1",
 						)}
 					>
@@ -427,6 +442,8 @@ function CanvasNode({
 												"group-data-[connected=true]:!border-trigger-node-1",
 											v.isAction &&
 												"group-data-[connected=true]:!border-action-node-1",
+											v.isSquadStep &&
+												"group-data-[connected=true]:!border-action-node-1",
 											v.isQuery &&
 												"group-data-[connected=true]:!border-query-node-1",
 											isConnected &&
@@ -463,6 +480,9 @@ function CanvasNode({
 												"!bg-trigger-node-1 !border-trigger-node-1",
 											isConnected &&
 												v.isAction &&
+												"!bg-action-node-1 !border-action-node-1",
+											isConnected &&
+												v.isSquadStep &&
 												"!bg-action-node-1 !border-action-node-1",
 											isConnected &&
 												v.isQuery &&

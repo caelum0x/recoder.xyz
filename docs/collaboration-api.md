@@ -54,18 +54,18 @@ power is fail-safe (truthful health, never fake success).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET / POST | `/api/a2a/squads` | List (owner-scoped) / create |
+| GET / POST | `/api/a2a/squads` | List (owner-scoped) / create. Squads may carry `projectId` as the default runtime project |
 | POST | `/api/a2a/squads/import` | Create from a portable squad JSON |
 | GET | `/api/a2a/squads/:id` (`?withPresence=true`) | Detail (optionally with member presence) |
-| PATCH / DELETE | `/api/a2a/squads/:id` | Update (name/description/leader) / delete |
+| PATCH / DELETE | `/api/a2a/squads/:id` | Update (name/description/leader/default `projectId`) / delete |
 | POST | `/api/a2a/squads/:id/clone` · `/api/a2a/squads/:id/export` (GET) | Duplicate / export portable JSON |
-| POST | `/api/a2a/squads/:id/members` · PATCH/DELETE `/members/:memberId` | Add member / set role / remove |
+| POST | `/api/a2a/squads/:id/members` · PATCH/DELETE `/members/:memberId` | Add member / set role or member `projectId` / remove |
 
 ## Squad dispatch
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/a2a/squads/:id/dispatch` | Fan a task to the team (`strategy`: all/leader/round-robin/best-match). Delivers to agent A2A inboxes; opt-in `execute:true`+`projectId` runs it on the project's coding runtime (session-on-demand) |
+| POST | `/api/a2a/squads/:id/dispatch` | Fan a task to the team (`strategy`: all/leader/round-robin/best-match). Delivers to agent A2A inboxes; opt-in `execute:true` runs on explicit `projectId`, a single targeted member `projectId`, or the squad default `projectId` (session-on-demand) |
 | GET | `/api/a2a/squads/:id/tasks` · `/api/a2a/squads/:id/stats` | Task list / dispatch metrics |
 | POST | `/api/a2a/squad-tasks/:taskId/assignments/:memberId` | Transition an assignment (queued/in_progress/completed/failed) → updates presence + skill profiles |
 
@@ -97,7 +97,8 @@ power is fail-safe (truthful health, never fake success).
 
 ## Self-hosting
 
-`docker-backend/docker-compose.capabilities.yml` (Qdrant, Ollama, optional vLLM/ziti) +
+`docker-backend/docker-compose.capabilities.yml` (Correction 2026-06-19: prod compose
+provisions Qdrant + OpenZiti only; Ollama/vLLM removed — cloud LLM instead) +
 `scripts/setup-capabilities.sh`, `provision-ziti-runner.sh`, `smoke-capabilities.sh`.
 Prod policy: cloud LLM + on-box Qdrant/ziti; no Ollama/vLLM on the 16GB/no-GPU box
 (`.env.capabilities.recoder-server`).

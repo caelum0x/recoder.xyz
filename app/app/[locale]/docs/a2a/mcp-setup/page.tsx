@@ -5,6 +5,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/docs/a2a/mcp-setup' },
   title: 'Claude Code MCP Setup - A2A - Recoder Documentation',
   description: 'Set up the Recoder MCP server in Claude Code to use A2A agent-to-agent communication, sandbox execution, and cross-platform workflows.',
 };

@@ -1,6 +1,11 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DollarSign, Target, Shield, TrendingUp, Users, Zap, CheckCircle, XCircle, ArrowRight } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
+
+export const metadata: Metadata = {
+  alternates: { canonical: 'https://recoder.xyz/docs/byok' },
+};
 
 export default function BYOKPage() {
   return (

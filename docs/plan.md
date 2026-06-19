@@ -1,6 +1,8 @@
 # Recoder Spaces Platform Status and Agent Control-Plane Plan
 
-Last updated: 2026-05-14
+Last updated: 2026-06-19
+
+> **Infra state (2026-06-19):** To free a near-full prod disk at zero traffic, the **Daytona sandbox stack (8 containers) plus meilisearch/hatchet/openmeter/umami were stopped and their images removed** (freed ~9G; disk 95%→83%, 25G free). They are re-provisionable on demand, **not deleted from the roadmap** — but any "Daytona is the active runtime substrate" wording below is currently *dormant, not running*. Live containers: recoder-docker-backend, recoder-redis, qdrant, text-embedding-inference, and vcpeer's stack. recoder.xyz + agents.recoder.xyz serve 200. Correction: vcpeer is ~42GB, **not** the "135GB" some docs claim. DB is self-hosted PostgreSQL 17 (migrated off Neon 2026-03-16).
 
 ## Goal
 

@@ -284,7 +284,6 @@ export class AgentBridgeService {
       this.agentTypeIndex.set(agentId, new Set());
     }
     this.agentTypeIndex.get(agentId)!.add(resolvedSessionId);
-    this.recordBridgeHeartbeat(agent);
 
     // Auto-add to workspace member lists
     const wsSvc = getWorkspaceService();
@@ -321,6 +320,7 @@ export class AgentBridgeService {
     } catch (err) {
       logger.warn({ agentId, err }, 'failed to sync bridge agent into agent registry (non-fatal)');
     }
+    this.recordBridgeHeartbeat(agent);
 
     // Pre-warm agent memory context in background (fire-and-forget)
     if (userId && userId !== 'system') {

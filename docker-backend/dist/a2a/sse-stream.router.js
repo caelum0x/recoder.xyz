@@ -23,7 +23,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sseStreamRouter = void 0;
 const express_1 = require("express");
 const a2a_event_bus_1 = require("./a2a-event-bus");
+const a2a_1 = require("@recoder/shared/a2a");
 const task_lifecycle_service_1 = require("./task-lifecycle.service");
+const workspace_service_1 = require("./workspace.service");
 const logger_1 = require("../logger");
 const logger = (0, logger_1.createLogger)('a2a-sse-stream');
 /** Heartbeat interval in milliseconds. */
@@ -95,6 +97,32 @@ function parseTypeFilter(raw) {
         .filter(Boolean);
     return types.length > 0 ? new Set(types) : null;
 }
+function getAuthenticatedUserId(req) {
+    const userId = req.userId;
+    return typeof userId === 'string' && userId.trim().length > 0 && userId !== 'anonymous'
+        ? userId
+        : undefined;
+}
+function sendAuthorizationDenied(res, message) {
+    res.status(403).json({
+        success: false,
+        error: (0, a2a_1.buildA2AError)({
+            code: a2a_1.A2AErrorCodeEnum.AuthorizationDenied,
+            message,
+        }),
+    });
+}
+function canAccessWorkspace(req, workspaceId) {
+    const authenticatedUserId = getAuthenticatedUserId(req);
+    if (!authenticatedUserId || !workspaceId) {
+        return true;
+    }
+    const workspace = (0, workspace_service_1.getWorkspaceService)().get(workspaceId);
+    if (!workspace) {
+        return true;
+    }
+    return workspace.ownerId === authenticatedUserId;
+}
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -119,6 +147,10 @@ exports.sseStreamRouter.get('/tasks/:taskId/stream', (req, res) => {
             success: false,
             error: taskResult.error,
         });
+        return;
+    }
+    if (!canAccessWorkspace(req, taskResult.data.workspace_id)) {
+        sendAuthorizationDenied(res, `Task stream access denied: ${taskId}`);
         return;
     }
     logger.info({ task_id: taskId }, 'SSE stream opened for task');
@@ -186,6 +218,11 @@ exports.sseStreamRouter.get('/channels/:channelId/stream', (req, res) => {
         });
         return;
     }
+    const workspace = (0, workspace_service_1.getWorkspaceService)().list().find((candidate) => candidate.defaultChannelId === channelId);
+    if (!canAccessWorkspace(req, workspace?.workspaceId)) {
+        sendAuthorizationDenied(res, `Channel stream access denied: ${channelId}`);
+        return;
+    }
     logger.info({ channel_id: channelId }, 'SSE stream opened for channel');
     // Initialize SSE response
     initSseResponse(res);
@@ -228,6 +265,10 @@ exports.sseStreamRouter.get('/channels/:channelId/stream', (req, res) => {
 // GET /events/stream -- Global SSE stream for all A2A events
 // ---------------------------------------------------------------------------
 exports.sseStreamRouter.get('/events/stream', (req, res) => {
+    if (!canAccessWorkspace(req)) {
+        sendAuthorizationDenied(res, 'Global stream access denied');
+        return;
+    }
     // Parse optional type filter from query string
     const typeFilter = parseTypeFilter(req.query.types);
     logger.info({ filter: typeFilter ? Array.from(typeFilter) : 'all' }, 'global SSE stream opened');

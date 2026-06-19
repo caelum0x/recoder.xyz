@@ -1,7 +1,7 @@
 "use strict";
 /**
  * Docker Backend Client SDK
- * Use this in recoder-web to connect to Docker backend
+ * Use this from Recoder Spaces surfaces to connect to Docker backend.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DockerClient = void 0;

@@ -1,41 +1,18 @@
-import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
-import { locales, defaultLocale, type Locale } from '@/i18n';
-
-const BASE_URL = 'https://recoder.xyz';
+import { locales, type Locale } from '@/i18n';
 
 export function generateStaticParams() {
   return locales.map((locale) => ({ locale }));
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
-  const { locale } = await params;
-
-  // Build the canonical URL for the current locale
-  const canonical =
-    locale === defaultLocale ? BASE_URL : `${BASE_URL}/${locale}`;
-
-  // Build hreflang alternate links for every supported locale
-  const languages: Record<string, string> = {};
-  for (const loc of locales) {
-    languages[loc] = loc === defaultLocale ? BASE_URL : `${BASE_URL}/${loc}`;
-  }
-  // x-default points to the default (English) version
-  languages['x-default'] = BASE_URL;
-
-  return {
-    alternates: {
-      canonical,
-      languages,
-    },
-  };
-}
+// NOTE: Canonical/hreflang are intentionally NOT set at the locale-layout
+// level. The previous implementation pointed every page's canonical at the
+// locale root (and the homepage for the default locale), which told Google
+// that all sub-pages were duplicates of "/". Canonical is now declared
+// per-page against its English URL. hreflang is omitted until the locale
+// variants serve genuinely translated content (today they fall back to en).
 
 interface LocaleLayoutProps {
   children: React.ReactNode;

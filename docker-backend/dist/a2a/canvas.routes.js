@@ -22,6 +22,7 @@ const a2a_event_bus_1 = require("./a2a-event-bus");
 const agent_bridge_service_1 = require("./agent-bridge.service");
 const logger_1 = require("../logger");
 const logger = (0, logger_1.createLogger)('a2a-canvas-routes');
+const canvasPersistenceQueues = new Map();
 function publishCanvasEvent(projectId, threadId, elements) {
     (0, a2a_event_bus_1.getA2AEventBus)().publish({
         id: `evt_${(0, uuid_1.v4)().replace(/-/g, '').slice(0, 16)}`,
@@ -125,6 +126,26 @@ async function persistToSandbox(options, sandboxId, filePath, elements) {
         return false;
     }
 }
+async function persistToSandboxSerial(options, sandboxId, filePath, elements) {
+    const queueKey = JSON.stringify([sandboxId, filePath]);
+    const previous = canvasPersistenceQueues.get(queueKey) ?? Promise.resolve();
+    let releaseCurrent;
+    const current = new Promise((resolve) => {
+        releaseCurrent = resolve;
+    });
+    const queued = previous.catch(() => { }).then(() => current);
+    canvasPersistenceQueues.set(queueKey, queued);
+    try {
+        await previous.catch(() => { });
+        return await persistToSandbox(options, sandboxId, filePath, elements);
+    }
+    finally {
+        releaseCurrent?.();
+        if (canvasPersistenceQueues.get(queueKey) === queued) {
+            canvasPersistenceQueues.delete(queueKey);
+        }
+    }
+}
 function createCanvasRouter(options = {}) {
     const router = (0, express_1.Router)();
     // ── POST / — push canvas update (broadcast + persist) ──────────────
@@ -159,7 +180,7 @@ function createCanvasRouter(options = {}) {
         // 2. Persist to sandbox file (if sandboxId + filePath provided)
         let persisted = false;
         if (sandboxId && filePath) {
-            persisted = await persistToSandbox(options, sandboxId, filePath, elements);
+            persisted = await persistToSandboxSerial(options, sandboxId, filePath, elements);
         }
         logger.info({ projectId, threadId: normalizedThreadId, elementCount: elements.length, persisted }, 'canvas update processed');
         res.json({

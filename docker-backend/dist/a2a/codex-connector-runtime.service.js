@@ -177,13 +177,14 @@ class CodexConnectorRuntime extends events_1.EventEmitter {
             threadId: input.threadId,
         });
         this.lastActivity = new Date().toISOString();
+        const effectivePrompt = input.instructionBundle?.agent_specific_prompt || input.prompt;
         try {
             const codexTask = {
                 id: input.taskId,
                 sessionId: `recoder-session-${Date.now()}`,
                 message: {
                     role: 'user',
-                    parts: [{ text: input.prompt }],
+                    parts: [{ text: effectivePrompt }],
                 },
                 artifacts: input.artifacts?.map((a) => ({
                     filename: a.filename,

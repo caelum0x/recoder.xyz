@@ -101,6 +101,8 @@ export async function buildMessageObject({
 		case "appEntry": {
 			return [];
 		}
+		case "squadStep":
+			return [];
 		default: {
 			const _exhaustiveCheck: never = node.content;
 			throw new Error(`Unhandled content type: ${_exhaustiveCheck}`);
@@ -314,6 +316,7 @@ async function buildGenerationMessageForTextGeneration({
 			case "query":
 			case "dataQuery":
 			case "trigger":
+			case "squadStep":
 			case "action": {
 				const result = await generationContentResolver(
 					contextNode.id,
@@ -623,6 +626,7 @@ async function buildGenerationMessageForImageGeneration(
 
 			case "action":
 			case "trigger":
+			case "squadStep":
 			case "query":
 			case "dataQuery": {
 				const result = await textGenerationResolver(
@@ -703,6 +707,7 @@ async function buildGenerationMessageForImageGeneration(
 
 			case "github":
 			case "vectorStore":
+			case "squadStep":
 			case "end":
 				userMessage = userMessage.replace(replaceKeyword, "");
 				break;
@@ -1149,6 +1154,7 @@ async function buildGenerationMessageForContentGeneration({
 
 			case "query":
 			case "trigger":
+			case "squadStep":
 			case "action":
 			case "dataQuery": {
 				const result = await generationContentResolver(

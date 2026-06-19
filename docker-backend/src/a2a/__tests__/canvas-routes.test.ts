@@ -45,7 +45,7 @@ function request(
   options?: { headers?: Record<string, string>; body?: unknown },
 ): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: any }> {
   return new Promise((resolve, reject) => {
-    const server = app.listen(0, () => {
+    const server = app.listen(0, '127.0.0.1', () => {
       const addr = server.address();
       if (!addr || typeof addr === 'string') {
         server.close();
@@ -61,6 +61,7 @@ function request(
           method,
           headers: {
             'content-type': 'application/json',
+            connection: 'close',
             ...options?.headers,
           },
         },
@@ -70,21 +71,25 @@ function request(
             data += chunk;
           });
           res.on('end', () => {
-            server.close();
             let body: any = data;
             try {
               body = JSON.parse(data);
             } catch {
               // leave as text
             }
-            resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
+            server.close((error) => {
+              if (error) {
+                reject(error);
+                return;
+              }
+              resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
+            });
           });
         },
       );
 
       req.on('error', (error) => {
-        server.close();
-        reject(error);
+        server.close(() => reject(error));
       });
 
       if (options?.body) {
@@ -93,6 +98,53 @@ function request(
 
       req.end();
     });
+    server.on('error', reject);
+  });
+}
+
+function requestToPort(
+  port: number,
+  method: string,
+  path: string,
+  options?: { headers?: Record<string, string>; body?: unknown },
+): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: any }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: '127.0.0.1',
+        port,
+        path,
+        method,
+        headers: {
+          'content-type': 'application/json',
+          connection: 'close',
+          ...options?.headers,
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          let body: any = data;
+          try {
+            body = JSON.parse(data);
+          } catch {
+            // leave as text
+          }
+          resolve({ status: res.statusCode ?? 0, headers: res.headers, body });
+        });
+      },
+    );
+
+    req.on('error', reject);
+
+    if (options?.body) {
+      req.write(JSON.stringify(options.body));
+    }
+
+    req.end();
   });
 }
 
@@ -305,6 +357,75 @@ describe('canvas.routes', () => {
     expect(writtenScene.type).toBe('excalidraw');
     expect(writtenScene.elements).toHaveLength(1);
     expect(writtenScene.elements[0].id).toBe('first-1');
+  });
+
+  it('serializes parallel writes to the same canvas file', async () => {
+    let storedScene = JSON.stringify({
+      type: 'excalidraw',
+      version: 2,
+      source: 'https://agents.recoder.xyz',
+      elements: [{ id: 'base-1', type: 'rectangle', x: 0, y: 0, width: 50, height: 50 }],
+      appState: {},
+      files: {},
+    });
+
+    let writeCount = 0;
+    const readFile = vi.fn(async () => storedScene);
+    const writeFile = vi.fn(async (_sandboxId: string, _filePath: string, content: string) => {
+      writeCount += 1;
+      if (writeCount === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      storedScene = content;
+    });
+
+    const app = createTestApp(createCanvasRouter({ readFile, writeFile }));
+    const server = await new Promise<http.Server>((resolve, reject) => {
+      const nextServer = app.listen(0, '127.0.0.1', () => resolve(nextServer));
+      nextServer.on('error', reject);
+    });
+    const addr = server.address();
+    if (!addr || typeof addr === 'string') {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      throw new Error('Could not determine server address');
+    }
+
+    const first = requestToPort(addr.port, 'POST', '/api/a2a/canvas-update', {
+      body: {
+        projectId: 'project-parallel',
+        elements: [{ id: 'parallel-1', type: 'ellipse', x: 10, y: 10, width: 20, height: 20 }],
+        sandboxId: 'sandbox-parallel',
+        filePath: 'canvases/board.excalidraw',
+      },
+    });
+    const second = requestToPort(addr.port, 'POST', '/api/a2a/canvas-update', {
+      body: {
+        projectId: 'project-parallel',
+        elements: [{ id: 'parallel-2', type: 'diamond', x: 30, y: 30, width: 20, height: 20 }],
+        sandboxId: 'sandbox-parallel',
+        filePath: 'canvases/board.excalidraw',
+      },
+    });
+
+    const responses = await Promise.all([first, second]);
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(writeFile).toHaveBeenCalledTimes(2);
+    const finalScene = JSON.parse(storedScene);
+    expect(finalScene.elements.map((element: any) => element.id).sort()).toEqual([
+      'base-1',
+      'parallel-1',
+      'parallel-2',
+    ]);
   });
 
   it('reads current board state from sandbox via GET /read', async () => {

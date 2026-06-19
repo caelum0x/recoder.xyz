@@ -20,7 +20,7 @@ That matches where Claude Code and Codex are going. Claude Code’s official doc
 What I found in your repo
 The installed GitHub entry for caelum0x/recoder.xyz is a private monorepo on main, and it is much larger than the split recoder-code and recoder-web repos, so it should be treated as the main platform repo.
 You already merged a serious “agent capability layer” on June 2, 2026. That commit says Recoder now exposes capabilities via GET /api/capabilities, adds Qwen Code and Gemini CLI adapters, E2B, mem0, Context7, OpenZiti, a 12-provider LLM router, GitNexus-style code intelligence, multica skill profiles, and /capabilities plus /workflows UI surfaces. It also states the design principle I would keep: fail-safe, truthful health, never fake success.
-Your existing plan already says the right thing: “one workspace, many agents, controlled delivery.” It frames Recoder Spaces as the shared task room where humans, coding agents, PM agents, review agents, deployment agents, browser agents, and later desktop agents coordinate through tasks, artifacts, approvals, logs, and audit trails. It also says the control plane owns identity, workflow state, approval state, and orchestration history, while runners like Daytona remain execution substrates.
+Your existing plan already says the right thing: “one workspace, many agents, controlled delivery.” It frames Recoder Spaces as the shared task room where humans, coding agents, PM agents, review agents, deployment agents, browser agents, and later desktop agents coordinate through tasks, artifacts, approvals, logs, and audit trails. It also says the control plane owns identity, workflow state, approval state, and orchestration history, while runners like Daytona remain execution substrates. (Correction 2026-06-19: Daytona is currently dormant in prod — its sandbox stack was stopped and images removed at zero traffic; it is re-provision-on-demand and remains on the roadmap as an optional substrate, not a running runtime.)
 Your recoder-agency/AGENTS.md and recoder-agency/CLAUDE.md exist as scoped instruction docs. The agency guide’s philosophy is good: less is more, simple APIs, minimize dependencies, fail fast, explicit over implicit, and keep code obvious.
 You already have the runtime pieces: a WebSocket A2A bridge for local agents, Claude connector routes/runtime, a Codex adapter, a Recoder A2A CLI server, production smoke scripts, and tools/a2a-interop.
 The current Codex adapter exposes five tools: list agents, list tasks, send task, create thread, and sandbox run. That is enough for a proof, but not enough for production trust yet.
@@ -282,7 +282,7 @@ Goal:
 	•	Add structured JSON-RPC errors.
 	•	Add timeout and retry policy.
 	•	Emit run events: started, log, artifact, needs_input, verified, failed, completed.
-Immediate security fix: mcp/recoder-codex-adapter.js currently has default production URLs and a hard-coded Daytona URL/IP fallback. Make RECODER_DAYTONA_URL required or put safe local-only defaults in .env.example; do not ship a real network IP as a default.
+Tracked follow-up (Correction 2026-06-19: the Daytona sandbox path is dormant in prod — the stack was stopped and its images removed at zero traffic, re-provision-on-demand, so this is no longer an urgent inline fix): mcp/recoder-codex-adapter.js currently has default production URLs and a hard-coded Daytona URL/IP fallback. Make RECODER_DAYTONA_URL required or put safe local-only defaults in .env.example; do not ship a real network IP as a default.
 Also, the current Codex adapter calls /api/a2a/agents and /api/a2a/tasks without an auth header, while only /v1/agent/start conditionally uses RECODER_API_TOKEN. Fix that before treating Codex as production-connected.
 PR 4: Self-prompt compiler
 Files:
@@ -345,7 +345,7 @@ Files:
 recoder-agents/src/app/agent-os/*
 recoder-agents/src/components/agent-os/*
 recoder-pm/.../approvals/*
-recoder-web/app/components/workbench/AgentTeamPanel.tsx
+recoder-web/app/components/workbench/AgentTeamPanel.tsx  # Correction 2026-06-19: recoder-web is RETIRED (bd recoder-26j7); build this panel in recoder-agents instead
 Show:
 	•	online agents
 	•	capabilities
@@ -410,7 +410,7 @@ signup
   -> task closes
 Your own plan already defines that paid-user loop as the launch gate. Keep it narrow. Do not expand into marketplace, edge platform, agency OS, hosted compute, and deployment platform all at once.
 Immediate fixes before deeper work
-	1.	Remove hard-coded Daytona URL/IP fallback from Codex adapter. Require RECODER_DAYTONA_URL, or default to a local dev URL only.
+	1.	Remove hard-coded Daytona URL/IP fallback from Codex adapter. Require RECODER_DAYTONA_URL, or default to a local dev URL only. (Correction 2026-06-19: tracked follow-up, not urgent — the Daytona sandbox path is dormant in prod, re-provision-on-demand.)
 	2.	Authenticate all Codex adapter A2A calls. Right now the agent/task calls do not consistently include bearer auth.
 	3.	Stop silently swallowing malformed JSON-RPC input. The adapter currently catches JSON parse errors and ignores them. That hides broken clients and attacks. Return structured errors where possible.
 	4.	Add signed envelope validation at every connector ingress. Your plan already says shared A2A validation and signed ingress are the baseline. Enforce it everywhere, including Codex.
@@ -556,7 +556,9 @@ I confirmed `caelum0x/recoder.xyz` is the private main repo on branch `main`, so
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │                         Recoder UI                          │
-│  recoder-web / recoder-pm / recoder-agents / recoder-agency │
+│  recoder-pm / recoder-agents / recoder-agency               │
+│  (Correction 2026-06-19: recoder-web is RETIRED — bd         │
+│   recoder-26j7; new UI lives in recoder-agents)             │
 └───────────────────────┬─────────────────────────────────────┘
                         │
 ┌───────────────────────▼─────────────────────────────────────┐
@@ -641,7 +643,7 @@ recoder.xyz/
 │   ├── recoder-agents/
 │   ├── recoder-pm/
 │   ├── recoder-agency/
-│   └── recoder-web/
+│   └── recoder-web/        # RETIRED 2026-06-19 (bd recoder-26j7); UI moved to recoder-agents
 │
 ├── packages/
 │   ├── agent-os/
@@ -1242,7 +1244,7 @@ export interface WorkflowDriver {
 | Policy                  |          Yes | TypeScript first; OPA/Rego for customer/admin policy.                                                |
 | Observability           |          Yes | OpenTelemetry traces/logs/metrics.                                                                   |
 | Memory                  |        Mixed | Postgres + pgvector canonical; mem0 adapter optional.                                                |
-| Sandbox                 |          Yes | Daytona/E2B adapters; later self-hosted Firecracker/K8s runner.                                      |
+| Sandbox                 |          Yes | Daytona/E2B adapters; later self-hosted Firecracker/K8s runner. (Correction 2026-06-19: Daytona is dormant in prod — stack stopped + images removed at zero traffic, re-provision-on-demand, not running; kept on roadmap as optional substrate. E2B remains a fallback adapter.) |
 | Browser automation      |          Yes | Playwright first; browser-use/Stagehand as adapters only.                                            |
 | Agent frameworks        | Adapter only | LangGraph, AutoGen, CrewAI should not own Recoder core state.                                        |
 | Auth                    |          Yes | Existing auth first; Keycloak/Zitadel optional for self-host enterprise.                             |

@@ -2561,5 +2561,1792 @@
       "createdAt": "2026-06-03T17:18:17.473Z",
       "updatedAt": "2026-06-03T17:18:17.473Z"
     }
+  ],
+  [
+    "ws_dc9da77c22d64e7c",
+    {
+      "workspaceId": "ws_dc9da77c22d64e7c",
+      "name": "ws-proj-agent-1",
+      "projectId": "proj-agent-1",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-1"
+      ],
+      "defaultChannelId": "04e19a79-0d4b-479c-a97a-2b27e4737b41",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.356Z",
+      "updatedAt": "2026-06-13T16:15:39.356Z"
+    }
+  ],
+  [
+    "ws_78a5de0550214184",
+    {
+      "workspaceId": "ws_78a5de0550214184",
+      "name": "ws-proj-reuse",
+      "projectId": "proj-reuse",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-reuse"
+      ],
+      "defaultChannelId": "966c8558-d34a-48ce-bb0a-058c4746330c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.378Z",
+      "updatedAt": "2026-06-13T16:15:39.378Z"
+    }
+  ],
+  [
+    "ws_0da2f2a0416441bc",
+    {
+      "workspaceId": "ws_0da2f2a0416441bc",
+      "name": "ws-proj-visibility",
+      "projectId": "proj-visibility",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-visibility"
+      ],
+      "defaultChannelId": "a574ac35-6534-4c08-904c-3b71b80a3783",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.383Z",
+      "updatedAt": "2026-06-13T16:15:39.383Z"
+    }
+  ],
+  [
+    "ws_e1ab25c377be4037",
+    {
+      "workspaceId": "ws_e1ab25c377be4037",
+      "name": "ws-proj-conflict",
+      "projectId": "proj-conflict",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "conflict-agent"
+      ],
+      "defaultChannelId": "db7b9cf9-fb8b-45e7-9298-8ac57839bc74",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.386Z",
+      "updatedAt": "2026-06-13T16:15:39.386Z"
+    }
+  ],
+  [
+    "ws_7bf2979bbb944a4f",
+    {
+      "workspaceId": "ws_7bf2979bbb944a4f",
+      "name": "ws-proj-membership",
+      "projectId": "proj-membership",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "21c7bf8b-8434-4850-9d44-4eb188a9780c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.390Z",
+      "updatedAt": "2026-06-13T16:15:39.390Z"
+    }
+  ],
+  [
+    "ws_4798b6a87e434c20",
+    {
+      "workspaceId": "ws_4798b6a87e434c20",
+      "name": "ws-proj-correct",
+      "projectId": "proj-correct",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-project"
+      ],
+      "defaultChannelId": "f9b516d3-2679-457a-9a59-9e5bbb88e88e",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.391Z",
+      "updatedAt": "2026-06-13T16:15:39.391Z"
+    }
+  ],
+  [
+    "ws_129ba9b610584203",
+    {
+      "workspaceId": "ws_129ba9b610584203",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "919c4f1b-099b-49c9-a685-7673227885de",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.393Z",
+      "updatedAt": "2026-06-13T16:15:39.393Z"
+    }
+  ],
+  [
+    "ws_f10b424f0eb84840",
+    {
+      "workspaceId": "ws_f10b424f0eb84840",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "cfaf143e-6e75-43cc-b591-0447f175dd85",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.394Z",
+      "updatedAt": "2026-06-13T16:15:39.394Z"
+    }
+  ],
+  [
+    "ws_f8b3acd07225484e",
+    {
+      "workspaceId": "ws_f8b3acd07225484e",
+      "name": "ws-proj-heartbeat",
+      "projectId": "proj-heartbeat",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-heartbeat"
+      ],
+      "defaultChannelId": "ac499c3b-abce-4b6a-9dcc-40bbd33e3811",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.409Z",
+      "updatedAt": "2026-06-13T16:15:39.409Z"
+    }
+  ],
+  [
+    "ws_5a35c1f8271147ed",
+    {
+      "workspaceId": "ws_5a35c1f8271147ed",
+      "name": "ws-proj-bound",
+      "projectId": "proj-bound",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-bound"
+      ],
+      "defaultChannelId": "a454bb53-ff36-41d9-b9db-d29decd7481b",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:39.416Z",
+      "updatedAt": "2026-06-13T16:15:39.416Z"
+    }
+  ],
+  [
+    "ws_f263e51f193844b7",
+    {
+      "workspaceId": "ws_f263e51f193844b7",
+      "name": "ws-proj-agent-1",
+      "projectId": "proj-agent-1",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-1"
+      ],
+      "defaultChannelId": "ea1168a0-88f1-4071-a0be-c32e8c2de121",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.824Z",
+      "updatedAt": "2026-06-13T16:15:59.824Z"
+    }
+  ],
+  [
+    "ws_031e550219214d09",
+    {
+      "workspaceId": "ws_031e550219214d09",
+      "name": "ws-proj-reuse",
+      "projectId": "proj-reuse",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-reuse"
+      ],
+      "defaultChannelId": "becddf52-844e-41d2-84b9-c67d41609285",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.841Z",
+      "updatedAt": "2026-06-13T16:15:59.841Z"
+    }
+  ],
+  [
+    "ws_dec04330bfa14499",
+    {
+      "workspaceId": "ws_dec04330bfa14499",
+      "name": "ws-proj-visibility",
+      "projectId": "proj-visibility",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-visibility"
+      ],
+      "defaultChannelId": "0580b6e3-2dbb-453c-8f8a-647697c58830",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.849Z",
+      "updatedAt": "2026-06-13T16:15:59.849Z"
+    }
+  ],
+  [
+    "ws_e662a8d39ba1484a",
+    {
+      "workspaceId": "ws_e662a8d39ba1484a",
+      "name": "ws-proj-conflict",
+      "projectId": "proj-conflict",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "conflict-agent"
+      ],
+      "defaultChannelId": "e7d8de67-747b-4fa3-9975-faf4cb343730",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.852Z",
+      "updatedAt": "2026-06-13T16:15:59.852Z"
+    }
+  ],
+  [
+    "ws_b6170b8b3ce8467f",
+    {
+      "workspaceId": "ws_b6170b8b3ce8467f",
+      "name": "ws-proj-membership",
+      "projectId": "proj-membership",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "29841259-94d2-4539-a3d0-21f919264ba7",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.855Z",
+      "updatedAt": "2026-06-13T16:15:59.855Z"
+    }
+  ],
+  [
+    "ws_744535292400471d",
+    {
+      "workspaceId": "ws_744535292400471d",
+      "name": "ws-proj-correct",
+      "projectId": "proj-correct",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-project"
+      ],
+      "defaultChannelId": "f0a335f2-06b7-42d5-be6b-bd99b8b69e94",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.857Z",
+      "updatedAt": "2026-06-13T16:15:59.857Z"
+    }
+  ],
+  [
+    "ws_a6eb1f7a0f1b4c21",
+    {
+      "workspaceId": "ws_a6eb1f7a0f1b4c21",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "058642cd-0825-4afc-a3f6-051c7fb24e4e",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.859Z",
+      "updatedAt": "2026-06-13T16:15:59.859Z"
+    }
+  ],
+  [
+    "ws_0788f150e35f4fcd",
+    {
+      "workspaceId": "ws_0788f150e35f4fcd",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "2257c17e-1beb-4bfa-ade9-67a499d70f90",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.859Z",
+      "updatedAt": "2026-06-13T16:15:59.859Z"
+    }
+  ],
+  [
+    "ws_fba39649659f46dc",
+    {
+      "workspaceId": "ws_fba39649659f46dc",
+      "name": "ws-proj-heartbeat",
+      "projectId": "proj-heartbeat",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-heartbeat"
+      ],
+      "defaultChannelId": "fdeee996-a660-4fd9-a48a-02f75a2b640e",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.872Z",
+      "updatedAt": "2026-06-13T16:15:59.872Z"
+    }
+  ],
+  [
+    "ws_b9adb23b93954c99",
+    {
+      "workspaceId": "ws_b9adb23b93954c99",
+      "name": "ws-proj-bound",
+      "projectId": "proj-bound",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-bound"
+      ],
+      "defaultChannelId": "51682a31-d55c-4c0b-b0c1-20fe6037385a",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:15:59.876Z",
+      "updatedAt": "2026-06-13T16:15:59.876Z"
+    }
+  ],
+  [
+    "ws_ac57ebd61bfc46de",
+    {
+      "workspaceId": "ws_ac57ebd61bfc46de",
+      "name": "ws-proj-agent-1",
+      "projectId": "proj-agent-1",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-1"
+      ],
+      "defaultChannelId": "d78fbd66-6502-4ccf-8e50-4333d7f189d6",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.017Z",
+      "updatedAt": "2026-06-13T16:16:01.017Z"
+    }
+  ],
+  [
+    "ws_0efc52d30e5e44d7",
+    {
+      "workspaceId": "ws_0efc52d30e5e44d7",
+      "name": "ws-proj-reuse",
+      "projectId": "proj-reuse",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-reuse"
+      ],
+      "defaultChannelId": "1728ea9b-1452-4b97-b40b-063b300af8c1",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.041Z",
+      "updatedAt": "2026-06-13T16:16:01.041Z"
+    }
+  ],
+  [
+    "ws_a2c6669ded634de6",
+    {
+      "workspaceId": "ws_a2c6669ded634de6",
+      "name": "ws-proj-visibility",
+      "projectId": "proj-visibility",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-visibility"
+      ],
+      "defaultChannelId": "38123565-16e3-4a34-b54b-c9c8ddf93ee2",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.046Z",
+      "updatedAt": "2026-06-13T16:16:01.046Z"
+    }
+  ],
+  [
+    "ws_45301e5d42064f78",
+    {
+      "workspaceId": "ws_45301e5d42064f78",
+      "name": "ws-proj-conflict",
+      "projectId": "proj-conflict",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "conflict-agent"
+      ],
+      "defaultChannelId": "85ee1396-deb0-4e78-ad59-f846491755c6",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.049Z",
+      "updatedAt": "2026-06-13T16:16:01.049Z"
+    }
+  ],
+  [
+    "ws_4ac35062d92f4564",
+    {
+      "workspaceId": "ws_4ac35062d92f4564",
+      "name": "ws-proj-membership",
+      "projectId": "proj-membership",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "b5d9d5f5-e322-4afb-b611-c177388ec53d",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.053Z",
+      "updatedAt": "2026-06-13T16:16:01.053Z"
+    }
+  ],
+  [
+    "ws_26e8fbbdc0e74c1c",
+    {
+      "workspaceId": "ws_26e8fbbdc0e74c1c",
+      "name": "ws-proj-correct",
+      "projectId": "proj-correct",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-project"
+      ],
+      "defaultChannelId": "e45afef8-3ee3-443e-9bc4-e31f513654ad",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.055Z",
+      "updatedAt": "2026-06-13T16:16:01.055Z"
+    }
+  ],
+  [
+    "ws_ec7a847d93904020",
+    {
+      "workspaceId": "ws_ec7a847d93904020",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "265e05d5-8ea9-4ccd-be6c-a0312a65eca1",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.057Z",
+      "updatedAt": "2026-06-13T16:16:01.057Z"
+    }
+  ],
+  [
+    "ws_e89a0ea56fb141d3",
+    {
+      "workspaceId": "ws_e89a0ea56fb141d3",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "d5a422d1-8c20-4c25-87c3-6fe3d0405327",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.057Z",
+      "updatedAt": "2026-06-13T16:16:01.057Z"
+    }
+  ],
+  [
+    "ws_be349af3669742ba",
+    {
+      "workspaceId": "ws_be349af3669742ba",
+      "name": "ws-proj-heartbeat",
+      "projectId": "proj-heartbeat",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-heartbeat"
+      ],
+      "defaultChannelId": "46155119-73de-495e-aa8a-62617c7b1df9",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.074Z",
+      "updatedAt": "2026-06-13T16:16:01.074Z"
+    }
+  ],
+  [
+    "ws_cd2e9b2398c64d75",
+    {
+      "workspaceId": "ws_cd2e9b2398c64d75",
+      "name": "ws-proj-bound",
+      "projectId": "proj-bound",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-bound"
+      ],
+      "defaultChannelId": "f3e76425-4ff6-40d3-85d6-1a66ac35e6b6",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:16:01.078Z",
+      "updatedAt": "2026-06-13T16:16:01.078Z"
+    }
+  ],
+  [
+    "ws_c3c2fa01e8d94863",
+    {
+      "workspaceId": "ws_c3c2fa01e8d94863",
+      "name": "ws-proj-agent-1",
+      "projectId": "proj-agent-1",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-1"
+      ],
+      "defaultChannelId": "758aaf84-9d38-4f7d-b6c5-ae1a8b769074",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.920Z",
+      "updatedAt": "2026-06-13T16:40:18.920Z"
+    }
+  ],
+  [
+    "ws_4d670300b79049fc",
+    {
+      "workspaceId": "ws_4d670300b79049fc",
+      "name": "ws-proj-reuse",
+      "projectId": "proj-reuse",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-reuse"
+      ],
+      "defaultChannelId": "42133f29-782d-4cdc-b5d9-f16c5b83077d",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.942Z",
+      "updatedAt": "2026-06-13T16:40:18.942Z"
+    }
+  ],
+  [
+    "ws_469423f7bb794a60",
+    {
+      "workspaceId": "ws_469423f7bb794a60",
+      "name": "ws-proj-visibility",
+      "projectId": "proj-visibility",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-visibility"
+      ],
+      "defaultChannelId": "a8ea1a29-855b-4962-8b46-778740275ee9",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.948Z",
+      "updatedAt": "2026-06-13T16:40:18.948Z"
+    }
+  ],
+  [
+    "ws_0e9b33f0739d440d",
+    {
+      "workspaceId": "ws_0e9b33f0739d440d",
+      "name": "ws-proj-conflict",
+      "projectId": "proj-conflict",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "conflict-agent"
+      ],
+      "defaultChannelId": "d66df67e-8f59-431b-bd42-8fc7626ee228",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.953Z",
+      "updatedAt": "2026-06-13T16:40:18.953Z"
+    }
+  ],
+  [
+    "ws_60789baff34b4560",
+    {
+      "workspaceId": "ws_60789baff34b4560",
+      "name": "ws-proj-membership",
+      "projectId": "proj-membership",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "e342c043-4858-4f81-a598-cfc82159ebbc",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.957Z",
+      "updatedAt": "2026-06-13T16:40:18.957Z"
+    }
+  ],
+  [
+    "ws_bb0b27550f484999",
+    {
+      "workspaceId": "ws_bb0b27550f484999",
+      "name": "ws-proj-correct",
+      "projectId": "proj-correct",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-project"
+      ],
+      "defaultChannelId": "2c0dfdd1-6395-437e-87c9-d777e355b956",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.960Z",
+      "updatedAt": "2026-06-13T16:40:18.960Z"
+    }
+  ],
+  [
+    "ws_f90712168a064138",
+    {
+      "workspaceId": "ws_f90712168a064138",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "80649cd5-e277-4f23-8257-cc648763b2f5",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.962Z",
+      "updatedAt": "2026-06-13T16:40:18.962Z"
+    }
+  ],
+  [
+    "ws_59e5523fbfe54436",
+    {
+      "workspaceId": "ws_59e5523fbfe54436",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "faa2226c-12ae-4217-90d6-385c64b06eae",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.962Z",
+      "updatedAt": "2026-06-13T16:40:18.962Z"
+    }
+  ],
+  [
+    "ws_c3f630c1d6594315",
+    {
+      "workspaceId": "ws_c3f630c1d6594315",
+      "name": "ws-proj-heartbeat",
+      "projectId": "proj-heartbeat",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-heartbeat"
+      ],
+      "defaultChannelId": "221eac78-5a35-46ec-9956-cbb51824c9ef",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.976Z",
+      "updatedAt": "2026-06-13T16:40:18.976Z"
+    }
+  ],
+  [
+    "ws_b7e7d6f5d8cb4b9e",
+    {
+      "workspaceId": "ws_b7e7d6f5d8cb4b9e",
+      "name": "ws-proj-bound",
+      "projectId": "proj-bound",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-bound"
+      ],
+      "defaultChannelId": "42c78deb-3b68-412c-bb66-ae482a41f92c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:18.980Z",
+      "updatedAt": "2026-06-13T16:40:18.980Z"
+    }
+  ],
+  [
+    "ws_b6101c50025d4533",
+    {
+      "workspaceId": "ws_b6101c50025d4533",
+      "name": "ws-proj-agent-1",
+      "projectId": "proj-agent-1",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-1"
+      ],
+      "defaultChannelId": "88a2b197-a54a-4060-9f64-bdf9b85f6d53",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.244Z",
+      "updatedAt": "2026-06-13T16:40:34.244Z"
+    }
+  ],
+  [
+    "ws_c21eaaec180c4541",
+    {
+      "workspaceId": "ws_c21eaaec180c4541",
+      "name": "ws-proj-reuse",
+      "projectId": "proj-reuse",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-reuse"
+      ],
+      "defaultChannelId": "99adc64d-52d2-44c4-994b-ade5cea15b6c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.269Z",
+      "updatedAt": "2026-06-13T16:40:34.269Z"
+    }
+  ],
+  [
+    "ws_befb506e9cbe4bc4",
+    {
+      "workspaceId": "ws_befb506e9cbe4bc4",
+      "name": "ws-proj-visibility",
+      "projectId": "proj-visibility",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-visibility"
+      ],
+      "defaultChannelId": "b44558c9-946f-4f79-b5f9-d405fdab9993",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.275Z",
+      "updatedAt": "2026-06-13T16:40:34.275Z"
+    }
+  ],
+  [
+    "ws_e876ad656cf34e2a",
+    {
+      "workspaceId": "ws_e876ad656cf34e2a",
+      "name": "ws-proj-conflict",
+      "projectId": "proj-conflict",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "conflict-agent"
+      ],
+      "defaultChannelId": "36bcfcf9-ee31-4d47-9b72-79c59ab915b6",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.281Z",
+      "updatedAt": "2026-06-13T16:40:34.281Z"
+    }
+  ],
+  [
+    "ws_16c2d39ae0234f91",
+    {
+      "workspaceId": "ws_16c2d39ae0234f91",
+      "name": "ws-proj-membership",
+      "projectId": "proj-membership",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "d129748d-9502-4873-bdca-3be6e4a5faac",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.285Z",
+      "updatedAt": "2026-06-13T16:40:34.285Z"
+    }
+  ],
+  [
+    "ws_5699a02f2a2a4fdc",
+    {
+      "workspaceId": "ws_5699a02f2a2a4fdc",
+      "name": "ws-proj-correct",
+      "projectId": "proj-correct",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-project"
+      ],
+      "defaultChannelId": "775c53d7-2cb4-4f81-8606-a07c15da5ac9",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.287Z",
+      "updatedAt": "2026-06-13T16:40:34.287Z"
+    }
+  ],
+  [
+    "ws_3216fdc1a117464e",
+    {
+      "workspaceId": "ws_3216fdc1a117464e",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "7a3d5287-3b59-499c-b949-f09445bb04c7",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.290Z",
+      "updatedAt": "2026-06-13T16:40:34.290Z"
+    }
+  ],
+  [
+    "ws_3a08022b3dd64120",
+    {
+      "workspaceId": "ws_3a08022b3dd64120",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "7cde29c6-3168-4d10-a703-2ddc89af823b",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.291Z",
+      "updatedAt": "2026-06-13T16:40:34.291Z"
+    }
+  ],
+  [
+    "ws_faf8f6717cd04dc5",
+    {
+      "workspaceId": "ws_faf8f6717cd04dc5",
+      "name": "ws-proj-heartbeat",
+      "projectId": "proj-heartbeat",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-heartbeat"
+      ],
+      "defaultChannelId": "71509a3c-2bdc-4e6c-bcf0-8115ce78105c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.307Z",
+      "updatedAt": "2026-06-13T16:40:34.307Z"
+    }
+  ],
+  [
+    "ws_e51717b43eb242ba",
+    {
+      "workspaceId": "ws_e51717b43eb242ba",
+      "name": "ws-proj-bound",
+      "projectId": "proj-bound",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-bound"
+      ],
+      "defaultChannelId": "2ca12218-9869-4017-8056-b2a66acc0a05",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:40:34.311Z",
+      "updatedAt": "2026-06-13T16:40:34.311Z"
+    }
+  ],
+  [
+    "ws_38ef829a4dc94872",
+    {
+      "workspaceId": "ws_38ef829a4dc94872",
+      "name": "ws-proj-agent-1",
+      "projectId": "proj-agent-1",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-1"
+      ],
+      "defaultChannelId": "50ab31cd-ad99-400b-a4f1-3da7bc734c63",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.156Z",
+      "updatedAt": "2026-06-13T16:41:24.156Z"
+    }
+  ],
+  [
+    "ws_7abbdd0113574d97",
+    {
+      "workspaceId": "ws_7abbdd0113574d97",
+      "name": "ws-proj-reuse",
+      "projectId": "proj-reuse",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-reuse"
+      ],
+      "defaultChannelId": "e841ecb7-9bda-439f-8d5d-50cd1a9e7bbd",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.185Z",
+      "updatedAt": "2026-06-13T16:41:24.185Z"
+    }
+  ],
+  [
+    "ws_1ee4c59e1dab4fe8",
+    {
+      "workspaceId": "ws_1ee4c59e1dab4fe8",
+      "name": "ws-proj-visibility",
+      "projectId": "proj-visibility",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-visibility"
+      ],
+      "defaultChannelId": "2ccf61b5-2bf3-4b79-82bf-ca28ffbf6f26",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.195Z",
+      "updatedAt": "2026-06-13T16:41:24.195Z"
+    }
+  ],
+  [
+    "ws_dbc7a4595da042b8",
+    {
+      "workspaceId": "ws_dbc7a4595da042b8",
+      "name": "ws-proj-conflict",
+      "projectId": "proj-conflict",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "conflict-agent"
+      ],
+      "defaultChannelId": "532dbf1d-0bfd-413e-9d99-87f555bc9bed",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.202Z",
+      "updatedAt": "2026-06-13T16:41:24.202Z"
+    }
+  ],
+  [
+    "ws_65e0fa8c4a2d46d2",
+    {
+      "workspaceId": "ws_65e0fa8c4a2d46d2",
+      "name": "ws-proj-membership",
+      "projectId": "proj-membership",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "4c2af299-2a86-45b4-baa8-905c74d880b9",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.208Z",
+      "updatedAt": "2026-06-13T16:41:24.208Z"
+    }
+  ],
+  [
+    "ws_b27cd76093554e46",
+    {
+      "workspaceId": "ws_b27cd76093554e46",
+      "name": "ws-proj-correct",
+      "projectId": "proj-correct",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-project"
+      ],
+      "defaultChannelId": "eef662cd-0c3e-434a-ae81-6c4ff078916e",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.210Z",
+      "updatedAt": "2026-06-13T16:41:24.210Z"
+    }
+  ],
+  [
+    "ws_d1f83c7d388646ba",
+    {
+      "workspaceId": "ws_d1f83c7d388646ba",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "20a7bfa0-7217-4a3a-b4d3-7edefb22caa0",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.214Z",
+      "updatedAt": "2026-06-13T16:41:24.214Z"
+    }
+  ],
+  [
+    "ws_5c3103886af14d84",
+    {
+      "workspaceId": "ws_5c3103886af14d84",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "21b36978-b40c-4570-b2b8-636500a94767",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.215Z",
+      "updatedAt": "2026-06-13T16:41:24.215Z"
+    }
+  ],
+  [
+    "ws_a7324797287e4f8d",
+    {
+      "workspaceId": "ws_a7324797287e4f8d",
+      "name": "ws-proj-heartbeat",
+      "projectId": "proj-heartbeat",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-heartbeat"
+      ],
+      "defaultChannelId": "9a7fcbbd-269c-403b-9102-cf60943d8a5b",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.238Z",
+      "updatedAt": "2026-06-13T16:41:24.238Z"
+    }
+  ],
+  [
+    "ws_2bdf75b0d3c649cb",
+    {
+      "workspaceId": "ws_2bdf75b0d3c649cb",
+      "name": "ws-proj-bound",
+      "projectId": "proj-bound",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-bound"
+      ],
+      "defaultChannelId": "d690af51-15b6-475d-ba9d-06f7f9d496a2",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:24.243Z",
+      "updatedAt": "2026-06-13T16:41:24.243Z"
+    }
+  ],
+  [
+    "ws_488250c89f6a41b0",
+    {
+      "workspaceId": "ws_488250c89f6a41b0",
+      "name": "ws-proj-agents",
+      "projectId": "proj-agents",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-registry"
+      ],
+      "defaultChannelId": "8d5f4fa5-0d73-4648-88da-8b13b2f35903",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.172Z",
+      "updatedAt": "2026-06-13T16:41:26.172Z"
+    }
+  ],
+  [
+    "ws_30c776c23f064faf",
+    {
+      "workspaceId": "ws_30c776c23f064faf",
+      "name": "ws-proj-approvals",
+      "projectId": "proj-approvals",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "24adc617-4c70-46a2-a3d6-452ff913b228",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.209Z",
+      "updatedAt": "2026-06-13T16:41:26.209Z"
+    }
+  ],
+  [
+    "ws_e44d2621c1d74992",
+    {
+      "workspaceId": "ws_e44d2621c1d74992",
+      "name": "ws-proj-tasks",
+      "projectId": "proj-tasks",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "a2c1fcce-541e-45e0-8eb5-ee155c393f25",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.225Z",
+      "updatedAt": "2026-06-13T16:41:26.225Z"
+    }
+  ],
+  [
+    "ws_9e9314e7dcee486b",
+    {
+      "workspaceId": "ws_9e9314e7dcee486b",
+      "name": "ws-proj-forbidden",
+      "projectId": "proj-forbidden",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "dfe0acbb-9376-4611-9eea-e0813ead4b3d",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.241Z",
+      "updatedAt": "2026-06-13T16:41:26.241Z"
+    }
+  ],
+  [
+    "ws_c857110dab3f48ed",
+    {
+      "workspaceId": "ws_c857110dab3f48ed",
+      "name": "ws-owned",
+      "projectId": "proj-owned",
+      "ownerId": "owner-unique-1781368886244",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "eda5ea38-1fd9-44ce-bab6-2133f25f790c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.244Z",
+      "updatedAt": "2026-06-13T16:41:26.244Z"
+    }
+  ],
+  [
+    "ws_e386a643394741ec",
+    {
+      "workspaceId": "ws_e386a643394741ec",
+      "name": "ws-other",
+      "projectId": "proj-other",
+      "ownerId": "other-owner",
+      "memberAgentIds": [],
+      "defaultChannelId": "146ff149-e962-4aea-b338-c96b0d3ec237",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.245Z",
+      "updatedAt": "2026-06-13T16:41:26.245Z"
+    }
+  ],
+  [
+    "ws_3c01f20c515d44c8",
+    {
+      "workspaceId": "ws_3c01f20c515d44c8",
+      "name": "ws-proj-control-plane",
+      "projectId": "proj-control-plane",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "141bef2c-5b74-4b39-ba50-381e1692df36",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.248Z",
+      "updatedAt": "2026-06-13T16:41:26.248Z"
+    }
+  ],
+  [
+    "ws_e1c99122fa32452c",
+    {
+      "workspaceId": "ws_e1c99122fa32452c",
+      "name": "ws-proj-context",
+      "projectId": "proj-context",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "6a18de58-f5bc-4974-8825-6db3103e99da",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.262Z",
+      "updatedAt": "2026-06-13T16:41:26.262Z"
+    }
+  ],
+  [
+    "ws_10f43a8c3f9d4b46",
+    {
+      "workspaceId": "ws_10f43a8c3f9d4b46",
+      "name": "ws-proj-handoffs",
+      "projectId": "proj-handoffs",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "597a8231-724d-4698-ba11-ecf0def3f783",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.270Z",
+      "updatedAt": "2026-06-13T16:41:26.270Z"
+    }
+  ],
+  [
+    "ws_c5c2aba7e1934ccf",
+    {
+      "workspaceId": "ws_c5c2aba7e1934ccf",
+      "name": "ws-proj-handoff-alias",
+      "projectId": "proj-handoff-alias",
+      "ownerId": "owner-test",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "e9786c24-b81d-4069-9229-0175b457c74e",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:26.279Z",
+      "updatedAt": "2026-06-13T16:41:26.279Z"
+    }
+  ],
+  [
+    "ws_c214c940b44b4bfe",
+    {
+      "workspaceId": "ws_c214c940b44b4bfe",
+      "name": "Approval Workspace",
+      "projectId": "proj-1",
+      "ownerId": "owner-1",
+      "memberAgentIds": [
+        "agent-a",
+        "agent-b"
+      ],
+      "defaultChannelId": "36ee6bea-9fa9-4a6e-8964-2e85e7c4244c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": true,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:41:29.816Z",
+      "updatedAt": "2026-06-13T16:41:29.816Z"
+    }
+  ],
+  [
+    "ws_4325e7cc99f94aba",
+    {
+      "workspaceId": "ws_4325e7cc99f94aba",
+      "name": "ws-proj-agent-1",
+      "projectId": "proj-agent-1",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-1"
+      ],
+      "defaultChannelId": "2b48f0c7-67e0-4778-a288-53e5c2f9ed0c",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.533Z",
+      "updatedAt": "2026-06-13T16:52:32.533Z"
+    }
+  ],
+  [
+    "ws_a043b924d7024027",
+    {
+      "workspaceId": "ws_a043b924d7024027",
+      "name": "ws-proj-reuse",
+      "projectId": "proj-reuse",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-reuse"
+      ],
+      "defaultChannelId": "51825ed6-aa94-4cc1-bbf3-245047f8ce46",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.565Z",
+      "updatedAt": "2026-06-13T16:52:32.565Z"
+    }
+  ],
+  [
+    "ws_bf87d21e79224217",
+    {
+      "workspaceId": "ws_bf87d21e79224217",
+      "name": "ws-proj-visibility",
+      "projectId": "proj-visibility",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-visibility"
+      ],
+      "defaultChannelId": "fdda5852-f901-4894-b681-4a3b092ec0de",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.577Z",
+      "updatedAt": "2026-06-13T16:52:32.577Z"
+    }
+  ],
+  [
+    "ws_ef00f84b76b64f6f",
+    {
+      "workspaceId": "ws_ef00f84b76b64f6f",
+      "name": "ws-proj-conflict",
+      "projectId": "proj-conflict",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "conflict-agent"
+      ],
+      "defaultChannelId": "a53b6355-becf-4cbc-a1a2-ba08d18735d9",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.584Z",
+      "updatedAt": "2026-06-13T16:52:32.584Z"
+    }
+  ],
+  [
+    "ws_c8b90290f00a45e5",
+    {
+      "workspaceId": "ws_c8b90290f00a45e5",
+      "name": "ws-proj-membership",
+      "projectId": "proj-membership",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-a"
+      ],
+      "defaultChannelId": "9d56bf40-5f34-4fa9-9d34-0e79cc65aeb2",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.589Z",
+      "updatedAt": "2026-06-13T16:52:32.589Z"
+    }
+  ],
+  [
+    "ws_b25163b0b8134ddc",
+    {
+      "workspaceId": "ws_b25163b0b8134ddc",
+      "name": "ws-proj-correct",
+      "projectId": "proj-correct",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-project"
+      ],
+      "defaultChannelId": "88868725-f496-41b1-b937-e95a54d949d3",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.591Z",
+      "updatedAt": "2026-06-13T16:52:32.591Z"
+    }
+  ],
+  [
+    "ws_e1dafc12ec5e4ae3",
+    {
+      "workspaceId": "ws_e1dafc12ec5e4ae3",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "d14cf19b-8fe6-4aac-af94-aaaa9db7dd21",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.593Z",
+      "updatedAt": "2026-06-13T16:52:32.593Z"
+    }
+  ],
+  [
+    "ws_90f8559848854005",
+    {
+      "workspaceId": "ws_90f8559848854005",
+      "name": "ws-proj-conflict-identity",
+      "projectId": "proj-conflict-identity",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "agent-conflict"
+      ],
+      "defaultChannelId": "7b7afb20-a54f-416b-9081-7875cb1e615b",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.594Z",
+      "updatedAt": "2026-06-13T16:52:32.594Z"
+    }
+  ],
+  [
+    "ws_071f399014dc4420",
+    {
+      "workspaceId": "ws_071f399014dc4420",
+      "name": "ws-proj-heartbeat",
+      "projectId": "proj-heartbeat",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-heartbeat"
+      ],
+      "defaultChannelId": "a6c00c74-fdee-41ca-8a1b-0e6ec705f4b3",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.619Z",
+      "updatedAt": "2026-06-13T16:52:32.619Z"
+    }
+  ],
+  [
+    "ws_726c008b637d49c8",
+    {
+      "workspaceId": "ws_726c008b637d49c8",
+      "name": "ws-proj-bound",
+      "projectId": "proj-bound",
+      "ownerId": "test-owner",
+      "memberAgentIds": [
+        "codex-agent-bound"
+      ],
+      "defaultChannelId": "bd9b9cb8-1bfb-4474-9985-8ffc7c98806f",
+      "settings": {
+        "autoRouting": false,
+        "approvalRequired": false,
+        "worktreeIsolation": false,
+        "maxConcurrentTasks": 5,
+        "defaultOrchestrationPattern": "direct"
+      },
+      "createdAt": "2026-06-13T16:52:32.629Z",
+      "updatedAt": "2026-06-13T16:52:32.629Z"
+    }
   ]
 ]

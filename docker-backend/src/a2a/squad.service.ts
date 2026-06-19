@@ -25,6 +25,7 @@ export interface SquadMember {
   id: string;
   kind: MemberKind;
   role: string;
+  projectId?: string;
   addedAt: string;
 }
 
@@ -41,6 +42,7 @@ export interface Squad {
   description?: string;
   ownerId: string;
   leaderId?: string;
+  projectId?: string;
   members: SquadMember[];
   activity: SquadActivityEntry[];
   createdAt: string;
@@ -83,10 +85,12 @@ function appendActivity(squad: Squad, entry: Omit<SquadActivityEntry, 'at'>): Sq
 }
 
 function normalizeMember(input: Partial<SquadMember> & { id: string }): SquadMember {
+  const projectId = input.projectId?.trim();
   return {
     id: input.id,
     kind: input.kind === 'human' ? 'human' : 'agent',
     role: (input.role ?? 'member').trim() || 'member',
+    projectId: projectId || undefined,
     addedAt: new Date().toISOString(),
   };
 }
@@ -96,6 +100,7 @@ export interface CreateSquadParams {
   ownerId: string;
   description?: string;
   leaderId?: string;
+  projectId?: string;
   members?: Array<Partial<SquadMember> & { id: string }>;
 }
 
@@ -114,6 +119,7 @@ export function createSquad(params: CreateSquadParams): Squad {
     description: params.description?.trim() || undefined,
     ownerId: params.ownerId,
     leaderId: params.leaderId && deduped.some((m) => m.id === params.leaderId) ? params.leaderId : undefined,
+    projectId: params.projectId?.trim() || undefined,
     members: deduped,
     activity: [{ at: now, actor: params.ownerId, action: 'created', detail: params.name.trim() }],
     createdAt: now,
@@ -145,7 +151,7 @@ function mutate(id: string, fn: (squad: Squad) => Squad): Squad | undefined {
 
 export function updateSquad(
   id: string,
-  patch: { name?: string; description?: string; leaderId?: string },
+  patch: { name?: string; description?: string; leaderId?: string; projectId?: string | null },
   actor: string,
 ): Squad | undefined {
   return mutate(id, (squad) => {
@@ -157,6 +163,7 @@ export function updateSquad(
       name: patch.name?.trim() || squad.name,
       description: patch.description !== undefined ? (patch.description.trim() || undefined) : squad.description,
       leaderId,
+      projectId: patch.projectId !== undefined ? (patch.projectId?.trim() || undefined) : squad.projectId,
       activity: appendActivity(squad, { actor, action: 'updated' }),
     };
   });
@@ -186,13 +193,27 @@ export function removeMember(id: string, memberId: string, actor: string): Squad
   });
 }
 
-export function setMemberRole(id: string, memberId: string, role: string, actor: string): Squad | undefined {
+export function setMemberRole(
+  id: string,
+  memberId: string,
+  role: string | undefined,
+  actor: string,
+  patch?: { projectId?: string | null },
+): Squad | undefined {
   return mutate(id, (squad) => {
     if (!squad.members.some((m) => m.id === memberId)) return squad;
+    const detailParts = [
+      role !== undefined ? `role=${role.trim() || 'unchanged'}` : null,
+      patch?.projectId !== undefined ? `project=${patch.projectId?.trim() || 'none'}` : null,
+    ].filter(Boolean);
     return {
       ...squad,
-      members: squad.members.map((m) => (m.id === memberId ? { ...m, role: role.trim() || m.role } : m)),
-      activity: appendActivity(squad, { actor, action: 'role_changed', detail: `${memberId} → ${role}` }),
+      members: squad.members.map((m) => (m.id === memberId ? {
+        ...m,
+        role: role !== undefined ? (role.trim() || m.role) : m.role,
+        projectId: patch?.projectId !== undefined ? (patch.projectId?.trim() || undefined) : m.projectId,
+      } : m)),
+      activity: appendActivity(squad, { actor, action: 'role_changed', detail: `${memberId} → ${detailParts.join(', ')}` }),
     };
   });
 }
@@ -202,11 +223,44 @@ export function logSquadActivity(id: string, entry: Omit<SquadActivityEntry, 'at
   return mutate(id, (squad) => ({ ...squad, activity: appendActivity(squad, entry) }));
 }
 
+export interface ResolvedSquadProject {
+  projectId?: string;
+  source?: 'request' | 'member' | 'squad';
+}
+
+export function resolveSquadDispatchProject(params: {
+  squadId: string;
+  assignedMemberIds: readonly string[];
+  explicitProjectId?: string;
+}): ResolvedSquadProject {
+  const explicitProjectId = params.explicitProjectId?.trim();
+  if (explicitProjectId) return { projectId: explicitProjectId, source: 'request' };
+
+  const squad = getSquad(params.squadId);
+  if (!squad) return {};
+
+  const assignedMembers = new Set(params.assignedMemberIds);
+  const memberProjectIds = squad.members
+    .filter((m) => assignedMembers.has(m.id))
+    .map((m) => m.projectId?.trim())
+    .filter((projectId): projectId is string => !!projectId);
+  const uniqueMemberProjectIds = Array.from(new Set(memberProjectIds));
+  if (uniqueMemberProjectIds.length === 1) {
+    return { projectId: uniqueMemberProjectIds[0], source: 'member' };
+  }
+
+  const squadProjectId = squad.projectId?.trim();
+  if (squadProjectId) return { projectId: squadProjectId, source: 'squad' };
+
+  return {};
+}
+
 export interface PortableSquad {
   name: string;
   description?: string;
   leaderId?: string;
-  members: Array<{ id: string; kind: MemberKind; role: string }>;
+  projectId?: string;
+  members: Array<{ id: string; kind: MemberKind; role: string; projectId?: string }>;
 }
 
 /** Export a squad to a portable shape (no owner/activity/timestamps). */
@@ -217,7 +271,8 @@ export function exportSquad(id: string): PortableSquad | undefined {
     name: s.name,
     description: s.description,
     leaderId: s.leaderId,
-    members: s.members.map((m) => ({ id: m.id, kind: m.kind, role: m.role })),
+    projectId: s.projectId,
+    members: s.members.map((m) => ({ id: m.id, kind: m.kind, role: m.role, projectId: m.projectId })),
   };
 }
 
@@ -228,6 +283,7 @@ export function importSquad(data: PortableSquad, ownerId: string): Squad {
     description: data.description,
     ownerId,
     leaderId: data.leaderId,
+    projectId: data.projectId,
     members: Array.isArray(data.members) ? data.members : [],
   });
 }
@@ -241,7 +297,8 @@ export function cloneSquad(id: string, ownerId: string): Squad | undefined {
     description: src.description,
     ownerId,
     leaderId: src.leaderId,
-    members: src.members.map((m) => ({ id: m.id, kind: m.kind, role: m.role })),
+    projectId: src.projectId,
+    members: src.members.map((m) => ({ id: m.id, kind: m.kind, role: m.role, projectId: m.projectId })),
   });
 }
 

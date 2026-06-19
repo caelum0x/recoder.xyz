@@ -72,6 +72,12 @@ export type AgentOsPALPlanInput = {
   reviewerRuntime?: string;
   skills?: string[];
   mcpTools?: string[];
+  mcpToolGrants?: Array<{
+    serverId: string;
+    toolName: string;
+    mode?: string;
+    reason?: string;
+  }>;
   risk?: string;
 };
 
@@ -327,6 +333,7 @@ function mapPALPlan(
     reviewerRuntime: palPlan.reviewerRuntime,
     skills: palPlan.skills ?? [],
     mcpTools: palPlan.mcpTools ?? [],
+    mcpToolGrants: palPlan.mcpToolGrants ?? [],
     risk: palPlan.risk ?? 'unknown',
   };
 }

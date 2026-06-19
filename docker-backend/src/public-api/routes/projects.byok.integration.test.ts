@@ -112,7 +112,7 @@ suite('projects BYOK processing integration', () => {
 
     const task = projectsTesting.promptTasks.get(taskId);
     expect(task?.status).toBe('failed');
-    expect(task?.error).toContain('No BYOK provider key found for this user');
+    expect(task?.error).toContain('No BYOK provider key found. Configure at least one of: openrouter');
   });
 
   it('keeps task stream snapshot shape compatible for polling/stream consumers', async () => {

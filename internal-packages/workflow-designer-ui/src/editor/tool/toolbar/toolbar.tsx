@@ -18,6 +18,7 @@ import {
 	createFileNode,
 	createGitHubVectorStoreNode,
 	createQueryNode,
+	createSquadStepNode,
 	createTextNode,
 	createTriggerNode,
 	createWebPageNode,
@@ -31,6 +32,7 @@ import {
 	HammerIcon,
 	Layers2Icon,
 	SparklesIcon,
+	UsersRoundIcon,
 } from "lucide-react";
 import { Popover, ToggleGroup } from "radix-ui";
 import { useEffect, useMemo, useState } from "react";
@@ -561,6 +563,11 @@ export function Toolbar() {
 																addNodeTool(createDataQueryNode()),
 															);
 															break;
+														case "squadStep":
+															setSelectedTool(
+																addNodeTool(createSquadStepNode()),
+															);
+															break;
 													}
 												}}
 											>
@@ -582,6 +589,14 @@ export function Toolbar() {
 														<p className="text-[14px]">Data Query</p>
 													</ToggleGroup.Item>
 												)}
+												<ToggleGroup.Item
+													value="squadStep"
+													data-tool
+													className="hover:bg-[rgba(222,233,242,0.10)]"
+												>
+													<UsersRoundIcon className="w-[20px] h-[20px]" />
+													<p className="text-[14px]">Squad Step</p>
+												</ToggleGroup.Item>
 											</ToggleGroup.Root>
 										</div>
 									</Popover.Content>

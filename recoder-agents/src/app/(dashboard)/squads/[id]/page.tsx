@@ -23,7 +23,9 @@ import { toast } from '@/lib/toast';
 import { Textarea } from '@/components/ui/textarea';
 import {
   useSquad,
+  useUpdateSquad,
   useAddMember,
+  useUpdateMember,
   useRemoveMember,
   useCloneSquad,
   useSquadTasks,
@@ -35,6 +37,7 @@ import {
   type MemberKind,
   type DispatchStrategy,
   type AssignmentStatus,
+  type Squad,
   type SquadTask,
 } from '@/hooks/use-squads';
 import { Send, Play, CheckCircle2, XCircle, Copy, Download } from 'lucide-react';
@@ -57,6 +60,7 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
   const router = useRouter();
   const { data: squad, isLoading } = useSquad(id, true);
   const addMember = useAddMember(id);
+  const updateMember = useUpdateMember(id);
   const removeMember = useRemoveMember(id);
   const clone = useCloneSquad();
 
@@ -74,6 +78,7 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
   const [memberId, setMemberId] = useState('');
   const [kind, setKind] = useState<MemberKind>('agent');
   const [role, setRole] = useState('member');
+  const [memberProjectId, setMemberProjectId] = useState('');
 
   const handleAdd = async () => {
     if (!memberId.trim()) {
@@ -81,10 +86,16 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
       return;
     }
     try {
-      await addMember.mutateAsync({ id: memberId.trim(), kind, role: role.trim() || 'member' });
+      await addMember.mutateAsync({
+        id: memberId.trim(),
+        kind,
+        role: role.trim() || 'member',
+        ...(memberProjectId.trim() ? { projectId: memberProjectId.trim() } : {}),
+      });
       toast.success(`Added ${kind} ${memberId.trim()}`);
       setMemberId('');
       setRole('member');
+      setMemberProjectId('');
     } catch {
       toast.error('Add failed');
     }
@@ -128,7 +139,8 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
                 name: squad.name,
                 description: squad.description,
                 leaderId: squad.leaderId,
-                members: squad.members.map((m) => ({ id: m.id, kind: m.kind, role: m.role })),
+                projectId: squad.projectId,
+                members: squad.members.map((m) => ({ id: m.id, kind: m.kind, role: m.role, projectId: m.projectId })),
               };
               const blob = new Blob([JSON.stringify(portable, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
@@ -155,6 +167,8 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
+      <DefaultProjectCard squad={squad} />
+
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Members ({squad.members.length})</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-2">
@@ -172,8 +186,25 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
                       {m.id}
                       {isLeader && <Crown className="h-3.5 w-3.5 text-amber-500" />}
                     </p>
-                    <p className="text-xs text-muted-foreground">{m.role}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {m.role}
+                      {m.projectId ? ` · project ${m.projectId}` : ''}
+                    </p>
                   </div>
+                  {m.kind === 'agent' && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => {
+                        const next = prompt(`Project id for ${m.id}`, m.projectId ?? '');
+                        if (next === null) return;
+                        updateMember.mutate({ memberId: m.id, projectId: next.trim() || null });
+                      }}
+                    >
+                      Project
+                    </Button>
+                  )}
                   {presence && (
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <span className={cn('h-2 w-2 rounded-full', AVAIL_STYLE[presence.availability])} />
@@ -222,6 +253,12 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
               <label className="text-xs font-medium text-muted-foreground">Role</label>
               <Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="role" className="sm:w-32" />
             </div>
+            {kind === 'agent' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Project</label>
+                <Input value={memberProjectId} onChange={(e) => setMemberProjectId(e.target.value)} placeholder="optional project id" className="sm:w-44" />
+              </div>
+            )}
             <Button onClick={handleAdd} disabled={addMember.isPending}>
               {addMember.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}
               Add
@@ -232,7 +269,7 @@ export default function SquadDetailPage({ params }: { params: Promise<{ id: stri
 
       <SquadStatsBar squadId={id} />
 
-      <DispatchPanel squadId={id} />
+      <DispatchPanel squad={squad} />
 
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Activity</CardTitle></CardHeader>
@@ -273,6 +310,37 @@ const ASSIGN_STATUS_STYLE: Record<AssignmentStatus, string> = {
   failed: 'text-red-500',
 };
 
+function DefaultProjectCard({ squad }: { squad: Squad }) {
+  const update = useUpdateSquad(squad.id);
+  const [projectId, setProjectId] = useState(squad.projectId ?? '');
+
+  useEffect(() => {
+    setProjectId(squad.projectId ?? '');
+  }, [squad.projectId]);
+
+  const handleSave = async () => {
+    try {
+      await update.mutateAsync({ projectId: projectId.trim() || null });
+      toast.success(projectId.trim() ? 'Default project saved' : 'Default project cleared');
+    } catch {
+      toast.error('Project update failed');
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Default project</CardTitle></CardHeader>
+      <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="project id used when dispatch execution is enabled" />
+        <Button onClick={handleSave} disabled={update.isPending}>
+          {update.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          Save
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SquadStatsBar({ squadId }: { squadId: string }) {
   const { data: stats } = useSquadStats(squadId);
   if (!stats || stats.totalTasks === 0) return null;
@@ -290,10 +358,10 @@ function SquadStatsBar({ squadId }: { squadId: string }) {
   );
 }
 
-function DispatchPanel({ squadId }: { squadId: string }) {
-  const { data: tasks } = useSquadTasks(squadId);
-  const dispatch = useDispatchToSquad(squadId);
-  const transition = useTransitionAssignment(squadId);
+function DispatchPanel({ squad }: { squad: Squad }) {
+  const { data: tasks } = useSquadTasks(squad.id);
+  const dispatch = useDispatchToSquad(squad.id);
+  const transition = useTransitionAssignment(squad.id);
   const qc = useQueryClient();
 
   // Live refresh: reflect this squad's dispatch/assignment events (incl. those
@@ -304,17 +372,19 @@ function DispatchPanel({ squadId }: { squadId: string }) {
     const latest = events[0];
     if (!latest || latest.at === lastSeen.current) return;
     lastSeen.current = latest.at;
-    if (latest.squadId && latest.squadId !== squadId) return;
+    if (latest.squadId && latest.squadId !== squad.id) return;
     const a = latest.action ?? '';
     if (a.startsWith('task_') || a.startsWith('assignment_')) {
-      qc.invalidateQueries({ queryKey: ['squad-tasks', squadId] });
-      qc.invalidateQueries({ queryKey: ['squad-stats', squadId] });
+      qc.invalidateQueries({ queryKey: ['squad-tasks', squad.id] });
+      qc.invalidateQueries({ queryKey: ['squad-stats', squad.id] });
     }
-  }, [events, qc, squadId]);
+  }, [events, qc, squad.id]);
   const [task, setTask] = useState('');
   const [strategy, setStrategy] = useState<DispatchStrategy>('all');
   const [projectId, setProjectId] = useState('');
+  const [runOnProject, setRunOnProject] = useState(false);
   const [createSandbox, setCreateSandbox] = useState(false);
+  const mappedProjectId = squad.projectId?.trim();
 
   const handleDispatch = async () => {
     if (!task.trim()) {
@@ -325,9 +395,10 @@ function DispatchPanel({ squadId }: { squadId: string }) {
       const res = await dispatch.mutateAsync({
         task: task.trim(),
         strategy,
-        ...(projectId.trim() ? { projectId: projectId.trim(), execute: true, createSandbox } : {}),
+        ...(projectId.trim() ? { projectId: projectId.trim() } : {}),
+        ...((runOnProject || projectId.trim()) ? { execute: true, createSandbox } : {}),
       });
-      if (!projectId.trim()) {
+      if (!res?.execution?.requested) {
         toast.success('Dispatched to squad');
       } else if (res?.execution?.started) {
         toast.success('Dispatched + running on coding runtime');
@@ -361,10 +432,14 @@ function DispatchPanel({ squadId }: { squadId: string }) {
             <Input
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              placeholder="project id (optional — run on coding runtime)"
+              placeholder={mappedProjectId ? `override project id (default: ${mappedProjectId})` : 'project id override'}
               className="h-9 w-64"
             />
-            {projectId.trim() && (
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Run on the explicit project, member project, or squad default project">
+              <input type="checkbox" checked={runOnProject} onChange={(e) => setRunOnProject(e.target.checked)} className="h-3.5 w-3.5" />
+              run on mapped project
+            </label>
+            {(runOnProject || projectId.trim()) && (
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground" title="Provision a fresh sandbox if the project has none">
                 <input type="checkbox" checked={createSandbox} onChange={(e) => setCreateSandbox(e.target.checked)} className="h-3.5 w-3.5" />
                 provision sandbox if missing

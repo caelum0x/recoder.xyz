@@ -20,6 +20,7 @@ type NodeHandleDotProps = {
 		| "videoGeneration"
 		| "trigger"
 		| "action"
+		| "squadStep"
 		| "query"
 		| "end";
 	id: string;
@@ -40,6 +41,7 @@ const borderToneByType: Record<NodeHandleDotProps["contentType"], string> = {
 	videoGeneration: "!border-video-generation-node-1",
 	trigger: "!border-trigger-node-1",
 	action: "!border-action-node-1",
+	squadStep: "!border-action-node-1",
 	query: "!border-query-node-1",
 	end: "!border-end-node-1",
 };
@@ -59,6 +61,7 @@ const fillToneByType: Record<NodeHandleDotProps["contentType"], string> = {
 	videoGeneration: "!bg-video-generation-node-1",
 	trigger: "!bg-trigger-node-1",
 	action: "!bg-action-node-1",
+	squadStep: "!bg-action-node-1",
 	query: "!bg-query-node-1",
 	end: "!bg-end-node-1",
 };

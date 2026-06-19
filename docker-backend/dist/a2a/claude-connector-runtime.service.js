@@ -222,20 +222,21 @@ class ClaudeConnectorRuntime extends events_1.EventEmitter {
             workspaceId: input.workspaceId,
             threadId: input.threadId,
         });
+        const effectivePrompt = input.instructionBundle?.agent_specific_prompt || input.prompt;
         // Transition the task to 'working' via the lifecycle service
         const lifecycle = (0, task_lifecycle_service_1.getTaskLifecycleService)();
         lifecycle.startTask(input.taskId, CLAUDE_CONNECTOR_IDENTITY.id);
         this.emit('task:start', { taskId: input.taskId });
         try {
             // Determine which tool to call
-            const toolName = input.toolName || this.selectDefaultTool(input.prompt);
-            let toolArgs = input.toolArgs || this.buildToolArgs(toolName, input.prompt);
+            const toolName = input.toolName || this.selectDefaultTool(effectivePrompt);
+            let toolArgs = input.toolArgs || this.buildToolArgs(toolName, effectivePrompt);
             // Inject input artifacts into the prompt context if provided
             if (input.artifacts?.length) {
                 const artifactContext = input.artifacts
                     .map((a) => `[Artifact: ${a.key} (${a.artifact_type})]:\n${a.content}`)
                     .join('\n\n');
-                const augmentedPrompt = `${input.prompt}\n\n--- Attached Artifacts ---\n${artifactContext}`;
+                const augmentedPrompt = `${effectivePrompt}\n\n--- Attached Artifacts ---\n${artifactContext}`;
                 toolArgs = { ...toolArgs };
                 // Update the prompt-like field with artifact context
                 if ('prompt' in toolArgs)

@@ -69,7 +69,6 @@ const AUTO_START_COOLDOWN_MS = 10000;
 const AUTO_INSTALL_COOLDOWN_MS = 60000;
 const APP_API_URL = process.env.APP_API_URL || 'http://127.0.0.1:3000';
 const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? '';
-const RECODER_WEB_INTERNAL_URL = process.env.RECODER_WEB_INTERNAL_URL || 'http://recoder-web:5173';
 const DOCKER_PUBLIC_URL = process.env.DOCKER_PUBLIC_URL || 'https://docker.recoder.xyz';
 const DAYTONA_PORT_CANDIDATES = [
     { port: 5173, type: 'Vite (5173)' },
@@ -126,7 +125,7 @@ function getDaytonaPortCandidatesForFramework(framework) {
         normalized === 'java-spring') {
         return DAYTONA_PORT_CANDIDATES;
     }
-    // Web IDE starters are overwhelmingly Vite/Next-style apps. Exclude the
+    // Browser-created starters are overwhelmingly Vite/Next-style apps. Exclude the
     // sandbox's raw 8080/8081 file browser ports by default so we don't treat a
     // directory listing as a healthy preview.
     return DAYTONA_PORT_CANDIDATES.filter(({ port }) => port !== 8080 && port !== 8081);
@@ -200,26 +199,8 @@ async function fetchProjectSnapshot(projectId, userId) {
             }
         }
         catch {
-            // Fall through to recoder-web/app legacy lookups below.
+            // Fall through to the main app proxy lookup below.
         }
-    }
-    try {
-        const response = await fetch(`${RECODER_WEB_INTERNAL_URL}/api/projects/${projectId}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-        if (response.ok) {
-            const payload = await response.json().catch(() => null);
-            const snapshot = payload?.project?.fileSnapshot || null;
-            if (snapshot && Object.keys(snapshot).length > 0) {
-                return { files: snapshot, directories: payload?.project?.directories || [] };
-            }
-        }
-    }
-    catch {
-        // Fall through to main-app proxy lookup below.
     }
     if (!userId || !INTERNAL_SERVICE_KEY) {
         return null;
@@ -664,7 +645,7 @@ async function recoverContainerFromDaytona(projectId, containers) {
         if (match) {
             const workDir = await dc.getWorkDir(match.id);
             dc.rememberWorkDir(match.id, workDir);
-            // Align recovered preview entries with the main Web IDE runtime lane.
+            // Align recovered preview entries with the main Spaces runtime lane.
             // Vite-based build sandboxes should start on 5173 unless a later probe
             // proves another port is actually responding.
             const defaultPort = 5173;
@@ -1506,7 +1487,7 @@ function setupPreviewProxy(app, containers) {
             });
         }
         const port = entry?.port || 0;
-        const baseUrl = process.env.PUBLIC_URL || `https://web.recoder.xyz`;
+        const baseUrl = process.env.PUBLIC_URL || process.env.PREVIEW_PUBLIC_URL || DOCKER_PUBLIC_URL;
         res.json({
             url: latestDeployment?.protectedPreviewUrl || `${baseUrl}/preview/${projectId}`,
             baseUrl: `${baseUrl}/preview/${projectId}`,

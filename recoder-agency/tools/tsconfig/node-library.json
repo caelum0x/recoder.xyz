@@ -16,6 +16,7 @@
 		"exactOptionalPropertyTypes": false,
 		"esModuleInterop": true,
 		"resolveJsonModule": true,
+		"types": ["node"],
 		"isolatedModules": true,
 		"verbatimModuleSyntax": true,
 		"noUncheckedSideEffectImports": true,
