@@ -36,6 +36,7 @@ import {
   type AgentOsWorkSignal,
 } from '@/hooks/workspaces/use-mission-control';
 import { OssComponentRegistry } from '@/components/oss';
+import { RunTimeline } from '@/components/agent-os/run-timeline';
 
 type AgentOsTask = Record<string, unknown> & {
   id?: string;
@@ -190,6 +191,7 @@ export function AgentOsControlPlane() {
     useWorkspaces();
   const workspaces = workspacesData?.workspaces ?? [];
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const {
     data: snapshot,
     isLoading: snapshotLoading,
@@ -237,6 +239,20 @@ export function AgentOsControlPlane() {
       filterByTaskIds(agentOsSummary?.runs ?? [], taskIds),
     );
   }, [agentOsSummary?.runs, taskIds]);
+  const selectedRun = useMemo(
+    () => agentOsRuns.find((run) => run.runId === selectedRunId) ?? null,
+    [agentOsRuns, selectedRunId],
+  );
+  useEffect(() => {
+    if (agentOsRuns.length === 0) {
+      if (selectedRunId !== null) setSelectedRunId(null);
+      return;
+    }
+    const stillVisible = agentOsRuns.some((run) => run.runId === selectedRunId);
+    if (!stillVisible) {
+      setSelectedRunId(agentOsRuns[0]?.runId ?? null);
+    }
+  }, [agentOsRuns, selectedRunId]);
   const agentOsApprovals = useMemo(() => {
     return filterByTaskIds(agentOsSummary?.approvals ?? [], taskIds);
   }, [agentOsSummary?.approvals, taskIds]);
@@ -500,7 +516,17 @@ export function AgentOsControlPlane() {
                   </p>
                 ) : (
                   agentOsRuns.slice(0, 4).map((run) => (
-                    <div key={run.runId} className="rounded border px-3 py-2">
+                    <button
+                      key={run.runId}
+                      type="button"
+                      onClick={() => setSelectedRunId(run.runId)}
+                      aria-pressed={selectedRunId === run.runId}
+                      className={cn(
+                        'w-full rounded border px-3 py-2 text-left transition-colors hover:bg-muted/50',
+                        selectedRunId === run.runId &&
+                          'border-primary/50 bg-primary/5 ring-1 ring-primary/30',
+                      )}
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-medium">
                           {run.title || run.taskId}
@@ -512,7 +538,7 @@ export function AgentOsControlPlane() {
                         {run.runtimeEvidenceCount} evidence ·{' '}
                         {run.approvalCount} approvals
                       </p>
-                    </div>
+                    </button>
                   ))
                 )}
               </section>
@@ -638,6 +664,23 @@ export function AgentOsControlPlane() {
                 {verificationArtifacts.length} verification artifacts ·{' '}
                 {agentOsApprovals.length} approvals.
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Run Timeline</CardTitle>
+              <CardDescription>
+                Chronological task → instruction bundle → artifact → PR →
+                preview → runtime evidence → approval history for the selected
+                run, read from shared Agent OS run history.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RunTimeline
+                runId={selectedRun?.runId ?? null}
+                runTitle={selectedRun?.title || selectedRun?.taskId}
+              />
             </CardContent>
           </Card>
 
