@@ -18,6 +18,8 @@ const missionControlKeys = {
   pipeline: (wsId: string) => ['mission-control', 'pipeline', wsId] as const,
   metrics: (wsId: string) => ['mission-control', 'metrics', wsId] as const,
   agentOsSummary: () => ['mission-control', 'agent-os-summary'] as const,
+  agentOsRunHistory: (runId: string) =>
+    ['mission-control', 'agent-os-run-history', runId] as const,
 };
 
 export interface MissionControlSummary {
@@ -179,6 +181,80 @@ export interface AgentOsSummary {
   ossComponents: AgentOsOssComponent[];
 }
 
+export type AgentOsRunHistoryItemKind =
+  | 'run_state'
+  | 'run_event'
+  | 'artifact'
+  | 'runtime_evidence'
+  | 'approval'
+  | 'policy_decision'
+  | 'memory_candidate'
+  | 'memory_item'
+  | 'instruction_bundle'
+  | 'github_delivery_link'
+  | 'work_lock';
+
+export type AgentOsRunHistoryItemSeverity =
+  | 'info'
+  | 'success'
+  | 'warning'
+  | 'block';
+
+export interface AgentOsRunHistoryItem {
+  itemId: string;
+  kind: AgentOsRunHistoryItemKind;
+  taskId: string;
+  runId?: string;
+  createdAt: string;
+  title: string;
+  summary?: string;
+  severity: AgentOsRunHistoryItemSeverity;
+  refs?: Record<string, string>;
+  data?: Record<string, unknown>;
+}
+
+export interface AgentOsRunHistory {
+  run: {
+    runId: string;
+    taskId: string;
+    state: string;
+    assigneeAgentId?: string;
+    instructionBundleId?: string;
+    updatedAt: string;
+    metadata?: Record<string, unknown>;
+  };
+  task?: {
+    taskId: string;
+    prompt?: string;
+    intent?: string;
+    [key: string]: unknown;
+  };
+  items: AgentOsRunHistoryItem[];
+  counts: {
+    events: number;
+    artifacts: number;
+    runtimeEvidence: number;
+    approvals: number;
+    policyDecisions: number;
+    memoryCandidates: number;
+    memoryItems: number;
+    instructionBundles: number;
+    githubDeliveryLinks: number;
+    workLocks: number;
+  };
+  latest: {
+    state: string;
+    updatedAt: string;
+    lastEventAt?: string;
+    waitingApprovalIds: string[];
+    artifactIds: string[];
+    previewArtifactIds: string[];
+    pullRequestArtifactIds: string[];
+    runtimeEvidenceIds: string[];
+    githubDeliveryLinkIds: string[];
+  };
+}
+
 function mapSnapshotAgents(
   input: Array<string | Record<string, unknown>>,
 ): AgentTeamMember[] {
@@ -244,6 +320,26 @@ export function useAgentOsSummary() {
       if (res.success && res.data) return res.data;
       throw new Error(res.error?.message || 'Failed to fetch Agent OS summary');
     },
+    refetchInterval: 10_000,
+  });
+}
+
+/**
+ * Fetch the unified, chronologically-sorted run history (task -> instruction
+ * bundle -> artifact -> PR -> preview -> runtime evidence -> approval -> handoff)
+ * for a single Agent OS run from shared control-plane history.
+ */
+export function useAgentOsRunHistory(runId: string | null) {
+  return useQuery({
+    queryKey: missionControlKeys.agentOsRunHistory(runId ?? ''),
+    queryFn: async () => {
+      const res = await dockerBackendApi.get<AgentOsRunHistory>(
+        `/api/agent-os/runs/${runId}/history`,
+      );
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to fetch run history');
+    },
+    enabled: !!runId,
     refetchInterval: 10_000,
   });
 }
