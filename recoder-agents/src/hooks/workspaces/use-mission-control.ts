@@ -435,6 +435,34 @@ export interface AgentOsApprovalDecisionInput {
   runId?: string;
 }
 
+export interface AgentOsResolveWorkSignalInput {
+  signalId: string;
+  resolvedBy: string;
+}
+
+/**
+ * Resolve a detected Agent OS work signal (blocker) and refresh the shared
+ * summary so the cleared blocker disappears from mission control.
+ */
+export function useAgentOsResolveWorkSignal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AgentOsResolveWorkSignalInput) => {
+      const res = await dockerBackendApi.patch<AgentOsWorkSignal>(
+        `/api/agent-os/work-signals/${input.signalId}/status`,
+        { status: 'resolved', resolvedBy: input.resolvedBy },
+      );
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to resolve work signal');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: missionControlKeys.agentOsSummary(),
+      });
+    },
+  });
+}
+
 /**
  * Decide a pending Agent OS approval (approve or reject) and refresh the shared
  * summary + affected run-history timeline so the gate result is visible
