@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 🚀 RECODER.XYZ 5-PLATFORM ECOSYSTEM DEPLOYMENT
-# Deploys all 5 platforms: Main Web, Backend API, Production Engine, Recoder Web, Recoder Chat
+# Deploys core platforms: Main Web, Backend API, Production Engine, Recoder Chat
 
 set -e  # Exit on any error
 
@@ -19,14 +19,12 @@ NC='\033[0m' # No Color
 BACKEND_PORT=${BACKEND_PORT:-3001}
 ENGINE_PORT=${ENGINE_PORT:-3002}
 MAIN_WEB_PORT=${MAIN_WEB_PORT:-3000}
-RECODER_WEB_PORT=${RECODER_WEB_PORT:-3003}
 RECODER_CHAT_PORT=${RECODER_CHAT_PORT:-3004}
 
 echo "🌐 Deployment Configuration:"
 echo "  📊 Backend API: http://localhost:$BACKEND_PORT"
 echo "  🏭 Production Engine: http://localhost:$ENGINE_PORT"
 echo "  🌐 Main Website: http://localhost:$MAIN_WEB_PORT"
-echo "  🛠️ Recoder Web: http://localhost:$RECODER_WEB_PORT"
 echo "  💬 Recoder Chat: http://localhost:$RECODER_CHAT_PORT"
 echo ""
 
@@ -146,17 +144,6 @@ echo $MAIN_WEB_PID > ../pids/main-web.pid
 echo -e "${GREEN}✅ Main Website started (PID: $MAIN_WEB_PID)${NC}"
 cd ..
 
-# Build and start Recoder Web Platform
-echo -e "${BLUE}🛠️ Building and starting Recoder Web Platform (port $RECODER_WEB_PORT)...${NC}"
-cd recoder-web
-npm install
-npm run build:production || npm run build || echo "Recoder Web build completed"
-PORT=$RECODER_WEB_PORT npm run start:production || npm start > ../logs/recoder-web.log 2>&1 &
-RECODER_WEB_PID=$!
-echo $RECODER_WEB_PID > ../pids/recoder-web.pid
-echo -e "${GREEN}✅ Recoder Web Platform started (PID: $RECODER_WEB_PID)${NC}"
-cd ..
-
 # Build and start Recoder Chat Platform
 echo -e "${BLUE}💬 Building and starting Recoder Chat Platform (port $RECODER_CHAT_PORT)...${NC}"
 cd recoder-chat
@@ -174,7 +161,6 @@ echo -e "${PURPLE}🔍 Performing health checks...${NC}"
 wait_for_service "http://localhost:$BACKEND_PORT/health" "Backend API"
 wait_for_service "http://localhost:$ENGINE_PORT/health" "Production Engine"
 wait_for_service "http://localhost:$MAIN_WEB_PORT" "Main Website"
-wait_for_service "http://localhost:$RECODER_WEB_PORT" "Recoder Web Platform"
 wait_for_service "http://localhost:$RECODER_CHAT_PORT" "Recoder Chat Platform"
 
 # Test critical endpoints
@@ -201,7 +187,6 @@ echo -e "${BLUE}📊 Platform Status:${NC}"
 echo -e "  🌐 Main Website (recoder.xyz): ${GREEN}http://localhost:$MAIN_WEB_PORT${NC}"
 echo -e "  📊 Backend API (api.recoder.xyz): ${GREEN}http://localhost:$BACKEND_PORT${NC}"
 echo -e "  🏭 Production Engine (engine.recoder.xyz): ${GREEN}http://localhost:$ENGINE_PORT${NC}"
-echo -e "  🛠️ Recoder Web (web.recoder.xyz): ${GREEN}http://localhost:$RECODER_WEB_PORT${NC}"
 echo -e "  💬 Recoder Chat (chat.recoder.xyz): ${GREEN}http://localhost:$RECODER_CHAT_PORT${NC}"
 echo ""
 echo -e "${BLUE}🚀 Next Steps:${NC}"
@@ -209,7 +194,6 @@ echo "  1. Configure DNS records for your domains:"
 echo "    - recoder.xyz → $MAIN_WEB_PORT"
 echo "    - api.recoder.xyz → $BACKEND_PORT"
 echo "    - engine.recoder.xyz → $ENGINE_PORT"
-echo "    - web.recoder.xyz → $RECODER_WEB_PORT"
 echo "    - chat.recoder.xyz → $RECODER_CHAT_PORT"
 echo ""
 echo "  2. Set up SSL certificates for HTTPS"
@@ -240,14 +224,12 @@ echo "======================================"
 BACKEND_PORT=${BACKEND_PORT:-3001}
 ENGINE_PORT=${ENGINE_PORT:-3002}
 MAIN_WEB_PORT=${MAIN_WEB_PORT:-3000}
-RECODER_WEB_PORT=${RECODER_WEB_PORT:-3003}
 RECODER_CHAT_PORT=${RECODER_CHAT_PORT:-3004}
 
 # Check if services are running
 backend_pid=$(cat pids/backend.pid 2>/dev/null)
 engine_pid=$(cat pids/engine.pid 2>/dev/null)
 main_web_pid=$(cat pids/main-web.pid 2>/dev/null)
-recoder_web_pid=$(cat pids/recoder-web.pid 2>/dev/null)
 recoder_chat_pid=$(cat pids/recoder-chat.pid 2>/dev/null)
 
 echo "📊 Process Status:"
@@ -269,12 +251,6 @@ else
     echo "❌ Main Website - Not running"
 fi
 
-if [ -n "$recoder_web_pid" ] && kill -0 $recoder_web_pid 2>/dev/null; then
-    echo "✅ Recoder Web (PID: $recoder_web_pid) - Running"
-else
-    echo "❌ Recoder Web - Not running"
-fi
-
 if [ -n "$recoder_chat_pid" ] && kill -0 $recoder_chat_pid 2>/dev/null; then
     echo "✅ Recoder Chat (PID: $recoder_chat_pid) - Running"
 else
@@ -286,7 +262,6 @@ echo "🔍 Health Check Results:"
 curl -s http://localhost:$BACKEND_PORT/health | head -1 2>/dev/null && echo "✅ Backend API healthy" || echo "❌ Backend API not responding"
 curl -s http://localhost:$ENGINE_PORT/health | head -1 2>/dev/null && echo "✅ Production Engine healthy" || echo "❌ Production Engine not responding"
 curl -s http://localhost:$MAIN_WEB_PORT | head -1 2>/dev/null && echo "✅ Main Website healthy" || echo "❌ Main Website not responding"
-curl -s http://localhost:$RECODER_WEB_PORT | head -1 2>/dev/null && echo "✅ Recoder Web healthy" || echo "❌ Recoder Web not responding"  
 curl -s http://localhost:$RECODER_CHAT_PORT | head -1 2>/dev/null && echo "✅ Recoder Chat healthy" || echo "❌ Recoder Chat not responding"
 
 echo ""
@@ -294,7 +269,6 @@ echo "🌐 Access URLs:"
 echo "  Main Website: http://localhost:$MAIN_WEB_PORT"
 echo "  Backend API: http://localhost:$BACKEND_PORT"
 echo "  Production Engine: http://localhost:$ENGINE_PORT"
-echo "  Recoder Web: http://localhost:$RECODER_WEB_PORT"
 echo "  Recoder Chat: http://localhost:$RECODER_CHAT_PORT"
 EOF
 
@@ -310,7 +284,6 @@ echo "🛑 Stopping Recoder.xyz 5-Platform Ecosystem..."
 backend_pid=$(cat pids/backend.pid 2>/dev/null)
 engine_pid=$(cat pids/engine.pid 2>/dev/null)
 main_web_pid=$(cat pids/main-web.pid 2>/dev/null)
-recoder_web_pid=$(cat pids/recoder-web.pid 2>/dev/null)
 recoder_chat_pid=$(cat pids/recoder-chat.pid 2>/dev/null)
 
 if [ -n "$backend_pid" ] && kill -0 $backend_pid 2>/dev/null; then
@@ -326,11 +299,6 @@ fi
 if [ -n "$main_web_pid" ] && kill -0 $main_web_pid 2>/dev/null; then
     kill $main_web_pid
     echo "✅ Stopped Main Website (PID: $main_web_pid)"
-fi
-
-if [ -n "$recoder_web_pid" ] && kill -0 $recoder_web_pid 2>/dev/null; then
-    kill $recoder_web_pid
-    echo "✅ Stopped Recoder Web (PID: $recoder_web_pid)"
 fi
 
 if [ -n "$recoder_chat_pid" ] && kill -0 $recoder_chat_pid 2>/dev/null; then

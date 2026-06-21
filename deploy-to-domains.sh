@@ -102,10 +102,6 @@ build_images() {
     print_status "Building production engine..."
     docker build -t recoder/production-engine:latest ./production-engine
     
-    # Build recoder web platform
-    print_status "Building recoder web platform..."
-    docker build -t recoder/recoder-web:latest ./recoder-web
-    
     # Build chat platform
     print_status "Building chat platform..."
     docker build -t recoder/recoder-chat:latest ./recoder-chat

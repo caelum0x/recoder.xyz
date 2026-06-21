@@ -326,12 +326,6 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'recoder-web'
-    static_configs:
-      - targets: ['recoder-web:3000']
-    metrics_path: '/api/metrics'
-    scrape_interval: 30s
-
   - job_name: 'recoder-chat'
     static_configs:
       - targets: ['recoder-chat:3000']
@@ -430,7 +424,6 @@ deploy_domain_services() {
     docker-compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d \
         recoder-api \
         production-engine \
-        recoder-web \
         recoder-chat \
         ollama
     

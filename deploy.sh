@@ -99,12 +99,10 @@ build_images() {
     log "Building version: $version"
     
     # Build images
-    docker build -t "${DOCKER_REGISTRY}/recoder-web:${version}" --target web-production .
     docker build -t "${DOCKER_REGISTRY}/recoder-backend:${version}" --target backend-production .
     docker build -t "${DOCKER_REGISTRY}/recoder-cli:${version}" --target cli-production .
-    
+
     # Tag as latest
-    docker tag "${DOCKER_REGISTRY}/recoder-web:${version}" "${DOCKER_REGISTRY}/recoder-web:latest"
     docker tag "${DOCKER_REGISTRY}/recoder-backend:${version}" "${DOCKER_REGISTRY}/recoder-backend:latest"
     docker tag "${DOCKER_REGISTRY}/recoder-cli:${version}" "${DOCKER_REGISTRY}/recoder-cli:latest"
     
@@ -121,11 +119,9 @@ push_images() {
         
         local version=$(node -p "require('./${VERSION_FILE}').version")
         
-        docker push "${DOCKER_REGISTRY}/recoder-web:${version}"
         docker push "${DOCKER_REGISTRY}/recoder-backend:${version}"
         docker push "${DOCKER_REGISTRY}/recoder-cli:${version}"
-        docker push "${DOCKER_REGISTRY}/recoder-web:latest"
-        docker push "${DOCKER_REGISTRY}/recoder-backend:latest"  
+        docker push "${DOCKER_REGISTRY}/recoder-backend:latest"
         docker push "${DOCKER_REGISTRY}/recoder-cli:latest"
         
         success "Images pushed to registry"
@@ -163,26 +159,8 @@ health_check() {
     
     local max_attempts=30
     local attempt=1
-    
-    while [[ $attempt -le $max_attempts ]]; do
-        log "Health check attempt $attempt/$max_attempts"
-        
-        # Check web service
-        if curl -f -s "http://localhost:3000/api/health" > /dev/null; then
-            success "Web service is healthy"
-            break
-        fi
-        
-        if [[ $attempt -eq $max_attempts ]]; then
-            error "Health check failed after $max_attempts attempts"
-        fi
-        
-        sleep 10
-        ((attempt++))
-    done
-    
+
     # Check backend service
-    attempt=1
     while [[ $attempt -le $max_attempts ]]; do
         if curl -f -s "http://localhost:3001/health" > /dev/null; then
             success "Backend service is healthy"
@@ -207,7 +185,6 @@ rollback() {
         log "Rolling back to version: $previous_version"
         
         # Restore previous images
-        docker tag "${DOCKER_REGISTRY}/recoder-web:${previous_version}" "${DOCKER_REGISTRY}/recoder-web:latest"
         docker tag "${DOCKER_REGISTRY}/recoder-backend:${previous_version}" "${DOCKER_REGISTRY}/recoder-backend:latest"
         docker tag "${DOCKER_REGISTRY}/recoder-cli:${previous_version}" "${DOCKER_REGISTRY}/recoder-cli:latest"
         

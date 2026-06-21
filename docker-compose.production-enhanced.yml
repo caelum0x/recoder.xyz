@@ -207,43 +207,6 @@ services:
         max_attempts: 3
         window: 120s
 
-  web:
-    build:
-      context: ./recoder-web
-      dockerfile: Dockerfile
-    container_name: recoder-web-prod
-    restart: always
-    environment:
-      - NODE_ENV=production
-      - PORT=5173
-      - NEXT_PUBLIC_API_URL=${API_URL:-https://api.recoder.xyz}
-      - NEXT_PUBLIC_WEB_URL=${WEB_URL:-https://recoder.xyz}
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?Better Auth secret required}
-      - AUTH_DATABASE_URL=${AUTH_DATABASE_URL:?Auth database URL required}
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Internal service key required}
-      - DATABASE_URL=postgresql://${DB_USER:-recoder}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-recoder_production}
-    ports:
-      - "5173:5173"
-    networks:
-      - recoder-network
-    depends_on:
-      - backend
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5173/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          memory: 1G
-          cpus: '0.5'
-        reservations:
-          memory: 512M
-          cpus: '0.25'
-
   pm:
     build:
       context: ./recoder-pm
@@ -353,7 +316,6 @@ services:
     networks:
       - recoder-network
     depends_on:
-      - web
       - pm
       - backend
       - agency
@@ -556,7 +518,6 @@ services:
     networks:
       - recoder-network
     depends_on:
-      - web
       - pm
       - backend
       - agency
@@ -564,7 +525,6 @@ services:
       sh -c "
         while true; do
           echo 'Running health checks...';
-          curl -f http://web:5173/api/health || echo 'Web health check failed';
           curl -f http://backend:3100/api/health || echo 'Backend health check failed';
           curl -f http://agency:3000/api/health || echo 'Agency health check failed';
           curl -f http://pm:3002/api/health || echo 'PM health check failed';
