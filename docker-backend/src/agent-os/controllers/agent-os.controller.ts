@@ -983,6 +983,7 @@ export class AgentOsController {
       instructionBundles: (await this.repository.listInstructionBundles()),
       githubDeliveryLinks: (await this.repository.listGitHubDeliveryLinks()),
       workLocks: (await this.repository.listWorkLocks()),
+      workSignals: (await this.repository.listWorkSignals()),
     });
   }
 
