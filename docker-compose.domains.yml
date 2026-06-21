@@ -130,31 +130,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # Recoder Web Platform - app.recoder.xyz
-  recoder-web:
-    build:
-      context: ./recoder-web
-      dockerfile: Dockerfile.production
-    container_name: recoder-web-platform
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=https://api.recoder.xyz
-      - NEXT_PUBLIC_ENGINE_URL=https://engine.recoder.xyz
-      - NEXT_PUBLIC_CHAT_URL=https://chat.recoder.xyz
-    networks:
-      - recoder-network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`app.recoder.xyz`)"
-      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
-      - "traefik.http.services.app.loadbalancer.server.port=3000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
   # AI Chat Platform - chat.recoder.xyz
   recoder-chat:
     build:

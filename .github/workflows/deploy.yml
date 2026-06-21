@@ -118,7 +118,7 @@ jobs:
 
             # ── Batch 1: parallel builds ──
             echo ""
-            echo ">>> Batch 1: Building app, recoder-frontend, recoder-web, docker-backend, openclaw..."
+            echo ">>> Batch 1: Building app, recoder-frontend, docker-backend, openclaw..."
 
             BUILD_FAILURES=0
 
@@ -135,12 +135,6 @@ jobs:
             PID_FRONTEND=$!
 
             (
-              cd /root/recoder.xyz/recoder-web && npm install && npm run build
-              echo "  [batch1] recoder-web build complete"
-            ) &
-            PID_WEB=$!
-
-            (
               cd /root/recoder.xyz/docker-backend && npm install && npm run build
               echo "  [batch1] docker-backend build complete"
             ) &
@@ -152,7 +146,7 @@ jobs:
             ) &
             PID_OPENCLAW=$!
 
-            for PID in $PID_APP $PID_FRONTEND $PID_WEB $PID_DOCKER $PID_OPENCLAW; do
+            for PID in $PID_APP $PID_FRONTEND $PID_DOCKER $PID_OPENCLAW; do
               if ! wait $PID; then
                 BUILD_FAILURES=$((BUILD_FAILURES + 1))
               fi
@@ -207,7 +201,7 @@ jobs:
             # ── Create log directories for PM2 ──
             echo ""
             echo ">>> Ensuring log directories exist..."
-            mkdir -p /root/recoder.xyz/logs/{recoder-app,recoder-frontend,recoder-web,docker-backend,recoder-backend,recoder-pm,recoder-studio,recoder-agency,openclaw}
+            mkdir -p /root/recoder.xyz/logs/{recoder-app,recoder-frontend,docker-backend,recoder-backend,recoder-pm,recoder-studio,recoder-agency,openclaw}
 
             # ── Deploy nginx config ──
             echo ""
@@ -235,7 +229,6 @@ jobs:
 
             DOCKER_SERVICES=(
               "docker-backend|https://api.recoder.xyz/health"
-              "recoder-web|https://web.recoder.xyz/"
               "openclaw-gateway|https://openclaw.recoder.xyz/health"
             )
 
@@ -408,7 +401,6 @@ jobs:
             ENDPOINTS=(
               "https://recoder.xyz/"
               "https://api.recoder.xyz/health"
-              "https://web.recoder.xyz/"
               "https://frontend.recoder.xyz/"
               "https://pm.recoder.xyz/"
               "https://studio.recoder.xyz/"
@@ -428,13 +420,13 @@ jobs:
 
             if [[ "$FINAL_FAILURES" -gt 3 ]]; then
               echo ""
-              echo "CRITICAL: ${FINAL_FAILURES}/7 endpoints failing after deploy!"
+              echo "CRITICAL: ${FINAL_FAILURES}/6 endpoints failing after deploy!"
               echo "Consider manual rollback: cd /root/recoder.xyz && git checkout \$(cat /tmp/recoder-prev-deploy-commit)"
               exit 1
             fi
 
             echo ""
-            echo ">>> Post-deploy health: $((7 - FINAL_FAILURES))/7 endpoints healthy"
+            echo ">>> Post-deploy health: $((6 - FINAL_FAILURES))/6 endpoints healthy"
 
       - name: Deploy summary
         if: always()

@@ -106,10 +106,6 @@ install_dependencies() {
     log "Installing shared dependencies..."
     cd packages/shared && npm install && cd ../..
     
-    # Web dependencies
-    log "Installing web dependencies..."
-    cd recoder-web && npm install && cd ..
-    
     # Chat dependencies
     log "Installing chat dependencies..."
     cd recoder-chat && npm install && cd ..
@@ -153,14 +149,6 @@ start_services() {
     npm start &
     BACKEND_PID=$!
     echo $BACKEND_PID > ../logs/backend.pid
-    cd ..
-    
-    # Start web service in background
-    log "Starting web service..."
-    cd recoder-web
-    npm run dev &
-    WEB_PID=$!
-    echo $WEB_PID > ../logs/web.pid
     cd ..
     
     # Start chat service in background

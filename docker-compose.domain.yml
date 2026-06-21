@@ -206,47 +206,6 @@ services:
       retries: 3
       start_period: 30s
 
-  # Web Platform (recoder.xyz)
-  recoder-web:
-    build:
-      context: ./recoder-web
-      dockerfile: Dockerfile.production
-    container_name: recoder-web
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=https://api.recoder.xyz
-      - NEXT_PUBLIC_WEB_URL=https://recoder.xyz
-      - NEXT_PUBLIC_CHAT_URL=https://chat.recoder.xyz
-      - NEXTAUTH_URL=https://recoder.xyz
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/recoder_production
-    volumes:
-      - ./logs/web:/app/logs
-    networks:
-      - recoder-network
-    depends_on:
-      - recoder-api
-      - postgres
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=Host(`recoder.xyz`) || Host(`www.recoder.xyz`)"
-      - "traefik.http.routers.web.tls=true"
-      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.web.middlewares=security-headers,www-redirect"
-      - "traefik.http.services.web.loadbalancer.server.port=3000"
-      
-      # WWW redirect middleware
-      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www.recoder.xyz/(.*)"
-      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://recoder.xyz/$${1}"
-      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
   # Chat Platform (chat.recoder.xyz)
   recoder-chat:
     build:

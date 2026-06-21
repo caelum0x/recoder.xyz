@@ -501,57 +501,6 @@ spec:
     targetPort: 3003
 EOF
     
-    log_step "Building and deploying Web Platform..."
-    cd recoder-web
-    npm ci
-    npm run build
-    docker build -t $DOCKER_REGISTRY/web-platform:$VERSION .
-    docker push $DOCKER_REGISTRY/web-platform:$VERSION
-    cd ..
-    
-    kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: web-platform
-  namespace: $NAMESPACE
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: web-platform
-  template:
-    metadata:
-      labels:
-        app: web-platform
-    spec:
-      containers:
-      - name: web-platform
-        image: $DOCKER_REGISTRY/web-platform:$VERSION
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NODE_ENV
-          value: production
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: recoder-secrets
-              key: database-url
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: web-platform
-  namespace: $NAMESPACE
-spec:
-  selector:
-    app: web-platform
-  ports:
-  - port: 3000
-    targetPort: 3000
-EOF
-
     log_success "Web platforms deployment completed"
 }
 

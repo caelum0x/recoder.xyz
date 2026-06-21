@@ -61,7 +61,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [workspace-manifest-check, first-party-script-contract-check, required-workflow-policy-check]
     outputs:
-      has-web: ${{ steps.platforms.outputs.has-web }}
       has-app: ${{ steps.platforms.outputs.has-app }}
       has-backend: ${{ steps.platforms.outputs.has-backend }}
       has-docker-backend: ${{ steps.platforms.outputs.has-docker-backend }}
@@ -78,7 +77,6 @@ jobs:
         id: platforms
         run: |
           set -e
-          echo "has-web=$([[ -d recoder-web ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
           echo "has-app=$([[ -d app ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
           echo "has-backend=$([[ -d backend ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
           echo "has-docker-backend=$([[ -d docker-backend ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
@@ -92,7 +90,6 @@ jobs:
           echo "## Recoder.xyz Platform Status" >> $GITHUB_STEP_SUMMARY
           echo "| Service | Found |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| recoder-web (Web IDE) | ${{ steps.platforms.outputs.has-web }} |" >> $GITHUB_STEP_SUMMARY
           echo "| app (Hub) | ${{ steps.platforms.outputs.has-app }} |" >> $GITHUB_STEP_SUMMARY
           echo "| backend (Python API) | ${{ steps.platforms.outputs.has-backend }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docker-backend (A2A Gateway) | ${{ steps.platforms.outputs.has-docker-backend }} |" >> $GITHUB_STEP_SUMMARY
@@ -100,43 +97,6 @@ jobs:
           echo "| recoder-agency (Multi-Agent) | ${{ steps.platforms.outputs.has-agency }} |" >> $GITHUB_STEP_SUMMARY
           echo "| recoder-pm (Project Management) | ${{ steps.platforms.outputs.has-pm }} |" >> $GITHUB_STEP_SUMMARY
           echo "| recoder-frontend (AI IDE) | ${{ steps.platforms.outputs.has-frontend }} |" >> $GITHUB_STEP_SUMMARY
-
-  # =============================================
-  # WEB IDE BUILD CHECK
-  # =============================================
-  web-build:
-    name: Build recoder-web
-    runs-on: ubuntu-latest
-    needs: [health-check]
-    if: needs.health-check.outputs.has-web == 'true'
-
-    defaults:
-      run:
-        working-directory: ./recoder-web
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
-          cache-dependency-path: recoder-web/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build
-        run: SKIP_ENV_VALIDATION=true pnpm run build
-        env:
-          NODE_ENV: production
 
   # =============================================
   # DOCKER-BACKEND BUILD & TEST
@@ -236,19 +196,6 @@ jobs:
         env:
           SKIP_ENV_VALIDATION: true
 
-      # ---- recoder-web coverage ----
-      - name: Install recoder-web dependencies
-        if: needs.health-check.outputs.has-web == 'true'
-        working-directory: ./recoder-web
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Run recoder-web coverage
-        if: needs.health-check.outputs.has-web == 'true'
-        working-directory: ./recoder-web
-        run: pnpm run test:coverage
-        env:
-          SKIP_ENV_VALIDATION: true
-
       # ---- app (Hub) coverage ----
       - name: Install app dependencies
         if: needs.health-check.outputs.has-app == 'true'
@@ -305,7 +252,6 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Services with coverage configured" >> $GITHUB_STEP_SUMMARY
             echo "- **docker-backend** — vitest + @vitest/coverage-v8" >> $GITHUB_STEP_SUMMARY
-            echo "- **recoder-web** — vitest + @vitest/coverage-v8" >> $GITHUB_STEP_SUMMARY
             echo "- **app** — vitest + @vitest/coverage-v8 (newly added)" >> $GITHUB_STEP_SUMMARY
           fi
 
@@ -317,7 +263,6 @@ jobs:
           path: |
             app/coverage/
             docker-backend/coverage/
-            recoder-web/coverage/
             logs/coverage/
           retention-days: 14
           if-no-files-found: ignore
@@ -328,7 +273,7 @@ jobs:
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [health-check, web-build, docker-backend-check, security-scan, test-coverage]
+    needs: [health-check, docker-backend-check, security-scan, test-coverage]
     if: always()
 
     steps:
@@ -339,7 +284,6 @@ jobs:
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Platform Detection | ${{ needs.health-check.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| recoder-web Build | ${{ needs.web-build.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docker-backend Tests | ${{ needs.docker-backend-check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test Coverage | ${{ needs.test-coverage.result }} |" >> $GITHUB_STEP_SUMMARY

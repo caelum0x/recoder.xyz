@@ -40,7 +40,6 @@ jobs:
       matrix:
         platform:
           - { name: 'docker-backend', path: 'docker-backend', install: 'pnpm install', test: 'pnpm test', node: '20' }
-          - { name: 'recoder-web', path: 'recoder-web', install: 'pnpm install', test: 'pnpm test', node: '20' }
           - { name: 'app', path: 'app', install: 'pnpm install', test: 'pnpm test', node: '20' }
           - { name: 'desktop', path: 'apps/desktop', install: 'npm ci', test: 'npx vitest run', node: '20' }
           - { name: 'recoder-studio', path: 'recoder-studio', install: 'pnpm install', test: 'pnpm test', node: '24' }
