@@ -8,12 +8,6 @@
       "buildTime": 37,
       "timestamp": "2025-08-15T22:51:48.390Z"
     },
-    "recoder-web": {
-      "status": "warning",
-      "message": "Build completed with issues",
-      "buildTime": 76,
-      "timestamp": "2025-08-15T22:53:04.227Z"
-    },
     "recoder-extension": {
       "status": "failed",
       "message": "Build or packaging failed",
@@ -22,9 +16,9 @@
     }
   },
   "summary": {
-    "total": 3,
+    "total": 2,
     "passed": 0,
     "failed": 2,
-    "warnings": 1
+    "warnings": 0
   }
 }

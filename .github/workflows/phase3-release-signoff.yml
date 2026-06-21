@@ -67,11 +67,6 @@ on:
         options:
           - "false"
           - "true"
-      recoder_web_url:
-        description: "recoder-web URL"
-        required: true
-        default: "https://web.recoder.xyz"
-        type: string
       backend_url:
         description: "docker-backend URL"
         required: true
@@ -133,7 +128,6 @@ jobs:
           ENABLE_A2A_INTEROP_SMOKE: ${{ inputs.enable_a2a_interop_smoke }}
           A2A_WORKER_STATUS_CHECK: ${{ inputs.a2a_worker_status_check }}
           BILLING_ACTIONS_ENABLED: ${{ inputs.billing_actions_enabled }}
-          RECODER_WEB_URL: ${{ inputs.recoder_web_url }}
           BACKEND_URL: ${{ inputs.backend_url }}
           BASE_URL: ${{ inputs.base_url }}
           EXPECTED_QUEUE_BACKEND: ${{ inputs.expected_queue_backend }}

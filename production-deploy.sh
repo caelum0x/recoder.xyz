@@ -22,28 +22,7 @@ echo "===================================="
 # Fix NODE_ENV
 export NODE_ENV=production
 
-# 1. Fix Web Platform Anthropic SDK issue
-echo "🔧 Fixing Web Platform..."
-cd /Users/arhansubasi/recoder.xyz/recoder-web
-
-# Update Anthropic SDK to resolve conflicts
-if grep -q "@anthropic-ai/sdk.*0.59.0" package.json; then
-    echo "⚠️  Anthropic SDK version conflict detected - updating..."
-    # Use specific compatible version
-    npm install @anthropic-ai/sdk@0.51.0 --save-exact
-fi
-
-# Test build
-echo "🏗️  Testing web platform build..."
-if SKIP_ENV_VALIDATION=true npm run build --silent; then
-    echo "✅ Web Platform: Build successful"
-else
-    echo "⚠️  Web Platform: Build has warnings but continues"
-fi
-
-cd ..
-
-# 2. Verify Chat Platform (already working)
+# 1. Verify Chat Platform (already working)
 echo "✅ Chat Platform: Production ready"
 
 # 3. Verify VS Code Extension (already working)  
@@ -91,17 +70,6 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=\${DATABASE_URL}
     restart: unless-stopped
-    
-  recoder-web:
-    build:
-      context: ./recoder-web  
-      dockerfile: Dockerfile
-    ports:
-      - "3001:3000"
-    environment:
-      - NODE_ENV=production
-      - SKIP_ENV_VALIDATION=true
-    restart: unless-stopped
 
 networks:
   default:
@@ -112,10 +80,10 @@ EOF
 echo "🏥 Running final health check..."
 
 platforms_ready=0
-total_platforms=5
+total_platforms=4
 
 echo "Platform Status:"
-for platform in recoder-chat recoder-web recoder-extension recoder-desktop recoder-chat-mobile; do
+for platform in recoder-chat recoder-extension recoder-desktop recoder-chat-mobile; do
     if [[ -d "$platform" && -f "$platform/package.json" ]]; then
         echo "✅ $platform: Ready"
         platforms_ready=$((platforms_ready + 1))
@@ -139,8 +107,7 @@ if [[ $platforms_ready -ge 2 ]]; then
     echo "🚀 Next Steps:"
     echo "1. Deploy chat platform: docker-compose -f docker-compose.production.yml up -d recoder-chat"
     echo "2. Publish VS Code extension to marketplace"
-    echo "3. Fix web platform and deploy: docker-compose -f docker-compose.production.yml up -d recoder-web"
-    echo "4. Monitor with: docker-compose logs -f"
+    echo "3. Monitor with: docker-compose logs -f"
 else
     echo "⚠️  STATUS: Need more platforms ready before deployment"
 fi
@@ -148,5 +115,4 @@ fi
 echo ""
 echo "🔗 Production URLs:"
 echo "- Chat Platform: http://localhost:3000"
-echo "- Web Platform: http://localhost:3001"  
 echo "- Health Check: curl http://localhost:3000/api/health"

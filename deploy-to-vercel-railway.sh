@@ -61,13 +61,6 @@ deploy_to_vercel() {
     cd ..
     print_success "Main website deployed"
     
-    # Deploy web platform
-    print_status "Deploying web platform (app.recoder.xyz)..."
-    cd recoder-web
-    vercel --prod --yes
-    cd ..
-    print_success "Web platform deployed"
-    
     # Deploy chat platform
     print_status "Deploying chat platform (chat.recoder.xyz)..."
     cd recoder-chat
