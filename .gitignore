@@ -212,7 +212,6 @@ recoder-agency/packages/pseudo-tiktoken/**/.turbo/
 !backend/supabase/migrations/20260310500003_api_key_enhancements.sql
 !backend/supabase/migrations/20260311400002_api_key_scopes.sql
 !backend/supabase/migrations/20260312901000_agent_secrets_vault.sql
-!docker-backend/data/api-keys.json
 !docker-backend/src/__tests__/secrets-manager.test.ts
 !docker-backend/src/public-api/api-keys.ts
 !docker-backend/src/public-api/identity-tokens.ts
@@ -450,11 +449,14 @@ temp/
 *.sqlite-wal
 *.sqlite-journal
 
-# docker-backend runtime state (regenerated on every start; noisy in git)
-docker-backend/data/a2a-events.json
-docker-backend/data/performance-profiler.json
-docker-backend/data/projects.json
-docker-backend/data/public-api-queue.sqlite*
+# docker-backend runtime state (regenerated on demand with graceful defaults;
+# never source — only runtime JSON stores, the public-api queue sqlite, and
+# backup tarballs. Tracking these caused local drift to leak into git and risked
+# a prod `git pull` overwriting live runtime state with a stale committed copy.
+# Globbed (not the bare dir) so a future intentional fixture can be re-included.
+docker-backend/data/*.json
+docker-backend/data/*.sqlite*
+docker-backend/data/backups/
 
 # Uploads
 uploads/
