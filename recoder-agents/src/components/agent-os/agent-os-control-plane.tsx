@@ -31,6 +31,7 @@ import { useWorkspaces } from '@/hooks/workspaces/use-workspaces';
 import {
   useAgentOsApprovalDecision,
   useAgentOsDeliveryLinks,
+  useAgentOsResolveWorkSignal,
   useAgentOsSummary,
   useControlPlaneSnapshot,
   type AgentOsApprovalSummary,
@@ -208,6 +209,18 @@ export function AgentOsControlPlane() {
   const { data: capabilities } = useCapabilities();
   const { user } = useAuth();
   const approvalDecision = useAgentOsApprovalDecision();
+  const resolveWorkSignal = useAgentOsResolveWorkSignal();
+
+  const resolvingSignalId = resolveWorkSignal.isPending
+    ? resolveWorkSignal.variables?.signalId
+    : undefined;
+  const handleResolveSignal = (signal: AgentOsWorkSignal) => {
+    if (resolveWorkSignal.isPending) return;
+    resolveWorkSignal.mutate({
+      signalId: signal.signalId,
+      resolvedBy: user?.email || user?.id || 'agent-os-operator',
+    });
+  };
 
   const decidingApprovalId = approvalDecision.isPending
     ? approvalDecision.variables?.approvalId
@@ -512,9 +525,29 @@ export function AgentOsControlPlane() {
                       <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">
                         {signal.recommendedNextAction}
                       </p>
+                      <div className="mt-2 flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-xs"
+                          disabled={resolveWorkSignal.isPending}
+                          onClick={() => handleResolveSignal(signal)}
+                        >
+                          {resolvingSignalId === signal.signalId
+                            ? 'Resolving…'
+                            : 'Mark resolved'}
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
+                {resolveWorkSignal.isError ? (
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    {resolveWorkSignal.error instanceof Error
+                      ? resolveWorkSignal.error.message
+                      : 'Failed to resolve work signal.'}
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           </div>
