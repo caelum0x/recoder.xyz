@@ -614,7 +614,12 @@ export function AgentOsControlPlane() {
                   deliveryArtifacts.slice(0, 5).map((artifact) => (
                     <div
                       key={artifact.artifactId}
-                      className="rounded border px-3 py-2 text-sm"
+                      className={cn(
+                        'rounded border px-3 py-2 text-sm',
+                        artifact.runId &&
+                          selectedRunId === artifact.runId &&
+                          'border-primary/50 bg-primary/5',
+                      )}
                     >
                       <div className="flex items-center justify-between gap-2">
                         {artifact.url ? (
@@ -638,11 +643,24 @@ export function AgentOsControlPlane() {
                           {artifact.kind.replace(/_/g, ' ')}
                         </Badge>
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {artifact.repository ||
-                          artifact.provider ||
-                          artifact.createdBy}
-                      </p>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="truncate text-xs text-muted-foreground">
+                          {artifact.repository ||
+                            artifact.provider ||
+                            artifact.createdBy}
+                        </p>
+                        {artifact.runId ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedRunId(artifact.runId ?? null)
+                            }
+                            className="shrink-0 text-[11px] font-medium text-primary underline-offset-4 hover:underline"
+                          >
+                            timeline
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ))
                 )}
@@ -660,7 +678,12 @@ export function AgentOsControlPlane() {
                   runtimeEvidence.slice(0, 5).map((evidence) => (
                     <div
                       key={evidence.evidenceId}
-                      className="rounded border px-3 py-2 text-sm"
+                      className={cn(
+                        'rounded border px-3 py-2 text-sm',
+                        evidence.runId &&
+                          selectedRunId === evidence.runId &&
+                          'border-primary/50 bg-primary/5',
+                      )}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-medium">
@@ -673,11 +696,24 @@ export function AgentOsControlPlane() {
                           {evidence.status}
                         </Badge>
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {evidence.command ||
-                          evidence.runtimeId ||
-                          evidence.kind}
-                      </p>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="truncate text-xs text-muted-foreground">
+                          {evidence.command ||
+                            evidence.runtimeId ||
+                            evidence.kind}
+                        </p>
+                        {evidence.runId ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedRunId(evidence.runId ?? null)
+                            }
+                            className="shrink-0 text-[11px] font-medium text-primary underline-offset-4 hover:underline"
+                          >
+                            timeline
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ))
                 )}
