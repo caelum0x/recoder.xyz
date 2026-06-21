@@ -26,6 +26,7 @@ const missionControlKeys = {
     ['mission-control', 'agent-os-run-history', runId] as const,
   agentOsDeliveryLinks: () =>
     ['mission-control', 'agent-os-delivery-links'] as const,
+  agentOsSpaces: () => ['mission-control', 'agent-os-spaces'] as const,
 };
 
 export interface MissionControlSummary {
@@ -185,6 +186,24 @@ export interface AgentOsSummary {
   runtimeEvidence: AgentOsRuntimeEvidence[];
   deliveryArtifacts: AgentOsDeliveryArtifact[];
   ossComponents: AgentOsOssComponent[];
+}
+
+export interface AgentOsSpaceRepository {
+  repoId: string;
+  provider: 'github' | 'gitlab' | 'bitbucket' | 'local' | 'custom';
+  owner: string;
+  name: string;
+  defaultBranch?: string;
+  url?: string;
+}
+
+export interface AgentOsSpace {
+  spaceId: string;
+  displayName: string;
+  ownerId: string;
+  repositories: AgentOsSpaceRepository[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type GitHubDeliveryLinkStatus =
@@ -405,6 +424,63 @@ export function useAgentOsRunHistory(runId: string | null) {
     },
     enabled: !!runId,
     refetchInterval: 10_000,
+  });
+}
+
+/**
+ * Fetch Agent OS control-plane Spaces and their connected repositories so the
+ * operator can see and manage the 'connect repo' step of the paid-user loop.
+ */
+export function useAgentOsSpaces() {
+  return useQuery({
+    queryKey: missionControlKeys.agentOsSpaces(),
+    queryFn: async () => {
+      const res = await dockerBackendApi.get<AgentOsSpace[]>(
+        '/api/agent-os/spaces',
+      );
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to fetch Agent OS spaces');
+    },
+    refetchInterval: 30_000,
+  });
+}
+
+export interface ConnectAgentOsRepositoryInput {
+  spaceId: string;
+  owner: string;
+  name: string;
+  defaultBranch?: string;
+  url?: string;
+}
+
+/**
+ * Connect a GitHub repository to an Agent OS Space, then refresh spaces and
+ * delivery links so the new repo is available for the task → PR pipeline.
+ */
+export function useConnectAgentOsRepository() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ConnectAgentOsRepositoryInput) => {
+      const res = await dockerBackendApi.post<AgentOsSpace>(
+        `/api/agent-os/spaces/${input.spaceId}/repositories/github`,
+        {
+          owner: input.owner,
+          name: input.name,
+          defaultBranch: input.defaultBranch,
+          url: input.url,
+        },
+      );
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to connect repository');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: missionControlKeys.agentOsSpaces(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: missionControlKeys.agentOsDeliveryLinks(),
+      });
+    },
   });
 }
 
