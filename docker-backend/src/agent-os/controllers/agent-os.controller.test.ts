@@ -1,8 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import type { Request, Response } from 'express';
-import type { TaskRun } from '@recoder/agent-os';
+import type { AgentProfile, TaskRun } from '@recoder/agent-os';
 import { InMemoryAgentOsRepository } from '../repositories/in-memory-agent-os.repository';
 import { AgentOsController } from './agent-os.controller';
+
+function healthyAgent(agentId: string): AgentProfile {
+  return {
+    agentId,
+    displayName: agentId,
+    vendorSurface: 'codex',
+    connectorId: `${agentId}:local`,
+    runtimeKind: 'local',
+    capabilities: [],
+    tools: [],
+    supportedTaskIntents: ['feature_delivery'],
+    permissions: {
+      defaultFileEffect: 'deny',
+      pathRules: [],
+      toolRules: [],
+      allowNetwork: true,
+      allowShell: true,
+      allowGitWrite: true,
+      allowPrCreation: false,
+      allowSecretsAccess: false,
+      maxParallelSubagents: 1,
+      writeLockRequired: true,
+    },
+    approvalPolicy: { mode: 'policy', requiredRules: [], allowAutoApprovalForLowRisk: false },
+    memoryScope: 'repo',
+    cwdPolicy: { mode: 'repo_root', allowedRoots: ['/workspace/repo'] },
+    health: { status: 'healthy', checkedAt: '2026-06-13T00:00:00.000Z' },
+    lastSeenAt: '2026-06-13T00:00:00.000Z',
+  };
+}
 
 describe('AgentOsController run event ingestion', () => {
   it('projects embedded runtime evidence from appended run events', async () => {
@@ -168,6 +198,83 @@ describe('AgentOsController approval loop', () => {
       'recoder.approval.requested',
       'recoder.approval.approved',
     ]);
+  });
+});
+
+describe('AgentOsController run handoff', () => {
+  it('reassigns a run to a new agent, preserves state, and records a handoff event', async () => {
+    const repository = new InMemoryAgentOsRepository();
+    await repository.upsertAgent(healthyAgent('codex'));
+    await repository.upsertAgent(healthyAgent('claude'));
+    const run: TaskRun = {
+      runId: 'run-handoff',
+      taskId: 'task-handoff',
+      spaceId: 'space-handoff',
+      state: 'running',
+      assigneeAgentId: 'codex',
+      updatedAt: '2026-06-13T10:00:00.000Z',
+    };
+    await repository.upsertRun(run);
+
+    const controller = new AgentOsController(repository);
+    const response = createResponse();
+    await controller.handoffRun({
+      params: { runId: 'run-handoff' },
+      body: {
+        toAgentId: 'claude',
+        reason: 'Codex hit a blocker; routing to Claude.',
+        handoffPrompt: 'Continue run-handoff from the current branch state.',
+        requestedBy: 'pm-user',
+      },
+    } as unknown as Request, response.res);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body?.data).toMatchObject({
+      runId: 'run-handoff',
+      assigneeAgentId: 'claude',
+      state: 'running',
+    });
+    expect(response.body?.data.metadata.lastHandoff).toMatchObject({
+      fromAgentId: 'codex',
+      toAgentId: 'claude',
+      requestedBy: 'pm-user',
+    });
+
+    const events = await repository.listEvents();
+    const handoff = events.find((event) => event.type === 'handoff');
+    expect(handoff).toMatchObject({
+      type: 'handoff',
+      runId: 'run-handoff',
+      agentId: 'claude',
+      data: { fromAgentId: 'codex', toAgentId: 'claude', requestedBy: 'pm-user' },
+    });
+
+    const outboxTypes = (await repository.listOutbox()).map((record) => record.event.type);
+    expect(outboxTypes).toContain('recoder.run.handoff');
+  });
+
+  it('rejects handoff to an unknown agent', async () => {
+    const repository = new InMemoryAgentOsRepository();
+    const run: TaskRun = {
+      runId: 'run-handoff-2',
+      taskId: 'task-handoff-2',
+      spaceId: 'space-handoff-2',
+      state: 'running',
+      assigneeAgentId: 'codex',
+      updatedAt: '2026-06-13T10:00:00.000Z',
+    };
+    await repository.upsertRun(run);
+
+    const controller = new AgentOsController(repository);
+    const response = createResponse();
+    await controller.handoffRun({
+      params: { runId: 'run-handoff-2' },
+      body: { toAgentId: 'ghost' },
+    } as unknown as Request, response.res);
+
+    expect(response.statusCode).toBe(404);
+    expect(response.body?.success).toBe(false);
+    expect(response.body?.error).toContain('agent not found');
   });
 });
 

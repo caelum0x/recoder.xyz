@@ -16,7 +16,9 @@ export function mapRunEventToCloudEvent(event: RunEvent) {
               ? 'recoder.verification.completed'
               : event.type === 'approval_requested'
                 ? 'recoder.approval.requested'
-                : 'recoder.run.log.appended';
+                : event.type === 'handoff'
+                  ? 'recoder.run.handoff'
+                  : 'recoder.run.log.appended';
 
   return createRecoderCloudEvent({
     id: event.eventId,

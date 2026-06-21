@@ -8,6 +8,7 @@ export type RunEventType =
   | 'needs_input'
   | 'verified'
   | 'approval_requested'
+  | 'handoff'
   | 'failed'
   | 'completed';
 
