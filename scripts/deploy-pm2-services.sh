@@ -24,7 +24,6 @@ SYNC_PATHS=(
   "recoder-agency"
   "recoder-agents"
   "recoder-pm"
-  "recoder-studio"
 )
 
 RSYNC_EXCLUDES=(
@@ -217,7 +216,7 @@ require_http_status() {
 build_auth_workspace
 build_app "recoder-app" "$REMOTE_DIR/app" "./app" "pnpm exec prisma generate"
 build_app "recoder-agents" "$REMOTE_DIR/recoder-agents" "./recoder-agents"
-build_app "recoder-studio" "$REMOTE_DIR/recoder-studio" "./recoder-studio"
+# recoder-studio removed (abandoned) — see docs/direction.md
 build_app "recoder-pm" "$REMOTE_DIR/recoder-pm/apps/app" "./recoder-pm/apps/app"
 build_app "recoder-agency" "$REMOTE_DIR/recoder-agency/apps/agency" "./recoder-agency/apps/agency"
 
