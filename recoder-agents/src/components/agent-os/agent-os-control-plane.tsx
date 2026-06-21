@@ -1088,12 +1088,47 @@ export function AgentOsControlPlane() {
                 </section>
                 <section>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Handoff state
+                    Active handoffs
                   </p>
-                  <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    {(snapshot?.handoffs ?? []).length} handoff records in this
-                    workspace
+                  <div className="mt-2 space-y-2">
+                    {(snapshot?.handoffs ?? []).length === 0 ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        No active handoffs in this workspace.
+                      </div>
+                    ) : (
+                      (snapshot?.handoffs ?? []).slice(0, 5).map((handoff) => {
+                        const fromAgent = String(
+                          handoff.fromAgentId ?? 'unassigned',
+                        );
+                        const toAgent = String(handoff.toAgentId ?? 'unassigned');
+                        return (
+                          <div
+                            key={String(
+                              handoff.handoffId ?? `${fromAgent}:${toAgent}`,
+                            )}
+                            className="rounded border px-3 py-2 text-sm"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate font-medium">
+                                {fromAgent} → {toAgent}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 rounded px-2 py-0.5 text-[11px]"
+                              >
+                                {String(handoff.status ?? 'active')}
+                              </Badge>
+                            </div>
+                            {handoff.intent ? (
+                              <p className="mt-1 truncate text-xs text-muted-foreground">
+                                {String(handoff.intent)}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </section>
               </CardContent>
