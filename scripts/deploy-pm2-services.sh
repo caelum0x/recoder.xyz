@@ -218,6 +218,7 @@ build_app "recoder-app" "$REMOTE_DIR/app" "./app" "pnpm exec prisma generate"
 build_app "recoder-agents" "$REMOTE_DIR/recoder-agents" "./recoder-agents"
 # recoder-studio removed (abandoned) — see docs/direction.md
 build_app "recoder-pm" "$REMOTE_DIR/recoder-pm/apps/app" "./recoder-pm/apps/app"
+# recoder-agency is FROZEN (keep building, no new feature investment) — see recoder-agency/FROZEN.md
 build_app "recoder-agency" "$REMOTE_DIR/recoder-agency/apps/agency" "./recoder-agency/apps/agency"
 
 echo "--- Reload PM2 ecosystem ---"
