@@ -291,6 +291,17 @@ export function AgentOsControlPlane() {
     () => agentOsRuns.find((run) => run.runId === selectedRunId) ?? null,
     [agentOsRuns, selectedRunId],
   );
+  // Group runs by task; agentOsRuns is already sorted updatedAt desc, so the
+  // first run for each task id is its latest run.
+  const runsByTaskId = useMemo(() => {
+    const map = new Map<string, AgentOsRunSummary[]>();
+    for (const run of agentOsRuns) {
+      const existing = map.get(run.taskId);
+      if (existing) existing.push(run);
+      else map.set(run.taskId, [run]);
+    }
+    return map;
+  }, [agentOsRuns]);
   useEffect(() => {
     if (agentOsRuns.length === 0) {
       if (selectedRunId !== null) setSelectedRunId(null);
@@ -997,41 +1008,70 @@ export function AgentOsControlPlane() {
                     No tasks in this workspace yet.
                   </p>
                 ) : (
-                  tasks.slice(0, 8).map((task) => (
-                    <div key={task.id} className="rounded-lg border p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {task.prompt || task.id}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {task.assignee_agent_id || 'unassigned'}
-                          </p>
+                  tasks.slice(0, 8).map((task) => {
+                    const resolvedTaskId = task.taskId || task.id || '';
+                    const taskRuns = runsByTaskId.get(resolvedTaskId) ?? [];
+                    const latestRun = taskRuns[0];
+                    const isSelected =
+                      !!latestRun &&
+                      taskRuns.some((run) => run.runId === selectedRunId);
+                    return (
+                      <button
+                        key={task.id}
+                        type="button"
+                        disabled={!latestRun}
+                        onClick={() =>
+                          latestRun && setSelectedRunId(latestRun.runId)
+                        }
+                        aria-pressed={isSelected}
+                        className={cn(
+                          'w-full rounded-lg border p-3 text-left transition-colors',
+                          latestRun
+                            ? 'hover:bg-muted/50'
+                            : 'cursor-default opacity-90',
+                          isSelected &&
+                            'border-primary/50 bg-primary/5 ring-1 ring-primary/30',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {task.prompt || task.id}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {task.assignee_agent_id || 'unassigned'}
+                            </p>
+                          </div>
+                          <StateBadge state={task.state} />
                         </div>
-                        <StateBadge state={task.state} />
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                        <span className="inline-flex items-center gap-1">
-                          <FileText className="h-3 w-3" />
-                          {task.instructions ? 'bundle' : 'no bundle'}
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <TerminalSquare className="h-3 w-3" />
-                          {task.instructions?.verificationCommands?.length ??
-                            0}{' '}
-                          verify
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Brain className="h-3 w-3" />
-                          {task.memoryCandidates?.length ?? 0} memory
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3" />
-                          {task.runtime?.evidenceCount ?? 0} evidence
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <Workflow className="h-3 w-3" />
+                            {taskRuns.length} run
+                            {taskRuns.length === 1 ? '' : 's'}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            {task.instructions ? 'bundle' : 'no bundle'}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <TerminalSquare className="h-3 w-3" />
+                            {task.instructions?.verificationCommands?.length ??
+                              0}{' '}
+                            verify
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Brain className="h-3 w-3" />
+                            {task.memoryCandidates?.length ?? 0} memory
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            {task.runtime?.evidenceCount ?? 0} evidence
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
