@@ -9,13 +9,16 @@ ACTIVE_SURFACES=(
   "recoder-agents"
   "apps/mobile"
   "apps/desktop"
-  "recoder-studio"
   "recoder-pm"
   "recoder-agency"
   "packages/shared"
   "packages/cli"
 )
 
+# Retired/removed surfaces — see docs/direction.md (2026-06-21):
+# recoder-studio: abandoned, removed from tree.
+# recoder-web: retired (bd recoder-26j7).
+# openclaw: demoted to runtime-adapter source, not a deployed product.
 LEGACY_SURFACES=(
   "production-engine"
   "recoder-chat"
@@ -23,4 +26,7 @@ LEGACY_SURFACES=(
   "recoder-desktop"
   "recoder-extension"
   "browser-extension"
+  "recoder-web"
+  "recoder-studio"
+  "openclaw"
 )
