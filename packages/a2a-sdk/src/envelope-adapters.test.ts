@@ -9,7 +9,7 @@ const legacy = {
   messageId: 'msg-1',
   threadId: 'thread-1',
   createdAt: '2026-05-31T00:00:00.000Z',
-  from: { id: 'agent-web', platform: 'recoder_web', name: 'Web' },
+  from: { id: 'agent-web', platform: 'recoder_app', name: 'Web' },
   to: { id: 'agent-pm', platform: 'recoder_pm', name: 'PM', instanceId: 'pm-iid' },
   intent: 'plan',
   payload: [{ kind: 'text', text: 'hello' }],
@@ -25,7 +25,7 @@ describe('adaptLegacyEnvelopeToTaskEnvelope', () => {
     expect(env.trace_id).toBe('trace-1');
     expect(env.parent_id).toBe('msg-0');
     expect(env.workspace_id).toBe('ws-9');
-    expect(env.requester).toMatchObject({ agent_id: 'agent-web', platform: 'recoder_web' });
+    expect(env.requester).toMatchObject({ agent_id: 'agent-web', platform: 'recoder_app' });
     expect(env.assignee).toMatchObject({ agent_id: 'agent-pm', platform: 'recoder_pm', instance_id: 'pm-iid' });
     expect(env.created_at).toBe('2026-05-31T00:00:00.000Z');
     expect(env.updated_at).toBe('2026-05-31T00:00:00.000Z');

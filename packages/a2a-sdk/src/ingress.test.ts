@@ -8,7 +8,7 @@ const validInput = {
   workspace_id: 'ws-1',
   thread_id: 'th-1',
   trace_id: 'tr-1',
-  requester: { agent_id: 'req-1', platform: 'recoder_web' as const },
+  requester: { agent_id: 'req-1', platform: 'recoder_app' as const },
   assignee: { agent_id: 'asg-1', platform: 'recoder_pm' as const },
   connector: {
     platform: 'recoder_pm' as const,

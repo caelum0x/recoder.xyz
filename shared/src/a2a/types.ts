@@ -9,7 +9,7 @@ export type RecoderAgentPlatform =
   | 'replit'
   | 'codex'
   | 'claude_code'
-  | 'recoder_web'
+  | 'recoder_app'
   | 'recoder_pm'
   | 'recoder_agency'
   | 'recoder_backend'
@@ -146,7 +146,7 @@ export const RECODER_AGENT_PLATFORMS = [
   'replit',
   'codex',
   'claude_code',
-  'recoder_web',
+  'recoder_app',
   'recoder_pm',
   'recoder_agency',
   'recoder_backend',

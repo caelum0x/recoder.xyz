@@ -27,7 +27,7 @@ const logger = createLogger('a2a-agent-registry-middleware');
 const VALID_PLATFORMS = new Set<string>([
   'codex',
   'claude_code',
-  'recoder_web',
+  'recoder_app',
   'recoder_pm',
   'recoder_agency',
   'recoder_backend',
