@@ -43,6 +43,7 @@ import {
 import { OssComponentRegistry } from '@/components/oss';
 import { RunTimeline } from '@/components/agent-os/run-timeline';
 import { GitHubDeliveryPipeline } from '@/components/agent-os/github-delivery-pipeline';
+import { SpacesRepositories } from '@/components/agent-os/spaces-repositories';
 import { useAuth } from '@/components/AuthProvider';
 
 type AgentOsTask = Record<string, unknown> & {
@@ -796,6 +797,22 @@ export function AgentOsControlPlane() {
                 {verificationArtifacts.length} verification artifacts ·{' '}
                 {agentOsApprovals.length} approvals.
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Spaces &amp; Repositories
+              </CardTitle>
+              <CardDescription>
+                Connect GitHub repositories to control-plane Spaces — the
+                &quot;connect repo&quot; step of the task → PR → preview →
+                approval loop.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SpacesRepositories />
             </CardContent>
           </Card>
 
