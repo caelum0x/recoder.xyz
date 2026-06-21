@@ -24,6 +24,8 @@ const missionControlKeys = {
   agentOsSummary: () => ['mission-control', 'agent-os-summary'] as const,
   agentOsRunHistory: (runId: string) =>
     ['mission-control', 'agent-os-run-history', runId] as const,
+  agentOsDeliveryLinks: () =>
+    ['mission-control', 'agent-os-delivery-links'] as const,
 };
 
 export interface MissionControlSummary {
@@ -185,6 +187,64 @@ export interface AgentOsSummary {
   ossComponents: AgentOsOssComponent[];
 }
 
+export type GitHubDeliveryLinkStatus =
+  | 'branch_mapped'
+  | 'pr_open'
+  | 'checks_pending'
+  | 'checks_failed'
+  | 'review_required'
+  | 'ready_for_approval'
+  | 'merged'
+  | 'closed'
+  | 'blocked';
+
+export interface GitHubCheckSummary {
+  name: string;
+  state:
+    | 'success'
+    | 'failure'
+    | 'pending'
+    | 'skipped'
+    | 'cancelled'
+    | 'neutral'
+    | 'action_required';
+  url?: string;
+  completedAt?: string;
+}
+
+export interface GitHubReviewSummary {
+  reviewer: string;
+  state:
+    | 'approved'
+    | 'changes_requested'
+    | 'commented'
+    | 'pending'
+    | 'dismissed';
+  url?: string;
+  submittedAt?: string;
+}
+
+export interface AgentOsGitHubDeliveryLink {
+  linkId: string;
+  taskId: string;
+  runId?: string;
+  spaceId: string;
+  repository: string;
+  branch: string;
+  baseBranch?: string;
+  issueNumber?: number | string;
+  issueUrl?: string;
+  pullRequestUrl?: string;
+  pullRequestNumber?: number | string;
+  previewArtifactIds: string[];
+  checks: GitHubCheckSummary[];
+  reviews: GitHubReviewSummary[];
+  status: GitHubDeliveryLinkStatus;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
 export type AgentOsRunHistoryItemKind =
   | 'run_state'
   | 'run_event'
@@ -344,6 +404,25 @@ export function useAgentOsRunHistory(runId: string | null) {
       throw new Error(res.error?.message || 'Failed to fetch run history');
     },
     enabled: !!runId,
+    refetchInterval: 10_000,
+  });
+}
+
+/**
+ * Fetch GitHub delivery links (branch → PR → checks → review → ready_for_approval
+ * → merged) so the control plane can show real PR delivery status for the
+ * task → artifact → PR pipeline.
+ */
+export function useAgentOsDeliveryLinks() {
+  return useQuery({
+    queryKey: missionControlKeys.agentOsDeliveryLinks(),
+    queryFn: async () => {
+      const res = await dockerBackendApi.get<AgentOsGitHubDeliveryLink[]>(
+        '/api/agent-os/github/delivery-links',
+      );
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to fetch delivery links');
+    },
     refetchInterval: 10_000,
   });
 }
