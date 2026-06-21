@@ -29,14 +29,17 @@ import { cn } from '@/lib/utils';
 import { useCapabilities } from '@/hooks/use-capabilities';
 import { useWorkspaces } from '@/hooks/workspaces/use-workspaces';
 import {
+  useAgentOsApprovalDecision,
   useAgentOsSummary,
   useControlPlaneSnapshot,
+  type AgentOsApprovalSummary,
   type AgentOsDeliveryArtifact,
   type AgentOsRunSummary,
   type AgentOsWorkSignal,
 } from '@/hooks/workspaces/use-mission-control';
 import { OssComponentRegistry } from '@/components/oss';
 import { RunTimeline } from '@/components/agent-os/run-timeline';
+import { useAuth } from '@/components/AuthProvider';
 
 type AgentOsTask = Record<string, unknown> & {
   id?: string;
@@ -200,6 +203,26 @@ export function AgentOsControlPlane() {
   } = useControlPlaneSnapshot(workspaceId);
   const { data: agentOsSummary } = useAgentOsSummary();
   const { data: capabilities } = useCapabilities();
+  const { user } = useAuth();
+  const approvalDecision = useAgentOsApprovalDecision();
+
+  const decidingApprovalId = approvalDecision.isPending
+    ? approvalDecision.variables?.approvalId
+    : undefined;
+  const decideApproval = (
+    approval: AgentOsApprovalSummary,
+    decision: 'approved' | 'rejected',
+  ) => {
+    if (approvalDecision.isPending) return;
+    approvalDecision.mutate({
+      approvalId: approval.approvalId,
+      decision,
+      decidedBy: user?.email || user?.id || 'agent-os-operator',
+      runId: approval.runId,
+    });
+  };
+  const isPendingApproval = (status: string) =>
+    status === 'pending' || status === 'escalated';
 
   useEffect(() => {
     if (!workspaceId && workspaces[0]?.workspaceId) {
@@ -628,6 +651,13 @@ export function AgentOsControlPlane() {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Approval Gate
                 </p>
+                {approvalDecision.isError ? (
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    {approvalDecision.error instanceof Error
+                      ? approvalDecision.error.message
+                      : 'Approval decision failed.'}
+                  </p>
+                ) : null}
                 {agentOsApprovals.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No Agent OS approvals visible yet.
@@ -652,6 +682,29 @@ export function AgentOsControlPlane() {
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                         {approval.reason}
                       </p>
+                      {isPendingApproval(approval.status) ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={approvalDecision.isPending}
+                            onClick={() => decideApproval(approval, 'approved')}
+                          >
+                            {decidingApprovalId === approval.approvalId
+                              ? 'Saving…'
+                              : 'Approve'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            disabled={approvalDecision.isPending}
+                            onClick={() => decideApproval(approval, 'rejected')}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 )}
