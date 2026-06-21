@@ -82,6 +82,7 @@ export type RunCockpitCard = {
   artifactCount: number;
   runtimeEvidenceCount: number;
   approvalCount: number;
+  openWorkSignalCount: number;
   updatedAt: string;
 };
 
@@ -104,7 +105,9 @@ export type WorkSignalCockpitCard = {
   status: WorkSignal['status'];
   detectedReason: WorkSignal['detectedReason'];
   source: WorkSignal['source'];
+  whyItMatters: string;
   recommendedNextAction: string;
+  agentHandoffPrompt: string;
   detectedAt: string;
 };
 
@@ -290,6 +293,11 @@ export function buildAgentOsCockpitSummary(
         approval =>
           approval.runId === run.runId || approval.taskId === run.taskId
       ).length,
+      openWorkSignalCount: workSignals.filter(
+        signal =>
+          signal.status === 'open' &&
+          (signal.runId === run.runId || signal.taskId === run.taskId)
+      ).length,
       updatedAt: run.updatedAt,
     })),
     approvals: approvals.map(approval => ({
@@ -310,7 +318,9 @@ export function buildAgentOsCockpitSummary(
       status: signal.status,
       detectedReason: signal.detectedReason,
       source: signal.source,
+      whyItMatters: signal.whyItMatters,
       recommendedNextAction: signal.recommendedNextAction,
+      agentHandoffPrompt: signal.agentHandoffPrompt,
       detectedAt: signal.detectedAt,
     })),
     instructionBundles: instructionBundles.map(bundle => ({

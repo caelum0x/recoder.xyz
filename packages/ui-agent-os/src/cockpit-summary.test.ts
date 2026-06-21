@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Artifact, RuntimeEvidence } from '@recoder/agent-os';
+import type { Artifact, RuntimeEvidence, TaskRun, WorkSignal } from '@recoder/agent-os';
 import { buildAgentOsCockpitSummary } from './cockpit-summary';
 
 test('buildAgentOsCockpitSummary projects compact instruction bundle artifact metadata', () => {
@@ -152,6 +152,7 @@ test('buildAgentOsCockpitSummary projects paid-user delivery evidence cards', ()
       createdAt: '2026-06-13T10:03:00.000Z',
       createdBy: 'codex',
     },
+
     {
       artifactId: 'artifact-preview-1',
       taskId: 'task-1',
@@ -183,6 +184,56 @@ test('buildAgentOsCockpitSummary projects paid-user delivery evidence cards', ()
       passed: true,
       createdAt: '2026-06-13T10:03:00.000Z',
       createdBy: 'codex',
+    },
+  ]);
+});
+
+test('buildAgentOsCockpitSummary surfaces handoff work signals and flags runs that carry them', () => {
+  const run: TaskRun = {
+    runId: 'run-1',
+    taskId: 'task-1',
+    spaceId: 'space-1',
+    state: 'waiting_for_approval',
+    assigneeAgentId: 'codex',
+    updatedAt: '2026-06-13T10:08:00.000Z',
+  };
+  const signal: WorkSignal = {
+    signalId: 'signal-1',
+    taskId: 'task-1',
+    runId: 'run-1',
+    source: 'task_run',
+    sourceId: 'run-1',
+    title: 'Run is waiting for human approval',
+    severity: 'high',
+    status: 'open',
+    detectedReason: 'waiting_for_approval',
+    whyItMatters: 'Delivery is blocked until a human approves before the PR merges.',
+    recommendedNextAction: 'Review and approve the pending gate.',
+    agentHandoffPrompt: 'Approve or reject the pending before_pr gate for run-1.',
+    detectedAt: '2026-06-13T10:08:30.000Z',
+  };
+
+  const summary = buildAgentOsCockpitSummary({
+    runs: [run],
+    workSignals: [signal],
+    now: '2026-06-13T10:09:00.000Z',
+  });
+
+  assert.equal(summary.runs[0]?.openWorkSignalCount, 1);
+  assert.deepEqual(summary.workSignals, [
+    {
+      signalId: 'signal-1',
+      taskId: 'task-1',
+      runId: 'run-1',
+      title: 'Run is waiting for human approval',
+      severity: 'high',
+      status: 'open',
+      detectedReason: 'waiting_for_approval',
+      source: 'task_run',
+      whyItMatters: 'Delivery is blocked until a human approves before the PR merges.',
+      recommendedNextAction: 'Review and approve the pending gate.',
+      agentHandoffPrompt: 'Approve or reject the pending before_pr gate for run-1.',
+      detectedAt: '2026-06-13T10:08:30.000Z',
     },
   ]);
 });
