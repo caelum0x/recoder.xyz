@@ -21,7 +21,6 @@ const DEFAULT_PATHS = [
   '/Users/arhansubasi/recoder.xyz/apps/desktop',
   '/Users/arhansubasi/recoder.xyz/apps/frontend',
   '/Users/arhansubasi/recoder.xyz/apps/mobile',
-  '/Users/arhansubasi/recoder.xyz/recoder-studio',
   UI_RECODER_WORKSPACE_PATH,
   '/Users/arhansubasi/recoder.xyz/backend',
   '/Users/arhansubasi/recoder.xyz/docker-backend',
@@ -35,16 +34,14 @@ const DEFAULT_PATHS = [
 const LANE_CATALOG: SubagentLane[] = [
   {
     laneId: 'E1',
-    title: 'Ecosystem app chain (mobile -> studio -> frontend -> app)',
+    title: 'Ecosystem app chain (mobile -> frontend -> app)',
     paths: [
       '/Users/arhansubasi/recoder.xyz/apps/mobile',
-      '/Users/arhansubasi/recoder.xyz/recoder-studio',
       '/Users/arhansubasi/recoder.xyz/apps/frontend',
       '/Users/arhansubasi/recoder.xyz/app',
     ],
     validationCommands: [
       'pnpm -C /Users/arhansubasi/recoder.xyz/apps/mobile run typecheck',
-      'pnpm -C /Users/arhansubasi/recoder.xyz/recoder-studio run typecheck',
       'pnpm -C /Users/arhansubasi/recoder.xyz/apps/frontend run typecheck',
       'pnpm -C /Users/arhansubasi/recoder.xyz/app run typecheck',
     ],
@@ -75,15 +72,6 @@ const LANE_CATALOG: SubagentLane[] = [
       'pnpm -C /Users/arhansubasi/recoder.xyz/apps/frontend run typecheck',
       'pnpm -C /Users/arhansubasi/recoder.xyz/apps/mobile run typecheck',
     ],
-  },
-  {
-    laneId: 'A4',
-    title: 'Studio and ui.recoder.xyz',
-    paths: [
-      '/Users/arhansubasi/recoder.xyz/recoder-studio',
-      UI_RECODER_WORKSPACE_PATH,
-    ],
-    validationCommands: ['pnpm -C /Users/arhansubasi/recoder.xyz/recoder-studio run check'],
   },
   {
     laneId: 'A5',
