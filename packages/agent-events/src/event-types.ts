@@ -7,6 +7,7 @@ export const RECODER_AGENT_EVENT_TYPES = [
   'recoder.task.claimed',
   'recoder.run.started',
   'recoder.run.log.appended',
+  'recoder.run.handoff',
   'recoder.artifact.created',
   'recoder.approval.requested',
   'recoder.approval.approved',
