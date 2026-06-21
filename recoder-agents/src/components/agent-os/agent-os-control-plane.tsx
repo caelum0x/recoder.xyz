@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
@@ -210,6 +211,12 @@ export function AgentOsControlPlane() {
   const { user } = useAuth();
   const approvalDecision = useAgentOsApprovalDecision();
   const resolveWorkSignal = useAgentOsResolveWorkSignal();
+  const queryClient = useQueryClient();
+
+  const refreshAll = () => {
+    refetch();
+    queryClient.invalidateQueries({ queryKey: ['mission-control'] });
+  };
 
   const resolvingSignalId = resolveWorkSignal.isPending
     ? resolveWorkSignal.variables?.signalId
@@ -376,7 +383,7 @@ export function AgentOsControlPlane() {
           </select>
           <Button
             variant="outline"
-            onClick={() => refetch()}
+            onClick={refreshAll}
             disabled={!workspaceId || isFetching}
           >
             <RefreshCw
