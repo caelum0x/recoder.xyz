@@ -44,6 +44,7 @@ import { OssComponentRegistry } from '@/components/oss';
 import { RunTimeline } from '@/components/agent-os/run-timeline';
 import { GitHubDeliveryPipeline } from '@/components/agent-os/github-delivery-pipeline';
 import { SpacesRepositories } from '@/components/agent-os/spaces-repositories';
+import { EventOutbox } from '@/components/agent-os/event-outbox';
 import { useAuth } from '@/components/AuthProvider';
 
 type AgentOsTask = Record<string, unknown> & {
@@ -850,6 +851,19 @@ export function AgentOsControlPlane() {
                 runId={selectedRun?.runId ?? null}
                 runTitle={selectedRun?.title || selectedRun?.taskId}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Event Outbox</CardTitle>
+              <CardDescription>
+                CloudEvents queued for control-plane delivery (NATS/JetStream
+                drain), with pending, published, and failed status.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <EventOutbox />
             </CardContent>
           </Card>
 
