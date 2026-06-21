@@ -30,6 +30,7 @@ import { useCapabilities } from '@/hooks/use-capabilities';
 import { useWorkspaces } from '@/hooks/workspaces/use-workspaces';
 import {
   useAgentOsApprovalDecision,
+  useAgentOsDeliveryLinks,
   useAgentOsSummary,
   useControlPlaneSnapshot,
   type AgentOsApprovalSummary,
@@ -39,6 +40,7 @@ import {
 } from '@/hooks/workspaces/use-mission-control';
 import { OssComponentRegistry } from '@/components/oss';
 import { RunTimeline } from '@/components/agent-os/run-timeline';
+import { GitHubDeliveryPipeline } from '@/components/agent-os/github-delivery-pipeline';
 import { useAuth } from '@/components/AuthProvider';
 
 type AgentOsTask = Record<string, unknown> & {
@@ -202,6 +204,7 @@ export function AgentOsControlPlane() {
     isFetching,
   } = useControlPlaneSnapshot(workspaceId);
   const { data: agentOsSummary } = useAgentOsSummary();
+  const { data: deliveryLinks } = useAgentOsDeliveryLinks();
   const { data: capabilities } = useCapabilities();
   const { user } = useAuth();
   const approvalDecision = useAgentOsApprovalDecision();
@@ -717,6 +720,26 @@ export function AgentOsControlPlane() {
                 {verificationArtifacts.length} verification artifacts ·{' '}
                 {agentOsApprovals.length} approvals.
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                GitHub Delivery Pipeline
+              </CardTitle>
+              <CardDescription>
+                Branch → PR → checks → review → ready for approval → merged
+                status for connected repositories. Open a PR to drill into its
+                run timeline.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <GitHubDeliveryPipeline
+                links={deliveryLinks}
+                taskIds={taskIds}
+                onSelectRun={setSelectedRunId}
+              />
             </CardContent>
           </Card>
 
