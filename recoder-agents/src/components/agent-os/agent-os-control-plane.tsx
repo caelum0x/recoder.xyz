@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { useCapabilities } from '@/hooks/use-capabilities';
 import { useWorkspaces } from '@/hooks/workspaces/use-workspaces';
 import {
+  useActivityTimeline,
   useAgentOsApprovalDecision,
   useAgentOsDeliveryLinks,
   useAgentOsResolveWorkSignal,
@@ -221,6 +222,32 @@ export function AgentOsControlPlane() {
     queryClient.invalidateQueries({ queryKey: ['mission-control'] });
   };
 
+  // Live updates: subscribe to the workspace event stream and invalidate the
+  // mission-control queries when control-plane events arrive, throttled so a
+  // burst of events triggers at most one refetch per window.
+  const [liveActive, setLiveActive] = useState(false);
+  const liveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleLiveEvent = useCallback(() => {
+    setLiveActive(true);
+    if (liveThrottleRef.current) return;
+    liveThrottleRef.current = setTimeout(() => {
+      liveThrottleRef.current = null;
+      queryClient.invalidateQueries({ queryKey: ['mission-control'] });
+    }, 1500);
+  }, [queryClient]);
+  useEffect(() => {
+    return () => {
+      if (liveThrottleRef.current) {
+        clearTimeout(liveThrottleRef.current);
+        liveThrottleRef.current = null;
+      }
+    };
+  }, []);
+  useEffect(() => {
+    setLiveActive(false);
+  }, [workspaceId]);
+  useActivityTimeline(workspaceId, handleLiveEvent);
+
   const resolvingSignalId = resolveWorkSignal.isPending
     ? resolveWorkSignal.variables?.signalId
     : undefined;
@@ -376,6 +403,29 @@ export function AgentOsControlPlane() {
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {workspaceId ? (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium',
+                liveActive
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'border-muted-foreground/30 text-muted-foreground',
+              )}
+              title={
+                liveActive
+                  ? 'Receiving live control-plane events'
+                  : 'Waiting for live control-plane events'
+              }
+            >
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  liveActive ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
+                )}
+              />
+              {liveActive ? 'Live' : 'Idle'}
+            </span>
+          ) : null}
           <select
             value={workspaceId ?? ''}
             onChange={(event) => setWorkspaceId(event.target.value || null)}
