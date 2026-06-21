@@ -79,7 +79,7 @@ function makeSelfRegisterInput(overrides: Partial<SelfRegisterInput> = {}): Self
   return {
     agentId: 'self-agent',
     name: 'Self Agent',
-    platform: 'recoder_web',
+    platform: 'recoder_app',
     ...overrides,
   };
 }
@@ -257,7 +257,7 @@ describe('AgentRegistryService', () => {
   describe('discover', () => {
     beforeEach(() => {
       service.register(makeRegisterInput({
-        identity: { id: 'agent-rest', name: 'REST Agent', platform: 'recoder_web' },
+        identity: { id: 'agent-rest', name: 'REST Agent', platform: 'recoder_app' },
         protocol: 'rest',
         tier: 'tier1',
         tags: ['web'],
@@ -500,10 +500,10 @@ describe('AgentRegistryService', () => {
     it('registers with minimal config using platform defaults', () => {
       const agent = service.selfRegister(makeSelfRegisterInput());
       expect(agent.identity.id).toBe('self-agent');
-      expect(agent.identity.platform).toBe('recoder_web');
+      expect(agent.identity.platform).toBe('recoder_app');
       expect(agent.protocol).toBe('rest');
       expect(agent.tier).toBe('tier1');
-      expect(agent.card.description).toBe('Recoder Web application');
+      expect(agent.card.description).toBe('Recoder App application');
       expect(agent.card.skills.length).toBeGreaterThan(0);
     });
 
@@ -564,9 +564,9 @@ describe('AgentRegistryService', () => {
 
     it('registers recoder-web with correct platform', () => {
       service.registerDefaults();
-      const web = service.get('recoder-web');
+      const web = service.get('recoder-app');
       expect(web).toBeDefined();
-      expect(web!.identity.platform).toBe('recoder_web');
+      expect(web!.identity.platform).toBe('recoder_app');
       expect(web!.protocol).toBe('rest');
     });
 
@@ -800,7 +800,7 @@ describe('Agent Registry Middleware', () => {
       const req = makeMockReq({
         agentId: 'agent-1',
         name: 'Agent 1',
-        platform: 'recoder_web',
+        platform: 'recoder_app',
       });
       const res = makeMockRes();
       const next = makeMockNext();
@@ -1018,14 +1018,14 @@ describe('Agent Registry Workflow', () => {
   it('complete lifecycle: register -> discover -> heartbeat -> health -> unregister', () => {
     // 1. Register
     const agent = service.register(makeRegisterInput({
-      identity: { id: 'lifecycle-agent', name: 'Lifecycle Agent', platform: 'recoder_web' },
+      identity: { id: 'lifecycle-agent', name: 'Lifecycle Agent', platform: 'recoder_app' },
       protocol: 'rest',
       tags: ['lifecycle'],
     }));
     expect(agent.identity.id).toBe('lifecycle-agent');
 
     // 2. Discover by platform
-    const discovered = service.discover({ platform: 'recoder_web' });
+    const discovered = service.discover({ platform: 'recoder_app' });
     expect(discovered).toHaveLength(1);
     expect(discovered[0].identity.id).toBe('lifecycle-agent');
 
@@ -1047,7 +1047,7 @@ describe('Agent Registry Workflow', () => {
     expect(withHealth!.lifecycle.registrationCount).toBe(1);
 
     // 6b. Discover with health should include lifecycle metadata
-    const enrichedDiscovery = service.discoverWithHealth({ platform: 'recoder_web' });
+    const enrichedDiscovery = service.discoverWithHealth({ platform: 'recoder_app' });
     expect(enrichedDiscovery[0]?.lifecycle.lastSeenAt).toBeTruthy();
 
     // 7. Unregister
@@ -1055,7 +1055,7 @@ describe('Agent Registry Workflow', () => {
 
     // 8. Verify removal
     expect(service.get('lifecycle-agent')).toBeUndefined();
-    expect(service.discover({ platform: 'recoder_web' })).toHaveLength(0);
+    expect(service.discover({ platform: 'recoder_app' })).toHaveLength(0);
   });
 
   it('self-register then discover by generated card properties', () => {
@@ -1063,7 +1063,7 @@ describe('Agent Registry Workflow', () => {
     const agent = service.selfRegister({
       agentId: 'my-web-agent',
       name: 'My Web Agent',
-      platform: 'recoder_web',
+      platform: 'recoder_app',
       tags: ['custom-tag'],
     });
 
@@ -1084,8 +1084,8 @@ describe('Agent Registry Workflow', () => {
     service.registerDefaults();
 
     // recoder-web should be discoverable by platform
-    const webAgents = service.discover({ platform: 'recoder_web' });
-    expect(webAgents.some(a => a.identity.id === 'recoder-web')).toBe(true);
+    const webAgents = service.discover({ platform: 'recoder_app' });
+    expect(webAgents.some(a => a.identity.id === 'recoder-app')).toBe(true);
 
     // recoder-pm should be discoverable
     const pmAgents = service.discover({ platform: 'recoder_pm' });

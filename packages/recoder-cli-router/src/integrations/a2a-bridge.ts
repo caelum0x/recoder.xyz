@@ -19,7 +19,7 @@ export interface A2AConfig {
 export type AgentId =
   | 'codex'
   | 'claude_code'
-  | 'recoder_web'
+  | 'recoder_app'
   | 'recoder_agents'
   | 'recoder_pm'
   | 'recoder_agency'
@@ -318,7 +318,7 @@ export class A2ABridge {
       return 'recoder_agency';
     }
     if (lower.includes('web') || lower.includes('frontend') || lower.includes('react') || lower.includes('deploy')) {
-      return 'recoder_web';
+      return 'recoder_app';
     }
     if (lower.includes('agent') || lower.includes('workflow') || lower.includes('automate') || lower.includes('pipeline')) {
       return 'recoder_agents';

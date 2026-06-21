@@ -277,7 +277,7 @@ describe('CursorConnectorRuntime', () => {
     const execPromise = runtime.executeTask({
       taskId: 'task-001',
       prompt: 'fix the bug',
-      requester: { id: 'test-user', name: 'Tester', platform: 'recoder_web' },
+      requester: { id: 'test-user', name: 'Tester', platform: 'recoder_app' },
     });
 
     // Get the written request and respond
@@ -298,7 +298,7 @@ describe('CursorConnectorRuntime', () => {
     const result = await runtime.executeTask({
       taskId: 'task-002',
       prompt: 'do something',
-      requester: { id: 'test', name: 'Test', platform: 'recoder_web' },
+      requester: { id: 'test', name: 'Test', platform: 'recoder_app' },
     });
 
     expect(result.success).toBe(false);

@@ -207,7 +207,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        target_agent: { type: 'string', description: 'Target agent ID (codex, claude_code, recoder_web, recoder_agency, recoder_pm, recoder_backend)' },
+        target_agent: { type: 'string', description: 'Target agent ID (codex, claude_code, recoder_app, recoder_agency, recoder_pm, recoder_backend)' },
         task: { type: 'string', description: 'Task description' },
         intent: { type: 'string', enum: ['execute', 'plan', 'handoff', 'tool_call'], default: 'execute' },
       },
@@ -251,7 +251,7 @@ const TOOLS = [
   },
   {
     name: 'recoder_inbox',
-    description: 'Check inbound tasks assigned to this agent via the A2A bridge. Shows pending tasks from other agents (Codex, recoder_web, etc).',
+    description: 'Check inbound tasks assigned to this agent via the A2A bridge. Shows pending tasks from other agents (Codex, recoder_app, etc).',
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {

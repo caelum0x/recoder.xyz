@@ -137,7 +137,7 @@ describe('OpencodeConnectorRuntime', () => {
       prompt: 'Fix the failing test',
       cwd: '/workspace/project',
       model: 'openrouter/anthropic/claude-sonnet-4',
-      requester: { id: 'recoder-web', name: 'Recoder Web', platform: 'custom' },
+      requester: { id: 'recoder-app', name: 'Recoder App', platform: 'custom' },
       providerKeys: { openrouter: 'or-key' },
     });
     await Promise.resolve();
@@ -206,7 +206,7 @@ describe('OpencodeConnectorRuntime', () => {
     const pendingResult = runtime.executeTask({
       taskId: 'task-2',
       prompt: 'Keep working',
-      requester: { id: 'recoder-web', name: 'Recoder Web', platform: 'custom' },
+      requester: { id: 'recoder-app', name: 'Recoder App', platform: 'custom' },
     });
     await Promise.resolve();
 

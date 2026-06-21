@@ -235,7 +235,7 @@ describe('A2A routes HTTP E2E (socket-backed)', () => {
         config: {
           workspaceId: 'ws_1',
           threadId: 'thr_1',
-          requester: { agent_id: 'u1', platform: 'recoder_web' },
+          requester: { agent_id: 'u1', platform: 'recoder_app' },
         },
         input: {
           kind: 'direct-handoff',

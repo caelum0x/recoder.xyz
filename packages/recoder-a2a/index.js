@@ -297,7 +297,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        target_agent: { type: 'string', description: 'Target agent ID (codex, claude_code, recoder_web, recoder_agency, recoder_pm, recoder_backend)' },
+        target_agent: { type: 'string', description: 'Target agent ID (codex, claude_code, recoder_app, recoder_agency, recoder_pm, recoder_backend)' },
         task: { type: 'string', description: 'Task description' },
         intent: { type: 'string', enum: ['execute', 'plan', 'handoff', 'tool_call'], default: 'execute' },
       },

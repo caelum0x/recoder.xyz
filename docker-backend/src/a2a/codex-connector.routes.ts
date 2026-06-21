@@ -119,7 +119,7 @@ codexConnectorRouter.post('/execute', async (req: Request, res: Response) => {
         thread_id: req.body.thread_id || generateId('thr'),
         requester: {
           agent_id: requester?.id || 'api-caller',
-          platform: requester?.platform || 'recoder_web',
+          platform: requester?.platform || 'recoder_app',
           name: requester?.name || 'API Caller',
         },
         assignee: {
@@ -153,7 +153,7 @@ codexConnectorRouter.post('/execute', async (req: Request, res: Response) => {
       requester: {
         id: requester?.id || 'api-caller',
         name: requester?.name || 'API Caller',
-        platform: requester?.platform || 'recoder_web',
+        platform: requester?.platform || 'recoder_app',
       },
       artifacts,
     };

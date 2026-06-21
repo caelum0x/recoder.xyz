@@ -142,7 +142,7 @@ describe('opencode-connector.routes /execute', () => {
       const res = await request(app, 'POST', '/api/a2a/connectors/opencode/execute', {
         prompt: 'Fix the bug',
         projectId: 'proj_centralized',
-        requester: { id: 'test-caller', name: 'Test', platform: 'recoder_web' },
+        requester: { id: 'test-caller', name: 'Test', platform: 'recoder_app' },
       });
 
       expect(res.status).toBe(200);

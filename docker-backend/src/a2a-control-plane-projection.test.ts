@@ -89,7 +89,7 @@ describe('A2A control-plane task projection', () => {
           messageId: 'msg-control-plane-projection',
           threadId: 'thread-control-plane-projection',
           intent: 'execute',
-          from: { id: 'web', platform: 'recoder_web' },
+          from: { id: 'web', platform: 'recoder_app' },
           to: { id: 'codex', platform: 'codex' },
           payload: [{ kind: 'text', text: 'ship a patch' }],
           metadata: {
@@ -107,8 +107,8 @@ describe('A2A control-plane task projection', () => {
       thread_id: 'thread-control-plane-projection',
       trace_id: 'trace-control-plane-projection',
       requester: {
-        agent_id: 'recoder_web',
-        platform: 'recoder_web',
+        agent_id: 'recoder_app',
+        platform: 'recoder_app',
       },
       assignee: {
         agent_id: 'codex',

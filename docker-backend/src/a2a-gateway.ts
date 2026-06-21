@@ -105,7 +105,7 @@ const VALID_RECORDER_INTENTS = new Set([
 const VALID_RECORDER_PLATFORMS = new Set([
   'codex',
   'claude_code',
-  'recoder_web',
+  'recoder_app',
   'recoder_pm',
   'recoder_agency',
   'recoder_backend',
@@ -227,7 +227,7 @@ export type EnvelopeValidationIssue = A2AEnvelopeValidationIssue;
 type GatewayAgentPlatform =
   | 'codex'
   | 'claude_code'
-  | 'recoder_web'
+  | 'recoder_app'
   | 'recoder_pm'
   | 'recoder_agency'
   | 'recoder_backend'
