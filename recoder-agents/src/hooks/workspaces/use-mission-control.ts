@@ -1,6 +1,10 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import {
   dockerBackendApi,
@@ -341,6 +345,46 @@ export function useAgentOsRunHistory(runId: string | null) {
     },
     enabled: !!runId,
     refetchInterval: 10_000,
+  });
+}
+
+export interface AgentOsApprovalDecisionInput {
+  approvalId: string;
+  decision: 'approved' | 'rejected';
+  decidedBy: string;
+  reason?: string;
+  runId?: string;
+}
+
+/**
+ * Decide a pending Agent OS approval (approve or reject) and refresh the shared
+ * summary + affected run-history timeline so the gate result is visible
+ * immediately. Backs the human-in-the-loop approval gate in the control plane.
+ */
+export function useAgentOsApprovalDecision() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AgentOsApprovalDecisionInput) => {
+      const res = await dockerBackendApi.post<{
+        approval: AgentOsApprovalSummary;
+        run?: AgentOsRunSummary;
+      }>(`/api/agent-os/approvals/${input.approvalId}/${input.decision}`, {
+        decidedBy: input.decidedBy,
+        reason: input.reason,
+      });
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to record approval decision');
+    },
+    onSuccess: (_data, input) => {
+      queryClient.invalidateQueries({
+        queryKey: missionControlKeys.agentOsSummary(),
+      });
+      if (input.runId) {
+        queryClient.invalidateQueries({
+          queryKey: missionControlKeys.agentOsRunHistory(input.runId),
+        });
+      }
+    },
   });
 }
 
