@@ -2,9 +2,6 @@ import type { KnipConfig } from "knip";
 
 const config: KnipConfig = {
 	biome: false,
-	ignoreIssues: {
-		"recoder-studio/emails/**/*.tsx": ["duplicates"],
-	},
 	workspaces: {
 		"apps/playground": {
 			ignoreDependencies: [
@@ -14,25 +11,6 @@ const config: KnipConfig = {
 				"happy-dom",
 				"jsdom",
 				"pg",
-			],
-		},
-		"recoder-studio": {
-			entry: ["tests/e2e/global-setup.ts", "emails/**/*.tsx"],
-			ignore: [
-				"scripts/**",
-				"trigger.config.ts",
-				"trigger/investigate-private-key-job.ts",
-			],
-			// Ignore deps that are resolved dynamically in next.config or used only at build/runtime
-			ignoreDependencies: [
-				"@aws-sdk/client-s3",
-				"@embedpdf/pdfium",
-				"import-in-the-middle",
-				"require-in-the-middle",
-				"@react-email/preview-server",
-				"pino-pretty",
-				"prettier",
-				"shiki",
 			],
 		},
 		"apps/ui.giselles.ai": {
