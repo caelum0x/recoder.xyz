@@ -9,6 +9,7 @@ import type {
   RuntimeEvidence,
   TaskRun,
   TaskSpec,
+  WorkSignal,
 } from '../domain';
 import { RunHistoryService } from './run-history-service';
 
@@ -147,6 +148,25 @@ test('RunHistoryService builds one paid-user delivery timeline from control-plan
     },
   ];
 
+  const workSignals: WorkSignal[] = [
+    {
+      signalId: 'signal-waiting-approval',
+      taskId: task.taskId,
+      runId: run.runId,
+      spaceId: task.spaceId,
+      source: 'task_run',
+      sourceId: run.runId,
+      title: 'Run is waiting for human approval',
+      severity: 'high',
+      status: 'open',
+      detectedReason: 'waiting_for_approval',
+      whyItMatters: 'Delivery is blocked until a human approves before the PR merges.',
+      recommendedNextAction: 'Review and approve approval-before-pr.',
+      agentHandoffPrompt: 'Approve or reject the pending before_pr gate for run-1.',
+      detectedAt: '2026-06-13T10:08:30.000Z',
+    },
+  ];
+
   const history = new RunHistoryService().build({
     run,
     task,
@@ -156,6 +176,7 @@ test('RunHistoryService builds one paid-user delivery timeline from control-plan
     approvals,
     instructionBundles,
     githubDeliveryLinks,
+    workSignals,
   });
 
   assert.equal(history.counts.instructionBundles, 1);
@@ -163,11 +184,13 @@ test('RunHistoryService builds one paid-user delivery timeline from control-plan
   assert.equal(history.counts.artifacts, 2);
   assert.equal(history.counts.githubDeliveryLinks, 1);
   assert.equal(history.counts.approvals, 1);
+  assert.equal(history.counts.workSignals, 1);
   assert.deepEqual(history.latest.waitingApprovalIds, ['approval-before-pr']);
   assert.deepEqual(history.latest.previewArtifactIds, ['artifact-preview']);
   assert.deepEqual(history.latest.pullRequestArtifactIds, ['artifact-pr']);
   assert.deepEqual(history.latest.runtimeEvidenceIds, ['evidence-verification']);
   assert.deepEqual(history.latest.githubDeliveryLinkIds, ['github-delivery-1']);
+  assert.deepEqual(history.latest.openWorkSignalIds, ['signal-waiting-approval']);
   assert.deepEqual(
     new Set(history.items.map((item) => item.kind)),
     new Set([
@@ -178,6 +201,7 @@ test('RunHistoryService builds one paid-user delivery timeline from control-plan
       'approval',
       'github_delivery_link',
       'run_state',
+      'work_signal',
     ]),
   );
   assert.equal(
@@ -188,4 +212,7 @@ test('RunHistoryService builds one paid-user delivery timeline from control-plan
     history.items.find((item) => item.kind === 'approval')?.severity,
     'warning',
   );
+  const workSignalItem = history.items.find((item) => item.kind === 'work_signal');
+  assert.equal(workSignalItem?.severity, 'warning');
+  assert.equal(workSignalItem?.data?.agentHandoffPrompt, 'Approve or reject the pending before_pr gate for run-1.');
 });
