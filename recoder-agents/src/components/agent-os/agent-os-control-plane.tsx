@@ -45,6 +45,7 @@ import { RunTimeline } from '@/components/agent-os/run-timeline';
 import { GitHubDeliveryPipeline } from '@/components/agent-os/github-delivery-pipeline';
 import { SpacesRepositories } from '@/components/agent-os/spaces-repositories';
 import { EventOutbox } from '@/components/agent-os/event-outbox';
+import { PlanUsageSummary } from '@/components/agent-os/plan-usage-summary';
 import { useAuth } from '@/components/AuthProvider';
 
 type AgentOsTask = Record<string, unknown> & {
@@ -875,6 +876,20 @@ export function AgentOsControlPlane() {
             </CardHeader>
             <CardContent>
               <EventOutbox />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Plan &amp; Usage</CardTitle>
+              <CardDescription>
+                Your plan limits and consumption for the agent work loop — runs,
+                AI workers, and chats — with upgrade prompts when you approach a
+                limit.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PlanUsageSummary />
             </CardContent>
           </Card>
 
