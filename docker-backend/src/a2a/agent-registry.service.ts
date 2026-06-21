@@ -141,11 +141,11 @@ const PLATFORM_DEFAULTS: Record<
         { id: 'code-review', name: 'Code Review', description: 'Review code and architecture', tags: ['code', 'review'] },
       ],
   },
-  recoder_web: {
+  recoder_app: {
     protocol: 'rest',
     tier: 'tier1',
     status: 'supported',
-    description: 'Recoder Web application',
+    description: 'Recoder App application',
     defaultSkills: [
       { id: 'workspace-ui', name: 'Workspace UI', description: 'Human-facing workspace and agent control UI', tags: ['workspace', 'ui'] },
     ],
@@ -211,9 +211,9 @@ export interface DefaultAgentConfig {
 
 export const DEFAULT_AGENTS: DefaultAgentConfig[] = [
   {
-    id: 'recoder-web',
-    name: 'Recoder Web',
-    platform: 'recoder_web',
+    id: 'recoder-app',
+    name: 'Recoder App',
+    platform: 'recoder_app',
     description: 'Human-facing workspace surface for tasks, artifacts, and approvals',
     url: process.env.RECODER_WEB_URL || 'https://recoder.xyz',
     skills: [

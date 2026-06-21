@@ -254,7 +254,7 @@ describe('ReplitConnectorRuntime', () => {
     const result = await runtime.executeTask({
       taskId: 'task-001',
       prompt: 'fix the bug',
-      requester: { id: 'test-user', name: 'Tester', platform: 'recoder_web' },
+      requester: { id: 'test-user', name: 'Tester', platform: 'recoder_app' },
     });
 
     expect(result.success).toBe(true);
@@ -269,7 +269,7 @@ describe('ReplitConnectorRuntime', () => {
     await runtime.executeTask({
       taskId: 'task-002',
       prompt: 'write a test',
-      requester: { id: 'user-1', name: 'User', platform: 'recoder_web' },
+      requester: { id: 'user-1', name: 'User', platform: 'recoder_app' },
       metadata: { priority: 'high' },
     });
 
@@ -302,7 +302,7 @@ describe('ReplitConnectorRuntime', () => {
     const result = await runtime.executeTask({
       taskId: 'task-003',
       prompt: 'do something',
-      requester: { id: 'test', name: 'Test', platform: 'recoder_web' },
+      requester: { id: 'test', name: 'Test', platform: 'recoder_app' },
     });
 
     expect(result.success).toBe(false);
@@ -317,7 +317,7 @@ describe('ReplitConnectorRuntime', () => {
     const result = await runtime.executeTask({
       taskId: 'task-004',
       prompt: 'do something',
-      requester: { id: 'test', name: 'Test', platform: 'recoder_web' },
+      requester: { id: 'test', name: 'Test', platform: 'recoder_app' },
     });
 
     expect(result.success).toBe(false);

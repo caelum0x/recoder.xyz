@@ -53,7 +53,7 @@ export type RecoderAgentPlatform =
   | 'cursor'
   | 'windsurf'
   | 'replit'
-  | 'recoder_web'
+  | 'recoder_app'
   | 'recoder_agents'
   | 'recoder_pm'
   | 'recoder_agency'

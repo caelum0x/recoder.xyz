@@ -13,7 +13,7 @@ function task(overrides: Partial<TaskEnvelope> = {}): TaskEnvelope {
     state: TaskStateEnum.Completed,
     requester: {
       agent_id: 'user_1',
-      platform: 'recoder_web',
+      platform: 'recoder_app',
     },
     assignee: {
       agent_id: 'agent_codex',

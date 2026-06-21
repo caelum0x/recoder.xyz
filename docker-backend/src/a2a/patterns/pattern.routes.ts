@@ -113,7 +113,7 @@ patternRouter.post('/execute', async (req: Request, res: Response) => {
       patternType: patternType as PatternConfig['patternType'],
       workspaceId: config.workspaceId || 'default',
       threadId: config.threadId || `thr-${Date.now()}`,
-      requester: config.requester || { agent_id: 'api-caller', platform: 'recoder_web', name: 'API Caller' },
+      requester: config.requester || { agent_id: 'api-caller', platform: 'recoder_app', name: 'API Caller' },
     };
 
     const result = await pattern.execute(patternConfig, input as PatternInput);

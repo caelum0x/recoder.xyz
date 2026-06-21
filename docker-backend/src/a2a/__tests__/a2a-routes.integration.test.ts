@@ -323,7 +323,7 @@ describe('A2A route integrations', () => {
       method: 'POST',
       body: JSON.stringify({
         taskId: 't_bundle',
-        requester: { id: 'api-caller', platform: 'recoder_web', name: 'API Caller' },
+        requester: { id: 'api-caller', platform: 'recoder_app', name: 'API Caller' },
         instructionBundle: {
           shared_goal: 'Fix signup crash',
           agent_specific_prompt: 'Read AGENTS.md and fix signup crash.',
@@ -476,7 +476,7 @@ describe('A2A route integrations', () => {
         config: {
           workspaceId: 'ws_1',
           threadId: 'thr_1',
-          requester: { agent_id: 'u1', platform: 'recoder_web' },
+          requester: { agent_id: 'u1', platform: 'recoder_app' },
         },
         input: {
           kind: 'direct-handoff',
@@ -531,7 +531,7 @@ describe('A2A route integrations', () => {
     const created = lifecycle.createTask({
       workspace_id: 'ws_sse',
       thread_id: 'thr_sse',
-      requester: { agent_id: 'req', platform: 'recoder_web' },
+      requester: { agent_id: 'req', platform: 'recoder_app' },
       assignee: { agent_id: 'asg', platform: 'codex' },
       connector: { connector_id: 'codex-cli', platform: 'codex', protocol: 'jsonrpc' },
       payload: { kind: 'text', text: 'test' },

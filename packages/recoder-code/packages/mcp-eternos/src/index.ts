@@ -4083,7 +4083,7 @@ const rawTools: any[] = [
   // ── Recoder A2A Tools ──
   {
     name: "recoder_list_agents",
-    description: "List all agents connected to the Recoder A2A platform (codex, claude_code, recoder_web, etc.)",
+    description: "List all agents connected to the Recoder A2A platform (codex, claude_code, recoder_app, etc.)",
     inputSchema: z.object({}),
   },
   {
@@ -4095,7 +4095,7 @@ const rawTools: any[] = [
     name: "recoder_send_task",
     description: "Send a task to another agent on the Recoder platform via A2A protocol",
     inputSchema: z.object({
-      target_agent: z.string().describe("Target agent ID (codex, claude_code, recoder_web, recoder_agents)"),
+      target_agent: z.string().describe("Target agent ID (codex, claude_code, recoder_app, recoder_agents)"),
       task: z.string().describe("Task description"),
       capability: z.enum(["execute", "plan", "edit"]).default("execute"),
     }),

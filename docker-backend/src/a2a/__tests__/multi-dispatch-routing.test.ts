@@ -25,13 +25,13 @@ describe('deriveRoutingPlan', () => {
       runtimeCategory: 'visual',
       requiredCapabilities: ['web-interface'],
       preferredCapabilities: ['ui'],
-      preferredPlatform: 'recoder_web',
+      preferredPlatform: 'recoder_app',
     });
 
     expect(plan.runtimeCategory).toBe('visual');
     expect(plan.requirements.requiredCapabilities).toEqual(['web-interface']);
     expect(plan.requirements.preferredCapabilities).toEqual(['ui']);
-    expect(plan.requirements.preferredPlatform).toBe('recoder_web');
+    expect(plan.requirements.preferredPlatform).toBe('recoder_app');
   });
 
   it('falls back to a general routing plan for ambiguous prompts', () => {

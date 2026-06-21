@@ -11,7 +11,7 @@ exports.RECODER_A2A_ENVELOPE_TEXT_PREFIX = 'recoder.a2a.envelope:';
 exports.RECODER_AGENT_PLATFORMS = [
     'codex',
     'claude_code',
-    'recoder_web',
+    'recoder_app',
     'recoder_pm',
     'recoder_agency',
     'recoder_backend',
