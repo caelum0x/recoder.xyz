@@ -27,6 +27,7 @@ export function createAgentOsRouter(): Router {
   router.get('/runs/:runId/history', controller.runHistory);
   router.post('/runs/:runId/claim', controller.claimRun);
   router.post('/runs/:runId/transition', controller.transitionRun);
+  router.post('/runs/:runId/handoff', controller.handoffRun);
   router.post('/runs/:runId/verification-results', controller.createVerificationResult);
   router.get('/approvals', controller.approvals);
   router.post('/approvals', controller.upsertApproval);

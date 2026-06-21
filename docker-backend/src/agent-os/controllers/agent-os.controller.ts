@@ -6,6 +6,7 @@ import {
   ArtifactService,
   GitHubDeliveryService,
   isAllowedTaskRunTransition,
+  isTerminalTaskRunState,
   MemoryService,
   RuntimeEvidenceService,
   RunHistoryService,
@@ -230,6 +231,16 @@ export class AgentOsController {
       res.json({ success: true, data: run });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'run_transition_failed';
+      res.status(message.includes('not found') ? 404 : 409).json({ success: false, error: message });
+    }
+  };
+
+  handoffRun = async (req: Request, res: Response) => {
+    try {
+      const run = await this.markHandoffRun(req.params.runId, req.body);
+      res.json({ success: true, data: run });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'run_handoff_failed';
       res.status(message.includes('not found') ? 404 : 409).json({ success: false, error: message });
     }
   };
@@ -1282,6 +1293,77 @@ export class AgentOsController {
       assigneeAgentId: agentId,
     });
     await this.appendStateTransitionEvent(run.state, updated, 'run_claim', { agentId });
+    return updated;
+  }
+
+  private async markHandoffRun(runId: string, body: Record<string, unknown>): Promise<TaskRun> {
+    const toAgentId = requiredString(body.toAgentId ?? body.assigneeAgentId, 'toAgentId');
+    const run = (await this.repository.listRuns()).find((candidate) => candidate.runId === runId);
+    if (!run) {
+      throw new Error(`run not found: ${runId}`);
+    }
+    if (isTerminalTaskRunState(run.state)) {
+      throw new Error(`cannot hand off a run in terminal state ${run.state}`);
+    }
+
+    const toAgent = (await this.repository.listAgents()).find((candidate) => candidate.agentId === toAgentId);
+    if (!toAgent) {
+      throw new Error(`agent not found: ${toAgentId}`);
+    }
+    if (toAgent.health.status !== 'healthy' && toAgent.health.status !== 'degraded') {
+      throw new Error(`agent health is ${toAgent.health.status}`);
+    }
+
+    const task = (await this.repository.listTasks()).find((candidate) => candidate.taskId === run.taskId);
+    if (task && !supportsAgentIntent(toAgent, task.intent)) {
+      throw new Error(`agent does not support task intent ${task.intent}`);
+    }
+
+    const fromAgentId = run.assigneeAgentId;
+    const now = optionalString(body.now) ?? new Date().toISOString();
+    const reason = optionalString(body.reason);
+    const handoffPrompt = optionalString(body.handoffPrompt);
+    const requestedBy = optionalString(body.requestedBy) ?? optionalString(body.agentId) ?? 'agent-os';
+
+    // State is preserved on handoff: ownership, artifacts, approvals, and history
+    // stay attached to the same run; only the assignee changes.
+    const updated = await this.repository.upsertRun({
+      ...run,
+      assigneeAgentId: toAgentId,
+      updatedAt: now,
+      metadata: {
+        ...(run.metadata ?? {}),
+        lastHandoff: {
+          fromAgentId: fromAgentId ?? null,
+          toAgentId,
+          reason: reason ?? null,
+          handoffPrompt: handoffPrompt ?? null,
+          requestedBy,
+          handedOffAt: now,
+        },
+      },
+    });
+
+    const event: RunEvent = {
+      eventId: `event_${run.runId}_handoff_${Date.now()}`,
+      type: 'handoff',
+      taskId: run.taskId,
+      runId: run.runId,
+      agentId: toAgentId,
+      state: updated.state,
+      message: `Run handed off ${fromAgentId ?? 'unassigned'} -> ${toAgentId}`,
+      createdAt: now,
+      data: {
+        fromAgentId: fromAgentId ?? null,
+        toAgentId,
+        reason: reason ?? null,
+        handoffPrompt: handoffPrompt ?? null,
+        requestedBy,
+      },
+    };
+    (await this.repository.appendEvent(event));
+    await this.appendRunEventOutbox(event);
+    await this.appendTaskRunOutbox(updated);
     return updated;
   }
 
