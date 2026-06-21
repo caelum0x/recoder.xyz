@@ -16,15 +16,18 @@ import {
   Workflow,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
+  useAgentOsApprovalDecision,
   useAgentOsRunHistory,
   type AgentOsRunHistoryItem,
   type AgentOsRunHistoryItemKind,
   type AgentOsRunHistoryItemSeverity,
 } from '@/hooks/workspaces/use-mission-control';
+import { useAuth } from '@/components/AuthProvider';
 
 const KIND_ICON: Record<AgentOsRunHistoryItemKind, typeof Workflow> = {
   run_state: Workflow,
@@ -98,15 +101,30 @@ function primaryLink(
   return null;
 }
 
+function isPendingApprovalItem(item: AgentOsRunHistoryItem): boolean {
+  if (item.kind !== 'approval') return false;
+  const status = item.data?.status;
+  return status === 'pending' || status === 'escalated';
+}
+
 function TimelineRow({
   item,
   isLast,
+  onDecide,
+  decidingApprovalId,
+  decisionPending,
 }: {
   item: AgentOsRunHistoryItem;
   isLast: boolean;
+  onDecide?: (approvalId: string, decision: 'approved' | 'rejected') => void;
+  decidingApprovalId?: string;
+  decisionPending?: boolean;
 }) {
   const Icon = KIND_ICON[item.kind] ?? CircleDot;
   const link = primaryLink(item);
+  const approvalId = item.refs?.approvalId;
+  const canDecide =
+    !!onDecide && !!approvalId && isPendingApprovalItem(item);
   return (
     <li className="relative flex gap-3 pb-4 last:pb-0">
       {!isLast && (
@@ -161,6 +179,27 @@ function TimelineRow({
             </a>
           ) : null}
         </div>
+        {canDecide && approvalId ? (
+          <div className="mt-2 flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-7 px-2 text-xs"
+              disabled={decisionPending}
+              onClick={() => onDecide?.(approvalId, 'approved')}
+            >
+              {decidingApprovalId === approvalId ? 'Saving…' : 'Approve'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs"
+              disabled={decisionPending}
+              onClick={() => onDecide?.(approvalId, 'rejected')}
+            >
+              Reject
+            </Button>
+          </div>
+        ) : null}
       </div>
     </li>
   );
@@ -177,6 +216,24 @@ export interface RunTimelineProps {
  */
 export function RunTimeline({ runId, runTitle }: RunTimelineProps) {
   const { data, isLoading, isError, error } = useAgentOsRunHistory(runId);
+  const { user } = useAuth();
+  const approvalDecision = useAgentOsApprovalDecision();
+
+  const decidingApprovalId = approvalDecision.isPending
+    ? approvalDecision.variables?.approvalId
+    : undefined;
+  const handleDecide = (
+    approvalId: string,
+    decision: 'approved' | 'rejected',
+  ) => {
+    if (approvalDecision.isPending) return;
+    approvalDecision.mutate({
+      approvalId,
+      decision,
+      decidedBy: user?.email || user?.id || 'agent-os-operator',
+      runId: runId ?? undefined,
+    });
+  };
 
   if (!runId) {
     return (
@@ -260,6 +317,9 @@ export function RunTimeline({ runId, runTitle }: RunTimelineProps) {
               key={item.itemId}
               item={item}
               isLast={index === data.items.length - 1}
+              onDecide={handleDecide}
+              decidingApprovalId={decidingApprovalId}
+              decisionPending={approvalDecision.isPending}
             />
           ))}
         </ol>
