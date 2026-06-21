@@ -11,6 +11,7 @@ import type {
   TaskRun,
   TaskSpec,
   WorkLock,
+  WorkSignal,
 } from '../domain';
 
 export type RunHistoryItemKind =
@@ -24,7 +25,8 @@ export type RunHistoryItemKind =
   | 'memory_item'
   | 'instruction_bundle'
   | 'github_delivery_link'
-  | 'work_lock';
+  | 'work_lock'
+  | 'work_signal';
 
 export type RunHistoryItemSeverity = 'info' | 'success' | 'warning' | 'block';
 
@@ -54,6 +56,7 @@ export type BuildRunHistoryInput = {
   instructionBundles?: InstructionBundle[];
   githubDeliveryLinks?: GitHubDeliveryLink[];
   workLocks?: WorkLock[];
+  workSignals?: WorkSignal[];
 };
 
 export type RunHistory = {
@@ -71,6 +74,7 @@ export type RunHistory = {
     instructionBundles: number;
     githubDeliveryLinks: number;
     workLocks: number;
+    workSignals: number;
   };
   latest: {
     state: TaskRun['state'];
@@ -82,6 +86,7 @@ export type RunHistory = {
     pullRequestArtifactIds: string[];
     runtimeEvidenceIds: string[];
     githubDeliveryLinkIds: string[];
+    openWorkSignalIds: string[];
   };
 };
 
@@ -106,6 +111,7 @@ export class RunHistoryService {
     });
     const githubDeliveryLinks = (input.githubDeliveryLinks ?? []).filter((link) => isTaskOrRunLinked(link, taskId, run.runId));
     const workLocks = (input.workLocks ?? []).filter((lock) => lock.taskId === taskId);
+    const workSignals = (input.workSignals ?? []).filter((signal) => isTaskOrRunLinked(signal, taskId, run.runId));
 
     const items = [
       this.runStateItem(run),
@@ -119,6 +125,7 @@ export class RunHistoryService {
       ...instructionBundles.map((bundle) => this.instructionBundleItem(bundle, run.runId)),
       ...githubDeliveryLinks.map((link) => this.githubDeliveryLinkItem(link, run.runId)),
       ...workLocks.map((lock) => this.workLockItem(lock, run.runId)),
+      ...workSignals.map((signal) => this.workSignalItem(signal, run.runId)),
     ].sort(compareHistoryItems);
 
     const lastEventAt = items.length > 0 ? items[items.length - 1]?.createdAt : undefined;
@@ -131,6 +138,9 @@ export class RunHistoryService {
     const pullRequestArtifactIds = artifacts
       .filter((artifact) => artifact.kind === 'pull_request')
       .map((artifact) => artifact.artifactId);
+    const openWorkSignalIds = workSignals
+      .filter((signal) => signal.status === 'open')
+      .map((signal) => signal.signalId);
 
     return {
       run,
@@ -147,6 +157,7 @@ export class RunHistoryService {
         instructionBundles: instructionBundles.length,
         githubDeliveryLinks: githubDeliveryLinks.length,
         workLocks: workLocks.length,
+        workSignals: workSignals.length,
       },
       latest: {
         state: run.state,
@@ -158,6 +169,7 @@ export class RunHistoryService {
         pullRequestArtifactIds,
         runtimeEvidenceIds: runtimeEvidence.map((evidence) => evidence.evidenceId),
         githubDeliveryLinkIds: githubDeliveryLinks.map((link) => link.linkId),
+        openWorkSignalIds,
       },
     };
   }
@@ -438,6 +450,36 @@ export class RunHistoryService {
       },
     };
   }
+
+  private workSignalItem(signal: WorkSignal, fallbackRunId: string): RunHistoryItem {
+    return {
+      itemId: `work_signal:${signal.signalId}`,
+      kind: 'work_signal',
+      taskId: signal.taskId,
+      runId: signal.runId ?? fallbackRunId,
+      createdAt: signal.resolvedAt ?? signal.detectedAt,
+      title: `Work signal: ${signal.detectedReason}`,
+      summary: signal.title,
+      severity: workSignalSeverity(signal),
+      refs: {
+        signalId: signal.signalId,
+        source: signal.source,
+        sourceId: signal.sourceId,
+      },
+      data: {
+        severity: signal.severity,
+        status: signal.status,
+        detectedReason: signal.detectedReason,
+        whyItMatters: signal.whyItMatters,
+        recommendedNextAction: signal.recommendedNextAction,
+        agentHandoffPrompt: signal.agentHandoffPrompt,
+        detectedAt: signal.detectedAt,
+        resolvedAt: signal.resolvedAt,
+        resolvedBy: signal.resolvedBy,
+        metadata: signal.metadata,
+      },
+    };
+  }
 }
 
 function isTaskOrRunLinked(value: { taskId: string; runId?: string }, taskId: string, runId: string): boolean {
@@ -525,6 +567,19 @@ function artifactSummary(artifact: Artifact): string | undefined {
     return artifact.contentHash;
   }
   return undefined;
+}
+
+function workSignalSeverity(signal: WorkSignal): RunHistoryItemSeverity {
+  if (signal.status === 'resolved') {
+    return 'success';
+  }
+  if (signal.severity === 'critical') {
+    return 'block';
+  }
+  if (signal.severity === 'high') {
+    return 'warning';
+  }
+  return 'info';
 }
 
 function runtimeEvidenceSeverity(status: RuntimeEvidence['status']): RunHistoryItemSeverity {
