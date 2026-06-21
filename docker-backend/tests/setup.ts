@@ -5,8 +5,21 @@
 
 import { vi, beforeAll, afterAll, afterEach, beforeEach } from 'vitest';
 import type { Request, Response, NextFunction } from 'express';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 // ==================== Environment Setup ====================
+
+// Isolate JSON persistence (src/persistence.ts reads process.env.DATA_DIR at
+// module load) into a throwaway temp dir per worker. This stops tests from
+// reading/writing the git-tracked data/*.json runtime-state files, which
+// otherwise leak accumulated local state across tests (e.g. a2a-events.json,
+// a2a-agent-registry.json) and cause order-dependent flakes. Must run before
+// any source module is imported, which setupFiles guarantees.
+if (!process.env.DATA_DIR) {
+  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'recoder-backend-test-'));
+}
 
 // Set test environment
 process.env.NODE_ENV = 'test';
