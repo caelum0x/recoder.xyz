@@ -27,6 +27,7 @@ const missionControlKeys = {
   agentOsDeliveryLinks: () =>
     ['mission-control', 'agent-os-delivery-links'] as const,
   agentOsSpaces: () => ['mission-control', 'agent-os-spaces'] as const,
+  agentOsOutbox: () => ['mission-control', 'agent-os-outbox'] as const,
 };
 
 export interface MissionControlSummary {
@@ -186,6 +187,29 @@ export interface AgentOsSummary {
   runtimeEvidence: AgentOsRuntimeEvidence[];
   deliveryArtifacts: AgentOsDeliveryArtifact[];
   ossComponents: AgentOsOssComponent[];
+}
+
+export type AgentOsOutboxStatus =
+  | 'pending'
+  | 'published'
+  | 'failed'
+  | 'discarded';
+
+export interface AgentOsOutboxRecord {
+  outboxId: string;
+  status: AgentOsOutboxStatus;
+  attempts: number;
+  createdAt: string;
+  updatedAt: string;
+  lastError?: string;
+  event: {
+    id: string;
+    type: string;
+    source: string;
+    subject: string;
+    time: string;
+    data?: Record<string, unknown>;
+  };
 }
 
 export interface AgentOsSpaceRepository {
@@ -423,6 +447,24 @@ export function useAgentOsRunHistory(runId: string | null) {
       throw new Error(res.error?.message || 'Failed to fetch run history');
     },
     enabled: !!runId,
+    refetchInterval: 10_000,
+  });
+}
+
+/**
+ * Fetch the Agent OS CloudEvent outbox so the operator can see pending /
+ * published / failed control-plane event delivery for the launch loop.
+ */
+export function useAgentOsOutbox() {
+  return useQuery({
+    queryKey: missionControlKeys.agentOsOutbox(),
+    queryFn: async () => {
+      const res = await dockerBackendApi.get<AgentOsOutboxRecord[]>(
+        '/api/agent-os/outbox',
+      );
+      if (res.success && res.data) return res.data;
+      throw new Error(res.error?.message || 'Failed to fetch event outbox');
+    },
     refetchInterval: 10_000,
   });
 }
