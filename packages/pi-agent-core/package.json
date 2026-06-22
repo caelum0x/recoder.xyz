@@ -1,0 +1,34 @@
+{
+  "name": "@recoder/pi-agent-core",
+  "version": "0.78.0",
+  "description": "Recoder-owned vendor of pi pi-agent-core (merged from earendil-works/pi).",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo node_modules"
+  },
+  "dependencies": {
+    "@recoder/pi-ai": "workspace:*",
+    "ignore": "7.0.5",
+    "typebox": "1.1.38",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "@types/node": "catalog:"
+  }
+}
