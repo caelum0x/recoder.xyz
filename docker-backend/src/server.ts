@@ -65,6 +65,7 @@ import { appKeysRouter } from './public-api/routes/app-keys.js';
 import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
+import { createConductorRouter } from './conductor/conductor.routes.js';
 import { startAgentOsOutboxDrainLoop } from './agent-os/outbox-drain-loop.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
 import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, agentRegistryRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
@@ -15665,6 +15666,8 @@ app.use('/api/v1/projects', projectRouter);
 // runs, approvals, artifacts, memory, instructions, policy, events, workflows.
 app.use('/api/agent-os', authenticateRequest, createAgentOsRouter());
 app.use('/internal/agent-os', createInternalAgentOsRouter());
+// Recoder Conductor — parallel agent sessions (tmux + git worktrees). The pivot product.
+app.use('/api/conductor', authenticateRequest, createConductorRouter());
 
 // Identity token endpoints (requires API key auth, but /verify uses app key auth internally)
 app.use('/api/v1/identity', identityRouter);
