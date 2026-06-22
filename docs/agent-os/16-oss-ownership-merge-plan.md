@@ -46,19 +46,20 @@ package, keeping the monorepo green at every step:
 | daytona | `@recoder/sandbox-daytona` + `@recoder/daytona-api-client` + `@recoder/daytona-toolbox-api-client` (OTel neutralized) | vendor-package | **DONE** — owned + wired into docker-backend daytona-client hub (`daytona-sdk.ts`, opt-in via DAYTONA_USE_SDK) |
 | a2a-js | `@recoder/a2a-sdk` (proto + types) + `@recoder/a2a-js` (server/client) | extract + vendor | **DONE** — CanonicalA2A types in a2a-sdk; owned A2A server runs docker-backend's standard A2A server (external @a2a-js/sdk removed) |
 | mem0 (deepen) | `@recoder/mem0` | — | **DONE** — also powers GET /api/agent-os/memory/search (semantic recall) |
-| pal-mcp-server | `@recoder/pal` | sidecar (Python) | adapter exists; deepen |
+| pal-mcp-server | `@recoder/pal` | sidecar (Python) | adapter exists; Python sidecar (cannot be TS-vendored; "no thin HTTP adapter" => sidecar is the model) |
 | GitNexus | `/git-nexus` | lib | **DONE** — wired into agent-os (/tasks/:id/context-pack via git-context.ts) |
 | beads | `@recoder/beads-adapter` (`bd`) | adopt | wired for issue tracking |
 | recoder-a2a | `@recoder/recoder-a2a` | adopt | published; route via bridge queue |
 | daytona-projects | `@recoder/sandbox-daytona` (see above) | vendor-package | **DONE** (see daytona row above) |
 | E2B | — | drop | EMPTY clone in tree; nothing to vendor |
-| stagehand | `/browser-stagehand` | adopt | TODO — custom esbuild build, from-scratch consumer |
-| agent-browser | `@recoder/browser-cdp` (Rust sidecar) | sidecar | socket adapter → evidence |
-| opencode | `@recoder/runtime-opencode` | extract types/session | runtime adapter |
+| stagehand | `@recoder/browser-stagehand` | adopt | TODO (focused) — multi-step build: gen-version + build-dom-scripts (browser-injected DOM scripts) + tsc; not tsup-replaceable; consumer is a facade (from-scratch wiring) |
+| agent-browser | `@recoder/browser-cdp` (Rust sidecar) | sidecar | TODO (focused) — Rust CDP daemon; needs built binary + socket adapter |
+| opencode | `@recoder/runtime-opencode` | extract types/session | TODO (focused) — Bun-coupled monorepo; no clean TS core to extract without Bun runtime |
 | pi | `/pi-{ai,agent-core,tui,coding-agent}` | vendor-packages | **DONE** — used in docker-backend A2A pi adapter + recoder-code `pi` command |
 | openclaw | `@recoder/gateway-openclaw` | adapt (adapter exists) | channel→capability scopes |
-| polar | billing wiring of `polar-webhook` | adopt | wire to usage/entitlement events |
-| ziti | `ziti-*` (already wired) | sidecar | connectivity for runners |
+| polar | billing wiring of `polar-webhook` | adopt | **DONE** — resolveUserTier + GET /api/billing/tier (subscription→tier→limits) |
+| openclaw | a2a-openclaw-adapter.ts | adapt | **integrated** — 718-line social-channel gateway adapter in docker-backend |
+| ziti | `ziti-*` (already wired) | sidecar | **integrated** — connectivity for runners |
 | context7 | `@recoder/context7-sdk` | vendor-package | **DONE** — GET /api/context7/docs (owned live-docs SDK) |
 | ollama / vllm | — | **DEFER** | 16GB/no-GPU box; cloud LLM + on-box Qdrant |
 
