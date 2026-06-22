@@ -623,3 +623,10 @@ check-errors.sh
 
 # Ephemeral workflow worktrees
 .claude/worktrees/
+
+# OSS merge: owned @recoder/a2a-js lives under packages/ — re-include it (the
+# broad `a2a-js/` rule above is for the root vendored clone, not the owned pkg).
+!packages/a2a-js/
+!packages/a2a-js/**
+packages/a2a-js/node_modules/
+packages/a2a-js/dist/
