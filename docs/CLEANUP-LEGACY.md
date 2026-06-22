@@ -28,9 +28,11 @@ Backend routes/stores that exist only for the web-IDE/web-builder product:
 
 | Module | Path | Action |
 | --- | --- | --- |
-| Visual editing | `src/visual-editing-transform.ts`, `src/style-utils.ts` | remove |
-| Themes | `src/integrations/{theme-store,theme-generator,builtin-themes}.ts` | remove |
-| Web-IDE DB integrations | `src/integrations/{supabase-client,neon-client,vercel-store}.ts` | remove (web-builder only) |
+| Visual editing | `src/visual-editing-transform.ts`, `src/style-utils.ts` | **DONE** (7dfd5995) |
+| Themes | `src/integrations/{theme-store,theme-generator,builtin-themes}.ts` | **DONE** (27d5ef64) |
+| Vercel | `src/integrations/vercel-store.ts` | **DONE** (a49c0018) |
+| Supabase | `src/integrations/supabase-client.ts` | **DONE** (6c8375c4) |
+| Neon | `src/integrations/neon-client.ts` | **DEFERRED** — coupled to snapshot/version-restore (server.ts:6025); decide whether version-time-travel stays before removing |
 | Prompt library | `src/integrations/prompt-store.ts` | review (may be reused for task specs) |
 | Integration store | `src/integrations/integration-store.ts` | review (per-user creds — check non-web-builder use) |
 
