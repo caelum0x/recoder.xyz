@@ -3,8 +3,15 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  Plug,
+  ClipboardList,
+  Play,
+  ShieldCheck,
+  GitPullRequest,
+  ArrowRight,
+} from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { useIsMobile } from '@/hooks/utils';
 import {
   Dialog,
   DialogContent,
@@ -15,147 +22,100 @@ import {
 } from '@/components/ui/dialog';
 import { useTranslations } from 'next-intl';
 import { trackCtaSignup } from '@/lib/analytics/gtm';
-import { useAgentStartInput } from '@/hooks/dashboard';
-import { ChatInput } from '@/components/thread/chat-input/chat-input';
-import { DynamicGreeting } from '@/components/ui/dynamic-greeting';
 
-// Lazy load heavy components
-const RecoderModesPanel = lazy(() => 
-  import('@/components/dashboard/recoder-modes-panel').then(mod => ({ default: mod.RecoderModesPanel }))
-);
 const GoogleSignIn = lazy(() => import('@/components/GoogleSignIn'));
 
 const BlurredDialogOverlay = () => (
   <DialogOverlay className="bg-background/40 backdrop-blur-md" />
 );
 
+// The Agent OS loop — what users actually do with Recoder.
+const LOOP = [
+  { icon: Plug, label: 'Connect an agent', detail: 'Claude Code, Codex, Recoder Code, or your own runtime' },
+  { icon: ClipboardList, label: 'Assign a task', detail: 'Recoder compiles a task spec + instruction bundle' },
+  { icon: Play, label: 'Agent runs under policy', detail: 'Sandboxed work, verification, runtime evidence' },
+  { icon: GitPullRequest, label: 'PR + preview', detail: 'Real delivery artifacts, not chat replies' },
+  { icon: ShieldCheck, label: 'You approve', detail: 'First-class approval gates + full audit trail' },
+];
+
 export function HeroSection() {
-  const t = useTranslations('dashboard');
   const tAuth = useTranslations('auth');
-  const isMobile = useIsMobile();
   const router = useRouter();
   const { user, isLoading } = useAuth();
-  
+
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
-  
-  // Close auth dialog and redirect when user logs in
+
   useEffect(() => {
     if (authDialogOpen && user && !isLoading) {
       setAuthDialogOpen(false);
-      router.push('/dashboard');
+      router.push('/agent-os');
     }
   }, [user, isLoading, authDialogOpen, router]);
-  
-  const handleAuthRequired = (pendingMessage: string) => {
-    trackCtaSignup();
-    setAuthDialogOpen(true);
+
+  // Primary CTA: into the control plane when signed in, else open auth.
+  const openControlPlane = () => {
+    if (user) {
+      router.push('/agent-os');
+    } else {
+      trackCtaSignup();
+      setAuthDialogOpen(true);
+    }
   };
 
-  // Use the agent start input hook for state management (same as dashboard)
-  const {
-    inputValue,
-    setInputValue,
-    isSubmitting,
-    isRedirecting,
-    chatInputRef,
-    selectedAgentId,
-    setSelectedAgent,
-    selectedMode,
-    selectedCharts,
-    selectedOutputFormat,
-    selectedTemplate,
-    setSelectedMode,
-    setSelectedCharts,
-    setSelectedOutputFormat,
-    setSelectedTemplate,
-    handleSubmit,
-  } = useAgentStartInput({
-    redirectOnError: '/',
-    requireAuth: true,
-    onAuthRequired: handleAuthRequired,
-    enableAutoSubmit: true,
-    logPrefix: '[HeroSection]',
-  });
-  
   return (
-    <section id="hero" className="w-full h-dvh relative overflow-hidden">
-      <div className="flex flex-col h-full w-full overflow-hidden relative">
-        {/* Low-contrast product mark background for the hero surface */}
-        <div 
-          className="absolute inset-0 pointer-events-none overflow-hidden"
-          aria-hidden="true"
-        >
-          <img
-            src="/icon.png"
-            alt=""
-            className="absolute left-1/2 -translate-x-1/2 top-[-10%] sm:top-1/2 sm:-translate-y-1/2 w-[120vw] min-w-[640px] h-auto sm:w-[132vw] sm:min-w-[880px] md:min-w-[1040px] lg:w-[140vw] lg:min-w-[1320px] object-contain select-none opacity-[0.06] dark:opacity-[0.08]"
-            draggable={false}
-          />
+    <section id="hero" className="w-full min-h-dvh relative overflow-hidden">
+      {/* Low-contrast product mark background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+        <img
+          src="/icon.png"
+          alt=""
+          className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-[120vw] min-w-[640px] h-auto object-contain select-none opacity-[0.05] dark:opacity-[0.07]"
+          draggable={false}
+        />
+      </div>
+
+      <div className="relative z-[1] mx-auto flex min-h-dvh max-w-5xl flex-col items-center justify-center px-6 py-20 text-center">
+        <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-muted/30 px-4 py-1.5 text-sm text-muted-foreground">
+          Agent OS · the control plane for AI agents
         </div>
 
-        {/* Main content area - greeting and modes centered */}
-        <div className="flex-1 flex flex-col relative z-[1]">
-          {/* Centered content: Greeting + Subtitle + Modes
-              - Mobile: shifted up with pb-28 to account for chat input and feel more balanced
-              - Desktop: true center with no offset */}
-          <div className="absolute inset-0 flex items-center justify-center px-4 pb-28 sm:pb-0 pointer-events-none">
-            <div className="w-full max-w-3xl mx-auto flex flex-col items-center text-center pointer-events-auto">
-              {/* Greeting */}
-              <div className="animate-in fade-in-0 slide-in-from-bottom-4 duration-500 fill-mode-both">
-                <DynamicGreeting className="text-2xl sm:text-3xl md:text-4xl font-medium text-foreground tracking-tight" />
-              </div>
-              
-              {/* Subtitle */}
-              <p className="mt-2 sm:mt-3 text-sm sm:text-base text-muted-foreground/70 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-75 fill-mode-both">
-                {t('modeSubtitle')}
-              </p>
-              
-              {/* Modes Panel */}
-              <div className="mt-6 sm:mt-8 w-full animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-150 fill-mode-both">
-                <Suspense fallback={<div className="h-12 bg-muted/10 rounded-lg animate-pulse" />}>
-                  <RecoderModesPanel
-                    selectedMode={selectedMode}
-                    onModeSelect={setSelectedMode}
-                    onSelectPrompt={setInputValue}
-                    isMobile={isMobile}
-                    selectedCharts={selectedCharts}
-                    onChartsChange={setSelectedCharts}
-                    selectedOutputFormat={selectedOutputFormat}
-                    onOutputFormatChange={setSelectedOutputFormat}
-                    selectedTemplate={selectedTemplate}
-                    onTemplateChange={setSelectedTemplate}
-                    isFreeTier={true}
-                    onUpgradeClick={() => {}}
-                  />
-                </Suspense>
-              </div>
-            </div>
-          </div>
+        <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl md:text-6xl">
+          Not another chat box.<br className="hidden sm:block" /> A control plane for agent work.
+        </h1>
 
-          {/* Chat Input - fixed at bottom
-              - Mobile: safe area padding for iOS home indicator */}
-          <div className="absolute bottom-0 left-0 right-0 px-3 sm:px-4 pb-3 sm:pb-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-4 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
-            <div className="w-full max-w-3xl mx-auto">
-              <ChatInput
-                ref={chatInputRef}
-                onSubmit={handleSubmit}
-                placeholder={t('describeWhatYouNeed')}
-                loading={isSubmitting || isRedirecting}
-                disabled={isSubmitting}
-                value={inputValue}
-                onChange={setInputValue}
-                isLoggedIn={!!user}
-                selectedAgentId={selectedAgentId}
-                onAgentSelect={setSelectedAgent}
-                autoFocus={false}
-                enableAdvancedConfig={false}
-                selectedMode={selectedMode}
-                onModeDeselect={() => setSelectedMode(null)}
-                animatePlaceholder={true}
-                hideAttachments={false}
-              />
+        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+          Connect the coding agents your team trusts, assign real software tasks, and ship through
+          PRs, previews, and human approvals — with durable identity, policy, and a full audit trail.
+          Recoder owns the task, runtime, and delivery state; the agents are just the runtime.
+        </p>
+
+        {/* The loop — how users actually use Recoder */}
+        <div className="mt-10 grid w-full gap-3 sm:grid-cols-5">
+          {LOOP.map((step, i) => (
+            <div key={step.label} className="relative rounded-xl border border-border bg-background/40 p-4 text-left">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted/40 text-xs font-semibold text-foreground">{i + 1}</span>
+                <step.icon className="h-4 w-4 text-foreground/80" />
+              </div>
+              <div className="text-sm font-semibold text-foreground">{step.label}</div>
+              <div className="mt-1 text-xs leading-snug text-muted-foreground">{step.detail}</div>
             </div>
-          </div>
+          ))}
+        </div>
+
+        <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
+          <button
+            onClick={openControlPlane}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3.5 text-base font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Open the control plane <ArrowRight className="h-4 w-4" />
+          </button>
+          <Link
+            href="/agents-101"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-7 py-3.5 text-base font-medium hover:bg-accent/40"
+          >
+            How it works
+          </Link>
         </div>
       </div>
 
@@ -164,11 +124,7 @@ export function HeroSection() {
         <BlurredDialogOverlay />
         <DialogContent className="sm:max-w-md rounded-xl bg-background border border-border">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-xl font-medium">
-                {tAuth('signInToContinue')}
-              </DialogTitle>
-            </div>
+            <DialogTitle className="text-xl font-medium">{tAuth('signInToContinue')}</DialogTitle>
             <DialogDescription className="text-muted-foreground">
               {tAuth('signInOrCreateAccountToTalk')}
             </DialogDescription>
@@ -176,40 +132,29 @@ export function HeroSection() {
 
           <div className="w-full space-y-3 mt-8">
             <Suspense fallback={<div className="h-12 bg-muted/20 rounded-full animate-pulse" />}>
-              <GoogleSignIn returnUrl="/dashboard" />
+              <GoogleSignIn returnUrl="/agent-os" />
             </Suspense>
           </div>
 
           <div className="relative my-2">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border"></div>
-            </div>
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-3 bg-background text-muted-foreground font-medium">
-                {tAuth('orContinueWithEmail')}
-              </span>
+              <span className="px-3 bg-background text-muted-foreground font-medium">{tAuth('orContinueWithEmail')}</span>
             </div>
           </div>
 
           <div className="space-y-3">
             <Link
-              href={`/auth?returnUrl=${encodeURIComponent('/dashboard')}`}
+              href={`/auth?returnUrl=${encodeURIComponent('/agent-os')}`}
               className="flex h-12 items-center justify-center w-full text-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-sm font-medium"
-              onClick={() => {
-                trackCtaSignup();
-                setAuthDialogOpen(false);
-              }}
+              onClick={() => { trackCtaSignup(); setAuthDialogOpen(false); }}
             >
               {tAuth('signInWithEmail')}
             </Link>
-
             <Link
-              href={`/auth?mode=signup&returnUrl=${encodeURIComponent('/dashboard')}`}
+              href={`/auth?mode=signup&returnUrl=${encodeURIComponent('/agent-os')}`}
               className="flex h-12 items-center justify-center w-full text-center rounded-full border border-border bg-background hover:bg-accent/50 transition-all font-medium"
-              onClick={() => {
-                trackCtaSignup();
-                setAuthDialogOpen(false);
-              }}
+              onClick={() => { trackCtaSignup(); setAuthDialogOpen(false); }}
             >
               {tAuth('createNewAccount')}
             </Link>
@@ -217,13 +162,9 @@ export function HeroSection() {
 
           <div className="mt-8 text-center text-[13px] text-muted-foreground leading-relaxed">
             {tAuth('byContinuingYouAgreeSimple')}{' '}
-            <a href="https://www.recoder.xyz/legal?tab=terms" target="_blank" rel="noopener noreferrer" className="text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors">
-              {tAuth('termsOfService')}
-            </a>{' '}
+            <a href="https://www.recoder.xyz/legal?tab=terms" target="_blank" rel="noopener noreferrer" className="text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors">{tAuth('termsOfService')}</a>{' '}
             and{' '}
-            <a href="https://www.recoder.xyz/legal?tab=privacy" target="_blank" rel="noopener noreferrer" className="text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors">
-              {tAuth('privacyPolicy')}
-            </a>
+            <a href="https://www.recoder.xyz/legal?tab=privacy" target="_blank" rel="noopener noreferrer" className="text-foreground/70 hover:text-foreground underline underline-offset-2 transition-colors">{tAuth('privacyPolicy')}</a>
           </div>
         </DialogContent>
       </Dialog>
