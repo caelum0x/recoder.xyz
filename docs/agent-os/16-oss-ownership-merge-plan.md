@@ -44,9 +44,9 @@ package, keeping the monorepo green at every step:
 | --- | --- | --- | --- |
 | mem0 | `@recoder/mem0` (vendored `mem0/mem0-ts`, provider barrel pruned) | extract-subset | **DONE** — owned + in-process via `docker-backend/src/mem0-client.ts` (workspace:*) |
 | daytona | `@recoder/sandbox-daytona` + `@recoder/daytona-api-client` + `@recoder/daytona-toolbox-api-client` (OTel neutralized) | vendor-package | **DONE** — owned + wired into docker-backend daytona-client hub (`daytona-sdk.ts`, opt-in via DAYTONA_USE_SDK) |
-| a2a-js | `@recoder/a2a-sdk` (canonical proto vendored) | extract-types + conformance | **gate landed**; adopt `AgentCard`/types next |
+| a2a-js | `/a2a-sdk` (proto + official types vendored) | extract-types + conformance | **DONE** — canonical a2a.proto + a2a-js types (CanonicalA2A namespace) owned in the SDK |
 | pal-mcp-server | `@recoder/pal` | sidecar (Python) | adapter exists; deepen |
-| GitNexus | `@recoder/git-nexus` | sidecar + lib | adapter exists; wire as evidence producer |
+| GitNexus | `/git-nexus` | lib | **DONE** — wired into agent-os (/tasks/:id/context-pack via git-context.ts) |
 | beads | `@recoder/beads-adapter` (`bd`) | adopt | wired for issue tracking |
 | recoder-a2a | `@recoder/recoder-a2a` | adopt | published; route via bridge queue |
 | daytona-projects | `@recoder/sandbox-daytona` (see above) | vendor-package | **DONE** (see daytona row above) |
