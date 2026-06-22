@@ -18001,9 +18001,6 @@ startupInfo('middleware.public-api', 'applied', { modules: ['auth', 'rate-limiti
 import * as supabaseClient from './integrations/supabase-client.js';
 import * as neonClient from './integrations/neon-client.js';
 import * as integrationStore from './integrations/integration-store.js';
-import * as themeStore from './integrations/theme-store.js';
-import { BUILTIN_THEMES } from './integrations/builtin-themes.js';
-import { generateThemePrompt, type Provider as ThemeProvider } from './integrations/theme-generator.js';
 import * as promptStore from './integrations/prompt-store.js';
 import * as vercelStore from './integrations/vercel-store.js';
 
@@ -18449,128 +18446,6 @@ app.post('/api/integrations/neon/:projectId/branches/:branchId/restore', authent
 
 startupInfo('routes.neon', 'registered');
 
-// ── Theme Routes ───────────────────────────────────────────────────
-
-// List all themes (built-in + custom)
-app.get('/api/themes', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const customThemes = themeStore.listThemes(req.userId!);
-  sendSuccess(res, {
-    builtinThemes: BUILTIN_THEMES.map(t => ({ id: t.id, name: t.name, description: t.description })),
-    customThemes,
-  });
-}));
-
-// Create custom theme
-app.post('/api/themes', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { name, description, prompt } = req.body;
-  if (!name || !prompt) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name and prompt are required'));
-  }
-  const theme = themeStore.createTheme(req.userId!, name, description || '', prompt);
-  sendSuccess(res, { theme });
-}));
-
-// Update custom theme
-app.put('/api/themes/:themeId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { name, description, prompt } = req.body;
-  const theme = themeStore.updateTheme(req.params.themeId, { name, description, prompt });
-  if (!theme) {
-    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Theme not found'));
-  }
-  sendSuccess(res, { theme });
-}));
-
-// Delete custom theme
-app.delete('/api/themes/:themeId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const deleted = themeStore.deleteTheme(req.params.themeId);
-  if (!deleted) {
-    return sendError(res, createError(ErrorCode.NOT_FOUND, 'Theme not found'));
-  }
-  sendSuccess(res, { deleted: true });
-}));
-
-// Get project theme
-app.get('/api/themes/project/:projectId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const themeId = themeStore.getProjectTheme(req.params.projectId);
-  if (!themeId) {
-    return sendSuccess(res, { themeId: null, themeName: null, themePrompt: null });
-  }
-  const prompt = themeStore.resolveThemePrompt(themeId, req.userId!);
-  const builtin = themeStore.getBuiltinTheme(themeId);
-  sendSuccess(res, {
-    themeId,
-    themeName: builtin?.name || 'Custom Theme',
-    themePrompt: prompt,
-  });
-}));
-
-// Set project theme
-app.post('/api/themes/project/:projectId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { themeId } = req.body;
-  if (!themeId) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'themeId is required'));
-  }
-  themeStore.setProjectTheme(req.params.projectId, themeId);
-  sendSuccess(res, { set: true });
-}));
-
-// Remove project theme
-app.delete('/api/themes/project/:projectId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  themeStore.removeProjectTheme(req.params.projectId);
-  sendSuccess(res, { removed: true });
-}));
-
-// Generate theme via AI
-app.post('/api/themes/generate', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { images, keywords, generationMode, model, apiKey, provider } = req.body;
-
-  if (!images || !Array.isArray(images) || images.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'At least one image is required'));
-  }
-  if (images.length > 5) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Maximum 5 images allowed'));
-  }
-  if (!model || !apiKey || !provider) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model, apiKey, and provider are required'));
-  }
-  if (!['inspired', 'high-fidelity'].includes(generationMode)) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'generationMode must be "inspired" or "high-fidelity"'));
-  }
-  if (!['anthropic', 'openai', 'google', 'openrouter'].includes(provider)) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'provider must be anthropic, openai, google, or openrouter'));
-  }
-
-  const startMs = Date.now();
-  const { prompt, inputTokens, outputTokens } = await generateThemePrompt({
-    images,
-    keywords: keywords || '',
-    generationMode,
-    model,
-    apiKey,
-    provider: provider as ThemeProvider,
-  });
-
-  trackLlmCall({
-    userId: req.userId!,
-    model,
-    provider,
-    inputTokens,
-    outputTokens,
-    durationMs: Date.now() - startMs,
-  });
-
-  sendSuccess(res, { prompt });
-}));
-
-startupInfo('routes.theme', 'registered');
-
-// ==================== END SPRINT 12 ====================
-
-// ==================== SPRINT 13: Prompt Library + Vercel Integration ====================
-
-// ── Prompt Library Routes ─────────────────────────────────────────
-
-// List user's prompts
 app.get('/api/prompts', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
   const prompts = promptStore.listPrompts(req.userId!);
   sendSuccess(res, { prompts });
