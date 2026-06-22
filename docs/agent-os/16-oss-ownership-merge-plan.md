@@ -54,7 +54,7 @@ package, keeping the monorepo green at every step:
 | stagehand | `@recoder/browser-stagehand` | adopt | browser-runtime evidence producer |
 | agent-browser | `@recoder/browser-cdp` (Rust sidecar) | sidecar | socket adapter → evidence |
 | opencode | `@recoder/runtime-opencode` | extract types/session | runtime adapter |
-| pi | `@recoder/runtime-pi` | adopt `pi-agent-core` | runtime adapter |
+| pi | `/pi-{ai,agent-core,tui,coding-agent}` | vendor-packages | **DONE** — used in docker-backend A2A pi adapter + recoder-code `pi` command |
 | openclaw | `@recoder/gateway-openclaw` | adapt (adapter exists) | channel→capability scopes |
 | polar | billing wiring of `polar-webhook` | adopt | wire to usage/entitlement events |
 | ziti | `ziti-*` (already wired) | sidecar | connectivity for runners |
