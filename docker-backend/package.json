@@ -37,6 +37,7 @@
     "@recoder/agent-instructions": "workspace:*",
     "@recoder/agent-mcp": "workspace:*",
     "@recoder/oss-registry": "workspace:*",
+    "@recoder/sandbox-daytona": "workspace:*",
     "@recoder/shared": "workspace:*",
     "@recoder/stream": "workspace:*",
     "@recoder/ui-agent-os": "workspace:*",
