@@ -35,6 +35,7 @@ import { createRecoderComponentRegistry } from '@recoder/oss-registry';
 import { buildAgentOsCockpitSummary } from '@recoder/ui-agent-os';
 import type { AgentOsRepository } from '../repositories/agent-os.repository';
 import type { AgentOsRepositoryDriver } from '../service-container';
+import { buildTaskContextPack } from '../../git-context.js';
 
 export class AgentOsController {
   constructor(
@@ -288,6 +289,21 @@ export class AgentOsController {
     }
 
     res.json({ success: true, data: await Promise.all(runs.map((run) => this.buildRunHistory(run))) });
+  };
+
+  /**
+   * Git Nexus code-context pack for a task — dependency graph, ownership map,
+   * test targets, impact report, and source refs, produced by the owned
+   * @recoder/git-nexus engine. Surfaces repo intelligence into the control plane.
+   */
+  taskContextPack = async (req: Request, res: Response) => {
+    const task = (await this.repository.listTasks()).find((candidate) => candidate.taskId === req.params.taskId);
+    if (!task) {
+      res.status(404).json({ success: false, error: `task not found: ${req.params.taskId}` });
+      return;
+    }
+    const repoRoot = optionalString(req.query?.repoRoot) ?? process.cwd();
+    res.json({ success: true, data: buildTaskContextPack(task, repoRoot) });
   };
 
   approvals = async (_req: Request, res: Response) => {
