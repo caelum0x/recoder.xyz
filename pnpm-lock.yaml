@@ -1137,6 +1137,9 @@ importers:
       '@recoder/agent-os':
         specifier: workspace:*
         version: link:../packages/agent-os
+      '@recoder/git-nexus':
+        specifier: workspace:*
+        version: link:../packages/git-nexus
       '@recoder/mem0':
         specifier: workspace:*
         version: link:../packages/mem0
