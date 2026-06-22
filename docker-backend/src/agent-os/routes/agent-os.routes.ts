@@ -22,6 +22,7 @@ export function createAgentOsRouter(): Router {
   router.post('/tasks', controller.upsertTask);
   router.post('/tasks/route', controller.routeTask);
   router.get('/tasks/:taskId/history', controller.taskHistory);
+  router.get('/tasks/:taskId/context-pack', controller.taskContextPack);
   router.get('/runs', controller.runs);
   router.post('/runs', controller.upsertRun);
   router.get('/runs/:runId/history', controller.runHistory);
