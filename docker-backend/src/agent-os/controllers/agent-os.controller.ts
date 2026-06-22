@@ -583,6 +583,29 @@ export class AgentOsController {
     });
   };
 
+  /**
+   * Semantic memory recall via the owned @recoder/mem0 (LLM + vector store).
+   * Connects the merged mem0 engine to the Agent OS memory surface.
+   */
+  memorySearch = async (req: Request, res: Response) => {
+    const query = optionalString(req.query?.q) ?? optionalString(req.query?.query);
+    if (!query) {
+      res.status(400).json({ success: false, error: 'query (?q=) is required' });
+      return;
+    }
+    const limit = Number(optionalString(req.query?.limit) ?? '10') || 10;
+    const { mem0Search } = await import('../../mem0-client.js');
+    const recall = await mem0Search(
+      query,
+      {
+        userId: optionalString(req.query?.userId) ?? 'agent-os',
+        runId: optionalString(req.query?.runId),
+      },
+      limit,
+    );
+    res.json({ success: true, data: recall });
+  };
+
   upsertMemoryCandidate = async (req: Request, res: Response) => {
     try {
       const candidate = (await this.repository.upsertMemoryCandidate(req.body));
