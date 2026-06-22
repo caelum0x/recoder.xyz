@@ -1,7 +1,7 @@
 /**
  * @module mem0-client
  *
- * Fail-safe wrapper over mem0 (`mem0ai`) for intelligent agent memory — the
+ * Fail-safe wrapper over Recoder-owned mem0 (`@recoder/mem0`) for intelligent agent memory — the
  * "agent memory" pillar. mem0 adds an LLM layer over a vector store that
  * extracts durable facts from a conversation, dedupes them, and updates
  * existing memories instead of blindly appending.
@@ -147,13 +147,13 @@ async function getClient(): Promise<ResolvedClient | null> {
   cached = (async () => {
     try {
       if (mode === 'platform') {
-        const mod = await dynamicImport('mem0ai');
+        const mod = await dynamicImport('@recoder/mem0');
         const MemoryClient = mod.default || mod.MemoryClient;
         if (!MemoryClient) throw new Error('MemoryClient export missing');
         return { mode, client: new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) };
       }
       // OSS mode
-      const mod = await dynamicImport('mem0ai/oss');
+      const mod = await dynamicImport('@recoder/mem0/oss');
       const Memory = mod.Memory || mod.default;
       if (!Memory) throw new Error('OSS Memory export missing');
       const config = buildOssConfig(resolveOssLlm()!, resolveOssEmbedder()!);
@@ -201,7 +201,7 @@ export async function mem0Health(): Promise<Mem0Health> {
   }
   const resolved = await getClient();
   if (!resolved) {
-    return { available: false, mode, reason: 'mem0 client init failed (is mem0ai installed?)' };
+    return { available: false, mode, reason: 'mem0 client init failed (is @recoder/mem0 built?)' };
   }
   if (mode === 'oss') {
     return {

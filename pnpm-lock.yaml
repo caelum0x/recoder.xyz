@@ -269,7 +269,7 @@ importers:
     dependencies:
       '@auth/prisma-adapter':
         specifier: ^2.10.0
-        version: 2.10.0(@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2))(nodemailer@8.0.4)
+        version: 2.10.0(@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2))(nodemailer@8.0.4)
       '@qwen-code/qwen-code':
         specifier: ^0.0.7
         version: 0.0.7(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(@types/react@19.2.7)(bufferutil@4.0.9)(react-devtools-core@6.1.5(bufferutil@4.0.9)(utf-8-validate@6.0.6))(utf-8-validate@6.0.6)
@@ -435,7 +435,7 @@ importers:
         version: 1.38.0
       '@payloadcms/db-postgres':
         specifier: 3.81.0
-        version: 3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
+        version: 3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
       '@payloadcms/next':
         specifier: 3.81.0
         version: 3.81.0(@types/react@19.2.7)(graphql@16.13.2)(monaco-editor@0.55.1)(next@15.4.11(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.56.1)(babel-plugin-macros@3.1.0)(babel-plugin-react-compiler@1.0.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.93.3))(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.2)
@@ -1137,6 +1137,9 @@ importers:
       '@recoder/agent-os':
         specifier: workspace:*
         version: link:../packages/agent-os
+      '@recoder/mem0':
+        specifier: workspace:*
+        version: link:../packages/mem0
       '@recoder/oss-registry':
         specifier: workspace:*
         version: link:../packages/oss-registry
@@ -1191,9 +1194,6 @@ importers:
       lib0:
         specifier: ^0.2.117
         version: 0.2.117
-      mem0ai:
-        specifier: ^3.0.6
-        version: 3.0.6(b0a354d8a84104ec50da7f564e188a4d)
       nats:
         specifier: ^2.29.3
         version: 2.29.3
@@ -1821,13 +1821,13 @@ importers:
     dependencies:
       '@ai-sdk/anthropic':
         specifier: ^2.0.1
-        version: 2.0.63(zod@4.3.6)
+        version: 2.0.63(zod@3.25.76)
       '@ai-sdk/groq':
         specifier: ^2.0.4
-        version: 2.0.35(zod@4.3.6)
+        version: 2.0.35(zod@3.25.76)
       '@ai-sdk/openai':
         specifier: ^2.0.7
-        version: 2.0.42(zod@4.3.6)
+        version: 2.0.42(zod@3.25.76)
       '@anthropic-ai/bedrock-sdk':
         specifier: ^0.22.0
         version: 0.22.4
@@ -1851,7 +1851,7 @@ importers:
         version: 1.49.0
       '@google/genai':
         specifier: ^1.13.0
-        version: 1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
+        version: 1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
       '@google/generative-ai':
         specifier: ^0.21.0
         version: 0.21.0
@@ -1863,7 +1863,7 @@ importers:
         version: 1.10.0
       '@musistudio/llms':
         specifier: ^1.0.21
-        version: 1.0.31(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6)
+        version: 1.0.31(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
       '@recoder/shared':
         specifier: npm:recoder-shared@^1.0.2
         version: recoder-shared@1.0.2(bufferutil@4.0.9)(utf-8-validate@6.0.6)
@@ -1875,7 +1875,7 @@ importers:
         version: 2.1.7
       ai:
         specifier: ^5.0.15
-        version: 5.0.133(zod@4.3.6)
+        version: 5.0.133(zod@3.25.76)
       async-mutex:
         specifier: ^0.5.0
         version: 0.5.0
@@ -1968,7 +1968,7 @@ importers:
         version: 8.4.2
       openai:
         specifier: ^5.12.2
-        version: 5.23.2(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6)
+        version: 5.23.2(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
       ora:
         specifier: ^5.4.1
         version: 5.4.1
@@ -2090,11 +2090,11 @@ importers:
     dependencies:
       '@prisma/client':
         specifier: 7.1.0
-        version: 7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2))(typescript@5.9.2)
+        version: 7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2))(typescript@5.9.2)
     devDependencies:
       prisma:
         specifier: 7.1.0
-        version: 7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2)
+        version: 7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2)
 
   packages/design-tokens: {}
 
@@ -2393,7 +2393,7 @@ importers:
         version: link:../tsconfig
       ai:
         specifier: 'catalog:'
-        version: 3.3.4(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6))(react@19.2.4)(solid-js@1.9.11)(sswr@2.1.0(svelte@4.2.20))(svelte@4.2.20)(vue@3.5.22(typescript@5.9.2))(zod@4.3.6)
+        version: 3.3.4(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76))(react@19.2.4)(solid-js@1.9.11)(sswr@2.1.0(svelte@4.2.20))(svelte@4.2.20)(vue@3.5.22(typescript@5.9.2))(zod@3.25.76)
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(@swc/core@1.15.7(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.2)(yaml@2.8.3)
@@ -2445,6 +2445,68 @@ importers:
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(@swc/core@1.15.7(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.2)(yaml@2.8.3)
+
+  packages/mem0:
+    dependencies:
+      '@google/genai':
+        specifier: ^1.2.0
+        version: 1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
+      '@qdrant/js-client-rest':
+        specifier: 1.13.0
+        version: 1.13.0(typescript@5.9.2)
+      axios:
+        specifier: 1.13.5
+        version: 1.13.5
+      ollama:
+        specifier: ^0.5.14
+        version: 0.5.18
+      openai:
+        specifier: ^4.93.0
+        version: 4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
+      pg:
+        specifier: 'catalog:'
+        version: 8.16.3
+      uuid:
+        specifier: 9.0.1
+        version: 9.0.1
+      zod:
+        specifier: 'catalog:'
+        version: 3.25.76
+    devDependencies:
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(@swc/core@1.15.7(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.2)(yaml@2.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.2
+    optionalDependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.40.1
+        version: 0.40.1(encoding@0.1.13)
+      '@langchain/core':
+        specifier: ^1.1.47
+        version: 1.1.48(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76))(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))
+      '@mistralai/mistralai':
+        specifier: ^1.5.2
+        version: 1.10.0
+      '@supabase/supabase-js':
+        specifier: 'catalog:'
+        version: 2.95.3(bufferutil@4.0.9)(utf-8-validate@6.0.6)
+      better-sqlite3:
+        specifier: ^12.6.2
+        version: 12.11.1
+      compromise:
+        specifier: ^14.0.0
+        version: 14.14.5
+      groq-sdk:
+        specifier: 0.3.0
+        version: 0.3.0(encoding@0.1.13)
+      natural:
+        specifier: ^8.0.1
+        version: 8.1.1(@aws-sdk/credential-providers@3.883.0)(@opentelemetry/api@1.9.0)(gcp-metadata@7.0.1)(socks@2.8.7)
+      redis:
+        specifier: ^4.6.13
+        version: 4.7.1
 
   packages/nextjs:
     dependencies:
@@ -2928,7 +2990,7 @@ importers:
         version: 19.2.4
       recoder-code-core:
         specifier: ^2.4.5
-        version: 2.4.5(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(zod@3.25.76)
+        version: 2.4.5(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(utf-8-validate@6.0.6)(zod@3.25.76)
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -2937,7 +2999,7 @@ importers:
         version: 7.7.3
       typeorm:
         specifier: ^0.3.27
-        version: 0.3.28(babel-plugin-macros@3.1.0)(better-sqlite3@11.10.0)(ioredis@5.9.3)(mysql2@3.15.3)(pg@8.21.0)(redis@5.12.1(@opentelemetry/api@1.9.0))(sqlite3@5.1.7)(ts-node@10.9.2(@swc/core@1.15.7(@swc/helpers@0.5.17))(@types/node@24.10.13)(typescript@5.9.2))
+        version: 0.3.28(babel-plugin-macros@3.1.0)(better-sqlite3@12.11.1)(ioredis@5.9.3)(mysql2@3.15.3)(pg@8.21.0)(redis@5.12.1(@opentelemetry/api@1.9.0))(sqlite3@5.1.7)(ts-node@10.9.2(@swc/core@1.15.7(@swc/helpers@0.5.17))(@types/node@24.10.13)(typescript@5.9.2))
       ws:
         specifier: ^8.18.0
         version: 8.18.3(bufferutil@4.0.9)(utf-8-validate@6.0.6)
@@ -4661,6 +4723,9 @@ packages:
   '@anthropic-ai/bedrock-sdk@0.22.4':
     resolution: {integrity: sha512-8u9RYH5Sfd9NykfJe86zX21Tc1I/1rLLl/DK9gkCL+xLgtSfUcAY285Fov6xk8ErRJfQLbGpbLAjSAzJNmf3sg==}
 
+  '@anthropic-ai/sdk@0.40.1':
+    resolution: {integrity: sha512-DJMWm8lTEM9Lk/MSFL+V+ugF7jKOn0M2Ujvb5fN8r2nY14aHbGPZ1k6sgjL+tpJ3VuOGJNG+4R83jEpOuYPv8w==}
+
   '@anthropic-ai/sdk@0.51.0':
     resolution: {integrity: sha512-fAFC/uHhyzfw7rs65EPVV+scXDytGNm5BjttxHf6rP/YGvaBRKEvp2lwyuMigTwMI95neeG4bzrZigz7KCikjw==}
     hasBin: true
@@ -4929,65 +4994,6 @@ packages:
   '@aws-sdk/xml-builder@3.873.0':
     resolution: {integrity: sha512-kLO7k7cGJ6KaHiExSJWojZurF7SnGMDHXRuQunFnEoD0n1yB6Lqy/S/zHiQ7oJnBhPr9q0TW9qFkrsZb1Uc54w==}
     engines: {node: '>=18.0.0'}
-
-  '@azure/abort-controller@2.1.2':
-    resolution: {integrity: sha512-nBrLsEWm4J2u5LpAPjxADTlq3trDgVZZXHNKabeXZtpq3d3AbN/KGO82R87rdDz5/lYB024rtEf10/q0urNgsA==}
-    engines: {node: '>=18.0.0'}
-
-  '@azure/core-auth@1.10.1':
-    resolution: {integrity: sha512-ykRMW8PjVAn+RS6ww5cmK9U2CyH9p4Q88YJwvUslfuMmN98w/2rdGRLPqJYObapBCdzBVeDgYWdJnFPFb7qzpg==}
-    engines: {node: '>=20.0.0'}
-
-  '@azure/core-client@1.10.1':
-    resolution: {integrity: sha512-Nh5PhEOeY6PrnxNPsEHRr9eimxLwgLlpmguQaHKBinFYA/RU9+kOYVOQqOrTsCL+KSxrLLl1gD8Dk5BFW/7l/w==}
-    engines: {node: '>=20.0.0'}
-
-  '@azure/core-http-compat@2.4.0':
-    resolution: {integrity: sha512-f1P96IB399YiN2ARYHP7EpZi3Bf3wH4SN2lGzrw7JVwm7bbsVYtf2iKSBwTywD2P62NOPZGHFSZi+6jjb75JuA==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      '@azure/core-client': ^1.10.0
-      '@azure/core-rest-pipeline': ^1.22.0
-
-  '@azure/core-paging@1.6.2':
-    resolution: {integrity: sha512-YKWi9YuCU04B55h25cnOYZHxXYtEvQEbKST5vqRga7hWY9ydd3FZHdeQF8pyh+acWZvppw13M/LMGx0LABUVMA==}
-    engines: {node: '>=18.0.0'}
-
-  '@azure/core-rest-pipeline@1.23.0':
-    resolution: {integrity: sha512-Evs1INHo+jUjwHi1T6SG6Ua/LHOQBCLuKEEE6efIpt4ZOoNonaT1kP32GoOcdNDbfqsD2445CPri3MubBy5DEQ==}
-    engines: {node: '>=20.0.0'}
-
-  '@azure/core-tracing@1.3.1':
-    resolution: {integrity: sha512-9MWKevR7Hz8kNzzPLfX4EAtGM2b8mr50HPDBvio96bURP/9C+HjdH3sBlLSNNrvRAr5/k/svoH457gB5IKpmwQ==}
-    engines: {node: '>=20.0.0'}
-
-  '@azure/core-util@1.13.1':
-    resolution: {integrity: sha512-XPArKLzsvl0Hf0CaGyKHUyVgF7oDnhKoP85Xv6M4StF/1AhfORhZudHtOyf2s+FcbuQ9dPRAjB8J2KvRRMUK2A==}
-    engines: {node: '>=20.0.0'}
-
-  '@azure/identity@4.13.1':
-    resolution: {integrity: sha512-5C/2WD5Vb1lHnZS16dNQRPMjN6oV/Upba+C9nBIs15PmOi6A3ZGs4Lr2u60zw4S04gi+u3cEXiqTVP7M4Pz3kw==}
-    engines: {node: '>=20.0.0'}
-
-  '@azure/logger@1.3.0':
-    resolution: {integrity: sha512-fCqPIfOcLE+CGqGPd66c8bZpwAji98tZ4JI9i/mlTNTlsIWslCfpg48s/ypyLxZTump5sypjrKn2/kY7q8oAbA==}
-    engines: {node: '>=20.0.0'}
-
-  '@azure/msal-browser@5.11.0':
-    resolution: {integrity: sha512-zkGNYS3TwY8lUpPIafAmsFCYZbgFixY9y/LZB9GUg0IILoHTqpN26j5OrkL1AQThh/YdZsawe4iWXfp85lFVxg==}
-    engines: {node: '>=0.8.0'}
-
-  '@azure/msal-common@16.6.2':
-    resolution: {integrity: sha512-hQjjsekAjB00cM1EmatWJlzhEoK2Qhz7Rj5gvM6tYf8iL7RM3tkxlpU9fG0+ofkulzg9AEEA6dIEnSmDr5ZqUA==}
-    engines: {node: '>=0.8.0'}
-
-  '@azure/msal-node@5.2.2':
-    resolution: {integrity: sha512-toS+2AePxqyzb0YOKttDOOiSl3jrkK9aiqIvpurpis0O34QcIS5gToqrgT39p04Dpxw3YoUU0lxJKTpSFFfA6Q==}
-    engines: {node: '>=20'}
-
-  '@azure/search-documents@12.2.0':
-    resolution: {integrity: sha512-4+Qw+qaGqnkdUCq/vEFzk/bkROogTvdbPb1fmI8poxNfDDN1q2WHxBmhI7CYwesrBj1yXC4i5E0aISBxZqZi0g==}
-    engines: {node: '>=20.0.0'}
 
   '@babel/code-frame@7.10.4':
     resolution: {integrity: sha512-vG6SvB6oYEhvgisZNFRmRCUkLz11c7rp+tbNTynGqc6mS1d5ATd/sGyV6W0KZZnXRKMTzZDRgQT3Ou9jhpAfUg==}
@@ -10431,9 +10437,9 @@ packages:
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
 
-  '@qdrant/js-client-rest@1.18.0':
-    resolution: {integrity: sha512-/0dqX5uV9chC1DnYSnU4gNMrDqse/pt6hHg3Rqqpl5isH7xl1xSNvffjzBoxycDD79luWn7Ho6Rh/61sOs5DNw==}
-    engines: {node: '>=18.17.0', pnpm: '>=8'}
+  '@qdrant/js-client-rest@1.13.0':
+    resolution: {integrity: sha512-bewMtnXlGvhhnfXsp0sLoLXOGvnrCM15z9lNlG0Snp021OedNAnRtKkerjk5vkOcbQWUmJHXYCuxDfcT93aSkA==}
+    engines: {node: '>=18.0.0', pnpm: '>=8'}
     peerDependencies:
       typescript: '>=4.7'
 
@@ -12589,6 +12595,9 @@ packages:
     peerDependencies:
       webpack: '>=4.40.0'
 
+  '@sevinf/maybe@0.5.0':
+    resolution: {integrity: sha512-ARhyoYDnY1LES3vYI0fiG6e9esWfTNcXcO6+MPJJXcnyMV3bim4lnFt45VXouV7y82F4x3YH8nOQ6VztuvUiWg==}
+
   '@shikijs/core@3.22.0':
     resolution: {integrity: sha512-iAlTtSDDbJiRpvgL5ugKEATDtHdUVkqgHDm/gbD2ZS9c88mx7G1zSYjjOxp5Qa0eaW0MAQosFRmJSk354PRoQA==}
 
@@ -13315,9 +13324,6 @@ packages:
 
   '@stablelib/base64@1.0.1':
     resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
-
-  '@standard-schema/spec@1.0.0':
-    resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -14958,10 +14964,6 @@ packages:
     resolution: {integrity: sha512-Xzmnb58+Db78gT/CCj/PVCvK+zxbnsw6F+O1oheYszJbBSdEjVhQi3C/Xttzxgi/GLmpvOggRs1RFpiJ8+c34Q==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@typespec/ts-http-runtime@0.3.5':
-    resolution: {integrity: sha512-yURCknZhvywvQItHMMmFSo+fq5arCUIyz/CVk7jD89MSai7dkaX8ufjCWp3NttLojoTVbcE72ri+be/TnEbMHw==}
-    engines: {node: '>=20.0.0'}
-
   '@uiw/codemirror-extensions-basic-setup@4.25.4':
     resolution: {integrity: sha512-YzNwkm0AbPv1EXhCHYR5v0nqfemG2jEB0Z3Att4rBYqKrlG7AA9Rhjc3IyBaOzsBu18wtrp9/+uhTyu7TXSRng==}
     peerDependencies:
@@ -16006,6 +16008,10 @@ packages:
   better-sqlite3@11.10.0:
     resolution: {integrity: sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ==}
 
+  better-sqlite3@12.11.1:
+    resolution: {integrity: sha512-dq9AtApgg5PGFtBzPFSBl3HZQjHok5gaQCM6zh2Yk0aSmDCs1CbnVI8/HgASQkNKsWFpseIO9beg5xxpYhbIfA==}
+    engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x || 26.x}
+
   bidi-js@1.0.3:
     resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
 
@@ -16494,9 +16500,6 @@ packages:
   clone@2.1.2:
     resolution: {integrity: sha512-3Pe/CF1Nn94hyhIYpjtiLhdCoEoz0DqQ+988E9gmeEdQZlojxnOb74wctFyuwWQHzqyf9X7C7MG8juUpqBJT8w==}
     engines: {node: '>=0.8'}
-
-  cloudflare@4.5.0:
-    resolution: {integrity: sha512-fPcbPKx4zF45jBvQ0z7PCdgejVAPBBCZxwqk1k7krQNfpM07Cfj97/Q6wBzvYqlWXx/zt1S9+m8vnfCe06umbQ==}
 
   clsx@1.1.1:
     resolution: {integrity: sha512-6/bPho624p3S2pMyvP5kKBPXnI3ufHLObBFCfgx+LkeR5lg2XYy2hqZqUf45ypD8COn2bhgGJSUE+l5dhNBieA==}
@@ -21347,30 +21350,6 @@ packages:
     resolution: {integrity: sha512-aisnrDP4GNe06UcKFnV5bfMNPBUw4jsLGaWwWfnH3v02GnBuXX2MCVn5RbrWo0j3pczUilYblq7fQ7Nw2t5XKw==}
     engines: {node: '>= 0.8'}
 
-  mem0ai@3.0.6:
-    resolution: {integrity: sha512-X1KbCVE5351qpJ6X2KXFhQJiW+dqoHj1otA66DSdXtIEO1uXuIdyeTKeURdAH+wjXtIcFa08ylL2meA1pBk9Iw==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      '@anthropic-ai/sdk': ^0.40.1
-      '@azure/identity': ^4.0.0
-      '@azure/search-documents': ^12.0.0
-      '@cloudflare/workers-types': ^4.20250504.0
-      '@google/genai': ^1.40.0
-      '@langchain/core': ^1.1.47
-      '@mistralai/mistralai': ^1.5.2
-      '@qdrant/js-client-rest': ^1.18.0
-      '@supabase/supabase-js': ^2.49.1
-      '@types/jest': 29.5.14
-      '@types/pg': 8.11.0
-      better-sqlite3: ^12.6.2
-      cloudflare: ^4.2.0
-      compromise: ^14.0.0
-      groq-sdk: 0.3.0
-      natural: ^8.0.1
-      ollama: ^0.5.14
-      pg: 8.11.3
-      redis: ^4.6.13
-
   memjs@1.3.2:
     resolution: {integrity: sha512-qUEg2g8vxPe+zPn09KidjIStHPtoBO8Cttm8bgJFWWabbsjQ9Av9Ky+6UcvKx6ue0LLb/LEhtcyQpRyKfzeXcg==}
     engines: {node: '>=0.10.0'}
@@ -22885,9 +22864,6 @@ packages:
   periscopic@3.1.0:
     resolution: {integrity: sha512-vKiQ8RRtkl9P+r/+oefh25C3fhybptkHKCZSPlcXiJux2tJF55GnEj3BVn4A5gKfq9NWWXXrxkHBwVPUfH0opw==}
 
-  pg-cloudflare@1.2.7:
-    resolution: {integrity: sha512-YgCtzMH0ptvZJslLM1ffsY4EuGaU0cx4XSdXLRFae8bPP4dS5xL1tNB3k2o/N64cHJpwU7dxKli/nZ2lUa5fLg==}
-
   pg-cloudflare@1.4.0:
     resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
 
@@ -22904,11 +22880,6 @@ packages:
   pg-numeric@1.0.2:
     resolution: {integrity: sha512-BM/Thnrw5jm2kKLE5uJkXqqExRUY/toLHda65XgFTBTFYZyopbKjBe29Ii3RbkvlsMoFwD+tHeGaCjjv0gHlyw==}
     engines: {node: '>=4'}
-
-  pg-pool@3.10.1:
-    resolution: {integrity: sha512-Tu8jMlcX+9d8+QVzKIvM/uJtp07PKr82IUOYEphaWcoBhIYkoHpLXN3qO59nAI11ripznDsEzEv8nUxBVWajGg==}
-    peerDependencies:
-      pg: '>=8.0'
 
   pg-pool@3.14.0:
     resolution: {integrity: sha512-gKtPkFdQPU3DksooVLi9LsjZxrsBUZIpa+7aVx+LV5pNh0KzP4Zleud2po+ConrxbuXGBJ6Hfer6hdgpIBpBaw==}
@@ -27133,11 +27104,11 @@ snapshots:
       '@ai-sdk/provider-utils': 1.0.9(zod@3.25.76)
       zod: 3.25.76
 
-  '@ai-sdk/anthropic@2.0.63(zod@4.3.6)':
+  '@ai-sdk/anthropic@2.0.63(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.1
-      '@ai-sdk/provider-utils': 3.0.21(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 3.0.21(zod@3.25.76)
+      zod: 3.25.76
 
   '@ai-sdk/fal@1.0.27(zod@3.25.76)':
     dependencies:
@@ -27152,36 +27123,23 @@ snapshots:
       '@vercel/oidc': 3.1.0
       zod: 3.25.76
 
-  '@ai-sdk/gateway@2.0.39(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider': 2.0.1
-      '@ai-sdk/provider-utils': 3.0.21(zod@4.3.6)
-      '@vercel/oidc': 3.1.0
-      zod: 4.3.6
-
   '@ai-sdk/google@2.0.28(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.16(zod@3.25.76)
       zod: 3.25.76
 
-  '@ai-sdk/groq@2.0.35(zod@4.3.6)':
+  '@ai-sdk/groq@2.0.35(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.1
-      '@ai-sdk/provider-utils': 3.0.21(zod@4.3.6)
-      zod: 4.3.6
+      '@ai-sdk/provider-utils': 3.0.21(zod@3.25.76)
+      zod: 3.25.76
 
   '@ai-sdk/openai@2.0.42(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.10(zod@3.25.76)
       zod: 3.25.76
-
-  '@ai-sdk/openai@2.0.42(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider': 2.0.0
-      '@ai-sdk/provider-utils': 3.0.10(zod@4.3.6)
-      zod: 4.3.6
 
   '@ai-sdk/provider-utils@1.0.9(zod@3.25.76)':
     dependencies:
@@ -27192,49 +27150,26 @@ snapshots:
     optionalDependencies:
       zod: 3.25.76
 
-  '@ai-sdk/provider-utils@1.0.9(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider': 0.0.17
-      eventsource-parser: 1.1.2
-      nanoid: 5.1.6
-      secure-json-parse: 2.7.0
-    optionalDependencies:
-      zod: 4.3.6
-
   '@ai-sdk/provider-utils@3.0.10(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@standard-schema/spec': 1.0.0
+      '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.6
       zod: 3.25.76
-
-  '@ai-sdk/provider-utils@3.0.10(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider': 2.0.0
-      '@standard-schema/spec': 1.0.0
-      eventsource-parser: 3.0.6
-      zod: 4.3.6
 
   '@ai-sdk/provider-utils@3.0.16(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
-      '@standard-schema/spec': 1.0.0
+      '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.6
       zod: 3.25.76
 
   '@ai-sdk/provider-utils@3.0.21(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 2.0.1
-      '@standard-schema/spec': 1.0.0
+      '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.6
       zod: 3.25.76
-
-  '@ai-sdk/provider-utils@3.0.21(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider': 2.0.1
-      '@standard-schema/spec': 1.0.0
-      eventsource-parser: 3.0.6
-      zod: 4.3.6
 
   '@ai-sdk/provider@0.0.17':
     dependencies:
@@ -27270,28 +27205,10 @@ snapshots:
       react: 19.2.4
       zod: 3.25.76
 
-  '@ai-sdk/react@0.0.40(react@19.2.4)(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider-utils': 1.0.9(zod@4.3.6)
-      '@ai-sdk/ui-utils': 0.0.28(zod@4.3.6)
-      swr: 2.2.5(react@19.2.4)
-    optionalDependencies:
-      react: 19.2.4
-      zod: 4.3.6
-
   '@ai-sdk/solid@0.0.31(solid-js@1.9.11)(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider-utils': 1.0.9(zod@3.25.76)
       '@ai-sdk/ui-utils': 0.0.28(zod@3.25.76)
-    optionalDependencies:
-      solid-js: 1.9.11
-    transitivePeerDependencies:
-      - zod
-
-  '@ai-sdk/solid@0.0.31(solid-js@1.9.11)(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider-utils': 1.0.9(zod@4.3.6)
-      '@ai-sdk/ui-utils': 0.0.28(zod@4.3.6)
     optionalDependencies:
       solid-js: 1.9.11
     transitivePeerDependencies:
@@ -27307,16 +27224,6 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@ai-sdk/svelte@0.0.33(svelte@4.2.20)(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider-utils': 1.0.9(zod@4.3.6)
-      '@ai-sdk/ui-utils': 0.0.28(zod@4.3.6)
-      sswr: 2.1.0(svelte@4.2.20)
-    optionalDependencies:
-      svelte: 4.2.20
-    transitivePeerDependencies:
-      - zod
-
   '@ai-sdk/ui-utils@0.0.28(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 0.0.17
@@ -27325,28 +27232,10 @@ snapshots:
     optionalDependencies:
       zod: 3.25.76
 
-  '@ai-sdk/ui-utils@0.0.28(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider': 0.0.17
-      '@ai-sdk/provider-utils': 1.0.9(zod@4.3.6)
-      secure-json-parse: 2.7.0
-    optionalDependencies:
-      zod: 4.3.6
-
   '@ai-sdk/vue@0.0.32(vue@3.5.22(typescript@5.9.2))(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider-utils': 1.0.9(zod@3.25.76)
       '@ai-sdk/ui-utils': 0.0.28(zod@3.25.76)
-      swrv: 1.0.4(vue@3.5.22(typescript@5.9.2))
-    optionalDependencies:
-      vue: 3.5.22(typescript@5.9.2)
-    transitivePeerDependencies:
-      - zod
-
-  '@ai-sdk/vue@0.0.32(vue@3.5.22(typescript@5.9.2))(zod@4.3.6)':
-    dependencies:
-      '@ai-sdk/provider-utils': 1.0.9(zod@4.3.6)
-      '@ai-sdk/ui-utils': 0.0.28(zod@4.3.6)
       swrv: 1.0.4(vue@3.5.22(typescript@5.9.2))
     optionalDependencies:
       vue: 3.5.22(typescript@5.9.2)
@@ -27372,7 +27261,7 @@ snapshots:
 
   '@anthropic-ai/bedrock-sdk@0.22.4':
     dependencies:
-      '@anthropic-ai/sdk': 0.51.0
+      '@anthropic-ai/sdk': 0.59.0
       '@aws-crypto/sha256-js': 4.0.0
       '@aws-sdk/client-bedrock-runtime': 3.883.0
       '@aws-sdk/credential-providers': 3.883.0
@@ -27386,6 +27275,19 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
+  '@anthropic-ai/sdk@0.40.1(encoding@0.1.13)':
+    dependencies:
+      '@types/node': 18.19.124
+      '@types/node-fetch': 2.6.13
+      abort-controller: 3.0.0
+      agentkeepalive: 4.6.0
+      form-data-encoder: 1.7.2
+      formdata-node: 4.4.1
+      node-fetch: 2.7.0(encoding@0.1.13)
+    transitivePeerDependencies:
+      - encoding
+    optional: true
+
   '@anthropic-ai/sdk@0.51.0': {}
 
   '@anthropic-ai/sdk@0.54.0': {}
@@ -27394,7 +27296,7 @@ snapshots:
 
   '@anthropic-ai/vertex-sdk@0.11.5(encoding@0.1.13)':
     dependencies:
-      '@anthropic-ai/sdk': 0.51.0
+      '@anthropic-ai/sdk': 0.59.0
       google-auth-library: 9.15.1(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
@@ -27460,10 +27362,10 @@ snapshots:
     optionalDependencies:
       nodemailer: 8.0.4
 
-  '@auth/prisma-adapter@2.10.0(@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2))(nodemailer@8.0.4)':
+  '@auth/prisma-adapter@2.10.0(@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2))(nodemailer@8.0.4)':
     dependencies:
       '@auth/core': 0.40.0(nodemailer@8.0.4)
-      '@prisma/client': 7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2)
+      '@prisma/client': 7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2)
     transitivePeerDependencies:
       - '@simplewebauthn/browser'
       - '@simplewebauthn/server'
@@ -28183,113 +28085,6 @@ snapshots:
     dependencies:
       '@smithy/types': 4.13.1
       tslib: 2.8.1
-
-  '@azure/abort-controller@2.1.2':
-    dependencies:
-      tslib: 2.8.1
-
-  '@azure/core-auth@1.10.1':
-    dependencies:
-      '@azure/abort-controller': 2.1.2
-      '@azure/core-util': 1.13.1
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
-  '@azure/core-client@1.10.1':
-    dependencies:
-      '@azure/abort-controller': 2.1.2
-      '@azure/core-auth': 1.10.1
-      '@azure/core-rest-pipeline': 1.23.0
-      '@azure/core-tracing': 1.3.1
-      '@azure/core-util': 1.13.1
-      '@azure/logger': 1.3.0
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
-  '@azure/core-http-compat@2.4.0(@azure/core-client@1.10.1)(@azure/core-rest-pipeline@1.23.0)':
-    dependencies:
-      '@azure/abort-controller': 2.1.2
-      '@azure/core-client': 1.10.1
-      '@azure/core-rest-pipeline': 1.23.0
-
-  '@azure/core-paging@1.6.2':
-    dependencies:
-      tslib: 2.8.1
-
-  '@azure/core-rest-pipeline@1.23.0':
-    dependencies:
-      '@azure/abort-controller': 2.1.2
-      '@azure/core-auth': 1.10.1
-      '@azure/core-tracing': 1.3.1
-      '@azure/core-util': 1.13.1
-      '@azure/logger': 1.3.0
-      '@typespec/ts-http-runtime': 0.3.5
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
-  '@azure/core-tracing@1.3.1':
-    dependencies:
-      tslib: 2.8.1
-
-  '@azure/core-util@1.13.1':
-    dependencies:
-      '@azure/abort-controller': 2.1.2
-      '@typespec/ts-http-runtime': 0.3.5
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
-  '@azure/identity@4.13.1':
-    dependencies:
-      '@azure/abort-controller': 2.1.2
-      '@azure/core-auth': 1.10.1
-      '@azure/core-client': 1.10.1
-      '@azure/core-rest-pipeline': 1.23.0
-      '@azure/core-tracing': 1.3.1
-      '@azure/core-util': 1.13.1
-      '@azure/logger': 1.3.0
-      '@azure/msal-browser': 5.11.0
-      '@azure/msal-node': 5.2.2
-      open: 10.2.0
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
-  '@azure/logger@1.3.0':
-    dependencies:
-      '@typespec/ts-http-runtime': 0.3.5
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
-  '@azure/msal-browser@5.11.0':
-    dependencies:
-      '@azure/msal-common': 16.6.2
-
-  '@azure/msal-common@16.6.2': {}
-
-  '@azure/msal-node@5.2.2':
-    dependencies:
-      '@azure/msal-common': 16.6.2
-      jsonwebtoken: 9.0.2
-
-  '@azure/search-documents@12.2.0':
-    dependencies:
-      '@azure/core-auth': 1.10.1
-      '@azure/core-client': 1.10.1
-      '@azure/core-http-compat': 2.4.0(@azure/core-client@1.10.1)(@azure/core-rest-pipeline@1.23.0)
-      '@azure/core-paging': 1.6.2
-      '@azure/core-rest-pipeline': 1.23.0
-      '@azure/core-tracing': 1.3.1
-      '@azure/core-util': 1.13.1
-      '@azure/logger': 1.3.0
-      events: 3.3.0
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
 
   '@babel/code-frame@7.10.4':
     dependencies:
@@ -29460,7 +29255,8 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@cfworker/json-schema@4.1.1': {}
+  '@cfworker/json-schema@4.1.1':
+    optional: true
 
   '@chevrotain/cst-dts-gen@10.5.0':
     dependencies:
@@ -29494,7 +29290,8 @@ snapshots:
 
   '@chevrotain/utils@11.0.3': {}
 
-  '@cloudflare/workers-types@4.20251014.0': {}
+  '@cloudflare/workers-types@4.20251014.0':
+    optional: true
 
   '@codemirror/autocomplete@6.18.7':
     dependencies:
@@ -31030,7 +30827,7 @@ snapshots:
       - supports-color
     optional: true
 
-  '@google/genai@1.13.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)':
+  '@google/genai@1.13.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)':
     dependencies:
       google-auth-library: 9.15.1(encoding@0.1.13)
       ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
@@ -31042,36 +30839,12 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@google/genai@1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@5.0.10)':
-    dependencies:
-      google-auth-library: 9.15.1(encoding@0.1.13)
-      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-    optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
-    transitivePeerDependencies:
-      - bufferutil
-      - encoding
-      - supports-color
-      - utf-8-validate
-
   '@google/genai@1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)':
     dependencies:
       google-auth-library: 9.15.1(encoding@0.1.13)
-      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@6.0.6)
+      ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
-    transitivePeerDependencies:
-      - bufferutil
-      - encoding
-      - supports-color
-      - utf-8-validate
-
-  '@google/genai@1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)':
-    dependencies:
-      google-auth-library: 9.15.1(encoding@0.1.13)
-      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@6.0.6)
-    optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -31999,12 +31772,12 @@ snapshots:
 
   '@kwsites/promise-deferred@1.1.1': {}
 
-  '@langchain/core@1.1.48(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@5.23.2(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76))(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))':
+  '@langchain/core@1.1.48(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76))(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       '@standard-schema/spec': 1.1.0
       js-tiktoken: 1.0.21
-      langsmith: 0.7.3(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@5.23.2(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76))(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
+      langsmith: 0.7.3(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76))(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))
       mustache: 4.2.0
       p-queue: 6.6.2
       zod: 3.25.76
@@ -32014,6 +31787,7 @@ snapshots:
       - '@opentelemetry/sdk-trace-base'
       - openai
       - ws
+    optional: true
 
   '@levischuck/tiny-cbor@0.2.11': {}
 
@@ -32299,7 +32073,7 @@ snapshots:
   '@mistralai/mistralai@1.10.0':
     dependencies:
       zod: 3.25.76
-      zod-to-json-schema: 3.25.0(zod@3.25.76)
+      zod-to-json-schema: 3.25.2(zod@3.25.76)
 
   '@mixmark-io/domino@2.2.0': {}
 
@@ -32327,31 +32101,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)':
-    dependencies:
-      '@hono/node-server': 1.19.12(hono@4.12.10)
-      ajv: 8.18.0
-      ajv-formats: 3.0.1(ajv@8.18.0)
-      content-type: 1.0.5
-      cors: 2.8.5
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.0.6
-      express: 5.2.1
-      express-rate-limit: 8.3.2(express@5.2.1)
-      hono: 4.12.10
-      jose: 6.2.2
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.0
-      raw-body: 3.0.1
-      zod: 4.3.6
-      zod-to-json-schema: 3.25.2(zod@4.3.6)
-    optionalDependencies:
-      '@cfworker/json-schema': 4.1.1
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
   '@monaco-editor/loader@1.7.0':
     dependencies:
       state-local: 1.0.7
@@ -32366,6 +32115,7 @@ snapshots:
   '@mongodb-js/saslprep@1.4.11':
     dependencies:
       sparse-bitfield: 3.0.3
+    optional: true
 
   '@motionone/animation@10.18.0':
     dependencies:
@@ -32418,50 +32168,6 @@ snapshots:
       json5: 2.2.3
       jsonrepair: 3.13.0
       openai: 5.23.2(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
-      undici: 7.24.4
-      uuid: 11.1.0
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - encoding
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@musistudio/llms@1.0.31(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)':
-    dependencies:
-      '@anthropic-ai/sdk': 0.54.0
-      '@fastify/cors': 11.1.0
-      '@google/genai': 1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
-      dotenv: 16.6.1
-      fastify: 5.8.4
-      google-auth-library: 10.3.0
-      json5: 2.2.3
-      jsonrepair: 3.13.0
-      openai: 5.23.2(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
-      undici: 7.24.4
-      uuid: 11.1.0
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - encoding
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@musistudio/llms@1.0.31(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6)':
-    dependencies:
-      '@anthropic-ai/sdk': 0.54.0
-      '@fastify/cors': 11.1.0
-      '@google/genai': 1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
-      dotenv: 16.6.1
-      fastify: 5.8.4
-      google-auth-library: 10.3.0
-      json5: 2.2.3
-      jsonrepair: 3.13.0
-      openai: 5.23.2(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6)
       undici: 7.24.4
       uuid: 11.1.0
     transitivePeerDependencies:
@@ -35004,13 +34710,13 @@ snapshots:
       '@parcel/watcher-win32-ia32': 2.5.1
       '@parcel/watcher-win32-x64': 2.5.1
 
-  '@payloadcms/db-postgres@3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(better-sqlite3@11.10.0)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)':
+  '@payloadcms/db-postgres@3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)':
     dependencies:
-      '@payloadcms/drizzle': 3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@11.10.0)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
+      '@payloadcms/drizzle': 3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@12.11.1)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
       '@types/pg': 8.10.2
       console-table-printer: 2.12.1
       drizzle-kit: 0.31.7
-      drizzle-orm: 0.44.7(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@11.10.0)(kysely@0.28.15)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
+      drizzle-orm: 0.44.7(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@12.11.1)(kysely@0.28.15)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
       payload: 3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6)
       pg: 8.16.3
       prompts: 2.4.2
@@ -35047,11 +34753,11 @@ snapshots:
       - sqlite3
       - supports-color
 
-  '@payloadcms/drizzle@3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@11.10.0)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)':
+  '@payloadcms/drizzle@3.81.0(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@12.11.1)(kysely@0.28.15)(mysql2@3.15.3)(payload@3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6))(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)':
     dependencies:
       console-table-printer: 2.12.1
       dequal: 2.0.3
-      drizzle-orm: 0.44.7(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@11.10.0)(kysely@0.28.15)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
+      drizzle-orm: 0.44.7(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@12.11.1)(kysely@0.28.15)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7)
       payload: 3.81.0(bufferutil@4.0.9)(graphql@16.13.2)(typescript@5.9.2)(utf-8-validate@6.0.6)
       prompts: 2.4.2
       to-snake-case: 1.0.0
@@ -35309,18 +35015,18 @@ snapshots:
       prisma: 6.19.2(magicast@0.3.5)(typescript@5.9.2)
       typescript: 5.9.2
 
-  '@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2)':
+  '@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2)':
     dependencies:
       '@prisma/client-runtime-utils': 7.1.0
     optionalDependencies:
-      prisma: 7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2)
+      prisma: 7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2)
       typescript: 5.9.2
 
-  '@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2))(typescript@5.9.2)':
+  '@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2))(typescript@5.9.2)':
     dependencies:
       '@prisma/client-runtime-utils': 7.1.0
     optionalDependencies:
-      prisma: 7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2)
+      prisma: 7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2)
       typescript: 5.9.2
 
   '@prisma/config@6.17.1(magicast@0.3.5)':
@@ -35488,9 +35194,10 @@ snapshots:
 
   '@protobufjs/utf8@1.1.0': {}
 
-  '@qdrant/js-client-rest@1.18.0(typescript@5.9.2)':
+  '@qdrant/js-client-rest@1.13.0(typescript@5.9.2)':
     dependencies:
       '@qdrant/openapi-typescript-fetch': 1.2.6
+      '@sevinf/maybe': 0.5.0
       typescript: 5.9.2
       undici: 7.24.4
 
@@ -35510,7 +35217,7 @@ snapshots:
       ajv: 8.18.0
       chardet: 2.1.1
       diff: 7.0.0
-      dotenv: 17.2.3
+      dotenv: 17.4.2
       fdir: 6.5.0(picomatch@4.0.4)
       glob: 13.0.3
       google-auth-library: 9.15.1(encoding@0.1.13)
@@ -38600,6 +38307,7 @@ snapshots:
   '@redis/bloom@5.12.1(@redis/client@5.12.1(@opentelemetry/api@1.9.0))':
     dependencies:
       '@redis/client': 5.12.1(@opentelemetry/api@1.9.0)
+    optional: true
 
   '@redis/bloom@5.8.2(@redis/client@5.8.2)':
     dependencies:
@@ -38616,6 +38324,7 @@ snapshots:
       cluster-key-slot: 1.1.2
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
+    optional: true
 
   '@redis/client@5.8.2':
     dependencies:
@@ -38632,6 +38341,7 @@ snapshots:
   '@redis/json@5.12.1(@redis/client@5.12.1(@opentelemetry/api@1.9.0))':
     dependencies:
       '@redis/client': 5.12.1(@opentelemetry/api@1.9.0)
+    optional: true
 
   '@redis/json@5.8.2(@redis/client@5.8.2)':
     dependencies:
@@ -38644,6 +38354,7 @@ snapshots:
   '@redis/search@5.12.1(@redis/client@5.12.1(@opentelemetry/api@1.9.0))':
     dependencies:
       '@redis/client': 5.12.1(@opentelemetry/api@1.9.0)
+    optional: true
 
   '@redis/search@5.8.2(@redis/client@5.8.2)':
     dependencies:
@@ -38656,6 +38367,7 @@ snapshots:
   '@redis/time-series@5.12.1(@redis/client@5.12.1(@opentelemetry/api@1.9.0))':
     dependencies:
       '@redis/client': 5.12.1(@opentelemetry/api@1.9.0)
+    optional: true
 
   '@redis/time-series@5.8.2(@redis/client@5.8.2)':
     dependencies:
@@ -38663,7 +38375,7 @@ snapshots:
 
   '@reduxjs/toolkit@2.11.2(react-redux@9.2.0(@types/react@19.2.7)(react@19.1.0)(redux@5.0.1))(react@19.1.0)':
     dependencies:
-      '@standard-schema/spec': 1.0.0
+      '@standard-schema/spec': 1.1.0
       '@standard-schema/utils': 0.3.0
       immer: 11.1.4
       redux: 5.0.1
@@ -39543,6 +39255,8 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  '@sevinf/maybe@0.5.0': {}
 
   '@shikijs/core@3.22.0':
     dependencies:
@@ -40641,8 +40355,6 @@ snapshots:
 
   '@stablelib/base64@1.0.1': {}
 
-  '@standard-schema/spec@1.0.0': {}
-
   '@standard-schema/spec@1.1.0': {}
 
   '@standard-schema/utils@0.3.0': {}
@@ -40668,16 +40380,6 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/realtime-js@2.95.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
-    dependencies:
-      '@types/phoenix': 1.6.7
-      '@types/ws': 8.18.1
-      tslib: 2.8.1
-      ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   '@supabase/realtime-js@2.95.3(bufferutil@4.0.9)(utf-8-validate@6.0.6)':
     dependencies:
       '@types/phoenix': 1.6.7
@@ -40692,17 +40394,6 @@ snapshots:
     dependencies:
       iceberg-js: 0.8.1
       tslib: 2.8.1
-
-  '@supabase/supabase-js@2.95.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
-    dependencies:
-      '@supabase/auth-js': 2.95.3
-      '@supabase/functions-js': 2.95.3
-      '@supabase/postgrest-js': 2.95.3
-      '@supabase/realtime-js': 2.95.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      '@supabase/storage-js': 2.95.3
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
 
   '@supabase/supabase-js@2.95.3(bufferutil@4.0.9)(utf-8-validate@6.0.6)':
     dependencies:
@@ -42277,7 +41968,7 @@ snapshots:
   '@types/pg@8.10.2':
     dependencies:
       '@types/node': 20.19.27
-      pg-protocol: 1.10.3
+      pg-protocol: 1.14.0
       pg-types: 4.1.0
 
   '@types/pg@8.15.5':
@@ -42413,13 +42104,15 @@ snapshots:
 
   '@types/vscode@1.109.0': {}
 
-  '@types/webidl-conversions@7.0.3': {}
+  '@types/webidl-conversions@7.0.3':
+    optional: true
 
   '@types/whatwg-mimetype@3.0.2': {}
 
   '@types/whatwg-url@13.0.0':
     dependencies:
       '@types/webidl-conversions': 7.0.3
+    optional: true
 
   '@types/ws@8.18.1':
     dependencies:
@@ -42672,14 +42365,6 @@ snapshots:
       '@typescript-eslint/types': 8.50.0
       eslint-visitor-keys: 4.2.1
 
-  '@typespec/ts-http-runtime@0.3.5':
-    dependencies:
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - supports-color
-
   '@uiw/codemirror-extensions-basic-setup@4.25.4(@codemirror/autocomplete@6.18.7)(@codemirror/commands@6.10.2)(@codemirror/language@6.12.1)(@codemirror/lint@6.9.2)(@codemirror/search@6.5.11)(@codemirror/state@6.5.4)(@codemirror/view@6.38.4)':
     dependencies:
       '@codemirror/autocomplete': 6.18.7
@@ -42893,7 +42578,7 @@ snapshots:
       std-env: 3.9.0
       test-exclude: 7.0.1
       tinyrainbow: 1.2.0
-      vitest: 2.1.9(@types/node@20.19.22)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@25.0.1(bufferutil@4.0.9)(utf-8-validate@6.0.6))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
+      vitest: 2.1.9(@types/node@24.10.13)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@5.0.10))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@5.0.10))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -43019,7 +42704,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 1.2.0
-      vitest: 2.1.9(@types/node@20.19.22)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@25.0.1(bufferutil@4.0.9)(utf-8-validate@6.0.6))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
+      vitest: 2.1.9(@types/node@24.10.13)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@5.0.10))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@5.0.10))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
 
   '@vitest/utils@2.1.9':
     dependencies:
@@ -43275,9 +42960,11 @@ snapshots:
 
   adler-32@1.3.1: {}
 
-  afinn-165-financialmarketnews@3.0.0: {}
+  afinn-165-financialmarketnews@3.0.0:
+    optional: true
 
-  afinn-165@2.0.2: {}
+  afinn-165@2.0.2:
+    optional: true
 
   agent-base@4.3.0:
     dependencies:
@@ -43352,32 +43039,6 @@ snapshots:
       - solid-js
       - vue
 
-  ai@3.3.4(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6))(react@19.2.4)(solid-js@1.9.11)(sswr@2.1.0(svelte@4.2.20))(svelte@4.2.20)(vue@3.5.22(typescript@5.9.2))(zod@4.3.6):
-    dependencies:
-      '@ai-sdk/provider': 0.0.17
-      '@ai-sdk/provider-utils': 1.0.9(zod@4.3.6)
-      '@ai-sdk/react': 0.0.40(react@19.2.4)(zod@4.3.6)
-      '@ai-sdk/solid': 0.0.31(solid-js@1.9.11)(zod@4.3.6)
-      '@ai-sdk/svelte': 0.0.33(svelte@4.2.20)(zod@4.3.6)
-      '@ai-sdk/ui-utils': 0.0.28(zod@4.3.6)
-      '@ai-sdk/vue': 0.0.32(vue@3.5.22(typescript@5.9.2))(zod@4.3.6)
-      '@opentelemetry/api': 1.9.0
-      eventsource-parser: 1.1.2
-      json-schema: 0.4.0
-      jsondiffpatch: 0.7.3
-      nanoid: 5.1.6
-      secure-json-parse: 2.7.0
-      zod-to-json-schema: 3.22.5(zod@4.3.6)
-    optionalDependencies:
-      openai: 4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6)
-      react: 19.2.4
-      sswr: 2.1.0(svelte@4.2.20)
-      svelte: 4.2.20
-      zod: 4.3.6
-    transitivePeerDependencies:
-      - solid-js
-      - vue
-
   ai@3.3.4(openai@5.23.2(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76))(react@19.2.4)(solid-js@1.9.11)(sswr@2.1.0(svelte@4.2.20))(svelte@4.2.20)(vue@3.5.22(typescript@5.9.2))(zod@3.25.76):
     dependencies:
       '@ai-sdk/provider': 0.0.17
@@ -43411,15 +43072,6 @@ snapshots:
       '@ai-sdk/provider-utils': 3.0.21(zod@3.25.76)
       '@opentelemetry/api': 1.9.0
       zod: 3.25.76
-    optional: true
-
-  ai@5.0.133(zod@4.3.6):
-    dependencies:
-      '@ai-sdk/gateway': 2.0.39(zod@4.3.6)
-      '@ai-sdk/provider': 2.0.1
-      '@ai-sdk/provider-utils': 3.0.21(zod@4.3.6)
-      '@opentelemetry/api': 1.9.0
-      zod: 4.3.6
 
   ajv-formats@2.1.1(ajv@8.18.0):
     optionalDependencies:
@@ -43502,6 +43154,7 @@ snapshots:
   apparatus@0.0.10:
     dependencies:
       sylvester: 0.0.21
+    optional: true
 
   aproba@2.1.0: {}
 
@@ -44004,7 +43657,8 @@ snapshots:
     dependencies:
       jackspeak: 4.2.3
 
-  base-64@0.1.0: {}
+  base-64@0.1.0:
+    optional: true
 
   base64-arraybuffer@1.0.2: {}
 
@@ -44116,6 +43770,12 @@ snapshots:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
+
+  better-sqlite3@12.11.1:
+    dependencies:
+      bindings: 1.5.0
+      prebuild-install: 7.1.3
+    optional: true
 
   bidi-js@1.0.3:
     dependencies:
@@ -44276,7 +43936,8 @@ snapshots:
 
   bson-objectid@2.0.4: {}
 
-  bson@7.2.0: {}
+  bson@7.2.0:
+    optional: true
 
   buffer-crc32@0.2.13: {}
 
@@ -44727,18 +44388,6 @@ snapshots:
   clone@1.0.4: {}
 
   clone@2.1.2: {}
-
-  cloudflare@4.5.0(encoding@0.1.13):
-    dependencies:
-      '@types/node': 18.19.124
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0(encoding@0.1.13)
-    transitivePeerDependencies:
-      - encoding
 
   clsx@1.1.1: {}
 
@@ -45627,6 +45276,7 @@ snapshots:
     dependencies:
       base-64: 0.1.0
       md5: 2.3.0
+    optional: true
 
   dijkstrajs@1.0.3: {}
 
@@ -45764,7 +45414,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.44.7(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@11.10.0)(kysely@0.28.15)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7):
+  drizzle-orm@0.44.7(@cloudflare/workers-types@4.20251014.0)(@electric-sql/pglite@0.3.2)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2))(@types/better-sqlite3@7.6.13)(@types/pg@8.10.2)(better-sqlite3@12.11.1)(kysely@0.28.15)(mysql2@3.15.3)(pg@8.16.3)(postgres@3.4.7)(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(sqlite3@5.1.7):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20251014.0
       '@electric-sql/pglite': 0.3.2
@@ -45773,7 +45423,7 @@ snapshots:
       '@prisma/client': 6.19.0(prisma@6.17.1(magicast@0.3.5)(typescript@5.9.2))(typescript@5.9.2)
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.10.2
-      better-sqlite3: 11.10.0
+      better-sqlite3: 12.11.1
       kysely: 0.28.15
       mysql2: 3.15.3
       pg: 8.16.3
@@ -45844,7 +45494,7 @@ snapshots:
 
   effect@3.21.0:
     dependencies:
-      '@standard-schema/spec': 1.0.0
+      '@standard-schema/spec': 1.1.0
       fast-check: 3.23.2
 
   efrt@2.7.0: {}
@@ -46353,7 +46003,7 @@ snapshots:
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-react: 7.37.5(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-react-hooks: 5.2.0(eslint@9.39.1(jiti@2.6.1))
@@ -46369,7 +46019,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.1.0
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-react: 7.37.5(eslint@9.39.1(jiti@2.6.1))
@@ -46403,7 +46053,22 @@ snapshots:
       tinyglobby: 0.2.15
       unrs-resolver: 1.11.1
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
+    transitivePeerDependencies:
+      - supports-color
+
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)):
+    dependencies:
+      '@nolyfill/is-core-module': 1.0.39
+      debug: 4.4.3
+      eslint: 9.39.1(jiti@2.6.1)
+      get-tsconfig: 4.13.0
+      is-bun-module: 2.0.0
+      stable-hash: 0.0.5
+      tinyglobby: 0.2.15
+      unrs-resolver: 1.11.1
+    optionalDependencies:
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
     transitivePeerDependencies:
       - supports-color
 
@@ -46419,21 +46084,6 @@ snapshots:
       unrs-resolver: 1.11.1
     optionalDependencies:
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
-    transitivePeerDependencies:
-      - supports-color
-
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1)):
-    dependencies:
-      '@nolyfill/is-core-module': 1.0.39
-      debug: 4.4.3
-      eslint: 9.39.1(jiti@2.6.1)
-      get-tsconfig: 4.13.0
-      is-bun-module: 2.0.0
-      stable-hash: 0.0.5
-      tinyglobby: 0.2.15
-      unrs-resolver: 1.11.1
-    optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
     transitivePeerDependencies:
       - supports-color
 
@@ -46459,14 +46109,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1)):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2)
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.1(jiti@2.6.1))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
     transitivePeerDependencies:
       - supports-color
 
@@ -46499,7 +46149,7 @@ snapshots:
       - eslint-import-resolver-webpack
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@6.21.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1)):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -46539,7 +46189,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.1(jiti@2.6.1)
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.1(jiti@2.6.1))
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.50.0(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.2))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1)))(eslint@9.39.1(jiti@2.6.1))
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -48171,6 +47821,7 @@ snapshots:
       web-streams-polyfill: 3.3.3
     transitivePeerDependencies:
       - encoding
+    optional: true
 
   groq-sdk@0.5.0(encoding@0.1.13):
     dependencies:
@@ -48787,7 +48438,7 @@ snapshots:
       is-in-ci: 2.0.0
       patch-console: 2.0.0
       react: 19.1.1
-      react-reconciler: 0.33.0(react@19.1.1)
+      react-reconciler: 0.33.0(react@19.2.4)
       scheduler: 0.27.0
       signal-exit: 3.0.7
       slice-ansi: 7.1.0
@@ -50191,6 +49842,7 @@ snapshots:
   js-tiktoken@1.0.21:
     dependencies:
       base64-js: 1.5.1
+    optional: true
 
   js-tokens@10.0.0: {}
 
@@ -50488,7 +50140,8 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  kareem@3.3.0: {}
+  kareem@3.3.0:
+    optional: true
 
   katex@0.16.28:
     dependencies:
@@ -50553,15 +50206,16 @@ snapshots:
       vscode-languageserver-textdocument: 1.0.12
       vscode-uri: 3.0.8
 
-  langsmith@0.7.3(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@5.23.2(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76))(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)):
+  langsmith@0.7.3(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76))(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)):
     dependencies:
       p-queue: 6.6.2
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/exporter-trace-otlp-proto': 0.210.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-base': 2.4.0(@opentelemetry/api@1.9.0)
-      openai: 5.23.2(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76)
-      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      openai: 4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
+      ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
+    optional: true
 
   language-subtag-registry@0.3.23: {}
 
@@ -51270,43 +50924,15 @@ snapshots:
 
   media-typer@1.1.0: {}
 
-  mem0ai@3.0.6(b0a354d8a84104ec50da7f564e188a4d):
-    dependencies:
-      '@anthropic-ai/sdk': 0.59.0
-      '@azure/identity': 4.13.1
-      '@azure/search-documents': 12.2.0
-      '@cloudflare/workers-types': 4.20251014.0
-      '@google/genai': 1.17.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@5.0.10)
-      '@langchain/core': 1.1.48(@opentelemetry/api@1.9.0)(@opentelemetry/exporter-trace-otlp-proto@0.210.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.4.0(@opentelemetry/api@1.9.0))(openai@5.23.2(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76))(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      '@mistralai/mistralai': 1.10.0
-      '@qdrant/js-client-rest': 1.18.0(typescript@5.9.2)
-      '@supabase/supabase-js': 2.95.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      '@types/jest': 29.5.14
-      '@types/pg': 8.15.6
-      axios: 1.13.5
-      better-sqlite3: 11.10.0
-      cloudflare: 4.5.0(encoding@0.1.13)
-      compromise: 14.14.5
-      groq-sdk: 0.3.0(encoding@0.1.13)
-      natural: 8.1.1(@aws-sdk/credential-providers@3.883.0)(@opentelemetry/api@1.9.0)(gcp-metadata@7.0.1)(socks@2.8.7)
-      ollama: 0.5.18
-      openai: 4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76)
-      pg: 8.16.3
-      redis: 5.12.1(@opentelemetry/api@1.9.0)
-      uuid: 9.0.1
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - debug
-      - encoding
-      - ws
-
-  memjs@1.3.2: {}
+  memjs@1.3.2:
+    optional: true
 
   memoize-one@5.2.1: {}
 
   memoize-one@6.0.0: {}
 
-  memory-pager@1.5.0: {}
+  memory-pager@1.5.0:
+    optional: true
 
   memorystream@0.3.1: {}
 
@@ -52241,6 +51867,7 @@ snapshots:
     dependencies:
       '@types/whatwg-url': 13.0.0
       whatwg-url: 14.2.0
+    optional: true
 
   mongodb@7.2.0(@aws-sdk/credential-providers@3.883.0)(gcp-metadata@7.0.1)(socks@2.8.7):
     dependencies:
@@ -52251,6 +51878,7 @@ snapshots:
       '@aws-sdk/credential-providers': 3.883.0
       gcp-metadata: 7.0.1
       socks: 2.8.7
+    optional: true
 
   mongoose@9.6.3(@aws-sdk/credential-providers@3.883.0)(gcp-metadata@7.0.1)(socks@2.8.7):
     dependencies:
@@ -52268,6 +51896,7 @@ snapshots:
       - mongodb-client-encryption
       - snappy
       - socks
+    optional: true
 
   motion-dom@12.23.12:
     dependencies:
@@ -52290,9 +51919,11 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  mpath@0.9.0: {}
+  mpath@0.9.0:
+    optional: true
 
-  mquery@6.0.0: {}
+  mquery@6.0.0:
+    optional: true
 
   mrmime@2.0.1: {}
 
@@ -52391,6 +52022,7 @@ snapshots:
       - pg-native
       - snappy
       - socks
+    optional: true
 
   ndarray-ops@1.2.2:
     dependencies:
@@ -52983,21 +52615,6 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@4.104.0(encoding@0.1.13)(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76):
-    dependencies:
-      '@types/node': 18.19.124
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0(encoding@0.1.13)
-    optionalDependencies:
-      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - encoding
-
   openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76):
     dependencies:
       '@types/node': 18.19.124
@@ -53012,34 +52629,11 @@ snapshots:
       zod: 3.25.76
     transitivePeerDependencies:
       - encoding
-    optional: true
-
-  openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6):
-    dependencies:
-      '@types/node': 18.19.124
-      '@types/node-fetch': 2.6.13
-      abort-controller: 3.0.0
-      agentkeepalive: 4.6.0
-      form-data-encoder: 1.7.2
-      formdata-node: 4.4.1
-      node-fetch: 2.7.0(encoding@0.1.13)
-    optionalDependencies:
-      ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
-      zod: 4.3.6
-    transitivePeerDependencies:
-      - encoding
-    optional: true
 
   openai@5.11.0(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76):
     optionalDependencies:
       ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
       zod: 3.25.76
-
-  openai@5.23.2(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@3.25.76):
-    optionalDependencies:
-      ws: 8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10)
-      zod: 3.25.76
-    optional: true
 
   openai@5.23.2(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76):
     optionalDependencies:
@@ -53050,11 +52644,6 @@ snapshots:
     optionalDependencies:
       ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
       zod: 3.25.76
-
-  openai@5.23.2(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@4.3.6):
-    optionalDependencies:
-      ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
-      zod: 4.3.6
 
   openapi-fetch@0.9.8:
     dependencies:
@@ -53153,10 +52742,12 @@ snapshots:
     dependencies:
       eventemitter3: 4.0.7
       p-timeout: 3.2.0
+    optional: true
 
   p-timeout@3.2.0:
     dependencies:
       p-finally: 1.0.0
+    optional: true
 
   p-try@2.2.0: {}
 
@@ -53401,9 +52992,6 @@ snapshots:
       estree-walker: 3.0.3
       is-reference: 3.0.3
 
-  pg-cloudflare@1.2.7:
-    optional: true
-
   pg-cloudflare@1.4.0:
     optional: true
 
@@ -53415,13 +53003,14 @@ snapshots:
 
   pg-numeric@1.0.2: {}
 
-  pg-pool@3.10.1(pg@8.16.3):
+  pg-pool@3.14.0(pg@8.16.3):
     dependencies:
       pg: 8.16.3
 
   pg-pool@3.14.0(pg@8.21.0):
     dependencies:
       pg: 8.21.0
+    optional: true
 
   pg-protocol@1.10.3: {}
 
@@ -53447,13 +53036,13 @@ snapshots:
 
   pg@8.16.3:
     dependencies:
-      pg-connection-string: 2.9.1
-      pg-pool: 3.10.1(pg@8.16.3)
-      pg-protocol: 1.10.3
+      pg-connection-string: 2.13.0
+      pg-pool: 3.14.0(pg@8.16.3)
+      pg-protocol: 1.14.0
       pg-types: 2.2.0
       pgpass: 1.0.5
     optionalDependencies:
-      pg-cloudflare: 1.2.7
+      pg-cloudflare: 1.4.0
 
   pg@8.21.0:
     dependencies:
@@ -53464,6 +53053,7 @@ snapshots:
       pgpass: 1.0.5
     optionalDependencies:
       pg-cloudflare: 1.4.0
+    optional: true
 
   pgpass@1.0.5:
     dependencies:
@@ -53847,7 +53437,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2):
+  prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2):
     dependencies:
       '@prisma/config': 7.1.0(magicast@0.3.5)
       '@prisma/dev': 0.15.0(typescript@5.9.2)
@@ -53856,7 +53446,7 @@ snapshots:
       mysql2: 3.15.3
       postgres: 3.4.7
     optionalDependencies:
-      better-sqlite3: 11.10.0
+      better-sqlite3: 12.11.1
       typescript: 5.9.2
     transitivePeerDependencies:
       - '@types/react'
@@ -53865,7 +53455,7 @@ snapshots:
       - react-dom
     optional: true
 
-  prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@11.10.0)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2):
+  prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.2.4))(react@19.2.4)(typescript@5.9.2):
     dependencies:
       '@prisma/config': 7.1.0(magicast@0.3.5)
       '@prisma/dev': 0.15.0(typescript@5.9.2)
@@ -53874,7 +53464,7 @@ snapshots:
       mysql2: 3.15.3
       postgres: 3.4.7
     optionalDependencies:
-      better-sqlite3: 11.10.0
+      better-sqlite3: 12.11.1
       typescript: 5.9.2
     transitivePeerDependencies:
       - '@types/react'
@@ -54868,11 +54458,6 @@ snapshots:
       react: 19.1.0
       scheduler: 0.27.0
 
-  react-reconciler@0.33.0(react@19.1.1):
-    dependencies:
-      react: 19.1.1
-      scheduler: 0.27.0
-
   react-reconciler@0.33.0(react@19.2.4):
     dependencies:
       react: 19.2.4
@@ -55165,7 +54750,7 @@ snapshots:
       '@dotenvx/dotenvx': 1.49.0
       '@lmstudio/sdk': 1.5.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
       '@mistralai/mistralai': 1.10.0
-      '@musistudio/llms': 1.0.31(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
+      '@musistudio/llms': 1.0.31(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
       axios: 1.13.5
       dotenv: 16.6.1
       google-auth-library: 10.3.0
@@ -55186,9 +54771,9 @@ snapshots:
       - ws
       - zod
 
-  recoder-code-core@2.4.5(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(zod@3.25.76):
+  recoder-code-core@2.4.5(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(utf-8-validate@6.0.6)(zod@3.25.76):
     dependencies:
-      '@google/genai': 1.13.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
+      '@google/genai': 1.13.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)
       '@lvce-editor/ripgrep': 1.6.0
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@opentelemetry/api': 1.9.0
@@ -55350,6 +54935,7 @@ snapshots:
     transitivePeerDependencies:
       - '@node-rs/xxhash'
       - '@opentelemetry/api'
+    optional: true
 
   redis@5.8.2:
     dependencies:
@@ -56134,7 +55720,8 @@ snapshots:
       side-channel-map: 1.0.1
       side-channel-weakmap: 1.0.2
 
-  sift@17.1.3: {}
+  sift@17.1.3:
+    optional: true
 
   siginfo@2.0.0: {}
 
@@ -56385,6 +55972,7 @@ snapshots:
   sparse-bitfield@3.0.3:
     dependencies:
       memory-pager: 1.5.0
+    optional: true
 
   spawn-command@0.0.2: {}
 
@@ -56511,7 +56099,8 @@ snapshots:
       es-errors: 1.3.0
       internal-slot: 1.1.0
 
-  stopwords-iso@1.1.0: {}
+  stopwords-iso@1.1.0:
+    optional: true
 
   stream-buffers@2.2.0: {}
 
@@ -56915,7 +56504,8 @@ snapshots:
     dependencies:
       vue: 3.5.22(typescript@5.9.2)
 
-  sylvester@0.0.21: {}
+  sylvester@0.0.21:
+    optional: true
 
   symbol-tree@3.2.4: {}
 
@@ -57631,7 +57221,7 @@ snapshots:
     dependencies:
       is-typedarray: 1.0.0
 
-  typeorm@0.3.28(babel-plugin-macros@3.1.0)(better-sqlite3@11.10.0)(ioredis@5.9.3)(mysql2@3.15.3)(pg@8.21.0)(redis@5.12.1(@opentelemetry/api@1.9.0))(sqlite3@5.1.7)(ts-node@10.9.2(@swc/core@1.15.7(@swc/helpers@0.5.17))(@types/node@24.10.13)(typescript@5.9.2)):
+  typeorm@0.3.28(babel-plugin-macros@3.1.0)(better-sqlite3@12.11.1)(ioredis@5.9.3)(mysql2@3.15.3)(pg@8.21.0)(redis@5.12.1(@opentelemetry/api@1.9.0))(sqlite3@5.1.7)(ts-node@10.9.2(@swc/core@1.15.7(@swc/helpers@0.5.17))(@types/node@24.10.13)(typescript@5.9.2)):
     dependencies:
       '@sqltools/formatter': 1.2.5
       ansis: 4.2.0
@@ -57649,7 +57239,7 @@ snapshots:
       uuid: 11.1.0
       yargs: 17.7.2
     optionalDependencies:
-      better-sqlite3: 11.10.0
+      better-sqlite3: 12.11.1
       ioredis: 5.9.3
       mysql2: 3.15.3
       pg: 8.21.0
@@ -57706,7 +57296,8 @@ snapshots:
 
   uncrypto@0.1.3: {}
 
-  underscore@1.13.8: {}
+  underscore@1.13.8:
+    optional: true
 
   undici-types@5.26.5: {}
 
@@ -58058,7 +57649,8 @@ snapshots:
 
   uuid@11.1.0: {}
 
-  uuid@13.0.2: {}
+  uuid@13.0.2:
+    optional: true
 
   uuid@7.0.3: {}
 
@@ -58903,7 +58495,8 @@ snapshots:
 
   word@0.3.0: {}
 
-  wordnet-db@3.1.14: {}
+  wordnet-db@3.1.14:
+    optional: true
 
   wordwrap@1.0.0: {}
 
@@ -59155,10 +58748,6 @@ snapshots:
     dependencies:
       zod: 3.25.76
 
-  zod-to-json-schema@3.22.5(zod@4.3.6):
-    dependencies:
-      zod: 4.3.6
-
   zod-to-json-schema@3.25.0(zod@3.25.76):
     dependencies:
       zod: 3.25.76
@@ -59166,11 +58755,6 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
       zod: 3.25.76
-
-  zod-to-json-schema@3.25.2(zod@4.3.6):
-    dependencies:
-      zod: 4.3.6
-    optional: true
 
   zod-validation-error@1.5.0(zod@3.25.76):
     dependencies:
