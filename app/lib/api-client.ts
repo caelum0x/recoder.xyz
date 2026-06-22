@@ -66,6 +66,18 @@ interface UsageHistoryResponse {
   summary: { totalRecords: number; totalTokens: number; totalCost: number };
 }
 
+export interface AgentOsControlPlaneSummary {
+  generatedAt?: string;
+  counts?: Record<string, number>;
+  agents?: Array<{ agentId: string; displayName: string; runtime?: string; health?: string; capabilityLabels?: string[]; activeRunIds?: string[]; lastSeenAt?: string }>;
+  runs?: Array<{ runId: string; taskId: string; title?: string; state: string; assigneeAgentId?: string; artifactCount?: number; runtimeEvidenceCount?: number; approvalCount?: number; openWorkSignalCount?: number; updatedAt?: string }>;
+  approvals?: Array<{ approvalId: string; taskId: string; status: string; reason?: string; requiredAt?: string; requestedAt?: string }>;
+  workSignals?: Array<{ signalId: string; taskId: string; title: string; severity: string; status: string; detectedReason?: string; whyItMatters?: string; recommendedNextAction?: string; agentHandoffPrompt?: string }>;
+  runtimeEvidence?: Array<{ evidenceId: string; kind: string; status: string; title?: string; summary?: string }>;
+  deliveryArtifacts?: Array<{ artifactId: string; kind: string; url?: string; repository?: string; number?: number }>;
+  [key: string]: unknown;
+}
+
 class ApiClient {
   private baseUrl: string;
   
@@ -106,6 +118,15 @@ class ApiClient {
 
     const data = await response.json();
     return data.data || data;
+  }
+
+  /**
+   * Agent OS control-plane summary — online agents + capabilities, runs + state,
+   * approvals waiting, handoff/work signals, and delivery artifacts (PR/preview).
+   * This is the control-plane state recoder.xyz should show instead of a chat box.
+   */
+  async getAgentOsSummary(): Promise<AgentOsControlPlaneSummary> {
+    return this.request<AgentOsControlPlaneSummary>('/api/agent-os/summary');
   }
 
   /**
