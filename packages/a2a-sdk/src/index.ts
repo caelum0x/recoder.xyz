@@ -392,3 +392,7 @@ export {
   type RuntimeEvidenceArtifactRef,
   type RuntimeEvidenceKind,
 } from './bridge-contract';
+
+// Canonical A2A wire types merged from @a2a-js/sdk (owned). Namespaced to avoid
+// collision with Recoder's domain types (which intentionally diverge).
+export * as CanonicalA2A from './canonical-a2a-types';
