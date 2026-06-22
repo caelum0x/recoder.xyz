@@ -1,7 +1,7 @@
 /**
  * @module a2a-standard-server
  *
- * Standards-compliant A2A server using the official @a2a-js/sdk.
+ * Standards-compliant A2A server using the owned @recoder/a2a-js (merged from a2a-js).
  * Mounts at /a2a on the Express app, providing:
  *   - GET  /a2a/.well-known/agent-card.json  (Agent Card discovery)
  *   - POST /a2a/                             (JSON-RPC task handler)
@@ -14,8 +14,8 @@ const logger = createLogger('a2a-standard');
 
 export async function mountA2AStandardServer(app: express.Express): Promise<void> {
   try {
-    const { agentCardHandler, jsonRpcHandler, UserBuilder } = await import('@a2a-js/sdk/server/express');
-    const { InMemoryTaskStore, DefaultRequestHandler, DefaultExecutionEventBusManager } = await import('@a2a-js/sdk/server');
+    const { agentCardHandler, jsonRpcHandler, UserBuilder } = await import('@recoder/a2a-js/server/express');
+    const { InMemoryTaskStore, DefaultRequestHandler, DefaultExecutionEventBusManager } = await import('@recoder/a2a-js/server');
 
     const agentCard = {
       name: 'Recoder Platform',

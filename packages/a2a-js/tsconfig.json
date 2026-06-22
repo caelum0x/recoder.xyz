@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "ES2020", "module": "ESNext", "lib": ["ES2021","dom"],
+    "declaration": true, "outDir": "./dist", "rootDir": "./src",
+    "strict": false, "moduleResolution": "bundler", "esModuleInterop": true,
+    "skipLibCheck": true, "resolveJsonModule": true, "isolatedModules": true, "types": ["node"]
+  },
+  "include": ["src/**/*"], "exclude": ["node_modules","dist","src/server/grpc","src/client/transports/grpc","src/grpc"]
+}
