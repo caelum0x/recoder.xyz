@@ -31,6 +31,7 @@ import process from 'node:process';
 import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs/yargs';
 import { aiCommand } from '../commands/ai.js';
+import { piCommand } from '../commands/pi.js';
 import { authCommand } from '../commands/auth.js';
 import { extensionsCommand } from '../commands/extensions.js';
 import { mcpCommand } from '../commands/mcp.js';
@@ -368,6 +369,8 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     .command(authCommand)
     // Register AI subcommands
     .command(aiCommand)
+    // Register pi agent runtime command (owned @recoder/pi-coding-agent)
+    .command(piCommand)
     // Register web project management commands
     .command(webCommand)
     // Register init command for .recoder folder
