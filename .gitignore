@@ -216,6 +216,7 @@ recoder-agency/packages/pseudo-tiktoken/**/.turbo/
 !docker-backend/src/public-api/api-keys.ts
 !docker-backend/src/public-api/identity-tokens.ts
 !docker-backend/src/secrets-manager.ts
+!packages/pi-ai/src/env-api-keys.ts
 # OSS merge (@recoder/daytona-api-client): credential-free OpenAPI-generated
 # files whose names carry api-key trigger substrings — re-include so the owned
 # package builds on fresh checkout.
