@@ -54,7 +54,7 @@
     "http-proxy-middleware": "^2.0.6",
     "ioredis": "^5.9.1",
     "lib0": "^0.2.117",
-    "mem0ai": "^3.0.6",
+    "@recoder/mem0": "workspace:*",
     "nats": "^2.29.3",
     "node-fetch": "^2.7.0",
     "node-pty": "^1.1.0",
