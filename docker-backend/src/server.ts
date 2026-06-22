@@ -17021,6 +17021,22 @@ if (POLAR_WEBHOOK_SECRET) {
   logger.info('POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
 }
 
+// List sandboxes via the owned Daytona SDK (@recoder/sandbox-daytona) when the
+// SDK-backed path is enabled (DAYTONA_USE_SDK). Degrades gracefully otherwise.
+app.get('/api/daytona/sdk/sandboxes', authenticateRequest, async (_req: AuthenticatedRequest, res) => {
+  const { getDaytonaSdk, isDaytonaSdkEnabled } = await import('./daytona-sdk.js');
+  if (!isDaytonaSdkEnabled()) {
+    res.json({ success: true, data: { enabled: false, sandboxes: [] } });
+    return;
+  }
+  try {
+    const result = await getDaytonaSdk().list();
+    res.json({ success: true, data: { enabled: true, result } });
+  } catch (err) {
+    res.status(502).json({ success: false, error: err instanceof Error ? err.message : 'daytona sdk list failed' });
+  }
+});
+
 // Live library documentation via the owned Context7 docs SDK (@recoder/context7-sdk).
 app.get('/api/context7/docs', authenticateRequest, async (req: AuthenticatedRequest, res) => {
   const library = String(req.query?.library ?? '');
