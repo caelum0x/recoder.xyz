@@ -666,7 +666,11 @@ export class AgentOsController {
         auditBundle: result.auditBundle,
       });
       const run = await this.markCompiledRun(req.body, result.runtimeBundle.bundleId);
-      res.status(201).json({ success: true, data: { ...result, artifact, run } });
+      // Deepen with owned Git Nexus code-context (dependency/impact/source refs)
+      // for the compiled task so instruction bundles carry repo intelligence.
+      const task = (await this.repository.listTasks()).find((candidate) => candidate.taskId === result.runtimeBundle.taskId);
+      const contextPack = task ? buildTaskContextPack(task, optionalString(req.body?.repoRoot) ?? process.cwd()) : undefined;
+      res.status(201).json({ success: true, data: { ...result, artifact, run, contextPack } });
     } catch (error) {
       res.status(400).json({
         success: false,
