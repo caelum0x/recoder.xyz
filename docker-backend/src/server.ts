@@ -17021,6 +17021,20 @@ if (POLAR_WEBHOOK_SECRET) {
   logger.info('POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
 }
 
+// Current user's entitlement tier, resolved on-demand from their active Polar
+// subscription (links billing/polar-webhook subscription state -> tier + limits).
+app.get('/api/billing/tier', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  const userId = req.userId;
+  if (!userId) {
+    res.status(401).json({ success: false, error: 'unauthenticated' });
+    return;
+  }
+  const { resolveUserTier } = await import('./billing/subscription-tier.js');
+  const { getTierResourceLimits } = await import('./resources/tier-limits.js');
+  const tier = resolveUserTier(userId);
+  res.json({ success: true, data: { tier, limits: getTierResourceLimits(tier) } });
+});
+
 // Handle Polar webhook events - provision/deprovision resources on subscription changes
 onWebhookEvent('subscription.active', async (data: any) => {
   logger.info({ subscriptionId: data.id, productId: data.product_id }, 'subscription activated — provisioning resources');
