@@ -17021,6 +17021,19 @@ if (POLAR_WEBHOOK_SECRET) {
   logger.info('POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
 }
 
+// Live library documentation via the owned Context7 docs SDK (@recoder/context7-sdk).
+app.get('/api/context7/docs', authenticateRequest, async (req: AuthenticatedRequest, res) => {
+  const library = String(req.query?.library ?? '');
+  const query = String(req.query?.q ?? req.query?.query ?? '');
+  if (!library) {
+    res.status(400).json({ success: false, error: 'library query param is required' });
+    return;
+  }
+  const { fetchLibraryDocs } = await import('./context7.js');
+  const result = await fetchLibraryDocs(library, query);
+  res.json({ success: true, data: result });
+});
+
 // Current user's entitlement tier, resolved on-demand from their active Polar
 // subscription (links billing/polar-webhook subscription state -> tier + limits).
 app.get('/api/billing/tier', authenticateRequest, async (req: AuthenticatedRequest, res) => {
