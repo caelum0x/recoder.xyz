@@ -42,13 +42,14 @@ package, keeping the monorepo green at every step:
 
 | OSS | Owned as | Approach | Status |
 | --- | --- | --- | --- |
-| mem0 | `mem0ai` in-process (→ vendor `mem0/mem0-ts` as `@recoder/mem0`) | extract-subset | **wired** (SDK in-process via `docker-backend/src/mem0-client.ts`); ownership-vendor pending |
+| mem0 | `@recoder/mem0` (vendored `mem0/mem0-ts`, provider barrel pruned) | extract-subset | **DONE** — owned + in-process via `docker-backend/src/mem0-client.ts` (workspace:*) |
+| daytona | `@recoder/sandbox-daytona` + `@recoder/daytona-api-client` + `@recoder/daytona-toolbox-api-client` (OTel neutralized) | vendor-package | **DONE** — owned + wired into docker-backend daytona-client hub (`daytona-sdk.ts`, opt-in via DAYTONA_USE_SDK) |
 | a2a-js | `@recoder/a2a-sdk` (canonical proto vendored) | extract-types + conformance | **gate landed**; adopt `AgentCard`/types next |
 | pal-mcp-server | `@recoder/pal` | sidecar (Python) | adapter exists; deepen |
 | GitNexus | `@recoder/git-nexus` | sidecar + lib | adapter exists; wire as evidence producer |
 | beads | `@recoder/beads-adapter` (`bd`) | adopt | wired for issue tracking |
 | recoder-a2a | `@recoder/recoder-a2a` | adopt | published; route via bridge queue |
-| daytona-projects | `@recoder/sandbox-daytona` | adapt SDK | replace in-memory `SandboxRecord` store |
+| daytona-projects | `@recoder/sandbox-daytona` (see above) | vendor-package | **DONE** (see daytona row above) |
 | E2B | `@recoder/sandbox-e2b` | adapt SDK (fallback) | secondary sandbox |
 | stagehand | `@recoder/browser-stagehand` | adopt | browser-runtime evidence producer |
 | agent-browser | `@recoder/browser-cdp` (Rust sidecar) | sidecar | socket adapter → evidence |
