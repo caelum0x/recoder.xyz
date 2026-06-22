@@ -1146,6 +1146,14 @@ export function getDaytonaClient(): DaytonaClient {
 }
 
 /**
+ * Owned Daytona SDK (@recoder/sandbox-daytona) — the merged, first-party Daytona
+ * TypeScript SDK. Re-exported from the canonical daytona client module so the
+ * product runs on owned code; callers can opt into its richer Sandbox API
+ * (filesystem/git/process/lsp) via getDaytonaSdk() gated by isDaytonaSdkEnabled().
+ */
+export { getDaytonaSdk, isDaytonaSdkEnabled, resolveDaytonaSdkConfig } from './daytona-sdk.js';
+
+/**
  * Check if Daytona integration is configured (API key present).
  */
 export function isDaytonaConfigured(): boolean {
