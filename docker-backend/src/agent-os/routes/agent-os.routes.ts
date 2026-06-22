@@ -51,6 +51,7 @@ export function createAgentOsRouter(): Router {
   router.post('/work-signals', controller.upsertWorkSignal);
   router.patch('/work-signals/:signalId/status', controller.resolveWorkSignal);
   router.get('/memory', controller.memory);
+  router.get('/memory/search', controller.memorySearch);
   router.post('/memory/candidates', controller.upsertMemoryCandidate);
   router.post('/memory/candidates/:candidateId/review', controller.reviewMemoryCandidate);
   router.post('/memory/items', controller.upsertMemoryItem);
