@@ -23,10 +23,7 @@
     "ci:install-and-check": "pnpm run ci:check:noninteractive",
     "ci:install-and-check:local": "pnpm run ci:check:noninteractive"
   },
-  "optionalDependencies": {
-    "@mariozechner/pi-ai": "file:../pi-mono/packages/ai",
-    "@mariozechner/pi-coding-agent": "file:../pi-mono/packages/coding-agent"
-  },
+  "optionalDependencies": {},
   "dependencies": {
     "@a2a-js/sdk": "^0.3.13",
     "@babel/parser": "^7.29.0",
@@ -66,7 +63,8 @@
     "uuid": "^9.0.1",
     "ws": "^8.18.3",
     "y-protocols": "^1.0.7",
-    "yjs": "^13.6.29"
+    "yjs": "^13.6.29",
+    "@recoder/pi-coding-agent": "workspace:*"
   },
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
