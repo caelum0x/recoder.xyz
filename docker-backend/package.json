@@ -64,7 +64,8 @@
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.29",
     "@recoder/pi-coding-agent": "workspace:*",
-    "@recoder/a2a-js": "workspace:*"
+    "@recoder/a2a-js": "workspace:*",
+    "@recoder/context7-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
