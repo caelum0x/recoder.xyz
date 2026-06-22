@@ -59,6 +59,7 @@ package, keeping the monorepo green at every step:
 | openclaw | `@recoder/gateway-openclaw` | adapt (adapter exists) | channel→capability scopes |
 | polar | billing wiring of `polar-webhook` | adopt | wire to usage/entitlement events |
 | ziti | `ziti-*` (already wired) | sidecar | connectivity for runners |
+| context7 | `@recoder/context7-sdk` | vendor-package | **DONE** — GET /api/context7/docs (owned live-docs SDK) |
 | ollama / vllm | — | **DEFER** | 16GB/no-GPU box; cloud LLM + on-box Qdrant |
 
 ## Sequence (keep monorepo green; parallelize independent rows via worktree workflows)
