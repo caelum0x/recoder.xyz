@@ -25,7 +25,6 @@
   },
   "optionalDependencies": {},
   "dependencies": {
-    "@a2a-js/sdk": "^0.3.13",
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.29.0",
     "@recoder/a2a-sdk": "workspace:*",
@@ -64,7 +63,8 @@
     "ws": "^8.18.3",
     "y-protocols": "^1.0.7",
     "yjs": "^13.6.29",
-    "@recoder/pi-coding-agent": "workspace:*"
+    "@recoder/pi-coding-agent": "workspace:*",
+    "@recoder/a2a-js": "workspace:*"
   },
   "devDependencies": {
     "@types/babel__traverse": "^7.28.0",
