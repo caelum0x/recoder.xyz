@@ -134,3 +134,6 @@ export * from './utils/browser.js';
 // OpenAI Logging Utilities
 export { OpenAILogger, openaiLogger } from './utils/openaiLogger.js';
 export { Storage } from './config/storage.js';
+
+// Recoder Code pi runtime engine (owned @recoder/pi-coding-agent bridge).
+export * from './pi/pi-runtime.js';
