@@ -1,0 +1,40 @@
+{
+  "name": "@recoder/sandbox-daytona",
+  "version": "0.0.0",
+  "description": "Recoder-owned vendor of the Daytona TypeScript SDK (sandbox runtime). Merged from daytona-projects; uses owned @recoder/daytona-*-api-client.",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo node_modules"
+  },
+  "dependencies": {
+    "@recoder/daytona-api-client": "workspace:*",
+    "@recoder/daytona-toolbox-api-client": "workspace:*",
+    "axios": "^1.15.2",
+    "busboy": "^1.6.0",
+    "isomorphic-ws": "^5.0.0",
+    "pathe": "^1.1.2",
+    "shell-quote": "^1.8.1",
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/lib-storage": "^3.600.0",
+    "expand-tilde": "^2.0.2"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "@types/busboy": "^1.5.4",
+    "@types/shell-quote": "^1.7.5"
+  }
+}

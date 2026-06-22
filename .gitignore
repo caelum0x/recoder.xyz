@@ -216,6 +216,14 @@ recoder-agency/packages/pseudo-tiktoken/**/.turbo/
 !docker-backend/src/public-api/api-keys.ts
 !docker-backend/src/public-api/identity-tokens.ts
 !docker-backend/src/secrets-manager.ts
+# OSS merge (@recoder/daytona-api-client): credential-free OpenAPI-generated
+# files whose names carry api-key trigger substrings — re-include so the owned
+# package builds on fresh checkout.
+!packages/daytona-api-client/src/api/api-keys-api.ts
+!packages/daytona-api-client/src/models/api-key-list.ts
+!packages/daytona-api-client/src/models/api-key-response.ts
+!packages/daytona-api-client/src/models/create-api-key.ts
+!packages/daytona-api-client/src/models/regenerate-api-key-response.ts
 !extracted-from-openclaw/agents/agents/anthropic.setup-token.live.test.ts
 !extracted-from-openclaw/agents/agents/models-config.auto-injects-github-copilot-provider-token-is.test.ts
 !extracted-from-openclaw/agents/agents/models-config.falls-back-default-baseurl-token-exchange-fails.test.ts
