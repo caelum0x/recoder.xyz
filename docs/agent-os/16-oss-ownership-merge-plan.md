@@ -51,7 +51,7 @@ package, keeping the monorepo green at every step:
 | recoder-a2a | `@recoder/recoder-a2a` | adopt | published; route via bridge queue |
 | daytona-projects | `@recoder/sandbox-daytona` (see above) | vendor-package | **DONE** (see daytona row above) |
 | E2B | `@recoder/sandbox-e2b` | adapt SDK (fallback) | secondary sandbox |
-| stagehand | `@recoder/browser-stagehand` | adopt | browser-runtime evidence producer |
+| stagehand | `/browser-stagehand` | adopt | TODO — custom esbuild build, from-scratch consumer |
 | agent-browser | `@recoder/browser-cdp` (Rust sidecar) | sidecar | socket adapter → evidence |
 | opencode | `@recoder/runtime-opencode` | extract types/session | runtime adapter |
 | pi | `/pi-{ai,agent-core,tui,coding-agent}` | vendor-packages | **DONE** — used in docker-backend A2A pi adapter + recoder-code `pi` command |
