@@ -168,7 +168,10 @@ coding-execution services. Step 6 must integrate with these, not reinvent them:
    exposes workspace RunEvents back over A2A (reuse the a2a event bridge).
 
 ### Known TODO (truthful gaps)
-- RunEvent tailing: stream tmux pane output into the control-plane RunEvent log.
-- mem0 recall/candidate in the bundle + delivery.
+- ~~RunEvent tailing~~ DONE (run-tailer.ts streams tmux pane → RunEvent log).
+- ~~mem0 recall in the bundle~~ DONE; mem0 **candidate on delivery** still TODO.
+- Substrate interface + daytona impl (step 6 reconciliation above).
+- A2A entry: inbound A2A code task → createWorkspace (step 6).
+- Thin operator console (step 7).
 - Full e2e launch verified on a box with tmux installed + agent CLI auth.
 - openfang sidecar deployment (step 4).
