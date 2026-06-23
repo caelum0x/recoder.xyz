@@ -30,9 +30,12 @@ import { enrichPrompt } from './bundle.js';
 import { startRunTail } from './run-tailer.js';
 import { getSubstrate } from './substrate.js';
 import { registerTmuxSubstrate } from './substrate-tmux.js';
+import { registerDaytonaSubstrate } from './substrate-daytona.js';
 
-// Register the default execution substrate (local git worktree + tmux).
+// Register execution substrates: local git worktree + tmux (default) and the
+// remote Daytona sandbox. Selection is per-workspace via Workspace.substrate.
 registerTmuxSubstrate();
+registerDaytonaSubstrate();
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
