@@ -25,6 +25,7 @@ import {
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
 import { startSession, type ConductorSession } from './tmux-orchestrator.js';
+import { resolveRuntimeCommand } from './runtime-commands.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
@@ -39,8 +40,12 @@ export interface CreateWorkspaceInput {
   repoPath: string;
   /** Runtime that will drive the work (agent-os surface id, e.g. 'claude_code'). */
   runtimeId: string;
-  /** Command the agent runs inside the worktree. */
-  command: string;
+  /** Explicit command to run; if omitted, resolved from runtimeId + prompt. */
+  command?: string;
+  /** Task prompt — used to resolve the headless CLI invocation for the runtime. */
+  prompt?: string;
+  /** Optional model override passed to the runtime CLI. */
+  model?: string;
   createdBy: string;
   branch?: string;
   baseRef?: string;
@@ -82,6 +87,12 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   const workspaceId = `ws_${randomUUID()}`;
   const branch = input.branch || `recoder/${workspaceId}`;
 
+  // Resolve the real headless CLI invocation from the runtime + prompt, unless an
+  // explicit command was supplied. Fails fast (no stub) if neither is usable.
+  const command =
+    input.command ??
+    resolveRuntimeCommand(input.runtimeId, { prompt: input.prompt ?? '', model: input.model }).commandLine;
+
   let workspace: Workspace = {
     workspaceId,
     spaceId: input.spaceId,
@@ -106,7 +117,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
     const session: ConductorSession = await startSession({
       sessionId: workspaceId,
       repoPath: input.repoPath,
-      command: input.command,
+      command,
       branch,
       baseRef: input.baseRef,
     });
