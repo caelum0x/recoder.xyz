@@ -36,6 +36,16 @@ export interface SubstrateHandle {
   sessionName?: string;
 }
 
+export interface SubstrateDiff {
+  /** `git diff --stat` summary against the base ref. */
+  stat: string;
+  /** Full unified patch of tracked changes against the base ref. */
+  patch: string;
+  /** Untracked files not yet in the patch. */
+  untracked: string[];
+  changedFiles: number;
+}
+
 export interface ConductorSubstrate {
   id: WorkspaceSubstrate;
   available(): Promise<{ available: boolean; reason?: string }>;
@@ -45,6 +55,8 @@ export interface ConductorSubstrate {
   capture(handle: SubstrateHandle, lines?: number): Promise<string | null>;
   /** Whether the agent process/session is still alive. */
   alive(handle: SubstrateHandle): Promise<boolean>;
+  /** Reviewable diff of the work against `baseRef`. */
+  diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff>;
   /** Stop the agent and (optionally) remove its isolation. */
   teardown(handle: SubstrateHandle, options?: { removeIsolation?: boolean }): Promise<void>;
 }

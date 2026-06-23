@@ -17,11 +17,17 @@ import {
 import {
   registerSubstrate,
   type ConductorSubstrate,
+  type SubstrateDiff,
   type SubstrateHandle,
   type SubstrateLaunchInput,
 } from './substrate.js';
 
 const exec = promisify(execFile);
+
+async function git(cwd: string, args: string[]): Promise<string> {
+  const { stdout } = await exec('git', ['-C', cwd, ...args], { maxBuffer: 32 * 1024 * 1024 });
+  return stdout;
+}
 
 const tmuxWorktreeSubstrate: ConductorSubstrate = {
   id: 'tmux_worktree',
@@ -59,6 +65,28 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
     } catch {
       return false;
     }
+  },
+
+  async diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff> {
+    if (!handle.worktreePath) throw new Error('tmux_worktree diff requires a worktree path');
+    const cwd = handle.worktreePath;
+    const base = baseRef || 'HEAD';
+    const [stat, patch, status] = await Promise.all([
+      git(cwd, ['--no-pager', 'diff', '--stat', base]),
+      git(cwd, ['--no-pager', 'diff', base]),
+      git(cwd, ['status', '--porcelain']),
+    ]);
+    const untracked = status
+      .split('\n')
+      .filter((line) => line.startsWith('??'))
+      .map((line) => line.slice(3).trim())
+      .filter(Boolean);
+    const changedFiles =
+      stat
+        .trim()
+        .split('\n')
+        .filter((l) => l.includes('|')).length + untracked.length;
+    return { stat: stat.trim(), patch, untracked, changedFiles };
   },
 
   async teardown(handle: SubstrateHandle, options?: { removeIsolation?: boolean }): Promise<void> {

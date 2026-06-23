@@ -8,15 +8,12 @@
  *
  * See docs/CONDUCTOR-ARCHITECTURE.md (review → merge → archive).
  */
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import type { Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
 import { getSubstrate } from './substrate.js';
 import { stopRunTail } from './run-tailer.js';
 
-const exec = promisify(execFile);
 const logger = createLogger('conductor:review');
 
 export interface WorkspaceDiff {
@@ -45,39 +42,25 @@ async function requireWorktree(workspaceId: string): Promise<Workspace & { workt
  */
 export async function workspaceDiff(workspaceId: string): Promise<WorkspaceDiff> {
   const workspace = await requireWorktree(workspaceId);
-  const cwd = workspace.worktreePath;
   const base = workspace.baseRef || 'HEAD';
 
-  const [stat, patch, status] = await Promise.all([
-    git(cwd, ['--no-pager', 'diff', '--stat', base]),
-    git(cwd, ['--no-pager', 'diff', base]),
-    git(cwd, ['status', '--porcelain']),
-  ]);
-
-  const untracked = status
-    .split('\n')
-    .filter((line) => line.startsWith('??'))
-    .map((line) => line.slice(3).trim())
-    .filter(Boolean);
-
-  const changedFiles =
-    stat
-      .trim()
-      .split('\n')
-      .filter((l) => l.includes('|')).length + untracked.length;
+  const result = await getSubstrate(workspace.substrate).diff(
+    { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
+    base,
+  );
 
   if (workspace.state === 'running') {
-    await advanceWorkspace(workspaceId, 'awaiting_review', undefined, { changedFiles });
+    await advanceWorkspace(workspaceId, 'awaiting_review', undefined, { changedFiles: result.changedFiles });
   }
 
   return {
     workspaceId,
     baseRef: base,
     branch: workspace.branch,
-    stat: stat.trim(),
-    patch,
-    untracked,
-    changedFiles,
+    stat: result.stat,
+    patch: result.patch,
+    untracked: result.untracked,
+    changedFiles: result.changedFiles,
   };
 }
 
@@ -106,9 +89,4 @@ export async function archiveWorkspace(workspaceId: string): Promise<Workspace> 
   });
   logger.info({ workspaceId }, 'workspace archived');
   return archived;
-}
-
-async function git(cwd: string, args: string[]): Promise<string> {
-  const { stdout } = await exec('git', ['-C', cwd, ...args], { maxBuffer: 32 * 1024 * 1024 });
-  return stdout;
 }
