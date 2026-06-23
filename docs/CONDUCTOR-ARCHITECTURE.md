@@ -145,9 +145,10 @@ Restart at any point → reconciler rebinds from DB + tmux + worktrees; no work 
    and Rust can't be built on the current disk. A client now would be a stub.
 5. **DONE** — Knowledge: task constraints + git-nexus repo context + context7 docs
    into the prompt, with provenance. (mem0 recall still TODO.)
-6. **NEXT** — Interop + substrate: A2A entry (external agents launch workspaces);
-   daytona as alternate execution substrate behind the same contract.
-7. **NEXT** — Thin operator console over the APIs (no chat).
+6. **DONE** — Interop + substrate: ConductorSubstrate contract with tmux_worktree +
+   daytona impls (selected per Workspace.substrate); A2A entry (inbound A2A code task
+   → createWorkspace, reply with workspace/run ids). `GET /substrates` exposes availability.
+7. **NEXT** — Thin operator console over the APIs (no chat). [frontend — deprioritized]
 
 ### Step 6 reconciliation — reuse existing a2a services, do NOT duplicate
 
@@ -169,12 +170,14 @@ coding-execution services. Step 6 must integrate with these, not reinvent them:
 
 ### Known TODO (truthful gaps)
 - ~~RunEvent tailing~~ DONE (run-tailer.ts streams pane → RunEvent log, substrate-routed).
-- ~~mem0 recall in the bundle~~ DONE; mem0 **candidate on delivery** still TODO.
+- ~~mem0 recall in the bundle~~ DONE; ~~candidate on delivery~~ DONE (reviewable
+  MemoryCandidate + pull_request artifact on merge).
 - ~~Substrate interface~~ DONE — `ConductorSubstrate` (launch/capture/alive/diff/teardown)
   + registry + tmux_worktree impl; tailer/review/workspace-service all route through it;
   `GET /substrates` exposes availability. **daytona impl** (one drop-in file delegating
   to a2a/cli-agent-runtime + daytona-sdk) still TODO — needs Daytona creds to be real.
-- A2A entry: inbound A2A code task → createWorkspace (step 6).
-- Thin operator console (step 7).
+- ~~A2A entry~~ DONE (conductor/a2a-entry.ts).
+- Thin operator console (step 7) — frontend, deprioritized.
 - Full e2e launch verified on a box with tmux installed + agent CLI auth.
+- daytona substrate runtime verification (needs Daytona creds + reachable remote).
 - openfang sidecar deployment (step 4).
