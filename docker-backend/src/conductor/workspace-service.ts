@@ -111,6 +111,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
       taskId: input.taskId,
       repoPath: input.repoPath,
       library: input.library,
+      userId: input.createdBy,
     });
     knowledgeSources = enriched.sources;
     command = resolveRuntimeCommand(input.runtimeId, { prompt: enriched.prompt, model: input.model }).commandLine;
