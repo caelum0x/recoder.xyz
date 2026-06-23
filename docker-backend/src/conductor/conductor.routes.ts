@@ -17,6 +17,7 @@ import {
   getWorkspace,
   reconcile,
 } from './workspace-service.js';
+import { runtimeAvailability } from './runtime-commands.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -73,6 +74,11 @@ export function createConductorRouter(): Router {
     res.json({ success: true });
   });
 
+  // Which installed agent CLIs Conductor can actually launch (truthful availability).
+  router.get('/runtimes', async (_req: Request, res: Response) => {
+    res.json({ success: true, data: await runtimeAvailability() });
+  });
+
   // --- Workspaces: the persisted, restart-survivable unit of parallel work ---
 
   router.get('/workspaces', async (_req: Request, res: Response) => {
@@ -81,12 +87,12 @@ export function createConductorRouter(): Router {
 
   router.post('/workspaces', async (req: Request, res: Response) => {
     try {
-      const { spaceId, projectId, taskId, repoPath, runtimeId, command, createdBy, branch, baseRef, env, metadata } =
+      const { spaceId, projectId, taskId, repoPath, runtimeId, command, prompt, model, createdBy, branch, baseRef, env, metadata } =
         req.body ?? {};
-      if (!spaceId || !projectId || !taskId || !repoPath || !runtimeId || !command || !createdBy) {
+      if (!spaceId || !projectId || !taskId || !repoPath || !runtimeId || !createdBy || (!command && !prompt)) {
         res.status(400).json({
           success: false,
-          error: 'spaceId, projectId, taskId, repoPath, runtimeId, command, and createdBy are required',
+          error: 'spaceId, projectId, taskId, repoPath, runtimeId, createdBy, and one of (command|prompt) are required',
         });
         return;
       }
@@ -97,6 +103,8 @@ export function createConductorRouter(): Router {
         repoPath,
         runtimeId,
         command,
+        prompt,
+        model,
         createdBy,
         branch,
         baseRef,
@@ -105,7 +113,7 @@ export function createConductorRouter(): Router {
       });
       res.status(workspace.state === 'failed' ? 409 : 201).json({ success: true, data: workspace });
     } catch (err) {
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'create failed' });
+      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'create failed' });
     }
   });
 
