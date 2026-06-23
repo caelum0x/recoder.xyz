@@ -26,6 +26,7 @@ import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
 import { startSession, type ConductorSession } from './tmux-orchestrator.js';
 import { resolveRuntimeCommand } from './runtime-commands.js';
+import { enrichPrompt } from './bundle.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
@@ -46,6 +47,8 @@ export interface CreateWorkspaceInput {
   prompt?: string;
   /** Optional model override passed to the runtime CLI. */
   model?: string;
+  /** Library to enrich the prompt with docs via context7 (e.g. 'next.js'). */
+  library?: string;
   createdBy: string;
   branch?: string;
   baseRef?: string;
@@ -87,11 +90,22 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   const workspaceId = `ws_${randomUUID()}`;
   const branch = input.branch || `recoder/${workspaceId}`;
 
-  // Resolve the real headless CLI invocation from the runtime + prompt, unless an
-  // explicit command was supplied. Fails fast (no stub) if neither is usable.
-  const command =
-    input.command ??
-    resolveRuntimeCommand(input.runtimeId, { prompt: input.prompt ?? '', model: input.model }).commandLine;
+  // Enrich the prompt with owned knowledge (task constraints, git-nexus repo
+  // context, context7 docs) and record provenance, then resolve the real headless
+  // CLI invocation. An explicit command bypasses enrichment. Fails fast (no stub)
+  // if neither command nor a usable prompt is given.
+  let knowledgeSources: string[] = [];
+  let command = input.command;
+  if (!command) {
+    const enriched = await enrichPrompt({
+      prompt: input.prompt ?? '',
+      taskId: input.taskId,
+      repoPath: input.repoPath,
+      library: input.library,
+    });
+    knowledgeSources = enriched.sources;
+    command = resolveRuntimeCommand(input.runtimeId, { prompt: enriched.prompt, model: input.model }).commandLine;
+  }
 
   let workspace: Workspace = {
     workspaceId,
@@ -106,7 +120,10 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
     createdBy: input.createdBy,
     createdAt: now,
     updatedAt: now,
-    metadata: input.metadata,
+    metadata: {
+      ...(input.metadata ?? {}),
+      ...(knowledgeSources.length ? { knowledgeSources } : {}),
+    },
   };
   // State of record FIRST — survives a crash mid-provision.
   workspace = await repository().upsertWorkspace(workspace);
