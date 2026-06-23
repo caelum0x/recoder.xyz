@@ -15,6 +15,7 @@ import {
   createWorkspace,
   listWorkspaces,
   getWorkspace,
+  listWorkspaceEvents,
   reconcile,
 } from './workspace-service.js';
 import { runtimeAvailability } from './runtime-commands.js';
@@ -126,6 +127,11 @@ export function createConductorRouter(): Router {
       return;
     }
     res.json({ success: true, data: workspace });
+  });
+
+  // Streamed RunEvents for the workspace's run (live terminal + lifecycle log).
+  router.get('/workspaces/:workspaceId/events', async (req: Request, res: Response) => {
+    res.json({ success: true, data: await listWorkspaceEvents(req.params.workspaceId) });
   });
 
   // Reviewable diff of the workspace's worktree against its base ref.

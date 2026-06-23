@@ -19,6 +19,7 @@ import { promisify } from 'node:util';
 import {
   isTerminalWorkspaceState,
   transitionWorkspace,
+  type TaskRun,
   type Workspace,
   type WorkspaceState,
 } from '@recoder/agent-os';
@@ -27,6 +28,7 @@ import { createLogger } from '../logger';
 import { startSession, type ConductorSession } from './tmux-orchestrator.js';
 import { resolveRuntimeCommand } from './runtime-commands.js';
 import { enrichPrompt } from './bundle.js';
+import { startRunTail } from './run-tailer.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
@@ -63,6 +65,13 @@ export async function listWorkspaces(): Promise<Workspace[]> {
 
 export async function getWorkspace(workspaceId: string): Promise<Workspace | null> {
   return repository().getWorkspace(workspaceId);
+}
+
+/** RunEvents streamed for a workspace's run (the live terminal + lifecycle log). */
+export async function listWorkspaceEvents(workspaceId: string) {
+  const runId = `run_${workspaceId}`;
+  const events = await repository().listEvents();
+  return events.filter((e) => e.runId === runId);
 }
 
 /** Transition a persisted workspace to `to` (enforced state machine) and save it. */
@@ -145,8 +154,30 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
         'ready',
       ),
     );
-    workspace = await repository().upsertWorkspace(transitionWorkspace(workspace, 'running'));
-    logger.info({ workspaceId, branch, session: session.tmuxName }, 'workspace created + running');
+    // Create the control-plane run and start streaming terminal output into the
+    // RunEvent log (the audit trail + UI/A2A source).
+    const runId = `run_${workspaceId}`;
+    const run: TaskRun = {
+      runId,
+      taskId: input.taskId,
+      spaceId: input.spaceId,
+      state: 'running',
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      metadata: { workspaceId, runtimeId: input.runtimeId },
+    };
+    await repository().upsertRun(run);
+
+    workspace = await repository().upsertWorkspace(transitionWorkspace({ ...workspace, runId }, 'running'));
+
+    startRunTail({
+      workspaceId,
+      taskId: input.taskId,
+      runId,
+      sessionName: session.tmuxName,
+    });
+
+    logger.info({ workspaceId, runId, branch, session: session.tmuxName }, 'workspace created + running');
     return workspace;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
