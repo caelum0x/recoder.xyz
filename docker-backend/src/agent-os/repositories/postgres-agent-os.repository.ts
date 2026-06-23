@@ -16,6 +16,7 @@ import type {
   TaskSpec,
   WorkLock,
   WorkSignal,
+  Workspace,
 } from '@recoder/agent-os';
 import type { OutboxRecord } from '@recoder/agent-events';
 import type { RecoderComponentDescriptor } from '@recoder/oss-registry';
@@ -50,7 +51,67 @@ export class PostgresAgentOsRepository implements AgentOsRepository {
       outbox: await this.listOutbox(),
       spaces: await this.listSpaces(),
       ossComponents: await this.listOssComponents(),
+      workspaces: await this.listWorkspaces(),
     };
+  }
+
+  async listWorkspaces(): Promise<Workspace[]> {
+    const rows = await queryRows<WorkspaceRow>(this.db, 'select * from conductor_workspaces order by created_at asc');
+    return rows
+      .map((row) => domainFromJson<Workspace>(row.metadata))
+      .filter((workspace): workspace is Workspace => workspace !== undefined);
+  }
+
+  async upsertWorkspace(workspace: Workspace): Promise<Workspace> {
+    await this.db.query(
+      `insert into conductor_workspaces (
+         workspace_id, space_id, project_id, task_id, run_id, runtime_id, substrate,
+         branch, base_ref, worktree_path, session_name, state, created_by, metadata, created_at, updated_at
+       )
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       on conflict (workspace_id) do update set
+         space_id = excluded.space_id,
+         project_id = excluded.project_id,
+         task_id = excluded.task_id,
+         run_id = excluded.run_id,
+         runtime_id = excluded.runtime_id,
+         substrate = excluded.substrate,
+         branch = excluded.branch,
+         base_ref = excluded.base_ref,
+         worktree_path = excluded.worktree_path,
+         session_name = excluded.session_name,
+         state = excluded.state,
+         metadata = excluded.metadata,
+         updated_at = excluded.updated_at`,
+      [
+        workspace.workspaceId,
+        workspace.spaceId,
+        workspace.projectId,
+        workspace.taskId,
+        workspace.runId ?? null,
+        workspace.runtimeId,
+        workspace.substrate,
+        workspace.branch,
+        workspace.baseRef,
+        workspace.worktreePath ?? null,
+        workspace.sessionName ?? null,
+        workspace.state,
+        workspace.createdBy,
+        withDomain(workspace.metadata, workspace),
+        workspace.createdAt,
+        workspace.updatedAt,
+      ],
+    );
+    return workspace;
+  }
+
+  async getWorkspace(workspaceId: string): Promise<Workspace | null> {
+    const rows = await queryRows<WorkspaceRow>(
+      this.db,
+      'select * from conductor_workspaces where workspace_id = $1 limit 1',
+      [workspaceId],
+    );
+    return rows[0] ? domainFromJson<Workspace>(rows[0].metadata) ?? null : null;
   }
 
   async listSpaces(): Promise<Space[]> {
@@ -768,6 +829,25 @@ type WorkSignalRow = QueryResultRow & {
   detected_at: string | Date;
   resolved_at: string | Date | null;
   resolved_by: string | null;
+};
+
+type WorkspaceRow = QueryResultRow & {
+  workspace_id: string;
+  space_id: string;
+  project_id: string;
+  task_id: string;
+  run_id: string | null;
+  runtime_id: string;
+  substrate: string;
+  branch: string;
+  base_ref: string;
+  worktree_path: string | null;
+  session_name: string | null;
+  state: string;
+  created_by: string;
+  metadata: Record<string, unknown>;
+  created_at: string | Date;
+  updated_at: string | Date;
 };
 
 type PayloadRow = QueryResultRow & {

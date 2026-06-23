@@ -15,6 +15,7 @@ import type {
   TaskSpec,
   WorkLock,
   WorkSignal,
+  Workspace,
 } from '@recoder/agent-os';
 import type { OutboxRecord } from '@recoder/agent-events';
 import type { RecoderComponentDescriptor } from '@recoder/oss-registry';
@@ -38,6 +39,7 @@ export type AgentOsRecordMap = {
   outbox: OutboxRecord[];
   spaces: Map<string, Space>;
   ossComponents: Map<string, RecoderComponentDescriptor>;
+  workspaces: Map<string, Workspace>;
 };
 
 export class InMemoryAgentOsRepository implements AgentOsRepository {
@@ -59,6 +61,7 @@ export class InMemoryAgentOsRepository implements AgentOsRepository {
     outbox: [],
     spaces: new Map(),
     ossComponents: new Map(),
+    workspaces: new Map(),
   };
 
   private onChange: (() => void) | null = null;
@@ -92,7 +95,22 @@ export class InMemoryAgentOsRepository implements AgentOsRepository {
       outbox: this.listOutbox(),
       spaces: this.listSpaces(),
       ossComponents: this.listOssComponents(),
+      workspaces: this.listWorkspaces(),
     };
+  }
+
+  listWorkspaces(): Workspace[] {
+    return [...this.records.workspaces.values()];
+  }
+
+  upsertWorkspace(workspace: Workspace): Workspace {
+    this.records.workspaces.set(workspace.workspaceId, workspace);
+    this.changed();
+    return workspace;
+  }
+
+  getWorkspace(workspaceId: string): Workspace | null {
+    return this.records.workspaces.get(workspaceId) ?? null;
   }
 
   listSpaces(): Space[] {
@@ -356,6 +374,7 @@ export class InMemoryAgentOsRepository implements AgentOsRepository {
     for (const lock of snapshot.workLocks ?? []) this.records.workLocks.set(lock.lockId, lock);
     for (const space of snapshot.spaces ?? []) this.records.spaces.set(space.spaceId, space);
     for (const component of snapshot.ossComponents ?? []) this.records.ossComponents.set(component.id, component);
+    for (const workspace of snapshot.workspaces ?? []) this.records.workspaces.set(workspace.workspaceId, workspace);
     this.records.events.push(...(snapshot.events ?? []));
     this.records.outbox.push(...(snapshot.outbox ?? []));
   }

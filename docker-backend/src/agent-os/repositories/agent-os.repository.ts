@@ -15,6 +15,7 @@ import type {
   TaskSpec,
   WorkLock,
   WorkSignal,
+  Workspace,
 } from '@recoder/agent-os';
 import type { OutboxRecord } from '@recoder/agent-events';
 import type { RecoderComponentDescriptor } from '@recoder/oss-registry';
@@ -39,6 +40,7 @@ export type AgentOsRepositorySnapshot = {
   outbox: OutboxRecord[];
   spaces: Space[];
   ossComponents: RecoderComponentDescriptor[];
+  workspaces: Workspace[];
 };
 
 export interface AgentOsRepository {
@@ -86,4 +88,7 @@ export interface AgentOsRepository {
   listOssComponents(): RepositoryResult<RecoderComponentDescriptor[]>;
   upsertOssComponent(component: RecoderComponentDescriptor): RepositoryResult<RecoderComponentDescriptor>;
   getOssComponent(componentId: string): RepositoryResult<RecoderComponentDescriptor | null>;
+  listWorkspaces(): RepositoryResult<Workspace[]>;
+  upsertWorkspace(workspace: Workspace): RepositoryResult<Workspace>;
+  getWorkspace(workspaceId: string): RepositoryResult<Workspace | null>;
 }
