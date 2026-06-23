@@ -132,13 +132,25 @@ Restart at any point → reconciler rebinds from DB + tmux + worktrees; no work 
 
 ## 7. Build order (each step real + verified + committed)
 
-0. **Reverted** node-pty mux; tmux is the substrate, pinned in the runtime image.  ← done
-1. **Persistence + reconciler**: DB tables, workspace-service skeleton writing state of
-   record, reconciler joining DB ∪ tmux ∪ worktrees. (The invariant first.)
-2. **Runtime drivers**: real headless launch + RunEvent tailing for claude-code/codex/
-   opencode/recoder-code/pi; exit→state. End-to-end run on this repo.
-3. **Review path**: worktree diff → PR → merge → archive.
-4. **openfang sidecar**: routing + approval risk, fail-safe.
-5. **Knowledge**: context7 + mem0 + git-nexus into bundle/evidence.
-6. **Interop + substrate**: A2A entry; daytona as alternate execution substrate.
-7. **Thin console**: operator UI over the APIs (no chat).
+0. **DONE** — Reverted node-pty mux; tmux is the substrate, pinned in the runtime image.
+1. **DONE** — Persistence + reconciler: Workspace domain + state machine, repository
+   persistence (memory/json/postgres + migration 0002), workspace-service brain,
+   reconcile() joining DB ∪ tmux ∪ worktrees (queried directly), boot hook.
+2. **DONE** — Runtime commands: real headless invocations (claude/codex/opencode/
+   recoder-code/gemini/qwen) + truthful availability + create-from-prompt wiring.
+   (RunEvent tailing of live output still TODO; needs tmux on box for full e2e.)
+3. **DONE** — Review path: worktree diff → PR (gh) → merge (gh) → archive.
+4. **DEFERRED (deploy env)** — openfang sidecar: routing + approval risk. openfang
+   ships its own Dockerfile; routing/approval are internal Rust (not HTTP endpoints)
+   and Rust can't be built on the current disk. A client now would be a stub.
+5. **DONE** — Knowledge: task constraints + git-nexus repo context + context7 docs
+   into the prompt, with provenance. (mem0 recall still TODO.)
+6. **NEXT** — Interop + substrate: A2A entry (external agents launch workspaces);
+   daytona as alternate execution substrate behind the same contract.
+7. **NEXT** — Thin operator console over the APIs (no chat).
+
+### Known TODO (truthful gaps)
+- RunEvent tailing: stream tmux pane output into the control-plane RunEvent log.
+- mem0 recall/candidate in the bundle + delivery.
+- Full e2e launch verified on a box with tmux installed + agent CLI auth.
+- openfang sidecar deployment (step 4).
