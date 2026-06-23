@@ -14,6 +14,7 @@ import type { Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
 import { killSession } from './tmux-orchestrator.js';
+import { stopRunTail } from './run-tailer.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:review');
@@ -89,6 +90,7 @@ export async function archiveWorkspace(workspaceId: string): Promise<Workspace> 
   if (!workspace) throw new Error(`workspace not found: ${workspaceId}`);
   if (workspace.state === 'archived') return workspace;
 
+  stopRunTail(workspaceId);
   await killSession(workspaceId, { removeWorktree: true });
 
   // archived is only reachable from merged|failed|cancelled — cancel first if needed.
