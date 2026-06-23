@@ -11,9 +11,11 @@
  * rule: branch pushes, PRs, and merges are approval-gated.
  */
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
-import type { Workspace } from '@recoder/agent-os';
+import type { Artifact, MemoryCandidate, Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
+import { agentOsContainer } from '../agent-os/service-container';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
 
 const exec = promisify(execFile);
@@ -119,6 +121,44 @@ export async function mergeWorkspace(workspaceId: string, input: MergeInput = {}
   }
 
   await advanceWorkspace(workspaceId, 'merged', undefined, { mergedAt: new Date().toISOString() });
+  await recordDeliveryMemoryCandidate(workspace).catch((err) =>
+    logger.warn({ workspaceId, err }, 'delivery memory candidate skipped (best effort)'),
+  );
   logger.info({ workspaceId, branch: workspace.branch, strategy }, 'workspace merged');
   return { workspaceId, branch: workspace.branch, merged: true };
+}
+
+/**
+ * On delivery, propose a reviewable memory candidate (with evidence) — never write
+ * durable memory directly (AGENTS.md). Records a pull_request artifact and a
+ * candidate referencing it; both are best-effort and never block the merge.
+ */
+async function recordDeliveryMemoryCandidate(workspace: Workspace): Promise<void> {
+  const repo = agentOsContainer.repository;
+  const now = new Date().toISOString();
+
+  const artifact: Artifact = {
+    artifactId: `art_${randomUUID()}`,
+    taskId: workspace.taskId,
+    runId: workspace.runId,
+    kind: 'pull_request',
+    mimeType: 'text/plain',
+    public: false,
+    createdAt: now,
+    createdBy: 'conductor',
+    metadata: { workspaceId: workspace.workspaceId, branch: workspace.branch, runtimeId: workspace.runtimeId },
+  };
+  await repo.upsertArtifact(artifact);
+
+  const candidate: MemoryCandidate = {
+    candidateId: `mc_${randomUUID()}`,
+    scope: 'repo',
+    title: `Conductor delivery: ${workspace.branch}`,
+    body: `Workspace ${workspace.workspaceId} (runtime ${workspace.runtimeId}) merged branch ${workspace.branch}. Knowledge sources: ${(workspace.metadata?.knowledgeSources as string[] | undefined)?.join(', ') ?? 'none'}.`,
+    status: 'candidate_created',
+    evidence: { taskId: workspace.taskId, artifactId: artifact.artifactId },
+    proposedBy: 'conductor',
+    proposedAt: now,
+  };
+  await repo.upsertMemoryCandidate(candidate);
 }
