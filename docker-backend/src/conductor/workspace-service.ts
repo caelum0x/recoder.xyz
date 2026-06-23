@@ -25,10 +25,14 @@ import {
 } from '@recoder/agent-os';
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
-import { startSession, type ConductorSession } from './tmux-orchestrator.js';
 import { resolveRuntimeCommand } from './runtime-commands.js';
 import { enrichPrompt } from './bundle.js';
 import { startRunTail } from './run-tailer.js';
+import { getSubstrate } from './substrate.js';
+import { registerTmuxSubstrate } from './substrate-tmux.js';
+
+// Register the default execution substrate (local git worktree + tmux).
+registerTmuxSubstrate();
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
@@ -141,17 +145,18 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   try {
     workspace = await repository().upsertWorkspace(transitionWorkspace(workspace, 'setting_up'));
 
-    const session: ConductorSession = await startSession({
-      sessionId: workspaceId,
-      repoPath: input.repoPath,
+    const handle = await getSubstrate(workspace.substrate).launch({
+      workspaceId,
       command,
+      repoPath: input.repoPath,
       branch,
-      baseRef: input.baseRef,
+      baseRef: input.baseRef || 'HEAD',
+      env: input.env,
     });
 
     workspace = await repository().upsertWorkspace(
       transitionWorkspace(
-        { ...workspace, worktreePath: session.worktreePath, sessionName: session.tmuxName },
+        { ...workspace, worktreePath: handle.worktreePath, sessionName: handle.sessionName },
         'ready',
       ),
     );
@@ -175,10 +180,10 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
       workspaceId,
       taskId: input.taskId,
       runId,
-      sessionName: session.tmuxName,
+      sessionName: handle.sessionName ?? handle.ref,
     });
 
-    logger.info({ workspaceId, runId, branch, session: session.tmuxName }, 'workspace created + running');
+    logger.info({ workspaceId, runId, branch, session: handle.sessionName ?? handle.ref }, 'workspace created + running');
     return workspace;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
