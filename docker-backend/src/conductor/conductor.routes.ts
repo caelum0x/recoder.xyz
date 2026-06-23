@@ -19,6 +19,7 @@ import {
   reconcile,
 } from './workspace-service.js';
 import { runtimeAvailability } from './runtime-commands.js';
+import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
 
@@ -80,6 +81,14 @@ export function createConductorRouter(): Router {
   // Which installed agent CLIs Conductor can actually launch (truthful availability).
   router.get('/runtimes', async (_req: Request, res: Response) => {
     res.json({ success: true, data: await runtimeAvailability() });
+  });
+
+  // Registered execution substrates + their availability (tmux_worktree, daytona…).
+  router.get('/substrates', async (_req: Request, res: Response) => {
+    const data = await Promise.all(
+      listSubstrates().map(async (id) => ({ id, ...(await getSubstrate(id).available()) })),
+    );
+    res.json({ success: true, data });
   });
 
   // --- Workspaces: the persisted, restart-survivable unit of parallel work ---
