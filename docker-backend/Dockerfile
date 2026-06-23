@@ -58,9 +58,12 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Docker CLI needed for container management, curl for healthchecks
+# Docker CLI for container management, curl for healthchecks, and git + tmux for
+# the Conductor: git worktrees isolate each parallel agent run and tmux hosts the
+# persistent per-agent terminal (survives backend restarts). Versions are pinned
+# by the node:20-slim (Debian stable) base tag.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    docker.io curl \
+    docker.io curl git tmux \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable pnpm && corepack prepare pnpm@10.30.3 --activate
