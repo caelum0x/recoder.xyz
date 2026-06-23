@@ -57,6 +57,11 @@ export async function mountA2AStandardServer(app: express.Express): Promise<void
         logger.info({ taskId: context.task?.id, prompt: userMessage.substring(0, 100) }, 'A2A standard task');
 
         try {
+          // Conductor entry: if the message carries a conductor data part, launch a
+          // real parallel-agent workspace instead of the default task queue.
+          const { tryConductorFromA2A } = await import('../conductor/a2a-entry.js');
+          if (await tryConductorFromA2A(context)) return;
+
           const { getTaskLifecycleService } = await import('./task-lifecycle.service.js');
           const service = getTaskLifecycleService();
           service.createTask({
