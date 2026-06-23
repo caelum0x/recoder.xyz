@@ -18,6 +18,7 @@ import {
   reconcile,
 } from './workspace-service.js';
 import { runtimeAvailability } from './runtime-commands.js';
+import { workspaceDiff, archiveWorkspace } from './review.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -124,6 +125,26 @@ export function createConductorRouter(): Router {
       return;
     }
     res.json({ success: true, data: workspace });
+  });
+
+  // Reviewable diff of the workspace's worktree against its base ref.
+  router.get('/workspaces/:workspaceId/diff', async (req: Request, res: Response) => {
+    try {
+      res.json({ success: true, data: await workspaceDiff(req.params.workspaceId) });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'diff failed';
+      res.status(msg.includes('not found') ? 404 : 500).json({ success: false, error: msg });
+    }
+  });
+
+  // Archive a finished workspace: stop session, remove worktree, mark archived.
+  router.post('/workspaces/:workspaceId/archive', async (req: Request, res: Response) => {
+    try {
+      res.json({ success: true, data: await archiveWorkspace(req.params.workspaceId) });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'archive failed';
+      res.status(msg.includes('not found') ? 404 : 500).json({ success: false, error: msg });
+    }
   });
 
   // Reconcile persisted workspaces against the real tmux + git substrate.
