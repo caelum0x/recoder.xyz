@@ -149,6 +149,24 @@ Restart at any point → reconciler rebinds from DB + tmux + worktrees; no work 
    daytona as alternate execution substrate behind the same contract.
 7. **NEXT** — Thin operator console over the APIs (no chat).
 
+### Step 6 reconciliation — reuse existing a2a services, do NOT duplicate
+
+Investigation (2026-06-23) found the `docker-backend/src/a2a/` subsystem already has
+coding-execution services. Step 6 must integrate with these, not reinvent them:
+
+| Existing a2a service | Role | Conductor relationship |
+| --- | --- | --- |
+| `cli-agent-runtime.service.ts` | runs Qwen/Gemini CLIs **inside a Daytona sandbox** (startCliAgentSession/sendCliAgentPrompt) | **This is the `daytona` substrate.** Conductor's substrate abstraction gets a daytona impl that delegates here — `Workspace.substrate='daytona'` already exists for it. |
+| `agent-terminal-registry.ts` | tracks **external** Claude Code/Codex terminals connecting *in* via A2A (register/route/push) | The **A2A-inbound** direction: an external agent can be targeted, or can launch a Conductor workspace. A2A entry maps an inbound code task → `workspace-service.createWorkspace`. |
+| `coding-runtime.ts` | legacy web-builder per-project coding (Native/OpenCode/Omo adapters) | Legacy/web-builder path; not the Conductor host model. Leave as-is. |
+
+**Design for Step 6 (to implement, non-duplicating):**
+1. Extract a `ConductorSubstrate` interface in `conductor/` (provision / launch / capture /
+   exit / teardown). Implement `tmux_worktree` (current code) + `daytona` (delegates to
+   `cli-agent-runtime.service`). workspace-service selects by `Workspace.substrate`.
+2. A2A entry: a handler that turns an inbound A2A code task into `createWorkspace`, and
+   exposes workspace RunEvents back over A2A (reuse the a2a event bridge).
+
 ### Known TODO (truthful gaps)
 - RunEvent tailing: stream tmux pane output into the control-plane RunEvent log.
 - mem0 recall/candidate in the bundle + delivery.
