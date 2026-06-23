@@ -168,9 +168,12 @@ coding-execution services. Step 6 must integrate with these, not reinvent them:
    exposes workspace RunEvents back over A2A (reuse the a2a event bridge).
 
 ### Known TODO (truthful gaps)
-- ~~RunEvent tailing~~ DONE (run-tailer.ts streams tmux pane → RunEvent log).
+- ~~RunEvent tailing~~ DONE (run-tailer.ts streams pane → RunEvent log, substrate-routed).
 - ~~mem0 recall in the bundle~~ DONE; mem0 **candidate on delivery** still TODO.
-- Substrate interface + daytona impl (step 6 reconciliation above).
+- ~~Substrate interface~~ DONE — `ConductorSubstrate` (launch/capture/alive/diff/teardown)
+  + registry + tmux_worktree impl; tailer/review/workspace-service all route through it;
+  `GET /substrates` exposes availability. **daytona impl** (one drop-in file delegating
+  to a2a/cli-agent-runtime + daytona-sdk) still TODO — needs Daytona creds to be real.
 - A2A entry: inbound A2A code task → createWorkspace (step 6).
 - Thin operator console (step 7).
 - Full e2e launch verified on a box with tmux installed + agent CLI auth.
