@@ -39,7 +39,9 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
       branch: input.branch,
       baseRef: input.baseRef,
     });
-    return { ref: session.tmuxName, worktreePath: session.worktreePath, sessionName: session.tmuxName };
+    // ref = the orchestrator's session id (workspaceId, used by capturePane/killSession);
+    // sessionName = the tmux session name (used for direct `tmux has-session`).
+    return { ref: input.workspaceId, worktreePath: session.worktreePath, sessionName: session.tmuxName };
   },
 
   async capture(handle: SubstrateHandle, lines = 200): Promise<string | null> {

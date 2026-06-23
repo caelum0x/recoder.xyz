@@ -180,7 +180,9 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
       workspaceId,
       taskId: input.taskId,
       runId,
+      substrate: workspace.substrate,
       sessionName: handle.sessionName ?? handle.ref,
+      worktreePath: handle.worktreePath,
     });
 
     logger.info({ workspaceId, runId, branch, session: handle.sessionName ?? handle.ref }, 'workspace created + running');
