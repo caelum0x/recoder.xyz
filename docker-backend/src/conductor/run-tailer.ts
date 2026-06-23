@@ -9,13 +9,11 @@
  *
  * See docs/CONDUCTOR-ARCHITECTURE.md (RunEvent tailing).
  */
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import type { RunEvent, RunEventType } from '@recoder/agent-os';
+import type { RunEvent, RunEventType, WorkspaceSubstrate } from '@recoder/agent-os';
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
+import { getSubstrate, type SubstrateHandle } from './substrate.js';
 
-const exec = promisify(execFile);
 const logger = createLogger('conductor:tail');
 
 const DEFAULT_INTERVAL_MS = 3000;
@@ -27,8 +25,11 @@ export interface RunTailInput {
   taskId: string;
   runId: string;
   agentId?: string;
-  /** tmux session name hosting the agent (e.g. recoder-ws_...). */
+  /** Execution substrate hosting the agent (selects capture/alive impl). */
+  substrate: WorkspaceSubstrate;
+  /** Session/handle ref hosting the agent (e.g. tmux session name). */
   sessionName: string;
+  worktreePath?: string;
   intervalMs?: number;
   maxMs?: number;
 }
@@ -66,24 +67,9 @@ async function appendEvent(
   }
 }
 
-async function capture(sessionName: string): Promise<string | null> {
-  try {
-    const { stdout } = await exec('tmux', ['capture-pane', '-p', '-t', sessionName, '-S', '-2000'], {
-      maxBuffer: 8 * 1024 * 1024,
-    });
-    return stdout;
-  } catch {
-    return null; // session gone or tmux unavailable
-  }
-}
-
-async function sessionAlive(sessionName: string): Promise<boolean> {
-  try {
-    await exec('tmux', ['has-session', '-t', sessionName]);
-    return true;
-  } catch {
-    return false;
-  }
+function handleFor(input: RunTailInput): SubstrateHandle {
+  // ref = workspaceId (orchestrator session id); sessionName = tmux session name.
+  return { ref: input.workspaceId, sessionName: input.sessionName, worktreePath: input.worktreePath };
 }
 
 /**
@@ -115,10 +101,13 @@ export function startRunTail(input: RunTailInput): TailHandle {
     sessionName: input.sessionName,
   });
 
+  const substrate = getSubstrate(input.substrate);
+  const subHandle = handleFor(input);
+
   const tick = async (): Promise<void> => {
     if (stopped) return;
 
-    const pane = await capture(input.sessionName);
+    const pane = await substrate.capture(subHandle, 2000);
     if (pane !== null && pane !== lastCapture) {
       const delta = pane.startsWith(lastCapture) ? pane.slice(lastCapture.length) : pane;
       lastCapture = pane;
@@ -128,7 +117,7 @@ export function startRunTail(input: RunTailInput): TailHandle {
       }
     }
 
-    const alive = await sessionAlive(input.sessionName);
+    const alive = await substrate.alive(subHandle);
     if (!alive) {
       await appendEvent(input, 'completed', 'Agent session ended', { sessionName: input.sessionName });
       handle.stop();

@@ -13,7 +13,7 @@ import { promisify } from 'node:util';
 import type { Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
-import { killSession } from './tmux-orchestrator.js';
+import { getSubstrate } from './substrate.js';
 import { stopRunTail } from './run-tailer.js';
 
 const exec = promisify(execFile);
@@ -91,7 +91,10 @@ export async function archiveWorkspace(workspaceId: string): Promise<Workspace> 
   if (workspace.state === 'archived') return workspace;
 
   stopRunTail(workspaceId);
-  await killSession(workspaceId, { removeWorktree: true });
+  await getSubstrate(workspace.substrate).teardown(
+    { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
+    { removeIsolation: true },
+  );
 
   // archived is only reachable from merged|failed|cancelled — cancel first if needed.
   if (!['merged', 'failed', 'cancelled'].includes(workspace.state)) {
