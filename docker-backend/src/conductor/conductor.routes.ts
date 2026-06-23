@@ -19,6 +19,7 @@ import {
 } from './workspace-service.js';
 import { runtimeAvailability } from './runtime-commands.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
+import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -134,6 +135,31 @@ export function createConductorRouter(): Router {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'diff failed';
       res.status(msg.includes('not found') ? 404 : 500).json({ success: false, error: msg });
+    }
+  });
+
+  // Open a PR for the workspace branch (outward-facing; caller enforces approval).
+  router.post('/workspaces/:workspaceId/pr', async (req: Request, res: Response) => {
+    try {
+      const { title, body, base, draft, remote } = req.body ?? {};
+      res.status(201).json({
+        success: true,
+        data: await createWorkspacePr(req.params.workspaceId, { title, body, base, draft, remote }),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'pr failed';
+      res.status(msg.includes('not found') ? 404 : 400).json({ success: false, error: msg });
+    }
+  });
+
+  // Merge the workspace PR (outward-facing; caller enforces approval/policy).
+  router.post('/workspaces/:workspaceId/merge', async (req: Request, res: Response) => {
+    try {
+      const { strategy, deleteBranch } = req.body ?? {};
+      res.json({ success: true, data: await mergeWorkspace(req.params.workspaceId, { strategy, deleteBranch }) });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'merge failed';
+      res.status(msg.includes('not found') ? 404 : 400).json({ success: false, error: msg });
     }
   });
 
