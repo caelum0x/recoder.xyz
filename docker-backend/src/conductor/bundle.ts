@@ -14,6 +14,7 @@ import type { TaskSpec } from '@recoder/agent-os';
 import { agentOsContainer } from '../agent-os/service-container';
 import { buildTaskContextPack } from '../git-context.js';
 import { fetchLibraryDocs, isContext7Available } from '../context7.js';
+import { mem0Search } from '../mem0-client.js';
 import { createLogger } from '../logger';
 
 const logger = createLogger('conductor:bundle');
@@ -26,6 +27,8 @@ export interface EnrichPromptInput {
   library?: string;
   /** Query for the library docs (defaults to the prompt). */
   libraryQuery?: string;
+  /** User scope for mem0 recall (e.g. the workspace creator). */
+  userId?: string;
 }
 
 export interface EnrichedPrompt {
@@ -81,6 +84,19 @@ export async function enrichPrompt(input: EnrichPromptInput): Promise<EnrichedPr
       }
     } catch (err) {
       logger.warn({ taskId: input.taskId, err }, 'task/git-nexus enrichment skipped');
+    }
+  }
+
+  if (input.userId) {
+    try {
+      const recall = await mem0Search(input.prompt, { userId: input.userId }, 5);
+      if (recall.available && recall.results.length) {
+        const memories = recall.results.map((r) => `- ${r.memory}`);
+        sections.push(['## Relevant memory (mem0)', ...memories].join('\n'));
+        sources.push('mem0');
+      }
+    } catch (err) {
+      logger.warn({ userId: input.userId, err }, 'mem0 recall skipped');
     }
   }
 
