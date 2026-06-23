@@ -11,6 +11,12 @@ import {
   sendKeys,
   killSession,
 } from './tmux-orchestrator.js';
+import {
+  createWorkspace,
+  listWorkspaces,
+  getWorkspace,
+  reconcile,
+} from './workspace-service.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -65,6 +71,56 @@ export function createConductorRouter(): Router {
   router.delete('/sessions/:sessionId', async (req: Request, res: Response) => {
     await killSession(req.params.sessionId, { removeWorktree: req.query?.keepWorktree !== 'true' });
     res.json({ success: true });
+  });
+
+  // --- Workspaces: the persisted, restart-survivable unit of parallel work ---
+
+  router.get('/workspaces', async (_req: Request, res: Response) => {
+    res.json({ success: true, data: await listWorkspaces() });
+  });
+
+  router.post('/workspaces', async (req: Request, res: Response) => {
+    try {
+      const { spaceId, projectId, taskId, repoPath, runtimeId, command, createdBy, branch, baseRef, env, metadata } =
+        req.body ?? {};
+      if (!spaceId || !projectId || !taskId || !repoPath || !runtimeId || !command || !createdBy) {
+        res.status(400).json({
+          success: false,
+          error: 'spaceId, projectId, taskId, repoPath, runtimeId, command, and createdBy are required',
+        });
+        return;
+      }
+      const workspace = await createWorkspace({
+        spaceId,
+        projectId,
+        taskId,
+        repoPath,
+        runtimeId,
+        command,
+        createdBy,
+        branch,
+        baseRef,
+        env,
+        metadata,
+      });
+      res.status(workspace.state === 'failed' ? 409 : 201).json({ success: true, data: workspace });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'create failed' });
+    }
+  });
+
+  router.get('/workspaces/:workspaceId', async (req: Request, res: Response) => {
+    const workspace = await getWorkspace(req.params.workspaceId);
+    if (!workspace) {
+      res.status(404).json({ success: false, error: 'workspace not found' });
+      return;
+    }
+    res.json({ success: true, data: workspace });
+  });
+
+  // Reconcile persisted workspaces against the real tmux + git substrate.
+  router.post('/reconcile', async (_req: Request, res: Response) => {
+    res.json({ success: true, data: await reconcile() });
   });
 
   return router;
