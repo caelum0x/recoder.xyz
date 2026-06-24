@@ -1,0 +1,53 @@
+# Recoder — unified build/verify orchestration across all languages.
+# Each OSS project keeps its own native build; this orchestrates them.
+# Heavy targets (rust-*, go-ziti) are CI-grade and may exceed a laptop's disk.
+# See docs/RECODER-PRODUCT-ARCHITECTURE.md §4 and §6.
+
+.DEFAULT_GOAL := help
+.PHONY: help all verify ts site backend go-beads go-ziti rust-openfang rust-claw py-pal py-ops py-clawwork heavy
+
+help: ## Show targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+# ---- TypeScript (pnpm workspace) ----
+ts: ## Build all TS packages
+	pnpm -r build
+
+backend: ## Typecheck the control-plane service
+	cd docker-backend && npx tsc --noEmit
+
+site: ## Build the marketing site
+	cd site && pnpm build
+
+# ---- Go ----
+go-beads: ## Build beads (bd) issue tracker
+	cd beads && go build ./...
+
+go-ziti: ## Build ziti zero-trust mesh (HEAVY)
+	cd ziti && go build ./...
+
+# ---- Rust (each its own Cargo workspace; HEAVY, disk-hungry -> CI) ----
+rust-openfang: ## Build OpenFang kernel (HEAVY)
+	cd openfang && cargo build --release
+
+rust-claw: ## Build claw-code-parity permission engine (HEAVY)
+	cd claw-code-parity/rust && cargo build --release
+
+# ---- Python (uv per project) ----
+py-pal: ## Sync pal-mcp-server
+	cd pal-mcp-server && uv sync
+
+py-ops: ## Sync ops-recorder
+	cd ops-recorder && uv sync
+
+py-clawwork: ## Sync ClawWork
+	cd ClawWork && uv sync
+
+# ---- Aggregates ----
+verify: backend site ## Fast green gate (TS only, laptop-safe)
+	@echo "✓ laptop-safe gates green"
+
+heavy: go-beads go-ziti rust-openfang rust-claw ## CI-grade builds (needs disk + time)
+
+all: ts backend site go-beads py-pal py-ops ## Build the laptop-feasible product surface
+	@echo "✓ feasible product surface built"
