@@ -181,6 +181,43 @@ Distinction that matters: **MCP and A2A are real wire protocols (deep, fine). A 
 client wrapping a service is a shim (not fine).** Own the logic; merge where same-language;
 embed as a first-party engine where cross-language.
 
+## 8c. Substrate: use real tmux + dmux — do NOT reimplement (LOCKED)
+
+The multiplexer is the one place we do **not** merge/rewrite. tmux and dmux are C/C++;
+reimplementing them in TS (the earlier `node-pty` / `@recoder/session-mux` idea) **does not
+work and does not scale for large operations** — it was tried and reverted. So:
+
+- **Clone the real `tmux` and `dmux`** as vendored C/C++ sources; build the actual binaries
+  (or depend on the system/installed ones). They are pinned in the runtime image.
+- The Substrate (`docker-backend/src/conductor`) **drives them via their CLI** — `new-session -d`,
+  `capture-pane`, `send-keys`, `kill-session` (the intended usage) — exactly as the conductor
+  already does. tmux/worktrees survive backend restarts; the reconciler rebinds.
+- We own them by vendoring + pinning + driving, not by rebuilding. No TS multiplexer.
+
+## 8d. Reference fusion: the Brain (the pattern for every subsystem)
+
+The Brain is the worked example of "fuse, don't wrap":
+
+- `git-nexus/src/context-pack.ts` already assembles repo context → it becomes the Brain's
+  **assembly core**. We edit it to pull from all memory sources, not just git.
+- **mem0** (semantic recall), **context7** (docs), **beads** (Go task-graph `Storage`/`Issue`)
+  are merged *into* the context pack: one `BrainContext` type unifying their outputs.
+- mem0 / context7 / git-nexus stop being three packages and become **modules of `@recoder/brain`**;
+  overlap deleted, one shared storage backend.
+- **beads** (Go) is the Brain's durable store, called in-process via **owned bindings** (Recoder's
+  memory engine) — not HTTP.
+- Result: `brain.assemble(task)` → repo slice + memories + docs + task-graph in one read, reused
+  by every agent (kills token waste); `brain.record(event)` → writes mem0 + beads.
+
+Every subsystem follows this shape: open sources → merge modules → unify types → delete overlap.
+
+## 8e. Execution model (parallel fusion, disjoint trees)
+
+One fusion agent per subsystem, run in parallel with git-worktree isolation (each edits real
+source safely). Subsystems touch **disjoint dir sets**, so they don't collide. Each agent:
+open its components → merge into the subsystem → unify types → delete overlap → build-green in
+scope. Then integrate and `make verify`. Brain leads as the reference; the rest follow.
+
 ## 8. Execution sequence (staged, build-green, nothing breaks)
 
 1. **Architecture locked** (this doc).
