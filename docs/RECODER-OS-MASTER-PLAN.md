@@ -13,6 +13,62 @@ merge/rebrand, the website, and desktop + MCP distribution.
 
 ---
 
+## 0. Wedge & strategy (LOCKED 2026-06-24 — supersedes the MCP-first framing in §2 below)
+
+**The pain (founder's own, validated by the market):** running multiple coding agents
+(Claude Code + Codex + several Claude Code terminals) makes them collide on shared files,
+duplicate work, hold inconsistent views of shared state, and ~2x token cost. 2026 guides
+call this out and say "coordination must be treated as infrastructure."
+
+**Hard truth from research:** the tmux-orchestration substrate (run real Claude Code/Codex
+in parallel panes + worktrees) is already a **commodity** — dmux, NTM, crystal, parallel-code,
+tutti, amux (~12 multiplexers) AND Anthropic's own Claude Code "Agent Teams" (split-pane +
+shared task list + peer messaging + file locking). Selling the multiplexer is a losing knife
+fight. **Build on the substrate; do not sell it.**
+
+**The wedge = the layer the multiplexers don't have** (Recoder owns the pieces for all of it):
+1. **Persistent shared brain that compounds** — read the repo once, every agent + every future
+   run reuses it; kills token waste. (Mem0 raised $24M proving people pay for the memory layer.)
+   → `mem0` + `git-nexus` + `context7` + `beads`.
+2. **Cross-runtime + cross-machine coordination** — Claude Code on the laptop, Codex in CI, an
+   agent on a teammate's box, coordinated securely. Nobody does this. → `a2a` (the LF standard)
+   + `ziti` (zero-trust mesh) + `pal-mcp`.
+3. **Governance, audit, recording** — approvals, permission rubric, audit trail, session replay,
+   self-host; what teams/enterprises pay for. → `openfang` + `agent-os` + `claw-code-parity`
+   + `ops-recorder` + `docker-backend`.
+
+**Model (locked):** users run their **own** Claude Code / Codex / opencode CLIs — Recoder never
+touches keys, never proxies models, never resells tokens (so it can't go bankrupt on inference
+and Cursor's token deals are irrelevant). Recoder is NOT a coding agent; it orchestrates the
+ones that exist.
+
+**Form factor:** local-first. Substrate = tmux + worktrees running the real CLIs; the shared
+brain + coordination + governance run as a local daemon/control plane; a native cockpit (the
+existing signed `apps/desktop` Electron shell) + MCP/CLI are the surfaces. Web `site/` is
+marketing only.
+
+**Sequencing:** **solo-first.** Free local cockpit that stops one dev's agents from colliding +
+wasting tokens (the founder is user #1). Expand to **team/enterprise fabric** (shared brain
+across people, governance, audit, self-host, ziti mesh) for revenue. Never tokens.
+
+**One line:** *don't build the multiplexer — build the brain and the fabric the multiplexers
+plug into.*
+
+| Layer | Assets | Commodity? |
+|---|---|---|
+| Substrate (run real CLIs in terminals) | tmux + worktrees, `conductor`, dmux-pattern | **Yes — reuse, don't sell** |
+| Shared brain (moat) | `mem0`, `git-nexus`, `context7`, `beads` | No — data moat |
+| Cross-boundary coordination | `a2a`, `ziti`, `pal-mcp` | No — only Recoder has the bundle |
+| Governance + record | `openfang`, `agent-os`, `claw-code-parity`, `ops-recorder`, `docker-backend` | No — where teams pay |
+
+Evidence: [Augment multi-agent workspace](https://www.augmentcode.com/guides/how-to-run-a-multi-agent-coding-workspace),
+[Claude Code Agent Teams](https://code.claude.com/docs/en/agent-teams),
+[amux multiplexer roundup](https://amux.io/guides/best-ai-agent-multiplexers-2026/),
+[Mem0 Series A](https://mem0.ai/series-a),
+[A2A at Linux Foundation](https://www.linuxfoundation.org/press/a2a-protocol-surpasses-150-organizations-lands-in-major-cloud-platforms-and-sees-enterprise-production-use-in-first-year).
+
+---
+
 ## 1. Thesis & category
 
 **Recoder is the operating system for coding agents.** It runs and orchestrates
@@ -48,28 +104,40 @@ Recoder's edge = **governance + self-hostability + interop**, on top of the same
 
 ---
 
-## 2. Product surfaces
+## 2. Product surfaces — form-factor decision (LOCKED 2026-06-24)
 
-Five surfaces over one backend. The **desktop app is the primary consumer surface**
-(Conductor/Cursor both prove "Download" beats "Sign up" for dev tools).
+**Decision: MCP/Claude-Code-first. Recoder is the OS that agents plug into — NOT a
+native desktop app competing with Conductor/Cursor.** Rationale: an OS is the layer
+apps run on, not an app; "Add to Claude Code" (one MCP install) beats "download another
+app" on adoption; the moat is the *governed, self-hostable, multi-runtime control plane*
+(not native UX a funded incumbent will out-build); and the necessary review surface is a
+**web problem** (board of diffs/approvals) built **once** and optionally wrapped in the
+existing Electron shell. Conductor rides *on top of* Claude Code; Recoder sits *under* it.
 
-1. **Recoder Desktop** — the flagship. Watch many agents at once (board of workspaces
-   with live output, diffs, run state, approvals), review → PR → merge → archive.
-   *Today:* `apps/desktop` is a signed+notarized **Electron** app. *Plan:* keep it as
-   the shipping baseline; evaluate **Tauri v2** migration (Rust-core alignment, smaller
-   binary) as a later wave. Bundles a local Recoder daemon for offline/self-host mode.
-2. **Recoder CLI** (`recoder-code`, `packages/cli`) — launch/observe parallel runs from
-   the terminal; distributed via `homebrew-recoder` tap + npm.
-3. **Recoder MCP** (`mcp/recoder-mcp-server`, `packages/agent-mcp`) — installable into
-   Claude Desktop / Cursor / any MCP host. One-click/deeplink install. Lets the agents
-   people already use drive Recoder.
-4. **Control-plane API** (`/api/agent-os/*`, `/api/conductor/*`, `/api/a2a/*`,
-   `/api/mcp/*`) on `docker-backend` — the state of record. A **thin** web console only
-   (status, not chat).
+The surfaces, in priority order:
+
+1. **Recoder MCP — the front door (PRIMARY distribution).** One published `@recoder/mcp`
+   server (consolidating `mcp/recoder-mcp-server` + bridges + `packages/agent-mcp`).
+   "Add Recoder to Claude Code / Cursor / Claude Desktop" via one-command/deeplink
+   install. The agents people already run drive Recoder. This is the wedge.
+2. **Recoder CLI** (`packages/cli`, `recoder` bin) — launch/observe parallel runs;
+   `homebrew-recoder` tap + `npm i -g @recoder/cli`.
+3. **Control plane — the product (THE MOAT).** `docker-backend` + `@recoder/*` +
+   Postgres state of record: runs/orchestrates parallel agents, governs (approvals,
+   work-locks, signed envelopes, audit, memory provenance), delivers. **Self-hostable.**
+   APIs: `/api/agent-os/*`, `/api/conductor/*`, `/api/a2a/*`, `/api/mcp/*`.
+4. **Review surface — ONE web console.** Workspaces board (live output, diffs, run state),
+   approvals, audit. Built once as a web app; **hosted** for cloud users AND **wrapped in
+   the existing signed Electron shell** (`apps/desktop`) + a local daemon for the
+   "Download Recoder" crowd. Same codebase → web reach + desktop download. NOT a bespoke
+   native app; Tauri migration optional later.
 5. **A2A interop** — external agents create/observe Recoder workspaces via `/api/a2a/*`.
 
 **BYO agent login** (Conductor's winning move): no API-key capture, no markup; reuse the
 user's existing Claude Code / Codex login. Accounts gated only for cloud/collab.
+
+> Desktop is a *packaging* of surface #4, not a strategy. We do not build a native app to
+> compete with Conductor; we make every app (incl. Conductor-likes) able to sit on Recoder.
 
 ---
 
