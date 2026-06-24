@@ -144,6 +144,43 @@ State legend: ✅ fully wired · ◐ partially integrated (glue exists) · ○ r
 
 **Build order falls out of state:** the ✅ spine already runs; ◐ need small wiring; ○ need a new adapter package each (all independent → parallelizable).
 
+## 8b. Deep integration — subsystems, not shims (LOCKED)
+
+**Correction (2026-06-24): no thin HTTP adapters.** The OSS are not external services we
+`fetch()`. They are **Recoder's own subsystems, merged by function.** Recoder's memory IS
+mem0 + context7 + git-nexus + beads + multica fused into one brain — not a REST client
+pointed at them. The §7 "smallest integration" notes describe the *seam*, not the goal;
+the goal is ownership and merge.
+
+**The subsystems (each a deep fusion of its components):**
+
+| Subsystem | Package facade | Fuses | What it is |
+| --- | --- | --- | --- |
+| **Brain** (memory) | `@recoder/brain` | mem0 + context7 + git-nexus + beads + multica | the shared memory every agent reads/writes: semantic recall, docs, repo index, task graph + history |
+| **Coordination** | `@recoder/agent-os` + a2a | agent-os work-locks + a2a bus + multica routing | no collisions, handoffs, dependency-aware dispatch |
+| **Governance** | `@recoder/governance` | openfang + claw-code-parity + ops-recorder | routing kernel + approval + permission enforcer + audit/Merkle + work-signals |
+| **Runtime** | `@recoder/agent-runtimes` | pi + oh-my-codex + oh-my-openagent + open-agents + clawwork | drive the real agent CLIs / owned agents via the driver contract |
+| **Substrate** | `@recoder/conductor` | conductor (tmux+worktrees) + daytona | isolated execution of the real CLIs |
+| **Network** | `@recoder/mesh` | ziti | owned zero-trust cross-machine fabric |
+| **Interop** | `@recoder/a2a-*` + `@recoder/agent-mcp` | a2a + mcp + pal/pal-mcp | external agents in/out (real protocols) |
+| **Distribution** | apps/desktop, cli, mcp | + polar (billing) + openclaw (channels) | how users get + pay + are notified |
+
+**Seam strategy by language (deep, not shim):**
+- **TS ↔ TS** (mem0, context7, git-nexus, multica-TS, pi, agent-os, a2a): real in-process
+  code merge behind the subsystem facade. The brain imports mem0/context7/git-nexus directly.
+- **TS ↔ Go** (beads, ziti, multica-Go): own as first-party engines. beads' Dolt task-graph
+  IS the brain's durable memory store (owned bindings / embedded `bd`, owned protocol — not a
+  generic REST wrapper). ziti is Recoder's embedded mesh.
+- **TS ↔ Rust** (openfang, claw-code-parity): openfang is Recoder's **policy/approval kernel**
+  (owned daemon, typed IPC/FFI — the decision brain, not an HTTP call); claw's permission
+  enforcer owned via FFI/WASM.
+- **TS ↔ Py** (pal-mcp, ops-recorder, clawwork): via **MCP** (a real protocol, not a shim) or
+  owned in-process embedding.
+
+Distinction that matters: **MCP and A2A are real wire protocols (deep, fine). A generic REST
+client wrapping a service is a shim (not fine).** Own the logic; merge where same-language;
+embed as a first-party engine where cross-language.
+
 ## 8. Execution sequence (staged, build-green, nothing breaks)
 
 1. **Architecture locked** (this doc).
