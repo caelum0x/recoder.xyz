@@ -4,6 +4,18 @@ Per `PIVOT-INFRA.md` §5. Recoder is infra to run agents; these surfaces are the
 BYOK-chat + web-builder past. **Deletions are staged and require approval** —
 each stage keeps the build green and is committed separately.
 
+## DONE — full web-app surface removal (2026-06-24, recoder-9eph)
+
+Whole legacy web-app/frontend surfaces removed (user-directed, "infra not web app"):
+`app/` (recoder.xyz), `recoder-agents/` (chat), `backend/` (Python chat backend),
+`recoder-pm/`, `recoder-agency/`, `internal-packages/`, `apps/ui.giselles.ai/`.
+Workspace/package.json/tsconfig/jest/Dockerfile config cleaned; pnpm workspace
+resolves and `docker-backend` `tsc --noEmit` exits 0.
+
+Remaining reference sweep tracked in **recoder-d6bg** (scripts/CI/nginx, A2A
+agent-registry platform entries, root apex Next app + auth source-of-truth, docs).
+The section below is the original staged inventory, now superseded by the full cut.
+
 ## A. recoder-agents — BYOK chat / canvas / modes (frontend; the "Ahoy" app)
 
 Heavy, interconnected frontend subtree. Removing it is a real refactor (many
