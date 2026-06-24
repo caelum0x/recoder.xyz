@@ -74,18 +74,24 @@ recoder.xyz/
 Naming: everything normalizes to the `@recoder/*` scope (TS) or `recoder-*` (crates/go/py).
 `docker-backend` keeps its name for now (many deploy/CI refs); it is the control-plane service.
 
-## 4. The four workspace manifests (what makes it one product)
+## 4. Build orchestration (what makes it one product)
 
-No relocation magic, just standard multi-language workspaces:
+Reality check from the analysis: `openfang` (14 crates) and `claw-code-parity` (9 crates)
+each have **their own Cargo workspace**, so they cannot be members of a single root Cargo
+workspace. The unified build is therefore **orchestration, not one mega-workspace**: a
+top-level `Makefile` (or scripts) that invokes each project's native build, plus `go.work`
+to unify the Go modules and a `uv` workspace for Python.
 
-- **`Cargo.toml`** (workspace) → `members = ["crates/*"]` — `cargo build` compiles openfang + permissions.
-- **`go.work`** → `use ./go/recoder-beads ./go/recoder-mesh` — `go build ./...`.
-- **`pyproject.toml`** (uv workspace) → `members = ["py/*"]` — `uv sync`.
-- **`pnpm-workspace.yaml`** (exists) → add `crates`/`go`/`py` build outputs as needed; TS unchanged.
+- **`go.work`** → `use ./beads ./ziti` — `go build ./...` across both Go modules.
+- **`uv`** workspace → `pal-mcp-server`, `ops-recorder`, `ClawWork` (Python) — `uv sync`.
+- **Rust** → built per-project (`cargo build` in `openfang/` and `claw-code-parity/rust/`);
+  each stays its own workspace. (Heavy + disk-hungry → CI, not the laptop.)
+- **`pnpm-workspace.yaml`** (exists) → all TS unchanged.
+- **`Makefile`** at root → `make build` / `make verify` runs every toolchain (see §6).
 
 The TS control plane (`docker-backend`) shells out to / links the compiled Rust + Go
-binaries (openfang sidecar, ziti, bd) and the Python MCP server — the same pattern the
-conductor already uses for `tmux`/`gh`.
+binaries (openfang daemon, ziti, bd) and the Python MCP servers — the same pattern the
+conductor already uses for `tmux`/`gh`. Adapters in `packages/*-adapter` are the seams.
 
 ## 5. Build-on-existing rule (no rewrites)
 
@@ -109,11 +115,34 @@ cd site && pnpm build                 # marketing site (currently green)
 
 CI runs all six as a matrix. Nothing ships red.
 
-## 7. Per-component integration map
+## 7. Per-component integration map (verified, workflow `wzsyiucj6`)
 
-_Populated from workflow `wzsyiucj6` (one agent per component, reading real repo code:
-entry points + current state + smallest build-on-existing integration). Appended on
-completion._
+State legend: ✅ fully wired · ◐ partially integrated (glue exists) · ○ raw clone (needs adapter).
+
+| Component | Lang | Layer | State | → name | Smallest build-on-existing integration |
+| --- | --- | --- | --- | --- | --- |
+| conductor (`docker-backend/src/conductor`) | TS | substrate | ✅ | `@recoder/conductor` | already THE substrate; only needs a types export package |
+| a2a spine (`docker-backend/src/a2a`) | TS | coordination/interop | ✅ | `@recoder/a2a-comms` | already wired (40+ services); optional barrel export |
+| agent-os (`packages/agent-os`) | TS | governance/brain | ✅ | keep | the unified contract; extend via existing ports/ pattern |
+| pi (`packages/pi-*`) | TS | runtime | ✅ | `@recoder/runtime-adapter-pi` | wrap `pi-runtime-adapter.ts` in AgentRuntimeAdapter |
+| daytona (`daytona-projects`) | TS | substrate | ✅ | `@recoder/substrate-daytona` | owned + wired; prefer SDK over REST client |
+| brain (`mem0`,`git-nexus`,`context7-sdk`,`beads-adapter`) | TS | brain | ◐ | `@recoder/brain-core` | wire `Mem0MemoryAdapter` into `docker-backend` agent-os routes |
+| agent-runtimes (`packages/agent-runtimes`) | TS | runtime | ◐ | `@recoder/runtime-adapters` | register adapters in `mcp-control.routes.ts` |
+| beads | Go+Py | brain/governance | ◐ | `@recoder/memory-beads` | wire `beads-mcp` (FastMCP) into docker-backend as stdio MCP |
+| ziti | Go | network | ◐ | `@recoder/ziti-network` | wrap `ziti-client.ts`; call `zitiHealth()` on startup |
+| oh-my-codex | TS+Rust | runtime | ◐ | `@recoder/codex-runtime` | extract `codex-connector-runtime.service.ts` → package |
+| oh-my-openagent | TS | runtime | ◐ | `@recoder/openagent-runtime` | `createOmoAdapter()` in `a2a/coding-runtime.ts` |
+| polar | TS | governance/billing | ◐ | `@recoder/billing-polar` | extract `polar-client.ts` + entitlement hook → package |
+| openfang | Rust | governance/routing | ○ | `@recoder/openfang` | `packages/openfang-adapter` bridges RuntimeAdapterPort; spawn daemon (own Cargo workspace) |
+| claw-code-parity | Rust | governance | ○ | `@recoder/permission-enforcer` | adapter re-exports Rust governance via FFI/WASM (own Cargo workspace) |
+| pal-mcp-server | Py | interop | ○ | `@recoder/pal-mcp` | TS adapter wraps Python MCP lifecycle via existing mcp-manager |
+| open-agents | TS | runtime | ○ | `@recoder/open-agents-runtime` | adapter maps `ToolLoopAgent` → RuntimeExecutionDriver |
+| multica | Go+TS | coordination | ○ | `@recoder/multica` | adapter = REST/WS client to multica server |
+| ops-recorder | Py | governance | ○ | `@recoder/ops-recorder` | TS client to work-signals HTTP endpoints |
+| ClawWork | Py | brain/governance | ○ | `@recoder/clawwork-agent` | wrap LiveAgent+EconomicTracker as RuntimeAdapter |
+| openclaw | TS | distribution | ○ | `@recoder/openclaw-adapter` | NATS heartbeat consumer → A2AEventBus |
+
+**Build order falls out of state:** the ✅ spine already runs; ◐ need small wiring; ○ need a new adapter package each (all independent → parallelizable).
 
 ## 8. Execution sequence (staged, build-green, nothing breaks)
 
