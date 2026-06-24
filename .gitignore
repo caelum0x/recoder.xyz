@@ -630,3 +630,18 @@ check-errors.sh
 !packages/a2a-js/**
 packages/a2a-js/node_modules/
 packages/a2a-js/dist/
+
+# --- Owned component sources, organized by language (2026-06-24) ---
+# Gitignored: large + Mac disk-constrained. Fused/owned code lands in tracked
+# packages/ subsystems; we edit these in place as ours.
+crates/openfang/
+crates/claw-code-parity/
+go/beads/
+go/ziti/
+go/multica/
+py/pal-mcp-server/
+py/ops-recorder/
+ts/oh-my-codex/
+ts/oh-my-openagent/
+ts/open-agents/
+ts/polar/
