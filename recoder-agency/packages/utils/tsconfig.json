@@ -1,5 +1,0 @@
-{
-	"extends": "@recoder/tsconfig/react-library.json",
-	"include": ["."],
-	"exclude": ["node_modules"]
-}

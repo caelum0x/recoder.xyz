@@ -4,7 +4,6 @@ export default {
   projects: getJestProjects(),
   collectCoverageFrom: [
     'packages/*/src/**/*.{ts,tsx}',
-    'backend/src/**/*.{ts,tsx}',
     '!**/*.d.ts',
     '!**/node_modules/**',
     '!**/dist/**',

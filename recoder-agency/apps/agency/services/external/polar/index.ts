@@ -1,1 +1,0 @@
-export { polar } from "./config";
