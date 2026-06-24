@@ -1,14 +1,10 @@
 packages:
   - docker-backend
-  - app
-  - recoder-agents
   - apps/agent-gateway
   - apps/agent-worker
   - apps/mobile
-  - apps/ui.giselles.ai
   - shared
   - packages/*
-  - internal-packages/*
   - scripts
 
 catalog:
@@ -104,6 +100,5 @@ exclude:
   - '**/.turbo/**'
   - '**/.nx/**'
   - packages-local-backup
-  - backend
   - infra
   - apps/desktop

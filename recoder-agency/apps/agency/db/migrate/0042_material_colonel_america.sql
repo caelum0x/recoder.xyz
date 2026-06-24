@@ -1,1 +1,0 @@
-ALTER TABLE "github_repository_pull_request_embeddings" RENAME COLUMN "pr_merged_at" TO "merged_at";
