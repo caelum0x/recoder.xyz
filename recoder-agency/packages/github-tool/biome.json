@@ -1,7 +1,0 @@
-{
-	"root": false,
-	"extends": "//",
-	"files": {
-		"includes": ["!schema.graphql", "!src/graphql-env.d.ts"]
-	}
-}

@@ -1,2 +1,0 @@
-ALTER TABLE "agents" ADD COLUMN "metadata" jsonb DEFAULT '{"sample":false}'::jsonb NOT NULL;--> statement-breakpoint
-ALTER TABLE "workspaces" ADD COLUMN "metadata" jsonb DEFAULT '{"sample":false}'::jsonb NOT NULL;

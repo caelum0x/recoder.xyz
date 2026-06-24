@@ -1,1 +1,0 @@
-ALTER TABLE "subscriptions" ALTER COLUMN "customer_id" SET NOT NULL;
