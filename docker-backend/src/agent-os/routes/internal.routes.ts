@@ -69,6 +69,31 @@ export function createInternalAgentOsRouter(): Router {
     }
   });
 
+  // Flag-gated (RECODER_BRAIN_ENABLED) read-only assemble. When the flag is off
+  // the BrainService returns null, which we surface as disabled (no-op).
+  router.post('/brain/assemble', async (req, res) => {
+    const { brain } = agentOsContainer;
+    if (!brain.isEnabled()) {
+      res.json({ success: true, data: { enabled: false, context: null } });
+      return;
+    }
+
+    const task = typeof req.body?.task === 'string' ? req.body.task : '';
+    const repoRoot = typeof req.body?.repoRoot === 'string' ? req.body.repoRoot : '';
+    if (!task || !repoRoot) {
+      res.status(400).json({ success: false, error: 'task and repoRoot are required' });
+      return;
+    }
+
+    const focusFiles = Array.isArray(req.body?.focusFiles)
+      ? req.body.focusFiles.filter((value: unknown): value is string => typeof value === 'string')
+      : undefined;
+    const limit = readPositiveInteger(req.body?.limit, 8);
+
+    const context = await brain.assembleForTask({ task, repoRoot, focusFiles, limit });
+    res.json({ success: true, data: { enabled: true, context } });
+  });
+
   router.post('/runs/tick', (_req, res) => {
     res.json({ success: true, data: { status: 'queued', operation: 'runs.tick' } });
   });
