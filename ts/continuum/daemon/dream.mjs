@@ -6,6 +6,9 @@
 import { loadEpisodes } from './store.mjs';
 import { writeMemory, readMemory, MEMORY_DIR } from './memory.mjs';
 import { instructionsBlock, activePreferences } from './preferences.mjs';
+import { SECTION as PATTERNS_SECTION, patternsMarkdown } from './stage4/patterns.mjs';
+import { SECTION as EXPERTISE_SECTION, expertiseMarkdown } from './stage4/expertise.mjs';
+import { SECTION as GOALS_SECTION, goalsMarkdown } from './stage4/goals.mjs';
 
 const epId = (e) => 'ep_' + (e.content_hash || e.end || 0);
 const authored = (e) => (e.structured && e.structured.authored) || ((e.source_mix || []).includes('input') ? e.text : '') || ((e.label && e.label.owner === 'me') ? e.text : '');
@@ -17,6 +20,17 @@ export const SECTIONS = [
   { file: 'people.md', title: 'People', ask: 'Recurring people / orgs the user works with or refers to, each a "- Name — one line on the relationship". Only those that genuinely recur.' },
   { file: 'taste.md', title: 'Taste', ask: 'The user\'s taste and working style — design/aesthetic, how they write, what they like and dislike — inferred from how they actually talk and decide.' },
   { file: 'decisions.md', title: 'Decisions', ask: 'Notable decisions the user has made, each "- Decision — short reason/context". Only clear, real decisions.' },
+  // Deeper understanding modules. Each ALSO has a zero-model heuristic renderer (written on the free
+  // tier below); with a model these same sections get re-grounded over the evidence digest (Pro).
+  PATTERNS_SECTION, EXPERTISE_SECTION, GOALS_SECTION,
+];
+
+// Heuristic understanding (free tier, zero model): file → renderer over episodes. Written whether or
+// not an LLM is configured, so free users get real value and Pro users get a model-enriched version.
+const HEURISTICS = [
+  { file: PATTERNS_SECTION.file, render: patternsMarkdown },
+  { file: EXPERTISE_SECTION.file, render: expertiseMarkdown },
+  { file: GOALS_SECTION.file, render: goalsMarkdown },
 ];
 
 // Compact, grounded evidence digest: the most salient/authored moments, each tagged with its id.
@@ -34,14 +48,33 @@ const stamp = (body, date, n) => {
   return [lines[0] || '', `<!-- dreamed ${date} · grounded in ${n} moments -->`, ...lines.slice(1)].join('\n');
 };
 
+// Free-tier writer: heuristic understanding (patterns/expertise/goals) + the preferences engine.
+// Pure model-free; grounded in the episodes themselves. Returns the files it wrote.
+function writeHeuristics(usable, date) {
+  const written = [];
+  for (const h of HEURISTICS) {
+    const r = writeMemory(h.file, stamp(h.render(usable, { now: Date.parse(date) || Date.now() }), date, usable.length), { reason: `dream ${date}`, source: 'dream' });
+    if (r.ok) written.push(h.file);
+  }
+  const prefs = instructionsBlock(activePreferences(usable));
+  if (prefs) { const r = writeMemory('preferences.md', stamp(`# Preferences\n${prefs}`, date, usable.length), { reason: `dream ${date}`, source: 'dream' }); if (r.ok) written.push('preferences.md'); }
+  return written;
+}
+
 export async function dream({ episodes, llm, sections = SECTIONS, now = Date.now() } = {}) {
   episodes = episodes || loadEpisodes();
-  if (!llm) return { error: 'dreaming needs a CAPABLE model — a strong local instruct model (8B+ general, not a small coder model) via Ollama, or an OpenAI/Anthropic key. Capture, retrieval, and preferences work fully without it.' };
   const usable = episodes.filter((e) => (e.text || '').length > 40);
+  const date = new Date(now).toISOString().slice(0, 10);
+
+  // FREE tier (no model): the LLM-only sections (about/projects/people/taste/decisions) still need a
+  // model — keep that error — but write the heuristic understanding + preferences regardless.
+  if (!llm) {
+    const heuristic = writeHeuristics(usable, date);
+    return { error: 'dreaming needs a CAPABLE model — a strong local instruct model (8B+ general, not a small coder model) via Ollama, or an OpenAI/Anthropic key. Capture, retrieval, and preferences work fully without it.', heuristic, date, dir: MEMORY_DIR };
+  }
   if (usable.length < 8) return { error: `not enough memory to dream over yet (${usable.length} usable episodes). Run \`continuum start\` for a while.` };
 
   const ev = digest(usable);
-  const date = new Date(now).toISOString().slice(0, 10);
   const written = [];
   for (const s of sections) {
     const existing = readMemory(s.file);
