@@ -14,8 +14,11 @@
  */
 
 import {
+  createBeadsTasks,
   createBrain,
+  createContext7Docs,
   createContinuumActivity,
+  createMem0Memory,
   createRepoIntelAuto,
   type Brain,
   type BrainContext,
@@ -50,12 +53,16 @@ function readFlagFromEnv(): boolean {
 }
 
 function defaultBrainFactory(): Brain {
-  // memory/docs/tasks are intentionally left undefined: the Brain degrades them
-  // to empty until those backends are wired. repo + activity are auto-adapters
-  // that themselves degrade safely when gitnexus / continuum are absent.
+  // All five real sources are wired. Each adapter is individually degrade-safe:
+  // it returns empty when its underlying tool/key is absent (gitnexus, continuum,
+  // mem0 key, context7, beads `bd`), so assembly stays fail-safe and the flag-off
+  // path remains a pure no-op (this factory is only invoked when enabled).
   return createBrain({
     repo: createRepoIntelAuto(),
     activity: createContinuumActivity(),
+    memory: createMem0Memory(),
+    docs: createContext7Docs(),
+    tasks: createBeadsTasks(),
   });
 }
 
