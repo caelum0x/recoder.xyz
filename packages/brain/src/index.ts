@@ -31,6 +31,36 @@ export {
   type ActivityExec,
 } from "./activity/continuum-activity-adapter";
 
+// Real mem0-backed semantic memory (degrade-safe to empty when key/tool absent)
+export {
+  Mem0Memory,
+  createMem0Memory,
+  buildMem0Request,
+  type Mem0Request,
+  type Mem0Response,
+  type Mem0Transport,
+  type Mem0MemoryOptions,
+} from "./memory/mem0-memory";
+
+// Real context7-backed docs (degrade-safe to empty when unavailable)
+export {
+  Context7Docs,
+  createContext7Docs,
+  type Context7DocsOptions,
+  type FetchImpl,
+  type FetchResponse,
+} from "./docs/context7-docs";
+
+// Real beads-backed task graph (degrade-safe to empty when `bd` absent)
+export {
+  BeadsTasks,
+  createBeadsTasks,
+  buildReadyArgs,
+  buildUpdateArgs,
+  type BeadsExec,
+  type BeadsTasksOptions,
+} from "./tasks/beads-tasks";
+
 // Domain types (data shapes)
 export type {
   BrainContext,
