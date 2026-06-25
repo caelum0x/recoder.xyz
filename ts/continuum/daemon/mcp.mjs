@@ -19,10 +19,15 @@ export function relTime(t, now = Date.now()) {
   return `${ago} · ${new Date(t).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// Sources that are unambiguously the user acting: focused input + the user-driven Stage 1 adapters
+// (commands you run, files you edit, things you copy). These attribute to 'you' even when the
+// heuristic labeler left owner 'unknown'/'system' (those adapters carry no authored-text signal).
+const YOU_SOURCES = new Set(['input', 'terminal', 'editor', 'clipboard']);
 const ownerOf = (e) => {
   if (e.speaker) return e.speaker === 'you' ? 'you' : 'others';
-  if (e.label && e.label.owner) return e.label.owner === 'me' ? 'you' : e.label.owner === 'other' ? 'others' : 'system';
-  return (e.source_mix || []).includes('input') ? 'you' : 'system';
+  if (e.label && (e.label.owner === 'me' || e.label.owner === 'other')) return e.label.owner === 'me' ? 'you' : 'others';
+  if ((e.source_mix || []).some((s) => YOU_SOURCES.has(s))) return 'you';
+  return 'system';
 };
 
 // Map an episode → the attributed, scrubbed, snippet-capped result schema (with a citation id).
