@@ -95,13 +95,18 @@ export function ollamaLLM({ model = 'llama3.1', base = 'http://localhost:11434' 
 export const mockLLM = async (_system, user) =>
   `summary: ${(user.match(/[a-z]{4,}/gi) || []).slice(0, 6).join(' ')}`;
 
-// ---------- graph: { add(text,group,date), search(q,group,k) } over the graphiti sidecar ----------
+// ---------- graph: backed by the richer createGraph client (local entity/relation pre-extraction +
+// injectable-fetch sidecar calls). Keeps the legacy { add(text,group,date), search(q,group,k) }
+// surface so distill's graphAdd + retrieval's graph.search keep working unchanged. -----------------
+import { createGraph } from './graph.mjs';
 
-export function graphClient(url = 'http://localhost:8000') {
-  const post = (p, b) => fetch(url + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
+export function graphClient(url = 'http://localhost:8000', group = 'default') {
+  const g = createGraph({ url, group });
   return {
-    add: (text, group = 'default', date) => post('/add', { text, name: 'rollup', group_id: group, date }),
-    search: (query, group = 'default', k = 6) => post('/search', { query, group_id: group, k }),
+    // legacy: a rollup summary string → structured graph episode (entities/relations extracted inside).
+    add: (text, grp = group, date) => g.add({ text, name: 'rollup', end: date }, grp),
+    search: (query, grp = group, k = 6) => g.search(query, grp, k),
+    temporalQuery: (opts) => g.temporalQuery(opts),
   };
 }
 

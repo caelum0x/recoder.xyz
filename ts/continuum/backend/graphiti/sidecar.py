@@ -57,38 +57,123 @@ async def lifespan(_app):
 app = FastAPI(lifespan=lifespan)
 
 
+# ---------------------------------------------------------------------------------------------
+# Richer episode -> graph mapping (2026-06). BACKWARD-COMPATIBLE: the wire shape is unchanged —
+# /add still accepts {text,name,group_id,date} and /search still returns {uuid,fact,name}. New
+# fields are all OPTIONAL additions:
+#   /add   : app/title/source_mix/salience + LOCALLY pre-extracted entities[] / relations[] (from
+#            daemon/graph.mjs entitiesFor). We fold those hints + provenance into the episode body
+#            so graphiti's extractor anchors on real names instead of re-discovering them, and we
+#            promote app/salience into source_description for better edge attribution.
+#   /search: optional entity focus + since/until ISO bounds → temporal filtering of returned edges
+#            on each edge's valid_at (falling back to created_at), plus valid_at/invalid_at in the
+#            result so callers can reason about WHEN a fact held. Old callers that send neither get
+#            the original behaviour and the original three keys (extra keys are additive).
+# ---------------------------------------------------------------------------------------------
+
+
+class Entity(BaseModel):
+    name: str
+    kind: str | None = None
+
+
+class Relation(BaseModel):
+    subject: str
+    predicate: str
+    object: str
+
+
 class AddReq(BaseModel):
     text: str
     name: str = "memory"
     group_id: str = "default"
     date: str | None = None
+    # optional richer episode context (ignored by old clients)
+    app: str | None = None
+    title: str | None = None
+    source_mix: list[str] = []
+    salience: float | None = None
+    entities: list[Entity] = []
+    relations: list[Relation] = []
 
 
 class SearchReq(BaseModel):
     query: str
     k: int = 5
     group_id: str = "default"
+    # optional temporal scoping (ignored by old clients)
+    entity: str | None = None
+    since: str | None = None
+    until: str | None = None
+
+
+def _parse_iso(s: str | None):
+    if not s:
+        return None
+    try:
+        d = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _enrich_body(r: AddReq) -> str:
+    # Prepend a compact, deterministic hint block so the extraction LLM anchors on the entities and
+    # relations we already found locally. Plain text — graphiti reads episode_body as prose.
+    lines: list[str] = []
+    if r.entities:
+        lines.append("Entities: " + ", ".join(e.name for e in r.entities[:24]))
+    if r.relations:
+        lines.append("Relations: " + "; ".join(f"{x.subject} {x.predicate} {x.object}" for x in r.relations[:24]))
+    return ("\n".join(lines) + "\n\n" + r.text) if lines else r.text
 
 
 @app.post("/add")
 async def add(r: AddReq):
-    try:
-        ref = datetime.fromisoformat(r.date).replace(tzinfo=timezone.utc) if r.date else datetime.now(timezone.utc)
-    except Exception:
-        ref = datetime.now(timezone.utc)
+    ref = _parse_iso(r.date) or datetime.now(timezone.utc)
+    desc = "continuum capture"
+    if r.app:
+        desc += f" · {r.app}"
+    if r.salience is not None:
+        desc += f" · salience={r.salience:.2f}"
     await graphiti.add_episode(
-        name=r.name, episode_body=r.text, source=EpisodeType.text,
-        source_description="continuum capture", reference_time=ref, group_id=r.group_id,
+        name=r.title or r.name, episode_body=_enrich_body(r), source=EpisodeType.text,
+        source_description=desc, reference_time=ref, group_id=r.group_id,
     )
     return {"ok": True}
 
 
 @app.post("/search")
 async def search(r: SearchReq):
-    edges = await graphiti.search(r.query, group_ids=[r.group_id], num_results=r.k)
+    # Entity focus narrows the query string; bounds filter the returned edges by validity window.
+    query = f"{r.entity}: {r.query}" if r.entity and r.entity not in r.query else r.query
+    since, until = _parse_iso(r.since), _parse_iso(r.until)
+    edges = await graphiti.search(query, group_ids=[r.group_id], num_results=r.k)
+
+    def _within(e) -> bool:
+        if not since and not until:
+            return True
+        t = getattr(e, "valid_at", None) or getattr(e, "created_at", None)
+        if t is None:
+            return True  # undated edges are never filtered out
+        if since and t < since:
+            return False
+        if until and t > until:
+            return False
+        return True
+
+    def _iso(t):
+        return t.isoformat() if t is not None else None
+
     return {"results": [
-        {"uuid": getattr(e, "uuid", None), "fact": getattr(e, "fact", None), "name": getattr(e, "name", None)}
-        for e in edges
+        {
+            "uuid": getattr(e, "uuid", None),
+            "fact": getattr(e, "fact", None),
+            "name": getattr(e, "name", None),
+            "valid_at": _iso(getattr(e, "valid_at", None)),
+            "invalid_at": _iso(getattr(e, "invalid_at", None)),
+        }
+        for e in edges if _within(e)
     ]}
 
 
