@@ -1,0 +1,51 @@
+name: Publish Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - run: npm install -g npm@11
+      - run: node --version && npm --version
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm run build:macos-helper
+      - run: pnpm run smoke:pack
+      - run: npm publish --provenance --access public
+
+      - name: Detect previous tag
+        id: tags
+        run: |
+          previous_tag="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          echo "previous_tag=$previous_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release with changelog
+        run: |
+          args=(--to "$GITHUB_REF_NAME")
+          if [ -n "${{ steps.tags.outputs.previous_tag }}" ]; then
+            args+=(--from "${{ steps.tags.outputs.previous_tag }}")
+          fi
+          npx --yes changelogithub@14.0.0 "${args[@]}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
