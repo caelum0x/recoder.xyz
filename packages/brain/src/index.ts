@@ -13,6 +13,16 @@ export { Brain, createBrain, type BrainDeps } from "./brain";
 // Repo-intelligence adapter (the ts/gitnexus fusion seam)
 export { ContextPackRepoIntel, createRepoIntel } from "./repo/repo-intel-adapter";
 
+// Real GitNexus-backed repo intelligence (opt-in, degrade-safe to the mock)
+export {
+  GitNexusRepoIntel,
+  createGitNexusRepoIntel,
+  createRepoIntelAuto,
+  buildImpactArgs,
+  type GitNexusExec,
+  type GitNexusRepoIntelOptions,
+} from "./repo/gitnexus-repo-intel";
+
 // Desktop-activity adapter (the ts/continuum fusion seam)
 export {
   ContinuumActivity,
