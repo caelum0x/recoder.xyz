@@ -4,6 +4,7 @@ import { JsonFileAgentOsRepository } from './repositories/json-file-agent-os.rep
 import { PostgresAgentOsRepository } from './repositories/postgres-agent-os.repository';
 import type { AgentOsRepository } from './repositories/agent-os.repository';
 import { WorkLockService } from '@recoder/agent-os';
+import { BrainService, createBrainService } from './brain-service';
 
 export type AgentOsRepositoryDriver = 'memory' | 'json' | 'postgres';
 
@@ -11,11 +12,14 @@ export type AgentOsServiceContainer = {
   repository: AgentOsRepository;
   repositoryDriver: AgentOsRepositoryDriver;
   workLocks: WorkLockService;
+  // Flag-gated (RECODER_BRAIN_ENABLED). No-op when disabled; never throws.
+  brain: BrainService;
 };
 
 export const agentOsContainer: AgentOsServiceContainer = {
   ...createRepository(),
   workLocks: new WorkLockService(),
+  brain: createBrainService(),
 };
 
 function createRepository(): Pick<AgentOsServiceContainer, 'repository' | 'repositoryDriver'> {

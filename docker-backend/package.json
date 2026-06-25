@@ -32,6 +32,7 @@
     "@recoder/agent-os": "workspace:*",
     "@recoder/agent-instructions": "workspace:*",
     "@recoder/agent-mcp": "workspace:*",
+    "@recoder/brain": "workspace:*",
     "@recoder/oss-registry": "workspace:*",
     "@recoder/git-nexus": "workspace:*",
     "@recoder/sandbox-daytona": "workspace:*",
