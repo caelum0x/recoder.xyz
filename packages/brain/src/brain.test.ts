@@ -50,6 +50,49 @@ test("assemble degrades to empty arrays when a source is absent", async () => {
   assert.deepEqual(ctx.tasks, []);
 });
 
+test("assemble fuses desktop activity from the activity port", async () => {
+  const brain = createBrain({
+    repo: fakeRepo,
+    activity: {
+      async recall() {
+        return [
+          {
+            when: "2026-06-26T10:00:00Z",
+            app: "Slack",
+            who: "you",
+            type: "message",
+            text: "shipping the brain fusion",
+            id: "a1",
+          },
+        ];
+      },
+      async profile() {
+        return {
+          kind: "developer",
+          brief: "ships fast, async-first",
+          apps: ["Slack", "VS Code"],
+          tools: ["message", "edit"],
+          recurring: ["deep work mornings"],
+        };
+      },
+    },
+  });
+
+  const ctx = await brain.assemble({ task: "fix bug", repoRoot: "/tmp/repo" });
+
+  assert.equal(ctx.activity.recent.length, 1);
+  assert.equal(ctx.activity.recent[0].id, "a1");
+  assert.equal(ctx.activity.recent[0].who, "you");
+  assert.equal(ctx.activity.profile?.kind, "developer");
+  assert.deepEqual(ctx.activity.profile?.apps, ["Slack", "VS Code"]);
+});
+
+test("assemble yields empty activity when no activity port (non-breaking)", async () => {
+  const brain = createBrain({ repo: fakeRepo });
+  const ctx = await brain.assemble({ task: "anything", repoRoot: "/tmp/repo" });
+  assert.deepEqual(ctx.activity, { recent: [], profile: null });
+});
+
 test("record routes memory events to memory.remember", async () => {
   let remembered = "";
   const brain = createBrain({

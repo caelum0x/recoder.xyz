@@ -5,13 +5,25 @@
  *
  * Repo intelligence now flows through {@link RepoIntelPort}, the seam where the
  * real ts/gitnexus knowledge-graph engine is merged in (see brain.md). Recall,
- * docs, and the task graph flow through their ports. The core depends only on
- * the ports, never the concrete engines.
+ * docs, the task graph, and desktop activity flow through their ports. The core
+ * depends only on the ports, never the concrete engines.
  */
 
 import { type CreateContextPackInput } from "@recoder/git-nexus";
-import type { BrainContext, BrainEvent, BrainQuery } from "./domain";
-import type { DocsPort, MemoryPort, RepoIntelPort, TaskGraphPort } from "./ports";
+import type {
+  BrainActivity,
+  BrainActivityProfile,
+  BrainContext,
+  BrainEvent,
+  BrainQuery,
+} from "./domain";
+import type {
+  ActivityPort,
+  DocsPort,
+  MemoryPort,
+  RepoIntelPort,
+  TaskGraphPort,
+} from "./ports";
 import { createRepoIntel } from "./repo/repo-intel-adapter";
 
 export interface BrainDeps {
@@ -23,11 +35,15 @@ export interface BrainDeps {
   docs?: DocsPort;
   /** Durable task graph, bound to the owned beads. */
   tasks?: TaskGraphPort;
+  /** Desktop-activity memory, bound to the owned continuum. */
+  activity?: ActivityPort;
   /** How git-nexus builds the repo map (defaults to indexing repoRoot). */
   repoMap?: (q: BrainQuery) => CreateContextPackInput;
 }
 
 const DEFAULT_LIMIT = 8;
+
+const EMPTY_ACTIVITY: BrainContext["activity"] = { recent: [], profile: null };
 
 export class Brain {
   private readonly repo: RepoIntelPort;
@@ -37,8 +53,8 @@ export class Brain {
   }
 
   /**
-   * One read. Repo intelligence + recall + docs + task graph, fused into a
-   * single BrainContext that the whole agent team shares.
+   * One read. Repo intelligence + recall + docs + task graph + desktop
+   * activity, fused into a single BrainContext that the whole agent team shares.
    */
   async assemble(query: BrainQuery): Promise<BrainContext> {
     const limit = query.limit ?? DEFAULT_LIMIT;
@@ -52,19 +68,30 @@ export class Brain {
         repoRoot: query.repoRoot,
       };
 
-    // Repo intel + recall + docs + tasks run together; the same read is reused.
-    const [repo, memories, docs, tasks] = await Promise.all([
-      this.repo.contextPack(input),
-      this.deps.memory?.recall(query.task, limit) ?? Promise.resolve([]),
-      this.deps.docs?.lookup(query.task, limit) ?? Promise.resolve([]),
-      this.deps.tasks?.related(query.task, limit) ?? Promise.resolve([]),
-    ]);
+    // Repo intel + recall + docs + tasks + activity run together; the same read
+    // is reused. Each source defaults to empty/null when its port is absent.
+    const [repo, memories, docs, tasks, activityRecent, activityProfile] =
+      await Promise.all([
+        this.repo.contextPack(input),
+        this.deps.memory?.recall(query.task, limit) ?? Promise.resolve([]),
+        this.deps.docs?.lookup(query.task, limit) ?? Promise.resolve([]),
+        this.deps.tasks?.related(query.task, limit) ?? Promise.resolve([]),
+        this.deps.activity?.recall(query.task, limit) ??
+          Promise.resolve([] as BrainActivity[]),
+        this.deps.activity?.profile() ??
+          Promise.resolve(null as BrainActivityProfile | null),
+      ]);
+
+    const activity: BrainContext["activity"] = this.deps.activity
+      ? { recent: activityRecent, profile: activityProfile }
+      : EMPTY_ACTIVITY;
 
     return {
       repo,
       memories,
       docs,
       tasks,
+      activity,
       assembledAt: new Date().toISOString(),
     };
   }

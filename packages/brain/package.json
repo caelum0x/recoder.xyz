@@ -18,7 +18,7 @@
     "build": "tsup",
     "check-types": "tsc --noEmit",
     "clean": "rm -rf .turbo dist node_modules",
-    "test": "node --test --import tsx src/**/*.test.ts"
+    "test": "node --test --import tsx 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@recoder/git-nexus": "workspace:*"
