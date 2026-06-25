@@ -30,6 +30,7 @@ const DEFAULTS = {
   tier: 'free',
   capture:    { source: 'screen', exclude: [], audio: false },  // screen (OCR) | ax; exclude = apps never captured; audio = capture meetings (on-device, opt-in)
   files:      { watch: [] },                          // dirs to capture writes from, e.g. ["~/Documents", "~/code"]
+  adapters:   { git: false, terminal: false, clipboard: false, editor: false, gitDirs: [] },  // user-driven Stage 1 capture — ALL off by default (privacy-first opt-in); gitDirs = repos to watch
   embeddings: { provider: 'local', model: '' },     // local | ollama | openai | api
   llm:        { provider: 'none',  model: '' },      // none | ollama | openai | anthropic
   graph:      { enabled: false, url: 'http://localhost:8000', group: 'default' },
@@ -44,6 +45,7 @@ export function loadConfig() {
     ...DEFAULTS, ...file,
     capture: { ...DEFAULTS.capture, ...file.capture },
     files: { ...DEFAULTS.files, ...file.files },
+    adapters: { ...DEFAULTS.adapters, ...file.adapters },
     embeddings: { ...DEFAULTS.embeddings, ...file.embeddings },
     llm: { ...DEFAULTS.llm, ...file.llm },
     graph: { ...DEFAULTS.graph, ...file.graph },
