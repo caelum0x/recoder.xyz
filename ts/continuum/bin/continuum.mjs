@@ -23,6 +23,7 @@ import { appendEpisode, loadEpisodes } from '../daemon/store.mjs';
 import { candidates, approve, dismiss, activePreferences } from '../daemon/preferences.mjs';
 import { localEmbedder } from '../daemon/adapters.mjs';
 import { watchFiles } from '../daemon/stage1/files.mjs';
+import { startAdapters } from '../daemon/stage1/adapters/index.mjs';
 import { runEval, formatReport } from '../daemon/eval/eval.mjs';
 import { runMeasure, formatScorecard } from '../daemon/eval/measure.mjs';
 import { cleanStore, formatClean } from '../daemon/clean.mjs';
@@ -138,7 +139,13 @@ async function start() {
 
   if (cfg.files.watch.length) { watchFiles(cfg.files.watch, ingest); console.error(`  + watching files in: ${cfg.files.watch.join(', ')}`); }
 
-  process.on('SIGINT', async () => { await q; await p.flush(); process.exit(0); });
+  // User-driven Stage 1 adapters (git / terminal / clipboard / editor) feed the SAME pipeline as
+  // screen capture. All off by default → with no config this is a no-op (behavior identical to before).
+  const stopAdapters = startAdapters(cfg, ingest);
+  const enabled = Object.entries(cfg.adapters || {}).filter(([, v]) => v === true).map(([k]) => k);
+  if (enabled.length) console.error(`  + adapters: ${enabled.join(', ')}`);
+
+  process.on('SIGINT', async () => { stopAdapters(); await q; await p.flush(); process.exit(0); });
 }
 
 // continuum preferences — review how the agent has learned you want it to work, and curate it.
