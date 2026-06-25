@@ -36,6 +36,8 @@ const DEFAULTS = {
   graph:      { enabled: false, url: 'http://localhost:8000', group: 'default' },
   keys:       { openai: '', anthropic: '' },
   mcp:        { paused: false, sinceDays: 0 },        // agent access controls: pause, or limit to a recent window (0 = all)
+  sync:       { enabled: false, url: '' },            // multi-device episode sync (opt-in); url = sync endpoint
+  team:       { enabled: false },                     // shared team memory view (opt-in)
 };
 
 export function loadConfig() {
@@ -50,6 +52,8 @@ export function loadConfig() {
     llm: { ...DEFAULTS.llm, ...file.llm },
     graph: { ...DEFAULTS.graph, ...file.graph },
     mcp: { ...DEFAULTS.mcp, ...file.mcp },
+    sync: { ...DEFAULTS.sync, ...file.sync },
+    team: { ...DEFAULTS.team, ...file.team },
     keys: {
       openai: process.env.OPENAI_API_KEY || file.keys?.openai || '',
       anthropic: process.env.ANTHROPIC_API_KEY || file.keys?.anthropic || '',

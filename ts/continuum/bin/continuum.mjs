@@ -24,6 +24,9 @@ import { candidates, approve, dismiss, activePreferences } from '../daemon/prefe
 import { localEmbedder } from '../daemon/adapters.mjs';
 import { watchFiles } from '../daemon/stage1/files.mjs';
 import { startAdapters } from '../daemon/stage1/adapters/index.mjs';
+import { detectPlatform, selectCaptureBackend } from '../daemon/stage1/platform.mjs';
+import { createStoreSync } from '../daemon/sync/store-sync.mjs';
+import { createTeamMemory } from '../daemon/team/team-memory.mjs';
 import { runEval, formatReport } from '../daemon/eval/eval.mjs';
 import { runMeasure, formatScorecard } from '../daemon/eval/measure.mjs';
 import { cleanStore, formatClean } from '../daemon/clean.mjs';
@@ -118,9 +121,12 @@ async function start() {
   const ingest = (ev) => { if (fs.existsSync(PAUSE)) return; q = q.then(() => p.ingest(ev)).catch(() => {}); };
   const onLine = (line) => { const s = line.trim(); if (!s) return; try { ingest(JSON.parse(s)); } catch { /* skip bad line */ } };
 
+  let stopBackend = () => {};
+  const platform = detectPlatform();
   if (process.argv.includes('--stdin')) {
     createInterface({ input: process.stdin }).on('line', onLine);
-  } else {
+  } else if (platform === 'darwin') {
+    // macOS — prebuilt Swift helper. UNCHANGED from prior behavior.
     const bin = ensureHelper(source);   // builds on first run if needed
     if (!bin) return;                   // ensureHelper printed why
     const env = { ...process.env, CONTINUUM_EXCLUDE: [process.env.CONTINUUM_EXCLUDE, ...cfg.capture.exclude].filter(Boolean).join(',') };
@@ -135,6 +141,12 @@ async function start() {
         console.error('  + audio capture on (meetings; on-device, transcribe-then-delete)');
       }
     }
+  } else {
+    // Linux / Windows — screenshot+OCR backend (platform.mjs) feeding the SAME pipeline.ingest.
+    const backend = selectCaptureBackend(platform);
+    if (!backend.start) { console.error(backend.note || `No capture backend for ${platform}.`); return; }
+    console.error(`  + ${backend.kind} capture (needs: ${(backend.deps || []).join(', ')}) — silently degrades if a tool is missing`);
+    stopBackend = backend.start(ingest, {});
   }
 
   if (cfg.files.watch.length) { watchFiles(cfg.files.watch, ingest); console.error(`  + watching files in: ${cfg.files.watch.join(', ')}`); }
@@ -145,7 +157,7 @@ async function start() {
   const enabled = Object.entries(cfg.adapters || {}).filter(([, v]) => v === true).map(([k]) => k);
   if (enabled.length) console.error(`  + adapters: ${enabled.join(', ')}`);
 
-  process.on('SIGINT', async () => { stopAdapters(); await q; await p.flush(); process.exit(0); });
+  process.on('SIGINT', async () => { stopAdapters(); stopBackend(); await q; await p.flush(); process.exit(0); });
 }
 
 // continuum preferences — review how the agent has learned you want it to work, and curate it.
@@ -189,6 +201,62 @@ async function preferences() {
   console.log('  (or curate visually in the dashboard → Preferences)');
 }
 
+// continuum sync — converge the local episode store with a remote endpoint via store-sync.
+// Thin + opt-in: off unless sync.enabled, no-op-with-reason when sync.url is unset. The HTTP I/O
+// is done here (async fetch); store-sync drives the content-addressed, conflict-free merge over a
+// transport whose pull() returns the pre-fetched remote batch and whose push() captures the
+// only-new outgoing batch we then POST.
+async function sync() {
+  const cfg = loadConfig();
+  if (!cfg.sync?.enabled) { console.log('continuum sync\n\n  sync is off. Turn it on in ~/.continuum/config.json:\n    "sync": { "enabled": true, "url": "https://your-sync-endpoint" }'); return; }
+  if (!cfg.sync.url) { console.log('continuum sync\n\n  sync is enabled but sync.url is unset. Set it in ~/.continuum/config.json.'); return; }
+  const url = cfg.sync.url;
+
+  let remote = { episodes: [], cursor: null };
+  try {
+    const res = await fetch(url, { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    remote = { episodes: Array.isArray(body.episodes) ? body.episodes : [], cursor: body.cursor ?? null };
+  } catch (e) { console.log(`continuum sync\n\n  could not reach sync endpoint (${url}): ${e.message}`); return; }
+
+  let outgoing = [];
+  const transport = { pull: () => remote, push: (batch) => { outgoing = batch; } };
+  const syncer = createStoreSync({ transport, localEpisodes: loadEpisodes, appendLocal: appendEpisode });
+  const r = syncer.fullSync();
+
+  if (outgoing.length) {
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ episodes: outgoing }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) { console.log(`continuum sync\n\n  pulled ${r.added.length}, but push failed (${url}): ${e.message}`); return; }
+  }
+  console.log(`continuum sync\n\n  ✅ converged with ${url}\n  pulled ${r.added.length} new · pushed ${r.pushed.length} new`);
+}
+
+// continuum team — show the merged shared-memory view (members → per-section, attributed).
+// Thin + opt-in: off unless team.enabled. Read-only; uses the default DATA_DIR/team storage.
+async function team() {
+  const cfg = loadConfig();
+  if (!cfg.team?.enabled) { console.log('continuum team\n\n  team memory is off. Turn it on in ~/.continuum/config.json:\n    "team": { "enabled": true }'); return; }
+  const tm = createTeamMemory();
+  const view = tm.teamView();
+  console.log('continuum team — shared memory view\n');
+  if (!view.members.length) { console.log('  (no members yet — nothing has been written to the team store)'); return; }
+  console.log(`  members: ${view.members.join(', ')}\n`);
+  const sectionNames = Object.keys(view.sections).sort();
+  if (!sectionNames.length) { console.log('  (members present, but no sections written yet)'); return; }
+  for (const name of sectionNames) {
+    console.log(`  ${name}`);
+    for (const c of view.sections[name]) console.log(`    · [${c.member}] ${String(c.text || '').replace(/\n/g, ' ').slice(0, 80)}`);
+  }
+  const conflicts = tm.conflicts();
+  if (conflicts.length) {
+    console.log('\n  conflicts (differing text from >1 member — reviewable, never auto-clobbered):');
+    for (const c of conflicts) console.log(`    · ${c.section}: ${c.members.join(', ')}`);
+  }
+}
+
 switch (cmd) {
   case 'verify': await verify(); break;
   case 'preferences': case 'prefs': await preferences(); break;
@@ -225,6 +293,8 @@ switch (cmd) {
     break;
   }
   case 'start': await start(); break;
+  case 'sync': await sync(); break;     // converge local episode store with a remote endpoint
+  case 'team': await team(); break;     // show the merged shared team-memory view
   case 'dashboard': await import('../daemon/dashboard.mjs'); break;
   case 'mcp': await import('../daemon/mcp-server.mjs'); break;       // stdio JSON-RPC — do not print to stdout
   case 'mcp-install': {
@@ -246,5 +316,5 @@ switch (cmd) {
     break;
   }
   default:
-    console.log('continuum <verify|start|dashboard|mcp-install|preferences|dream|memory|measure|clean|doctor|config|eval>\n\n  verify        prove it works in 30s (no setup)\n  start         live capture → local store\n  dashboard     timeline + search at localhost:3939\n  mcp-install   add Continuum to Claude Desktop (one step)\n  mcp-config    print the MCP config (for other clients)\n  preferences   review + curate how your agents work for you\n  dream         consolidate captured moments → durable memory (needs a model)\n  memory        show what your agent knows about you (the dreamed memory)\n  measure       retrieval/answer quality over your real memory (needs a model)\n  clean         salvage/delete polluted episodes (--apply to write; backs up first)\n  doctor        environment check\n  config        resolved config\n  eval          capture/perception quality over local fixtures');
+    console.log('continuum <verify|start|dashboard|mcp-install|preferences|dream|memory|sync|team|measure|clean|doctor|config|eval>\n\n  verify        prove it works in 30s (no setup)\n  start         live capture → local store\n  dashboard     timeline + search at localhost:3939\n  mcp-install   add Continuum to Claude Desktop (one step)\n  mcp-config    print the MCP config (for other clients)\n  preferences   review + curate how your agents work for you\n  dream         consolidate captured moments → durable memory (needs a model)\n  memory        show what your agent knows about you (the dreamed memory)\n  sync          converge your episode store with a remote endpoint (opt-in)\n  team          show the merged shared team-memory view (opt-in)\n  measure       retrieval/answer quality over your real memory (needs a model)\n  clean         salvage/delete polluted episodes (--apply to write; backs up first)\n  doctor        environment check\n  config        resolved config\n  eval          capture/perception quality over local fixtures');
 }
