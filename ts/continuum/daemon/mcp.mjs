@@ -2,6 +2,9 @@
 // over these. Pure over (index, episodes); no I/O. Design: docs/architecture/mcp.md.
 import { redactPII } from './stage2/segmenter.mjs';
 import { routeSearch } from './stage3/index.mjs';
+import { computePatterns } from './stage4/patterns.mjs';
+import { computeExpertise } from './stage4/expertise.mjs';
+import { computeGoals } from './stage4/goals.mjs';
 
 const SNIP = 280;
 const WORD = /[a-z0-9]+/gi;
@@ -100,7 +103,14 @@ export async function profile(episodes, opts = {}) {
   const recurring = topN(entityCounts(eps), 8);
   const voice = eps.filter((e) => ownerOf(e) === 'you' || (e.structured && e.structured.authored)).slice(-6).map((e) => scrub((e.structured && e.structured.authored) || e.text).slice(0, 140));
   const sources = eps.slice(-6).map((e) => mapResult(e, now));
-  const base = { topic: topic || null, apps, types, recurring, voice_samples: voice, sources };
+  // Deeper understanding — model-free heuristics, so the profile() tool returns real depth on the
+  // free tier (patterns = how/when they work, expertise = demonstrated skills, goals = active/stuck).
+  const pat = computePatterns(eps, { now });
+  const exp = computeExpertise(eps, { now });
+  const gls = computeGoals(eps, { now });
+  const patterns = { focus: pat.focus, peakHour: pat.peakHour || null, apps: pat.apps, dayParts: pat.dayParts, transitions: pat.transitions };
+  const goals = { active: gls.goals, stuck: gls.stuck };
+  const base = { topic: topic || null, apps, types, recurring, voice_samples: voice, sources, patterns, expertise: exp, goals };
   if (!llm || !eps.length) return { kind: 'heuristic', note: !eps.length ? 'No matching activity yet.' : 'Heuristic profile — set llm.provider for a synthesized understanding.', ...base };
   const ctx = eps.slice(-50).map((e) => '- ' + scrub((e.structured && e.structured.summary) || e.text).slice(0, 160)).join('\n');
   let brief = '';
