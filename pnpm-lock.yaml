@@ -1382,6 +1382,25 @@ importers:
         specifier: ^5.0.0
         version: 5.9.2
 
+  packages/brain:
+    dependencies:
+      '@recoder/git-nexus':
+        specifier: workspace:*
+        version: link:../git-nexus
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.27
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@swc/core@1.15.7(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.2)(yaml@2.8.3)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.2
+
   packages/browser-verification:
     devDependencies:
       '@types/node':
@@ -30351,7 +30370,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 1.2.0
-      vitest: 2.1.9(@types/node@24.10.13)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@5.0.10))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@5.0.10))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
+      vitest: 2.1.9(@types/node@20.19.27)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@6.0.6))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
 
   '@vitest/utils@2.1.9':
     dependencies:
@@ -34794,7 +34813,7 @@ snapshots:
       is-in-ci: 2.0.0
       patch-console: 2.0.0
       react: 19.1.1
-      react-reconciler: 0.33.0(react@19.1.1)
+      react-reconciler: 0.33.0(react@19.2.4)
       scheduler: 0.27.0
       signal-exit: 3.0.7
       slice-ansi: 7.1.0
@@ -39079,11 +39098,6 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
-
-  react-reconciler@0.33.0(react@19.1.1):
-    dependencies:
-      react: 19.1.1
-      scheduler: 0.27.0
 
   react-reconciler@0.33.0(react@19.2.4):
     dependencies:
