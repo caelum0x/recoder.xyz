@@ -7,9 +7,9 @@ export const GIT_NEXUS_MCP_TOOLS = [
   'recoder.git_nexus.context_pack',
 ] as const;
 
-export type GitNexusMcpTool = typeof GIT_NEXUS_MCP_TOOLS[number];
+export type RecoderGitMcpTool = typeof GIT_NEXUS_MCP_TOOLS[number];
 
-export function createGitNexusMcpServerDescriptor() {
+export function createRecoderGitMcpServerDescriptor() {
   return {
     serverId: 'recoder.git_nexus',
     displayName: 'Recoder Git Nexus',

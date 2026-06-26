@@ -10,7 +10,7 @@
 Status: **fusion already begun**. The reference seam exists at
 `packages/brain/src/{brain.ts,types.ts,index.ts}` (read and carried forward below). This doc
 turns that 3-file seam into a full production subsystem of **147 functional files** (plus a
-mirrored `tests/` tree). The `repo/` module is the richest — it merges the real GitNexus
+mirrored `tests/` tree). The `repo/` module is the richest — it merges the real RecoderGit
 code-knowledge-graph engine (40 files: Tree-sitter → ingestion → scope-resolution → graph →
 LadybugDB → embeddings → hybrid search), not the 8-file context-pack stub it was first drafted against.
 
@@ -19,7 +19,7 @@ This is a **first-party, owned** subsystem. We **merge and edit** the fused sour
 
 | Source | What it owns | Where it lives today |
 | --- | --- | --- |
-| **GitNexus** (`ts/gitnexus`) | Repo intelligence as a **real code-knowledge-graph engine**: Tree-sitter AST parse → scope resolution → typed graph nodes/edges (`Function`/`Class`/`Method`/`Import`/…, calls/imports/heritage edges) → **LadybugDB (`lbug`)** graph storage → code embeddings → hybrid BM25+semantic graph search/RAG → MCP query tools. NOT a stub. | engine: `ts/gitnexus/gitnexus/src/core/{tree-sitter,ingestion,graph,embeddings,lbug,search,incremental,augmentation}`, `ts/gitnexus/gitnexus/src/{storage,mcp}`; shared graph + scope-resolution: `ts/gitnexus/gitnexus-shared/src/{graph,scope-resolution}` |
+| **RecoderGit** (`ts/recodergit`) | Repo intelligence as a **real code-knowledge-graph engine**: Tree-sitter AST parse → scope resolution → typed graph nodes/edges (`Function`/`Class`/`Method`/`Import`/…, calls/imports/heritage edges) → **LadybugDB (`lbug`)** graph storage → code embeddings → hybrid BM25+semantic graph search/RAG → MCP query tools. NOT a stub. | engine: `ts/recodergit/gitnexus/src/core/{tree-sitter,ingestion,graph,embeddings,lbug,search,incremental,augmentation}`, `ts/recodergit/gitnexus/src/{storage,mcp}`; shared graph + scope-resolution: `ts/recodergit/gitnexus-shared/src/{graph,scope-resolution}` |
 | **mem0** (`py/mem0`) | Semantic recall: embeddings, vector stores (pgvector/qdrant/memory), LLM fact-extraction, history, hybrid (BM25) scoring | TS SDK (default merge, in-process): `py/mem0/mem0-ts/src/oss/src/{memory,vector_stores,embeddings,utils,storage,llms,config}`; Python core (alt recall service): `py/mem0/mem0/{memory,vector_stores,embeddings,reranker,utils}` |
 | `packages/context7-sdk` | External library docs: `searchLibrary`, `getContext`, HTTP client w/ retry | `packages/context7-sdk/src/*` |
 | `packages/beads-adapter` | TS bridge to the task graph: CLI runner, parser, TaskSpec mapping, sync | `packages/beads-adapter/src/*` |
@@ -35,7 +35,7 @@ This is a **first-party, owned** subsystem. We **merge and edit** the fused sour
    includes the git HEAD sha so a new commit invalidates stale repo intelligence.
 2. **Fusion, not aggregation.** The four sources are fused into one ranked, token-budgeted
    object. We do not just concatenate; we dedupe, score, and trim to a token budget.
-3. **First-party merge.** The real GitNexus engine (`ts/gitnexus`) becomes the `repo/` module; the
+3. **First-party merge.** The real RecoderGit engine (`ts/recodergit`) becomes the `repo/` module; the
    mem0 TS SDK (`py/mem0/mem0-ts/src/oss`) becomes the `memory/` module; `context7-sdk` becomes the
    `docs/` module; `beads-adapter` + `go/beads` become the `tasks/` module. The engines are merged
    and edited behind their ports; the brain-domain types they map into are re-exported from `brain`
@@ -83,7 +83,7 @@ packages/brain/
     │   ├── brain-fact.ts                # BrainFact<T>: ranked unit w/ score + sourceRef + tokens
     │   ├── source-ref.ts                # SourceRef discriminated union (git_nexus|mem0|context7|beads)
     │   ├── revision.ts                  # Revision: git sha + indexedAt + dirty flag (cache key part)
-    │   ├── repo-intel.types.ts          # RepoIntel: GitNexus graph-query results (symbols, callers/callees, impacted files, cycles) shaped into brain domain
+    │   ├── repo-intel.types.ts          # RepoIntel: RecoderGit graph-query results (symbols, callers/callees, impacted files, cycles) shaped into brain domain
     │   ├── memory.types.ts              # BrainMemory, MemoryScope (user/agent/space/run), MemoryKind
     │   ├── docs.types.ts                # BrainDoc, LibraryRef, DocKind (code|info)
     │   ├── task-graph.types.ts          # BrainTask, TaskEdge, EdgeKind, TaskGraphView
@@ -95,7 +95,7 @@ packages/brain/
     │
     ├── ports/                            # ── PORTS (interfaces the engine depends on) ──
     │   ├── index.ts
-    │   ├── repo-intel.port.ts           # RepoIntelPort: index(), contextPack(), impact() (GitNexus engine sits behind this)
+    │   ├── repo-intel.port.ts           # RepoIntelPort: index(), contextPack(), impact() (RecoderGit engine sits behind this)
     │   ├── memory.port.ts               # MemoryPort: recall(), remember(), forget(), history()
     │   ├── docs.port.ts                 # DocsPort: resolveLibrary(), lookup()
     │   ├── task-graph.port.ts           # TaskGraphPort: related(), ready(), blocked(), update(), tree()
@@ -124,14 +124,14 @@ packages/brain/
     │   ├── prompt-packer.ts            # render BrainContext -> token-efficient prompt block
     │   └── health-aggregator.ts        # combine per-source health into BrainHealth
     │
-    ├── repo/                             # ── FUSED: GitNexus engine (real code-knowledge-graph) ──
+    ├── repo/                             # ── FUSED: RecoderGit engine (real code-knowledge-graph) ──
     │   │   # The real Tree-sitter → graph → lbug → search engine, MERGED in (not HTTP-wrapped),
     │   │   # sitting BEHIND RepoIntelPort. RepoIntelAdapter is the only file the engine touches.
     │   ├── index.ts                     # barrel: exports RepoIntelAdapter (implements RepoIntelPort)
     │   ├── repo-intel-adapter.ts        # drives ingest→graph→lbug→search; maps results to brain domain
     │   │
     │   ├── tree-sitter/                 # ── AST PARSE ──
-    │   │   ├── parser-loader.ts         # ⟵ MERGED ts/gitnexus/gitnexus/src/core/tree-sitter/parser-loader.ts
+    │   │   ├── parser-loader.ts         # ⟵ MERGED ts/recodergit/gitnexus/src/core/tree-sitter/parser-loader.ts
     │   │   ├── safe-parse.ts            # ⟵ MERGED .../core/tree-sitter/safe-parse.ts (timeout-guarded parse)
     │   │   └── vendored-grammars.ts     # ⟵ MERGED .../core/tree-sitter/vendored-grammars.ts (grammar registry)
     │   │
@@ -144,7 +144,7 @@ packages/brain/
     │   │   └── scope-extractor.ts       # ⟵ MERGED .../core/ingestion/scope-extractor.ts (scopes from AST)
     │   │
     │   ├── scope-resolution/            # ── SCOPE RESOLUTION (symbol binding) ──
-    │   │   ├── scope-tree.ts            # ⟵ MERGED ts/gitnexus/gitnexus-shared/src/scope-resolution/scope-tree.ts
+    │   │   ├── scope-tree.ts            # ⟵ MERGED ts/recodergit/gitnexus-shared/src/scope-resolution/scope-tree.ts
     │   │   ├── def-index.ts             # ⟵ MERGED .../gitnexus-shared/src/scope-resolution/def-index.ts
     │   │   ├── qualified-name-index.ts  # ⟵ MERGED .../gitnexus-shared/src/scope-resolution/qualified-name-index.ts
     │   │   └── finalize-algorithm.ts    # ⟵ MERGED .../gitnexus-shared/src/scope-resolution/finalize-algorithm.ts (ref→def)
@@ -303,7 +303,7 @@ packages/brain/
 ```
 
 **Functional file count: 147** (every file above has one responsibility; the `repo/` module is 40
-files merging the real GitNexus engine. Excludes the 3 config files
+files merging the real RecoderGit engine. Excludes the 3 config files
 `package.json`/`tsconfig.json`/`tsup.config.ts` and `README.md`).
 
 ### `tests/` tree (mirrors `src/`)
@@ -423,7 +423,7 @@ export interface BrainFact<T> {
 export interface BrainContext {
   query: BrainQuery;
   revision: Revision;                 // git HEAD sha + dirty + indexedAt (cache key)
-  repo: RepoIntel;                    // GitNexus graph-query results, brain-shaped
+  repo: RepoIntel;                    // RecoderGit graph-query results, brain-shaped
   memories: BrainFact<BrainMemory>[]; // mem0
   docs: BrainFact<BrainDoc>[];        // context7
   tasks: BrainFact<BrainTask>[];      // beads/dolt
@@ -435,7 +435,7 @@ export interface BrainContext {
 }
 ```
 
-`BrainContext.repo` (`RepoIntel`) is assembled by `repo/repo-query.ts` from the merged GitNexus
+`BrainContext.repo` (`RepoIntel`) is assembled by `repo/repo-query.ts` from the merged RecoderGit
 graph: a focus-scoped slice of the knowledge graph (symbols, callers/callees, imports, heritage),
 the impacted-files set, import cycles, and matching code snippets from hybrid BM25+semantic search —
 each carrying a `git_nexus` `SourceRef` (file/node id + revision). This is the "assembly core" the
@@ -468,7 +468,7 @@ current `brain.ts` seam exposes, now backed by a real graph engine instead of a 
                           ▼              ▼              ▼              ▼
                   repo/RepoIntel   memory/Memory   docs/Docs     tasks/TaskGraph
                   Adapter          Adapter         Adapter       Adapter
-                  (GitNexus)       (mem0)          (context7)    (beads/dolt)
+                  (RecoderGit)       (mem0)          (context7)    (beads/dolt)
                           │              │              │              │
                   *-fact-mapper.ts: each source -> BrainFact<T>[] with SourceRef + tokens
                           └──────────────┴──────┬───────┴──────────────┘
@@ -491,7 +491,7 @@ Key behaviors:
 - **`source-runner`** wraps each adapter in `withTimeout` + try/catch. A failure becomes a
   `Degradation` (reason, source) appended to `degraded[]`; the rest of the assembly proceeds.
   No single source can fail the whole read. (security.md: never trust runtime success.)
-- **`ranker`** boosts facts that touch `query.focusFiles` and high-risk paths from the GitNexus
+- **`ranker`** boosts facts that touch `query.focusFiles` and high-risk paths from the RecoderGit
   impact set (`repo/repo-query.ts` impact() — files reachable from changed nodes; auth/billing/security)
   so safety-relevant context floats up.
 - **`budgeter`** is the token-waste killer's enforcement arm: it caps total + per-source tokens,
@@ -530,15 +530,15 @@ mem0 store via `memory/candidate-writer.ts` (called by governance, not by an age
 | `packages/brain/src/brain.ts` | `src/api/brain.ts` | upgraded in place: same `assemble/record`, gains `handle/recall/refresh/health`; `Promise.all` fan-out becomes `engine/source-runner` |
 | `packages/brain/src/types.ts` | `src/domain/*` | split into `brain-query.ts`, `brain-context.types.ts`, `memory.types.ts`, `docs.types.ts`, `task-graph.types.ts`; `MemoryRecall/DocsSource/TaskGraph` become `ports/*` |
 | `packages/brain/src/index.ts` | `src/index.ts` | grows to export ports + new API |
-| `ts/gitnexus/gitnexus/src/core/tree-sitter/{parser-loader,safe-parse,vendored-grammars}.ts` | `src/repo/tree-sitter/*` | merged; AST parse front-end |
-| `ts/gitnexus/gitnexus/src/core/ingestion/{pipeline,filesystem-walker,language-config,scope-extractor}.ts` + `pipeline-phases/{runner,index}.ts` | `src/repo/ingestion/*` | merged; phase-ordered parse→nodes/edges pipeline (the real "indexer", not a stub) |
-| `ts/gitnexus/gitnexus-shared/src/scope-resolution/{scope-tree,def-index,qualified-name-index,finalize-algorithm}.ts` | `src/repo/scope-resolution/*` | merged; ref→def symbol binding |
-| `ts/gitnexus/gitnexus/src/core/graph/{graph,types,import-cycles}.ts` + `gitnexus-shared/src/graph/types.ts` | `src/repo/graph/*` | merged; `createKnowledgeGraph` + `GraphNode/Relationship/NodeLabel` model + cycle detection |
-| `ts/gitnexus/gitnexus/src/core/lbug/{lbug-adapter,pool-adapter,schema,query-params}.ts` + `storage/{repo-manager,parse-cache,git}.ts` | `src/repo/storage/*` | merged; LadybugDB graph storage + `.gitnexus` index + git HEAD/diff |
-| `ts/gitnexus/gitnexus/src/core/embeddings/{embedder,embedding-pipeline,chunker}.ts` | `src/repo/embeddings/*` | merged; code embeddings over graph nodes |
-| `ts/gitnexus/gitnexus/src/core/search/{hybrid-search,bm25-index,fts-schema}.ts` + `core/augmentation/engine.ts` + `mcp/local/local-backend.ts` | `src/repo/search/*` | merged; hybrid BM25+semantic RRF search/RAG + graph-context augmentation (the read path) |
-| `ts/gitnexus/gitnexus/src/core/incremental/{subgraph-extract,shadow-candidates}.ts` | `src/repo/incremental/*` | merged; changed-file subgraph for incremental re-index |
-| `ts/gitnexus/gitnexus/src/mcp/{tools,server}.ts` | `src/seams/mcp-seam.ts` | folded into the brain MCP seam (read-only graph-query tools) |
+| `ts/recodergit/gitnexus/src/core/tree-sitter/{parser-loader,safe-parse,vendored-grammars}.ts` | `src/repo/tree-sitter/*` | merged; AST parse front-end |
+| `ts/recodergit/gitnexus/src/core/ingestion/{pipeline,filesystem-walker,language-config,scope-extractor}.ts` + `pipeline-phases/{runner,index}.ts` | `src/repo/ingestion/*` | merged; phase-ordered parse→nodes/edges pipeline (the real "indexer", not a stub) |
+| `ts/recodergit/gitnexus-shared/src/scope-resolution/{scope-tree,def-index,qualified-name-index,finalize-algorithm}.ts` | `src/repo/scope-resolution/*` | merged; ref→def symbol binding |
+| `ts/recodergit/gitnexus/src/core/graph/{graph,types,import-cycles}.ts` + `gitnexus-shared/src/graph/types.ts` | `src/repo/graph/*` | merged; `createKnowledgeGraph` + `GraphNode/Relationship/NodeLabel` model + cycle detection |
+| `ts/recodergit/gitnexus/src/core/lbug/{lbug-adapter,pool-adapter,schema,query-params}.ts` + `storage/{repo-manager,parse-cache,git}.ts` | `src/repo/storage/*` | merged; LadybugDB graph storage + `.gitnexus` index + git HEAD/diff |
+| `ts/recodergit/gitnexus/src/core/embeddings/{embedder,embedding-pipeline,chunker}.ts` | `src/repo/embeddings/*` | merged; code embeddings over graph nodes |
+| `ts/recodergit/gitnexus/src/core/search/{hybrid-search,bm25-index,fts-schema}.ts` + `core/augmentation/engine.ts` + `mcp/local/local-backend.ts` | `src/repo/search/*` | merged; hybrid BM25+semantic RRF search/RAG + graph-context augmentation (the read path) |
+| `ts/recodergit/gitnexus/src/core/incremental/{subgraph-extract,shadow-candidates}.ts` | `src/repo/incremental/*` | merged; changed-file subgraph for incremental re-index |
+| `ts/recodergit/gitnexus/src/mcp/{tools,server}.ts` | `src/seams/mcp-seam.ts` | folded into the brain MCP seam (read-only graph-query tools) |
 | `py/mem0/mem0-ts/src/oss/src/memory/index.ts` | `src/memory/memory-core.ts` | merged Memory class (add/search/get/history) |
 | `py/mem0/mem0-ts/src/oss/src/memory/memory.types.ts` | `src/memory/memory.types.ts` | merged (AddMemoryOptions, SearchMemoryOptions…) |
 | `py/mem0/mem0-ts/src/oss/src/utils/{factory,scoring,bm25}.ts` + `prompts/index.ts` | `src/memory/{memory-factory,scoring,bm25,fact-extractor}.ts` | merged; factories + hybrid scoring + LLM fact-extraction |
@@ -559,9 +559,9 @@ mem0 store via `memory/candidate-writer.ts` (called by governance, not by an age
 | `go/beads/internal/types/types.go` (`DependencyType`, `Issue`, `IssueDetails`) | `src/tasks/edge-mapper.ts`, `domain/task-graph.types.ts` | `DependencyType` (`blocks`/`parent-child`/`related`/`discovered-from`/…) maps to brain `EdgeKind`; `IssueDetails` shapes `BrainTask` |
 | `go/multica/server/internal/{storage,events,realtime}` | `src/persistence/*`, `src/seams/events-seam.ts` | knowledge/memory storage + event patterns ported into pg-backed candidate store + event sink |
 
-> The real GitNexus engine (`ts/gitnexus`) and the mem0 TS SDK (`py/mem0/mem0-ts/src/oss`), plus the
+> The real RecoderGit engine (`ts/recodergit`) and the mem0 TS SDK (`py/mem0/mem0-ts/src/oss`), plus the
 > remaining TS adapters (`context7-sdk`, `beads-adapter`), collapse **into** `packages/brain` — merged
-> and edited, never thin-HTTP-wrapped. The GitNexus engine sits **behind** `RepoIntelPort`; only
+> and edited, never thin-HTTP-wrapped. The RecoderGit engine sits **behind** `RepoIntelPort`; only
 > `repo/repo-intel-adapter.ts` imports its internals, so the rest of the brain depends on the port, not
 > on lbug/Tree-sitter. The brain-domain `RepoIntel` type (the assembled repo context pack the
 > `RepoIntelPort.contextPack()` returns) is re-exported via `seams/agent-os-seam.ts`; it is built by
@@ -571,12 +571,12 @@ mem0 store via `memory/candidate-writer.ts` (called by governance, not by an age
 
 ## 7. Seams to other subsystems
 
-- **agent-os** (`seams/agent-os-seam.ts`): converts a `TaskSpec` (`packages/agent-os/src/domain/task-spec.ts` — `taskId`, `targetPaths`, `forbiddenPaths`, `verification`, `intent`) into a `BrainQuery` (the spec's `targetPaths` seed `query.focusFiles` for the GitNexus graph walk). Re-exports the brain-domain `RepoIntel` type that `RepoIntelPort.contextPack()` returns.
+- **agent-os** (`seams/agent-os-seam.ts`): converts a `TaskSpec` (`packages/agent-os/src/domain/task-spec.ts` — `taskId`, `targetPaths`, `forbiddenPaths`, `verification`, `intent`) into a `BrainQuery` (the spec's `targetPaths` seed `query.focusFiles` for the RecoderGit graph walk). Re-exports the brain-domain `RepoIntel` type that `RepoIntelPort.contextPack()` returns.
 - **coordination** (`seams/coordination-seam.ts`): a squad/run gets **one** `BrainHandle` (pinned revision) shared by all member agents — assemble-once-reuse across agents, not just across calls. This is the literal "every agent reads once and reuses" guarantee.
 - **governance** (`seams/governance-seam.ts`): `record({kind:"memory"})` routes to the approval/policy subsystem as a `MemoryCandidate`; honors work locks and forbidden paths before any task-graph write. Never writes durable memory directly.
 - **events** (`seams/events-seam.ts`): every meaningful read/write emits a `RunEvent`/CloudEvent (assemble, recall, candidate-proposed, task-updated) so runs stay auditable.
 - **runtimes** (`seams/runtimes-seam.ts`): Claude Code / Codex / Recoder Code / browser agents all call the same `assemble`/`recall`; the Brain is runtime-agnostic.
-- **mcp** (`seams/mcp-seam.ts`): exposes `brain.assemble` and `brain.recall` as **read-only** MCP tools (merging GitNexus's existing MCP tools in `ts/gitnexus/gitnexus/src/mcp/{tools,server}.ts`).
+- **mcp** (`seams/mcp-seam.ts`): exposes `brain.assemble` and `brain.recall` as **read-only** MCP tools (merging RecoderGit's existing MCP tools in `ts/recodergit/gitnexus/src/mcp/{tools,server}.ts`).
 
 ---
 
@@ -655,7 +655,7 @@ Critical behaviors that MUST have tests (all listed in the `tests/` tree above):
 
 1. Keep `packages/brain/src/{brain.ts,types.ts,index.ts}` working; introduce `ports/` + `domain/`
    by re-deriving them from the existing `types.ts` contracts (`MemoryRecall`/`DocsSource`/`TaskGraph`).
-2. Merge the GitNexus engine (`ts/gitnexus`) into `src/repo/` (tree-sitter → ingestion → scope-resolution
+2. Merge the RecoderGit engine (`ts/recodergit`) into `src/repo/` (tree-sitter → ingestion → scope-resolution
    → graph → lbug storage → embeddings → search), and bind `RepoIntelAdapter`/`repo-query.ts` so
    `RepoIntelPort.contextPack()`/`impact()` run real graph queries. This is NOT a stub — index once per
    revision into `.gitnexus`, then incrementally re-index changed-file subgraphs on new HEAD shas.

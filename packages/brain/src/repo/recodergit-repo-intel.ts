@@ -9,13 +9,14 @@ import {
   type ImpactReport,
   type TestTarget,
   type TestTargetMap,
-} from "@recoder/git-nexus";
+} from "@recoder/recodergit";
 import type { RepoIntelPort } from "../ports/repo-intel.port";
 import { ContextPackRepoIntel } from "./repo-intel-adapter";
+import { RecoderGitMcpRepoIntel } from "./recodergit-mcp-repo-intel";
 import { resolveExecEngine } from "../runtime/engine-resolver";
 
 /**
- * REAL {@link RepoIntelPort}, backed by the actual GitNexus engine (ts/gitnexus:
+ * REAL {@link RepoIntelPort}, backed by the actual RecoderGit engine (ts/recodergit:
  * tree-sitter parse -> scope resolution -> knowledge graph -> hybrid search).
  *
  * It shells the `gitnexus impact` CLI — one call per target path — behind an
@@ -31,44 +32,85 @@ import { resolveExecEngine } from "../runtime/engine-resolver";
  * additive; its absence can only cost richness, never correctness.
  */
 
+/** Where/how a single gitnexus invocation runs (the cwd it resolves from). */
+export interface RecoderGitExecOptions {
+  /**
+   * Working directory for the spawned process. `impact` is run from the analyzed
+   * repo root so its repo + relative `--file` resolution match how the engine
+   * indexed the tree (verified live: running outside the repo still works with an
+   * explicit `--repo`, but the repo root is the natural, drift-free context).
+   */
+  cwd?: string;
+}
+
 /** Runs a command and resolves its stdout (the seam the test fakes). */
-export type GitNexusExec = (
+export type RecoderGitExec = (
   command: string,
   args: string[],
+  options?: RecoderGitExecOptions,
 ) => Promise<string>;
 
-export interface GitNexusRepoIntelOptions {
+export interface RecoderGitRepoIntelOptions {
   /** Override the exec (defaults to execFile against the gitnexus binary). */
-  exec?: GitNexusExec;
+  exec?: RecoderGitExec;
   /**
    * Port used when the real engine is unavailable or unusable. Defaults to the
    * mock-backed {@link ContextPackRepoIntel} so the Brain keeps prior behavior.
    */
   fallback?: RepoIntelPort;
   /** Override the binary name/path (defaults to "gitnexus"). */
-  gitnexusBin?: string;
+  recodergitBin?: string;
 }
 
+/**
+ * Largest stdout an impact call may emit before execFile aborts. A real impact
+ * report over a large graph (depth-3, hundreds of symbols) is well under this;
+ * the generous cap keeps a big-but-valid result from being truncated into an
+ * unparseable string (which would needlessly degrade an otherwise-good answer).
+ */
+const EXEC_MAX_BUFFER = 64 * 1024 * 1024;
+
 /** Default exec: run the gitnexus binary and collect stdout via execFile. */
-function defaultExec(command: string, args: string[]): Promise<string> {
+function defaultExec(
+  command: string,
+  args: string[],
+  options?: RecoderGitExecOptions,
+): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    execFile(command, args, (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(stdout);
-    });
+    execFile(
+      command,
+      args,
+      { cwd: options?.cwd, maxBuffer: EXEC_MAX_BUFFER },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        // execFile captures stdout only; gitnexus writes its pino logs to stderr,
+        // so stdout is already clean JSON. The parser still strips any stray log
+        // line defensively in case a different exec merges the streams.
+        resolve(stdout);
+      },
+    );
   });
 }
 
 /**
  * Build the argv for `gitnexus impact` over one target path. Tiny and pure so
  * the command surface is trivially auditable and the test can assert it targets
- * the right file + repoRoot. A symbol guess (the filename stem) is passed as the
- * positional target because `impact` resolves a symbol, with `--file` as the
- * disambiguator; an unresolved guess simply makes the CLI error and that path is
- * skipped (degrade), it never corrupts the pack.
+ * the right file + repoRoot.
+ *
+ * Verified live against the built engine (`dist/cli/index.js`):
+ *  - `impact <symbol>` requires a POSITIONAL symbol — there is no file-only mode
+ *    (`impact --file x` exits with a usage error). The filename stem is passed as
+ *    the symbol guess, with `--file` as the disambiguator; an unresolved guess
+ *    just makes the CLI emit `{ "error": "Target '…' not found" }`, which the
+ *    parser treats as no data and skips (degrade) — it never corrupts the pack.
+ *  - `--repo` resolves a repo PATH to its canonical index, so the absolute
+ *    repoRoot is passed here. (The CLI also accepts the registered alias, but the
+ *    alias is remote-derived for git repos and not always the basename, whereas
+ *    the path is unambiguous. `--json` is NOT a flag — it errors — output is JSON
+ *    by default.) The adapter additionally runs this with `cwd = repoRoot`.
  */
 export function buildImpactArgs(repoRoot: string, targetPath: string): string[] {
   return [
@@ -92,7 +134,7 @@ function symbolFromPath(filePath: string): string {
 }
 
 /** A `gitnexus impact` result as emitted by the CLI (untrusted external shape). */
-interface GitNexusImpactResult {
+interface RecoderGitImpactResult {
   target?: { filePath?: unknown; name?: unknown } | null;
   risk?: unknown;
   impactedCount?: unknown;
@@ -174,11 +216,27 @@ function modulesFrom(affectedModules: unknown): string[] {
   return [...out];
 }
 
+/**
+ * gitnexus emits its structured result as JSON on stdout, but its pino logger can
+ * prepend single-line records like `{"level":40,"time":…,"name":"gitnexus",…}`
+ * (e.g. the "FTS extension unavailable" notice). Verified live: with execFile
+ * those go to stderr, so stdout is already clean — but this strips any such line
+ * defensively so a merged-stream exec (or a future log on stdout) still parses.
+ * Only whole log lines (a line that STARTS the pino envelope) are dropped; a
+ * pretty-printed result's own lines never begin with `{"level":<n>`.
+ */
+function stripLogLines(stdout: string): string {
+  return stdout
+    .split("\n")
+    .filter((line) => !/^\s*\{"level":\d+/.test(line))
+    .join("\n");
+}
+
 /** Parse one impact stdout into a trusted, target-keyed view (or null). */
 function parseImpact(targetPath: string, stdout: string): ParsedImpact | null {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(stripLogLines(stdout));
   } catch {
     return null;
   }
@@ -189,7 +247,7 @@ function parseImpact(targetPath: string, stdout: string): ParsedImpact | null {
   if (typeof (parsed as { error?: unknown }).error === "string") {
     return null;
   }
-  const result = parsed as GitNexusImpactResult;
+  const result = parsed as RecoderGitImpactResult;
   const files = filesFromByDepth(result.byDepth);
   return {
     targetPath,
@@ -202,20 +260,20 @@ function parseImpact(targetPath: string, stdout: string): ParsedImpact | null {
   };
 }
 
-export class GitNexusRepoIntel implements RepoIntelPort {
-  private readonly exec: GitNexusExec;
+export class RecoderGitRepoIntel implements RepoIntelPort {
+  private readonly exec: RecoderGitExec;
   private readonly fallback: RepoIntelPort;
   /** Command to spawn — `node` for the vendored build, else a binary name. */
   private readonly cmd: string;
   /** Fixed arg prefix (the vendored entry path) prepended before impact argv. */
   private readonly argsPrefix: string[];
 
-  constructor(options: GitNexusRepoIntelOptions = {}) {
+  constructor(options: RecoderGitRepoIntelOptions = {}) {
     this.exec = options.exec ?? defaultExec;
     this.fallback = options.fallback ?? new ContextPackRepoIntel();
     // An explicit binary keeps prior behavior; otherwise discover the vendored
     // build (run via node) or fall back to the bare `gitnexus` on PATH.
-    const resolved = resolveExecEngine("gitnexus", options.gitnexusBin);
+    const resolved = resolveExecEngine("recodergit", options.recodergitBin);
     this.cmd = resolved.cmd;
     this.argsPrefix = resolved.args;
   }
@@ -252,10 +310,11 @@ export class GitNexusRepoIntel implements RepoIntelPort {
     targetPath: string,
   ): Promise<ParsedImpact | null> {
     try {
-      const stdout = await this.exec(this.cmd, [
-        ...this.argsPrefix,
-        ...buildImpactArgs(repoRoot, targetPath),
-      ]);
+      const stdout = await this.exec(
+        this.cmd,
+        [...this.argsPrefix, ...buildImpactArgs(repoRoot, targetPath)],
+        { cwd: repoRoot },
+      );
       return parseImpact(targetPath, stdout);
     } catch {
       return null;
@@ -302,7 +361,7 @@ export class GitNexusRepoIntel implements RepoIntelPort {
           kind: "git_nexus" as const,
           ref: path,
           detail: r
-            ? `Real GitNexus impact: ${r.rawRisk} risk, ${r.impactedCount} impacted symbols.`
+            ? `Real RecoderGit impact: ${r.rawRisk} risk, ${r.impactedCount} impacted symbols.`
             : "Target path included in Git Nexus context pack (no graph data).",
         };
       }),
@@ -345,7 +404,7 @@ export class GitNexusRepoIntel implements RepoIntelPort {
           discovered.push({
             pathGlob: test,
             commands: [],
-            reason: `GitNexus graph links this test to ${r.targetPath}.`,
+            reason: `RecoderGit graph links this test to ${r.targetPath}.`,
           });
         }
       }
@@ -371,13 +430,13 @@ export class GitNexusRepoIntel implements RepoIntelPort {
         return {
           path,
           risk: "low",
-          reason: "No GitNexus impact data for this path.",
+          reason: "No RecoderGit impact data for this path.",
         };
       }
       return {
         path,
         risk: r.risk,
-        reason: `GitNexus impact: ${r.impactedCount} impacted symbols, ${r.rawRisk} risk.`,
+        reason: `RecoderGit impact: ${r.impactedCount} impacted symbols, ${r.rawRisk} risk.`,
       };
     });
     return {
@@ -391,21 +450,35 @@ export class GitNexusRepoIntel implements RepoIntelPort {
   }
 }
 
-/** Construct the real GitNexus-backed repo-intelligence adapter (opt-in). */
-export function createGitNexusRepoIntel(
-  options?: GitNexusRepoIntelOptions,
+/** Construct the real RecoderGit-backed repo-intelligence adapter (opt-in). */
+export function createRecoderGitRepoIntel(
+  options?: RecoderGitRepoIntelOptions,
 ): RepoIntelPort {
-  return new GitNexusRepoIntel(options);
+  return new RecoderGitRepoIntel(options);
 }
 
 /**
- * Smart constructor: the real GitNexus engine with the mock-backed
- * {@link ContextPackRepoIntel} as its degrade target. Use this to opt into real
- * repo intelligence while keeping the Brain's fail-safe behavior. The default
- * `createRepoIntel` stays the safe (mock) default; this is the additive upgrade.
+ * Smart constructor: a degrade-safe PREFERENCE CHAIN over the RecoderGit backends,
+ * each one falling through to the next so absence only ever costs richness:
+ *
+ *   MCP server (persistent graph)  ->  CLI (cold per-call engine)  ->  context-pack (mock)
+ *
+ * When `RECODERGIT_MCP_URL` is set the long-lived MCP server is preferred; it
+ * degrades to the `gitnexus` CLI adapter, which itself degrades to the
+ * mock-backed {@link ContextPackRepoIntel}. With no URL configured the chain
+ * starts at the CLI (-> context-pack). Use this to opt into real repo
+ * intelligence while keeping the Brain's fail-safe behavior; the default
+ * `createRepoIntel` stays the safe (mock) default — this is the additive upgrade.
  */
 export function createRepoIntelAuto(
-  options?: GitNexusRepoIntelOptions,
+  options?: RecoderGitRepoIntelOptions,
 ): RepoIntelPort {
-  return new GitNexusRepoIntel(options);
+  // CLI -> context-pack: RecoderGitRepoIntel's fallback defaults to ContextPackRepoIntel.
+  const cli = new RecoderGitRepoIntel(options);
+  // Prefer the persistent MCP graph when a server URL is configured; it degrades
+  // to the CLI, which in turn degrades to the mock-backed context pack.
+  if (process.env["RECODERGIT_MCP_URL"]) {
+    return new RecoderGitMcpRepoIntel({ fallback: cli });
+  }
+  return cli;
 }

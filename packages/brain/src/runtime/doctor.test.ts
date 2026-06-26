@@ -6,7 +6,7 @@ import type { ResolvedEngines } from "./engine-resolver";
 /** A fully-resolved engine set with sane defaults, overridable per test. */
 function engines(overrides: Partial<ResolvedEngines> = {}): ResolvedEngines {
   return {
-    gitnexus: { kind: "node", cmd: "node", args: ["/repo/gitnexus.js"] },
+    recodergit: { kind: "node", cmd: "node", args: ["/repo/recodergit.js"] },
     continuum: { kind: "node", cmd: "node", args: ["/repo/continuum.mjs"] },
     bd: { kind: "path", cmd: "bd", args: [] },
     mem0: { baseUrl: null },
@@ -33,7 +33,7 @@ test("reports every engine in a stable order", async () => {
   });
   assert.deepEqual(
     reports.map((r) => r.engine),
-    ["gitnexus", "continuum", "bd", "mem0", "context7"],
+    ["recodergit", "continuum", "bd", "mem0", "context7"],
   );
 });
 
@@ -51,17 +51,17 @@ test("exec engines are available when the probe succeeds", async () => {
     }),
   );
 
-  const gitnexus = reports.get("gitnexus");
-  assert.ok(gitnexus?.available);
-  assert.match(gitnexus?.detail ?? "", /node \/repo\/gitnexus\.js/);
+  const recodergit = reports.get("recodergit");
+  assert.ok(recodergit?.available);
+  assert.match(recodergit?.detail ?? "", /node \/repo\/recodergit\.js/);
 
   const bd = reports.get("bd");
   assert.ok(bd?.available);
   assert.match(bd?.detail ?? "", /bd on PATH/);
 
   // Probe argv = the resolved prefix + the per-engine harmless flag.
-  const gitProbe = calls.find((c) => c.args.includes("/repo/gitnexus.js"));
-  assert.deepEqual(gitProbe?.args, ["/repo/gitnexus.js", "--help"]);
+  const gitProbe = calls.find((c) => c.args.includes("/repo/recodergit.js"));
+  assert.deepEqual(gitProbe?.args, ["/repo/recodergit.js", "--help"]);
   const bdProbe = calls.find((c) => c.cmd === "bd");
   assert.deepEqual(bdProbe?.args, ["--version"]);
 });
@@ -74,9 +74,9 @@ test("exec engines are unavailable with an actionable hint when the probe fails"
       fetchImpl: FETCH_UNUSED,
     }),
   );
-  const gitnexus = reports.get("gitnexus");
-  assert.equal(gitnexus?.available, false);
-  assert.match(gitnexus?.detail ?? "", /gitnexus CLI not found/);
+  const recodergit = reports.get("recodergit");
+  assert.equal(recodergit?.available, false);
+  assert.match(recodergit?.detail ?? "", /recodergit CLI not found/);
 
   const continuum = reports.get("continuum");
   assert.equal(continuum?.available, false);
@@ -98,7 +98,7 @@ test("a thrown probe degrades to unavailable, never throws", async () => {
       fetchImpl: FETCH_UNUSED,
     }),
   );
-  assert.equal(reports.get("gitnexus")?.available, false);
+  assert.equal(reports.get("recodergit")?.available, false);
   assert.equal(reports.get("bd")?.available, false);
 });
 

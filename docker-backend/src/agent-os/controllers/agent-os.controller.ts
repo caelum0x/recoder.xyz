@@ -294,7 +294,7 @@ export class AgentOsController {
   /**
    * Git Nexus code-context pack for a task — dependency graph, ownership map,
    * test targets, impact report, and source refs, produced by the owned
-   * @recoder/git-nexus engine. Surfaces repo intelligence into the control plane.
+   * @recoder/recodergit engine. Surfaces repo intelligence into the control plane.
    */
   taskContextPack = async (req: Request, res: Response) => {
     const task = (await this.repository.listTasks()).find((candidate) => candidate.taskId === req.params.taskId);

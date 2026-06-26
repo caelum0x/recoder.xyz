@@ -4,12 +4,12 @@
  * docs, and the beads task graph are fused into the same read.
  *
  * Repo intelligence now flows through {@link RepoIntelPort}, the seam where the
- * real ts/gitnexus knowledge-graph engine is merged in (see brain.md). Recall,
+ * real ts/recodergit knowledge-graph engine is merged in (see brain.md). Recall,
  * docs, the task graph, and desktop activity flow through their ports. The core
  * depends only on the ports, never the concrete engines.
  */
 
-import { type CreateContextPackInput } from "@recoder/git-nexus";
+import { type CreateContextPackInput } from "@recoder/recodergit";
 import type {
   BrainActivity,
   BrainActivityProfile,

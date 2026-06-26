@@ -1,13 +1,13 @@
 /**
  * Recoder-owned Git Nexus integration.
  *
- * Wires the first-party @recoder/git-nexus code-knowledge engine into the
+ * Wires the first-party @recoder/recodergit code-knowledge engine into the
  * Agent OS layer so a task's repo context (dependency graph, ownership map,
  * test targets, impact report, source refs) is produced as a real ContextPack —
  * consumable by instruction compilation and surfaced via /api/agent-os. Git Nexus
  * is owned code, not an external service; this makes the product actually use it.
  */
-import { createContextPack, type ContextPack } from '@recoder/git-nexus';
+import { createContextPack, type ContextPack } from '@recoder/recodergit';
 import type { TaskSpec } from '@recoder/agent-os';
 
 /**

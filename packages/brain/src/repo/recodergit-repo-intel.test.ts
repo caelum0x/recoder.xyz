@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { ContextPack, CreateContextPackInput } from "@recoder/git-nexus";
+import type { ContextPack, CreateContextPackInput } from "@recoder/recodergit";
 import {
   buildImpactArgs,
-  createGitNexusRepoIntel,
-  GitNexusRepoIntel,
-  type GitNexusExec,
-} from "./gitnexus-repo-intel";
+  createRecoderGitRepoIntel,
+  RecoderGitRepoIntel,
+  type RecoderGitExec,
+} from "./recodergit-repo-intel";
 import type { RepoIntelPort } from "../ports/repo-intel.port";
 
 /** Minimal CreateContextPackInput — the adapter only reads task + repoRoot. */
@@ -23,31 +23,74 @@ function makeInput(
   };
 }
 
-/** A canned `gitnexus impact` JSON payload for a target file. */
-const IMPACT_JSON = JSON.stringify({
-  target: { filePath: "packages/brain/src/brain.ts", name: "brain" },
+/**
+ * A canned `gitnexus impact` JSON payload — modeled on the REAL shape the built
+ * CLI emits (verified live): `target` carries `id`/`type`/`filePath`, `risk` is
+ * LOW|MEDIUM|HIGH|CRITICAL, `affected_modules` are graph CLUSTERS, and each
+ * `byDepth` entry has `depth`/`id`/`name`/`filePath`/`type`/`relationType`/
+ * `confidence`/`processes`. The adapter only reads filePath/name/risk, so the
+ * extra real fields are carried verbatim to prove it parses the genuine output.
+ */
+const IMPACT_OBJECT = {
+  target: {
+    id: "Function:packages/brain/src/brain.ts:brain",
+    name: "brain",
+    type: "Function",
+    filePath: "packages/brain/src/brain.ts",
+  },
   direction: "upstream",
   impactedCount: 3,
   risk: "HIGH",
-  summary: { direct: 2, processes_affected: 1, modules_affected: 1 },
+  epistemic: "exact",
+  summary: { direct: 2, processes_affected: 1, modules_affected: 2 },
+  byDepthCounts: { "1": 2, "2": 1 },
+  affected_processes: [],
   affected_modules: [
-    { name: "packages/brain", hits: 4, impact: "direct" },
-    { name: "apps/web", hits: 1, impact: "indirect" },
+    { name: "Cluster_0", hits: 4, impact: "direct" },
+    { name: "Cluster_3", hits: 1, impact: "indirect" },
   ],
   byDepth: {
     "1": [
-      { id: "a", name: "assemble", filePath: "apps/web/src/use-brain.ts", type: "Function" },
-      { id: "b", name: "spec", filePath: "packages/brain/src/brain.test.ts", type: "Function" },
+      {
+        depth: 1,
+        id: "Function:apps/web/src/use-brain.ts:assemble",
+        name: "assemble",
+        filePath: "apps/web/src/use-brain.ts",
+        type: "Function",
+        relationType: "CALLS",
+        confidence: 0.9,
+        processes: [],
+      },
+      {
+        depth: 1,
+        id: "Function:packages/brain/src/brain.test.ts:spec",
+        name: "spec",
+        filePath: "packages/brain/src/brain.test.ts",
+        type: "Function",
+        relationType: "CALLS",
+        confidence: 0.85,
+        processes: [],
+      },
     ],
     "2": [
-      { id: "c", name: "boot", filePath: "apps/web/src/boot.ts", type: "Function" },
+      {
+        depth: 2,
+        id: "Function:apps/web/src/boot.ts:boot",
+        name: "boot",
+        filePath: "apps/web/src/boot.ts",
+        type: "Function",
+        relationType: "CALLS",
+        confidence: 0.7,
+        processes: [],
+      },
     ],
   },
-});
+};
+const IMPACT_JSON = JSON.stringify(IMPACT_OBJECT, null, 2);
 
 test("contextPack maps real impact JSON into a ContextPack", async () => {
-  const exec: GitNexusExec = async () => IMPACT_JSON;
-  const intel = createGitNexusRepoIntel({ exec });
+  const exec: RecoderGitExec = async () => IMPACT_JSON;
+  const intel = createRecoderGitRepoIntel({ exec });
 
   const pack = await intel.contextPack(
     makeInput(["packages/brain/src/brain.ts"]),
@@ -58,9 +101,10 @@ test("contextPack maps real impact JSON into a ContextPack", async () => {
   assert.equal(pack.impactReport.changedFileRisks.length, 1);
   assert.equal(pack.impactReport.changedFileRisks[0].path, "packages/brain/src/brain.ts");
   assert.equal(pack.impactReport.changedFileRisks[0].risk, "high");
+  // affected_modules are graph clusters in the real engine output.
   assert.deepEqual(pack.impactReport.impactedPackages, [
-    "packages/brain",
-    "apps/web",
+    "Cluster_0",
+    "Cluster_3",
   ]);
 
   // Dependency graph: upstream callers depend_on the target, tests link via 'tests'.
@@ -86,16 +130,20 @@ test("contextPack maps real impact JSON into a ContextPack", async () => {
   // Source refs cite the real engine.
   assert.equal(pack.sourceRefs.length, 1);
   assert.equal(pack.sourceRefs[0].kind, "git_nexus");
-  assert.match(pack.sourceRefs[0].detail ?? "", /Real GitNexus impact/);
+  assert.match(pack.sourceRefs[0].detail ?? "", /Real RecoderGit impact/);
 });
 
-test("buildImpactArgs targets the right file and repoRoot", async () => {
-  const calls: Array<{ command: string; args: string[] }> = [];
-  const exec: GitNexusExec = async (command, args) => {
-    calls.push({ command, args });
+test("buildImpactArgs targets the right file and repoRoot, run from repoRoot", async () => {
+  const calls: Array<{
+    command: string;
+    args: string[];
+    cwd?: string;
+  }> = [];
+  const exec: RecoderGitExec = async (command, args, options) => {
+    calls.push({ command, args, cwd: options?.cwd });
     return IMPACT_JSON;
   };
-  const intel = createGitNexusRepoIntel({ exec, gitnexusBin: "gitnexus" });
+  const intel = createRecoderGitRepoIntel({ exec, recodergitBin: "gitnexus" });
 
   await intel.contextPack(
     makeInput(["packages/brain/src/brain.ts"], "/work/repo"),
@@ -114,6 +162,8 @@ test("buildImpactArgs targets the right file and repoRoot", async () => {
     "upstream",
     "--include-tests",
   ]);
+  // impact is run FROM the repo root (verified-live working context).
+  assert.equal(calls[0].cwd, "/work/repo");
 
   // The pure builder agrees with what the adapter shells.
   assert.deepEqual(
@@ -122,14 +172,33 @@ test("buildImpactArgs targets the right file and repoRoot", async () => {
   );
 });
 
+test("contextPack strips a prepended pino log line before parsing", async () => {
+  // gitnexus can prepend pino records (e.g. the FTS-unavailable notice). Even if
+  // a merged-stream exec puts them on stdout, the adapter must still parse the
+  // real result that follows — proving the degrade isn't triggered by log noise.
+  const logLine =
+    '{"level":40,"time":1782463500552,"name":"gitnexus","msg":"RecoderGit: FTS extension unavailable; continuing without FTS features."}';
+  const exec: RecoderGitExec = async () => `${logLine}\n${IMPACT_JSON}`;
+  const intel = createRecoderGitRepoIntel({ exec });
+
+  const pack = await intel.contextPack(
+    makeInput(["packages/brain/src/brain.ts"]),
+  );
+
+  // A real, non-fallback pack: the impact data parsed despite the log prefix.
+  assert.equal(pack.impactReport.changedFileRisks[0].risk, "high");
+  assert.equal(pack.sourceRefs.length, 1);
+  assert.match(pack.sourceRefs[0].detail ?? "", /Real RecoderGit impact/);
+});
+
 test("contextPack runs one impact call per target path", async () => {
   const seen: string[] = [];
-  const exec: GitNexusExec = async (_command, args) => {
+  const exec: RecoderGitExec = async (_command, args) => {
     const fileIdx = args.indexOf("--file");
     seen.push(args[fileIdx + 1]);
     return IMPACT_JSON;
   };
-  const intel = createGitNexusRepoIntel({ exec });
+  const intel = createRecoderGitRepoIntel({ exec });
 
   await intel.contextPack(makeInput(["a.ts", "b.ts"]));
   assert.deepEqual(seen.sort(), ["a.ts", "b.ts"]);
@@ -159,11 +228,11 @@ test("contextPack degrades to the fallback when exec throws", async () => {
       return sentinel;
     },
   };
-  const exec: GitNexusExec = async () => {
+  const exec: RecoderGitExec = async () => {
     throw new Error("gitnexus: command not found");
   };
 
-  const intel = new GitNexusRepoIntel({ exec, fallback });
+  const intel = new RecoderGitRepoIntel({ exec, fallback });
   const pack = await intel.contextPack(makeInput(["packages/brain/src/brain.ts"]));
 
   assert.ok(fallbackCalled, "fallback must be used when the engine is unusable");
@@ -194,7 +263,7 @@ test("contextPack degrades to the fallback on unparseable / error output", async
     },
   };
 
-  const garbage = new GitNexusRepoIntel({
+  const garbage = new RecoderGitRepoIntel({
     fallback,
     exec: async () => "not json at all",
   });
@@ -202,7 +271,7 @@ test("contextPack degrades to the fallback on unparseable / error output", async
   assert.equal(garbagePack.sourceRefs.length, 0);
 
   // A structured-error payload is also not usable intelligence -> fallback.
-  const errored = new GitNexusRepoIntel({
+  const errored = new RecoderGitRepoIntel({
     fallback,
     exec: async () => JSON.stringify({ error: "no index for repo" }),
   });
@@ -236,12 +305,12 @@ test("contextPack degrades to the fallback when there are no target paths", asyn
     },
   };
   let execCalled = false;
-  const exec: GitNexusExec = async () => {
+  const exec: RecoderGitExec = async () => {
     execCalled = true;
     return IMPACT_JSON;
   };
 
-  const intel = new GitNexusRepoIntel({ exec, fallback });
+  const intel = new RecoderGitRepoIntel({ exec, fallback });
   await intel.contextPack(makeInput([]));
 
   assert.ok(fallbackCalled, "no targets -> degrade to fallback");

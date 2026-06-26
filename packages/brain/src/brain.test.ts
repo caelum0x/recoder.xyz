@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { ContextPack } from "@recoder/git-nexus";
+import type { ContextPack } from "@recoder/recodergit";
 import { createBrain } from "./index";
 import type { RepoIntelPort } from "./ports";
 

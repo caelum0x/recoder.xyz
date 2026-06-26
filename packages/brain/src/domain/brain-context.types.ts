@@ -1,4 +1,4 @@
-import type { ContextPack } from "@recoder/git-nexus";
+import type { ContextPack } from "@recoder/recodergit";
 import type { BrainMemory } from "./memory.types";
 import type { BrainDoc } from "./docs.types";
 import type { BrainTask } from "./task-graph.types";

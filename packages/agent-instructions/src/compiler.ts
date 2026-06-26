@@ -17,12 +17,12 @@ import { renderCodexInstructionBundle } from './codex-renderer';
 import {
   loadBeadsInstructionSource,
   loadContext7InstructionSource,
-  loadGitNexusInstructionSource,
+  loadRecoderGitInstructionSource,
   loadPALInstructionSource,
   loadPolicyInstructionSource,
   type BeadsInstructionContext,
   type Context7InstructionContext,
-  type GitNexusInstructionContext,
+  type RecoderGitInstructionContext,
   type PALInstructionContext,
   type PolicyInstructionContext,
 } from './loaders';
@@ -100,7 +100,7 @@ export interface InstructionCompileInput {
   verification: VerificationPlan;
   compilerVersion?: string;
   beads?: BeadsInstructionContext;
-  gitNexus?: GitNexusInstructionContext;
+  gitNexus?: RecoderGitInstructionContext;
   pal?: PALInstructionContext;
   context7?: Context7InstructionContext[];
   policy?: PolicyInstructionContext;
@@ -178,7 +178,7 @@ function deriveMemoryRefs(memory: MemorySnapshot[]): MemoryRef[] {
 function loadAdditionalSources(input: InstructionCompileInput): LoadedInstructionSource[] {
   return [
     input.beads ? loadBeadsInstructionSource(input.beads) : undefined,
-    input.gitNexus ? loadGitNexusInstructionSource(input.gitNexus) : undefined,
+    input.gitNexus ? loadRecoderGitInstructionSource(input.gitNexus) : undefined,
     input.pal ? loadPALInstructionSource(input.pal) : undefined,
     input.policy ? loadPolicyInstructionSource(input.policy) : undefined,
     ...(input.context7 ?? []).map(loadContext7InstructionSource),
