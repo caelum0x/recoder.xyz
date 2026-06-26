@@ -169,6 +169,23 @@ export async function startInteractiveUI(
 
 export async function main() {
   setupUnhandledRejectionHandler();
+
+  // ===== RECODER PI SHELL (Stage A, opt-in via RECODER_PI_SHELL) =====
+  // When RECODER_PI_SHELL is set, hand off to full pi's interactive mode
+  // (@recoder/pi-coding-agent) configured with the Recoder config dir, branding,
+  // and the default recodergit + brain MCP servers. Additive + reversible: when
+  // the flag is unset (the DEFAULT) this guard is skipped entirely and the
+  // existing Ink path below runs unchanged. See docs/PI-CONSOLIDATION.md.
+  if (process.env['RECODER_PI_SHELL']) {
+    const { maybeRunRecoderPiShell } = await import(
+      './recoder-pi-shell/index.js'
+    );
+    if (await maybeRunRecoderPiShell()) {
+      return;
+    }
+  }
+  // ===== END RECODER PI SHELL =====
+
   const workspaceRoot = process.cwd();
   const settings = loadSettings(workspaceRoot);
 
