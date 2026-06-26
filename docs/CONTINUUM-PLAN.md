@@ -125,6 +125,6 @@ new capability (self-aware agent activity). **E1/T1** are deeper extensions.
 | F3 real-engine tests + verify | brain+continuum | ✅ | `756cb7232` — 90/90 brain tests (real temp store, no mocks); tsc 0; tsup build; dist runtime smoke |
 | R1 surface catch_up + snapshot | brain | ✅ | `756cb7232` — ActivityPort recent()+snapshot(); adapter implements both on the real engine |
 | R2 grounded recall (answerQuery) | brain | 📋 | KG + recall |
-| A1 recoder agent-session adapter | continuum | 📋 | self-aware activity |
+| A1 recoder agent-session adapter | continuum | ✅ | `913ab01be` — watchRecoder tails ~/.recoder/agent/sessions/*.jsonl; emits agent turns/bash/tool-results/model-switches as activity; wired first-class; opt-in/off; recoder.test 22/22, index.test 15/15, pipeline 7/7 |
 | E1 on-box Qdrant embed tier | continuum | 📋 | privacy-first |
 | T1 team/shared activity over A2A | continuum | 📋 | multi-agent |
