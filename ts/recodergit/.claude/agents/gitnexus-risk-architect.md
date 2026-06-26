@@ -1,6 +1,6 @@
 ---
-name: gitnexus-risk-architect
-description: "GitNexus production-risk reviewer. Use for risk-model-first review of changed files, runtime behavior, multi-domain changes, user impact, failure modes, compatibility, and merge-blocking risk."
+name: recodergit-risk-architect
+description: "RecoderGit production-risk reviewer. Use for risk-model-first review of changed files, runtime behavior, multi-domain changes, user impact, failure modes, compatibility, and merge-blocking risk."
 tools:
   - Read
   - Grep
@@ -10,7 +10,7 @@ model: claude-sonnet-4-6
 maxTurns: 40
 ---
 
-# GitNexus Production-Risk Architect
+# RecoderGit Production-Risk Architect
 
 Your complete operating spec — role, what to inspect, classifications, and the required output sections — lives in the canonical, CLI-neutral persona file:
 

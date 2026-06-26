@@ -5,9 +5,9 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import prettierConfig from 'eslint-config-prettier';
 import requireSafeParse from './eslint-rules/require-safe-parse.mjs';
 
-// Local plugin hosting custom rules that enforce GitNexus-specific invariants
+// Local plugin hosting custom rules that enforce RecoderGit-specific invariants
 // (currently: the Windows-SIGSEGV-safe parser entrypoint).
-const gitnexusLocalPlugin = {
+const recodergitLocalPlugin = {
   rules: {
     'require-safe-parse': requireSafeParse,
   },
@@ -52,12 +52,12 @@ export default [
       '**/dist/**',
       '**/node_modules/**',
       '**/coverage/**',
-      'gitnexus/vendor/**',
-      'gitnexus-web/src/vendor/**',
-      'gitnexus/test/fixtures/**',
-      'gitnexus-web/test/fixtures/**',
-      'gitnexus-web/playwright-report/**',
-      'gitnexus-web/test-results/**',
+      'recodergit/vendor/**',
+      'recodergit-web/src/vendor/**',
+      'recodergit/test/fixtures/**',
+      'recodergit-web/test/fixtures/**',
+      'recodergit-web/playwright-report/**',
+      'recodergit-web/test-results/**',
       '**/*.d.ts',
       '.claude/**',
       '.history/**',
@@ -101,11 +101,11 @@ export default [
   },
 
   // CLI/server packages — `console.log` IS the contract (CLI tool data output
-  // on stdout, e.g. `gitnexus query | jq`; server pretty-printed banners).
+  // on stdout, e.g. `recodergit query | jq`; server pretty-printed banners).
   // Diagnostic logging (`warn`/`error`/`debug`/`info`) goes through pino like
   // the rest of the codebase.
   {
-    files: ['gitnexus/src/cli/**/*.ts', 'gitnexus/src/server/**/*.ts'],
+    files: ['recodergit/src/cli/**/*.ts', 'recodergit/src/server/**/*.ts'],
     rules: {
       'no-console': ['error', { allow: ['log'] }],
     },
@@ -116,8 +116,8 @@ export default [
   // must fail lint. CLI/server are exempt above (legitimate stdout output).
   // Tests, bin scripts, and the logger module itself remain exempt.
   {
-    files: ['gitnexus/src/**/*.ts'],
-    ignores: ['gitnexus/src/cli/**', 'gitnexus/src/server/**', 'gitnexus/src/core/logger.ts'],
+    files: ['recodergit/src/**/*.ts'],
+    ignores: ['recodergit/src/cli/**', 'recodergit/src/server/**', 'recodergit/src/core/logger.ts'],
     rules: {
       'no-console': 'error',
     },
@@ -132,11 +132,11 @@ export default [
   // MCP entrypoint and inherits stricter discipline than the rest of cli/.
   {
     files: [
-      'gitnexus/src/mcp/**/*.ts',
-      'gitnexus/src/core/lbug/**/*.ts',
-      'gitnexus/src/core/embeddings/**/*.ts',
-      'gitnexus/src/core/tree-sitter/**/*.ts',
-      'gitnexus/src/cli/mcp.ts',
+      'recodergit/src/mcp/**/*.ts',
+      'recodergit/src/core/lbug/**/*.ts',
+      'recodergit/src/core/embeddings/**/*.ts',
+      'recodergit/src/core/tree-sitter/**/*.ts',
+      'recodergit/src/cli/mcp.ts',
     ],
     rules: {
       'no-console': ['error', { allow: ['error'] }],
@@ -152,18 +152,18 @@ export default [
   // rule), the helper itself (`safe-parse.ts`), and the `grpc-patterns/proto.ts`
   // grammar-load smoke test (filtered by string-literal-arg skip in the rule).
   {
-    files: ['gitnexus/src/core/**/*.ts'],
+    files: ['recodergit/src/core/**/*.ts'],
     plugins: {
-      gitnexus: gitnexusLocalPlugin,
+      recodergit: recodergitLocalPlugin,
     },
     rules: {
-      'gitnexus/require-safe-parse': 'error',
+      'recodergit/require-safe-parse': 'error',
     },
   },
 
-  // React-specific rules for gitnexus-web
+  // React-specific rules for recodergit-web
   {
-    files: ['gitnexus-web/src/**/*.{ts,tsx}'],
+    files: ['recodergit-web/src/**/*.{ts,tsx}'],
     plugins: {
       'react-hooks': reactHooks,
     },
@@ -184,7 +184,7 @@ export default [
   // mcpStdoutWriteSelectors here alongside the safeClose selectors. Without
   // this, lbug-adapter would silently lose its MCP stdout-write protection.
   {
-    files: ['gitnexus/src/core/lbug/lbug-adapter.ts'],
+    files: ['recodergit/src/core/lbug/lbug-adapter.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

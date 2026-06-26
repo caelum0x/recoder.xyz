@@ -50,7 +50,7 @@ async function waitForServer(port, retries = 30) {
 let tmpDir, serverPort, child;
 
 before(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), 'gitnexus-docker-test-'));
+  tmpDir = await mkdtemp(join(tmpdir(), 'recodergit-docker-test-'));
   const distDir = join(tmpDir, 'dist');
   const assetsDir = join(distDir, 'assets');
   await mkdir(assetsDir, { recursive: true });
@@ -150,7 +150,7 @@ function spawnServerWithEnv(cwd, port, env) {
 }
 
 async function withInjectionServer(envOverrides, fn) {
-  const dir = await mkdtemp(join(tmpdir(), 'gitnexus-inject-'));
+  const dir = await mkdtemp(join(tmpdir(), 'recodergit-inject-'));
   const distDir = join(dir, 'dist');
   const assetsDir = join(distDir, 'assets');
   await mkdir(assetsDir, { recursive: true });

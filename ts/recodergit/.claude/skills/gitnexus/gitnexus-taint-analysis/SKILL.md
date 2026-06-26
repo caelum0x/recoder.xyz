@@ -1,14 +1,14 @@
 ---
-name: gitnexus-taint-analysis
-description: "Use when working on, reviewing, or extending GitNexus's CFG/taint/PDG subsystem (the `--pdg` layers), or when reasoning about source→sink data-flow findings. Examples: \"How does taint analysis work here?\", \"Why didn't explain find this flow?\", \"Add a new sink/source\", \"Review the interprocedural taint code\"."
+name: recodergit-taint-analysis
+description: "Use when working on, reviewing, or extending RecoderGit's CFG/taint/PDG subsystem (the `--pdg` layers), or when reasoning about source→sink data-flow findings. Examples: \"How does taint analysis work here?\", \"Why didn't explain find this flow?\", \"Add a new sink/source\", \"Review the interprocedural taint code\"."
 ---
 
-# CFG & Taint Analysis with GitNexus
+# CFG & Taint Analysis with RecoderGit
 
 Expert knowledge for the opt-in `--pdg` program-analysis subsystem: control-flow
 graphs, reaching definitions, and intra- + inter-procedural taint. Read this
-before touching `gitnexus/src/core/ingestion/cfg/**` or
-`gitnexus/src/core/ingestion/taint/**`, or when explaining a finding.
+before touching `recodergit/src/core/ingestion/cfg/**` or
+`recodergit/src/core/ingestion/taint/**`, or when explaining a finding.
 
 ## When to Use
 
@@ -122,7 +122,7 @@ caller invokes two distinct **same-named callees**, a flow into one
 over-attributes to both (sound — over-report, never a missed flow). Absence of a
 finding is NOT proof of safety.
 
-## GitNexus-specific gotchas
+## RecoderGit-specific gotchas
 
 - **Function↔CFG join.** `FunctionCfg.functionStartLine` is 1-based; `Function`/
   `Method` node `startLine` is 0-based — join at `startLine - 1`. Function nodes

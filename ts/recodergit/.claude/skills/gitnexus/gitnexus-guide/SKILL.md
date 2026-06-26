@@ -1,32 +1,32 @@
 ---
-name: gitnexus-guide
-description: "Use when the user asks about GitNexus itself — available tools, how to query the knowledge graph, MCP resources, graph schema, or workflow reference. Examples: \"What GitNexus tools are available?\", \"How do I use GitNexus?\""
+name: recodergit-guide
+description: "Use when the user asks about RecoderGit itself — available tools, how to query the knowledge graph, MCP resources, graph schema, or workflow reference. Examples: \"What RecoderGit tools are available?\", \"How do I use RecoderGit?\""
 ---
 
-# GitNexus Guide
+# RecoderGit Guide
 
-Quick reference for all GitNexus MCP tools, resources, and the knowledge graph schema.
+Quick reference for all RecoderGit MCP tools, resources, and the knowledge graph schema.
 
 ## Always Start Here
 
 For any task involving code understanding, debugging, impact analysis, or refactoring:
 
-1. **Read `gitnexus://repo/{name}/context`** — codebase overview + check index freshness
+1. **Read `recodergit://repo/{name}/context`** — codebase overview + check index freshness
 2. **Match your task to a skill below** and **read that skill file**
 3. **Follow the skill's workflow and checklist**
 
-> If step 1 warns the index is stale, run `node .gitnexus/run.cjs analyze` in the terminal first.
+> If step 1 warns the index is stale, run `node .recodergit/run.cjs analyze` in the terminal first.
 
 ## Skills
 
 | Task                                         | Skill to read       |
 | -------------------------------------------- | ------------------- |
-| Understand architecture / "How does X work?" | `gitnexus-exploring`         |
-| Blast radius / "What breaks if I change X?"  | `gitnexus-impact-analysis`   |
-| Trace bugs / "Why is X failing?"             | `gitnexus-debugging`         |
-| Rename / extract / split / refactor          | `gitnexus-refactoring`       |
-| Tools, resources, schema reference           | `gitnexus-guide` (this file) |
-| Index, status, clean, wiki CLI commands      | `gitnexus-cli`               |
+| Understand architecture / "How does X work?" | `recodergit-exploring`         |
+| Blast radius / "What breaks if I change X?"  | `recodergit-impact-analysis`   |
+| Trace bugs / "Why is X failing?"             | `recodergit-debugging`         |
+| Rename / extract / split / refactor          | `recodergit-refactoring`       |
+| Tools, resources, schema reference           | `recodergit-guide` (this file) |
+| Index, status, clean, wiki CLI commands      | `recodergit-cli`               |
 
 ## Tools Reference
 
@@ -38,7 +38,7 @@ For any task involving code understanding, debugging, impact analysis, or refact
 | `trace`          | Shortest path between two symbols — "how does A reach B?" in one call     |
 | `detect_changes` | Git-diff impact — what do your current changes affect                    |
 | `rename`         | Multi-file coordinated rename with confidence-tagged edits               |
-| `cypher`         | Raw graph queries (read `gitnexus://repo/{name}/schema` first)           |
+| `cypher`         | Raw graph queries (read `recodergit://repo/{name}/schema` first)           |
 | `explain`        | Persisted taint findings — source→sink data flows (needs `analyze --pdg`) |
 | `pdg_query`      | Control/data dependence — what gates X (CDG) / where Y flows (REACHING_DEF); needs `analyze --pdg` |
 | `check`          | Check graph invariants such as circular imports                          |
@@ -77,7 +77,7 @@ Notes: `offset` ≥ `total` returns an empty page (with `total` still reported).
 
 ### Taint findings (`explain`)
 
-`explain` returns intra-procedural taint findings (`TAINTED` edges) recorded by `gitnexus analyze --pdg` — each with a sink category (command-injection, code-injection, path-traversal, sql-injection, xss), source/sink lines, and the ordered hop path with the variable carried on each hop.
+`explain` returns intra-procedural taint findings (`TAINTED` edges) recorded by `recodergit analyze --pdg` — each with a sink category (command-injection, code-injection, path-traversal, sql-injection, xss), source/sink lines, and the ordered hop path with the variable carried on each hop.
 
 - `explain {}` — enumerate all findings for the repo (bounded by `limit`, deterministic order)
 - `explain { target: "src/vuln.ts" }` — findings in a file (suffix path match accepted)
@@ -87,12 +87,12 @@ A repo indexed without `--pdg` returns a clear "no taint layer" note. Caveats: f
 
 ### Control & data dependence (`pdg_query`)
 
-`pdg_query` reads the control/data-dependence layers `gitnexus analyze --pdg` records (CDG + REACHING_DEF, basic-block granular) — the control/data analog of `explain`. It is **always anchored** (a `target` file path or symbol, resolved like `context`) and has two modes:
+`pdg_query` reads the control/data-dependence layers `recodergit analyze --pdg` records (CDG + REACHING_DEF, basic-block granular) — the control/data analog of `explain`. It is **always anchored** (a `target` file path or symbol, resolved like `context`) and has two modes:
 
 - `pdg_query { mode: "controls", target: "..." }` — CDG: "under what condition does X run?". Each edge is a controlling predicate block → dependent block with the branch sense (`'T'`/`'F'`) in `reason`; an edge into an early `return`/`throw` is flagged `guard: true` (guard-clause discovery — the sense depends on the predicate, so don't filter guards by a fixed label).
 - `pdg_query { mode: "flows", target: "...", variable?: "..." }` — REACHING_DEF def→use edges within the function; pass `variable` to trace one binding.
 
-A repo indexed without `--pdg` returns a "no PDG layer" note (or "status unknown" when the layer can't be confirmed). Intra-procedural only — cross-function flow is taint's domain (`explain`). The raw CDG/REACHING_DEF edges are also queryable via `cypher`. See the `gitnexus-pdg-query` skill for the full query surface.
+A repo indexed without `--pdg` returns a "no PDG layer" note (or "status unknown" when the layer can't be confirmed). Intra-procedural only — cross-function flow is taint's domain (`explain`). The raw CDG/REACHING_DEF edges are also queryable via `cypher`. See the `recodergit-pdg-query` skill for the full query surface.
 
 ### Shortest path between two symbols (`trace`)
 
@@ -110,12 +110,12 @@ Lightweight reads (~100-500 tokens) for navigation:
 
 | Resource                                       | Content                                   |
 | ---------------------------------------------- | ----------------------------------------- |
-| `gitnexus://repo/{name}/context`               | Stats, staleness check                    |
-| `gitnexus://repo/{name}/clusters`              | All functional areas with cohesion scores |
-| `gitnexus://repo/{name}/cluster/{clusterName}` | Area members                              |
-| `gitnexus://repo/{name}/processes`             | All execution flows                       |
-| `gitnexus://repo/{name}/process/{processName}` | Step-by-step trace                        |
-| `gitnexus://repo/{name}/schema`                | Graph schema for Cypher                   |
+| `recodergit://repo/{name}/context`               | Stats, staleness check                    |
+| `recodergit://repo/{name}/clusters`              | All functional areas with cohesion scores |
+| `recodergit://repo/{name}/cluster/{clusterName}` | Area members                              |
+| `recodergit://repo/{name}/processes`             | All execution flows                       |
+| `recodergit://repo/{name}/process/{processName}` | Step-by-step trace                        |
+| `recodergit://repo/{name}/schema`                | Graph schema for Cypher                   |
 
 ## Graph Schema
 

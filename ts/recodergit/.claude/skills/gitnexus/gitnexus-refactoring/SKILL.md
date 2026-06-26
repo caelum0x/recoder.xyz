@@ -1,9 +1,9 @@
 ---
-name: gitnexus-refactoring
+name: recodergit-refactoring
 description: "Use when the user wants to rename, extract, split, move, or restructure code safely. Examples: \"Rename this function\", \"Extract this into a module\", \"Refactor this class\", \"Move this to a separate file\""
 ---
 
-# Refactoring with GitNexus
+# Refactoring with RecoderGit
 
 ## When to Use
 
@@ -22,7 +22,7 @@ description: "Use when the user wants to rename, extract, split, move, or restru
 4. Plan update order: interfaces → implementations → callers → tests
 ```
 
-> If "Index is stale" → run `node .gitnexus/run.cjs analyze` in terminal.
+> If "Index is stale" → run `node .recodergit/run.cjs analyze` in terminal.
 
 ## Checklists
 

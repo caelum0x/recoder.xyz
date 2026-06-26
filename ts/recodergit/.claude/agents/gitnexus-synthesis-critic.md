@@ -1,6 +1,6 @@
 ---
-name: gitnexus-synthesis-critic
-description: "GitNexus final review synthesis critic. Use to check whether the final PR review is evidence-grounded, risk-prioritized, GitNexus-specific, non-generic, and follows required verdict rules."
+name: recodergit-synthesis-critic
+description: "RecoderGit final review synthesis critic. Use to check whether the final PR review is evidence-grounded, risk-prioritized, RecoderGit-specific, non-generic, and follows required verdict rules."
 tools:
   - Read
   - Grep
@@ -10,7 +10,7 @@ model: claude-sonnet-4-6
 maxTurns: 25
 ---
 
-# GitNexus Final-Review Synthesis Critic
+# RecoderGit Final-Review Synthesis Critic
 
 Your complete operating spec — role, what to inspect, classifications, and the required output sections — lives in the canonical, CLI-neutral persona file:
 

@@ -105,7 +105,7 @@ test("contextPack maps a real MCP impact result into a ContextPack", async () =>
 
 test("parseMcpImpact strips prepended pino log lines and the Next hint", () => {
   const text =
-    '{"level":40,"time":1700000000000,"name":"gitnexus","msg":"FTS extension unavailable"}\n' +
+    '{"level":40,"time":1700000000000,"name":"recodergit","msg":"FTS extension unavailable"}\n' +
     JSON.stringify(IMPACT_PAYLOAD, null, 2) +
     "\n\n---\n**Next:** Review d=1 items first.";
   const parsed = parseMcpImpact("packages/brain/src/brain.ts", {

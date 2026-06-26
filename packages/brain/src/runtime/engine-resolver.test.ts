@@ -13,7 +13,7 @@ const RECODERGIT_DIST = join(
   ROOT,
   "ts",
   "recodergit",
-  "gitnexus",
+  "recodergit",
   "dist",
   "cli",
   "index.js",
@@ -59,7 +59,7 @@ test("recodergit falls back to the bare PATH name when nothing resolves", () => 
   const engines = resolveEngines({ root: ROOT, env: EMPTY_ENV, exists: NONE });
   assert.deepEqual(engines.recodergit, {
     kind: "path",
-    cmd: "gitnexus",
+    cmd: "recodergit",
     args: [],
   });
 });
