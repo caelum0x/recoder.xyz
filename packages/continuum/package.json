@@ -1,13 +1,20 @@
 {
-  "name": "continuum-core",
+  "name": "@recoder/continuum",
   "version": "0.7.1",
-  "description": "Your whole desktop context — everything you've seen, read, typed, and heard — as a single MCP your agent can use to understand you and how you work. Open source, local-first, on-device.",
+  "description": "Recoder-owned vendor of continuum (merged from nikhilkagita04/continuum). The Brain's activity source: whole-desktop context (seen, read, typed, heard) as an in-process engine + MCP. Local-first, on-device. Fused, not wrapped.",
   "type": "module",
   "bin": {
     "continuum": "bin/continuum.mjs"
   },
   "exports": {
     ".": "./daemon/pipeline.mjs",
+    "./engines": {
+      "types": "./engines.d.ts",
+      "import": "./daemon/engines.mjs",
+      "default": "./daemon/engines.mjs"
+    },
+    "./store": "./daemon/store.mjs",
+    "./mcp": "./daemon/mcp.mjs",
     "./segmenter": "./daemon/stage2/segmenter.mjs",
     "./index": "./daemon/stage3/index.mjs",
     "./distill": "./daemon/stage4/distill.mjs",
@@ -46,6 +53,7 @@
   ],
   "files": [
     "bin",
+    "engines.d.ts",
     "daemon/**/*.mjs",
     "daemon/stage1/*.swift",
     "examples",

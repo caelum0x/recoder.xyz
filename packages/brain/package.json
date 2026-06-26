@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@recoder/continuum": "workspace:*",
     "@recoder/recodergit": "workspace:*"
   },
   "devDependencies": {
