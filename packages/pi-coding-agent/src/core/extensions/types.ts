@@ -314,6 +314,8 @@ export interface ExtensionContext {
 	model: Model<any> | undefined;
 	/** Whether the agent is idle (not streaming) */
 	isIdle(): boolean;
+	/** Whether project-local trust is active for this context. */
+	isProjectTrusted(): boolean;
 	/** The current abort signal, or undefined when the agent is not streaming. */
 	signal: AbortSignal | undefined;
 	/** Abort the current agent operation */
@@ -335,6 +337,9 @@ export interface ExtensionContext {
  * Includes session control methods only safe in user-initiated commands.
  */
 export interface ExtensionCommandContext extends ExtensionContext {
+	/** Get the current base system-prompt construction options. */
+	getSystemPromptOptions(): BuildSystemPromptOptions;
+
 	/** Wait for the agent to finish streaming */
 	waitForIdle(): Promise<void>;
 
@@ -492,8 +497,32 @@ export function defineTool<TParams extends TSchema, TDetails = unknown, TState =
 }
 
 // ============================================================================
-// Resource Events
+// Startup/Resource Events
 // ============================================================================
+
+export interface ProjectTrustEvent {
+	type: "project_trust";
+	cwd: string;
+}
+
+export type ProjectTrustEventDecision = "yes" | "no" | "undecided";
+
+export interface ProjectTrustEventResult {
+	trusted: ProjectTrustEventDecision;
+	remember?: boolean;
+}
+
+export interface ProjectTrustContext {
+	cwd: string;
+	mode: ExtensionMode;
+	hasUI: boolean;
+	ui: Pick<ExtensionUIContext, "select" | "confirm" | "input" | "notify">;
+}
+
+export type ProjectTrustHandler = (
+	event: ProjectTrustEvent,
+	ctx: ProjectTrustContext,
+) => Promise<ProjectTrustEventResult> | ProjectTrustEventResult;
 
 /** Fired after session_start to allow extensions to provide additional resource paths. */
 export interface ResourcesDiscoverEvent {
@@ -542,6 +571,10 @@ export interface SessionBeforeCompactEvent {
 	preparation: CompactionPreparation;
 	branchEntries: SessionEntry[];
 	customInstructions?: string;
+	/** What triggered the compaction: manual /compact, the context threshold, or context overflow recovery */
+	reason: "manual" | "threshold" | "overflow";
+	/** True when the aborted turn is retried after this compaction (overflow recovery) */
+	willRetry: boolean;
 	signal: AbortSignal;
 }
 
@@ -550,6 +583,10 @@ export interface SessionCompactEvent {
 	type: "session_compact";
 	compactionEntry: CompactionEntry;
 	fromExtension: boolean;
+	/** What triggered the compaction: manual /compact, the context threshold, or context overflow recovery */
+	reason: "manual" | "threshold" | "overflow";
+	/** True when the aborted turn is retried after this compaction (overflow recovery) */
+	willRetry: boolean;
 }
 
 /** Fired before an extension runtime is torn down due to quit, reload, or session replacement. */
@@ -954,6 +991,7 @@ export function isToolCallEventType(toolName: string, event: ToolCallEvent): boo
 
 /** Union of all event types */
 export type ExtensionEvent =
+	| ProjectTrustEvent
 	| ResourcesDiscoverEvent
 	| SessionEvent
 	| ContextEvent
@@ -1092,6 +1130,7 @@ export interface ExtensionAPI {
 	// Event Subscription
 	// =========================================================================
 
+	on(event: "project_trust", handler: ProjectTrustHandler): void;
 	on(event: "resources_discover", handler: ExtensionHandler<ResourcesDiscoverEvent, ResourcesDiscoverResult>): void;
 	on(event: "session_start", handler: ExtensionHandler<SessionStartEvent>): void;
 	on(
@@ -1499,6 +1538,7 @@ export interface ExtensionActions {
 export interface ExtensionContextActions {
 	getModel: () => Model<any> | undefined;
 	isIdle: () => boolean;
+	isProjectTrusted: () => boolean;
 	getSignal: () => AbortSignal | undefined;
 	abort: () => void;
 	hasPendingMessages: () => boolean;
@@ -1506,6 +1546,7 @@ export interface ExtensionContextActions {
 	getContextUsage: () => ContextUsage | undefined;
 	compact: (options?: CompactOptions) => void;
 	getSystemPrompt: () => string;
+	getSystemPromptOptions?: () => BuildSystemPromptOptions;
 }
 
 /**

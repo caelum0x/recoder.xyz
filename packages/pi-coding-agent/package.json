@@ -1,6 +1,6 @@
 {
   "name": "@recoder/pi-coding-agent",
-  "version": "0.78.0",
+  "version": "0.80.2",
   "description": "Recoder-owned vendor of pi pi-coding-agent (merged from earendil-works/pi).",
   "private": true,
   "type": "module",
@@ -35,13 +35,23 @@
     "jiti": "2.7.0",
     "minimatch": "10.2.5",
     "proper-lockfile": "4.1.2",
+    "semver": "7.8.0",
     "typebox": "1.1.38",
-    "undici": "8.3.0",
+    "undici": "8.5.0",
     "yaml": "2.9.0"
+  },
+  "optionalDependencies": {
+    "@mariozechner/clipboard": "0.3.9"
   },
   "devDependencies": {
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@types/cross-spawn": "6.0.6",
+    "@types/diff": "7.0.2",
+    "@types/hosted-git-info": "3.0.5",
+    "@types/ms": "2.1.0",
+    "@types/proper-lockfile": "4.1.4",
+    "@types/semver": "7.7.1"
   }
 }
