@@ -134,3 +134,52 @@ covers: branding (`piConfig` set in the vendored package.json), the auth gate bo
 (authed → pi launches; unauthed → prompt + exit, pi never launched, env untouched), and the
 MCP bridge degrading + surfacing loaded/degraded groups. Existing Stage A tests stay green;
 the flag-off default path is unchanged.
+
+---
+
+## 6. Stage C parity audit (gated)
+
+Stage C flips the default UI from Ink/React to pi-tui — the highest-risk consolidation
+step because it's a destructive UX migration. An adversarial parity audit was conducted
+to inventory every Ink feature, assess pi-tui coverage, and identify gaps before flipping
+the default.
+
+**Audit artifacts:**
+- Full audit report: [PI-CONSOLIDATION-STAGE-C-AUDIT.md](./PI-CONSOLIDATION-STAGE-C-AUDIT.md)
+- Inventory: 83 Ink features across 3 areas (TUI chat & streaming, CLI input/prompt, dialogs)
+- pi-tui native: 26 features already present
+- Port required: 29 features needing migration
+- Drop candidates: 13 Gemini/OpenRouter-specific features not applicable to Recoder
+
+**Critic verdict: gaps-found**
+
+The completeness critic identified 22 missing features and 14 questionable "native" verdicts
+(where pi-tui may not fully match Ink's implementation depth).
+
+**High-risk ports (8 features blocking the flip):**
+
+1. Tool approval confirmation UI — Interactive Yes/No/Allow Always with diff preview
+2. Unified diff renderer — Line numbers, colored backgrounds, gap indicators
+3. Height-constrained overflow management — MaxSizedBox with directional overflow
+4. Prompt Completion (Ghost Text) — AI-powered inline suggestions
+5. Vim Mode — Full modal editing state machine (NORMAL/INSERT, operators)
+6. Reverse Search (Ctrl+R) — Shell-style fuzzy reverse search
+7. Static rendering with message splitting — Performance optimization for streaming
+8. Tool call group rendering — Bordered box with status-based coloring
+9. Screen reader accessibility — Full ARIA labels infrastructure (pi-tui has none)
+
+**Gate decision:**
+
+Stage C is 📋 **gated** — NOT a safe blind flip. The critic found gaps in the parity matrix,
+particularly around overflow management, accessibility, and Recoder-specific tool approval UX.
+
+**Do NOT flip pi-tui to default until:**
+
+- High-risk ports (above) are deliberately ported or dropped with explicit migration docs
+- Missing features (22) are reviewed and either implemented or marked as out-of-scope
+- Questionable verdicts (14) are verified by comparing actual pi-tui implementations
+- A second audit confirms parity or documents deliberate feature tradeoffs
+
+The audit remains open as a reviewable gate document. Stage C work should focus on the
+high-effort ports first (tool approval UI, diff renderer, overflow management) since they
+block the default flip decision.
