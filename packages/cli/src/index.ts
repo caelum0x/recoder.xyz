@@ -68,6 +68,7 @@ import { createPortFixCommand } from './commands/port-fix';
 import { createOrchestratorTestCommand } from './commands/orchestrator-test';
 import { createCostDashboardCommand } from './commands/cost-dashboard';
 import { createDeployCommand } from './commands/deploy';
+import { createCodeGraphCommand } from './commands/code-graph';
 import { AIOrchestrator } from './services/ai-orchestrator';
 import { ContextMemorySystem } from './services/context-memory';
 import { openRouterAI } from './services/openrouter-ai';
@@ -923,7 +924,10 @@ Make this a production-ready plan that can actually be executed.`;
   
   // Add deployment command - Deploy generated code to various platforms
   program.addCommand(createDeployCommand());
-  
+
+  // Add code-graph command - connect repos + inspect their code graph
+  program.addCommand(createCodeGraphCommand());
+
   // Repository refactoring command - KILLER FEATURE vs Cursor (limited context)
   program
     .command('refactor')
