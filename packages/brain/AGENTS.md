@@ -1,7 +1,7 @@
 <!-- recodergit:start -->
 # RecoderGit — Code Intelligence
 
-This project is indexed by RecoderGit as **recoder.xyz** (392 symbols, 1003 relationships, 32 execution flows). Use the RecoderGit MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by RecoderGit as **recoder.xyz** (405 symbols, 1016 relationships, 33 execution flows). Use the RecoderGit MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .recodergit/run.cjs analyze` from the project root — it auto-selects an available runner. No `.recodergit/run.cjs` yet? `npx recodergit analyze` (npm 11 crash → `npm i -g recodergit`; #1939).
 

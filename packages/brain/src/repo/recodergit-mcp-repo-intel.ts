@@ -11,6 +11,13 @@ import {
 } from "@recoder/recodergit";
 import type { RepoIntelPort } from "../ports/repo-intel.port";
 import { ContextPackRepoIntel } from "./repo-intel-adapter";
+import {
+  buildSymbolResolveCypher,
+  mergeSymbolImpacts,
+  parseResolvedSymbols,
+  pickPrimarySymbols,
+  type ResolvedSymbol,
+} from "./recodergit-symbol-resolve";
 
 /**
  * REAL {@link RepoIntelPort}, backed by the RecoderGit MCP server (option c — the
@@ -100,6 +107,8 @@ interface ParsedImpact {
   modules: string[];
   upstreamFiles: string[];
   testFiles: string[];
+  /** How many real symbols backed this result (>=1 for resolved, undefined for legacy). */
+  resolvedSymbolCount?: number;
 }
 
 function str(value: unknown): string {
@@ -276,10 +285,44 @@ export function parseMcpImpact(
 }
 
 /**
- * Build the `impact` tool arguments for one target path. Mirrors the CLI
- * adapter's argv: resolve the filename stem as the symbol with `file_path` as
- * the disambiguator, walk upstream, include tests. An unresolved guess just
- * makes the tool return an error/disambiguation result, which is skipped.
+ * Build the `cypher` tool arguments that RESOLVE a file's symbols. The MCP cypher
+ * tool keys its statement on `statement` (verified against the server schema). This
+ * replaces the filename-stem guess: ask the resident graph for the file's actual
+ * declarations, then impact them by UID.
+ */
+export function buildSymbolResolveToolArgs(
+  repoRoot: string,
+  targetPath: string,
+): Record<string, unknown> {
+  return {
+    statement: buildSymbolResolveCypher(targetPath),
+    repo: repoRoot,
+  };
+}
+
+/**
+ * Build the `impact` tool arguments by UID — the zero-ambiguity form. The MCP
+ * impact tool takes the graph UID via `target_uid` (verified against the server
+ * schema), which skips name resolution entirely for an exact blast radius.
+ */
+export function buildImpactByUidToolArgs(
+  repoRoot: string,
+  uid: string,
+): Record<string, unknown> {
+  return {
+    target_uid: uid,
+    direction: "upstream",
+    repo: repoRoot,
+    includeTests: true,
+  };
+}
+
+/**
+ * Build the `impact` tool arguments by the filename STEM — the legacy guess,
+ * retained only as a last-resort fallback for files whose main export matches the
+ * stem (or servers without a `cypher` tool). Mirrors the CLI adapter's stem argv:
+ * the stem as `target` with `file_path` as the disambiguator. An unresolved guess
+ * just makes the tool return an error/disambiguation result, which is skipped.
  */
 export function buildImpactToolArgs(
   repoRoot: string,
@@ -299,6 +342,21 @@ function symbolFromPath(filePath: string): string {
   const base = filePath.split("/").pop() ?? filePath;
   const dot = base.indexOf(".");
   return dot > 0 ? base.slice(0, dot) : base;
+}
+
+/**
+ * Parse a `cypher` tool result into resolved symbols. Pulls the text payload out
+ * of the MCP `CallToolResult`, then delegates to the shared Markdown-table parser.
+ * Any error result / unusable shape yields `[]` so the caller degrades.
+ */
+export function parseMcpResolvedSymbols(
+  result: McpCallToolResult | null | undefined,
+): ResolvedSymbol[] {
+  const text = textFromResult(result);
+  if (text === null) {
+    return [];
+  }
+  return parseResolvedSymbols(text);
 }
 
 // ---------------------------------------------------------------------------
@@ -478,8 +536,79 @@ export class RecoderGitMcpRepoIntel implements RepoIntelPort {
     }
   }
 
-  /** Call the impact tool for one path; null on any per-path failure (skip it). */
+  /**
+   * Resolve a path's REAL symbols via the `cypher` tool, impact them by UID, and
+   * merge into one result. Null on any per-path failure (skip it). Falls back to
+   * the legacy stem-guess `impact` only when resolution yields nothing usable, so
+   * files whose export matches the stem (and servers without `cypher`) still work.
+   */
   private async runImpact(
+    repoRoot: string,
+    targetPath: string,
+  ): Promise<ParsedImpact | null> {
+    if (!this.transport) {
+      return null;
+    }
+    const symbols = pickPrimarySymbols(
+      await this.resolveSymbols(repoRoot, targetPath),
+    );
+    if (symbols.length > 0) {
+      const facts = await Promise.all(
+        symbols.map((s) => this.impactByUid(repoRoot, targetPath, s.uid)),
+      );
+      const merged = mergeSymbolImpacts(
+        targetPath,
+        facts.filter((f): f is ParsedImpact => f !== null),
+      );
+      if (merged) {
+        return merged;
+      }
+    }
+    // No resolvable symbols (or none produced impact) — legacy stem guess.
+    return this.impactByStem(repoRoot, targetPath);
+  }
+
+  /** Ask the resident graph for a file's symbols; [] on any failure (degrade). */
+  private async resolveSymbols(
+    repoRoot: string,
+    targetPath: string,
+  ): Promise<ResolvedSymbol[]> {
+    if (!this.transport) {
+      return [];
+    }
+    try {
+      const result = await this.transport(
+        "cypher",
+        buildSymbolResolveToolArgs(repoRoot, targetPath),
+      );
+      return parseMcpResolvedSymbols(result);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Call the impact tool for one resolved UID; null on any failure (skip it). */
+  private async impactByUid(
+    repoRoot: string,
+    targetPath: string,
+    uid: string,
+  ): Promise<ParsedImpact | null> {
+    if (!this.transport) {
+      return null;
+    }
+    try {
+      const result = await this.transport(
+        "impact",
+        buildImpactByUidToolArgs(repoRoot, uid),
+      );
+      return parseMcpImpact(targetPath, result);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Legacy fallback: impact by the filename stem; null on any failure (skip it). */
+  private async impactByStem(
     repoRoot: string,
     targetPath: string,
   ): Promise<ParsedImpact | null> {
@@ -537,7 +666,10 @@ export class RecoderGitMcpRepoIntel implements RepoIntelPort {
           kind: "git_nexus" as const,
           ref: path,
           detail: r
-            ? `Real RecoderGit MCP impact: ${r.rawRisk} risk, ${r.impactedCount} impacted symbols.`
+            ? `Real RecoderGit MCP impact: ${r.rawRisk} risk, ${r.impactedCount} impacted symbols` +
+              (r.resolvedSymbolCount
+                ? ` across ${r.resolvedSymbolCount} resolved symbol(s).`
+                : ".")
             : "Target path included in Git Nexus context pack (no graph data).",
         };
       }),

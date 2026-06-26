@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import type { ContextPack, CreateContextPackInput } from "@recoder/recodergit";
 import {
   buildImpactToolArgs,
+  buildImpactByUidToolArgs,
+  buildSymbolResolveToolArgs,
   createRecoderGitMcpRepoIntel,
   RecoderGitMcpRepoIntel,
   parseMcpImpact,
@@ -10,6 +12,22 @@ import {
   type McpTransport,
 } from "./recodergit-mcp-repo-intel";
 import type { RepoIntelPort } from "../ports/repo-intel.port";
+
+/** Wrap a `cypher` resolution payload exactly like the MCP server's text content. */
+function mcpCypher(filePath: string, symbolName: string, kind = "Class"): McpCallToolResult {
+  const uid = `${kind}:${filePath}:${symbolName}`;
+  const markdown = [
+    "| uid | name | kind | exported |",
+    "| --- | --- | --- | --- |",
+    `| ${uid} | ${symbolName} | ${kind} | true |`,
+    `| Method:${filePath}:${symbolName}.run#1 | run | Method | true |`,
+    `| File:${filePath} | ${filePath.split("/").pop()} | File |  |`,
+  ].join("\n");
+  const text =
+    JSON.stringify({ markdown, row_count: 3 }, null, 2) +
+    "\n\n---\n**Next:** To explore a result symbol, use context().";
+  return { content: [{ type: "text", text }] };
+}
 
 /** Minimal CreateContextPackInput — the adapter only reads task + repoRoot. */
 function makeInput(
@@ -116,7 +134,8 @@ test("parseMcpImpact strips prepended pino log lines and the Next hint", () => {
   assert.equal(parsed?.impactedCount, 3);
 });
 
-test("buildImpactToolArgs targets the right file, repo, and direction", () => {
+test("tool arg builders: stem (legacy), cypher resolve, and impact-by-UID", () => {
+  // Legacy stem guess (fallback only).
   assert.deepEqual(
     buildImpactToolArgs("/work/repo", "packages/brain/src/brain.ts"),
     {
@@ -127,19 +146,65 @@ test("buildImpactToolArgs targets the right file, repo, and direction", () => {
       includeTests: true,
     },
   );
+  // Cypher resolve keys its statement on `statement` and scopes by filePath.
+  const resolve = buildSymbolResolveToolArgs("/work/repo", "source/index.ts");
+  assert.equal(resolve["repo"], "/work/repo");
+  assert.match(String(resolve["statement"]), /s\.filePath = 'source\/index\.ts'/);
+  // Impact-by-UID uses the zero-ambiguity `target_uid` key.
+  assert.deepEqual(
+    buildImpactByUidToolArgs("/work/repo", "Class:source/index.ts:PQueue"),
+    {
+      target_uid: "Class:source/index.ts:PQueue",
+      direction: "upstream",
+      repo: "/work/repo",
+      includeTests: true,
+    },
+  );
 });
 
-test("contextPack issues one impact tool call per target path", async () => {
-  const seen: string[] = [];
+test("contextPack resolves via cypher then impacts each path by its own UID", async () => {
+  const impactUids: string[] = [];
   const transport: McpTransport = async (toolName, args) => {
+    if (toolName === "cypher") {
+      const stmt = String((args as { statement?: unknown }).statement);
+      const file = stmt.match(/s\.filePath = '([^']+)'/)?.[1] ?? "unknown";
+      return mcpCypher(file, "Sym", "Class");
+    }
     assert.equal(toolName, "impact");
-    seen.push(String((args as { file_path?: unknown }).file_path));
+    impactUids.push(String((args as { target_uid?: unknown }).target_uid));
     return mcpResult(IMPACT_PAYLOAD);
   };
   const intel = createRecoderGitMcpRepoIntel({ transport });
 
   await intel.contextPack(makeInput(["a.ts", "b.ts"]));
-  assert.deepEqual(seen.sort(), ["a.ts", "b.ts"]);
+  assert.deepEqual(impactUids.sort(), ["Class:a.ts:Sym", "Class:b.ts:Sym"]);
+});
+
+test("PQueue case (MCP): main export != stem resolves real impact, not fallback", async () => {
+  const file = "source/index.ts";
+  const impactUids: string[] = [];
+  let stemGuessed = false;
+  const transport: McpTransport = async (toolName, args) => {
+    if (toolName === "cypher") {
+      return mcpCypher(file, "PQueue", "Class");
+    }
+    if ((args as { target_uid?: unknown }).target_uid) {
+      impactUids.push(String((args as { target_uid?: unknown }).target_uid));
+      return mcpResult(IMPACT_PAYLOAD);
+    }
+    stemGuessed = true; // a stem-guess `target: "index"` would land here and miss.
+    return mcpResult({ error: "Target 'index' not found" });
+  };
+  const intel = createRecoderGitMcpRepoIntel({ transport });
+
+  const pack = await intel.contextPack(makeInput([file]));
+
+  assert.deepEqual(impactUids, ["Class:source/index.ts:PQueue"]);
+  assert.equal(stemGuessed, false, "must not fall back to the stem guess");
+  assert.equal(pack.sourceRefs.length, 1);
+  assert.match(pack.sourceRefs[0].detail ?? "", /Real RecoderGit MCP impact/);
+  assert.match(pack.sourceRefs[0].detail ?? "", /resolved symbol/);
+  assert.equal(pack.impactReport.changedFileRisks[0].risk, "high");
 });
 
 test("contextPack degrades to the fallback when the transport throws", async () => {
