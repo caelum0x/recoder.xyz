@@ -1,4 +1,4 @@
-import type { ActivityPort } from "../ports/activity.port";
+import type { ActivityPort, BrainActivityAnswer } from "../ports/activity.port";
 import type {
   BrainActivity,
   BrainActivityProfile,
@@ -135,6 +135,25 @@ export class ContinuumActivity implements ActivityPort {
       return e.snapshot(episodes);
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Grounded Q&A over activity: evidence rows (always) + a synthesized answer when an LLM is
+   * wired. Backed by continuum's answerQuery (KG facts + recall context). Loads the index once
+   * and reuses it for both the recall evidence and the grounded answer.
+   */
+  async answer(query: string, limit = 6): Promise<BrainActivityAnswer> {
+    try {
+      const e = await this.engines();
+      const episodes = e.loadEpisodes();
+      const index = await e.loadIndex(this.embed);
+      const sources = (await e.recall(index, episodes, { query, k: limit })).map(toActivity);
+      const { answer } = await e.answerQuery(query, { index, llm: this.llm });
+      return { answer, sources };
+    } catch {
+      // Engine absent or errored — degrade to evidence-empty, answer-null, never throw.
+      return { answer: null, sources: [] };
     }
   }
 }
