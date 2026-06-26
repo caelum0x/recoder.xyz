@@ -3,6 +3,8 @@ export * from './routes/github-webhook.routes';
 export * from './routes/mcp-control.routes';
 export * from './routes/internal.routes';
 export * from './routes/code-graph.routes';
+export * from './routes/code-graph-user.routes';
+export * from './code-graph-clone';
 export * from './recodergit-service';
 export * from './controllers/agent-os.controller';
 export * from './repositories/in-memory-agent-os.repository';

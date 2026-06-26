@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { AgentOsController } from '../controllers/agent-os.controller';
 import { agentOsContainer } from '../service-container';
+import { createCodeGraphUserRouter } from './code-graph-user.routes';
 
 export function createAgentOsRouter(): Router {
   const router = Router();
@@ -9,6 +10,12 @@ export function createAgentOsRouter(): Router {
     agentOsContainer.workLocks,
     agentOsContainer.repositoryDriver,
   );
+
+  // User-facing, flag-gated (RECODER_CODE_GRAPH_ENABLED) on-demand GitHub repo
+  // connect + code-graph reads. Owner-scoped to req.userId; token-safe; no-op
+  // when the flag is off. Mounted additively under the same authenticateRequest
+  // middleware the rest of this surface uses (see server.ts mount).
+  router.use('/code-graph', createCodeGraphUserRouter());
 
   router.get('/health', controller.health);
   router.get('/summary', controller.summary);
