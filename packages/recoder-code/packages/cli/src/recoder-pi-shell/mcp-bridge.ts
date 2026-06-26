@@ -66,11 +66,44 @@ export type ConnectMcpServer = (
   config: MCPServerConfig,
 ) => Promise<BridgedMcpConnection>;
 
+/** A Recoder tool group that came up successfully. */
+export interface LoadedToolGroup {
+  /** Server/group name (e.g. `recodergit`, `brain`). */
+  readonly name: string;
+  /** Number of tools the group registered into pi. */
+  readonly toolCount: number;
+}
+
+/** A Recoder tool group that failed to start (degraded; not fatal). */
+export interface DegradedToolGroup {
+  /** Server/group name (e.g. `recodergit`, `brain`). */
+  readonly name: string;
+  /** Why it could not be brought up. */
+  readonly reason: string;
+}
+
+/**
+ * Outcome of bridging the configured Recoder MCP servers into pi. Lets the
+ * launcher surface which tool groups loaded and which degraded — the bridge
+ * never throws, so this is how callers learn the real, partial result.
+ */
+export interface RecoderToolGroupSummary {
+  readonly loaded: LoadedToolGroup[];
+  readonly degraded: DegradedToolGroup[];
+}
+
 export interface McpBridgeOptions {
   /** Override the connector (tests inject a fake; default spawns over stdio). */
   readonly connect?: ConnectMcpServer;
   /** Sink for fail-safe warnings (defaults to console.error). */
   readonly onWarn?: (message: string) => void;
+  /**
+   * Called once after every configured server has been attempted, with the
+   * loaded/degraded breakdown. Used to surface which Recoder tool groups are
+   * available in the running pi agent. Optional; defaults to no-op in the bridge
+   * (the launcher injects a reporter).
+   */
+  readonly onGroupsResolved?: (summary: RecoderToolGroupSummary) => void;
 }
 
 const EMPTY_OBJECT_SCHEMA = {
@@ -145,6 +178,8 @@ export function createRecoderMcpBridgeFactory(
     const entries = Object.entries(mcpServers).filter(
       ([, config]) => !!config && !!config.command,
     );
+    const loaded: LoadedToolGroup[] = [];
+    const degraded: DegradedToolGroup[] = [];
     for (const [name, config] of entries) {
       try {
         const connection = await connect(name, config);
@@ -168,11 +203,16 @@ export function createRecoderMcpBridgeFactory(
             },
           });
         }
+        loaded.push({ name, toolCount: tools.length });
       } catch (error: unknown) {
         // Fail-safe: a missing/broken MCP server must never break the shell.
+        // The group is recorded as degraded so the launcher can surface it; the
+        // rest of the groups (and the shell itself) still come up.
         const message = error instanceof Error ? error.message : String(error);
+        degraded.push({ name, reason: message });
         onWarn(`MCP server "${name}" unavailable, skipping its tools: ${message}`);
       }
     }
+    options.onGroupsResolved?.({ loaded, degraded });
   };
 }

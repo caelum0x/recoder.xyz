@@ -23,7 +23,7 @@ vi.mock('recoder-code-core', async () => {
 
 import {
   buildRecoderPiLaunchPlan,
-  PI_AGENT_DIR_ENV,
+  RECODER_PI_AGENT_DIR_ENV,
   RECODER_APP_NAME,
   RECODER_APP_TITLE,
   resolveRecoderConfigDir,
@@ -81,7 +81,8 @@ describe('buildRecoderPiLaunchPlan', () => {
 
     expect(plan.configDir).toBe('/home/tester/.recoder');
     expect(plan.piAgentDir).toBe('/home/tester/.recoder/agent');
-    expect(plan.envOverrides[PI_AGENT_DIR_ENV]).toBe(
+    expect(RECODER_PI_AGENT_DIR_ENV).toBe('RECODER_CODING_AGENT_DIR');
+    expect(plan.envOverrides[RECODER_PI_AGENT_DIR_ENV]).toBe(
       '/home/tester/.recoder/agent',
     );
   });
