@@ -65,7 +65,7 @@ export interface ResolveEnginesOptions {
 }
 
 /** Vendored built recodergit CLI entry, relative to the monorepo root. */
-const RECODERGIT_VENDORED = ["ts", "recodergit", "gitnexus", "dist", "cli", "index.js"];
+const RECODERGIT_VENDORED = ["ts", "recodergit", "recodergit", "dist", "cli", "index.js"];
 /** Vendored zero-dep continuum CLI entry, relative to the monorepo root. */
 const CONTINUUM_VENDORED = ["ts", "continuum", "bin", "continuum.mjs"];
 /** Marker that identifies the monorepo root when walking up from a start dir. */
@@ -131,7 +131,7 @@ export function resolveEngines(
   const recodergit = resolveExec({
     vendored: join(root, ...RECODERGIT_VENDORED),
     envBin: env["RECODERGIT_BIN"],
-    pathName: "gitnexus",
+    pathName: "recodergit",
     exists,
   });
   const continuum = resolveExec({

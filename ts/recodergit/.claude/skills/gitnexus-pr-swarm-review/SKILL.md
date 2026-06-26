@@ -1,14 +1,14 @@
 ---
-name: gitnexus-pr-swarm-review
-description: "Run a GitNexus production-readiness pull request review using a coordinated reviewer swarm."
+name: recodergit-pr-swarm-review
+description: "Run a RecoderGit production-readiness pull request review using a coordinated reviewer swarm."
 ---
 
-# GitNexus PR Swarm Review (Claude Code adapter)
+# RecoderGit PR Swarm Review (Claude Code adapter)
 
-Use this skill to review a GitNexus pull request and produce a production-readiness review.
+Use this skill to review a RecoderGit pull request and produce a production-readiness review.
 
 ```
-/gitnexus-pr-swarm-review <PR URL or PR number>
+/recodergit-pr-swarm-review <PR URL or PR number>
 ```
 
 You are the **swarm coordinator**. The full review contract — lanes, dependencies,
@@ -20,7 +20,7 @@ rules — is the canonical, CLI-neutral spec:
 This adapter only pins the Claude Code specifics:
 
 - **Run in Swarm mode.** Dispatch each lane as its own subagent via the Agent tool. The
-  seven subagents are the project agents named `gitnexus-*` (one per persona); each reads
+  seven subagents are the project agents named `recodergit-*` (one per persona); each reads
   its canonical persona under `pr-swarm-review/personas/`. Run lanes 1–2 first, lanes 3–6
   in parallel after, and lane 7 last on the draft.
 - **Lane 7 is a hard gate.** Do not emit the final review while the synthesis critic's

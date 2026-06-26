@@ -6,7 +6,7 @@
 
 Last reviewed: 2026-04-13
 
-**Project:** GitNexus · **Environment:** dev · **Maintainer:** repository maintainers (see GitHub)
+**Project:** RecoderGit · **Environment:** dev · **Maintainer:** repository maintainers (see GitHub)
 
 Follow **AGENTS.md** for the canonical rules; this file adds Claude Code–specific deltas. Cursor-specific notes live only in `AGENTS.md`.
 
@@ -18,7 +18,7 @@ See the **Scope** table in [AGENTS.md](AGENTS.md) for read/write/execute/off-lim
 
 - **Primary:** Pin per **Claude Code** / Anthropic org policy (explicit model id). Do not rely on an unversioned `latest` alias for governed workflows.
 - **Fallback:** As configured in Claude Code (organization default or user override).
-- **Notes:** The GitNexus CLI analyzer does not call an LLM.
+- **Notes:** The RecoderGit CLI analyzer does not call an LLM.
 
 ## Execution Sequence (complex tasks)
 
@@ -26,7 +26,7 @@ Same discipline as [AGENTS.md](AGENTS.md): before large multi-step work, state w
 
 ## Claude Code hooks
 
-Prefer **PreToolUse** hooks for hard gates (e.g. tests before `git_commit`). Adapt hook commands to `gitnexus/` npm scripts.
+Prefer **PreToolUse** hooks for hard gates (e.g. tests before `git_commit`). Adapt hook commands to `recodergit/` npm scripts.
 
 ## Context budget
 
@@ -35,30 +35,30 @@ If always-on instructions grow, load deep conventions via conditional reads (e.g
 ## Reference Documentation
 
 - **This repository:** [AGENTS.md](AGENTS.md) (Cursor + monorepo notes), [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md), [GUARDRAILS.md](GUARDRAILS.md).
-- **Call & inheritance resolution:** See ARCHITECTURE.md § Scope-Resolution Pipeline. Shared pipeline code in `gitnexus/src/core/ingestion/` must not name languages — use `LanguageProvider` / `ScopeResolver` hooks instead (see AGENTS.md). (The legacy call-resolution DAG was removed in #942.)
-- **GitNexus:** `.claude/skills/gitnexus/`; MCP and indexed-repo rules live only in [AGENTS.md](AGENTS.md) (`gitnexus:start` … `gitnexus:end`). See **GitNexus rules** below.
+- **Call & inheritance resolution:** See ARCHITECTURE.md § Scope-Resolution Pipeline. Shared pipeline code in `recodergit/src/core/ingestion/` must not name languages — use `LanguageProvider` / `ScopeResolver` hooks instead (see AGENTS.md). (The legacy call-resolution DAG was removed in #942.)
+- **RecoderGit:** `.claude/skills/recodergit/`; MCP and indexed-repo rules live only in [AGENTS.md](AGENTS.md) (`recodergit:start` … `recodergit:end`). See **RecoderGit rules** below.
 
 ## Changelog
 
 | Date | Version | Change |
 |------|---------|--------|
-| 2026-04-13 | 1.3.0 | Updated GitNexus index stats after DAG refactor. |
-| 2026-03-24 | 1.2.0 | Removed duplicated gitnexus:start block and scope table; replaced with pointers to AGENTS.md. |
+| 2026-04-13 | 1.3.0 | Updated RecoderGit index stats after DAG refactor. |
+| 2026-03-24 | 1.2.0 | Removed duplicated recodergit:start block and scope table; replaced with pointers to AGENTS.md. |
 | 2026-03-23 | 1.1.0 | Updated agent instructions to match AGENTS.md. |
 | 2026-03-22 | 1.0.0 | Added structured header and changelog. |
 
 ---
 
-## GitNexus rules
+## RecoderGit rules
 
-See the `<!-- gitnexus:start --> … <!-- gitnexus:end -->` block in **[AGENTS.md](AGENTS.md)** for the canonical MCP tools, impact analysis rules, and index instructions.
+See the `<!-- recodergit:start --> … <!-- recodergit:end -->` block in **[AGENTS.md](AGENTS.md)** for the canonical MCP tools, impact analysis rules, and index instructions.
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+<!-- recodergit:start -->
+# RecoderGit — Code Intelligence
 
-This project is indexed by GitNexus as **GitNexus** (26675 symbols, 35395 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by RecoderGit as **RecoderGit** (26675 symbols, 35395 relationships, 300 execution flows). Use the RecoderGit MCP tools to understand code, assess impact, and navigate safely.
 
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+> Index stale? Run `node .recodergit/run.cjs analyze` from the project root — it auto-selects an available runner. No `.recodergit/run.cjs` yet? `npx recodergit analyze` (npm 11 crash → `npm i -g recodergit`; #1939).
 
 ## Always Do
 
@@ -79,21 +79,21 @@ This project is indexed by GitNexus as **GitNexus** (26675 symbols, 35395 relati
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/GitNexus/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/GitNexus/clusters` | All functional areas |
-| `gitnexus://repo/GitNexus/processes` | All execution flows |
-| `gitnexus://repo/GitNexus/process/{name}` | Step-by-step execution trace |
+| `recodergit://repo/RecoderGit/context` | Codebase overview, check index freshness |
+| `recodergit://repo/RecoderGit/clusters` | All functional areas |
+| `recodergit://repo/RecoderGit/processes` | All execution flows |
+| `recodergit://repo/RecoderGit/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
 | Task | Read this skill file |
 |------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Understand architecture / "How does X work?" | `.claude/skills/recodergit/recodergit-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/recodergit/recodergit-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/recodergit/recodergit-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/recodergit/recodergit-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/recodergit/recodergit-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/recodergit/recodergit-cli/SKILL.md` |
 | Work in the Ingestion area (239 symbols) | `.claude/skills/generated/ingestion/SKILL.md` |
 | Work in the Extractors area (135 symbols) | `.claude/skills/generated/extractors/SKILL.md` |
 | Work in the Components area (112 symbols) | `.claude/skills/generated/components/SKILL.md` |
@@ -115,4 +115,4 @@ This project is indexed by GitNexus as **GitNexus** (26675 symbols, 35395 relati
 | Work in the Storage area (51 symbols) | `.claude/skills/generated/storage/SKILL.md` |
 | Work in the Php area (48 symbols) | `.claude/skills/generated/php/SKILL.md` |
 
-<!-- gitnexus:end -->
+<!-- recodergit:end -->

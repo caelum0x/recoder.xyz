@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "gitnexus": {
+    "recodergit": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "gitnexus@latest", "mcp"]
+      "args": ["-y", "recodergit@latest", "mcp"]
     }
   }
 }

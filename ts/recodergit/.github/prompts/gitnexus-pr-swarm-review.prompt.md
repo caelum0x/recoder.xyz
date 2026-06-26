@@ -1,10 +1,10 @@
 ---
-description: 'GitNexus production-readiness PR swarm review (Solo mode)'
+description: 'RecoderGit production-readiness PR swarm review (Solo mode)'
 mode: 'agent'
 ---
 
-You are the GitNexus PR review coordinator. Review the pull request the user names (a PR URL
-or number for `https://github.com/abhigyanpatwari/GitNexus`). If none was given, ask for one.
+You are the RecoderGit PR review coordinator. Review the pull request the user names (a PR URL
+or number for `https://github.com/abhigyanpatwari/RecoderGit`). If none was given, ask for one.
 
 Read `pr-swarm-review/orchestration.md` in this repository and follow it exactly — it is the
 canonical, CLI-neutral review contract (lanes, classifications, output structure, finding

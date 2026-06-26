@@ -29,6 +29,6 @@
 4. **Workflow Polish**: Noodlbox's `/detect_impact staged` is a great specific use case. Gitnexus should wrap `blastRadius` into similar concrete workflows.
 
 ## Technical Feasibility (Interception)
-- **Cursor**: Use `.cursorrules` to "shadow" default tools. Instruct agent to ALWAYS use `gitnexus_search` instead of `grep`.
+- **Cursor**: Use `.cursorrules` to "shadow" default tools. Instruct agent to ALWAYS use `recodergit_search` instead of `grep`.
 - **Claude Code**: Likely uses a private plugin API for `PreToolUse`. We can't match this exactly without an official plugin, but we can approximate it with strong prompt instructions in `AGENTS.md`.
 - **MCP Shadowing**: Define tools with names that conflict (e.g., `grep`)? No, unsafe. Better to use "Virtual Hooks" via system prompt instructions.

@@ -19,20 +19,20 @@ import { resolveExecEngine } from "../runtime/engine-resolver";
  * REAL {@link RepoIntelPort}, backed by the actual RecoderGit engine (ts/recodergit:
  * tree-sitter parse -> scope resolution -> knowledge graph -> hybrid search).
  *
- * It shells the `gitnexus impact` CLI — one call per target path — behind an
+ * It shells the `recodergit impact` CLI — one call per target path — behind an
  * INJECTABLE exec, parses the structured JSON the engine emits, and MAPS it into
  * a valid {@link ContextPack} so every existing BrainContext.repo consumer keeps
  * working unchanged. The engine is consumed as an external CLI, never imported,
- * so this package has no build/runtime dependency on a built gitnexus.
+ * so this package has no build/runtime dependency on a built recodergit.
  *
- * Fail-safe doctrine (brain's law): if gitnexus is missing, unbuilt, or emits
+ * Fail-safe doctrine (brain's law): if recodergit is missing, unbuilt, or emits
  * unparseable output, this adapter NEVER throws — it degrades to the injected
  * {@link RepoIntelPort} fallback (the mock-backed {@link ContextPackRepoIntel}
  * by default) and returns that pack instead. Real intelligence is opt-in and
  * additive; its absence can only cost richness, never correctness.
  */
 
-/** Where/how a single gitnexus invocation runs (the cwd it resolves from). */
+/** Where/how a single recodergit invocation runs (the cwd it resolves from). */
 export interface RecoderGitExecOptions {
   /**
    * Working directory for the spawned process. `impact` is run from the analyzed
@@ -51,14 +51,14 @@ export type RecoderGitExec = (
 ) => Promise<string>;
 
 export interface RecoderGitRepoIntelOptions {
-  /** Override the exec (defaults to execFile against the gitnexus binary). */
+  /** Override the exec (defaults to execFile against the recodergit binary). */
   exec?: RecoderGitExec;
   /**
    * Port used when the real engine is unavailable or unusable. Defaults to the
    * mock-backed {@link ContextPackRepoIntel} so the Brain keeps prior behavior.
    */
   fallback?: RepoIntelPort;
-  /** Override the binary name/path (defaults to "gitnexus"). */
+  /** Override the binary name/path (defaults to "recodergit"). */
   recodergitBin?: string;
 }
 
@@ -70,7 +70,7 @@ export interface RecoderGitRepoIntelOptions {
  */
 const EXEC_MAX_BUFFER = 64 * 1024 * 1024;
 
-/** Default exec: run the gitnexus binary and collect stdout via execFile. */
+/** Default exec: run the recodergit binary and collect stdout via execFile. */
 function defaultExec(
   command: string,
   args: string[],
@@ -86,7 +86,7 @@ function defaultExec(
           reject(error);
           return;
         }
-        // execFile captures stdout only; gitnexus writes its pino logs to stderr,
+        // execFile captures stdout only; recodergit writes its pino logs to stderr,
         // so stdout is already clean JSON. The parser still strips any stray log
         // line defensively in case a different exec merges the streams.
         resolve(stdout);
@@ -96,7 +96,7 @@ function defaultExec(
 }
 
 /**
- * Build the argv for `gitnexus impact` over one target path. Tiny and pure so
+ * Build the argv for `recodergit impact` over one target path. Tiny and pure so
  * the command surface is trivially auditable and the test can assert it targets
  * the right file + repoRoot.
  *
@@ -133,7 +133,7 @@ function symbolFromPath(filePath: string): string {
   return dot > 0 ? base.slice(0, dot) : base;
 }
 
-/** A `gitnexus impact` result as emitted by the CLI (untrusted external shape). */
+/** A `recodergit impact` result as emitted by the CLI (untrusted external shape). */
 interface RecoderGitImpactResult {
   target?: { filePath?: unknown; name?: unknown } | null;
   risk?: unknown;
@@ -161,7 +161,7 @@ function num(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/** Map gitnexus risk (LOW/MEDIUM/HIGH/CRITICAL) to a ContextPack risk. */
+/** Map recodergit risk (LOW/MEDIUM/HIGH/CRITICAL) to a ContextPack risk. */
 function toRisk(value: unknown): ChangedFileRisk["risk"] {
   const v = str(value).toUpperCase();
   if (v === "HIGH" || v === "CRITICAL") {
@@ -217,8 +217,8 @@ function modulesFrom(affectedModules: unknown): string[] {
 }
 
 /**
- * gitnexus emits its structured result as JSON on stdout, but its pino logger can
- * prepend single-line records like `{"level":40,"time":…,"name":"gitnexus",…}`
+ * recodergit emits its structured result as JSON on stdout, but its pino logger can
+ * prepend single-line records like `{"level":40,"time":…,"name":"recodergit",…}`
  * (e.g. the "FTS extension unavailable" notice). Verified live: with execFile
  * those go to stderr, so stdout is already clean — but this strips any such line
  * defensively so a merged-stream exec (or a future log on stdout) still parses.
@@ -272,7 +272,7 @@ export class RecoderGitRepoIntel implements RepoIntelPort {
     this.exec = options.exec ?? defaultExec;
     this.fallback = options.fallback ?? new ContextPackRepoIntel();
     // An explicit binary keeps prior behavior; otherwise discover the vendored
-    // build (run via node) or fall back to the bare `gitnexus` on PATH.
+    // build (run via node) or fall back to the bare `recodergit` on PATH.
     const resolved = resolveExecEngine("recodergit", options.recodergitBin);
     this.cmd = resolved.cmd;
     this.argsPrefix = resolved.args;
@@ -299,7 +299,7 @@ export class RecoderGitRepoIntel implements RepoIntelPort {
 
       return this.assemblePack(input, parsed);
     } catch {
-      // gitnexus missing / unusable — degrade to the fallback, never throw.
+      // recodergit missing / unusable — degrade to the fallback, never throw.
       return this.fallback.contextPack(input);
     }
   }
@@ -464,7 +464,7 @@ export function createRecoderGitRepoIntel(
  *   MCP server (persistent graph)  ->  CLI (cold per-call engine)  ->  context-pack (mock)
  *
  * When `RECODERGIT_MCP_URL` is set the long-lived MCP server is preferred; it
- * degrades to the `gitnexus` CLI adapter, which itself degrades to the
+ * degrades to the `recodergit` CLI adapter, which itself degrades to the
  * mock-backed {@link ContextPackRepoIntel}. With no URL configured the chain
  * starts at the CLI (-> context-pack). Use this to opt into real repo
  * intelligence while keeping the Brain's fail-safe behavior; the default

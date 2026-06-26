@@ -3,34 +3,34 @@
 
 Last reviewed: 2026-04-23
 
-**Project:** GitNexus · **Environment:** dev · **Maintainer:** repository maintainers (see GitHub)
+**Project:** RecoderGit · **Environment:** dev · **Maintainer:** repository maintainers (see GitHub)
 
 ## Scope
 
 | Boundary | Rule |
 |----------|------|
-| **Reads** | `gitnexus/`, `gitnexus-web/`, `eval/`, plugin packages, `.github/`, `.gitnexus/`, docs. |
+| **Reads** | `recodergit/`, `recodergit-web/`, `eval/`, plugin packages, `.github/`, `.recodergit/`, docs. |
 | **Writes** | Only paths required for the change; keep diffs minimal. Update lockfiles when deps change. |
-| **Executes** | `npm`, `npx`, `node` under `gitnexus/` and `gitnexus-web/`; `uv run` for Python under `eval/`; documented CI/dev workflows. |
+| **Executes** | `npm`, `npx`, `node` under `recodergit/` and `recodergit-web/`; `uv run` for Python under `eval/`; documented CI/dev workflows. |
 | **Off-limits** | Real `.env` / secrets, production credentials, unrelated repos, destructive git ops without confirmation. |
 
 ## Model Configuration
 
 - **Primary:** Use a named model (e.g. Claude Sonnet 4.x). Avoid `Auto` or unversioned `latest` when reproducibility matters.
-- **Notes:** The GitNexus CLI indexer does not call an LLM.
+- **Notes:** The RecoderGit CLI indexer does not call an LLM.
 
 ## Execution Sequence (complex tasks)
 
 For multi-step work, state up front:
 1. Which rules in this file and **[GUARDRAILS.md](GUARDRAILS.md)** apply (and any relevant Signs).
 2. Current **Scope** boundaries.
-3. Which **validation commands** you will run (`cd gitnexus && npm test`, `npx tsc --noEmit`).
+3. Which **validation commands** you will run (`cd recodergit && npm test`, `npx tsc --noEmit`).
 
 On long threads, *"Remember: apply all AGENTS.md rules"* re-weights these instructions against context dilution.
 
 ## Claude Code hooks
 
-**PreToolUse** hooks can block tools (e.g. `git_commit`) until checks pass. Adapt to this repo: `cd gitnexus && npm test` before commit.
+**PreToolUse** hooks can block tools (e.g. `git_commit`) until checks pass. Adapt to this repo: `cd recodergit && npm test` before commit.
 
 ## Context budget
 
@@ -39,13 +39,13 @@ Commands and gotchas live under **Repo reference** below and in **[CONTRIBUTING.
 ## Reference docs
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)**, **[CONTRIBUTING.md](CONTRIBUTING.md)**, **[GUARDRAILS.md](GUARDRAILS.md)**
-- **Call & inheritance resolution (RFC #909 Ring 3):** See ARCHITECTURE.md § Scope-Resolution Pipeline. All languages resolve calls and inheritance through the scope-resolution pipeline (`Registry.lookup`, `preEmitInheritanceEdges`, `emitHeritageEdges`, `buildMro` → `MethodDispatchIndex`). **Shared code in `gitnexus/src/core/ingestion/` must not name languages** — plug language behavior in via `LanguageProvider` / `ScopeResolver` hooks. A language plugs in by implementing `ScopeResolver` (`scope-resolution/contract/scope-resolver.ts`) and registering it in `SCOPE_RESOLVERS`. (The legacy call-resolution DAG + `@heritage` capture path were removed in RING4-1 #942.)
+- **Call & inheritance resolution (RFC #909 Ring 3):** See ARCHITECTURE.md § Scope-Resolution Pipeline. All languages resolve calls and inheritance through the scope-resolution pipeline (`Registry.lookup`, `preEmitInheritanceEdges`, `emitHeritageEdges`, `buildMro` → `MethodDispatchIndex`). **Shared code in `recodergit/src/core/ingestion/` must not name languages** — plug language behavior in via `LanguageProvider` / `ScopeResolver` hooks. A language plugs in by implementing `ScopeResolver` (`scope-resolution/contract/scope-resolver.ts`) and registering it in `SCOPE_RESOLVERS`. (The legacy call-resolution DAG + `@heritage` capture path were removed in RING4-1 #942.)
 - **Cursor:** `.cursor/index.mdc` (always-on); `.cursor/rules/*.mdc` (glob-scoped). Legacy `.cursorrules` deprecated.
-- **GitNexus:** skills in `.claude/skills/gitnexus/`; MCP rules in `gitnexus:start` block below.
+- **RecoderGit:** skills in `.claude/skills/recodergit/`; MCP rules in `recodergit:start` block below.
 
 ## PR Swarm Review (cross-CLI)
 
-To run a production-readiness review of a GitNexus pull request from **any** AI CLI, follow
+To run a production-readiness review of a RecoderGit pull request from **any** AI CLI, follow
 the canonical, CLI-neutral spec **[`pr-swarm-review/orchestration.md`](pr-swarm-review/orchestration.md)**
 (seven read-only review personas under `pr-swarm-review/personas/`). It defines two
 execution modes with the same output contract: **Swarm mode** (parallel subagents, e.g.
@@ -62,21 +62,21 @@ commits, or posts.
 | 2026-05-22 | 1.8.0 | Kotlin added to `MIGRATED_LANGUAGES` (registry-primary call resolution by default). Closes #1756 (companion-vs-instance dispatch) and #1757 (lambda scopes); refs #1746. RFC §6.4 corpus criterion waived (corpus-mode wiring is #927-scope); fixture criterion met. |
 | 2026-04-23 | 1.7.0 | TypeScript added to `MIGRATED_LANGUAGES` (registry-primary call resolution by default). |
 | 2026-04-20 | 1.6.0 | Added scope-resolution pipeline pointer (RFC #909 Ring 3); Python migrated to registry-primary. |
-| 2026-04-19 | 1.5.0 | Cross-repo impact (#794): `impact`/`query`/`context` accept `repo: "@<group>"` + `service`. Removed `group_query`/`group_contracts`/`group_status` MCP tools; added `gitnexus://group/{name}/contracts` and `gitnexus://group/{name}/status` resources. |
-| 2026-04-16 | 1.4.0 | Fixed: web UI description, pre-commit behavior, MCP tools (7->16), added gitnexus-shared, removed stale vite-plugin-wasm gotcha. |
-| 2026-04-13 | 1.3.0 | Updated GitNexus index stats after DAG refactor. |
-| 2026-03-24 | 1.2.0 | Fixed gitnexus:start block duplication. |
+| 2026-04-19 | 1.5.0 | Cross-repo impact (#794): `impact`/`query`/`context` accept `repo: "@<group>"` + `service`. Removed `group_query`/`group_contracts`/`group_status` MCP tools; added `recodergit://group/{name}/contracts` and `recodergit://group/{name}/status` resources. |
+| 2026-04-16 | 1.4.0 | Fixed: web UI description, pre-commit behavior, MCP tools (7->16), added recodergit-shared, removed stale vite-plugin-wasm gotcha. |
+| 2026-04-13 | 1.3.0 | Updated RecoderGit index stats after DAG refactor. |
+| 2026-03-24 | 1.2.0 | Fixed recodergit:start block duplication. |
 | 2026-03-23 | 1.1.0 | Updated agent instructions, references, Cursor layout. |
 | 2026-03-22 | 1.0.0 | Initial structured header and changelog. |
 
 ---
 
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
+<!-- recodergit:start -->
+# RecoderGit — Code Intelligence
 
-This project is indexed by GitNexus as **GitNexus** (26675 symbols, 35395 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by RecoderGit as **RecoderGit** (26675 symbols, 35395 relationships, 300 execution flows). Use the RecoderGit MCP tools to understand code, assess impact, and navigate safely.
 
-> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+> Index stale? Run `node .recodergit/run.cjs analyze` from the project root — it auto-selects an available runner. No `.recodergit/run.cjs` yet? `npx recodergit analyze` (npm 11 crash → `npm i -g recodergit`; #1939).
 
 ## Always Do
 
@@ -97,21 +97,21 @@ This project is indexed by GitNexus as **GitNexus** (26675 symbols, 35395 relati
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/GitNexus/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/GitNexus/clusters` | All functional areas |
-| `gitnexus://repo/GitNexus/processes` | All execution flows |
-| `gitnexus://repo/GitNexus/process/{name}` | Step-by-step execution trace |
+| `recodergit://repo/RecoderGit/context` | Codebase overview, check index freshness |
+| `recodergit://repo/RecoderGit/clusters` | All functional areas |
+| `recodergit://repo/RecoderGit/processes` | All execution flows |
+| `recodergit://repo/RecoderGit/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
 | Task | Read this skill file |
 |------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Understand architecture / "How does X work?" | `.claude/skills/recodergit/recodergit-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/recodergit/recodergit-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/recodergit/recodergit-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/recodergit/recodergit-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/recodergit/recodergit-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/recodergit/recodergit-cli/SKILL.md` |
 | Work in the Ingestion area (239 symbols) | `.claude/skills/generated/ingestion/SKILL.md` |
 | Work in the Extractors area (135 symbols) | `.claude/skills/generated/extractors/SKILL.md` |
 | Work in the Components area (112 symbols) | `.claude/skills/generated/components/SKILL.md` |
@@ -133,7 +133,7 @@ This project is indexed by GitNexus as **GitNexus** (26675 symbols, 35395 relati
 | Work in the Storage area (51 symbols) | `.claude/skills/generated/storage/SKILL.md` |
 | Work in the Php area (48 symbols) | `.claude/skills/generated/php/SKILL.md` |
 
-<!-- gitnexus:end -->
+<!-- recodergit:end -->
 
 ## Repo reference
 
@@ -141,38 +141,38 @@ This project is indexed by GitNexus as **GitNexus** (26675 symbols, 35395 relati
 
 | Package | Path | Purpose |
 |---------|------|---------|
-| **CLI/Core** | `gitnexus/` | TypeScript CLI, indexing pipeline, MCP server. Published to npm. |
-| **Web UI** | `gitnexus-web/` | React/Vite thin client. All queries via `gitnexus serve` HTTP API. |
-| **Shared** | `gitnexus-shared/` | Shared TypeScript types and constants. |
-| Claude Plugin | `gitnexus-claude-plugin/` | Static config for Claude marketplace. |
-| Cursor Integration | `gitnexus-cursor-integration/` | Static config for Cursor editor. |
+| **CLI/Core** | `recodergit/` | TypeScript CLI, indexing pipeline, MCP server. Published to npm. |
+| **Web UI** | `recodergit-web/` | React/Vite thin client. All queries via `recodergit serve` HTTP API. |
+| **Shared** | `recodergit-shared/` | Shared TypeScript types and constants. |
+| Claude Plugin | `recodergit-claude-plugin/` | Static config for Claude marketplace. |
+| Cursor Integration | `recodergit-cursor-integration/` | Static config for Cursor editor. |
 | Eval | `eval/` | Python evaluation harness (Docker + LLM API keys). |
 
 ### Running services
 
 ```bash
-cd gitnexus && npm run dev                 # CLI: tsx watch mode
-cd gitnexus-web && npm run dev             # Web UI: Vite on port 5173
-npx gitnexus serve                         # HTTP API on port 4747 (from any indexed repo)
+cd recodergit && npm run dev                 # CLI: tsx watch mode
+cd recodergit-web && npm run dev             # Web UI: Vite on port 5173
+npx recodergit serve                         # HTTP API on port 4747 (from any indexed repo)
 ```
 
 ### Testing
 
-**CLI / Core (`gitnexus/`)**
+**CLI / Core (`recodergit/`)**
 - `npm test` — full vitest suite (~2000 tests)
 - `npm run test:unit` — unit tests only
 - `npm run test:integration` — integration (~1850 tests). LadybugDB file-locking tests may fail in containers (known env issue).
 - `npx tsc --noEmit` — typecheck
 
-**Web UI (`gitnexus-web/`)**
+**Web UI (`recodergit-web/`)**
 - `npm test` — vitest (~200 tests)
-- `npm run test:e2e` — Playwright (7 spec files; requires `gitnexus serve` + `npm run dev`)
+- `npm run test:e2e` — Playwright (7 spec files; requires `recodergit serve` + `npm run dev`)
 - `npx tsc -b --noEmit` — typecheck
 
 **Pre-commit hook** (`.husky/pre-commit`): formatting (prettier via lint-staged) + typecheck for staged packages. Tests do **not** run in pre-commit — CI only.
 
 ### Gotchas
 
-- `npm install` in `gitnexus/` triggers `prepare` (builds via `tsc`) and `postinstall` (materializes the vendored grammars into `node_modules/`, then prefers a committed prebuild per platform-arch and only source-builds when none matches). A C/C++ toolchain (`python3`, `make`, `g++`) is needed only for that source-build fallback.
+- `npm install` in `recodergit/` triggers `prepare` (builds via `tsc`) and `postinstall` (materializes the vendored grammars into `node_modules/`, then prefers a committed prebuild per platform-arch and only source-builds when none matches). A C/C++ toolchain (`python3`, `make`, `g++`) is needed only for that source-build fallback.
 - The vendored grammars `tree-sitter-{c,dart,proto,swift,kotlin}` are handled uniformly: c is required; dart/proto/swift/kotlin are optional and skippable via `GITNEXUS_SKIP_OPTIONAL_GRAMMARS=1`. Install warnings appear only when no prebuild matches the platform-arch and no toolchain is present, and are non-fatal — only that language's parsing is unavailable.
 - ESLint configured via `eslint.config.mjs` (TS, React Hooks, unused-imports). No `npm run lint` script; use `npx eslint .`. Prettier runs via lint-staged. CI checks both in `ci-quality.yml`.

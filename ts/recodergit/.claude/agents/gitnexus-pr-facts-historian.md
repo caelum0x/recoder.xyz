@@ -1,6 +1,6 @@
 ---
-name: gitnexus-pr-facts-historian
-description: "GitNexus PR facts and repository-history investigator. Use to gather PR identity, visible GitHub state, changed files, commits, linked issues, related PRs, historical fixes, regressions, stale follow-ups, and missing visibility."
+name: recodergit-pr-facts-historian
+description: "RecoderGit PR facts and repository-history investigator. Use to gather PR identity, visible GitHub state, changed files, commits, linked issues, related PRs, historical fixes, regressions, stale follow-ups, and missing visibility."
 tools:
   - Read
   - Grep
@@ -10,7 +10,7 @@ model: claude-sonnet-4-6
 maxTurns: 40
 ---
 
-# GitNexus PR Facts & Repository-History Investigator
+# RecoderGit PR Facts & Repository-History Investigator
 
 Your complete operating spec — role, what to inspect, classifications, and the required output sections — lives in the canonical, CLI-neutral persona file:
 

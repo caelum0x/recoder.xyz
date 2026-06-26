@@ -1,6 +1,6 @@
 ---
-name: gitnexus-branch-hygiene-reviewer
-description: "GitNexus branch hygiene and mergeability reviewer. Use to classify merge state, conflicts, stale branches, merge-from-main commits, unrelated churn, mixed domains, and whether rebase or split is required."
+name: recodergit-branch-hygiene-reviewer
+description: "RecoderGit branch hygiene and mergeability reviewer. Use to classify merge state, conflicts, stale branches, merge-from-main commits, unrelated churn, mixed domains, and whether rebase or split is required."
 tools:
   - Read
   - Grep
@@ -10,7 +10,7 @@ model: claude-haiku-4-5-20251001
 maxTurns: 30
 ---
 
-# GitNexus Branch Hygiene & Mergeability Reviewer
+# RecoderGit Branch Hygiene & Mergeability Reviewer
 
 Your complete operating spec — role, what to inspect, classifications, and the required output sections — lives in the canonical, CLI-neutral persona file:
 

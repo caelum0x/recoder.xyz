@@ -1,0 +1,3 @@
+{
+  "installCommand": "cd ../recodergit-shared && npm install && npm run build && cd ../recodergit-web && npm ci --include=dev"
+}

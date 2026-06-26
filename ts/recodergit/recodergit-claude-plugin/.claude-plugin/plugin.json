@@ -1,0 +1,11 @@
+{
+  "name": "recodergit",
+  "description": "Code intelligence powered by a knowledge graph. Provides execution flow tracing, blast radius analysis, and augmented search across your codebase.",
+  "version": "1.6.8",
+  "author": {
+    "name": "RecoderGit"
+  },
+  "homepage": "https://github.com/abhigyanpatwari/RecoderGit",
+  "repository": "https://github.com/abhigyanpatwari/RecoderGit",
+  "keywords": ["code-intelligence", "knowledge-graph", "mcp", "static-analysis"]
+}

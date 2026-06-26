@@ -1,11 +1,11 @@
-# GitNexus
+# RecoderGit
 
-**⚠️ Important Notice:** GitNexus has NO official cryptocurrency, token, or coin. Any token/coin using the GitNexus name on Pump.fun or any other platform is **not affiliated with, endorsed by, or created by** this project or its maintainers. Do not purchase any cryptocurrency claiming association with GitNexus.
+**⚠️ Important Notice:** RecoderGit has NO official cryptocurrency, token, or coin. Any token/coin using the RecoderGit name on Pump.fun or any other platform is **not affiliated with, endorsed by, or created by** this project or its maintainers. Do not purchase any cryptocurrency claiming association with RecoderGit.
 
 <div align="center">
 
   <a href="https://trendshift.io/repositories/19809" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/19809" alt="abhigyanpatwari%2FGitNexus | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
+    <img src="https://trendshift.io/api/badge/repositories/19809" alt="abhigyanpatwari%2FRecoderGit | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
   </a>
 
   <h2>Join the official Discord to discuss ideas, issues etc!</h2>
@@ -13,17 +13,17 @@
   <a href="https://discord.gg/MgJrmsqr62">
     <img src="https://img.shields.io/discord/1477255801545429032?color=5865F2&logo=discord&logoColor=white" alt="Discord"/>
   </a>
-  <a href="https://www.npmjs.com/package/gitnexus">
-    <img src="https://img.shields.io/npm/v/gitnexus.svg" alt="npm version"/>
+  <a href="https://www.npmjs.com/package/recodergit">
+    <img src="https://img.shields.io/npm/v/recodergit.svg" alt="npm version"/>
   </a>
   <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/">
     <img src="https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg" alt="License: PolyForm Noncommercial"/>
   </a>
-  <a href="https://securityscorecards.dev/viewer/?uri=github.com/abhigyanpatwari/GitNexus">
-    <img src="https://api.securityscorecards.dev/projects/github.com/abhigyanpatwari/GitNexus/badge" alt="OpenSSF Scorecard"/>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/abhigyanpatwari/RecoderGit">
+    <img src="https://api.securityscorecards.dev/projects/github.com/abhigyanpatwari/RecoderGit/badge" alt="OpenSSF Scorecard"/>
   </a>
-  <a href="https://github.com/abhigyanpatwari/GitNexus/actions/workflows/ci.yml">
-    <img src="https://github.com/abhigyanpatwari/GitNexus/actions/workflows/ci.yml/badge.svg" alt="CI Workflows"/>
+  <a href="https://github.com/abhigyanpatwari/RecoderGit/actions/workflows/ci.yml">
+    <img src="https://github.com/abhigyanpatwari/RecoderGit/actions/workflows/ci.yml/badge.svg" alt="CI Workflows"/>
   </a>
 
   <p><strong>Enterprise (SaaS & Self-hosted)</strong> - <a href="https://akonlabs.com">akonlabs.com</a></p>
@@ -36,7 +36,7 @@ Indexes any codebase into a knowledge graph — every dependency, call chain, cl
 
 https://github.com/user-attachments/assets/172685ba-8e54-4ea7-9ad1-e31a3398da72
 
-> _Like DeepWiki, but deeper._ DeepWiki helps you _understand_ code. GitNexus lets you _analyze_ it — because a knowledge graph tracks every relationship, not just descriptions.
+> _Like DeepWiki, but deeper._ DeepWiki helps you _understand_ code. RecoderGit lets you _analyze_ it — because a knowledge graph tracks every relationship, not just descriptions.
 
 **TL;DR:** The **Web UI** is a quick way to chat with any repo. The **CLI + MCP** is how you make your AI agent actually reliable — it gives Cursor, Claude Code, Antigravity, Codex, and friends a deep architectural view of your codebase so they stop missing dependencies, breaking call chains, and shipping blind edits. Even smaller models get full architectural clarity, making it compete with Goliath models.
 
@@ -44,27 +44,27 @@ https://github.com/user-attachments/assets/172685ba-8e54-4ea7-9ad1-e31a3398da72
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=abhigyanpatwari/GitNexus&type=date&legend=top-left)](https://www.star-history.com/#abhigyanpatwari/GitNexus&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=abhigyanpatwari/RecoderGit&type=date&legend=top-left)](https://www.star-history.com/#abhigyanpatwari/RecoderGit&type=date&legend=top-left)
 
-## Two Ways to Use GitNexus
+## Two Ways to Use RecoderGit
 
 |             | **CLI + MCP**                                                         | **Web UI**                                                           |
 | ----------- | --------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | **What**    | Index repos locally, connect AI agents via MCP                        | Visual graph explorer + AI chat in browser                           |
 | **For**     | Daily development with Cursor, Claude Code, Antigravity, Codex, Windsurf, OpenCode | Quick exploration, demos, one-off analysis                           |
 | **Scale**   | Full repos, any size                                                  | Limited by browser memory (~5k files), or unlimited via backend mode |
-| **Install** | `npm install -g gitnexus`                                             | No install — [gitnexus.vercel.app](https://gitnexus.vercel.app)      |
+| **Install** | `npm install -g recodergit`                                             | No install — [recodergit.vercel.app](https://recodergit.vercel.app)      |
 | **Storage** | LadybugDB native (fast, persistent)                                   | LadybugDB WASM (in-memory, per session)                              |
 | **Parsing** | Tree-sitter native bindings                                           | Tree-sitter WASM                                                     |
 | **Privacy** | Everything local, no network                                          | Everything in-browser, no server                                     |
 
-> **Bridge mode:** `gitnexus serve` connects the two — the web UI auto-detects the local server and can browse all your CLI-indexed repos without re-uploading or re-indexing.
+> **Bridge mode:** `recodergit serve` connects the two — the web UI auto-detects the local server and can browse all your CLI-indexed repos without re-uploading or re-indexing.
 
 ---
 
 ## Enterprise
 
-GitNexus is available as an **enterprise offering** - either as a fully managed **SaaS** or a **self-hosted** deployment. Also available for **commercial use** of the OSS version with proper licensing.
+RecoderGit is available as an **enterprise offering** - either as a fully managed **SaaS** or a **self-hosted** deployment. Also available for **commercial use** of the OSS version with proper licensing.
 
 Enterprise includes:
 
@@ -92,7 +92,7 @@ Enterprise includes:
 - [RUNBOOK.md](RUNBOOK.md) — analyze, embeddings, stale index, MCP recovery, CI snippets
 - [GUARDRAILS.md](GUARDRAILS.md) — safety rules and operational “Signs” for contributors and agents
 - [CONTRIBUTING.md](CONTRIBUTING.md) — license, setup, commits, and pull requests
-- [TESTING.md](TESTING.md) — test commands for `gitnexus` and `gitnexus-web`
+- [TESTING.md](TESTING.md) — test commands for `recodergit` and `recodergit-web`
 
 ## CLI + MCP (recommended)
 
@@ -102,35 +102,35 @@ The CLI indexes your repository and runs an MCP server that gives AI agents deep
 
 ```bash
 # Index your repo (run from repo root)
-npx gitnexus analyze
+npx recodergit analyze
 ```
 
 That's it. This indexes the codebase, installs agent skills, registers Claude Code hooks, and creates `AGENTS.md` / `CLAUDE.md` context files — all in one command.
 
-> **On npm 11.x?** `npx` can crash during install with `Cannot destructure property 'package' of 'node.target'` (an npm/arborist bug, before GitNexus runs). Use pnpm instead — it builds the native deps explicitly:
+> **On npm 11.x?** `npx` can crash during install with `Cannot destructure property 'package' of 'node.target'` (an npm/arborist bug, before RecoderGit runs). Use pnpm instead — it builds the native deps explicitly:
 >
 > ```bash
-> pnpm --allow-build=@ladybugdb/core --allow-build=gitnexus --allow-build=tree-sitter dlx gitnexus@latest analyze
+> pnpm --allow-build=@ladybugdb/core --allow-build=recodergit --allow-build=tree-sitter dlx recodergit@latest analyze
 > ```
 >
-> Or install globally (`npm install -g gitnexus@latest`) and run `gitnexus analyze`. See [#1939](https://github.com/abhigyanpatwari/GitNexus/issues/1939).
+> Or install globally (`npm install -g recodergit@latest`) and run `recodergit analyze`. See [#1939](https://github.com/abhigyanpatwari/RecoderGit/issues/1939).
 
-To configure MCP for your editor, run `npx gitnexus setup` once — or set it up manually below.
+To configure MCP for your editor, run `npx recodergit setup` once — or set it up manually below.
 
-> **Faster install (no C++ toolchain needed):** set `GITNEXUS_SKIP_OPTIONAL_GRAMMARS=1` before `npm install -g gitnexus` to skip the vendored grammar materialize/build for `tree-sitter-dart`, `tree-sitter-proto`, `tree-sitter-swift`, and `tree-sitter-kotlin` — those four won't be parsed, but install completes in seconds without `python3`/`make`/`g++`. Strict `=1` only — any other value falls through to the rebuild. See the `tree-sitter-kotlin` note below.
+> **Faster install (no C++ toolchain needed):** set `GITNEXUS_SKIP_OPTIONAL_GRAMMARS=1` before `npm install -g recodergit` to skip the vendored grammar materialize/build for `tree-sitter-dart`, `tree-sitter-proto`, `tree-sitter-swift`, and `tree-sitter-kotlin` — those four won't be parsed, but install completes in seconds without `python3`/`make`/`g++`. Strict `=1` only — any other value falls through to the rebuild. See the `tree-sitter-kotlin` note below.
 >
-> **About `tree-sitter-kotlin`:** like Dart/Proto/Swift, Kotlin is a **vendored** grammar (under `gitnexus/vendor/tree-sitter-kotlin`). Upstream `tree-sitter-kotlin` ships **source only** (no prebuilt binaries), so GitNexus builds the Kotlin platform prebuilds itself (via the `build-tree-sitter-prebuilds` GitHub Actions workflow) and vendors them — the same uniform pipeline now used for Dart, Proto, and Swift (Swift's prebuilds were originally copied from upstream; they're now GitNexus-cross-built too). `node-gyp-build` selects the right `.node` at require time, so **no C/C++ toolchain is needed**. If no prebuild matches your platform-arch, only Kotlin (`.kt`/`.kts`) parsing is unavailable; the rest of `gitnexus` is unaffected.
+> **About `tree-sitter-kotlin`:** like Dart/Proto/Swift, Kotlin is a **vendored** grammar (under `recodergit/vendor/tree-sitter-kotlin`). Upstream `tree-sitter-kotlin` ships **source only** (no prebuilt binaries), so RecoderGit builds the Kotlin platform prebuilds itself (via the `build-tree-sitter-prebuilds` GitHub Actions workflow) and vendors them — the same uniform pipeline now used for Dart, Proto, and Swift (Swift's prebuilds were originally copied from upstream; they're now RecoderGit-cross-built too). `node-gyp-build` selects the right `.node` at require time, so **no C/C++ toolchain is needed**. If no prebuild matches your platform-arch, only Kotlin (`.kt`/`.kts`) parsing is unavailable; the rest of `recodergit` is unaffected.
 
 ### MCP Setup
 
-`gitnexus setup` auto-detects your editors and writes the correct global MCP config. You only need to run it once. To configure only selected integrations, pass `--coding-agent`/`-c` with a comma-separated list or repeat the option, for example `gitnexus setup -c cursor,codex`.
+`recodergit setup` auto-detects your editors and writes the correct global MCP config. You only need to run it once. To configure only selected integrations, pass `--coding-agent`/`-c` with a comma-separated list or repeat the option, for example `recodergit setup -c cursor,codex`.
 
 ### Editor Support
 
 | Editor               | MCP | Skills | Hooks (auto-augment)                                                                    | Support      |
 | -------------------- | --- | ------ | --------------------------------------------------------------------------------------- | ------------ |
 | **Claude Code**      | Yes | Yes    | Yes (PreToolUse + PostToolUse)                                                          | **Full**     |
-| **Cursor**           | Yes | Yes    | Yes (postToolUse, [manual install](gitnexus-cursor-integration/README.md#hook-install)) | **Full**     |
+| **Cursor**           | Yes | Yes    | Yes (postToolUse, [manual install](recodergit-cursor-integration/README.md#hook-install)) | **Full**     |
 | **Antigravity** (Google) | Yes | Yes | Yes (AfterTool, [Gemini CLI hooks schema](https://geminicli.com/docs/hooks/reference/))[¹](#fn-antigravity-hooks) | **Full**     |
 | **Codex**            | Yes | Yes    | —                                                                                       | MCP + Skills |
 | **Windsurf**         | Yes | —      | —                                                                                       | MCP          |
@@ -147,29 +147,29 @@ Built by the community — not officially maintained, but worth checking out.
 
 | Project                                                                       | Author                                                 | Description                                                             |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| [pi-gitnexus](https://github.com/tintinweb/pi-gitnexus)                       | [@tintinweb](https://github.com/tintinweb)             | GitNexus plugin for [pi](https://pi.dev) — `pi install npm:pi-gitnexus` |
-| [gitnexus-stable-ops](https://github.com/ShunsukeHayashi/gitnexus-stable-ops) | [@ShunsukeHayashi](https://github.com/ShunsukeHayashi) | Stable ops & deployment workflows (Miyabi ecosystem)                    |
+| [pi-recodergit](https://github.com/tintinweb/pi-recodergit)                       | [@tintinweb](https://github.com/tintinweb)             | RecoderGit plugin for [pi](https://pi.dev) — `pi install npm:pi-recodergit` |
+| [recodergit-stable-ops](https://github.com/ShunsukeHayashi/recodergit-stable-ops) | [@ShunsukeHayashi](https://github.com/ShunsukeHayashi) | Stable ops & deployment workflows (Miyabi ecosystem)                    |
 
-> Have a project built on GitNexus? Open a PR to add it here!
+> Have a project built on RecoderGit? Open a PR to add it here!
 
 If you prefer manual configuration:
 
-> **Recommended for fastest startup:** install gitnexus globally (`npm i -g gitnexus`) and run `gitnexus setup` — this writes an absolute-path MCP config that bypasses `npx` entirely. The pinned-`npx` snippets below are a quickstart fallback; on a cold cache the `npx` install can exceed Claude Code's `MCP_TIMEOUT` default (~30s).
+> **Recommended for fastest startup:** install recodergit globally (`npm i -g recodergit`) and run `recodergit setup` — this writes an absolute-path MCP config that bypasses `npx` entirely. The pinned-`npx` snippets below are a quickstart fallback; on a cold cache the `npx` install can exceed Claude Code's `MCP_TIMEOUT` default (~30s).
 
 **Claude Code** (full support — MCP + skills + hooks):
 
 ```bash
 # macOS / Linux
-claude mcp add gitnexus -- npx -y gitnexus@latest mcp
+claude mcp add recodergit -- npx -y recodergit@latest mcp
 
 # Windows
-claude mcp add gitnexus -- cmd /c npx -y gitnexus@latest mcp
+claude mcp add recodergit -- cmd /c npx -y recodergit@latest mcp
 ```
 
 **Codex** (full support — MCP + skills):
 
 ```bash
-codex mcp add gitnexus -- npx -y gitnexus@latest mcp
+codex mcp add recodergit -- npx -y recodergit@latest mcp
 ```
 
 **Cursor** (`~/.cursor/mcp.json` — global, works for all projects):
@@ -177,9 +177,9 @@ codex mcp add gitnexus -- npx -y gitnexus@latest mcp
 ```json
 {
   "mcpServers": {
-    "gitnexus": {
+    "recodergit": {
       "command": "npx",
-      "args": ["-y", "gitnexus@latest", "mcp"]
+      "args": ["-y", "recodergit@latest", "mcp"]
     }
   }
 }
@@ -190,24 +190,24 @@ codex mcp add gitnexus -- npx -y gitnexus@latest mcp
 ```json
 {
   "mcpServers": {
-    "gitnexus": {
+    "recodergit": {
       "command": "npx",
-      "args": ["-y", "gitnexus@latest", "mcp"]
+      "args": ["-y", "recodergit@latest", "mcp"]
     }
   }
 }
 ```
 
-> `gitnexus setup` also merges an `AfterTool` entry into `~/.gemini/settings.json` (under the canonical [Gemini CLI hooks schema](https://geminicli.com/docs/hooks/reference/)) and installs skills to `~/.gemini/antigravity/skills/`. Existing user hooks are preserved. The hook adapter's path is rewritten at install time, so run `gitnexus setup` rather than hand-editing.
+> `recodergit setup` also merges an `AfterTool` entry into `~/.gemini/settings.json` (under the canonical [Gemini CLI hooks schema](https://geminicli.com/docs/hooks/reference/)) and installs skills to `~/.gemini/antigravity/skills/`. Existing user hooks are preserved. The hook adapter's path is rewritten at install time, so run `recodergit setup` rather than hand-editing.
 
 **OpenCode** (`~/.config/opencode/config.json`):
 
 ```json
 {
   "mcp": {
-    "gitnexus": {
+    "recodergit": {
       "type": "local",
-      "command": ["gitnexus", "mcp"]
+      "command": ["recodergit", "mcp"]
     }
   }
 }
@@ -216,76 +216,76 @@ codex mcp add gitnexus -- npx -y gitnexus@latest mcp
 **Codex** (`~/.codex/config.toml` for system scope, or `.codex/config.toml` for project scope):
 
 ```toml
-[mcp_servers.gitnexus]
+[mcp_servers.recodergit]
 command = "npx"
-args = ["-y", "gitnexus@latest", "mcp"]
+args = ["-y", "recodergit@latest", "mcp"]
 ```
 
 ### CLI Commands
 
 ```bash
-gitnexus setup                   # Configure MCP for detected editors (one-time; use -c to select)
-gitnexus uninstall               # Preview removal of GitNexus MCP/skills/hooks (add --force to apply)
-gitnexus analyze [path]          # Index a repository (or update stale index)
-gitnexus analyze --repair-fts    # Fast path: rebuild/verify only FTS indexes on existing index data
-gitnexus analyze --force         # Full rebuild: re-parse + graph rebuild + FTS rebuild
-gitnexus analyze --skills        # Generate repo-specific skill files from detected communities
-gitnexus analyze --skip-embeddings  # Skip embedding generation (faster)
-gitnexus analyze --skip-agents-md  # Preserve custom AGENTS.md/CLAUDE.md gitnexus section edits
-gitnexus analyze --skip-skills     # Skip installing .claude/skills/gitnexus/ skill files
-gitnexus analyze --default-branch develop  # Branch used in the generated regression-compare example (base_ref)
-gitnexus analyze --skip-git        # Index folders that are not Git repositories
-gitnexus analyze --embeddings [limit]  # Enable embedding generation (slower, better search)
-gitnexus analyze --verbose       # Log skipped files when parsers are unavailable
-gitnexus analyze --worker-timeout 60  # Increase worker idle timeout for slow parses
-gitnexus analyze --wal-checkpoint-threshold 67108864  # 64 MiB. Control LadybugDB WAL auto-checkpoint threshold (default: 67108864 = 64 MiB; -1 keeps Ladybug stock ~16 MiB)
-gitnexus analyze --workers <n>        # Parse worker pool size (>=1; default: cores-1, capped at 16, auto-sized to the repo). 0 is rejected — there is no sequential mode.
-gitnexus mcp                     # Start MCP server (stdio) — serves all indexed repos
-gitnexus serve                   # Start local HTTP server (multi-repo) for web UI connection
-gitnexus list                    # List all indexed repositories
-gitnexus status                  # Show index status for current repo
-gitnexus clean                   # Delete index for current repo
-gitnexus clean --all --force     # Delete all indexes
-gitnexus wiki [path]             # Generate repository wiki from knowledge graph
-gitnexus wiki --model <model>    # Wiki with custom LLM model (default: gpt-4o-mini)
-gitnexus wiki --base-url <url>   # Wiki with custom LLM API base URL
-gitnexus publish                 # Notify the understand-quickly registry (opt-in, see below)
+recodergit setup                   # Configure MCP for detected editors (one-time; use -c to select)
+recodergit uninstall               # Preview removal of RecoderGit MCP/skills/hooks (add --force to apply)
+recodergit analyze [path]          # Index a repository (or update stale index)
+recodergit analyze --repair-fts    # Fast path: rebuild/verify only FTS indexes on existing index data
+recodergit analyze --force         # Full rebuild: re-parse + graph rebuild + FTS rebuild
+recodergit analyze --skills        # Generate repo-specific skill files from detected communities
+recodergit analyze --skip-embeddings  # Skip embedding generation (faster)
+recodergit analyze --skip-agents-md  # Preserve custom AGENTS.md/CLAUDE.md recodergit section edits
+recodergit analyze --skip-skills     # Skip installing .claude/skills/recodergit/ skill files
+recodergit analyze --default-branch develop  # Branch used in the generated regression-compare example (base_ref)
+recodergit analyze --skip-git        # Index folders that are not Git repositories
+recodergit analyze --embeddings [limit]  # Enable embedding generation (slower, better search)
+recodergit analyze --verbose       # Log skipped files when parsers are unavailable
+recodergit analyze --worker-timeout 60  # Increase worker idle timeout for slow parses
+recodergit analyze --wal-checkpoint-threshold 67108864  # 64 MiB. Control LadybugDB WAL auto-checkpoint threshold (default: 67108864 = 64 MiB; -1 keeps Ladybug stock ~16 MiB)
+recodergit analyze --workers <n>        # Parse worker pool size (>=1; default: cores-1, capped at 16, auto-sized to the repo). 0 is rejected — there is no sequential mode.
+recodergit mcp                     # Start MCP server (stdio) — serves all indexed repos
+recodergit serve                   # Start local HTTP server (multi-repo) for web UI connection
+recodergit list                    # List all indexed repositories
+recodergit status                  # Show index status for current repo
+recodergit clean                   # Delete index for current repo
+recodergit clean --all --force     # Delete all indexes
+recodergit wiki [path]             # Generate repository wiki from knowledge graph
+recodergit wiki --model <model>    # Wiki with custom LLM model (default: gpt-4o-mini)
+recodergit wiki --base-url <url>   # Wiki with custom LLM API base URL
+recodergit publish                 # Notify the understand-quickly registry (opt-in, see below)
 
 # Repository groups (multi-repo / monorepo service tracking)
-gitnexus group create <name>                                   # Create a repository group
-gitnexus group add <group> <groupPath> <registryName>          # Add a repo to a group. <groupPath> is a hierarchy path (e.g. hr/hiring/backend); <registryName> is the repo's name from the registry (see `gitnexus list`)
-gitnexus group remove <group> <groupPath>                      # Remove a repo from a group by its hierarchy path
-gitnexus group list [name]                                     # List groups, or show one group's config
-gitnexus group sync <name>                                     # Extract contracts and match across repos/services
-gitnexus group contracts <name>  # Inspect extracted contracts and cross-links
-gitnexus group query <name> <q>  # Search execution flows across all repos in a group
-gitnexus group status <name>     # Check staleness of repos in a group
+recodergit group create <name>                                   # Create a repository group
+recodergit group add <group> <groupPath> <registryName>          # Add a repo to a group. <groupPath> is a hierarchy path (e.g. hr/hiring/backend); <registryName> is the repo's name from the registry (see `recodergit list`)
+recodergit group remove <group> <groupPath>                      # Remove a repo from a group by its hierarchy path
+recodergit group list [name]                                     # List groups, or show one group's config
+recodergit group sync <name>                                     # Extract contracts and match across repos/services
+recodergit group contracts <name>  # Inspect extracted contracts and cross-links
+recodergit group query <name> <q>  # Search execution flows across all repos in a group
+recodergit group status <name>     # Check staleness of repos in a group
 ```
 
-> **`gitnexus uninstall`** reverses `gitnexus setup` — it removes the GitNexus MCP entries, hooks, and skill directories it added to each detected editor. Skill directories are identified **by bundled gitnexus skill name** (e.g. `gitnexus-cli/`), so if you customized files inside an installed skill directory, back them up first. It is a dry-run preview by default and prints the exact paths it would remove; pass `--force` to apply. Per-repo indexes (`gitnexus clean --all`) and the global npm package (`npm uninstall -g gitnexus`) are left for you to remove.
+> **`recodergit uninstall`** reverses `recodergit setup` — it removes the RecoderGit MCP entries, hooks, and skill directories it added to each detected editor. Skill directories are identified **by bundled recodergit skill name** (e.g. `recodergit-cli/`), so if you customized files inside an installed skill directory, back them up first. It is a dry-run preview by default and prints the exact paths it would remove; pass `--force` to apply. Per-repo indexes (`recodergit clean --all`) and the global npm package (`npm uninstall -g recodergit`) are left for you to remove.
 
-If `analyze` reports a worker parse timeout on a large or unusual repository, it keeps running and falls back safely. To give slow worker jobs more time, use `gitnexus analyze --worker-timeout 60` or set `GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=60000`. For very large files, `GITNEXUS_WORKER_SUB_BATCH_MAX_BYTES` controls the worker job byte budget.
+If `analyze` reports a worker parse timeout on a large or unusual repository, it keeps running and falls back safely. To give slow worker jobs more time, use `recodergit analyze --worker-timeout 60` or set `GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=60000`. For very large files, `GITNEXUS_WORKER_SUB_BATCH_MAX_BYTES` controls the worker job byte budget.
 
 #### Embeddings node limit
 
-`gitnexus analyze --embeddings` generates semantic search vectors with a default 50,000-node safety cap to protect memory on large repositories. Override the cap when you know the host has enough memory for a larger graph, or disable it entirely for a one-off full embeddings run.
+`recodergit analyze --embeddings` generates semantic search vectors with a default 50,000-node safety cap to protect memory on large repositories. Override the cap when you know the host has enough memory for a larger graph, or disable it entirely for a one-off full embeddings run.
 
 ```bash
 # Generate embeddings with the default 50,000 node safety cap
-gitnexus analyze --embeddings
+recodergit analyze --embeddings
 
 # Disable the safety cap entirely
-gitnexus analyze --embeddings 0
+recodergit analyze --embeddings 0
 
 # Use a custom cap
-gitnexus analyze --embeddings 100000
+recodergit analyze --embeddings 100000
 ```
 
-If embeddings are skipped on a large repository, the indexed graph likely exceeds the default safety cap. Re-run with `gitnexus analyze --embeddings 0` to remove the cap, or `gitnexus analyze --embeddings <n>` to choose a higher limit while still keeping memory bounded.
+If embeddings are skipped on a large repository, the indexed graph likely exceeds the default safety cap. Re-run with `recodergit analyze --embeddings 0` to remove the cap, or `recodergit analyze --embeddings <n>` to choose a higher limit while still keeping memory bounded.
 
-#### Project config (`.gitnexusrc`)
+#### Project config (`.recodergitrc`)
 
-Commit a `.gitnexusrc` JSON file at the repo root to preconfigure recurring `analyze` options per project, instead of re-passing the same flags every run. It is read from the resolved repo root (not `.gitnexus/`, which is gitignored index storage). **CLI flags always override `.gitnexusrc`.**
+Commit a `.recodergitrc` JSON file at the repo root to preconfigure recurring `analyze` options per project, instead of re-passing the same flags every run. It is read from the resolved repo root (not `.recodergit/`, which is gitignored index storage). **CLI flags always override `.recodergitrc`.**
 
 ```jsonc
 {
@@ -294,7 +294,7 @@ Commit a `.gitnexusrc` JSON file at the repo root to preconfigure recurring `ana
   // over its fix on every analyze. (Alias: "branch".)
   "defaultBranch": "develop",
   "skipContextFiles": true, // alias of skipAgentsMd: keep your own AGENTS.md/CLAUDE.md
-  "skipSkills": true, // don't install .claude/skills/gitnexus/
+  "skipSkills": true, // don't install .claude/skills/recodergit/
   "embeddings": true, // generate embeddings by default
   "workerTimeout": 60
 }
@@ -308,14 +308,14 @@ A nested `analyze` block is also accepted (and overrides flat keys for the same 
 
 Notes:
 
-- The default branch is resolved as: `--default-branch` > `.gitnexusrc` `defaultBranch`/`branch` > auto-detected `origin/HEAD` > `main`.
+- The default branch is resolved as: `--default-branch` > `.recodergitrc` `defaultBranch`/`branch` > auto-detected `origin/HEAD` > `main`.
 - `skipContextFiles` / `skipAiContext` are aliases for `skipAgentsMd` — they skip the `AGENTS.md` / `CLAUDE.md` block only. They do **not** imply `skipSkills`. `indexOnly` is the stronger option that skips all file injection.
 - Supported keys: `defaultBranch` (`branch`), `skipAgentsMd` (`skipContextFiles`, `skipAiContext`), `skipSkills`, `indexOnly`, `stats`/`noStats`, `embeddings`, `dropEmbeddings`, `name`, `allowDuplicateName`, `maxFileSize`, `workerTimeout`, `walCheckpointThreshold`, `workers`, `embeddingThreads`, `embeddingBatchSize`, `embeddingSubBatchSize`, `embeddingDevice`.
 - The file is JSON only. Unknown keys and invalid values fail fast with an actionable error before analysis starts.
 
 #### Environment variables
 
-Most `analyze` knobs are also CLI flags (`--workers`, `--worker-timeout`, `--max-file-size`, `--verbose`). Use the env-var form when you'd otherwise repeat the same flag every run, or when invoking GitNexus from a long-running host (MCP server, eval-server, CI shell) that already manages its own environment. CLI flags take precedence over env vars; env vars take precedence over built-in defaults.
+Most `analyze` knobs are also CLI flags (`--workers`, `--worker-timeout`, `--max-file-size`, `--verbose`). Use the env-var form when you'd otherwise repeat the same flag every run, or when invoking RecoderGit from a long-running host (MCP server, eval-server, CI shell) that already manages its own environment. CLI flags take precedence over env vars; env vars take precedence over built-in defaults.
 
 | Variable                               | Default                   | Effect                                                                                                                                                     | Tune when…                                                                                                                                  |
 | -------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -333,12 +333,12 @@ Most `analyze` knobs are also CLI flags (`--workers`, `--worker-timeout`, `--max
 | `GITNEXUS_WORKER_MAX_CUMULATIVE_TIMEOUT_MS`    | `5 × subBatchTimeoutMs`   | Total retry wall-time budget per job before quarantining. Combined with `timeoutBackoffFactor`, prevents exponentially-growing retries from stalling for hours. | Slow files that legitimately need long total retry windows; lower to fail-fast on stalls.                                                    |
 | `GITNEXUS_WORKER_CONSECUTIVE_FAILURE_THRESHOLD`| `max(3, poolSize)`        | Per-slot consecutive deaths before the pool's circuit breaker trips. After tripping, every subsequent dispatch rejects until a fresh pool is created.       | Hosts where a SIGSEGV-prone native grammar should trip the breaker sooner; CI runners that should fail loudly.                              |
 | `GITNEXUS_CHUNK_BYTE_BUDGET`           | `2097152` (2 MB)          | Chunk boundary used for cache-key composition and dispatch. Smaller = finer-grained cache hits but more dispatch overhead.                                 | Tuning incremental-analyze cache behavior on monorepos.                                                                                     |
-| `GITNEXUS_NO_GITIGNORE`                | unset                     | When set, skips `.gitignore` parsing. `.gitnexusignore` is still honored.                                                                                  | Indexing a repo whose `.gitignore` excludes files you actually want indexed (e.g., generated code committed for cross-repo lookup).         |
+| `GITNEXUS_NO_GITIGNORE`                | unset                     | When set, skips `.gitignore` parsing. `.recodergitignore` is still honored.                                                                                  | Indexing a repo whose `.gitignore` excludes files you actually want indexed (e.g., generated code committed for cross-repo lookup).         |
 | `GITNEXUS_SKIP_OPTIONAL_GRAMMARS`      | unset                     | When `=1` strictly, skips the vendored grammar materialize for `tree-sitter-dart`, `tree-sitter-proto`, `tree-sitter-swift`, and `tree-sitter-kotlin` at install time (and the Dart/Proto source builds). Those four won't be parsed; the install still succeeds. | Installing on a host without a C++ toolchain or where the vendored prebuilds don't match; willing to skip Dart/Proto/Swift/Kotlin parsing. |
 
 #### Publishing to understand-quickly (opt-in)
 
-[`looptech-ai/understand-quickly`](https://github.com/looptech-ai/understand-quickly) is a public registry of code-knowledge graphs that lists `gitnexus@1` as a first-class format. After registering your repo once (`npx @understand-quickly/cli add` or the [wizard](https://looptech-ai.github.io/understand-quickly/add.html)), `gitnexus publish` fires a single `repository_dispatch` event so the registry resyncs your entry on demand instead of waiting for the nightly job.
+[`looptech-ai/understand-quickly`](https://github.com/looptech-ai/understand-quickly) is a public registry of code-knowledge graphs that lists `recodergit@1` as a first-class format. After registering your repo once (`npx @understand-quickly/cli add` or the [wizard](https://looptech-ai.github.io/understand-quickly/add.html)), `recodergit publish` fires a single `repository_dispatch` event so the registry resyncs your entry on demand instead of waiting for the nightly job.
 
 It is opt-in and a no-op without `UNDERSTAND_QUICKLY_TOKEN` — a fine-grained GitHub PAT with `Repository dispatches: write` on the registry repo. Nothing else happens; no graph file is uploaded. See the [protocol spec](https://github.com/looptech-ai/understand-quickly/blob/main/docs/integrations/protocol.md) for the full contract.
 
@@ -367,13 +367,13 @@ It is opt-in and a no-op without `UNDERSTAND_QUICKLY_TOKEN` — a fine-grained G
 
 | Resource                                | Purpose                                              |
 | --------------------------------------- | ---------------------------------------------------- |
-| `gitnexus://repos`                      | List all indexed repositories (read this first)      |
-| `gitnexus://repo/{name}/context`        | Codebase stats, staleness check, and available tools |
-| `gitnexus://repo/{name}/clusters`       | All functional clusters with cohesion scores         |
-| `gitnexus://repo/{name}/cluster/{name}` | Cluster members and details                          |
-| `gitnexus://repo/{name}/processes`      | All execution flows                                  |
-| `gitnexus://repo/{name}/process/{name}` | Full process trace with steps                        |
-| `gitnexus://repo/{name}/schema`         | Graph schema for Cypher queries                      |
+| `recodergit://repos`                      | List all indexed repositories (read this first)      |
+| `recodergit://repo/{name}/context`        | Codebase stats, staleness check, and available tools |
+| `recodergit://repo/{name}/clusters`       | All functional clusters with cohesion scores         |
+| `recodergit://repo/{name}/cluster/{name}` | Cluster members and details                          |
+| `recodergit://repo/{name}/processes`      | All execution flows                                  |
+| `recodergit://repo/{name}/process/{name}` | Full process trace with steps                        |
+| `recodergit://repo/{name}/schema`         | Graph schema for Cypher queries                      |
 
 **2 MCP prompts** for guided workflows:
 
@@ -391,30 +391,30 @@ It is opt-in and a no-op without `UNDERSTAND_QUICKLY_TOKEN` — a fine-grained G
 
 **Repo-specific skills** generated with `--skills`:
 
-When you run `gitnexus analyze --skills`, GitNexus detects the functional areas of your codebase (via Leiden community detection) and generates a `SKILL.md` file for each one under `.claude/skills/generated/`. Each skill describes a module's key files, entry points, execution flows, and cross-area connections — so your AI agent gets targeted context for the exact area of code you're working in. Skills are regenerated on each `--skills` run to stay current with the codebase.
+When you run `recodergit analyze --skills`, RecoderGit detects the functional areas of your codebase (via Leiden community detection) and generates a `SKILL.md` file for each one under `.claude/skills/generated/`. Each skill describes a module's key files, entry points, execution flows, and cross-area connections — so your AI agent gets targeted context for the exact area of code you're working in. Skills are regenerated on each `--skills` run to stay current with the codebase.
 
 ---
 
 ## Multi-Repo MCP Architecture
 
-GitNexus uses a **global registry** so one MCP server can serve multiple indexed repos. No per-project MCP config needed — set it up once and it works everywhere.
+RecoderGit uses a **global registry** so one MCP server can serve multiple indexed repos. No per-project MCP config needed — set it up once and it works everywhere.
 
 ```mermaid
 flowchart TD
     subgraph CLI [CLI Commands]
-        Setup["gitnexus setup"]
-        Analyze["gitnexus analyze"]
-        Clean["gitnexus clean"]
-        List["gitnexus list"]
+        Setup["recodergit setup"]
+        Analyze["recodergit analyze"]
+        Clean["recodergit clean"]
+        List["recodergit list"]
     end
 
-    subgraph Registry ["~/.gitnexus/"]
+    subgraph Registry ["~/.recodergit/"]
         RegFile["registry.json"]
     end
 
     subgraph Repos [Project Repos]
-        RepoA[".gitnexus/ in repo A"]
-        RepoB[".gitnexus/ in repo B"]
+        RepoA[".recodergit/ in repo A"]
+        RepoB[".recodergit/ in repo B"]
     end
 
     subgraph MCP [MCP Server]
@@ -439,7 +439,7 @@ flowchart TD
     ConnB -->|"queries"| RepoB
 ```
 
-**How it works:** Each `gitnexus analyze` stores the index in `.gitnexus/` inside the repo (portable, gitignored) and registers a pointer in `~/.gitnexus/registry.json`. When an AI agent starts, the MCP server reads the registry and can serve any indexed repo. LadybugDB connections are opened lazily on first query and evicted after 5 minutes of inactivity (max 5 concurrent). If only one repo is indexed, the `repo` parameter is optional on all tools — agents don't need to change anything.
+**How it works:** Each `recodergit analyze` stores the index in `.recodergit/` inside the repo (portable, gitignored) and registers a pointer in `~/.recodergit/registry.json`. When an AI agent starts, the MCP server reads the registry and can serve any indexed repo. LadybugDB connections are opened lazily on first query and evicted after 5 minutes of inactivity (max 5 concurrent). If only one repo is indexed, the `repo` parameter is optional on all tools — agents don't need to change anything.
 
 ---
 
@@ -447,19 +447,19 @@ flowchart TD
 
 A client-side graph explorer and AI chat — your code never leaves your machine.
 
-**Try it now:** [gitnexus.vercel.app](https://gitnexus.vercel.app) — run `npx gitnexus@latest serve` locally and the page auto-connects to your local backend.
+**Try it now:** [recodergit.vercel.app](https://recodergit.vercel.app) — run `npx recodergit@latest serve` locally and the page auto-connects to your local backend.
 
-<img width="2550" height="1343" alt="gitnexus_img" src="https://github.com/user-attachments/assets/cc5d637d-e0e5-48e6-93ff-5bcfdb929285" />
+<img width="2550" height="1343" alt="recodergit_img" src="https://github.com/user-attachments/assets/cc5d637d-e0e5-48e6-93ff-5bcfdb929285" />
 
 Or run the frontend locally:
 
 ```bash
-git clone https://github.com/abhigyanpatwari/gitnexus.git
-cd gitnexus/gitnexus-shared && npm install && npm run build
-cd ../gitnexus-web && npm install
+git clone https://github.com/abhigyanpatwari/recodergit.git
+cd recodergit/recodergit-shared && npm install && npm run build
+cd ../recodergit-web && npm install
 npm run dev
 # Then in another terminal, start the backend the frontend connects to:
-npx gitnexus@latest serve
+npx recodergit@latest serve
 ```
 
 ## Docker
@@ -468,13 +468,13 @@ The official Docker setup ships **two signed images** orchestrated by `docker-co
 
 | Purpose                                                                | GHCR (default in `docker-compose.yaml`)       | Docker Hub mirror              |
 | ---------------------------------------------------------------------- | --------------------------------------------- | ------------------------------ |
-| CLI / `gitnexus serve` backend (HTTP API on port `4747`, MCP, indexer) | `ghcr.io/abhigyanpatwari/gitnexus:latest`     | `akonlabs/gitnexus:latest`     |
-| Static web UI (port `4173`)                                            | `ghcr.io/abhigyanpatwari/gitnexus-web:latest` | `akonlabs/gitnexus-web:latest` |
+| CLI / `recodergit serve` backend (HTTP API on port `4747`, MCP, indexer) | `ghcr.io/abhigyanpatwari/recodergit:latest`     | `akonlabs/recodergit:latest`     |
+| Static web UI (port `4173`)                                            | `ghcr.io/abhigyanpatwari/recodergit-web:latest` | `akonlabs/recodergit-web:latest` |
 
 > **Heads-up — image rename.** Earlier releases published the web UI under
-> `ghcr.io/abhigyanpatwari/gitnexus`. Starting with the introduction of the
+> `ghcr.io/abhigyanpatwari/recodergit`. Starting with the introduction of the
 > bundled backend, that slug now hosts the CLI/server image and the UI moved
-> to `ghcr.io/abhigyanpatwari/gitnexus-web`. The previous tags remain
+> to `ghcr.io/abhigyanpatwari/recodergit-web`. The previous tags remain
 > available for pulling, but new versions are only published under the new
 > slugs. Update your `docker run` / compose files accordingly (or just adopt
 > the bundled compose).
@@ -489,14 +489,14 @@ This starts the server on `http://localhost:4747` and the web UI on
 `http://localhost:4173`. The UI auto-detects the server because the browser
 runs on the host and reaches the container via the mapped port.
 
-A named volume (`gitnexus-data`) persists the global registry, indexes, and
-cloned repos at `/data/gitnexus` inside the server container. To make repos on
+A named volume (`recodergit-data`) persists the global registry, indexes, and
+cloned repos at `/data/recodergit` inside the server container. To make repos on
 your host machine indexable, set `WORKSPACE_DIR` before bringing the stack up:
 
 ```bash
 WORKSPACE_DIR=$HOME/code docker compose up -d
 # Inside the server container the directory is mounted read-only at /workspace.
-docker compose exec gitnexus-server gitnexus index /workspace/my-repo
+docker compose exec recodergit-server recodergit index /workspace/my-repo
 ```
 
 ### Direct `docker run`
@@ -504,16 +504,16 @@ docker compose exec gitnexus-server gitnexus index /workspace/my-repo
 ```bash
 # Server
 docker run --rm -d \
-  --name gitnexus-server \
+  --name recodergit-server \
   -p 4747:4747 \
-  -v gitnexus-data:/data/gitnexus \
-  ghcr.io/abhigyanpatwari/gitnexus:latest
+  -v recodergit-data:/data/recodergit \
+  ghcr.io/abhigyanpatwari/recodergit:latest
 
 # Web UI
 docker run --rm -d \
-  --name gitnexus-web \
+  --name recodergit-web \
   -p 4173:4173 \
-  ghcr.io/abhigyanpatwari/gitnexus-web:latest
+  ghcr.io/abhigyanpatwari/recodergit-web:latest
 ```
 
 Optional env file (override image tags, container names, ports, workspace dir):
@@ -529,10 +529,10 @@ The Docker images are version-locked to the npm package:
 
 - Stable images are **only published from `vX.Y.Z` git tags** (via `docker.yml`
   triggered directly by the tag push), and the workflow refuses to build unless
-  the tag exactly matches `gitnexus/package.json`'s version. So
-  `ghcr.io/abhigyanpatwari/gitnexus:1.6.2` (and its Docker Hub mirror
-  `akonlabs/gitnexus:1.6.2`) is byte-for-byte the same release as
-  `npm install gitnexus@1.6.2` — no drift, no floating builds from `main`.
+  the tag exactly matches `recodergit/package.json`'s version. So
+  `ghcr.io/abhigyanpatwari/recodergit:1.6.2` (and its Docker Hub mirror
+  `akonlabs/recodergit:1.6.2`) is byte-for-byte the same release as
+  `npm install recodergit@1.6.2` — no drift, no floating builds from `main`.
   Both registries receive the same digest from a single build step, so you can
   pull from either and the signature verifies identically.
 - Release-candidate images (e.g. `:1.7.0-rc.1`) are published alongside each
@@ -546,19 +546,19 @@ workflow's GitHub OIDC identity, and shipped with build provenance and SBOM
 attestations. **This is your protection against supply-chain attacks**: even if
 an attacker republishes a same-named image elsewhere (or somehow pushes to a
 typo-squatted registry), they cannot forge a Cosign signature tied to
-`abhigyanpatwari/GitNexus`'s `docker.yml`. Always verify before pulling into
+`abhigyanpatwari/RecoderGit`'s `docker.yml`. Always verify before pulling into
 sensitive environments:
 
 **Stable releases** — signed from the `v*` tag ref:
 
 ```bash
-cosign verify ghcr.io/abhigyanpatwari/gitnexus:1.6.2 \
-  --certificate-identity-regexp '^https://github\.com/abhigyanpatwari/GitNexus/\.github/workflows/docker\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$' \
+cosign verify ghcr.io/abhigyanpatwari/recodergit:1.6.2 \
+  --certificate-identity-regexp '^https://github\.com/abhigyanpatwari/RecoderGit/\.github/workflows/docker\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # Same signature verifies the Docker Hub mirror (identical digest):
-cosign verify docker.io/akonlabs/gitnexus:1.6.2 \
-  --certificate-identity-regexp '^https://github\.com/abhigyanpatwari/GitNexus/\.github/workflows/docker\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$' \
+cosign verify docker.io/akonlabs/recodergit:1.6.2 \
+  --certificate-identity-regexp '^https://github\.com/abhigyanpatwari/RecoderGit/\.github/workflows/docker\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -572,15 +572,15 @@ workflow run.
 `publish.yml` invokes `docker.yml` as a reusable workflow):
 
 ```bash
-cosign verify ghcr.io/abhigyanpatwari/gitnexus:1.7.0-rc.1 \
-  --certificate-identity 'https://github.com/abhigyanpatwari/GitNexus/.github/workflows/docker.yml@refs/heads/main' \
+cosign verify ghcr.io/abhigyanpatwari/recodergit:1.7.0-rc.1 \
+  --certificate-identity 'https://github.com/abhigyanpatwari/RecoderGit/.github/workflows/docker.yml@refs/heads/main' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
 You can also inspect the build provenance and SBOM:
 
 ```bash
-cosign download attestation ghcr.io/abhigyanpatwari/gitnexus:1.6.2 \
+cosign download attestation ghcr.io/abhigyanpatwari/recodergit:1.6.2 \
   --predicate-type https://slsa.dev/provenance/v1
 ```
 
@@ -588,7 +588,7 @@ cosign download attestation ghcr.io/abhigyanpatwari/gitnexus:1.6.2 \
 
 For Kubernetes deployments, ship the bundled
 [`ClusterImagePolicy`](deploy/kubernetes/cluster-image-policy.yaml) so the
-[Sigstore policy-controller][policy-controller] rejects any GitNexus pod whose
+[Sigstore policy-controller][policy-controller] rejects any RecoderGit pod whose
 image is not signed by this repo's `docker.yml` running from a `vX.Y.Z` tag —
 the same identity the `cosign verify` snippet above pins.
 
@@ -606,7 +606,7 @@ kubectl apply -f deploy/kubernetes/cluster-image-policy.yaml
 ```
 
 After this, attempting to deploy an unsigned image — or one signed by anything
-other than `abhigyanpatwari/GitNexus`'s `docker.yml` at a `v*` tag — fails the
+other than `abhigyanpatwari/RecoderGit`'s `docker.yml` at a `v*` tag — fails the
 admission webhook before a pod is ever created. This turns the verifiable
 signature into an enforced policy, which is the supply-chain control most
 clusters actually need.
@@ -616,18 +616,18 @@ clusters actually need.
 
 ### Files
 
-- [Dockerfile.web](Dockerfile.web) — builds `gitnexus-shared` and `gitnexus-web`, then serves the production frontend.
-- [Dockerfile.cli](Dockerfile.cli) — builds the CLI/server (with its native deps) and runs `gitnexus serve --host 0.0.0.0`.
+- [Dockerfile.web](Dockerfile.web) — builds `recodergit-shared` and `recodergit-web`, then serves the production frontend.
+- [Dockerfile.cli](Dockerfile.cli) — builds the CLI/server (with its native deps) and runs `recodergit serve --host 0.0.0.0`.
 - [docker-compose.yaml](docker-compose.yaml) — starts both signed images side by side.
 - [.env.example](.env.example) — overrides for image names, container names, ports, and the workspace mount.
 
 The web UI uses the same indexing pipeline as the CLI but runs entirely in WebAssembly (Tree-sitter WASM, LadybugDB WASM, in-browser embeddings). It's great for quick exploration but limited by browser memory for larger repos.
 
-**Local Backend Mode:** Run `gitnexus serve` and open the web UI locally — it auto-detects the server and shows all your indexed repos, with full AI chat support. No need to re-upload or re-index. The agent's tools (Cypher queries, search, code navigation) route through the backend HTTP API automatically.
+**Local Backend Mode:** Run `recodergit serve` and open the web UI locally — it auto-detects the server and shows all your indexed repos, with full AI chat support. No need to re-upload or re-index. The agent's tools (Cypher queries, search, code navigation) route through the backend HTTP API automatically.
 
 ---
 
-## The Problem GitNexus Solves
+## The Problem RecoderGit Solves
 
 Tools like **Cursor**, **Claude Code**, **Codex**, **Cline**, **Roo Code**, and **Windsurf** are powerful — but they don't truly know your codebase structure.
 
@@ -637,9 +637,9 @@ Tools like **Cursor**, **Claude Code**, **Codex**, **Cline**, **Roo Code**, and 
 2. Doesn't know 47 functions depend on its return type
 3. **Breaking changes ship**
 
-### Traditional Graph RAG vs GitNexus
+### Traditional Graph RAG vs RecoderGit
 
-Traditional approaches give the LLM raw graph edges and hope it explores enough. GitNexus **precomputes structure at index time** — clustering, tracing, scoring — so tools return complete context in one call:
+Traditional approaches give the LLM raw graph edges and hope it explores enough. RecoderGit **precomputes structure at index time** — clustering, tracing, scoring — so tools return complete context in one call:
 
 ```mermaid
 flowchart TB
@@ -654,7 +654,7 @@ flowchart TB
         Q4 --> OUT1["Answer after 4+ queries"]
     end
 
-    subgraph GN["GitNexus Smart Tools"]
+    subgraph GN["RecoderGit Smart Tools"]
         direction TB
         U2["User: What depends on UserService?"]
         U2 --> TOOL["impact UserService upstream"]
@@ -674,7 +674,7 @@ flowchart TB
 
 ## How It Works
 
-GitNexus builds a complete knowledge graph of your codebase through a multi-phase indexing pipeline:
+RecoderGit builds a complete knowledge graph of your codebase through a multi-phase indexing pipeline:
 
 1. **Structure** — Walks the file tree and maps folder/file relationships
 2. **Parsing** — Extracts functions, classes, methods, and interfaces using Tree-sitter ASTs
@@ -728,12 +728,12 @@ UPSTREAM (what depends on this):
 
 Options: `maxDepth`, `minConfidence`, `relationTypes` (`CALLS`, `IMPORTS`, `EXTENDS`, `IMPLEMENTS`), `includeTests`, `limit` (max symbols per depth, default 100), `offset` (pagination start per depth), `summaryOnly` (counts and risk only, omits symbol list)
 
-**Disambiguation** — when several symbols share the target name, `impact` returns a ranked `ambiguous` candidate list instead of guessing. Narrow it with `target_uid` (exact, zero-ambiguity), `file_path`, or `kind` (`Function`, `Class`, `Method`, …). From the CLI these are `--uid`, `--file`, and `--kind`, matching `gitnexus context`:
+**Disambiguation** — when several symbols share the target name, `impact` returns a ranked `ambiguous` candidate list instead of guessing. Narrow it with `target_uid` (exact, zero-ambiguity), `file_path`, or `kind` (`Function`, `Class`, `Method`, …). From the CLI these are `--uid`, `--file`, and `--kind`, matching `recodergit context`:
 
 ```bash
-gitnexus impact get_embeddings                       # → ambiguous: lists ranked candidates
-gitnexus impact get_embeddings --file src/embed.py   # → resolves to the one in that file
-gitnexus impact get_embeddings --uid "Function:src/embed.py:get_embeddings"  # exact
+recodergit impact get_embeddings                       # → ambiguous: lists ranked candidates
+recodergit impact get_embeddings --file src/embed.py   # → resolves to the one in that file
+recodergit impact get_embeddings --uid "Function:src/embed.py:get_embeddings"  # exact
 ```
 
 ### Process-Grouped Search
@@ -831,22 +831,22 @@ Generate LLM-powered documentation from your knowledge graph:
 
 ```bash
 # Requires an LLM API key (OPENAI_API_KEY, etc.)
-gitnexus wiki
+recodergit wiki
 
 # Use a custom model or provider
-gitnexus wiki --model gpt-4o
-gitnexus wiki --base-url https://api.anthropic.com/v1
+recodergit wiki --model gpt-4o
+recodergit wiki --base-url https://api.anthropic.com/v1
 
 # Force full regeneration
-gitnexus wiki --force
+recodergit wiki --force
 
 
 # Increase the timeout or retries for large codebase or slow LLM providers
-gitnexus wiki --timeout <seconds> # LLM request timeout in seconds (default: disabled)
-gitnexus wiki --retries <n>      # Max LLM retry attempts per request (default: 3)
+recodergit wiki --timeout <seconds> # LLM request timeout in seconds (default: disabled)
+recodergit wiki --retries <n>      # Max LLM retry attempts per request (default: 3)
 
 # Change the language generation for wiki
-gitnexus wiki --lang <lang>  # Output language for generated documentation (e.g. english, chinese, spanish, japanese)
+recodergit wiki --lang <lang>  # Output language for generated documentation (e.g. english, chinese, spanish, japanese)
 ```
 
 The wiki generator reads the indexed graph structure, groups files into modules via LLM, generates per-module documentation pages, and creates an overview page — all with cross-references to the knowledge graph.
@@ -891,7 +891,7 @@ The wiki generator reads the indexed graph structure, groups files into modules 
 
 ## Security & Privacy
 
-- **CLI**: Everything runs locally on your machine. No network calls. Index stored in `.gitnexus/` (gitignored). Global registry at `~/.gitnexus/` stores only paths and metadata.
+- **CLI**: Everything runs locally on your machine. No network calls. Index stored in `.recodergit/` (gitignored). Global registry at `~/.recodergit/` stores only paths and metadata.
 - **Web**: Everything runs in your browser. No code uploaded to any server. API keys stored in localStorage only.
 - Open source — audit the code yourself.
 

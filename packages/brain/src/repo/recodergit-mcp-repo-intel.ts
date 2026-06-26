@@ -16,7 +16,7 @@ import { ContextPackRepoIntel } from "./repo-intel-adapter";
  * REAL {@link RepoIntelPort}, backed by the RecoderGit MCP server (option c — the
  * persistent-graph path).
  *
- * Unlike the CLI adapter (which spawns `gitnexus impact` per call against a
+ * Unlike the CLI adapter (which spawns `recodergit impact` per call against a
  * freshly-loaded graph), this adapter talks to a long-lived RecoderGit MCP server
  * over MCP JSON-RPC (`POST /mcp`, `tools/call` for the `impact` tool). The graph
  * is indexed once and kept resident, so per-task context assembly is a cheap
@@ -81,7 +81,7 @@ export interface RecoderGitMcpRepoIntelOptions {
 // Result parsing (untrusted boundary normalization)
 // ---------------------------------------------------------------------------
 
-/** A `gitnexus impact` payload as emitted by the engine (untrusted shape). */
+/** A `recodergit impact` payload as emitted by the engine (untrusted shape). */
 interface RecoderGitImpactPayload {
   target?: { filePath?: unknown; name?: unknown } | null;
   risk?: unknown;
@@ -110,7 +110,7 @@ function num(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-/** Map gitnexus risk (LOW/MEDIUM/HIGH/CRITICAL) to a ContextPack risk. */
+/** Map recodergit risk (LOW/MEDIUM/HIGH/CRITICAL) to a ContextPack risk. */
 function toRisk(value: unknown): ChangedFileRisk["risk"] {
   const v = str(value).toUpperCase();
   if (v === "HIGH" || v === "CRITICAL") {
@@ -187,7 +187,7 @@ function textFromResult(result: McpCallToolResult | null | undefined): string | 
 
 /**
  * Drop pino-style log lines an engine may prepend to its output, e.g.
- * `{"level":40,"time":...,"name":"gitnexus","msg":"..."}` on its own line.
+ * `{"level":40,"time":...,"name":"recodergit","msg":"..."}` on its own line.
  */
 function stripLogLines(text: string): string {
   return text

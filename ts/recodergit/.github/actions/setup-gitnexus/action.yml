@@ -1,4 +1,4 @@
-name: Setup GitNexus
+name: Setup RecoderGit
 description: Setup Node.js 22, install dependencies, and optionally build
 
 inputs:
@@ -14,20 +14,20 @@ runs:
       with:
         node-version: 22
         cache: npm
-        cache-dependency-path: gitnexus/package-lock.json
+        cache-dependency-path: recodergit/package-lock.json
 
-    - name: Build gitnexus-shared
+    - name: Build recodergit-shared
       run: npm install && npm run build
       shell: bash
-      working-directory: gitnexus-shared
+      working-directory: recodergit-shared
 
     - name: Install dependencies
       run: npm ci
       shell: bash
-      working-directory: gitnexus
+      working-directory: recodergit
 
     - name: Build
       if: ${{ inputs.build == 'true' }}
       run: npm run build
       shell: bash
-      working-directory: gitnexus
+      working-directory: recodergit
