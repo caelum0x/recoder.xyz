@@ -117,6 +117,7 @@ Legend: ✅ done · 🔄 in progress · 📐 designed · 📋 planned · ⚠️ 
 | recodergit engine built + verified | code-graph | ✅ | live: analyze→graph, impact by UID |
 | recodergit full rebrand (zero gitnexus) | code-graph | ✅ | committed |
 | Brain: 5 real sources + MCP server | brain | ✅ | continuum/bd/recodergit live; mem0/context7 need config |
+| **Continuum fusion** — @recoder/continuum in-process (kill shell-out) | brain+continuum | ✅ | `756cb7232` — promoted ts/→packages/ @recoder/continuum (owned); brain adapter fused in-process (execFile/subprocess fully removed); R1 recent+snapshot surfaced; 90/90 brain tests real-engine (no mocks); plan+roadmap in docs/CONTINUUM-PLAN.md |
 | recoder-code gets recodergit + brain tools | recoder-code | ✅ | default stdio MCP, opt-out-able |
 | `recoder code-graph` CLI verb | recoder-cli | ✅ | envelope bug fixed |
 | **pi merge → 0.80.2** (full, rebranded) | pi | ✅ | `4ef18d248` — full pi @ 0.80.2, all 4 green |
@@ -126,7 +127,7 @@ Legend: ✅ done · 🔄 in progress · 📐 designed · 📋 planned · ⚠️ 
 | **OSS merge wave** (context7-sdk, mem0) | vendored | ✅ | `89ec4f826` — context7 0.3.1, mem0 3.0.11; a2a-js already current |
 | **⚠️ cli → workspace core wiring** | recoder-code | ⚠️ | PREREQ for Stage C/D: cli resolves published `recoder-code-core@2.4.5` (stale, missing new exports) not workspace source → 4 pre-existing tsc errors. Repoint to workspace before C/D |
 | **Stage B — port Recoder layer onto pi** | recoder-code | ✅ | `2daca3a73` — pi `piConfig` {name:Recoder, configDir:.recoder} (APP_NAME/ENV_AGENT_DIR derived, setup-wizard off); pre-launch auth gate reuses `RecoderAuthService` (not reimplemented); MCP bridge degrade-safe + loaded/degraded summary; cli+core tsc 0 errors, pi build green, vitest 25/25; flag-off byte-identical |
-| **Stage C — pi-tui as default UI** (desktop + cli) | TUI | 📋 | the "pi-tui for both" goal; gated on Ink↔pi-tui parity audit (high risk; destructive — only after audit) |
+| **Stage C — pi-tui as default UI** (desktop + cli) | TUI | 📋 | audit done `b668fd2ec` (83-feature matrix, critic gaps-found) — C NOT a safe flip; gated on porting the 9 high-risk features; see docs/PI-CONSOLIDATION-STAGE-C-AUDIT.md |
 | **Stage D — delete the Ink duplicate** | recoder-code | 📋 | recoder-code = launcher + Recoder extensions only |
 | **Package consolidation** (a2a/memory/mcp/cli/sandbox dups) | repo | ⚠️ | execute per docs/PACKAGES.md after it lands |
 | Activate code-graph (flip `RECODER_CODE_GRAPH_ENABLED`) | ops | ⚠️ | your call; flag off by default, then gated deploy |
