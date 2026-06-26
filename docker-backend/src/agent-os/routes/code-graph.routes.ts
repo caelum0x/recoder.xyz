@@ -55,6 +55,19 @@ export function createCodeGraphRouter(): Router {
     res.json({ success: true, data: result });
   });
 
+  // Truthful supervision health for the recodergit `mcp --http` server. Brings
+  // the process up best-effort (ensureServer is fail-safe) and reports
+  // starting/ready/unavailable + base URL. Disabled flag -> { enabled:false }.
+  router.get('/mcp-health', async (_req, res) => {
+    const { codeGraph } = agentOsContainer;
+    if (!codeGraph.isEnabled()) {
+      res.json({ success: true, data: { enabled: false } });
+      return;
+    }
+    const health = await codeGraph.ensureServer();
+    res.json({ success: true, data: { enabled: true, ...health } });
+  });
+
   router.post('/reindex', async (req, res) => {
     const { codeGraph } = agentOsContainer;
     if (!codeGraph.isEnabled()) {

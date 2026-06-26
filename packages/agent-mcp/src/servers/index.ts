@@ -10,6 +10,7 @@ export * from './work-locks-server';
 export * from './deployment-server';
 export * from './billing-server';
 export * from './git-nexus-server';
+export * from './recodergit-server';
 export * from './beads-server';
 export * from './oss-server';
 export * from './preview-server';
