@@ -1,7 +1,7 @@
 {
   "name": "@recoder/context7-sdk",
-  "version": "1.0.0",
-  "description": "Recoder-owned vendor of the Context7 docs SDK (live library docs). Merged from context7/packages/sdk.",
+  "version": "1.0.1",
+  "description": "Recoder-owned vendor of the Context7 docs SDK (live library docs). Merged from context7/packages/sdk @ upstream 0.3.1.",
   "private": true,
   "type": "module",
   "main": "./dist/client.cjs",
