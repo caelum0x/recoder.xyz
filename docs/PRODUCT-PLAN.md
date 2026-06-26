@@ -125,8 +125,8 @@ Legend: ✅ done · 🔄 in progress · 📐 designed · 📋 planned · ⚠️ 
 | **Stage A — recoder-code → pi launcher** | recoder-code | ✅ | `89ec4f826` — flag-gated `RECODER_PI_SHELL`; pi `main()` via extensionFactories; recodergit+brain bridged in; 19/19 tests; flag-off byte-identical |
 | **OSS merge wave** (context7-sdk, mem0) | vendored | ✅ | `89ec4f826` — context7 0.3.1, mem0 3.0.11; a2a-js already current |
 | **⚠️ cli → workspace core wiring** | recoder-code | ⚠️ | PREREQ for Stage C/D: cli resolves published `recoder-code-core@2.4.5` (stale, missing new exports) not workspace source → 4 pre-existing tsc errors. Repoint to workspace before C/D |
-| **Stage B — port Recoder layer onto pi** | recoder-code | 📋 | MCP/auth/branding as pi config+extensions; pi `piConfig` APP_NAME rebrand |
-| **Stage C — pi-tui as default UI** (desktop + cli) | TUI | 📋 | the "pi-tui for both" goal; gated on parity (high risk) |
+| **Stage B — port Recoder layer onto pi** | recoder-code | ✅ | `2daca3a73` — pi `piConfig` {name:Recoder, configDir:.recoder} (APP_NAME/ENV_AGENT_DIR derived, setup-wizard off); pre-launch auth gate reuses `RecoderAuthService` (not reimplemented); MCP bridge degrade-safe + loaded/degraded summary; cli+core tsc 0 errors, pi build green, vitest 25/25; flag-off byte-identical |
+| **Stage C — pi-tui as default UI** (desktop + cli) | TUI | 📋 | the "pi-tui for both" goal; gated on Ink↔pi-tui parity audit (high risk; destructive — only after audit) |
 | **Stage D — delete the Ink duplicate** | recoder-code | 📋 | recoder-code = launcher + Recoder extensions only |
 | **Package consolidation** (a2a/memory/mcp/cli/sandbox dups) | repo | ⚠️ | execute per docs/PACKAGES.md after it lands |
 | Activate code-graph (flip `RECODER_CODE_GRAPH_ENABLED`) | ops | ⚠️ | your call; flag off by default, then gated deploy |
