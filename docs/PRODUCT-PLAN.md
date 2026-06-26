@@ -119,9 +119,15 @@ Legend: ✅ done · 🔄 in progress · 📐 designed · 📋 planned · ⚠️ 
 | Brain: 5 real sources + MCP server | brain | ✅ | continuum/bd/recodergit live; mem0/context7 need config |
 | recoder-code gets recodergit + brain tools | recoder-code | ✅ | default stdio MCP, opt-out-able |
 | `recoder code-graph` CLI verb | recoder-cli | ✅ | envelope bug fixed |
-| **pi merge → 0.80.2** | pi | 🔄 | workflow `w3q73z1yv` — real merge, no stubs |
-| **package audit → docs/PACKAGES.md** | repo | 🔄 | workflow `we33rkkcg` — duplicates/stubs/cleanup |
-| **pi-tui as shared TUI** (desktop + recoder-code) | TUI | ⚠️ | migration Ink→pi-tui — decide after merge |
+| **pi merge → 0.80.2** (full, rebranded) | pi | ✅ | `4ef18d248` — full pi @ 0.80.2, all 4 green |
+| **package audit → docs/PACKAGES.md** | repo | ✅ | `7992ea18b` — 83 pkgs, dups/stubs/cleanup |
+| **Decision: pi IS the IDE foundation** | recoder-code | ✅ | chosen; plan in `docs/PI-CONSOLIDATION.md` |
+| **Stage A — recoder-code → pi launcher** | recoder-code | ✅ | `89ec4f826` — flag-gated `RECODER_PI_SHELL`; pi `main()` via extensionFactories; recodergit+brain bridged in; 19/19 tests; flag-off byte-identical |
+| **OSS merge wave** (context7-sdk, mem0) | vendored | ✅ | `89ec4f826` — context7 0.3.1, mem0 3.0.11; a2a-js already current |
+| **⚠️ cli → workspace core wiring** | recoder-code | ⚠️ | PREREQ for Stage C/D: cli resolves published `recoder-code-core@2.4.5` (stale, missing new exports) not workspace source → 4 pre-existing tsc errors. Repoint to workspace before C/D |
+| **Stage B — port Recoder layer onto pi** | recoder-code | 📋 | MCP/auth/branding as pi config+extensions; pi `piConfig` APP_NAME rebrand |
+| **Stage C — pi-tui as default UI** (desktop + cli) | TUI | 📋 | the "pi-tui for both" goal; gated on parity (high risk) |
+| **Stage D — delete the Ink duplicate** | recoder-code | 📋 | recoder-code = launcher + Recoder extensions only |
 | **Package consolidation** (a2a/memory/mcp/cli/sandbox dups) | repo | ⚠️ | execute per docs/PACKAGES.md after it lands |
 | Activate code-graph (flip `RECODER_CODE_GRAPH_ENABLED`) | ops | ⚠️ | your call; flag off by default, then gated deploy |
 | Configure mem0 (`MEM0_BASE_URL`) + context7 (`CONTEXT7_API_KEY`) | brain | ⚠️ | secrets/config to light up the last 2 brain sources |
