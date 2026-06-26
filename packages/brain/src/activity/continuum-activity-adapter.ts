@@ -4,6 +4,7 @@ import type {
   BrainActivity,
   BrainActivityProfile,
 } from "../domain/activity.types";
+import { resolveExecEngine } from "../runtime/engine-resolver";
 
 /**
  * Default {@link ActivityPort}, backed by the continuum CLI (ts/continuum).
@@ -29,8 +30,6 @@ export interface ContinuumActivityOptions {
   /** Override the binary name/path (defaults to "continuum"). */
   binary?: string;
 }
-
-const DEFAULT_BINARY = "continuum";
 
 /** Default exec: run the continuum binary and collect stdout via execFile. */
 function defaultExec(command: string, args: string[]): Promise<string> {
@@ -107,16 +106,24 @@ function toProfile(profile: ContinuumProfile): BrainActivityProfile {
 
 export class ContinuumActivity implements ActivityPort {
   private readonly exec: ActivityExec;
-  private readonly binary: string;
+  /** Command to spawn — `node` for the vendored entry, else a binary name. */
+  private readonly cmd: string;
+  /** Fixed arg prefix (the vendored entry path) prepended before each argv. */
+  private readonly argsPrefix: string[];
 
   constructor(options: ContinuumActivityOptions = {}) {
     this.exec = options.exec ?? defaultExec;
-    this.binary = options.binary ?? DEFAULT_BINARY;
+    // An explicit binary keeps prior behavior; otherwise discover the vendored
+    // continuum.mjs (run via node) or fall back to `continuum` on PATH.
+    const resolved = resolveExecEngine("continuum", options.binary);
+    this.cmd = resolved.cmd;
+    this.argsPrefix = resolved.args;
   }
 
   async recall(query: string, limit: number): Promise<BrainActivity[]> {
     try {
-      const stdout = await this.exec(this.binary, [
+      const stdout = await this.exec(this.cmd, [
+        ...this.argsPrefix,
         "recall",
         "--json",
         "--limit",
@@ -136,11 +143,11 @@ export class ContinuumActivity implements ActivityPort {
 
   async profile(topic?: string): Promise<BrainActivityProfile | null> {
     try {
-      const args = ["profile", "--json"];
+      const args = [...this.argsPrefix, "profile", "--json"];
       if (topic) {
         args.push(topic);
       }
-      const stdout = await this.exec(this.binary, args);
+      const stdout = await this.exec(this.cmd, args);
       const parsed: unknown = JSON.parse(stdout);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         return null;

@@ -1,0 +1,188 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { runDoctor, type DoctorFetch, type ProbeFn } from "./doctor";
+import type { ResolvedEngines } from "./engine-resolver";
+
+/** A fully-resolved engine set with sane defaults, overridable per test. */
+function engines(overrides: Partial<ResolvedEngines> = {}): ResolvedEngines {
+  return {
+    gitnexus: { kind: "node", cmd: "node", args: ["/repo/gitnexus.js"] },
+    continuum: { kind: "node", cmd: "node", args: ["/repo/continuum.mjs"] },
+    bd: { kind: "path", cmd: "bd", args: [] },
+    mem0: { baseUrl: null },
+    context7: { apiKey: false },
+    ...overrides,
+  };
+}
+
+const PROBE_OK: ProbeFn = async () => ({ ok: true, out: "usage: ..." });
+const PROBE_FAIL: ProbeFn = async () => ({ ok: false, out: "command not found" });
+const FETCH_UNUSED: DoctorFetch = async () => {
+  throw new Error("fetch should not run when mem0 is unconfigured");
+};
+
+function byEngine(reports: Awaited<ReturnType<typeof runDoctor>>) {
+  return new Map(reports.map((r) => [r.engine, r]));
+}
+
+test("reports every engine in a stable order", async () => {
+  const reports = await runDoctor({
+    resolve: () => engines(),
+    probe: PROBE_OK,
+    fetchImpl: FETCH_UNUSED,
+  });
+  assert.deepEqual(
+    reports.map((r) => r.engine),
+    ["gitnexus", "continuum", "bd", "mem0", "context7"],
+  );
+});
+
+test("exec engines are available when the probe succeeds", async () => {
+  const calls: Array<{ cmd: string; args: string[] }> = [];
+  const probe: ProbeFn = async (cmd, args) => {
+    calls.push({ cmd, args });
+    return { ok: true, out: "ok" };
+  };
+  const reports = byEngine(
+    await runDoctor({
+      resolve: () => engines(),
+      probe,
+      fetchImpl: FETCH_UNUSED,
+    }),
+  );
+
+  const gitnexus = reports.get("gitnexus");
+  assert.ok(gitnexus?.available);
+  assert.match(gitnexus?.detail ?? "", /node \/repo\/gitnexus\.js/);
+
+  const bd = reports.get("bd");
+  assert.ok(bd?.available);
+  assert.match(bd?.detail ?? "", /bd on PATH/);
+
+  // Probe argv = the resolved prefix + the per-engine harmless flag.
+  const gitProbe = calls.find((c) => c.args.includes("/repo/gitnexus.js"));
+  assert.deepEqual(gitProbe?.args, ["/repo/gitnexus.js", "--help"]);
+  const bdProbe = calls.find((c) => c.cmd === "bd");
+  assert.deepEqual(bdProbe?.args, ["--version"]);
+});
+
+test("exec engines are unavailable with an actionable hint when the probe fails", async () => {
+  const reports = byEngine(
+    await runDoctor({
+      resolve: () => engines(),
+      probe: PROBE_FAIL,
+      fetchImpl: FETCH_UNUSED,
+    }),
+  );
+  const gitnexus = reports.get("gitnexus");
+  assert.equal(gitnexus?.available, false);
+  assert.match(gitnexus?.detail ?? "", /gitnexus CLI not found/);
+
+  const continuum = reports.get("continuum");
+  assert.equal(continuum?.available, false);
+  assert.match(continuum?.detail ?? "", /continuum CLI not found/);
+
+  const bd = reports.get("bd");
+  assert.equal(bd?.available, false);
+  assert.match(bd?.detail ?? "", /bd \(beads\) CLI not found/);
+});
+
+test("a thrown probe degrades to unavailable, never throws", async () => {
+  const probe: ProbeFn = async () => {
+    throw new Error("spawn EACCES");
+  };
+  const reports = byEngine(
+    await runDoctor({
+      resolve: () => engines(),
+      probe,
+      fetchImpl: FETCH_UNUSED,
+    }),
+  );
+  assert.equal(reports.get("gitnexus")?.available, false);
+  assert.equal(reports.get("bd")?.available, false);
+});
+
+test("mem0 is unavailable and never fetched when no base URL is configured", async () => {
+  const reports = byEngine(
+    await runDoctor({
+      resolve: () => engines({ mem0: { baseUrl: null } }),
+      probe: PROBE_OK,
+      fetchImpl: FETCH_UNUSED,
+    }),
+  );
+  const mem0 = reports.get("mem0");
+  assert.equal(mem0?.available, false);
+  assert.match(mem0?.detail ?? "", /not configured — set MEM0_BASE_URL/);
+});
+
+test("mem0 is available when configured AND the health GET succeeds", async () => {
+  const urls: string[] = [];
+  const fetchImpl: DoctorFetch = async (url) => {
+    urls.push(url);
+    return { ok: true, status: 200 };
+  };
+  const reports = byEngine(
+    await runDoctor({
+      resolve: () => engines({ mem0: { baseUrl: "http://mem0:8000/" } }),
+      probe: PROBE_OK,
+      fetchImpl,
+    }),
+  );
+  const mem0 = reports.get("mem0");
+  assert.ok(mem0?.available);
+  assert.match(mem0?.detail ?? "", /reachable/);
+  // Trailing slash normalized before appending the health path.
+  assert.deepEqual(urls, ["http://mem0:8000/health"]);
+});
+
+test("mem0 is configured-but-unreachable when the health GET fails", async () => {
+  const fetchImpl: DoctorFetch = async () => ({ ok: false, status: 503 });
+  const reports = byEngine(
+    await runDoctor({
+      resolve: () => engines({ mem0: { baseUrl: "http://mem0:8000" } }),
+      probe: PROBE_OK,
+      fetchImpl,
+    }),
+  );
+  const mem0 = reports.get("mem0");
+  assert.equal(mem0?.available, false);
+  assert.match(mem0?.detail ?? "", /unreachable \(status 503\)/);
+});
+
+test("a thrown fetch degrades mem0 to unavailable, never throws", async () => {
+  const fetchImpl: DoctorFetch = async () => {
+    throw new Error("ECONNREFUSED");
+  };
+  const reports = byEngine(
+    await runDoctor({
+      resolve: () => engines({ mem0: { baseUrl: "http://mem0:8000" } }),
+      probe: PROBE_OK,
+      fetchImpl,
+    }),
+  );
+  const mem0 = reports.get("mem0");
+  assert.equal(mem0?.available, false);
+  assert.match(mem0?.detail ?? "", /unreachable/);
+});
+
+test("context7 is available iff a key is present (no network)", async () => {
+  const withKey = byEngine(
+    await runDoctor({
+      resolve: () => engines({ context7: { apiKey: true } }),
+      probe: PROBE_OK,
+      fetchImpl: FETCH_UNUSED,
+    }),
+  );
+  assert.ok(withKey.get("context7")?.available);
+  assert.match(withKey.get("context7")?.detail ?? "", /API key present/);
+
+  const noKey = byEngine(
+    await runDoctor({
+      resolve: () => engines({ context7: { apiKey: false } }),
+      probe: PROBE_OK,
+      fetchImpl: FETCH_UNUSED,
+    }),
+  );
+  assert.equal(noKey.get("context7")?.available, false);
+  assert.match(noKey.get("context7")?.detail ?? "", /API key absent/);
+});
