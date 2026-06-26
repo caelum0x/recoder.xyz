@@ -22,6 +22,7 @@ import {
   loadServerHierarchicalMemory,
   setGeminiMdFilename as setServerGeminiMdFilename,
   ShellTool,
+  withDefaultBrainServer,
   withDefaultCodeGraphServer,
   WriteFileTool,
 } from 'recoder-code-core';
@@ -564,6 +565,11 @@ export async function loadCliConfig(
   // entry or RECODER_CODE_GRAPH=false opts out, and an unresolved engine adds
   // nothing rather than a broken server.
   mcpServers = withDefaultCodeGraphServer(mcpServers);
+  // Local-first default: expose the Brain's shared-memory tools out of the box
+  // (brain_assemble / brain_recall / brain_record). Additive + fail-safe — a
+  // user-configured `brain` entry wins, a falsy entry or RECODER_BRAIN=false opts
+  // out, and an unresolved Brain entry adds nothing rather than a broken server.
+  mcpServers = withDefaultBrainServer(mcpServers);
   const question = argv.promptInteractive || argv.prompt || '';
 
   // Determine approval mode with backward compatibility

@@ -10,6 +10,20 @@
 // Construction
 export { Brain, createBrain, type BrainDeps } from "./brain";
 
+// MCP seam — expose the Brain as read-mostly stdio MCP tools (assemble/recall
+// read-only; record emits a candidate, never a durable write).
+export {
+  createBrainTools,
+  BRAIN_TOOL_NAMES,
+  type BrainTool,
+  type BrainToolResult,
+} from "./seams/mcp-seam";
+export {
+  createBrainMcpServer,
+  createDefaultBrain,
+  runBrainMcpStdio,
+} from "./seams/mcp-server";
+
 // Repo-intelligence adapter (the ts/recodergit fusion seam)
 export { ContextPackRepoIntel, createRepoIntel } from "./repo/repo-intel-adapter";
 
