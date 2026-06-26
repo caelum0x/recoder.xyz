@@ -61,6 +61,30 @@ export {
   type BeadsTasksOptions,
 } from "./tasks/beads-tasks";
 
+// Engine resolver + truthful doctor (vendored-engine discovery + honest health)
+export {
+  resolveEngines,
+  resolveExecEngine,
+  type ResolvedEngines,
+  type ResolvedExecEngine,
+  type ResolvedMem0,
+  type ResolvedContext7,
+  type EngineKind,
+  type ResolveEnginesOptions,
+  type ExistsFn,
+  type EnvLike,
+} from "./runtime/engine-resolver";
+export {
+  runDoctor,
+  type EngineReport,
+  type EngineName,
+  type ProbeFn,
+  type ProbeResult,
+  type DoctorFetch,
+  type DoctorFetchResult,
+  type RunDoctorOptions,
+} from "./runtime/doctor";
+
 // Domain types (data shapes)
 export type {
   BrainContext,
