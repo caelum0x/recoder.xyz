@@ -20,7 +20,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const CODE_GRAPH_FLAG_ENV = 'RECODER_CODE_GRAPH_ENABLED';
@@ -44,12 +44,23 @@ export interface IndexState {
   clusters?: number;
   flows?: number;
   status: Extract<IndexStatus, 'indexed' | 'unavailable'>;
+  /** Set when the repo was cloned via connectRepo; null for on-disk indexRepo. */
+  cloneUrl?: string | null;
 }
 
 export interface IndexRepoInput {
   repoRoot: string;
   repoId: string;
   /** Optional git ref to record/analyze. Informational; analyze uses the checkout. */
+  ref?: string;
+}
+
+export interface ConnectRepoInput {
+  /** Path-safe identifier (no '/', '\\', '..', or NUL). Used as the workdir name. */
+  repoId: string;
+  /** Remote URL to clone (https or git). Secrets/tokens come from the caller/env. */
+  cloneUrl: string;
+  /** Optional branch/ref to clone. Informational + passed to the cloner. */
   ref?: string;
 }
 
@@ -99,6 +110,12 @@ export type EngineExec = (args: string[], opts: { cwd: string }) => Promise<Exec
 export interface GitProvider {
   headSha: (repoRoot: string) => Promise<string | null>;
   currentBranch: (repoRoot: string) => Promise<string | null>;
+  /**
+   * Clone `cloneUrl` into `dest` (optionally at `ref`). Optional so existing
+   * injected providers stay valid; connectRepo degrades safely when absent.
+   * Must reject on failure (non-zero exit / network error).
+   */
+  clone?: (cloneUrl: string, dest: string, ref?: string) => Promise<void>;
 }
 
 /** Injectable per-project index-state store. Default is in-memory; pg later. */
@@ -126,11 +143,52 @@ export interface RecoderGitServiceDeps {
   now?: () => string;
   /** Fail-safe error sink. Defaults to console.error. */
   logger?: RecoderGitServiceLogger;
+  /**
+   * Root dir for cloned repos (connectRepo). Each repo lands in
+   * `<workdirRoot>/<repoId>`. Defaults to `<DATA_DIR>/code-graph`.
+   */
+  workdirRoot?: () => string;
 }
 
 function readFlagFromEnv(): boolean {
   const raw = process.env[CODE_GRAPH_FLAG_ENV]?.trim().toLowerCase();
   return raw !== undefined && TRUTHY.has(raw);
+}
+
+/**
+ * Reject repoIds that could escape the managed workdir. A safe repoId is a
+ * single non-empty path segment with no separators, parent refs, or NUL bytes.
+ * Throws on violation (callers catch and degrade — never propagate to a request).
+ */
+export function assertSafeRepoId(repoId: string): void {
+  if (typeof repoId !== 'string' || repoId.length === 0) {
+    throw new Error('unsafe repoId: must be a non-empty string');
+  }
+  if (
+    repoId === '.' ||
+    repoId === '..' ||
+    repoId.includes('/') ||
+    repoId.includes('\\') ||
+    repoId.includes('\0') ||
+    repoId.includes('..')
+  ) {
+    throw new Error(`unsafe repoId: ${JSON.stringify(repoId)}`);
+  }
+}
+
+/**
+ * Derive a deterministic, path-safe repoId from a GitHub `owner/repo` full name.
+ * Lowercases and collapses every non `[a-z0-9_-]` run to `__` (so `owner/repo`
+ * -> `owner__repo`), guaranteeing no separators or parent refs survive.
+ */
+export function repoIdFromFullName(fullName: string): string {
+  return fullName.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '__');
+}
+
+/** Default clone workdir root: `<DATA_DIR or cwd/data>/code-graph`. */
+export function defaultWorkdirRoot(): string {
+  const dataDir = process.env.DATA_DIR?.trim() || path.join(process.cwd(), 'data');
+  return path.join(dataDir, 'code-graph');
 }
 
 /** Default bin resolver: RECODERGIT_BIN override, else the vendored dist (if present). */
@@ -185,6 +243,18 @@ function makeDefaultGit(): GitProvider {
   return {
     headSha: (repoRoot) => run(['rev-parse', 'HEAD'], repoRoot),
     currentBranch: (repoRoot) => run(['rev-parse', '--abbrev-ref', 'HEAD'], repoRoot),
+    clone: async (cloneUrl, dest, ref) => {
+      mkdirSync(path.dirname(dest), { recursive: true });
+      const args = ['clone', '--depth', '1'];
+      if (ref) {
+        args.push('--branch', ref);
+      }
+      args.push(cloneUrl, dest);
+      const result = await spawnCapture('git', args, path.dirname(dest));
+      if (result.code !== 0) {
+        throw new Error(`git clone failed (${result.code}): ${result.stderr.trim().slice(0, 200)}`);
+      }
+    },
   };
 }
 
@@ -278,6 +348,7 @@ export class RecoderGitService {
   private readonly store: IndexStateStore;
   private readonly now: () => string;
   private readonly logger: RecoderGitServiceLogger;
+  private readonly workdirRoot: () => string;
 
   constructor(deps: RecoderGitServiceDeps = {}) {
     this.isEnabledFn = deps.isEnabled ?? readFlagFromEnv;
@@ -287,6 +358,7 @@ export class RecoderGitService {
     this.store = deps.store ?? new InMemoryIndexStateStore();
     this.now = deps.now ?? (() => new Date().toISOString());
     this.logger = deps.logger ?? { error: (message, error) => console.error(message, error) };
+    this.workdirRoot = deps.workdirRoot ?? defaultWorkdirRoot;
   }
 
   /** True when the gate env var is truthy. Default OFF. */
@@ -342,6 +414,68 @@ export class RecoderGitService {
       await this.store.set(repoId, state);
       return { enabled: true, state };
     }
+  }
+
+  /**
+   * Connect a remote repo to the code-graph: clone it into a path-safe managed
+   * workdir (`<workdirRoot>/<repoId>`), then `indexRepo` it and persist the
+   * IndexState (with `repoRoot` + `cloneUrl`). No-op when the flag is off.
+   * Unsafe repoId, missing cloner, or clone/index failure all degrade to a
+   * truthful 'unavailable' state — this NEVER throws into a request path.
+   */
+  async connectRepo(
+    input: ConnectRepoInput,
+  ): Promise<ServiceResult<{ state: IndexState; status: IndexStatus }>> {
+    if (!this.isEnabled()) return { enabled: false };
+
+    const { repoId, cloneUrl, ref } = input;
+
+    let repoRoot: string;
+    try {
+      assertSafeRepoId(repoId);
+      repoRoot = path.join(this.workdirRoot(), repoId);
+    } catch (error: unknown) {
+      // Reject path-traversal repoIds WITHOUT cloning, persisting, or spawning.
+      this.logger.error('[recodergit-service] connectRepo rejected unsafe repoId', error);
+      return { enabled: true, state: this.unavailableState(repoId, '', cloneUrl), status: 'unavailable' };
+    }
+
+    try {
+      if (!this.git.clone) {
+        throw new Error('git provider has no clone capability');
+      }
+      await this.git.clone(cloneUrl, repoRoot, ref);
+      const indexed = await this.indexRepo({ repoRoot, repoId, ref });
+      if (!indexed.enabled) {
+        // isEnabled() was true above; defensive only.
+        const state = this.unavailableState(repoId, repoRoot, cloneUrl);
+        await this.store.set(repoId, state);
+        return { enabled: true, state, status: 'unavailable' };
+      }
+      // Record the cloneUrl alongside the freshly-indexed state (immutable copy).
+      const state: IndexState = { ...indexed.state, cloneUrl: cloneUrl ?? null };
+      await this.store.set(repoId, state);
+      return { enabled: true, state, status: state.status };
+    } catch (error: unknown) {
+      this.logger.error('[recodergit-service] connectRepo clone/index failed (degrading to unavailable)', error);
+      const state = this.unavailableState(repoId, repoRoot, cloneUrl);
+      await this.store.set(repoId, state);
+      return { enabled: true, state, status: 'unavailable' };
+    }
+  }
+
+  private unavailableState(repoId: string, repoRoot: string, cloneUrl?: string): IndexState {
+    return {
+      repoId,
+      repoRoot,
+      branch: null,
+      lastIndexedSha: null,
+      indexedAt: this.now(),
+      nodes: 0,
+      edges: 0,
+      status: 'unavailable',
+      cloneUrl: cloneUrl ?? null,
+    };
   }
 
   /**
