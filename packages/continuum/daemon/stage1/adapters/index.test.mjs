@@ -12,6 +12,7 @@ const make = (name, log) => (...args) => { log.started.push({ name, args }); ret
 const fakes = (log) => ({
   git: make('git', log), terminal: make('terminal', log),
   clipboard: make('clipboard', log), editor: make('editor', log),
+  recoder: make('recoder', log),
 });
 
 // disabled-by-default: empty/absent adapters config starts nothing
@@ -26,8 +27,17 @@ const fakes = (log) => ({
 // all explicitly false → starts nothing
 {
   const log = { started: [], stopped: [] };
-  startAdapters({ adapters: { git: false, terminal: false, clipboard: false, editor: false, gitDirs: [] } }, () => {}, fakes(log));
+  startAdapters({ adapters: { git: false, terminal: false, clipboard: false, editor: false, recoder: false, gitDirs: [] } }, () => {}, fakes(log));
   ok('all adapters false → starts nothing', log.started.length === 0, log.started.length);
+}
+
+// recoder branch: onEvent passed as 1st arg (terminal shape), and disabled by default
+{
+  const log = { started: [], stopped: [] };
+  const sink = () => {};
+  startAdapters({ adapters: { recoder: true } }, sink, fakes(log));
+  ok('recoder starts when enabled', log.started.some((s) => s.name === 'recoder'), JSON.stringify(log.started));
+  ok('recoder receives onEvent as 1st arg', log.started.find((s) => s.name === 'recoder').args[0] === sink);
 }
 
 // only enabled adapters start
