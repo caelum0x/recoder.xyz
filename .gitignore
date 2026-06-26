@@ -645,3 +645,10 @@ ts/oh-my-codex/
 ts/oh-my-openagent/
 ts/open-agents/
 ts/polar/
+
+# GitNexus build artifacts + per-repo index (regenerable; built via npm in ts/gitnexus)
+ts/gitnexus/**/node_modules/
+ts/gitnexus/gitnexus/dist/
+ts/gitnexus/gitnexus/web/
+.gitnexus/
+packages/*/.claude/skills/gitnexus/
