@@ -144,6 +144,7 @@ export default async function globalSetup(): Promise<void> {
     { spaces: 2 }
   );
 
+  await fs.ensureDir(path.join(sampleProject, 'src'));
   await fs.writeFile(
     path.join(sampleProject, 'src', 'index.js'),
     'import React from "react";\nimport ReactDOM from "react-dom";\n\nReactDOM.render(<h1>Hello World!</h1>, document.getElementById("root"));'
