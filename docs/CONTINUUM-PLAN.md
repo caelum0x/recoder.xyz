@@ -120,10 +120,10 @@ new capability (self-aware agent activity). **E1/T1** are deeper extensions.
 | Item | Area | Status | Note |
 |---|---|---|---|
 | Plan (this doc) | continuum | ✅ | written |
-| F1 promote → @recoder/continuum | continuum | 📋 | real engine, exports, types |
-| F2 in-process fusion (kill shell-out) | brain+continuum | 📋 | mirrors recodergit |
-| F3 real-engine tests + verify | brain+continuum | 📋 | temp store, fail-safe, no execFile |
-| R1 surface catch_up + snapshot | brain | 📋 | engines exist |
+| F1 promote → @recoder/continuum | continuum | ✅ | `756cb7232` — ts/→packages/; real .mjs engine; engines.mjs + engines.d.ts; exports ./engines(·)/store/mcp |
+| F2 in-process fusion (kill shell-out) | brain+continuum | ✅ | `756cb7232` — adapter dynamic-imports engines; execFile/subprocess gone (grep-proven); mirrors recodergit |
+| F3 real-engine tests + verify | brain+continuum | ✅ | `756cb7232` — 90/90 brain tests (real temp store, no mocks); tsc 0; tsup build; dist runtime smoke |
+| R1 surface catch_up + snapshot | brain | ✅ | `756cb7232` — ActivityPort recent()+snapshot(); adapter implements both on the real engine |
 | R2 grounded recall (answerQuery) | brain | 📋 | KG + recall |
 | A1 recoder agent-session adapter | continuum | 📋 | self-aware activity |
 | E1 on-box Qdrant embed tier | continuum | 📋 | privacy-first |
