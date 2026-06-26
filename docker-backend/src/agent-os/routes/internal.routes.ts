@@ -3,6 +3,7 @@ import { markOutboxFailed } from '@recoder/agent-events';
 import { agentOsContainer } from '../service-container';
 import { drainAgentOsOutbox } from '../outbox-drain.service';
 import { createNatsOutboxPublisher } from '../nats-outbox-publisher';
+import { createCodeGraphRouter } from './code-graph.routes';
 
 function requireInternalServiceKey(req: Request, res: Response, next: NextFunction) {
   const configured = process.env.INTERNAL_SERVICE_KEY;
@@ -93,6 +94,10 @@ export function createInternalAgentOsRouter(): Router {
     const context = await brain.assembleForTask({ task, repoRoot, focusFiles, limit });
     res.json({ success: true, data: { enabled: true, context } });
   });
+
+  // Flag-gated (RECODER_CODE_GRAPH_ENABLED) code-graph index lifecycle. Mounted
+  // additively under the same INTERNAL_SERVICE_KEY guard; no-op when the flag is off.
+  router.use('/code-graph', createCodeGraphRouter());
 
   router.post('/runs/tick', (_req, res) => {
     res.json({ success: true, data: { status: 'queued', operation: 'runs.tick' } });
