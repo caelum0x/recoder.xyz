@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-06-26T10:45:42.767Z",
+  "environment": {
+    "nodeVersion": "v24.10.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "duration": 0.832284667,
+  "cleanup": {
+    "directoriesRemoved": 3,
+    "reportsArchived": true,
+    "environmentCleaned": true
+  },
+  "status": "completed"
+}
