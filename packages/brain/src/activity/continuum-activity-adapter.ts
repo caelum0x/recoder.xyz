@@ -1,70 +1,43 @@
-import { execFile } from "node:child_process";
 import type { ActivityPort } from "../ports/activity.port";
 import type {
   BrainActivity,
   BrainActivityProfile,
 } from "../domain/activity.types";
-import { resolveExecEngine } from "../runtime/engine-resolver";
+import type {
+  ContinuumActivityRow,
+  ContinuumProfile,
+  ContinuumEmbed,
+} from "@recoder/continuum/engines";
 
 /**
- * Default {@link ActivityPort}, backed by the continuum CLI (ts/continuum).
+ * Default {@link ActivityPort}, backed by the OWNED continuum engine IN-PROCESS.
  *
- * continuum owns desktop-activity memory; its CLI exposes recall (semantic
- * activity search) and profile (synthesized "who is this user / how they
- * work"). This adapter shells out behind an INJECTABLE exec so the command
- * building is trivially swappable and tests inject a fake exec.
+ * This is the fusion seam (docs/CONTINUUM-PLAN.md §2). Brain imports the real continuum
+ * engines (`@recoder/continuum/engines`) and calls them directly — NO subprocess, NO
+ * JSON-over-stdout. It mirrors how the repo-intel port consumes `@recoder/recodergit`
+ * (`createContextPack`) in-process. The previous implementation shelled out to the
+ * `continuum` CLI binary; that thin-adapter pattern is gone.
  *
- * Fail-safe doctrine: if continuum is absent or errors, recall returns [] and
- * profile returns null. This source NEVER throws — a missing source degrades.
+ * Fail-safe doctrine: continuum never throws here. If the engine is absent or the store is
+ * empty/missing, recall → [], recent → [], profile → null, snapshot → null. A missing source
+ * degrades; the Brain keeps working.
  */
 
-/** Runs a command and resolves its stdout (the seam the test fakes). */
-export type ActivityExec = (
-  command: string,
-  args: string[],
-) => Promise<string>;
+/** The continuum engine module, loaded lazily once (cached after first import). */
+type ContinuumEngines = typeof import("@recoder/continuum/engines");
 
 export interface ContinuumActivityOptions {
-  /** Override the exec (defaults to execFile against the continuum binary). */
-  exec?: ActivityExec;
-  /** Override the binary name/path (defaults to "continuum"). */
-  binary?: string;
-}
-
-/** Default exec: run the continuum binary and collect stdout via execFile. */
-function defaultExec(command: string, args: string[]): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    execFile(command, args, (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(stdout);
-    });
-  });
-}
-
-/** A continuum recall row as emitted by the CLI (untrusted external shape). */
-interface ContinuumRow {
-  when?: unknown;
-  app?: unknown;
-  who?: unknown;
-  type?: unknown;
-  text?: unknown;
-  id?: unknown;
-}
-
-/** A continuum profile object as emitted by the CLI (untrusted external shape). */
-interface ContinuumProfile {
-  kind?: unknown;
-  brief?: unknown;
-  apps?: unknown;
-  types?: unknown;
-  recurring?: unknown;
-}
-
-function str(value: unknown): string {
-  return typeof value === "string" ? value : "";
+  /**
+   * Optional embedding fn for the hybrid search index. Null/omitted = lexical-only index
+   * (recall still works, just without semantic embedding). Default null = zero-config.
+   * E1 (on-box Qdrant embed tier) will wire a real fn here without touching this adapter.
+   */
+  embed?: ContinuumEmbed | null;
+  /**
+   * Optional LLM for a synthesized profile. Null/omitted = heuristic-only profile (the free
+   * default). R2 (grounded recall) wires a real fn here.
+   */
+  llm?: ((system: string, user: string, max: number) => Promise<string>) | null;
 }
 
 function strArray(value: unknown): string[] {
@@ -74,29 +47,23 @@ function strArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-function toWho(value: unknown): BrainActivity["who"] {
-  return value === "you" || value === "others" || value === "system"
-    ? value
-    : "system";
-}
-
-/** Map one continuum row to a BrainActivity (boundary normalization). */
-function toActivity(row: ContinuumRow): BrainActivity {
+/** Map a continuum activity row to a BrainActivity (boundary normalization). */
+function toActivity(row: ContinuumActivityRow): BrainActivity {
   return {
-    when: str(row.when),
-    app: str(row.app),
-    who: toWho(row.who),
-    type: str(row.type),
-    text: str(row.text),
-    id: str(row.id),
+    when: row.when ?? "",
+    app: row.app ?? "",
+    who: row.who === "you" || row.who === "others" || row.who === "system" ? row.who : "system",
+    type: row.type ?? "",
+    text: row.text ?? "",
+    id: row.id ?? "",
   };
 }
 
 /** Map a continuum profile to a BrainActivityProfile (boundary normalization). */
 function toProfile(profile: ContinuumProfile): BrainActivityProfile {
-  const brief = str(profile.brief);
+  const brief = profile.brief;
   return {
-    kind: str(profile.kind),
+    kind: profile.kind ?? "",
     ...(brief ? { brief } : {}),
     apps: strArray(profile.apps),
     tools: strArray(profile.types),
@@ -105,62 +72,74 @@ function toProfile(profile: ContinuumProfile): BrainActivityProfile {
 }
 
 export class ContinuumActivity implements ActivityPort {
-  private readonly exec: ActivityExec;
-  /** Command to spawn — `node` for the vendored entry, else a binary name. */
-  private readonly cmd: string;
-  /** Fixed arg prefix (the vendored entry path) prepended before each argv. */
-  private readonly argsPrefix: string[];
+  private readonly embed: ContinuumEmbed | null;
+  private readonly llm: ((s: string, u: string, m: number) => Promise<string>) | null;
+  /** Lazily-loaded engine module (cached). */
+  private enginesPromise: Promise<ContinuumEngines> | null = null;
 
   constructor(options: ContinuumActivityOptions = {}) {
-    this.exec = options.exec ?? defaultExec;
-    // An explicit binary keeps prior behavior; otherwise discover the vendored
-    // continuum.mjs (run via node) or fall back to `continuum` on PATH.
-    const resolved = resolveExecEngine("continuum", options.binary);
-    this.cmd = resolved.cmd;
-    this.argsPrefix = resolved.args;
+    this.embed = options.embed ?? null;
+    this.llm = options.llm ?? null;
+  }
+
+  /** Load the continuum engine module once; cache the promise. */
+  private async engines(): Promise<ContinuumEngines> {
+    if (!this.enginesPromise) {
+      this.enginesPromise = import("@recoder/continuum/engines");
+    }
+    return this.enginesPromise;
   }
 
   async recall(query: string, limit: number): Promise<BrainActivity[]> {
     try {
-      const stdout = await this.exec(this.cmd, [
-        ...this.argsPrefix,
-        "recall",
-        "--json",
-        "--limit",
-        String(limit),
-        query,
-      ]);
-      const parsed: unknown = JSON.parse(stdout);
-      if (!Array.isArray(parsed)) {
-        return [];
-      }
-      return parsed.map((row) => toActivity(row as ContinuumRow));
+      const e = await this.engines();
+      const episodes = e.loadEpisodes(); // [] if store absent — fail-safe
+      const index = await e.loadIndex(this.embed); // lexical-only if embed null
+      const rows = await e.recall(index, episodes, { query, k: limit });
+      return rows.map(toActivity);
     } catch {
-      // Continuum absent or errored — degrade to empty, never throw.
+      // Engine absent or errored — degrade to empty, never throw.
       return [];
     }
   }
 
   async profile(topic?: string): Promise<BrainActivityProfile | null> {
     try {
-      const args = [...this.argsPrefix, "profile", "--json"];
-      if (topic) {
-        args.push(topic);
-      }
-      const stdout = await this.exec(this.cmd, args);
-      const parsed: unknown = JSON.parse(stdout);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return null;
-      }
-      return toProfile(parsed as ContinuumProfile);
+      const e = await this.engines();
+      const episodes = e.loadEpisodes();
+      const result = await e.profile(episodes, { ...(topic ? { topic } : {}), llm: this.llm });
+      return toProfile(result);
     } catch {
-      // Continuum absent or errored — degrade to null, never throw.
+      // Engine absent or errored — degrade to null, never throw.
+      return null;
+    }
+  }
+
+  /** Recent activity, newest-first, deduped (no query). Maps continuum's catchUp. */
+  async recent(limit = 12): Promise<BrainActivity[]> {
+    try {
+      const e = await this.engines();
+      const episodes = e.loadEpisodes();
+      const rows = e.catchUp(episodes, { limit });
+      return rows.map(toActivity);
+    } catch {
+      return [];
+    }
+  }
+
+  /** One-line "who is this user" snapshot (no LLM). null if no activity. */
+  async snapshot(): Promise<string | null> {
+    try {
+      const e = await this.engines();
+      const episodes = e.loadEpisodes();
+      return e.snapshot(episodes);
+    } catch {
       return null;
     }
   }
 }
 
-/** Construct the default continuum-backed activity adapter. */
+/** Construct the default continuum-backed activity adapter (in-process, no shell-out). */
 export function createContinuumActivity(
   options?: ContinuumActivityOptions,
 ): ActivityPort {

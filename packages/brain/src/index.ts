@@ -50,12 +50,11 @@ export {
   type RecoderGitMcpRepoIntelOptions,
 } from "./repo/recodergit-mcp-repo-intel";
 
-// Desktop-activity adapter (the ts/continuum fusion seam)
+// Desktop-activity adapter (the in-process @recoder/continuum fusion seam)
 export {
   ContinuumActivity,
   createContinuumActivity,
   type ContinuumActivityOptions,
-  type ActivityExec,
 } from "./activity/continuum-activity-adapter";
 
 // Real mem0-backed semantic memory (degrade-safe to empty when key/tool absent)
