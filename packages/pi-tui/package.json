@@ -1,17 +1,17 @@
 {
   "name": "@recoder/pi-tui",
-  "version": "0.78.0",
+  "version": "0.80.2",
   "description": "Recoder-owned vendor of pi pi-tui (merged from earendil-works/pi).",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "get-east-asian-width": "1.6.0",
-    "marked": "15.0.12"
+    "marked": "18.0.5"
   },
   "devDependencies": {
     "tsup": "catalog:",
