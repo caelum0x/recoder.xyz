@@ -12,7 +12,8 @@
 export {
   buildRecoderPiLaunchPlan,
   resolveRecoderConfigDir,
-  PI_AGENT_DIR_ENV,
+  RECODER_PI_AGENT_DIR_ENV,
+  RECODER_PI_APP_NAME,
   RECODER_APP_NAME,
   RECODER_APP_TITLE,
   RECODER_CONFIG_DIR_NAME,
@@ -29,16 +30,20 @@ export {
   createRecoderMcpBridgeFactory,
   type BridgedMcpConnection,
   type ConnectMcpServer,
+  type DegradedToolGroup,
+  type LoadedToolGroup,
   type McpBridgeOptions,
   type PiBridgedTool,
   type PiExtensionFactory,
   type PiToolRegistrar,
+  type RecoderToolGroupSummary,
 } from './mcp-bridge.js';
 export {
   isPiShellEnabled,
   maybeRunRecoderPiShell,
   runRecoderPiShell,
   RECODER_PI_SHELL_ENV,
+  RECODER_AUTH_LOGIN_HINT,
   type PiMainEntry,
   type RunPiShellDeps,
 } from './launcher.js';

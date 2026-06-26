@@ -28,10 +28,14 @@ import {
 import {
   createRecoderMcpBridgeFactory,
   type PiExtensionFactory,
+  type RecoderToolGroupSummary,
 } from './mcp-bridge.js';
 
 /** The env flag that opts Recoder Code into the pi interactive shell. */
 export const RECODER_PI_SHELL_ENV = 'RECODER_PI_SHELL';
+
+/** The command we tell an unauthenticated user to run before launching. */
+export const RECODER_AUTH_LOGIN_HINT = 'recoder auth login';
 
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
@@ -64,6 +68,19 @@ export interface RunPiShellDeps extends BuildLaunchPlanOptions {
     env: Record<string, string | undefined>,
     overrides: Record<string, string>,
   ) => void;
+  /**
+   * Pre-launch auth gate: resolves `true` when a valid Recoder session/token
+   * exists. Default reuses recoder-code's existing `RecoderAuthService`
+   * (device-flow loader) — it is NOT reimplemented here. Injected in tests so the
+   * gate can be exercised both ways without touching the real auth file.
+   */
+  readonly ensureAuthenticated?: () => Promise<boolean>;
+  /** Called when the auth gate fails, before exiting (default: prints the login hint). */
+  readonly onUnauthenticated?: () => void;
+  /** Exits the process when unauthenticated (injected in tests; default `process.exit`). */
+  readonly exit?: (code: number) => void;
+  /** Surfaces which Recoder MCP tool groups loaded/degraded (default: prints to stderr). */
+  readonly reportToolGroups?: (summary: RecoderToolGroupSummary) => void;
 }
 
 /** Default pi `main` loader: dynamic import that survives CJS/ESM output. */
@@ -91,15 +108,63 @@ function defaultApplyEnv(
 }
 
 /**
+ * Default pre-launch auth check: reuse recoder-code's existing
+ * `RecoderAuthService` (the device-flow / token loader that persists under
+ * `~/.recoder/auth.json`). Lazily imported so the auth module (and its `open`/
+ * http deps) is only loaded on the flag-on path — never reimplemented here.
+ */
+async function defaultEnsureAuthenticated(): Promise<boolean> {
+  const { RecoderAuthService } = await import(
+    '../services/RecoderAuthService.js'
+  );
+  const auth = new RecoderAuthService();
+  return auth.isAuthenticated();
+}
+
+/** Default unauthenticated handler: tell the user how to sign in (existing pattern). */
+function defaultOnUnauthenticated(): void {
+  console.error('❌ Not authenticated with recoder.xyz');
+  console.error(`💡 Run: ${RECODER_AUTH_LOGIN_HINT}`);
+}
+
+/** Default exit: terminate the process so pi never launches unauthenticated. */
+function defaultExit(code: number): void {
+  process.exit(code);
+}
+
+/** Default tool-group reporter: surface loaded/degraded Recoder groups on stderr. */
+function defaultReportToolGroups(summary: RecoderToolGroupSummary): void {
+  if (summary.loaded.length > 0) {
+    const loaded = summary.loaded
+      .map((g) => `${g.name} (${g.toolCount} tool${g.toolCount === 1 ? '' : 's'})`)
+      .join(', ');
+    console.error(`[recoder-pi-shell] Recoder tool groups loaded: ${loaded}`);
+  }
+  for (const group of summary.degraded) {
+    console.error(
+      `[recoder-pi-shell] Recoder tool group degraded (unavailable): ${group.name} — ${group.reason}`,
+    );
+  }
+  if (summary.loaded.length === 0 && summary.degraded.length === 0) {
+    console.error('[recoder-pi-shell] No Recoder tool groups configured.');
+  }
+}
+
+/**
  * Launch full pi's interactive mode as the Recoder Code shell.
  *
  * Real wiring performed here:
  *  1. Build the launch plan (Recoder config dir + branding + default MCP servers).
- *  2. Apply the env overrides so pi writes its config under the Recoder config dir.
- *  3. Bridge the recodergit + brain MCP servers into pi via an extension factory.
- *  4. Invoke pi's interactive `main(piArgs, { extensionFactories })`.
+ *  2. PRE-LAUNCH AUTH GATE: ensure a valid Recoder session exists; otherwise
+ *     prompt `recoder auth login` and exit WITHOUT launching pi.
+ *  3. Apply the env overrides so pi writes its config under the Recoder config dir.
+ *  4. Bridge the recodergit + brain MCP servers into pi via an extension factory,
+ *     surfacing which tool groups loaded/degraded.
+ *  5. Invoke pi's interactive `main(piArgs, { extensionFactories })`.
  *
- * Returns the plan it executed (so callers/tests can assert the wiring).
+ * Returns the plan it executed (so callers/tests can assert the wiring). When the
+ * auth gate fails it returns the plan WITHOUT launching pi (under the default
+ * `exit` the process has already terminated by then).
  */
 export async function runRecoderPiShell(
   deps: RunPiShellDeps = {},
@@ -114,12 +179,30 @@ export async function runRecoderPiShell(
     startDir: deps.startDir,
   });
 
+  // PRE-LAUNCH AUTH GATE — the pi agent must run authenticated. Reuses the
+  // existing recoder-code auth flow; on failure we surface the login hint and
+  // exit before any env mutation or pi launch.
+  const ensureAuthenticated =
+    deps.ensureAuthenticated ?? defaultEnsureAuthenticated;
+  const authenticated = await ensureAuthenticated();
+  if (!authenticated) {
+    (deps.onUnauthenticated ?? defaultOnUnauthenticated)();
+    (deps.exit ?? defaultExit)(1);
+    // Reached only when a non-terminating `exit` is injected (tests): never
+    // launch pi for an unauthenticated user.
+    return plan;
+  }
+
   const applyEnv = deps.applyEnv ?? defaultApplyEnv;
   applyEnv(env, plan.envOverrides);
 
+  const reportToolGroups = deps.reportToolGroups ?? defaultReportToolGroups;
   const buildBridge =
     deps.buildBridge ??
-    ((mcpServers) => createRecoderMcpBridgeFactory(mcpServers));
+    ((mcpServers) =>
+      createRecoderMcpBridgeFactory(mcpServers, {
+        onGroupsResolved: reportToolGroups,
+      }));
   const bridge = buildBridge(plan.mcpServers);
 
   const loadPiMain = deps.loadPiMain ?? defaultLoadPiMain;

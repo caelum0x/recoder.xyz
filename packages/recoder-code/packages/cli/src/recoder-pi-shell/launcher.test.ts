@@ -73,6 +73,7 @@ describe('maybeRunRecoderPiShell (the CLI gate)', () => {
       env: resolvableEnv({ RECODER_PI_SHELL: '1' }),
       exists: NO_VENDORED,
       argv: [],
+      ensureAuthenticated: async () => true,
       loadPiMain: async () => piMain as unknown as PiMainEntry,
     });
 
@@ -92,6 +93,7 @@ describe('runRecoderPiShell wiring', () => {
       env,
       exists: NO_VENDORED,
       argv: ['--foo'],
+      ensureAuthenticated: async () => true,
       loadPiMain: async () => piMain as unknown as PiMainEntry,
       buildBridge,
     });
@@ -103,8 +105,10 @@ describe('runRecoderPiShell wiring', () => {
       'recodergit',
     ]);
 
-    // configDir env wiring was really applied to the env.
-    expect(env['PI_CODING_AGENT_DIR']).toBe('/home/tester/.recoder/agent');
+    // configDir env wiring was really applied to the env. After the Stage B
+    // rebrand pi's APP_NAME is "Recoder", so the env var it honors is
+    // RECODER_CODING_AGENT_DIR (not the stock PI_CODING_AGENT_DIR).
+    expect(env['RECODER_CODING_AGENT_DIR']).toBe('/home/tester/.recoder/agent');
 
     // The bridge was built from exactly the seeded MCP servers...
     expect(buildBridge).toHaveBeenCalledTimes(1);
@@ -128,6 +132,7 @@ describe('runRecoderPiShell wiring', () => {
       env,
       exists: NO_VENDORED,
       argv: [],
+      ensureAuthenticated: async () => true,
       loadPiMain: async () => piMain as unknown as PiMainEntry,
     });
 
