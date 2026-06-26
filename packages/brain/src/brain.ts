@@ -15,6 +15,7 @@ import type {
   BrainActivityProfile,
   BrainContext,
   BrainEvent,
+  BrainMemory,
   BrainQuery,
 } from "./domain";
 import type {
@@ -94,6 +95,16 @@ export class Brain {
       activity,
       assembledAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Focused semantic recall — the memory port only, no full assemble. The MCP
+   * `brain_recall` tool maps to this so an agent can pull prior knowledge
+   * without paying for a whole context assembly. Degrade-safe: yields [] when no
+   * memory adapter is wired (missing key/tool is never an error).
+   */
+  async recall(query: string, limit: number = DEFAULT_LIMIT): Promise<BrainMemory[]> {
+    return (await this.deps.memory?.recall(query, limit)) ?? [];
   }
 
   /** Write an agent's outcome back so the next assemble() is richer. */
