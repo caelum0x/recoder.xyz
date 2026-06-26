@@ -1,9 +1,12 @@
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   RecoderGitService,
   parseAnalyzeStats,
   projectDomainMap,
   extractJson,
+  assertSafeRepoId,
+  repoIdFromFullName,
   type EngineExec,
   type ExecResult,
   type GitProvider,
@@ -139,6 +142,108 @@ describe('RecoderGitService — indexRepo', () => {
     const result = await service.indexRepo(INPUT);
     if (!result.enabled) throw new Error('expected enabled');
     expect(result.state.status).toBe('unavailable');
+  });
+});
+
+describe('RecoderGitService — connectRepo (clone + index)', () => {
+  function gitWithClone(sha: string | null, branch: string | null = 'main') {
+    const clone = vi.fn<[string, string, string?], Promise<void>>(async () => {});
+    const git: GitProvider = { headSha: async () => sha, currentBranch: async () => branch, clone };
+    return { git, clone };
+  }
+
+  it('flag ON -> clones into <workdir>/<repoId>, indexes, records state with cloneUrl', async () => {
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => ok(ANALYZE_OUT));
+    const { git, clone } = gitWithClone('abc1234', 'main');
+    const store = fakeStore();
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      exec,
+      git,
+      store,
+      workdirRoot: () => '/managed',
+      now: () => '2026-06-26T00:00:00.000Z',
+    });
+
+    const result = await service.connectRepo({
+      repoId: 'owner__repo',
+      cloneUrl: 'https://github.com/owner/repo.git',
+      ref: 'main',
+    });
+
+    const expectedRoot = path.join('/managed', 'owner__repo');
+    expect(clone).toHaveBeenCalledWith('https://github.com/owner/repo.git', expectedRoot, 'main');
+    expect(exec).toHaveBeenCalledWith(['analyze', expectedRoot, '--skip-git'], { cwd: expectedRoot });
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.status).toBe('indexed');
+    expect(result.state).toMatchObject({
+      repoId: 'owner__repo',
+      repoRoot: expectedRoot,
+      cloneUrl: 'https://github.com/owner/repo.git',
+      lastIndexedSha: 'abc1234',
+      status: 'indexed',
+    });
+    expect(store.states.get('owner__repo')?.cloneUrl).toBe('https://github.com/owner/repo.git');
+  });
+
+  it('path-traversal repoId -> rejected with NO clone/exec, status unavailable', async () => {
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => ok(ANALYZE_OUT));
+    const { git, clone } = gitWithClone('abc1234');
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      exec,
+      git,
+      store: fakeStore(),
+      workdirRoot: () => '/managed',
+      logger: { error: vi.fn() },
+    });
+
+    const result = await service.connectRepo({ repoId: '../escape', cloneUrl: 'https://x' });
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.status).toBe('unavailable');
+    expect(clone).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('flag OFF -> connectRepo is a no-op (no clone/exec)', async () => {
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => {
+      throw new Error('exec must not run when disabled');
+    });
+    const clone = vi.fn<[string, string, string?], Promise<void>>(async () => {
+      throw new Error('clone must not run when disabled');
+    });
+    const service = new RecoderGitService({
+      isEnabled: () => false,
+      exec,
+      git: { headSha: async () => 'x', currentBranch: async () => null, clone },
+    });
+
+    await expect(service.connectRepo({ repoId: 'r1', cloneUrl: 'https://x' })).resolves.toEqual({ enabled: false });
+    expect(clone).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('clone failure -> fails safe to unavailable (no index), never throws', async () => {
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => ok(ANALYZE_OUT));
+    const clone = vi.fn<[string, string, string?], Promise<void>>(async () => {
+      throw new Error('network down');
+    });
+    const store = fakeStore();
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      exec,
+      git: { headSha: async () => 'x', currentBranch: async () => 'm', clone },
+      store,
+      workdirRoot: () => '/managed',
+      logger: { error: vi.fn() },
+    });
+
+    const result = await service.connectRepo({ repoId: 'r1', cloneUrl: 'https://x' });
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.status).toBe('unavailable');
+    expect(result.state.cloneUrl).toBe('https://x');
+    expect(exec).not.toHaveBeenCalled();
+    expect(store.states.get('r1')?.status).toBe('unavailable');
   });
 });
 
@@ -310,5 +415,20 @@ describe('pure helpers', () => {
   it('projectDomainMap accepts a bare array of domains and snake_case keys', () => {
     const map = projectDomainMap('r1', [{ id: 'core', entry_points: ['x.ts'], depends_on: ['util'] }]);
     expect(map.domains).toEqual([{ name: 'core', files: undefined, entryPoints: ['x.ts'], dependsOn: ['util'] }]);
+  });
+
+  it('repoIdFromFullName produces a deterministic path-safe id', () => {
+    expect(repoIdFromFullName('owner/repo')).toBe('owner__repo');
+    expect(repoIdFromFullName('Owner/Repo.JS')).toBe('owner__repo__js');
+    expect(repoIdFromFullName('owner/../etc')).toBe('owner__etc');
+    // The derived id is always accepted by the path-safety guard.
+    expect(() => assertSafeRepoId(repoIdFromFullName('owner/repo'))).not.toThrow();
+  });
+
+  it('assertSafeRepoId rejects separators, parent refs, NUL, and empty', () => {
+    expect(() => assertSafeRepoId('owner__repo')).not.toThrow();
+    for (const bad of ['', '.', '..', 'a/b', 'a\\b', '../escape', 'a..b', 'a\0b']) {
+      expect(() => assertSafeRepoId(bad)).toThrow();
+    }
   });
 });

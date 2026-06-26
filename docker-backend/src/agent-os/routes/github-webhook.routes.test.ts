@@ -1,8 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GitHubDeliveryService, type TaskSpec } from '@recoder/agent-os';
 import { InMemoryAgentOsRepository } from '../repositories/in-memory-agent-os.repository';
 import { agentOsContainer } from '../service-container';
-import { ingestGitHubWebhook } from './github-webhook.routes';
+import { RecoderGitService, type IndexState, type IndexStateStore } from '../recodergit-service';
+import {
+  ingestGitHubWebhook,
+  reindexConnectedRepoOnPush,
+  processAgentOsGitHubWebhook,
+  extractPushChangedFiles,
+} from './github-webhook.routes';
 
 const now = '2026-06-13T10:00:00.000Z';
 
@@ -104,5 +110,120 @@ describe('Agent OS GitHub webhook ingestion', () => {
     expect(result).toEqual({ event: 'pull_request', matched: false });
     expect(await agentOsContainer.repository.listArtifacts()).toHaveLength(0);
     expect(await agentOsContainer.repository.listOutbox()).toHaveLength(0);
+  });
+});
+
+describe('Agent OS GitHub webhook -> code-graph push reindex (additive, non-blocking)', () => {
+  // full_name 'recoder/recoder.xyz' -> repoIdFromFullName collapses '/' and '.' to '__'.
+  const CONNECTED_REPO_ID = 'recoder__recoder__xyz';
+
+  const PUSH_PAYLOAD: Record<string, unknown> = {
+    ref: 'refs/heads/main',
+    repository: { full_name: 'recoder/recoder.xyz' },
+    commits: [
+      { added: ['a.ts'], modified: ['b.ts'], removed: [] },
+      { modified: ['b.ts', 'c.ts'], removed: ['d.ts'] },
+    ],
+  };
+
+  function makeStore(seedConnected: boolean): IndexStateStore {
+    const states = new Map<string, IndexState>();
+    if (seedConnected) {
+      states.set(CONNECTED_REPO_ID, {
+        repoId: CONNECTED_REPO_ID,
+        repoRoot: '/managed/' + CONNECTED_REPO_ID,
+        branch: 'main',
+        lastIndexedSha: 'sha',
+        indexedAt: '2026-06-26T00:00:00.000Z',
+        nodes: 1,
+        edges: 1,
+        status: 'indexed',
+      });
+    }
+    return {
+      get: (repoId) => states.get(repoId) ?? null,
+      set: (repoId, state) => {
+        states.set(repoId, state);
+      },
+    };
+  }
+
+  function makeService(opts: { enabled: boolean; connected: boolean }): RecoderGitService {
+    return new RecoderGitService({
+      isEnabled: () => opts.enabled,
+      exec: async () => ({ stdout: '1 nodes | 1 edges', stderr: '', code: 0 }),
+      git: { headSha: async () => 'sha', currentBranch: async () => 'main', clone: async () => {} },
+      store: makeStore(opts.connected),
+      workdirRoot: () => '/managed',
+      logger: { error: vi.fn() },
+    });
+  }
+
+  it('push for a connected repo triggers reindexOnPush with derived repoId + changedFiles', async () => {
+    const service = makeService({ enabled: true, connected: true });
+    const spy = vi.spyOn(service, 'reindexOnPush');
+
+    const result = await reindexConnectedRepoOnPush(service, 'push', PUSH_PAYLOAD);
+
+    expect(result).toMatchObject({ triggered: true, repoId: CONNECTED_REPO_ID });
+    expect(spy).toHaveBeenCalledWith({
+      repoId: CONNECTED_REPO_ID,
+      changedFiles: ['a.ts', 'b.ts', 'c.ts', 'd.ts'],
+    });
+  });
+
+  it('flag OFF -> no reindex, no engine work', async () => {
+    const service = makeService({ enabled: false, connected: true });
+    const spy = vi.spyOn(service, 'reindexOnPush');
+
+    const result = await reindexConnectedRepoOnPush(service, 'push', PUSH_PAYLOAD);
+
+    expect(result).toEqual({ triggered: false, reason: 'disabled' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('unconnected/unknown repo -> skipped (not_connected)', async () => {
+    const service = makeService({ enabled: true, connected: false });
+    const spy = vi.spyOn(service, 'reindexOnPush');
+
+    const result = await reindexConnectedRepoOnPush(service, 'push', PUSH_PAYLOAD);
+
+    expect(result).toMatchObject({ triggered: false, reason: 'not_connected' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('non-push event -> skipped', async () => {
+    const service = makeService({ enabled: true, connected: true });
+    const spy = vi.spyOn(service, 'reindexOnPush');
+
+    const result = await reindexConnectedRepoOnPush(service, 'pull_request', PUSH_PAYLOAD);
+
+    expect(result).toEqual({ triggered: false, reason: 'not_push' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('reindex THROWS -> webhook still returns its normal success (non-blocking proven)', async () => {
+    const service = makeService({ enabled: true, connected: true });
+    vi.spyOn(service, 'reindexOnPush').mockRejectedValue(new Error('reindex boom'));
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await processAgentOsGitHubWebhook('push', PUSH_PAYLOAD, service);
+
+    // Response is byte-identical to the no-reindex path despite the failure.
+    expect(response).toEqual({
+      status: 202,
+      body: { success: true, data: { event: 'push', matched: false } },
+    });
+
+    // Let the fire-and-forget rejection settle: it is swallowed + logged, never thrown.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it('extractPushChangedFiles dedupes across commits; undefined when none', () => {
+    expect(extractPushChangedFiles(PUSH_PAYLOAD)).toEqual(['a.ts', 'b.ts', 'c.ts', 'd.ts']);
+    expect(extractPushChangedFiles({ commits: [] })).toBeUndefined();
+    expect(extractPushChangedFiles({})).toBeUndefined();
   });
 });

@@ -13,6 +13,13 @@ import {
   mapArtifactToCloudEvent,
 } from '@recoder/agent-events';
 import { agentOsContainer } from '../service-container';
+import { RecoderGitService, repoIdFromFullName } from '../recodergit-service';
+
+/**
+ * Minimal structural slice of RecoderGitService the push-reindex hook needs.
+ * Keeps the hook injectable/testable without the full service surface.
+ */
+type CodeGraphReindexer = Pick<RecoderGitService, 'isEnabled' | 'status' | 'reindexOnPush'>;
 
 const GITHUB_WEBHOOK_SECRET =
   process.env.AGENT_OS_GITHUB_WEBHOOK_SECRET ||
@@ -46,18 +53,121 @@ export function createAgentOsGitHubWebhookRouter(): Router {
       return;
     }
 
-    try {
-      const result = await ingestGitHubWebhook(event, payload);
-      res.status(result.matched ? 200 : 202).json({ success: true, data: result });
-    } catch (error) {
-      res.status(400).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'github_webhook_ingest_failed',
-      });
-    }
+    const { status, body } = await processAgentOsGitHubWebhook(event, payload);
+    res.status(status).json(body);
   });
 
   return router;
+}
+
+export interface WebhookResponse {
+  status: number;
+  body: Record<string, unknown>;
+}
+
+/**
+ * Compute the webhook HTTP response (byte-identical to the prior inline logic),
+ * then schedule a NON-BLOCKING code-graph reindex. The reindex is fire-and-forget
+ * and cannot change `status`/`body`: it runs after the response is computed and
+ * every failure is swallowed. ADDITIVE + flag-gated (see scheduleCodeGraphPushReindex).
+ */
+export async function processAgentOsGitHubWebhook(
+  event: string,
+  payload: Record<string, unknown>,
+  codeGraph: CodeGraphReindexer = agentOsContainer.codeGraph,
+): Promise<WebhookResponse> {
+  let response: WebhookResponse;
+  try {
+    const result = await ingestGitHubWebhook(event, payload);
+    response = { status: result.matched ? 200 : 202, body: { success: true, data: result } };
+  } catch (error) {
+    response = {
+      status: 400,
+      body: {
+        success: false,
+        error: error instanceof Error ? error.message : 'github_webhook_ingest_failed',
+      },
+    };
+  }
+
+  scheduleCodeGraphPushReindex(event, payload, codeGraph);
+  return response;
+}
+
+/**
+ * Fire-and-forget the push reindex. Synchronous, returns void, and swallows every
+ * error (sync throw or async rejection) so it can NEVER affect the webhook response.
+ */
+export function scheduleCodeGraphPushReindex(
+  event: string,
+  payload: Record<string, unknown>,
+  codeGraph: CodeGraphReindexer = agentOsContainer.codeGraph,
+): void {
+  try {
+    void reindexConnectedRepoOnPush(codeGraph, event, payload).catch((error) => {
+      logReindexError(error);
+    });
+  } catch (error) {
+    logReindexError(error);
+  }
+}
+
+/**
+ * Best-effort: on a `push` for a CONNECTED repo (an IndexState already exists for
+ * the repoId derived from the push repo full_name), trigger an incremental reindex.
+ * No-op when the flag is off, the event is not a push, or the repo is not connected.
+ */
+export async function reindexConnectedRepoOnPush(
+  codeGraph: CodeGraphReindexer,
+  event: string,
+  payload: Record<string, unknown>,
+): Promise<{ triggered: boolean; reason?: string; repoId?: string }> {
+  if (event !== 'push') {
+    return { triggered: false, reason: 'not_push' };
+  }
+  if (!codeGraph.isEnabled()) {
+    return { triggered: false, reason: 'disabled' };
+  }
+  const fullName = repositoryFullName(payload);
+  if (!fullName) {
+    return { triggered: false, reason: 'no_repository' };
+  }
+  const repoId = repoIdFromFullName(fullName);
+  const statusResult = await codeGraph.status(repoId);
+  if (!statusResult.enabled || statusResult.status === 'not_indexed') {
+    return { triggered: false, reason: 'not_connected', repoId };
+  }
+  const changedFiles = extractPushChangedFiles(payload);
+  await codeGraph.reindexOnPush({ repoId, changedFiles });
+  return { triggered: true, repoId };
+}
+
+/** Collect unique added/modified/removed paths from a push payload's commits. */
+export function extractPushChangedFiles(payload: Record<string, unknown>): string[] | undefined {
+  const commits = Array.isArray(payload.commits) ? payload.commits : [];
+  const files = new Set<string>();
+  for (const commit of commits) {
+    const c = record(commit);
+    for (const key of ['added', 'modified', 'removed'] as const) {
+      const arr = c[key];
+      if (Array.isArray(arr)) {
+        for (const file of arr) {
+          if (typeof file === 'string' && file.length > 0) {
+            files.add(file);
+          }
+        }
+      }
+    }
+  }
+  return files.size > 0 ? [...files] : undefined;
+}
+
+function logReindexError(error: unknown): void {
+  try {
+    console.error('[agent-os][code-graph] push reindex failed (non-blocking)', error);
+  } catch {
+    // never let logging break the fire-and-forget contract
+  }
 }
 
 export async function ingestGitHubWebhook(
