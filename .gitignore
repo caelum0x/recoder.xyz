@@ -652,3 +652,4 @@ ts/recodergit/**/dist/
 ts/recodergit/**/web/
 .recodergit/
 packages/*/.claude/skills/recodergit/
+.history/
