@@ -42,7 +42,7 @@ export interface ResolvedContext7 {
 
 /** The full resolution across every Brain engine. */
 export interface ResolvedEngines {
-  readonly gitnexus: ResolvedExecEngine;
+  readonly recodergit: ResolvedExecEngine;
   readonly continuum: ResolvedExecEngine;
   readonly bd: ResolvedExecEngine;
   readonly mem0: ResolvedMem0;
@@ -64,8 +64,8 @@ export interface ResolveEnginesOptions {
   readonly exists?: ExistsFn;
 }
 
-/** Vendored built gitnexus CLI entry, relative to the monorepo root. */
-const GITNEXUS_VENDORED = ["ts", "gitnexus", "gitnexus", "dist", "cli", "index.js"];
+/** Vendored built recodergit CLI entry, relative to the monorepo root. */
+const RECODERGIT_VENDORED = ["ts", "recodergit", "gitnexus", "dist", "cli", "index.js"];
 /** Vendored zero-dep continuum CLI entry, relative to the monorepo root. */
 const CONTINUUM_VENDORED = ["ts", "continuum", "bin", "continuum.mjs"];
 /** Marker that identifies the monorepo root when walking up from a start dir. */
@@ -128,9 +128,9 @@ export function resolveEngines(
   const env = options.env ?? process.env;
   const root = options.root ?? findRepoRoot(process.cwd(), exists);
 
-  const gitnexus = resolveExec({
-    vendored: join(root, ...GITNEXUS_VENDORED),
-    envBin: env["GITNEXUS_BIN"],
+  const recodergit = resolveExec({
+    vendored: join(root, ...RECODERGIT_VENDORED),
+    envBin: env["RECODERGIT_BIN"],
     pathName: "gitnexus",
     exists,
   });
@@ -149,7 +149,7 @@ export function resolveEngines(
 
   const mem0Base = env["MEM0_BASE_URL"]?.trim();
   return {
-    gitnexus,
+    recodergit,
     continuum,
     bd,
     mem0: { baseUrl: mem0Base ? mem0Base : null },
@@ -164,7 +164,7 @@ export function resolveEngines(
  * an absent override opts into vendored discovery.
  */
 export function resolveExecEngine(
-  engine: "gitnexus" | "continuum" | "bd",
+  engine: "recodergit" | "continuum" | "bd",
   override?: string,
   options?: ResolveEnginesOptions,
 ): ResolvedExecEngine {

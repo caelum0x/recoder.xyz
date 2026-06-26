@@ -2,7 +2,7 @@
  * @module code-graph
  *
  * Lightweight code knowledge graph — the "code intelligence" pillar, inspired
- * by GitNexus (abhigyanpatwari/GitNexus). Given a set of source files it builds
+ * by RecoderGit (abhigyanpatwari/RecoderGit). Given a set of source files it builds
  * a queryable graph of files + symbols (nodes) and imports + definitions
  * (edges), so agents can navigate a codebase: find a symbol, list a file's
  * exports, see who imports a module, or trace dependencies.

@@ -118,7 +118,7 @@ owned source, then merges into the target subsystem.
 
 | OSS (real, owned) | Path | Lang | Fuses into | Provides |
 |---|---|---|---|---|
-| **GitNexus** | `ts/gitnexus` | TS | brain (`repo/`) | Tree-sitter AST ingestion → code knowledge graph (LadybugDB/`lbug`) → embeddings → search/RAG → MCP. The real repo-intelligence engine. |
+| **RecoderGit** | `ts/recodergit` | TS | brain (`repo/`) | Tree-sitter AST ingestion → code knowledge graph (LadybugDB/`lbug`) → embeddings → search/RAG → MCP. The real repo-intelligence engine. |
 | **mem0** | `py/mem0` (+ `mem0-ts/src/oss`) | Py/TS | brain (`memory/`) | Semantic recall: embeddings, vector stores (pgvector/qdrant/memory), LLM fact-extraction, scoring/bm25, history. |
 | **context7-sdk** | `packages/context7-sdk` | TS | brain (`docs/`) | External library docs: `searchLibrary`, `getContext`, retrying HTTP client. |
 | **beads** | `go/beads` | Go | brain (`tasks/`) | Durable task graph on Dolt: versioned deps, ready/blocked, cycles, history. |
@@ -144,10 +144,10 @@ owned source, then merges into the target subsystem.
 > **Mock → real correction (why this plan was re-grounded).** The first brain design was
 > written against thin in-repo stubs: `packages/git-nexus` (192 lines across 8 files) and a
 > TS-only `packages/mem0` assumption. Those are **mocks**. The real engines are now cloned
-> and owned: `ts/gitnexus` (1,860 TS files — Tree-sitter knowledge graph) and `py/mem0`
+> and owned: `ts/recodergit` (1,860 TS files — Tree-sitter knowledge graph) and `py/mem0`
 > (Python core + `mem0-ts/src/oss` TS SDK whose layout matches the original fusion paths).
-> `brain.md`'s `repo/` module must fuse the real GitNexus core
-> (`ts/gitnexus/gitnexus/src/core/{tree-sitter,ingestion,graph,embeddings,lbug,search,
+> `brain.md`'s `repo/` module must fuse the real RecoderGit core
+> (`ts/recodergit/gitnexus/src/core/{tree-sitter,ingestion,graph,embeddings,lbug,search,
 > incremental}` + `gitnexus-shared/src/{graph,scope-resolution}`), and its `memory/` paths
 > repoint from `packages/mem0/src/...` → `py/mem0/mem0-ts/src/oss/src/...`. The mock
 > packages stay as the type-shim seam during the merge, then collapse into `packages/brain`.
@@ -158,7 +158,7 @@ Curated against the 8-subsystem thesis. The bar: does it fill a slot a subsystem
 needs? "Validates the stack" = the upstream of code we already own (confirms the architecture).
 
 **Already own (upstreams of our vendored OSS — listed firehose confirmed these):**
-multica · openfang · GitNexus · polar · pal-mcp-server · pi · mem0 · a2a-js · open-agents ·
+multica · openfang · RecoderGit · polar · pal-mcp-server · pi · mem0 · a2a-js · open-agents ·
 daytona · context7 · beads · ziti · dmux · continuum. → see §5.
 
 **Tier 1 — cloning now (fills a named subsystem slot):**
@@ -226,7 +226,7 @@ subsystem's doc. Never thin-wrap.
 
 | Phase | Subsystem | What lands | Status |
 |---|---|---|---|
-| 0 | OSS acquisition | Clone + de-git real GitNexus, mem0, tmux, dmux into `ts/ py/ c/` | ✅ done |
+| 0 | OSS acquisition | Clone + de-git real RecoderGit, mem0, tmux, dmux into `ts/ py/ c/` | ✅ done |
 | 1 | **brain** | ✅ **DONE** — ports foundation; real adapters behind every port: gitnexus (`RepoIntelPort`, degrade-safe), **continuum desktop-activity** (`ActivityPort`), mem0 (`MemoryPort`), context7 (`DocsPort`), beads (`TaskGraphPort`); all 5 wired into `docker-backend` `BrainService` (flag-gated, default off). Each fail-safe + unit-tested. Remaining: assemble-once cache + tokens-saved metric. | ✅ built & green |
 | 2 | **governance** | Rust governance crates (approval/audit/routing/permission) + TS `packages/governance` over typed IPC | designed |
 | 3 | **coordination** | Work-locks + dispatch + handoff bus + reconciler | designed |

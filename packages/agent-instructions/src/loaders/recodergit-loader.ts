@@ -1,14 +1,14 @@
 import { InstructionSourceKindEnum } from '@recoder/a2a-sdk';
 import { sha256Hex, type LoadedInstructionSource } from '../provenance';
 
-export type GitNexusInstructionContext = {
+export type RecoderGitInstructionContext = {
   taskId: string;
   impactedPackages: string[];
   relatedTests: string[];
   riskSummary?: string;
 };
 
-export function loadGitNexusInstructionSource(context: GitNexusInstructionContext): LoadedInstructionSource {
+export function loadRecoderGitInstructionSource(context: RecoderGitInstructionContext): LoadedInstructionSource {
   const content = [
     `Git Nexus context for task ${context.taskId}`,
     `Impacted packages: ${context.impactedPackages.join(', ') || 'none declared'}`,
