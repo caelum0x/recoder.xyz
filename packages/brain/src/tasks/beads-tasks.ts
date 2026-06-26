@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import type { TaskGraphPort } from "../ports/task-graph.port";
 import type { BrainTask } from "../domain/task-graph.types";
+import { resolveExecEngine } from "../runtime/engine-resolver";
 
 /**
  * REAL {@link TaskGraphPort}, backed by the actual beads engine (go/beads) via
@@ -29,8 +30,6 @@ export interface BeadsTasksOptions {
   /** Override the binary name/path (defaults to "bd"). */
   bdBin?: string;
 }
-
-const DEFAULT_BIN = "bd";
 
 /** Statuses that mean "this task is finished" — routed through `bd close`. */
 const CLOSED_STATUSES: ReadonlySet<string> = new Set([
@@ -169,16 +168,25 @@ export function buildUpdateArgs(
 
 export class BeadsTasks implements TaskGraphPort {
   private readonly exec: BeadsExec;
-  private readonly bin: string;
+  /** Command to spawn (an env-pinned path or `bd` on PATH). */
+  private readonly cmd: string;
+  /** Fixed arg prefix prepended before each bd argv (empty for a bare binary). */
+  private readonly argsPrefix: string[];
 
   constructor(options: BeadsTasksOptions = {}) {
     this.exec = options.exec ?? defaultExec;
-    this.bin = options.bdBin ?? DEFAULT_BIN;
+    // An explicit binary keeps prior behavior; otherwise honor BD_BIN or `bd`.
+    const resolved = resolveExecEngine("bd", options.bdBin);
+    this.cmd = resolved.cmd;
+    this.argsPrefix = resolved.args;
   }
 
   async related(query: string, limit: number): Promise<BrainTask[]> {
     try {
-      const stdout = await this.exec(this.bin, buildReadyArgs(limit));
+      const stdout = await this.exec(this.cmd, [
+        ...this.argsPrefix,
+        ...buildReadyArgs(limit),
+      ]);
       return parseTasks(stdout);
     } catch {
       // bd absent or errored — degrade to empty, never throw.
@@ -191,7 +199,10 @@ export class BeadsTasks implements TaskGraphPort {
       return;
     }
     try {
-      await this.exec(this.bin, buildUpdateArgs(id, status, note));
+      await this.exec(this.cmd, [
+        ...this.argsPrefix,
+        ...buildUpdateArgs(id, status, note),
+      ]);
     } catch {
       // bd absent or errored — silent no-op, never throw.
     }

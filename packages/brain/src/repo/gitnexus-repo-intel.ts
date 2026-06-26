@@ -12,6 +12,7 @@ import {
 } from "@recoder/git-nexus";
 import type { RepoIntelPort } from "../ports/repo-intel.port";
 import { ContextPackRepoIntel } from "./repo-intel-adapter";
+import { resolveExecEngine } from "../runtime/engine-resolver";
 
 /**
  * REAL {@link RepoIntelPort}, backed by the actual GitNexus engine (ts/gitnexus:
@@ -47,8 +48,6 @@ export interface GitNexusRepoIntelOptions {
   /** Override the binary name/path (defaults to "gitnexus"). */
   gitnexusBin?: string;
 }
-
-const DEFAULT_BIN = "gitnexus";
 
 /** Default exec: run the gitnexus binary and collect stdout via execFile. */
 function defaultExec(command: string, args: string[]): Promise<string> {
@@ -206,12 +205,19 @@ function parseImpact(targetPath: string, stdout: string): ParsedImpact | null {
 export class GitNexusRepoIntel implements RepoIntelPort {
   private readonly exec: GitNexusExec;
   private readonly fallback: RepoIntelPort;
-  private readonly bin: string;
+  /** Command to spawn — `node` for the vendored build, else a binary name. */
+  private readonly cmd: string;
+  /** Fixed arg prefix (the vendored entry path) prepended before impact argv. */
+  private readonly argsPrefix: string[];
 
   constructor(options: GitNexusRepoIntelOptions = {}) {
     this.exec = options.exec ?? defaultExec;
     this.fallback = options.fallback ?? new ContextPackRepoIntel();
-    this.bin = options.gitnexusBin ?? DEFAULT_BIN;
+    // An explicit binary keeps prior behavior; otherwise discover the vendored
+    // build (run via node) or fall back to the bare `gitnexus` on PATH.
+    const resolved = resolveExecEngine("gitnexus", options.gitnexusBin);
+    this.cmd = resolved.cmd;
+    this.argsPrefix = resolved.args;
   }
 
   async contextPack(input: CreateContextPackInput): Promise<ContextPack> {
@@ -246,10 +252,10 @@ export class GitNexusRepoIntel implements RepoIntelPort {
     targetPath: string,
   ): Promise<ParsedImpact | null> {
     try {
-      const stdout = await this.exec(
-        this.bin,
-        buildImpactArgs(repoRoot, targetPath),
-      );
+      const stdout = await this.exec(this.cmd, [
+        ...this.argsPrefix,
+        ...buildImpactArgs(repoRoot, targetPath),
+      ]);
       return parseImpact(targetPath, stdout);
     } catch {
       return null;
