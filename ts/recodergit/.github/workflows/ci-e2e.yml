@@ -22,7 +22,7 @@ jobs:
         with:
           filters: |
             web:
-              - 'gitnexus-web/**'
+              - 'recodergit-web/**'
 
   e2e:
     name: e2e (chromium)
@@ -35,55 +35,55 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Configure e2e GitNexus home
-        run: echo "GITNEXUS_HOME=${RUNNER_TEMP}/gitnexus-home" >> "$GITHUB_ENV"
+      - name: Configure e2e RecoderGit home
+        run: echo "GITNEXUS_HOME=${RUNNER_TEMP}/recodergit-home" >> "$GITHUB_ENV"
 
-      - uses: ./.github/actions/setup-gitnexus-web
+      - uses: ./.github/actions/setup-recodergit-web
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-        working-directory: gitnexus-web
+        working-directory: recodergit-web
 
       - name: Install backend dependencies
         run: npm ci
-        working-directory: gitnexus
+        working-directory: recodergit
 
       - name: Build backend
         run: npm run build
-        working-directory: gitnexus
+        working-directory: recodergit
 
       - name: Analyze repository (index for backend)
         run: |
-          E2E_REPO="${RUNNER_TEMP}/gitnexus-e2e-repo"
+          E2E_REPO="${RUNNER_TEMP}/recodergit-e2e-repo"
           rm -rf "${E2E_REPO}"
           mkdir -p "${E2E_REPO}"
-          cp -R gitnexus/test/fixtures/mini-repo/src "${E2E_REPO}/src"
+          cp -R recodergit/test/fixtures/mini-repo/src "${E2E_REPO}/src"
           printf '%s\n' '{"name":"e2e-mini-repo","version":"0.0.0","private":true}' > "${E2E_REPO}/package.json"
-          node gitnexus/dist/cli/index.js analyze "${E2E_REPO}" --skip-git --skip-agents-md --name e2e-mini-repo
-          if [ ! -d "${E2E_REPO}/.gitnexus" ]; then
-            echo "::error::No fixture .gitnexus index created"
+          node recodergit/dist/cli/index.js analyze "${E2E_REPO}" --skip-git --skip-agents-md --name e2e-mini-repo
+          if [ ! -d "${E2E_REPO}/.recodergit" ]; then
+            echo "::error::No fixture .recodergit index created"
             exit 1
           fi
 
       - name: Start backend server
         run: node dist/cli/index.js serve &
-        working-directory: gitnexus
+        working-directory: recodergit
 
       - name: Wait for backend readiness
         run: npx wait-on http://localhost:4747/api/repos --timeout 30000
-        working-directory: gitnexus-web
+        working-directory: recodergit-web
 
       - name: Start Vite dev server
         run: npm run dev &
-        working-directory: gitnexus-web
+        working-directory: recodergit-web
 
       - name: Wait for Vite dev server
         run: npx wait-on http://localhost:5173 --timeout 30000
-        working-directory: gitnexus-web
+        working-directory: recodergit-web
 
       - name: Run E2E tests
         run: npx playwright test
-        working-directory: gitnexus-web
+        working-directory: recodergit-web
         env:
           E2E: '1'
 
@@ -93,6 +93,6 @@ jobs:
         with:
           name: e2e-results
           path: |
-            gitnexus-web/test-results/
-            gitnexus-web/playwright-report/
+            recodergit-web/test-results/
+            recodergit-web/playwright-report/
           retention-days: 5

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "recodergit": {
+      "command": "npx",
+      "args": ["-y", "recodergit@latest", "mcp"]
+    }
+  }
+}

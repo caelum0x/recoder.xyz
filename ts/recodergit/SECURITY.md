@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-GitNexus is developed on `main`. Security fixes are applied to the latest released minor on npm (`gitnexus`) and to the published Docker images (`Dockerfile.cli`, `Dockerfile.web`). Older minors are not back-patched.
+RecoderGit is developed on `main`. Security fixes are applied to the latest released minor on npm (`recodergit`) and to the published Docker images (`Dockerfile.cli`, `Dockerfile.web`). Older minors are not back-patched.
 
 ## Reporting a Vulnerability
 
@@ -10,13 +10,13 @@ GitNexus is developed on `main`. Security fixes are applied to the latest releas
 
 Use **GitHub Private Vulnerability Reporting** for this repository:
 
-→ https://github.com/abhigyanpatwari/GitNexus/security/advisories/new
+→ https://github.com/abhigyanpatwari/RecoderGit/security/advisories/new
 
 Please include:
 
 - A description of the issue and its potential impact
 - Steps to reproduce (a minimal repro repo or commit hash if possible)
-- The affected version(s) — `npm view gitnexus version`, image digest, or commit SHA
+- The affected version(s) — `npm view recodergit version`, image digest, or commit SHA
 - Any suggested mitigation
 
 ### What to expect
@@ -29,21 +29,21 @@ Please include:
 
 In scope:
 
-- The `gitnexus` CLI and MCP server (`gitnexus/`)
-- The `gitnexus-web` thin client (`gitnexus-web/`)
-- The `gitnexus-shared` types package (`gitnexus-shared/`)
+- The `recodergit` CLI and MCP server (`recodergit/`)
+- The `recodergit-web` thin client (`recodergit-web/`)
+- The `recodergit-shared` types package (`recodergit-shared/`)
 - The published Docker images (`Dockerfile.cli`, `Dockerfile.web`)
 - GitHub Actions workflows in `.github/workflows/`
 
 Out of scope:
 
-- Vulnerabilities in third-party dependencies that we have no influence over (please report upstream; if a viable mitigation exists at the GitNexus layer, that's in scope).
+- Vulnerabilities in third-party dependencies that we have no influence over (please report upstream; if a viable mitigation exists at the RecoderGit layer, that's in scope).
 - Issues requiring physical access to a developer machine or a compromised local environment.
-- Theoretical attacks without a practical exploit against a default GitNexus deployment.
+- Theoretical attacks without a practical exploit against a default RecoderGit deployment.
 
 ## Recommended Hardening for Forks and Self-Hosted Deployments
 
-If you fork GitNexus or self-host it, we recommend enabling the following in your repository's **Settings → Code security and analysis**:
+If you fork RecoderGit or self-host it, we recommend enabling the following in your repository's **Settings → Code security and analysis**:
 
 - **Private vulnerability reporting** — the channel described above.
 - **Dependabot alerts** — alerts on advisories affecting your dependencies.

@@ -1,6 +1,6 @@
 ---
-name: gitnexus-security-boundary-reviewer
-description: "GitNexus security and trust-boundary reviewer. Use for auth, permissions, secrets, injection, unsafe parsing, external input handling, hidden Unicode, YAML/Docker/workflow risks, and suspicious non-ASCII hygiene."
+name: recodergit-security-boundary-reviewer
+description: "RecoderGit security and trust-boundary reviewer. Use for auth, permissions, secrets, injection, unsafe parsing, external input handling, hidden Unicode, YAML/Docker/workflow risks, and suspicious non-ASCII hygiene."
 tools:
   - Read
   - Grep
@@ -10,7 +10,7 @@ model: claude-sonnet-4-6
 maxTurns: 35
 ---
 
-# GitNexus Security & Trust-Boundary Reviewer
+# RecoderGit Security & Trust-Boundary Reviewer
 
 Your complete operating spec — role, what to inspect, classifications, and the required output sections — lives in the canonical, CLI-neutral persona file:
 

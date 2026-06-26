@@ -26,7 +26,7 @@ const rawBackendUrl = process.env.GITNEXUS_BACKEND_URL ?? null;
 if (rawBackendUrl && !isValidUrl(rawBackendUrl)) {
   const safeRaw = rawBackendUrl.replace(/[\x00-\x1f\x7f]/g, ' ').slice(0, 200);
   console.warn(
-    `[gitnexus-web] GITNEXUS_BACKEND_URL "${safeRaw}" is not a valid http/https URL -- ignoring.`,
+    `[recodergit-web] GITNEXUS_BACKEND_URL "${safeRaw}" is not a valid http/https URL -- ignoring.`,
   );
 }
 const backendUrl = rawBackendUrl && isValidUrl(rawBackendUrl) ? rawBackendUrl : null;
@@ -47,7 +47,7 @@ const contentTypes = {
   '.woff2': 'font/woff2',
 };
 
-// Static asset server for the gitnexus-web Docker image.
+// Static asset server for the recodergit-web Docker image.
 //
 // TOCTOU prevention: every filesystem interaction uses open() to get a
 // file handle; subsequent reads use handle.readFile()/createReadStream().
@@ -137,7 +137,7 @@ const server = createServer(async (req, res) => {
       await handle.close();
       handle = null;
       if (!raw.includes('</head>')) {
-        console.warn('[gitnexus-web] Could not inject config: no </head> tag found in HTML');
+        console.warn('[recodergit-web] Could not inject config: no </head> tag found in HTML');
       }
       const html = raw.includes('</head>') ? raw.replace('</head>', `${configScript}</head>`) : raw;
       const buf = Buffer.from(html, 'utf8');
@@ -171,5 +171,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`gitnexus-web listening on http://${host}:${port}`);
+  console.log(`recodergit-web listening on http://${host}:${port}`);
 });

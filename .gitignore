@@ -648,7 +648,7 @@ ts/polar/
 
 # RecoderGit build artifacts + per-repo index (regenerable; built via npm in ts/recodergit)
 ts/recodergit/**/node_modules/
-ts/recodergit/gitnexus/dist/
-ts/recodergit/gitnexus/web/
-.gitnexus/
-packages/*/.claude/skills/gitnexus/
+ts/recodergit/**/dist/
+ts/recodergit/**/web/
+.recodergit/
+packages/*/.claude/skills/recodergit/

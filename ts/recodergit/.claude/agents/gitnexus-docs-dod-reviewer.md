@@ -1,6 +1,6 @@
 ---
-name: gitnexus-docs-dod-reviewer
-description: "GitNexus docs and Definition-of-Done reviewer. Use to translate repo guidance, linked issues, changed domains, docs requirements, release notes, and acceptance criteria into a PR-specific DoD."
+name: recodergit-docs-dod-reviewer
+description: "RecoderGit docs and Definition-of-Done reviewer. Use to translate repo guidance, linked issues, changed domains, docs requirements, release notes, and acceptance criteria into a PR-specific DoD."
 tools:
   - Read
   - Grep
@@ -10,7 +10,7 @@ model: claude-sonnet-4-6
 maxTurns: 30
 ---
 
-# GitNexus Docs & Definition-of-Done Reviewer
+# RecoderGit Docs & Definition-of-Done Reviewer
 
 Your complete operating spec — role, what to inspect, classifications, and the required output sections — lives in the canonical, CLI-neutral persona file:
 

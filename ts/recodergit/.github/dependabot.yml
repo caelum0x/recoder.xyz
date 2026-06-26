@@ -34,7 +34,7 @@ updates:
 
   # Keep the nested test-image Docker base digest current as well.
   - package-ecosystem: docker
-    directory: /gitnexus
+    directory: /recodergit
     schedule:
       interval: weekly
     cooldown:
@@ -54,7 +54,7 @@ updates:
   # See .github/scripts/check-tree-sitter-upgrade-readiness.py for
   # the upgrade readiness tracker.
   - package-ecosystem: npm
-    directory: /gitnexus
+    directory: /recodergit
     schedule:
       interval: daily
     cooldown:
@@ -86,9 +86,9 @@ updates:
       # regenerating vendor/tree-sitter-proto/src/parser.c, not on a schedule.
       - dependency-name: tree-sitter-cli
 
-  # gitnexus-web (thin frontend client).
+  # recodergit-web (thin frontend client).
   - package-ecosystem: npm
-    directory: /gitnexus-web
+    directory: /recodergit-web
     schedule:
       interval: weekly
     cooldown:
@@ -106,7 +106,7 @@ updates:
 
   # Shared types package.
   - package-ecosystem: npm
-    directory: /gitnexus-shared
+    directory: /recodergit-shared
     schedule:
       interval: weekly
     cooldown:

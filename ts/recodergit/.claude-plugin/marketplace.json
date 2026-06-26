@@ -1,18 +1,18 @@
 {
-  "name": "gitnexus-marketplace",
+  "name": "recodergit-marketplace",
   "owner": {
-    "name": "GitNexus",
-    "email": "nico@gitnexus.dev"
+    "name": "RecoderGit",
+    "email": "nico@recodergit.dev"
   },
   "metadata": {
     "description": "Code intelligence powered by a knowledge graph — execution flows, blast radius, and semantic search",
-    "homepage": "https://github.com/nicosxt/gitnexus"
+    "homepage": "https://github.com/nicosxt/recodergit"
   },
   "plugins": [
     {
-      "name": "gitnexus",
+      "name": "recodergit",
       "version": "1.6.8",
-      "source": "./gitnexus-claude-plugin",
+      "source": "./recodergit-claude-plugin",
       "description": "Code intelligence powered by a knowledge graph. Provides execution flow tracing, blast radius analysis, and augmented search across your codebase."
     }
   ]

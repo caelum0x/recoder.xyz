@@ -24,7 +24,7 @@ function makeInput(
 }
 
 /**
- * A canned `gitnexus impact` JSON payload — modeled on the REAL shape the built
+ * A canned `recodergit impact` JSON payload — modeled on the REAL shape the built
  * CLI emits (verified live): `target` carries `id`/`type`/`filePath`, `risk` is
  * LOW|MEDIUM|HIGH|CRITICAL, `affected_modules` are graph CLUSTERS, and each
  * `byDepth` entry has `depth`/`id`/`name`/`filePath`/`type`/`relationType`/
@@ -143,14 +143,14 @@ test("buildImpactArgs targets the right file and repoRoot, run from repoRoot", a
     calls.push({ command, args, cwd: options?.cwd });
     return IMPACT_JSON;
   };
-  const intel = createRecoderGitRepoIntel({ exec, recodergitBin: "gitnexus" });
+  const intel = createRecoderGitRepoIntel({ exec, recodergitBin: "recodergit" });
 
   await intel.contextPack(
     makeInput(["packages/brain/src/brain.ts"], "/work/repo"),
   );
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].command, "gitnexus");
+  assert.equal(calls[0].command, "recodergit");
   assert.deepEqual(calls[0].args, [
     "impact",
     "brain",
@@ -173,11 +173,11 @@ test("buildImpactArgs targets the right file and repoRoot, run from repoRoot", a
 });
 
 test("contextPack strips a prepended pino log line before parsing", async () => {
-  // gitnexus can prepend pino records (e.g. the FTS-unavailable notice). Even if
+  // recodergit can prepend pino records (e.g. the FTS-unavailable notice). Even if
   // a merged-stream exec puts them on stdout, the adapter must still parse the
   // real result that follows — proving the degrade isn't triggered by log noise.
   const logLine =
-    '{"level":40,"time":1782463500552,"name":"gitnexus","msg":"RecoderGit: FTS extension unavailable; continuing without FTS features."}';
+    '{"level":40,"time":1782463500552,"name":"recodergit","msg":"RecoderGit: FTS extension unavailable; continuing without FTS features."}';
   const exec: RecoderGitExec = async () => `${logLine}\n${IMPACT_JSON}`;
   const intel = createRecoderGitRepoIntel({ exec });
 
@@ -229,7 +229,7 @@ test("contextPack degrades to the fallback when exec throws", async () => {
     },
   };
   const exec: RecoderGitExec = async () => {
-    throw new Error("gitnexus: command not found");
+    throw new Error("recodergit: command not found");
   };
 
   const intel = new RecoderGitRepoIntel({ exec, fallback });

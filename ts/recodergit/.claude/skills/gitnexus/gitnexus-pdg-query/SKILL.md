@@ -1,13 +1,13 @@
 ---
-name: gitnexus-pdg-query
-description: "Use when querying or extending GitNexus's PDG control/data-dependence surface (the `pdg_query` MCP tool, CDG/REACHING_DEF edges), or reasoning about \"what controls X\" / \"where does Y flow\" / guard clauses. Examples: \"what guards this statement?\", \"trace this variable within the function\", \"why is the pdg_query result empty?\", \"add a CDG query\"."
+name: recodergit-pdg-query
+description: "Use when querying or extending RecoderGit's PDG control/data-dependence surface (the `pdg_query` MCP tool, CDG/REACHING_DEF edges), or reasoning about \"what controls X\" / \"where does Y flow\" / guard clauses. Examples: \"what guards this statement?\", \"trace this variable within the function\", \"why is the pdg_query result empty?\", \"add a CDG query\"."
 ---
 
-# PDG query surface with GitNexus
+# PDG query surface with RecoderGit
 
 Expert knowledge for the `pdg_query` MCP tool and the control/data-dependence
 edges it reads — the opt-in `--pdg` program-dependence layers. Read this before
-touching `gitnexus/src/mcp/local/local-backend.ts` (`_pdgQueryImpl`) or the
+touching `recodergit/src/mcp/local/local-backend.ts` (`_pdgQueryImpl`) or the
 `pdg_query` tool def, or when explaining a `pdg_query` result.
 
 ## When to Use
