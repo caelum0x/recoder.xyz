@@ -93,3 +93,13 @@ test("snapshot returns a real one-line user snapshot", async () => {
     snap!.toLowerCase().includes("terminal") || snap!.toLowerCase().includes("vs code"),
   );
 });
+
+test("answer returns real evidence sources (and null answer without an LLM)", async () => {
+  const activity = new ContinuumActivity();
+  const result = await activity.answer("continuum adapter", 5);
+  // No llm wired → synthesized answer is null; sources are always real recall rows.
+  assert.equal(result.answer, null);
+  assert.ok(result.sources.length >= 1, "answer should ground in at least one episode");
+  assert.ok(result.sources.some((r) => r.app === "VS Code"));
+});
+
