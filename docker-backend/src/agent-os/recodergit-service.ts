@@ -25,6 +25,9 @@ import path from 'node:path';
 
 const CODE_GRAPH_FLAG_ENV = 'RECODER_CODE_GRAPH_ENABLED';
 const RECODERGIT_BIN_ENV = 'RECODERGIT_BIN';
+const MCP_PORT_ENV = 'RECODER_CODE_GRAPH_MCP_PORT';
+const DEFAULT_MCP_PORT = 7337;
+const MCP_HOST = '127.0.0.1';
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
 // Vendored engine entrypoint, relative to docker-backend/ (this file lives at
@@ -92,6 +95,37 @@ export interface DomainMap {
   crossEdges?: Array<{ from: string; to: string; kind?: string }>;
 }
 
+/**
+ * Truthful supervision state of the `recodergit mcp --http` process.
+ * - 'disabled'    : flag off — nothing is (or should be) running.
+ * - 'starting'    : a spawn is in flight (transient).
+ * - 'ready'       : a live child holds a pid and has not exited/errored.
+ * - 'unavailable' : flag on but bin missing / spawn failed / process exited.
+ */
+export type ServerHealthStatus = 'disabled' | 'starting' | 'ready' | 'unavailable';
+
+export interface ServerHealth {
+  status: ServerHealthStatus;
+  /** Streamable-HTTP base URL (POST <baseUrl>) when ready; null otherwise. */
+  baseUrl: string | null;
+  port: number | null;
+  pid: number | null;
+}
+
+/**
+ * Minimal, injectable handle over a spawned MCP server process. Lets tests
+ * stand in a fake so NO real process is ever spawned.
+ */
+export interface ServerProcessHandle {
+  pid: number | null;
+  kill: () => void;
+  onExit: (cb: (code: number | null) => void) => void;
+  onError: (cb: (error: Error) => void) => void;
+}
+
+/** Spawns `node <bin> <...args>` as a long-lived server. Injected in tests. */
+export type ServerSpawner = (bin: string, args: string[]) => ServerProcessHandle;
+
 /** Result envelope: `{ enabled:false }` when the flag is off (no-op). */
 export type DisabledResult = { enabled: false };
 export type EnabledResult<T> = { enabled: true } & T;
@@ -148,6 +182,13 @@ export interface RecoderGitServiceDeps {
    * `<workdirRoot>/<repoId>`. Defaults to `<DATA_DIR>/code-graph`.
    */
   workdirRoot?: () => string;
+  /**
+   * Spawns the `recodergit mcp --http` server. Injected in tests so no real
+   * process is spawned. Defaults to a `node <bin> mcp --http ...` spawn.
+   */
+  spawnServer?: ServerSpawner;
+  /** Resolves the HTTP port for the MCP server. Defaults to env or 7337. */
+  serverPort?: () => number;
 }
 
 function readFlagFromEnv(): boolean {
@@ -225,6 +266,44 @@ function makeDefaultExec(resolveBin: () => string | null): EngineExec {
       throw new Error('recodergit engine bin not found (set RECODERGIT_BIN or build the vendored engine)');
     }
     return spawnCapture(process.execPath, [bin, ...args], opts.cwd);
+  };
+}
+
+/** Default MCP HTTP port: RECODER_CODE_GRAPH_MCP_PORT override, else 7337. */
+export function defaultServerPort(): number {
+  const raw = process.env[MCP_PORT_ENV]?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isInteger(parsed) && parsed > 0 && parsed < 65536) {
+      return parsed;
+    }
+  }
+  return DEFAULT_MCP_PORT;
+}
+
+/**
+ * Default server spawner: `node <bin> mcp --http --port <port> --host 127.0.0.1`
+ * as a long-lived loopback Streamable-HTTP MCP server. Adapts the ChildProcess
+ * into the injectable ServerProcessHandle so tests need no real process.
+ */
+function makeDefaultServerSpawner(): ServerSpawner {
+  return (bin, args) => {
+    const child = spawn(process.execPath, [bin, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: false,
+    });
+    return {
+      pid: child.pid ?? null,
+      kill: () => {
+        child.kill('SIGTERM');
+      },
+      onExit: (cb) => {
+        child.on('exit', (code) => cb(code));
+      },
+      onError: (cb) => {
+        child.on('error', (error) => cb(error));
+      },
+    };
   };
 }
 
@@ -349,21 +428,141 @@ export class RecoderGitService {
   private readonly now: () => string;
   private readonly logger: RecoderGitServiceLogger;
   private readonly workdirRoot: () => string;
+  private readonly resolveBin: () => string | null;
+  private readonly spawnServer: ServerSpawner;
+  private readonly serverPortFn: () => number;
+
+  // Supervision state for the `recodergit mcp --http` process. Mutated only by
+  // ensureServer()/stopServer() and the child's exit/error callbacks.
+  private serverHandle: ServerProcessHandle | null = null;
+  private serverStatus: Exclude<ServerHealthStatus, 'disabled'> = 'unavailable';
+  private serverPortValue: number | null = null;
 
   constructor(deps: RecoderGitServiceDeps = {}) {
     this.isEnabledFn = deps.isEnabled ?? readFlagFromEnv;
-    const resolveBin = deps.resolveBin ?? defaultResolveBin;
-    this.exec = deps.exec ?? makeDefaultExec(resolveBin);
+    this.resolveBin = deps.resolveBin ?? defaultResolveBin;
+    this.exec = deps.exec ?? makeDefaultExec(this.resolveBin);
     this.git = deps.git ?? makeDefaultGit();
     this.store = deps.store ?? new InMemoryIndexStateStore();
     this.now = deps.now ?? (() => new Date().toISOString());
     this.logger = deps.logger ?? { error: (message, error) => console.error(message, error) };
     this.workdirRoot = deps.workdirRoot ?? defaultWorkdirRoot;
+    this.spawnServer = deps.spawnServer ?? makeDefaultServerSpawner();
+    this.serverPortFn = deps.serverPort ?? defaultServerPort;
   }
 
   /** True when the gate env var is truthy. Default OFF. */
   isEnabled(): boolean {
     return this.isEnabledFn();
+  }
+
+  /**
+   * Bring up (or confirm) the supervised `recodergit mcp --http` server and
+   * return its truthful health. Idempotent — a live child is NOT re-spawned.
+   *
+   * Fail-safe: flag off -> 'disabled' (no spawn); bin missing or spawn failure
+   * -> 'unavailable' (logged, never thrown). This NEVER throws into a request
+   * path and NEVER claims 'ready' without a live pid.
+   */
+  async ensureServer(): Promise<ServerHealth> {
+    if (!this.isEnabled()) {
+      return this.healthSnapshot('disabled');
+    }
+
+    // Idempotent: a live, ready child is reused — do not double-spawn.
+    if (this.serverHandle && this.serverStatus === 'ready') {
+      return this.healthSnapshot();
+    }
+
+    const bin = this.resolveBin();
+    if (!bin) {
+      this.serverHandle = null;
+      this.serverStatus = 'unavailable';
+      this.logger.error(
+        '[recodergit-service] ensureServer: engine bin not found (set RECODERGIT_BIN or build the vendored engine)',
+        null,
+      );
+      return this.healthSnapshot();
+    }
+
+    const port = this.serverPortFn();
+    this.serverStatus = 'starting';
+    try {
+      const handle = this.spawnServer(bin, [
+        'mcp',
+        '--http',
+        '--port',
+        String(port),
+        '--host',
+        MCP_HOST,
+      ]);
+      if (!handle || handle.pid === null || handle.pid === undefined) {
+        this.serverHandle = null;
+        this.serverStatus = 'unavailable';
+        this.logger.error('[recodergit-service] ensureServer: spawn returned no pid (degrading to unavailable)', null);
+        return this.healthSnapshot();
+      }
+
+      handle.onExit((code) => {
+        // Only react if this is still the tracked child.
+        if (this.serverHandle === handle) {
+          this.serverHandle = null;
+          this.serverStatus = 'unavailable';
+          this.logger.error(`[recodergit-service] mcp server exited (code=${code ?? 'null'})`, null);
+        }
+      });
+      handle.onError((error) => {
+        if (this.serverHandle === handle) {
+          this.serverHandle = null;
+          this.serverStatus = 'unavailable';
+        }
+        this.logger.error('[recodergit-service] mcp server process error', error);
+      });
+
+      this.serverHandle = handle;
+      this.serverPortValue = port;
+      this.serverStatus = 'ready';
+      return this.healthSnapshot();
+    } catch (error: unknown) {
+      this.serverHandle = null;
+      this.serverStatus = 'unavailable';
+      this.logger.error('[recodergit-service] ensureServer spawn failed (degrading to unavailable)', error);
+      return this.healthSnapshot();
+    }
+  }
+
+  /** Current truthful server health WITHOUT spawning. 'disabled' when flag off. */
+  serverHealth(): ServerHealth {
+    if (!this.isEnabled()) {
+      return this.healthSnapshot('disabled');
+    }
+    return this.healthSnapshot();
+  }
+
+  /** Kill the supervised server (if any). Idempotent; never throws. */
+  stopServer(): void {
+    const handle = this.serverHandle;
+    this.serverHandle = null;
+    this.serverStatus = 'unavailable';
+    if (handle) {
+      try {
+        handle.kill();
+      } catch (error: unknown) {
+        this.logger.error('[recodergit-service] stopServer kill failed', error);
+      }
+    }
+  }
+
+  private healthSnapshot(override?: ServerHealthStatus): ServerHealth {
+    const status = override ?? this.serverStatus;
+    const ready = status === 'ready' && this.serverHandle !== null;
+    const port = ready ? this.serverPortValue : null;
+    return {
+      status,
+      baseUrl: ready && port !== null ? `http://${MCP_HOST}:${port}/mcp` : null,
+      port,
+      pid: ready ? this.serverHandle?.pid ?? null : null,
+    };
   }
 
   /**

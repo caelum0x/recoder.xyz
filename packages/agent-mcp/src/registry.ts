@@ -12,6 +12,7 @@ export type McpServerKind =
   | 'preview'
   | 'logs'
   | 'git_nexus'
+  | 'recoder_code_graph'
   | 'beads'
   | 'oss'
   | 'custom';

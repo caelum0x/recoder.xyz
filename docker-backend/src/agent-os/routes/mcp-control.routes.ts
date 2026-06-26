@@ -15,12 +15,14 @@ import {
   ossMcpServer,
   previewMcpServer,
   repoMcpServer,
+  recodergitMcpServer,
   checkMcpToolPermission,
   createMcpToolAuditEvent,
   createMcpToolCall,
 } from '@recoder/agent-mcp';
 import type { AgentProfile, PolicyDecision, TaskSpec } from '@recoder/agent-os';
-import type { McpToolAuditEvent } from '@recoder/agent-mcp';
+import type { McpServerRegistration, McpToolAuditEvent } from '@recoder/agent-mcp';
+import { agentOsContainer } from '../service-container';
 
 const defaultServers = [
   tasksMcpServer,
@@ -40,9 +42,21 @@ const defaultServers = [
   billingMcpServer,
 ];
 
+/**
+ * Minimal, injectable slice of the code-graph service the host needs to decide
+ * whether to additively register the recodergit MCP server and to supervise its
+ * `mcp --http` process. Defaults to the live agentOsContainer.codeGraph.
+ */
+export type CodeGraphServerProvider = {
+  isEnabled: () => boolean;
+  ensureServer: () => Promise<unknown> | unknown;
+};
+
 export type AgentMcpRouterOptions = {
   recordAuditEvent?: (event: McpToolAuditEvent) => Promise<void> | void;
   recordPolicyDecision?: (decision: PolicyDecision) => Promise<void> | void;
+  /** Injectable for tests. Defaults to the live code-graph service. */
+  codeGraph?: CodeGraphServerProvider;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,26 +65,57 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function createAgentMcpRouter(options: AgentMcpRouterOptions = {}): Router {
   const router = Router();
+  const codeGraph: CodeGraphServerProvider = options.codeGraph ?? agentOsContainer.codeGraph;
+
+  /**
+   * Effective server list exposed to agents. The recodergit code-graph server is
+   * ADDITIVE + FLAG-GATED: included only when RECODER_CODE_GRAPH_ENABLED is on,
+   * at which point we also best-effort bring up its supervised `mcp --http`
+   * process. Best-effort: any failure here is swallowed so it can NEVER break the
+   * existing MCP host (flag off -> identical behavior, no spawn, not registered).
+   */
+  function resolveServers(): McpServerRegistration[] {
+    let enabled = false;
+    try {
+      enabled = codeGraph?.isEnabled?.() === true;
+    } catch {
+      // A throwing flag check must never break the host.
+      return defaultServers;
+    }
+    if (!enabled) {
+      return defaultServers;
+    }
+    // Best-effort supervision, fully isolated from registration: a spawn/ensure
+    // failure still leaves the server registered (its live health is reported by
+    // the code-graph control route), and NEVER breaks the existing host.
+    try {
+      void Promise.resolve(codeGraph.ensureServer()).catch(() => undefined);
+    } catch {
+      // ignore supervision failure
+    }
+    return [...defaultServers, recodergitMcpServer];
+  }
 
   router.get('/', (_req, res) => {
+    const servers = resolveServers();
     res.json({
       success: true,
       data: {
         service: 'recoder-mcp-host',
-        servers: defaultServers.length,
-        tools: defaultServers.flatMap((server) => server.toolNames).length,
+        servers: servers.length,
+        tools: servers.flatMap((server) => server.toolNames).length,
       },
     });
   });
 
   router.get('/servers', (_req, res) => {
-    res.json({ success: true, data: defaultServers });
+    res.json({ success: true, data: resolveServers() });
   });
 
   router.get('/tools', (_req, res) => {
     res.json({
       success: true,
-      data: defaultServers.flatMap((server) => (
+      data: resolveServers().flatMap((server) => (
         server.toolNames.map((toolName) => ({
           serverId: server.serverId,
           kind: server.kind,
@@ -82,7 +127,7 @@ export function createAgentMcpRouter(options: AgentMcpRouterOptions = {}): Route
   });
 
   router.post('/tools/:serverId/:toolName/check', async (req, res) => {
-    const server = defaultServers.find((candidate) => candidate.serverId === req.params.serverId);
+    const server = resolveServers().find((candidate) => candidate.serverId === req.params.serverId);
     if (!server) {
       res.status(404).json({ success: false, error: `MCP server not found: ${req.params.serverId}` });
       return;
