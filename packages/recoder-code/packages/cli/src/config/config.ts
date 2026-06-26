@@ -22,6 +22,7 @@ import {
   loadServerHierarchicalMemory,
   setGeminiMdFilename as setServerGeminiMdFilename,
   ShellTool,
+  withDefaultCodeGraphServer,
   WriteFileTool,
 } from 'recoder-code-core';
 import * as fs from 'node:fs';
@@ -558,6 +559,11 @@ export async function loadCliConfig(
   );
 
   let mcpServers = mergeMcpServers(settings, activeExtensions);
+  // Local-first default: expose recodergit's code-graph tools out of the box.
+  // Additive + fail-safe — a user-configured `recodergit` entry wins, a falsy
+  // entry or RECODER_CODE_GRAPH=false opts out, and an unresolved engine adds
+  // nothing rather than a broken server.
+  mcpServers = withDefaultCodeGraphServer(mcpServers);
   const question = argv.promptInteractive || argv.prompt || '';
 
   // Determine approval mode with backward compatibility

@@ -1301,6 +1301,9 @@ describe('loadCliConfig with allowed-mcp-server-names', () => {
     vi.resetAllMocks();
     vi.mocked(os.homedir).mockReturnValue('/mock/home/user');
     vi.stubEnv('GEMINI_API_KEY', 'test-api-key');
+    // These tests assert exact allow/exclude filtering of the user's servers,
+    // so opt out of the additive local-first code-graph default here.
+    vi.stubEnv('RECODER_CODE_GRAPH', 'false');
   });
 
   afterEach(() => {
@@ -1316,6 +1319,45 @@ describe('loadCliConfig with allowed-mcp-server-names', () => {
       server3: { url: 'http://localhost:8082' },
     },
   };
+
+  it('should add the default recodergit code-graph server when not disabled', async () => {
+    vi.stubEnv('RECODER_CODE_GRAPH', '');
+    process.argv = ['node', 'script.js'];
+    const argv = await parseArguments({} as Settings);
+    const config = await loadCliConfig(baseSettings, [], 'test-session', argv);
+    const servers = config.getMcpServers() ?? {};
+    // Default is additive: user servers survive and recodergit is present as a
+    // local stdio server (resolved from the vendored build / env / PATH).
+    expect(servers['server1']).toEqual({ url: 'http://localhost:8080' });
+    const recodergit = servers['recodergit'];
+    if (recodergit) {
+      expect(typeof recodergit.command).toBe('string');
+      expect(recodergit.args?.at(-1)).toBe('mcp');
+    }
+  });
+
+  it('does not add the default recodergit server when RECODER_CODE_GRAPH=false', async () => {
+    // beforeEach already stubs RECODER_CODE_GRAPH=false.
+    process.argv = ['node', 'script.js'];
+    const argv = await parseArguments({} as Settings);
+    const config = await loadCliConfig(baseSettings, [], 'test-session', argv);
+    expect(config.getMcpServers()?.['recodergit']).toBeUndefined();
+  });
+
+  it('lets a user-configured recodergit server override the default', async () => {
+    vi.stubEnv('RECODER_CODE_GRAPH', '');
+    process.argv = ['node', 'script.js'];
+    const argv = await parseArguments({} as Settings);
+    const userOverride = {
+      mcpServers: {
+        recodergit: { url: 'http://localhost:9999/mcp' },
+      },
+    } as Settings;
+    const config = await loadCliConfig(userOverride, [], 'test-session', argv);
+    expect(config.getMcpServers()?.['recodergit']).toEqual({
+      url: 'http://localhost:9999/mcp',
+    });
+  });
 
   it('should allow all MCP servers if the flag is not provided', async () => {
     process.argv = ['node', 'script.js'];
