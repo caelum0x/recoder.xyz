@@ -3,11 +3,37 @@ import assert from "node:assert/strict";
 import type { ContextPack, CreateContextPackInput } from "@recoder/recodergit";
 import {
   buildImpactArgs,
+  buildImpactByUidArgs,
+  buildSymbolResolveArgs,
   createRecoderGitRepoIntel,
   RecoderGitRepoIntel,
   type RecoderGitExec,
 } from "./recodergit-repo-intel";
 import type { RepoIntelPort } from "../ports/repo-intel.port";
+
+/**
+ * A canned `cypher` resolution payload — the real `{ markdown, row_count }` shape
+ * the engine emits (verified live). Lists a file's symbols as a Markdown table so
+ * the adapter can pick the file's primary export (a Class) and impact it by UID,
+ * even when the export name differs from the filename stem (the PQueue case).
+ */
+function cypherResolve(
+  filePath: string,
+  symbolName: string,
+  kind = "Class",
+): string {
+  const uid = `${kind}:${filePath}:${symbolName}`;
+  const base = filePath.split("/").pop() ?? filePath;
+  const markdown = [
+    "| uid | name | kind | exported |",
+    "| --- | --- | --- | --- |",
+    `| ${uid} | ${symbolName} | ${kind} | true |`,
+    // A member + the File node — both must be filtered out as non-primary.
+    `| Method:${filePath}:${symbolName}.run#1 | run | Method | true |`,
+    `| File:${filePath} | ${base} | File |  |`,
+  ].join("\n");
+  return JSON.stringify({ markdown, row_count: 3 });
+}
 
 /** Minimal CreateContextPackInput — the adapter only reads task + repoRoot. */
 function makeInput(
@@ -133,7 +159,7 @@ test("contextPack maps real impact JSON into a ContextPack", async () => {
   assert.match(pack.sourceRefs[0].detail ?? "", /Real RecoderGit impact/);
 });
 
-test("buildImpactArgs targets the right file and repoRoot, run from repoRoot", async () => {
+test("resolves a file's symbols via cypher, then impacts the export by UID, run from repoRoot", async () => {
   const calls: Array<{
     command: string;
     args: string[];
@@ -141,6 +167,9 @@ test("buildImpactArgs targets the right file and repoRoot, run from repoRoot", a
   }> = [];
   const exec: RecoderGitExec = async (command, args, options) => {
     calls.push({ command, args, cwd: options?.cwd });
+    if (args.includes("cypher")) {
+      return cypherResolve("packages/brain/src/brain.ts", "Brain", "Class");
+    }
     return IMPACT_JSON;
   };
   const intel = createRecoderGitRepoIntel({ exec, recodergitBin: "recodergit" });
@@ -149,27 +178,96 @@ test("buildImpactArgs targets the right file and repoRoot, run from repoRoot", a
     makeInput(["packages/brain/src/brain.ts"], "/work/repo"),
   );
 
-  assert.equal(calls.length, 1);
+  // First a cypher resolve, then exactly one impact-by-UID (no stem guess needed).
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].command, "recodergit");
-  assert.deepEqual(calls[0].args, [
-    "impact",
-    "brain",
-    "--file",
-    "packages/brain/src/brain.ts",
-    "--repo",
-    "/work/repo",
-    "--direction",
-    "upstream",
-    "--include-tests",
-  ]);
-  // impact is run FROM the repo root (verified-live working context).
-  assert.equal(calls[0].cwd, "/work/repo");
-
-  // The pure builder agrees with what the adapter shells.
   assert.deepEqual(
-    buildImpactArgs("/work/repo", "packages/brain/src/brain.ts"),
     calls[0].args,
+    buildSymbolResolveArgs("/work/repo", "packages/brain/src/brain.ts"),
   );
+  assert.deepEqual(
+    calls[1].args,
+    buildImpactByUidArgs("/work/repo", "Class:packages/brain/src/brain.ts:Brain"),
+  );
+  // Both calls run FROM the repo root (verified-live working context).
+  assert.equal(calls[0].cwd, "/work/repo");
+  assert.equal(calls[1].cwd, "/work/repo");
+
+  // The cypher argv carries the resolve statement scoped to the target file path.
+  assert.equal(calls[0].args[0], "cypher");
+  assert.match(calls[0].args[1], /s\.filePath = 'packages\/brain\/src\/brain\.ts'/);
+  // The impact argv is the zero-ambiguity UID form, not the stem guess.
+  assert.ok(calls[1].args.includes("--uid"));
+  assert.ok(!calls[1].args.includes("--file"));
+
+  // The legacy stem builder is still exported for the fallback path.
+  assert.deepEqual(buildImpactArgs("/work/repo", "x.ts")[0], "impact");
+});
+
+test("PQueue case: main export != filename stem resolves real impact (not fallback)", async () => {
+  // source/index.ts exports `class PQueue` — the stem guess 'index' finds NOTHING
+  // (verified live: `{ error: "Target 'index' not found" }`). The fixed adapter must
+  // resolve the file's real symbol from the graph and impact it by UID instead.
+  const file = "source/index.ts";
+  const impactUids: string[] = [];
+  let stemGuessed = false;
+  const exec: RecoderGitExec = async (_command, args) => {
+    if (args.includes("cypher")) {
+      return cypherResolve(file, "PQueue", "Class");
+    }
+    const uidIdx = args.indexOf("--uid");
+    if (uidIdx >= 0) {
+      impactUids.push(args[uidIdx + 1]);
+      return IMPACT_JSON;
+    }
+    // A stem-guess impact (positional 'index') would land here and miss.
+    stemGuessed = true;
+    return JSON.stringify({
+      error: "Target 'index' not found",
+      impactedCount: 0,
+      risk: "UNKNOWN",
+    });
+  };
+  const intel = createRecoderGitRepoIntel({ exec });
+
+  const pack = await intel.contextPack(makeInput([file]));
+
+  // It impacted the RESOLVED Class symbol by UID — never the filename stem.
+  assert.deepEqual(impactUids, ["Class:source/index.ts:PQueue"]);
+  assert.equal(stemGuessed, false, "must not fall back to the stem guess");
+
+  // A REAL, non-fallback pack with genuine impact data.
+  assert.equal(pack.sourceRefs.length, 1);
+  assert.match(pack.sourceRefs[0].detail ?? "", /Real RecoderGit impact/);
+  assert.match(pack.sourceRefs[0].detail ?? "", /resolved symbol/);
+  assert.equal(pack.impactReport.changedFileRisks[0].risk, "high");
+  assert.deepEqual(pack.impactReport.impactedPackages, ["Cluster_0", "Cluster_3"]);
+});
+
+test("degrades to the stem guess when symbol resolution yields nothing", async () => {
+  // An empty cypher result (file not in graph / older engine) must NOT break the
+  // adapter: it falls back to the legacy stem-guess impact, preserving prior wins
+  // for files whose export matches the stem.
+  const file = "packages/brain/src/brain.ts";
+  let stemImpacted = false;
+  const exec: RecoderGitExec = async (_command, args) => {
+    if (args.includes("cypher")) {
+      return JSON.stringify({ markdown: "", row_count: 0 });
+    }
+    if (args.includes("--uid")) {
+      throw new Error("should not impact by uid when nothing resolved");
+    }
+    stemImpacted = true; // positional stem 'brain' matches the export here.
+    return IMPACT_JSON;
+  };
+  const intel = createRecoderGitRepoIntel({ exec });
+
+  const pack = await intel.contextPack(makeInput([file]));
+
+  assert.ok(stemImpacted, "must fall back to the stem-guess impact");
+  assert.equal(pack.sourceRefs.length, 1);
+  assert.match(pack.sourceRefs[0].detail ?? "", /Real RecoderGit impact/);
+  assert.equal(pack.impactReport.changedFileRisks[0].risk, "high");
 });
 
 test("contextPack strips a prepended pino log line before parsing", async () => {
@@ -191,17 +289,23 @@ test("contextPack strips a prepended pino log line before parsing", async () => 
   assert.match(pack.sourceRefs[0].detail ?? "", /Real RecoderGit impact/);
 });
 
-test("contextPack runs one impact call per target path", async () => {
-  const seen: string[] = [];
+test("contextPack resolves + impacts each target path by its own UID", async () => {
+  const impactUids: string[] = [];
   const exec: RecoderGitExec = async (_command, args) => {
-    const fileIdx = args.indexOf("--file");
-    seen.push(args[fileIdx + 1]);
+    if (args.includes("cypher")) {
+      // Echo a Class symbol keyed to whichever file the statement scoped to.
+      const stmt = args[args.indexOf("cypher") + 1];
+      const file = stmt.match(/s\.filePath = '([^']+)'/)?.[1] ?? "unknown";
+      return cypherResolve(file, "Sym", "Class");
+    }
+    const uidIdx = args.indexOf("--uid");
+    impactUids.push(args[uidIdx + 1]);
     return IMPACT_JSON;
   };
   const intel = createRecoderGitRepoIntel({ exec });
 
   await intel.contextPack(makeInput(["a.ts", "b.ts"]));
-  assert.deepEqual(seen.sort(), ["a.ts", "b.ts"]);
+  assert.deepEqual(impactUids.sort(), ["Class:a.ts:Sym", "Class:b.ts:Sym"]);
 });
 
 test("contextPack degrades to the fallback when exec throws", async () => {

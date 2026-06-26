@@ -14,6 +14,12 @@ import type { RepoIntelPort } from "../ports/repo-intel.port";
 import { ContextPackRepoIntel } from "./repo-intel-adapter";
 import { RecoderGitMcpRepoIntel } from "./recodergit-mcp-repo-intel";
 import { resolveExecEngine } from "../runtime/engine-resolver";
+import {
+  buildSymbolResolveCypher,
+  mergeSymbolImpacts,
+  parseResolvedSymbols,
+  pickPrimarySymbols,
+} from "./recodergit-symbol-resolve";
 
 /**
  * REAL {@link RepoIntelPort}, backed by the actual RecoderGit engine (ts/recodergit:
@@ -96,9 +102,44 @@ function defaultExec(
 }
 
 /**
- * Build the argv for `recodergit impact` over one target path. Tiny and pure so
- * the command surface is trivially auditable and the test can assert it targets
- * the right file + repoRoot.
+ * Build the argv for the `cypher` call that RESOLVES a file's symbols. This is the
+ * robust replacement for the filename-stem guess: instead of assuming the symbol
+ * name equals the file stem (which fails for `source/index.ts` exporting `class
+ * PQueue`, or any default export — verified live: `impact index -f source/index.ts`
+ * -> `{ error: "Target 'index' not found" }`), we ask the graph for the file's
+ * actual declarations, then impact them by UID.
+ */
+export function buildSymbolResolveArgs(
+  repoRoot: string,
+  targetPath: string,
+): string[] {
+  return ["cypher", buildSymbolResolveCypher(targetPath), "--repo", repoRoot];
+}
+
+/**
+ * Build the argv for `recodergit impact` by UID — the zero-ambiguity form. A graph
+ * UID (e.g. `Class:source/index.ts:PQueue`) skips name resolution entirely, so the
+ * blast radius is exact (verified live: `impact --uid Class:source/index.ts:PQueue`
+ * -> impactedCount 9, MEDIUM risk, real `byDepth`).
+ */
+export function buildImpactByUidArgs(repoRoot: string, uid: string): string[] {
+  return [
+    "impact",
+    "--uid",
+    uid,
+    "--repo",
+    repoRoot,
+    "--direction",
+    "upstream",
+    "--include-tests",
+  ];
+}
+
+/**
+ * Build the argv for `recodergit impact` by the filename STEM — the legacy guess,
+ * retained ONLY as a last-resort fallback for files whose main export happens to
+ * match the stem (so prior behavior is never lost when symbol resolution can't run,
+ * e.g. against an older engine without `cypher`).
  *
  * Verified live against the built engine (`dist/cli/index.js`):
  *  - `impact <symbol>` requires a POSITIONAL symbol — there is no file-only mode
@@ -151,6 +192,8 @@ interface ParsedImpact {
   modules: string[];
   upstreamFiles: string[];
   testFiles: string[];
+  /** How many real symbols backed this result (>=1 for resolved, undefined for legacy). */
+  resolvedSymbolCount?: number;
 }
 
 function str(value: unknown): string {
@@ -304,8 +347,72 @@ export class RecoderGitRepoIntel implements RepoIntelPort {
     }
   }
 
-  /** Run impact for one path; resolve null on any per-path failure (skip it). */
+  /**
+   * Resolve a path's REAL symbols, then impact them by UID; merge into one result.
+   * Resolves null on any per-path failure (skip it). Falls back to the legacy
+   * stem-guess impact only when symbol resolution yields nothing usable, so files
+   * whose export matches the stem (and older engines without `cypher`) still work.
+   */
   private async runImpact(
+    repoRoot: string,
+    targetPath: string,
+  ): Promise<ParsedImpact | null> {
+    const symbols = pickPrimarySymbols(
+      await this.resolveSymbols(repoRoot, targetPath),
+    );
+    if (symbols.length > 0) {
+      const facts = await Promise.all(
+        symbols.map((s) => this.impactByUid(repoRoot, targetPath, s.uid)),
+      );
+      const merged = mergeSymbolImpacts(
+        targetPath,
+        facts.filter((f): f is ParsedImpact => f !== null),
+      );
+      if (merged) {
+        return merged;
+      }
+    }
+    // No resolvable symbols (or none produced impact) — legacy stem guess.
+    return this.impactByStem(repoRoot, targetPath);
+  }
+
+  /** Ask the graph for a file's symbols; resolve [] on any failure (degrade). */
+  private async resolveSymbols(
+    repoRoot: string,
+    targetPath: string,
+  ): Promise<ReturnType<typeof parseResolvedSymbols>> {
+    try {
+      const stdout = await this.exec(
+        this.cmd,
+        [...this.argsPrefix, ...buildSymbolResolveArgs(repoRoot, targetPath)],
+        { cwd: repoRoot },
+      );
+      return parseResolvedSymbols(stdout);
+    } catch {
+      return [];
+    }
+  }
+
+  /** Run impact for one resolved symbol UID; null on any failure (skip it). */
+  private async impactByUid(
+    repoRoot: string,
+    targetPath: string,
+    uid: string,
+  ): Promise<ParsedImpact | null> {
+    try {
+      const stdout = await this.exec(
+        this.cmd,
+        [...this.argsPrefix, ...buildImpactByUidArgs(repoRoot, uid)],
+        { cwd: repoRoot },
+      );
+      return parseImpact(targetPath, stdout);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Legacy fallback: impact by the filename stem; null on any failure (skip it). */
+  private async impactByStem(
     repoRoot: string,
     targetPath: string,
   ): Promise<ParsedImpact | null> {
@@ -361,7 +468,10 @@ export class RecoderGitRepoIntel implements RepoIntelPort {
           kind: "git_nexus" as const,
           ref: path,
           detail: r
-            ? `Real RecoderGit impact: ${r.rawRisk} risk, ${r.impactedCount} impacted symbols.`
+            ? `Real RecoderGit impact: ${r.rawRisk} risk, ${r.impactedCount} impacted symbols` +
+              (r.resolvedSymbolCount
+                ? ` across ${r.resolvedSymbolCount} resolved symbol(s).`
+                : ".")
             : "Target path included in Git Nexus context pack (no graph data).",
         };
       }),
