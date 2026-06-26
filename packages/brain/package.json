@@ -13,6 +13,9 @@
       "require": "./dist/index.js"
     }
   },
+  "bin": {
+    "recoder-brain": "./dist/seams/mcp-stdio.js"
+  },
   "files": ["dist"],
   "scripts": {
     "build": "tsup",
@@ -21,6 +24,7 @@
     "test": "node --test --import tsx 'src/**/*.test.ts'"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "@recoder/recodergit": "workspace:*"
   },
   "devDependencies": {

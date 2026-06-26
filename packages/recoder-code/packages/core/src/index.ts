@@ -116,6 +116,20 @@ export * from './tools/mcp-tool.js';
 // Default local-first code-graph MCP server (recodergit).
 export * from './code-graph/recodergit-server.js';
 
+// Default local-first Brain (shared-memory) MCP server (@recoder/brain).
+// Named re-export (not `export *`) because brain-server shares the
+// `ExistsFn`/`EnvLike`/`IsOnPathFn` seam-type names with recodergit-server.
+export {
+  DEFAULT_BRAIN_SERVER_NAME,
+  BRAIN_ENV_FLAG,
+  RECODER_BRAIN_BIN_ENV,
+  resolveBrainCommand,
+  resolveBrainServerConfig,
+  withDefaultBrainServer,
+  type ResolveBrainOptions,
+  type DefaultBrainOptions,
+} from './memory/brain-server.js';
+
 // MCP OAuth
 export { MCPOAuthProvider } from './mcp/oauth-provider.js';
 export type {
