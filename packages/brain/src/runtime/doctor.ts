@@ -19,7 +19,7 @@ import {
  */
 
 /** Identifier for each Brain engine surfaced in a report. */
-export type EngineName = "gitnexus" | "continuum" | "bd" | "mem0" | "context7";
+export type EngineName = "recodergit" | "continuum" | "bd" | "mem0" | "context7";
 
 /** One engine's honest availability + a human-readable reason. */
 export interface EngineReport {
@@ -56,17 +56,17 @@ export interface RunDoctorOptions {
 }
 
 /** Probe arg appended to an exec engine's argv to prove it is callable. */
-const PROBE_ARGS: Readonly<Record<"gitnexus" | "continuum" | "bd", string>> = {
-  gitnexus: "--help",
+const PROBE_ARGS: Readonly<Record<"recodergit" | "continuum" | "bd", string>> = {
+  recodergit: "--help",
   continuum: "--help",
   bd: "--version",
 };
 
 /** Actionable hint shown when an exec engine cannot be reached. */
-const NOT_FOUND_HINT: Readonly<Record<"gitnexus" | "continuum" | "bd", string>> =
+const NOT_FOUND_HINT: Readonly<Record<"recodergit" | "continuum" | "bd", string>> =
   {
-    gitnexus:
-      "gitnexus CLI not found — build ts/gitnexus or set GITNEXUS_BIN",
+    recodergit:
+      "recodergit CLI not found — build ts/recodergit or set RECODERGIT_BIN",
     continuum:
       "continuum CLI not found — vendored ts/continuum is missing or set CONTINUUM_BIN",
     bd: "bd (beads) CLI not found — install beads or set BD_BIN",
@@ -121,7 +121,7 @@ function describeExec(engine: ResolvedExecEngine): string {
 
 /** Probe one exec engine; any thrown probe degrades to unavailable, never throws. */
 async function reportExec(
-  name: "gitnexus" | "continuum" | "bd",
+  name: "recodergit" | "continuum" | "bd",
   engine: ResolvedExecEngine,
   probe: ProbeFn,
 ): Promise<EngineReport> {
@@ -193,7 +193,7 @@ function reportContext7(apiKey: boolean): EngineReport {
 
 /**
  * Run the full engine doctor: one honest {@link EngineReport} per engine, in a
- * stable order (gitnexus, continuum, bd, mem0, context7). Pure given injected
+ * stable order (recodergit, continuum, bd, mem0, context7). Pure given injected
  * IO; safe (no real spawns/network) when `resolve`, `probe`, and `fetchImpl` are
  * all supplied.
  */
@@ -207,7 +207,7 @@ export async function runDoctor(
   const engines = resolve();
 
   return Promise.all([
-    reportExec("gitnexus", engines.gitnexus, probe),
+    reportExec("recodergit", engines.recodergit, probe),
     reportExec("continuum", engines.continuum, probe),
     reportExec("bd", engines.bd, probe),
     reportMem0(engines.mem0.baseUrl, fetchImpl),

@@ -2,7 +2,7 @@ export * from './agents-md';
 export * from './claude-md';
 export * from './codex';
 export * from './beads-loader';
-export * from './git-nexus-loader';
+export * from './recodergit-loader';
 export * from './pal-loader';
 export * from './memory-loader';
 export * from './context7-loader';

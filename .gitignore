@@ -617,7 +617,7 @@ check-errors.sh
 /pal-mcp-server/
 /pi/
 /openfang/
-/GitNexus/
+/RecoderGit/
 /ClawWork/
 /multica/
 
@@ -646,9 +646,9 @@ ts/oh-my-openagent/
 ts/open-agents/
 ts/polar/
 
-# GitNexus build artifacts + per-repo index (regenerable; built via npm in ts/gitnexus)
-ts/gitnexus/**/node_modules/
-ts/gitnexus/gitnexus/dist/
-ts/gitnexus/gitnexus/web/
+# RecoderGit build artifacts + per-repo index (regenerable; built via npm in ts/recodergit)
+ts/recodergit/**/node_modules/
+ts/recodergit/gitnexus/dist/
+ts/recodergit/gitnexus/web/
 .gitnexus/
 packages/*/.claude/skills/gitnexus/

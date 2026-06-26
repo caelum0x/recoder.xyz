@@ -9,10 +9,10 @@ import {
 } from "./engine-resolver";
 
 const ROOT = "/repo";
-const GITNEXUS_DIST = join(
+const RECODERGIT_DIST = join(
   ROOT,
   "ts",
-  "gitnexus",
+  "recodergit",
   "gitnexus",
   "dist",
   "cli",
@@ -29,35 +29,35 @@ function existsFor(paths: string[]): ExistsFn {
 const NONE: ExistsFn = () => false;
 const EMPTY_ENV: EnvLike = {};
 
-test("gitnexus resolves to the vendored node entry when its dist exists", () => {
+test("recodergit resolves to the vendored node entry when its dist exists", () => {
   const engines = resolveEngines({
     root: ROOT,
     env: EMPTY_ENV,
-    exists: existsFor([GITNEXUS_DIST]),
+    exists: existsFor([RECODERGIT_DIST]),
   });
-  assert.deepEqual(engines.gitnexus, {
+  assert.deepEqual(engines.recodergit, {
     kind: "node",
     cmd: "node",
-    args: [GITNEXUS_DIST],
+    args: [RECODERGIT_DIST],
   });
 });
 
-test("gitnexus honors GITNEXUS_BIN when the vendored build is absent", () => {
+test("recodergit honors RECODERGIT_BIN when the vendored build is absent", () => {
   const engines = resolveEngines({
     root: ROOT,
-    env: { GITNEXUS_BIN: "/opt/gitnexus" },
+    env: { RECODERGIT_BIN: "/opt/recodergit" },
     exists: NONE,
   });
-  assert.deepEqual(engines.gitnexus, {
+  assert.deepEqual(engines.recodergit, {
     kind: "path",
-    cmd: "/opt/gitnexus",
+    cmd: "/opt/recodergit",
     args: [],
   });
 });
 
-test("gitnexus falls back to the bare PATH name when nothing resolves", () => {
+test("recodergit falls back to the bare PATH name when nothing resolves", () => {
   const engines = resolveEngines({ root: ROOT, env: EMPTY_ENV, exists: NONE });
-  assert.deepEqual(engines.gitnexus, {
+  assert.deepEqual(engines.recodergit, {
     kind: "path",
     cmd: "gitnexus",
     args: [],
@@ -67,11 +67,11 @@ test("gitnexus falls back to the bare PATH name when nothing resolves", () => {
 test("the vendored build wins over an env override (precedence)", () => {
   const engines = resolveEngines({
     root: ROOT,
-    env: { GITNEXUS_BIN: "/opt/gitnexus" },
-    exists: existsFor([GITNEXUS_DIST]),
+    env: { RECODERGIT_BIN: "/opt/recodergit" },
+    exists: existsFor([RECODERGIT_DIST]),
   });
-  assert.equal(engines.gitnexus.kind, "node");
-  assert.deepEqual(engines.gitnexus.args, [GITNEXUS_DIST]);
+  assert.equal(engines.recodergit.kind, "node");
+  assert.deepEqual(engines.recodergit.args, [RECODERGIT_DIST]);
 });
 
 test("continuum resolves the vendored mjs, env override, then PATH", () => {
@@ -109,7 +109,7 @@ test("bd resolves BD_BIN, else the bare PATH name (no vendored build)", () => {
   const env = resolveEngines({
     root: ROOT,
     env: { BD_BIN: "/home/me/.local/bin/bd" },
-    exists: existsFor([GITNEXUS_DIST, CONTINUUM_ENTRY]),
+    exists: existsFor([RECODERGIT_DIST, CONTINUUM_ENTRY]),
   });
   assert.deepEqual(env.bd, {
     kind: "path",
@@ -153,15 +153,15 @@ test("context7 reports key presence as a boolean (never the key)", () => {
 });
 
 test("resolveExecEngine: an explicit override pins a PATH cmd with no prefix", () => {
-  const engine = resolveExecEngine("gitnexus", "/custom/gitnexus", {
+  const engine = resolveExecEngine("recodergit", "/custom/recodergit", {
     root: ROOT,
     env: EMPTY_ENV,
-    exists: existsFor([GITNEXUS_DIST]),
+    exists: existsFor([RECODERGIT_DIST]),
   });
   // Override wins even when a vendored build exists — prior behavior preserved.
   assert.deepEqual(engine, {
     kind: "path",
-    cmd: "/custom/gitnexus",
+    cmd: "/custom/recodergit",
     args: [],
   });
 });

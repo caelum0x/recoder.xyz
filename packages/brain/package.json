@@ -21,7 +21,7 @@
     "test": "node --test --import tsx 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@recoder/git-nexus": "workspace:*"
+    "@recoder/recodergit": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

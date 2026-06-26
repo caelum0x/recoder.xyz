@@ -2,13 +2,13 @@ import {
   createContextPack,
   type ContextPack,
   type CreateContextPackInput,
-} from "@recoder/git-nexus";
+} from "@recoder/recodergit";
 import type { RepoIntelPort } from "../ports/repo-intel.port";
 
 /**
  * Default {@link RepoIntelPort}, backed by git-nexus's context-pack.
  *
- * This is the seam where the real ts/gitnexus knowledge-graph engine is merged
+ * This is the seam where the real ts/recodergit knowledge-graph engine is merged
  * in (see docs/subsystems/brain.md §repo). The port contract stays stable while
  * the engine behind it gets real; today it wraps `createContextPack` so the
  * Brain keeps its current behavior with zero changes to callers.

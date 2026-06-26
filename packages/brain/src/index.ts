@@ -10,18 +10,31 @@
 // Construction
 export { Brain, createBrain, type BrainDeps } from "./brain";
 
-// Repo-intelligence adapter (the ts/gitnexus fusion seam)
+// Repo-intelligence adapter (the ts/recodergit fusion seam)
 export { ContextPackRepoIntel, createRepoIntel } from "./repo/repo-intel-adapter";
 
-// Real GitNexus-backed repo intelligence (opt-in, degrade-safe to the mock)
+// Real RecoderGit-backed repo intelligence (opt-in, degrade-safe to the mock)
 export {
-  GitNexusRepoIntel,
-  createGitNexusRepoIntel,
+  RecoderGitRepoIntel,
+  createRecoderGitRepoIntel,
   createRepoIntelAuto,
   buildImpactArgs,
-  type GitNexusExec,
-  type GitNexusRepoIntelOptions,
-} from "./repo/gitnexus-repo-intel";
+  type RecoderGitExec,
+  type RecoderGitRepoIntelOptions,
+} from "./repo/recodergit-repo-intel";
+
+// Real RecoderGit MCP-server-backed repo intelligence (persistent-graph path;
+// degrade-safe to the CLI/context-pack chain via createRepoIntelAuto)
+export {
+  RecoderGitMcpRepoIntel,
+  createRecoderGitMcpRepoIntel,
+  buildImpactToolArgs,
+  parseMcpImpact,
+  createMcpFetchTransport,
+  type McpTransport,
+  type McpCallToolResult,
+  type RecoderGitMcpRepoIntelOptions,
+} from "./repo/recodergit-mcp-repo-intel";
 
 // Desktop-activity adapter (the ts/continuum fusion seam)
 export {

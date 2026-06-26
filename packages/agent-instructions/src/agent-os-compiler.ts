@@ -27,7 +27,7 @@ import {
 import type {
   BeadsInstructionContext,
   Context7InstructionContext,
-  GitNexusInstructionContext,
+  RecoderGitInstructionContext,
   PALInstructionContext,
   PolicyInstructionContext,
 } from './loaders';
@@ -96,7 +96,7 @@ export type CompileAgentOsInstructionBundleInput = {
   recentFailures?: FailurePattern[];
   beads?: BeadsInstructionContext;
   contextPack?: AgentOsContextPackInput;
-  gitNexus?: GitNexusInstructionContext;
+  gitNexus?: RecoderGitInstructionContext;
   palPlan?: AgentOsPALPlanInput;
   pal?: PALInstructionContext;
   context7?: Context7InstructionContext[];
@@ -301,7 +301,7 @@ function mapSpacePolicy(
 function mapContextPack(
   contextPack: AgentOsContextPackInput | undefined,
   taskId: string,
-): GitNexusInstructionContext | undefined {
+): RecoderGitInstructionContext | undefined {
   if (!contextPack?.impactReport) {
     return undefined;
   }

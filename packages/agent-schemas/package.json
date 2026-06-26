@@ -21,7 +21,7 @@
     "test": "node --test --import tsx src/**/*.test.ts"
   },
   "dependencies": {
-    "@recoder/git-nexus": "workspace:*",
+    "@recoder/recodergit": "workspace:*",
     "@recoder/agent-os": "workspace:*",
     "@recoder/oss-registry": "workspace:*",
     "@recoder/pal": "workspace:*"
