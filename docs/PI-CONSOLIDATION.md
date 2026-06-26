@@ -63,3 +63,74 @@
 5. Verify: `recoder` (flag on) launches pi, agent lists recodergit + brain tools, builds green; old path unaffected.
 
 Stage A is additive and reversible — the safe place to start. B→D follow once A proves the shell.
+
+---
+
+## 5. Stage B — the Recoder layer ported onto pi (shipped, flag-gated)
+
+Stage B turns the Stage A launcher into a real **Recoder-branded, authenticated** agent.
+Still opt-in behind `RECODER_PI_SHELL`; the default Ink path is untouched and
+byte-identical (the `recoder-pi-shell/*` modules are only imported when the flag is set,
+guarded in `gemini.tsx`).
+
+### 5.1 Branding (the pi TUI shows "Recoder")
+
+pi reads its identity from its **own** `package.json` `piConfig` at module load
+(`pi-coding-agent/src/config.ts`). The vendored package now sets:
+
+```jsonc
+"piConfig": { "name": "Recoder", "configDir": ".recoder" }
+```
+
+Consequences pi derives from `piConfig.name`:
+
+| pi symbol | value | effect |
+|---|---|---|
+| `APP_NAME` | `Recoder` | welcome banner ("Welcome to Recoder…"), CLI help, `User-Agent` |
+| `APP_TITLE` | `Recoder` | TUI title |
+| `CONFIG_DIR_NAME` | `.recoder` | default config root `~/.recoder/agent` |
+| `ENV_AGENT_DIR` | `RECODER_CODING_AGENT_DIR` | `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR` |
+| `ENV_SESSION_DIR` | `RECODER_CODING_AGENT_SESSION_DIR` | session dir override |
+
+Because `appName !== "pi"`, pi's `isOfficialDistribution()` is false, so the upstream
+first-time-setup wizard stays disabled for the rebrand.
+
+**Remaining hardcoded pi identity refs (not piConfig-driven), noted for later:** the
+banner tagline "the minimal coding agent" and the share-viewer URL `https://pi.dev/session/`
+(`PI_SHARE_VIEWER_URL`-overridable). These are cosmetic and out of Stage B scope.
+
+### 5.2 Config identity + RECODER_* → pi env mapping
+
+| Recoder input | Resolves to | pi env applied (`envOverrides`) | pi reads |
+|---|---|---|---|
+| `RECODER_CONFIG_DIR` / `RECODER_PI_CONFIG_DIR` (override) | Recoder config root | `RECODER_CODING_AGENT_DIR=<root>/agent` | `getAgentDir()` |
+| (unset) | `~/.recoder` (via `$HOME`/`piConfig.configDir`) | `RECODER_CODING_AGENT_DIR=~/.recoder/agent` | `getAgentDir()` |
+
+The launcher derives `RECODER_PI_AGENT_DIR_ENV` from `RECODER_PI_APP_NAME` exactly as pi
+derives `ENV_AGENT_DIR` from `piConfig.name`, so the two stay in lockstep (`launch-plan.ts`).
+Even if the env override is dropped, pi's default `CONFIG_DIR_NAME = .recoder` already lands
+config under `~/.recoder/agent`, matching `RecoderAuthService`'s `~/.recoder/auth.json`.
+
+### 5.3 Pre-launch auth gate
+
+`runRecoderPiShell` runs a **pre-launch auth gate** before any env mutation or pi launch.
+The default check reuses recoder-code's existing `RecoderAuthService.isAuthenticated()`
+(device-flow / token loader, persisted at `~/.recoder/auth.json`) — **not reimplemented**,
+lazily imported so it only loads on the flag-on path. If unauthenticated, it prints the
+existing `recoder auth login` hint and exits non-zero **without launching pi**. The check,
+the unauthenticated handler, and `exit` are all injectable (`RunPiShellDeps`) for testing.
+
+### 5.4 MCP bridge robustness
+
+The recodergit + brain bridge already fails safe per server (a server that can't start is
+skipped, never crashing the TUI). Stage B adds a `RecoderToolGroupSummary` (`loaded` /
+`degraded`) reported via `onGroupsResolved`, which the launcher surfaces on stderr — so the
+operator sees exactly which Recoder tool groups came up and which degraded.
+
+### 5.5 Tests
+
+`recoder-pi-shell/recoder-stage-b.test.ts` (force-added past the `*.test.ts` gitignore)
+covers: branding (`piConfig` set in the vendored package.json), the auth gate both ways
+(authed → pi launches; unauthed → prompt + exit, pi never launched, env untouched), and the
+MCP bridge degrading + surfacing loaded/degraded groups. Existing Stage A tests stay green;
+the flag-off default path is unchanged.

@@ -3,6 +3,10 @@
   "version": "0.80.2",
   "description": "Recoder-owned vendor of pi pi-coding-agent (merged from earendil-works/pi).",
   "private": true,
+  "piConfig": {
+    "name": "Recoder",
+    "configDir": ".recoder"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

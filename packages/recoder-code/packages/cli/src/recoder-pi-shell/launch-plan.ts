@@ -57,20 +57,32 @@ export type IsOnPathFn = (
   exists: ExistsFn,
 ) => boolean;
 
-/** Recoder branding/app identity handed to the pi shell. */
+/** Recoder branding/app identity handed to the pi shell (plan metadata). */
 export const RECODER_APP_NAME = 'recoder';
 export const RECODER_APP_TITLE = 'Recoder';
 
-/** Default Recoder config dir name (parallels pi's `.pi`). */
+/**
+ * The `piConfig.name` set in the vendored `@recoder/pi-coding-agent`
+ * package.json (Stage B branding). pi derives its runtime `APP_NAME`,
+ * `APP_TITLE`, and — crucially — its env-var prefix from this value at module
+ * load, so it MUST match `pi-coding-agent/package.json` `piConfig.name`. This is
+ * the single source of truth pi reads to render "Recoder" in the TUI.
+ */
+export const RECODER_PI_APP_NAME = 'Recoder';
+
+/** Default Recoder config dir name (matches pi's `piConfig.configDir`). */
 export const RECODER_CONFIG_DIR_NAME = '.recoder';
 
 /**
- * pi reads its agent/config dir from `<APP_NAME>_CODING_AGENT_DIR`. For the
- * stock vendored pi package APP_NAME is `pi`, so the env var is
- * `PI_CODING_AGENT_DIR`. Pointing it at the Recoder config dir is the real
- * configDir wiring — pi then writes settings/auth/sessions under `~/.recoder`.
+ * pi reads its agent/config dir from `<APP_NAME>_CODING_AGENT_DIR`. Stage B
+ * rebrands pi's `APP_NAME` to `Recoder` (via `piConfig.name`), so the env var pi
+ * actually honors is `RECODER_CODING_AGENT_DIR` — NOT the stock
+ * `PI_CODING_AGENT_DIR`. Derived from `RECODER_PI_APP_NAME` exactly as pi derives
+ * it, so the two stay in lockstep. Pointing it at the Recoder config dir is the
+ * real configDir wiring — pi then writes settings/sessions under
+ * `~/.recoder/agent`.
  */
-export const PI_AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
+export const RECODER_PI_AGENT_DIR_ENV = `${RECODER_PI_APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
 
 /** Env overrides that opt-out / redirect the Recoder config dir. */
 export const RECODER_CONFIG_DIR_ENV = 'RECODER_CONFIG_DIR';
@@ -182,7 +194,7 @@ export function buildRecoderPiLaunchPlan(
   const piAgentDir = join(configDir, 'agent');
 
   const envOverrides: Record<string, string> = {
-    [PI_AGENT_DIR_ENV]: piAgentDir,
+    [RECODER_PI_AGENT_DIR_ENV]: piAgentDir,
   };
 
   return {
