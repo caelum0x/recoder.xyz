@@ -75,7 +75,7 @@ The **eight subsystems** are the owned engines that fuse open-source code into R
 
 | # | Subsystem | Lives at | One line | Doc | Status |
 |---|-----------|----------|----------|-----|--------|
-| 1 | **brain** | `packages/brain` | Shared memory: repo intelligence + semantic recall + docs + task graph, **assembled once per repo/task and reused by every agent** (the token-waste killer). | [brain.md](./brain.md) | seam shipped; needs re-ground on real OSS |
+| 1 | **brain** | `packages/brain` | Shared memory: repo intelligence + semantic recall + docs + task graph + **desktop activity**, **assembled once per repo/task and reused by every agent** (the token-waste killer). | [brain.md](./brain.md) | **built & green** — 5 real sources behind ports (gitnexus · continuum · mem0 · context7 · beads), wired into `docker-backend` (flag-gated) |
 | 2 | **governance** | `packages/governance` + `crates/recoder-governance-*` | Policy spine: model/risk routing, approval risk tiers, permission enforcement, tamper-evident audit + replay. | [governance.md](./governance.md) | designed |
 | 3 | **coordination** | `packages/coordination` | Fleet coherence: work-locks, dependency-aware idempotent dispatch, A2A handoff bus, drift reconciler. | [coordination.md](./coordination.md) | designed |
 | 4 | **runtime** | `packages/runtime` | Drives the user's own agent CLIs headless behind one driver contract; translates native streams → `RunEvent`. | [runtime.md](./runtime.md) | designed |
@@ -227,7 +227,7 @@ subsystem's doc. Never thin-wrap.
 | Phase | Subsystem | What lands | Status |
 |---|---|---|---|
 | 0 | OSS acquisition | Clone + de-git real GitNexus, mem0, tmux, dmux into `ts/ py/ c/` | ✅ done |
-| 1 | **brain** | Re-ground `repo/` on real GitNexus, `memory/` on `py/mem0/mem0-ts`; build assemble-once cache; land tokens-saved metric | 🔜 next (verify-gated) |
+| 1 | **brain** | ✅ **DONE** — ports foundation; real adapters behind every port: gitnexus (`RepoIntelPort`, degrade-safe), **continuum desktop-activity** (`ActivityPort`), mem0 (`MemoryPort`), context7 (`DocsPort`), beads (`TaskGraphPort`); all 5 wired into `docker-backend` `BrainService` (flag-gated, default off). Each fail-safe + unit-tested. Remaining: assemble-once cache + tokens-saved metric. | ✅ built & green |
 | 2 | **governance** | Rust governance crates (approval/audit/routing/permission) + TS `packages/governance` over typed IPC | designed |
 | 3 | **coordination** | Work-locks + dispatch + handoff bus + reconciler | designed |
 | 4 | **runtime** | Driver contract + Claude/Codex/opencode/pi drivers + RunEvent translation | designed |
