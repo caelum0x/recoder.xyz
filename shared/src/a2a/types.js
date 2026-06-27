@@ -9,6 +9,10 @@ exports.RECODER_A2A_PROTOCOL_VERSION = '0.3.0';
 exports.RECODER_A2A_ENVELOPE_VERSION = '2026-02-14';
 exports.RECODER_A2A_ENVELOPE_TEXT_PREFIX = 'recoder.a2a.envelope:';
 exports.RECODER_AGENT_PLATFORMS = [
+    'recoder',
+    'cursor',
+    'windsurf',
+    'replit',
     'codex',
     'claude_code',
     'recoder_app',

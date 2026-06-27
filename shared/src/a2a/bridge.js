@@ -10,8 +10,13 @@ exports.claudeCodeToEnvelope = claudeCodeToEnvelope;
 exports.envelopeToClaudeCode = envelopeToClaudeCode;
 const types_1 = require("./types");
 function extractFirstText(envelope) {
-    const textPart = envelope.payload.find((part) => part.kind === 'text');
-    return textPart?.kind === 'text' ? textPart.text : '';
+    const payload = envelope.payload;
+    const textPart = payload.find((part) => {
+        if (!part || typeof part !== 'object')
+            return false;
+        return part.kind === 'text';
+    });
+    return textPart?.kind === 'text' ? (textPart.text ?? '') : '';
 }
 function roleFromIntent(intent) {
     if (intent === 'plan' || intent === 'status' || intent === 'sync') {
