@@ -55,6 +55,14 @@ export interface ConductorSubstrate {
   capture(handle: SubstrateHandle, lines?: number): Promise<string | null>;
   /** Whether the agent process/session is still alive. */
   alive(handle: SubstrateHandle): Promise<boolean>;
+  /**
+   * Exit code of the completed agent (0 = success, >0 = failure).
+   * Returns `undefined` when the agent is still alive, `null` when the handle
+   * is entirely gone (already cleaned up). Used by the run-tailer to distinguish
+   * `completed` (exit 0) from `failed` (non-zero) — the upgrade over "session
+   * gone = done" per docs/subsystems/substrate.md §4.3.
+   */
+  exitCode?(handle: SubstrateHandle): Promise<number | null | undefined>;
   /** Reviewable diff of the work against `baseRef`. */
   diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff>;
   /** Stop the agent and (optionally) remove its isolation. */

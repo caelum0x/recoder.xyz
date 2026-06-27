@@ -3,7 +3,7 @@
  * grouped into lifecycle columns. Data comes only from GET /workspaces (polled
  * ~2s by the parent). No mock cards: an empty backend yields empty columns.
  */
-import { BOARD_COLUMNS, stateLabel, stateTone } from '../lib/workspace-state';
+import { BOARD_COLUMNS, lockConflict, stateLabel, stateTone } from '../lib/workspace-state';
 import type { Workspace } from '../types';
 
 interface BoardProps {
@@ -39,23 +39,39 @@ export function Board({ workspaces, selectedId, onSelect }: BoardProps) {
               {cards.length === 0 ? (
                 <div class="board-col-empty">—</div>
               ) : (
-                cards.map((w) => (
-                  <button
-                    class={`card ${selectedId === w.workspaceId ? 'card-selected' : ''}`}
-                    key={w.workspaceId}
-                    onClick={() => onSelect(w.workspaceId)}
-                  >
-                    <div class="card-top">
-                      <span class={`badge tone-${stateTone(w.state)}`}>{stateLabel(w.state)}</span>
-                      <span class="card-runtime">{w.runtimeId}</span>
-                    </div>
-                    <div class="card-branch" title={w.branch}>{w.branch}</div>
-                    <div class="card-foot">
-                      <span class="card-substrate">{w.substrate}</span>
-                      <span class="card-time">{timeAgo(w.updatedAt)}</span>
-                    </div>
-                  </button>
-                ))
+                cards.map((w) => {
+                  // A failed workspace whose failure is a prevented write-lock
+                  // collision is rendered distinctly so the operator can see the
+                  // moat working: the launch was refused, not silently lost.
+                  const collision = lockConflict(w);
+                  return (
+                    <button
+                      class={`card ${selectedId === w.workspaceId ? 'card-selected' : ''} ${collision ? 'card-collision' : ''}`}
+                      key={w.workspaceId}
+                      onClick={() => onSelect(w.workspaceId)}
+                    >
+                      <div class="card-top">
+                        <span class={`badge tone-${stateTone(w.state)}`}>{stateLabel(w.state)}</span>
+                        {collision && (
+                          <span class="badge badge-lock" title={collision.message}>
+                            🔒 collision
+                          </span>
+                        )}
+                        <span class="card-runtime">{w.runtimeId}</span>
+                      </div>
+                      <div class="card-branch" title={w.branch}>{w.branch}</div>
+                      {collision && (
+                        <div class="card-collision-msg" title={collision.message}>
+                          {collision.message}
+                        </div>
+                      )}
+                      <div class="card-foot">
+                        <span class="card-substrate">{w.substrate}</span>
+                        <span class="card-time">{timeAgo(w.updatedAt)}</span>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
           </div>

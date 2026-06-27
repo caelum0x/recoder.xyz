@@ -6,13 +6,16 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "preact": "^10.24.3"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
   }
 }

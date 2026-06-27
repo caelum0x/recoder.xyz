@@ -105,6 +105,20 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
   // Isolated worktree on its own branch — parallel agents never collide.
   await exec('git', ['-C', input.repoPath, 'worktree', 'add', '-B', branch, worktreePath, input.baseRef || 'HEAD']);
 
+  // Ensure remain-on-exit is globally on BEFORE launching the agent command.
+  // This lets paneExitCode read #{pane_dead_status} after the agent exits,
+  // distinguishing success (0) from crash (non-zero). The global option only
+  // works when the tmux server is already running; bootstrap it idempotently.
+  try {
+    await exec(TMUX_BIN, ['set-option', '-g', 'remain-on-exit', 'on']);
+  } catch {
+    // Server not running yet — start it with a throwaway session, set the option.
+    const init = `__recoder_init_${Date.now()}`;
+    await exec(TMUX_BIN, ['new-session', '-d', '-s', init, 'true']);
+    await exec(TMUX_BIN, ['set-option', '-g', 'remain-on-exit', 'on']);
+    try { await exec(TMUX_BIN, ['kill-session', '-t', init]); } catch { /* gone */ }
+  }
+
   // Detached tmux session running the agent inside the worktree.
   await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command]);
 
@@ -166,4 +180,36 @@ export async function killSession(sessionId: string, options?: { removeWorktree?
   }
   sessions.delete(sessionId);
   logger.info({ sessionId }, 'conductor session killed');
+}
+
+/**
+ * Get the true exit code of a completed tmux session's pane.
+ *
+ * Uses `#{pane_dead}` and `#{pane_dead_status}` — the upgrade over "session gone
+ * = done" called out in the substrate design. When the session still exists (pane
+ * is alive), returns `undefined`. When the pane is dead, returns the exit status.
+ * When the session is entirely gone (already killed), returns `null`.
+ */
+export async function paneExitCode(sessionName: string): Promise<number | null | undefined> {
+  // Check if the session exists at all.
+  try {
+    await exec(TMUX_BIN, ['has-session', '-t', sessionName]);
+  } catch {
+    return null; // session entirely gone
+  }
+  // Session exists — check if the pane is dead.
+  try {
+    const { stdout: dead } = await exec(TMUX_BIN, [
+      'display-message', '-p', '-t', sessionName, '#{pane_dead}',
+    ]);
+    if (dead.trim() !== '1') return undefined; // still alive
+    // Pane is dead — read the exit status.
+    const { stdout: status } = await exec(TMUX_BIN, [
+      'display-message', '-p', '-t', sessionName, '#{pane_dead_status}',
+    ]);
+    const code = parseInt(status.trim(), 10);
+    return Number.isNaN(code) ? 0 : code;
+  } catch {
+    return null; // can't query → treat as gone
+  }
 }

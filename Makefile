@@ -18,7 +18,13 @@ backend: ## Typecheck the control-plane service
 
 # ---- Substrate binaries (vendored C/TS, pinned in the runtime image) ----
 build-tmux: ## Build the vendored tmux binary from c/tmux (needs cc + libevent + ncurses)
-	./scripts/build-tmux.sh
+	@if command -v autoconf >/dev/null 2>&1 && [ -f c/tmux/configure ]; then \
+		echo "→ autotools available, using configure build"; \
+		./scripts/build-tmux.sh; \
+	else \
+		echo "→ autotools unavailable or configure missing, using manual build"; \
+		bash scripts/build-tmux-manual.sh; \
+	fi
 
 build-dmux: ## Build the vendored dmux operator console from ts/dmux
 	cd ts/dmux && pnpm install --frozen-lockfile && pnpm run build

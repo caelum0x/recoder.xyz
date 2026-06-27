@@ -80,7 +80,7 @@
     "qrcode-terminal": "^0.12.0",
     "react": "^19.1.0",
     "read-package-up": "^11.0.0",
-    "recoder-code-core": "^2.4.5",
+    "recoder-code-core": "workspace:*",
     "shell-quote": "^1.8.3",
     "simple-git": "^3.28.0",
     "string-width": "^7.1.0",

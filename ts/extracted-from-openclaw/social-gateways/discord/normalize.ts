@@ -63,12 +63,22 @@ function detectDiscordMention(
   return content.includes(`<@${botUserId}>`) || content.includes(`<@!${botUserId}>`);
 }
 
+/** The subset of a Discord message attachment the normalizer reads. Mirrors the
+ * real `discord-api-types` `APIAttachment` shape (id/filename/content_type/url/size). */
+interface DiscordAttachmentShape {
+  readonly id?: string | number;
+  readonly filename?: string;
+  readonly content_type?: string | null;
+  readonly url?: string;
+  readonly size?: number;
+}
+
 function discordAttachments(message: DiscordMessageEvent["message"]): InboundAttachment[] {
-  const attachments = message.attachments ?? [];
+  const attachments = (message.attachments ?? []) as readonly DiscordAttachmentShape[];
   if (attachments.length === 0) {
     return [];
   }
-  return attachments.map((attachment) => ({
+  return attachments.map((attachment): InboundAttachment => ({
     mimeType: attachment.content_type ?? undefined,
     remoteId: attachment.id ? String(attachment.id) : undefined,
     url: attachment.url ?? undefined,

@@ -104,6 +104,8 @@ export interface CreateWorkspaceBody {
   repoPath: string;
   runtimeId: string;
   createdBy: string;
+  /** Execution substrate to launch on (defaults to 'tmux_worktree' server-side). */
+  substrate?: WorkspaceSubstrate;
   prompt?: string;
   command?: string;
   model?: string;
@@ -173,6 +175,33 @@ export interface DmuxLaunchResult {
   repoPath: string;
   command: string[];
   attachHint: string;
+}
+
+/**
+ * GET /api/connectors — per-channel connector health.
+ *
+ * Source of truth: docker-backend/src/connectors/gateway.ts
+ * (ConnectorsHealth / ChannelHealth). NOTE this route is mounted at
+ * /api/connectors, NOT under /api/conductor.
+ */
+export interface ChannelHealth {
+  channel: string;
+  accountId: string;
+  /** Credential present in env (so this channel was instantiated). */
+  configured: boolean;
+  /** A real probe() reported the account reachable + authorized. */
+  connected: boolean;
+  identity?: string;
+  error?: string;
+  checkedAt?: number;
+}
+
+export interface ConnectorsHealth {
+  /** True when at least one channel is configured (gateway is not inert). */
+  active: boolean;
+  /** Whether inbound commands can launch a workspace (dispatch is configured). */
+  dispatchReady: boolean;
+  channels: ChannelHealth[];
 }
 
 /** The standard backend envelope: { success, data?, error? }. */

@@ -64,8 +64,7 @@
     "semver": "^7.6.3",
     "typeorm": "^0.3.27",
     "ws": "^8.18.0",
-    "zod": "^3.25.76",
-    "recoder-code-core": "^2.4.5"
+    "zod": "^3.25.76"
   },
   "optionalDependencies": {
     "@google-cloud/speech": "^7.2.0",

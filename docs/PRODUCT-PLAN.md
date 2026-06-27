@@ -2,6 +2,8 @@
 
 > The single map of what Recoder *is*, every surface users touch, every MCP/CLI, the control
 > plane and subsystems underneath — plus a **status board to track each piece of work**.
+> **For what is actually built/green/used right now (with re-verified evidence), see the reality
+> snapshot in [`docs/BUILD-STATUS.md`](./BUILD-STATUS.md).** This file is the design map + board.
 > Companions: [`docs/subsystems/README.md`](./subsystems/README.md) (8-subsystem master plan),
 > the per-subsystem designs in `docs/subsystems/`, [`docs/PACKAGES.md`](./PACKAGES.md) (package
 > inventory + duplicate/stub cleanup), and [`docs/subsystems/recodergit.md`](./subsystems/recodergit.md)
@@ -70,7 +72,7 @@ host** (`/api/mcp`) and each client's **own mcpServers** (e.g. recoder-code's de
 | **brain** | `brain_assemble` (fused context) · `brain_recall` · `brain_record` (candidate-only) | `packages/brain/src/seams/mcp-server.ts` (stdio) | recoder-code default (stdio) | ✅ built, green |
 | **MCP host (governed)** | registry + permission/risk-score/audit `/check` for every tool call | `docker-backend/src/agent-os/routes/mcp-control.routes.ts` | `/api/mcp` (auth'd) | ✅ recodergit registered (flag-gated) |
 | **pal-mcp-server** | multi-model MCP server | `py/pal-mcp-server` | interop subsystem (planned) | 📐 vendored, integration designed |
-| **connector gateways** | Telegram/Slack/Discord/Signal/LINE/Feishu/iMessage/WhatsApp | `ts/extracted-from-openclaw` | interop subsystem | 📐 designed |
+| **connector gateways** | Telegram/Slack/Discord/Signal/LINE/Feishu/iMessage/WhatsApp (8 kinds declared) | `@recoder/connectors` (`ts/extracted-from-openclaw`) → `docker-backend/src/connectors` | `GET /api/connectors` (live, mounted `server.ts:15555`) | ✅ foundation green (13/13) + Telegram real adapter live; other 7 adapter-pending (`REAL_CHANNELS=['telegram']`) |
 
 ---
 
@@ -94,9 +96,9 @@ Per [`docs/subsystems/README.md`](./subsystems/README.md). Each fuses OSS (merge
 |---|---|---|---|
 | 1 | **brain** | ✅ **built & green** | 5 real sources behind ports (recodergit · continuum · mem0 · context7 · beads); BrainService + brain MCP server; the token-waste-killer |
 | 2 | **governance** | 📐 designed | Rust crates (openfang + claw-code-parity) + TS policy spine |
-| 3 | **coordination** | 📐 designed | work-locks, dispatch, A2A handoff, reconciler |
-| 4 | **runtime** | 📐 designed | drive agent CLIs (claude/codex/opencode/qwen/pi) → RunEvent |
-| 5 | **substrate** | 🟡 partial | tmux+worktree / Daytona isolation (conductor code shipped) |
+| 3 | **coordination** | ✅ **built & green; wired** | `@recoder/coordination` 252/252 tests; **work-locks now live in the conductor** (collision-prevention, 9/9 conductor-lock tests) — wiring in working-tree (uncommitted). dispatch/handoff/reconciler present. See BUILD-STATUS §4. |
+| 4 | **runtime** | 🟢 **built & green; shelved** | `@recoder/runtime` 160/160 tests (claude-code/codex/in-process tool-loop drivers); green-but-not-yet-wired into a live agent run. |
+| 5 | **substrate** | 🟡 partial | tmux+worktree / Daytona isolation (conductor live: `/api/conductor/health` 200, runtimes present); `@recoder/substrate` pkg scaffolding shelved-incomplete; interop empty. |
 | 6 | **network** | 📐 designed | OpenZiti zero-trust overlay |
 | 7 | **interop** | 📐 designed | A2A + MCP host + connectors |
 | 8 | **distribution** | 📐 designed | CLI dist + polar billing + signed delivery |
@@ -114,6 +116,14 @@ Legend: ✅ done · 🔄 in progress · 📐 designed · 📋 planned · ⚠️ 
 
 | Item | Area | Status | Next step / note |
 |---|---|---|---|
+| **Own `ts/` engines as `@recoder/*`** (dmux, codex-runtime, opencode-harness, open-agents, opencode, recodergit) | engines | ✅ | `34b2d4a83` — rebranded, build-green; `ts/qwen-code`, `ts/polar`, `ts/pi` (dup) retired. opencode 29/29 *prior-session reported* (not re-run). See BUILD-STATUS §1. |
+| **`@recoder/coordination`** built + green | coordination | ✅ | **252/252** (re-run). Locks/dispatch/handoff/reconciler. |
+| **`@recoder/coordination` wired into conductor** (work-locks) | coordination | ✅ 🅦 | collision-prevention live; **9/9** conductor-lock tests; wiring **uncommitted** (working-tree). BUILD-STATUS §4. |
+| **`@recoder/runtime`** built + green | runtime | ✅ | **160/160** (re-run); green-but-shelved (not yet wired to a live run). |
+| **`@recoder/connectors`** foundation + Telegram adapter | interop | ✅ | foundation **13/13**; 8 kinds declared; only **Telegram** is a real live adapter; `GET /api/connectors` live (`server.ts:15555`). |
+| **Desktop cockpit** over live `/api/conductor` | desktop | ✅ | board/terminals/sessions/auth/connectors-panel/lock-badges; **installable `Recoder.app`** with cockpit in `app.asar` (verified via `asar list`). |
+| **95-file merge resolved** (docker-backend tsc 114→0) | repo | ✅ | `34b2d4a83`; `tsc --noEmit` ⇒ **0** (re-run); 0 markers / 0 unmerged. |
+| **e2e: docker-backend boots (no Postgres), conductor live** | e2e | ✅ | `/api/conductor/health` 200 (tmux+git true), `/runtimes` shows claude/codex/opencode/pi present, `/api/connectors` truthful-inert. **Live-agent run NOT yet executed.** BUILD-STATUS §7. |
 | recodergit engine built + verified | code-graph | ✅ | live: analyze→graph, impact by UID |
 | recodergit full rebrand (zero gitnexus) | code-graph | ✅ | committed |
 | Brain: 5 real sources + MCP server | brain | ✅ | continuum/bd/recodergit live; mem0/context7 need config |

@@ -10,7 +10,8 @@ import { useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { readConfig } from '../lib/config';
-import type { CreateWorkspaceBody } from '../types';
+import { chooseFolder, hasFolderPicker } from '../lib/desktop';
+import type { CreateWorkspaceBody, WorkspaceSubstrate } from '../types';
 
 interface NewWorkspaceFormProps {
   onCreated: () => void;
@@ -24,21 +25,37 @@ function genTaskId(): string {
 export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) {
   const defaults = readConfig().defaults || {};
   const runtimes = usePoll(() => api.runtimes(), 15_000);
+  const substrates = usePoll(() => api.substrates(), 30_000);
 
   const [repoPath, setRepoPath] = useState(defaults.repoPath || '');
   const [prompt, setPrompt] = useState('');
   const [runtimeId, setRuntimeId] = useState('');
+  const [substrate, setSubstrate] = useState<WorkspaceSubstrate | ''>('');
   const [model, setModel] = useState('');
   const [spaceId, setSpaceId] = useState(defaults.spaceId || 'default');
   const [projectId, setProjectId] = useState(defaults.projectId || 'default');
   const [createdBy, setCreatedBy] = useState(defaults.createdBy || 'cockpit');
   const [baseRef, setBaseRef] = useState('');
+  const [pickError, setPickError] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const availableRuntimes = (runtimes.data || []).filter((r) => r.available);
+  const folderPickerAvailable = hasFolderPicker();
   const allRuntimes = runtimes.data || [];
+  const availableRuntimes = allRuntimes.filter((r) => r.available);
+  const allSubstrates = substrates.data || [];
+  const availableSubstrates = allSubstrates.filter((s) => s.available);
+
+  async function pickFolder() {
+    setPickError(null);
+    try {
+      const chosen = await chooseFolder();
+      if (chosen) setRepoPath(chosen);
+    } catch (err) {
+      setPickError(err instanceof Error ? err.message : 'folder pick failed');
+    }
+  }
 
   async function submit(e: Event) {
     e.preventDefault();
@@ -58,6 +75,7 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
       createdBy: createdBy.trim() || 'cockpit',
       prompt: prompt.trim(),
     };
+    if (substrate) body.substrate = substrate;
     if (model.trim()) body.model = model.trim();
     if (baseRef.trim()) body.baseRef = baseRef.trim();
 
@@ -89,13 +107,24 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
 
         <label class="field">
           <span>Repo path</span>
-          <input
-            type="text"
-            placeholder="/Users/you/project"
-            value={repoPath}
-            onInput={(e) => setRepoPath((e.target as HTMLInputElement).value)}
-            required
-          />
+          <div class="field-with-action">
+            <input
+              type="text"
+              placeholder="/Users/you/project"
+              value={repoPath}
+              onInput={(e) => setRepoPath((e.target as HTMLInputElement).value)}
+              required
+            />
+            {folderPickerAvailable && (
+              <button type="button" class="btn btn-sm btn-ghost" onClick={() => void pickFolder()}>
+                Choose folder…
+              </button>
+            )}
+          </div>
+          {!folderPickerAvailable && (
+            <span class="field-hint">Native folder picker is only available in the desktop app — type the absolute path here.</span>
+          )}
+          {pickError && <span class="form-error">{pickError}</span>}
         </label>
 
         <label class="field">
@@ -122,10 +151,19 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
               </option>
               {allRuntimes.map((r) => (
                 <option key={r.runtimeId} value={r.runtimeId} disabled={!r.available}>
-                  {r.runtimeId}{r.available ? '' : ' (not installed)'}
+                  {r.runtimeId}
+                  {r.available
+                    ? r.path
+                      ? ` — ${r.path}`
+                      : ''
+                    : ` (${r.bin} not installed)`}
                 </option>
               ))}
             </select>
+            {runtimeId && (() => {
+              const sel = allRuntimes.find((r) => r.runtimeId === runtimeId);
+              return sel?.path ? <span class="field-hint">Binary: {sel.path}</span> : null;
+            })()}
           </label>
 
           <label class="field">
@@ -136,6 +174,32 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
               value={model}
               onInput={(e) => setModel((e.target as HTMLInputElement).value)}
             />
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Substrate</span>
+            <select
+              value={substrate}
+              onChange={(e) => setSubstrate((e.target as HTMLSelectElement).value as WorkspaceSubstrate | '')}
+            >
+              <option value="">
+                {substrates.error ? 'substrates unavailable — default (tmux_worktree)' : 'default (first available)'}
+              </option>
+              {allSubstrates.map((s) => (
+                <option key={s.id} value={s.id} disabled={!s.available}>
+                  {s.id}
+                  {s.available ? '' : ` (unavailable${s.reason ? `: ${s.reason}` : ''})`}
+                </option>
+              ))}
+            </select>
+            {substrates.error && (
+              <span class="field-hint">Substrate list unavailable: {substrates.error.message}</span>
+            )}
+            {!substrates.error && availableSubstrates.length === 0 && substrates.data && (
+              <span class="field-hint">No substrates report available — the backend will reject the launch.</span>
+            )}
           </label>
         </div>
 

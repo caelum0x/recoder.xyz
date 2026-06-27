@@ -1,0 +1,33 @@
+{
+  "name": "@recoder/substrate",
+  "version": "0.1.0",
+  "description": "Recoder's swappable, restart-survivable execution layer under every Conductor workspace — one contract over real coding-agent CLIs driven inside isolated git worktrees (local tmux) or remote sandboxes (Daytona). The substrate provisions isolation, launches the user's own agent CLI headless, observes the run, and tears down; it never owns canonical control-plane state.",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "node --test --import tsx 'tests/**/*.test.ts' 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@recoder/agent-os": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}
