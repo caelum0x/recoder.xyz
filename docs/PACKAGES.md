@@ -26,7 +26,7 @@ along directory lines:
 | `crates/*` | Rust OSS subsystems: `openfang`, `tensorzero`, `lance`, `claw-code-parity`. | Vendored OSS (Rust) |
 | `go/*` | Go OSS: `beads`, `multica`, `ziti`. | Vendored OSS (Go) |
 | `py/*` | Python OSS: `mem0`, `colbert`, `browser-use`, `pal-mcp-server`, `ops-recorder`. | Vendored OSS (Py) |
-| `ts/*` | Standalone TS OSS engines: `pi`, `recodergit`, `dmux`, `opencode`, `qwen-code`, `continuum`, `open-agents`, `polar`, `extracted-from-openclaw`, `oh-my-codex`, `oh-my-openagent`. | Vendored OSS (TS, full impls) |
+| `ts/*` | Standalone TS OSS engines: `recodergit`, `dmux`, `opencode`, `open-agents`, `extracted-from-openclaw`, `oh-my-codex`, `oh-my-openagent` (7 dirs). `pi`, `qwen-code`, `polar` were retired as duplicates in `34b2d4a83`; `continuum` moved to `packages/continuum` (owned, fused in-process). | Vendored OSS (TS, full impls) |
 | `c/*` | `tmux` (real upstream tmux, cloned not reimplemented). | Vendored OSS (C) |
 
 **Key architectural intent** (per `.claude/rules/monorepo.md`): `packages/agent-*`
@@ -108,7 +108,7 @@ These are the real net-new Recoder authorship. Mostly small/medium contract laye
 | Package | Path | Files | Class | Purpose |
 |---------|------|------:|-------|---------|
 | `@recoder/pi-agent-core` | `pi-agent-core` | 26 | vendored-oss | pi agent-core (earendil-works/pi) |
-| `@recoder/pi-ai` | `pi-ai` | 202 | vendored-oss | pi AI layer (v0.80.2 — drifted from siblings) |
+| `@recoder/pi-ai` | `pi-ai` | 202 | vendored-oss | pi AI layer (v0.80.2; all four `pi-*` now pinned to 0.80.2 — drift resolved) |
 | `@recoder/pi-coding-agent` | `pi-coding-agent` | 151 | vendored-oss | pi coding-agent |
 | `@recoder/pi-tui` | `pi-tui` | 28 | vendored-oss | pi terminal UI |
 
@@ -172,7 +172,7 @@ auxiliary integrations.
 | Dir | Files | Note |
 |-----|------:|------|
 | `ts/recodergit` (`recodergit-monorepo`) | 2101 | Full RecoderGit (= "git-nexus") impl. Contract stub is `packages/recodergit` (9). **Memory's "ts/gitnexus" path is stale — the dir is `ts/recodergit`.** |
-| `ts/pi` | 784 | Full upstream pi monorepo. Vendored split is `packages/pi-*` (4 pkgs, 407 files). |
+| `ts/pi` | — | **Retired** in `34b2d4a83` (duplicate of `packages/pi-*`). The vendored split `packages/pi-*` (4 pkgs, 407 files) is now the single source. |
 | `py/mem0` | 381 | Full mem0 Python impl. TS SDK vendored at `packages/mem0` (64). |
 | `py/browser-use` | 386 | Browser automation engine. |
 | `py/colbert` | 114 | ColBERT retrieval. |
@@ -234,13 +234,12 @@ Some are *intentional contract-vs-impl splits* — called out explicitly.
   `browser-verification` is a near-empty stub — either flesh out or merge its 2 files
   into `agent-observability`/`agent-sandbox` evidence contracts.
 
-### G7 — pi (vendored split vs full upstream — DUP)
-- `packages/pi-{agent-core,ai,coding-agent,tui}` (4 pkgs, 407 files; pinned 0.78.0,
-  except `pi-ai` drifted to 0.80.2).
-- `ts/pi` (784, full upstream monorepo).
-- **Verdict:** Real duplication. Either depend on `ts/pi` workspaces OR keep the
-  `packages/pi-*` split — not both. **Version drift (`pi-ai` 0.80.2 vs siblings
-  0.78.0) is a latent bug.** Pick one source, re-pin to a single version.
+### G7 — pi (vendored split vs full upstream — RESOLVED)
+- `packages/pi-{agent-core,ai,coding-agent,tui}` (4 pkgs, 407 files; all pinned 0.80.2).
+- `ts/pi` — **retired** in `34b2d4a83`.
+- **Verdict:** Duplication resolved. `ts/pi` was deleted as a duplicate of the
+  `packages/pi-*` split, which is now the single source. The earlier version drift
+  (`pi-ai` had been 0.80.2 vs siblings 0.78.0) is also gone — all four are 0.80.2.
 
 ### G8 — git / recodergit (contract-vs-impl — intentional, but path-confusing)
 - `packages/recodergit` (9, owned **contracts**). Canonical contract.
@@ -305,10 +304,9 @@ wins are: isolating vendored clusters, killing facades, and fixing version drift
    obscuring what Recoder actually authored. Move under `vendor/giselle/` (or a
    submodule) owned by `recoder-agency`. No behavior change; massive clarity gain.
 
-2. **Resolve the pi duplication + version drift (G7, medium risk).** Choose `ts/pi`
-   workspaces OR the `packages/pi-*` split — not both. Re-pin `pi-ai` (0.80.2) to
-   match siblings (0.78.0) or bump all four together. The split version is a latent
-   incompatibility bug.
+2. **~~Resolve the pi duplication + version drift~~ (G7) — DONE.** `ts/pi` was retired
+   in `34b2d4a83` (duplicate of `packages/pi-*`), and all four `pi-*` packages are now
+   pinned to 0.80.2, so the earlier version drift is gone. No action remaining.
 
 3. **Pick one mem0 runtime (G2, medium risk).** Carrying `packages/mem0` (TS, 64) and
    `py/mem0` (Python, 381) is true duplication. Check which `brain` actually imports;
@@ -341,4 +339,4 @@ wins are: isolating vendored clusters, killing facades, and fixing version drift
 - **Class breakdown (top-level 79):** real 33 · vendored-oss 36 · generated 2 · stub 8
 - **Duplicate/overlap groups:** 11 (G1–G11)
 - **Stub/cruft packages:** 8 top-level + 1 aux (`mcp-eternos`)
-- **OSS dirs (`crates`/`go`/`py`/`ts`/`c`):** 4 + 3 + 5 + 11 + 1 = 24 vendored subsystems
+- **OSS dirs (`crates`/`go`/`py`/`ts`/`c`):** 4 + 3 + 5 + 7 + 1 = 20 vendored subsystems (`ts/` dropped from 11→7: `pi`/`qwen-code`/`polar` retired in `34b2d4a83`, `continuum` moved to `packages/continuum`)

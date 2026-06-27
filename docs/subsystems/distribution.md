@@ -35,13 +35,18 @@ The hard boundary (from `.claude/rules/production.md` and `AGENTS.md`):
 
 ---
 
-## 1. Fused sources (real code that is merged in)
+## 1. Fused sources (the merge plan)
 
-Every path below was read in this repo and verified to exist.
+> **Status (truthful):** this is the **fusion plan**, not a completed merge. When written,
+> the `ts/polar/**` source paths below existed and were read. **`ts/polar` has since been
+> retired** (`34b2d4a83`), and the `Lands in` targets — `py/recoder-billing` and
+> `packages/distribution` — **do not exist yet**. Treat the "Owned source" / "Lands in"
+> columns as the intended merge mapping, not as code that is already present. Re-source the
+> upstream Polar tree (or its retired snapshot) before executing this merge.
 
-### 1.1 Billing & entitlements — fused from Polar (`ts/polar/server/polar/**`, Python/FastAPI)
+### 1.1 Billing & entitlements — fused from Polar (`ts/polar/server/polar/**`, Python/FastAPI; `ts/polar` retired in `34b2d4a83`)
 
-| Owned source (read & merged) | What we take | Lands in |
+| Upstream source (read at plan time) | What we take | Lands in (planned) |
 |---|---|---|
 | `ts/polar/server/polar/checkout/{service,endpoints,guard,eventstream,ip_geolocation,repository,schemas}.py` | hosted checkout flow, confirm/Stripe path, product guard | `py/recoder-billing/billing/checkout/*` |
 | `ts/polar/server/polar/checkout_link/{service,app,endpoints,schemas}.py` | reusable hosted checkout links | `py/recoder-billing/billing/checkout_link/*` |
@@ -827,7 +832,10 @@ engine/delivery-pipeline
 
 ## 6. Fusion map (where each real file lands)
 
-| # | Source file (read) | Merged destination | Notes |
+> **Status:** planned mapping. The `ts/polar/**` sources were read at plan time but `ts/polar`
+> was retired in `34b2d4a83`; the `py/recoder-billing` destinations are not yet created. See §1.
+
+| # | Source file (read at plan time) | Merged destination (planned) | Notes |
 |---|---|---|---|
 | 1 | `ts/polar/server/polar/checkout/service.py` | `py/recoder-billing/billing/checkout/service.py` | hosted checkout + Stripe confirm kept |
 | 2 | `ts/polar/server/polar/checkout_link/service.py` | `py/recoder-billing/billing/checkout_link/service.py` | reusable links kept |

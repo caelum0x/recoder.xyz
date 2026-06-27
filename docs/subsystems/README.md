@@ -123,7 +123,7 @@ owned source, then merges into the target subsystem.
 | **context7-sdk** | `packages/context7-sdk` | TS | brain (`docs/`) | External library docs: `searchLibrary`, `getContext`, retrying HTTP client. |
 | **beads** | `go/beads` | Go | brain (`tasks/`) | Durable task graph on Dolt: versioned deps, ready/blocked, cycles, history. |
 | **multica** | `go/multica` | Go | brain + coordination | Knowledge/memory service parts; squad/claim recovery semantics. |
-| **continuum** | `ts/continuum` | JS/Swift | brain (`activity/`) + interop (MCP) | Desktop working-context source: on-device OCR of the focused window + meeting transcription → episode store → `bge-m3` embeddings/RRF recall, exposed as read-only `recall`/`catch_up`/`profile` MCP tools (PII-redacted, local-first). The "what is the human doing now" source. |
+| **continuum** | `packages/continuum` (`@recoder/continuum`; promoted from `ts/continuum` in `756cb7232`) | JS/Swift | brain (`activity/`) + interop (MCP) | Desktop working-context source: on-device OCR of the focused window + meeting transcription → episode store → `bge-m3` embeddings/RRF recall, exposed as read-only `recall`/`catch_up`/`profile` MCP tools (PII-redacted, local-first). The "what is the human doing now" source. |
 | **openfang** | `crates/openfang` | Rust | governance | Approval manager, SHA-256 Merkle audit chain, model router, tool policy (deny-wins glob). |
 | **claw-code-parity** | `crates/claw-code-parity` | Rust | governance | Permission modes/policy, permission enforcer, lane policy engine. |
 | **ops-recorder** | `py/ops-recorder` | Py | governance | `WorkSignal` model + deterministic signal IDs. |
@@ -138,7 +138,7 @@ owned source, then merges into the target subsystem.
 | **agent-mcp** | `packages/agent-mcp` | TS | interop | MCP registry + tool-permission contracts. |
 | **pal-mcp-server** | `py/pal-mcp-server` | Py | interop | Real MCP server implementation. |
 | **extracted-from-openclaw** | `ts/extracted-from-openclaw` | TS | interop | Social/connector gateways — real extracted roster: **Telegram · Slack · Discord · Signal · LINE · Feishu · iMessage · WhatsApp** (WordPress/Gmail/Teams/LinkedIn/Meet are planned, not yet present). |
-| **polar** | `ts/polar` | TS | distribution | Billing/monetization: subscriptions, entitlements, checkout. |
+| **polar** | _retired_ (`ts/polar` removed in `34b2d4a83`) | TS/Py | distribution | Billing/monetization: subscriptions, entitlements, checkout. Source for the planned `py/recoder-billing` fusion (see `distribution.md` §1.1); the upstream tree must be re-sourced before that merge. |
 | **homebrew-recoder** | `homebrew-recoder/` | Ruby | distribution | Homebrew tap for CLI distribution. |
 
 > **Mock → real correction (why this plan was re-grounded).** The first brain design was
@@ -166,7 +166,7 @@ daytona · context7 · beads · ziti · dmux · continuum. → see §5.
 | OSS | → | Why |
 |---|---|---|
 | **opencode** (`anomalyco/opencode`) → `ts/opencode` | runtime | Driver for the `opencode` AgentSurface `runtime.md` already names. |
-| **qwen-code** (`QwenLM/qwen-code`) → `ts/qwen-code` | runtime | Driver for the `qwen_code` surface `runtime.md` names. |
+| **qwen-code** (`QwenLM/qwen-code`) → ~~`ts/qwen-code`~~ **retired** (`34b2d4a83`) | runtime | Would have driven the `qwen_code` surface `runtime.md` names; the clone was removed as superseded. Re-source if that surface is revived. |
 | **browser-use** (`browser-use/browser-use`) → `py/browser-use` | runtime / substrate | The `browser` AgentSurface — make sites accessible to agents. |
 | **lance** (`lance-format/lance`) → `crates/lance` | brain | The "dedicated vector index" gap: vector index + **data versioning** (aligns with version time-travel), 100× random access over object storage. Candidate prod recall store. |
 | **ColBERT** (`stanford-futuredata/ColBERT`) → `py/colbert` | brain | SOTA late-interaction neural retrieval — recall-quality upgrade over plain pgvector/bge-m3. |
