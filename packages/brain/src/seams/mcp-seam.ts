@@ -150,6 +150,7 @@ export const BRAIN_TOOL_NAMES = {
   assemble: "brain_assemble",
   recall: "brain_recall",
   record: "brain_record",
+  activity: "brain_activity",
 } as const;
 
 /**
@@ -322,5 +323,58 @@ export function createBrainTools(brain: Brain): BrainTool[] {
     },
   };
 
-  return [assemble, recall, record];
+  const activity: BrainTool = {
+    name: BRAIN_TOOL_NAMES.activity,
+    description:
+      "Focused desktop/agent activity lookup (no full assemble). Read-only. Without a " +
+      "`query`: returns the user's recent activity (newest-first, deduped) + a one-line " +
+      "'who is this user' snapshot — grounded in the owned continuum (incl. the agent's own " +
+      "session actions). With a `query`: grounded Q&A over activity — evidence `sources` " +
+      "(always) + a synthesized `answer` when an LLM is configured. Degrades to empty when no " +
+      "activity adapter is wired.",
+    readOnly: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Optional. Omit for the recent-activity view; provide for grounded Q&A over activity.",
+        },
+        limit: {
+          type: "number",
+          description: "Max activity rows (optional).",
+        },
+      },
+    },
+    handler: async (args) => {
+      const query = asString(args, "query");
+      const limit = asLimit(args, "limit") ?? 8;
+      try {
+        if (query) {
+          const result = await brain.answerActivity(query, limit);
+          return ok({
+            answer: result.answer,
+            sources: result.sources,
+            degraded: result.sources.length === 0 && result.answer === null ? ["activity"] : [],
+          });
+        }
+        const [recent, snapshot] = await Promise.all([
+          brain.recentActivity(limit),
+          brain.activitySnapshot(),
+        ]);
+        return ok({
+          recent,
+          snapshot,
+          degraded: recent.length === 0 && snapshot === null ? ["activity"] : [],
+        });
+      } catch (error) {
+        return fail(
+          error instanceof Error ? error.message : "activity lookup failed unexpectedly.",
+        );
+      }
+    },
+  };
+
+  return [assemble, recall, record, activity];
 }
