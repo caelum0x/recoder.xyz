@@ -7,7 +7,7 @@ import type {
   PipelineContext,
 } from '../../src/core/ingestion/pipeline-phases/types.js';
 import type { KnowledgeGraph } from '../../src/core/graph/types.js';
-import type { GraphNode, GraphRelationship, NodeLabel } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship, NodeLabel } from '@recoder/recodergit-engine-shared';
 
 function makeCtx(graph: KnowledgeGraph, repoPath = 'D:/tmp/repo'): PipelineContext {
   return {

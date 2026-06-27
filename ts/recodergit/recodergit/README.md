@@ -1,10 +1,23 @@
-# RecoderGit
+# @recoder/recodergit-engine
+
+> **Vendored and owned by [Recoder](https://recoder.xyz).** This is the real
+> code-knowledge-graph **engine** behind Recoder's repo-intelligence:
+> tree-sitter parse → scope resolution → graph → **LadybugDB (`lbug`)** →
+> embeddings → hybrid search, served via the `recodergit` CLI and MCP.
+> It satisfies the [`@recoder/recodergit`](../../../packages/recodergit) contract —
+> `@recoder/brain` drives this engine (the brain's `doctor` probes the
+> `recodergit --help` binary and degrades gracefully when it is absent).
+> Internal shared types live in
+> [`@recoder/recodergit-engine-shared`](../recodergit-shared).
+> See [`docs/subsystems/recodergit.md`](../../../docs/subsystems/recodergit.md)
+> for the integration design. The **CLI bin name stays `recodergit`** (the
+> brain probes exactly that). The browser-only web UI (`recodergit-web`) is out
+> of scope for this engine. Upstream lineage: RecoderGit (PolyForm Noncommercial).
 
 **Graph-powered code intelligence for AI agents.** Index any codebase into a knowledge graph, then query it via MCP or CLI.
 
-Works with **Cursor**, **Claude Code**, **Antigravity** (Google), **Codex**, **Windsurf**, **Cline**, **OpenCode**, and any MCP-compatible tool.
+Works with **Recoder**, **Cursor**, **Claude Code**, **Antigravity** (Google), **Codex**, **Windsurf**, **Cline**, **OpenCode**, and any MCP-compatible tool.
 
-[![npm version](https://img.shields.io/npm/v/recodergit.svg)](https://www.npmjs.com/package/recodergit)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue.svg)](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
 ---

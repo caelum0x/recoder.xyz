@@ -1,7 +1,7 @@
-import { Event } from "@opencode-ai/schema/event"
-import { EventManifest } from "@opencode-ai/schema/event-manifest"
-import { Location } from "@opencode-ai/schema/location"
-import type { Definition } from "@opencode-ai/schema/event"
+import { Event } from "@recoder/opencode-schema/event"
+import { EventManifest } from "@recoder/opencode-schema/event-manifest"
+import { Location } from "@recoder/opencode-schema/location"
+import type { Definition } from "@recoder/opencode-schema/event"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 

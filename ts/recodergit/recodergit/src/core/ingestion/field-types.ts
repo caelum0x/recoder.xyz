@@ -2,7 +2,7 @@
 
 import type { TypeEnvironment } from './type-env.js';
 import type { SymbolTableReader } from './model/index.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 
 /**
  * Visibility levels used across all supported languages.

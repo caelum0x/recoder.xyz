@@ -28,7 +28,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { emitCsharpScopeCaptures } from '../../../../src/core/ingestion/languages/csharp/index.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 // This test lives at test/unit/scope-resolution/csharp/, so fixtures are THREE
 // levels up (unlike pipeline-graph-golden.test.ts at test/integration/).

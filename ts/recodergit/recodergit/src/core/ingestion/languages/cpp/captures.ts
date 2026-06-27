@@ -1,4 +1,4 @@
-import type { Capture, CaptureMatch, ParameterTypeClass } from 'recodergit-shared';
+import type { Capture, CaptureMatch, ParameterTypeClass } from '@recoder/recodergit-engine-shared';
 import {
   nodeIfType,
   nodeToCapture,

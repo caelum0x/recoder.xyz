@@ -1747,7 +1747,7 @@ export const DART_QUERIES = `
   right: (_)) @assignment
 `;
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 
 export const LANGUAGE_QUERIES: Record<SupportedLanguages, string> = {
   [SupportedLanguages.TypeScript]: TYPESCRIPT_QUERIES,

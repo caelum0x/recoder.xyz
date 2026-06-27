@@ -25,7 +25,7 @@ import {
   isReadOnlyDbError,
 } from '../core/lbug/lbug-adapter.js';
 import { isValidQueryParams } from '../core/lbug/query-params.js';
-import { NODE_TABLES, type GraphNode, type GraphRelationship } from 'recodergit-shared';
+import { NODE_TABLES, type GraphNode, type GraphRelationship } from '@recoder/recodergit-engine-shared';
 import { searchFTSFromLbug } from '../core/search/bm25-index.js';
 import { hybridSearch } from '../core/search/hybrid-search.js';
 import { LocalBackend } from '../mcp/local/local-backend.js';

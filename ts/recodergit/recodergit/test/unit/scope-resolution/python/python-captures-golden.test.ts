@@ -27,7 +27,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { emitPythonScopeCaptures } from '../../../../src/core/ingestion/languages/python/index.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 // This test lives at test/unit/scope-resolution/python/, so fixtures are FOUR
 // levels up.

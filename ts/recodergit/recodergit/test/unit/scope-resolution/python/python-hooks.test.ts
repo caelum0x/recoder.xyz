@@ -17,7 +17,7 @@ import type {
   SymbolDefinition,
   TypeRef,
   WorkspaceIndex,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import {
   pythonArityCompatibility,
   pythonImportOwningScope,

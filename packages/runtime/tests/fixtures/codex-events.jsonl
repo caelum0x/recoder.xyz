@@ -1,0 +1,10 @@
+{"type":"thread.started","thread_id":"th_abc123"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"it_1","item_type":"reasoning","text":"Let me inspect the repository layout first."}}
+{"type":"item.completed","item":{"id":"it_1","item_type":"reasoning","text":"Let me inspect the repository layout first."}}
+{"type":"item.started","item":{"id":"it_2","item_type":"command_execution","command":"ls -la","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"it_2","item_type":"command_execution","command":"ls -la","status":"completed","aggregated_output":"README.md\npackage.json\nsrc"}}
+{"type":"item.started","item":{"id":"it_3","item_type":"file_change","status":"in_progress","changes":[{"path":"src/index.ts","kind":"modify"}]}}
+{"type":"item.completed","item":{"id":"it_3","item_type":"file_change","status":"completed","changes":[{"path":"src/index.ts","kind":"modify"}]}}
+{"type":"item.completed","item":{"id":"it_4","item_type":"agent_message","text":"Done. I updated src/index.ts to export the new helper."}}
+{"type":"turn.completed","usage":{"input_tokens":1200,"output_tokens":340,"cached_input_tokens":800}}

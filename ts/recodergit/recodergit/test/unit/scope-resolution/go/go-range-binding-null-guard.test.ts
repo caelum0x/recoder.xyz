@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { extractParsedFile } from '../../../../src/core/ingestion/scope-extractor-bridge.js';
 import { goScopeResolver } from '../../../../src/core/ingestion/languages/go/scope-resolver.js';
 import { populateGoRangeBindings } from '../../../../src/core/ingestion/languages/go/range-binding.js';
-import type { ParsedFile, ScopeResolutionIndexes } from 'recodergit-shared';
+import type { ParsedFile, ScopeResolutionIndexes } from '@recoder/recodergit-engine-shared';
 
 function parseGo(src: string, path = 'main.go'): ParsedFile {
   const p = extractParsedFile(goScopeResolver.languageProvider, src, path);

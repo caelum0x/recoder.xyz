@@ -24,7 +24,7 @@
  *     class_declaration.
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
 import { swiftQualifiedBaseTail } from './base-type.js';
 import { swiftMethodConfig } from '../../method-extractors/configs/swift.js';

@@ -1,4 +1,4 @@
-import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from 'recodergit-shared';
+import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from '@recoder/recodergit-engine-shared';
 import { isHeritageMarker } from '../../utils/heritage-marker.js';
 
 // ─── interpretImport ──────────────────────────────────────────────────────

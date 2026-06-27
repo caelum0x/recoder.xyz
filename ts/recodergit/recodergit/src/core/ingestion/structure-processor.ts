@@ -1,5 +1,5 @@
 import { generateId } from '../../lib/utils.js';
-import type { GraphNode, GraphRelationship } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship } from '@recoder/recodergit-engine-shared';
 import { KnowledgeGraph } from '../graph/types.js';
 
 export const processStructure = (graph: KnowledgeGraph, paths: string[]) => {

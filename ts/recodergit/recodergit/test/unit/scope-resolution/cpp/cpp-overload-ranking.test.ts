@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ParameterTypeClass, SymbolDefinition } from 'recodergit-shared';
+import type { ParameterTypeClass, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import {
   CPP_CONVERSION_ONLY_ARG_TYPE_PREFIXES,
   cppConversionRank,

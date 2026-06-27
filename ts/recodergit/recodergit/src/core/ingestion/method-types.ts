@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/method-types.ts
 
-import type { ParameterTypeClass, SupportedLanguages } from 'recodergit-shared';
+import type { ParameterTypeClass, SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { FieldVisibility } from './field-types.js';
 import type { SyntaxNode } from './utils/ast-helpers.js';
 
@@ -63,7 +63,7 @@ export interface MethodExtractor {
   extractFunctionName?(
     node: SyntaxNode,
     filePath?: string,
-  ): { funcName: string | null; label: import('recodergit-shared').NodeLabel } | null;
+  ): { funcName: string | null; label: import('@recoder/recodergit-engine-shared').NodeLabel } | null;
 }
 
 export interface MethodExtractionConfig {
@@ -102,5 +102,5 @@ export interface MethodExtractionConfig {
   extractFunctionName?: (
     node: SyntaxNode,
     filePath?: string,
-  ) => { funcName: string | null; label: import('recodergit-shared').NodeLabel } | null;
+  ) => { funcName: string | null; label: import('@recoder/recodergit-engine-shared').NodeLabel } | null;
 }

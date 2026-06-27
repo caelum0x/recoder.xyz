@@ -24,7 +24,7 @@
  *      must not destabilize the legacy DAG.
  */
 
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import { extract as extractScope } from './scope-extractor.js';
 import type { LanguageProvider } from './language-provider.js';
 

@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/class-extractors/configs/jvm.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ClassExtractionConfig } from '../../class-types.js';
 
 // ---------------------------------------------------------------------------

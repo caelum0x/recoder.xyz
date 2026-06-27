@@ -21,7 +21,7 @@ import { useLanguage } from "@/context/language"
 import { useCommand } from "@/context/command"
 import { useTabs } from "@/context/tabs"
 import { createTabPromptState } from "@/context/prompt"
-import { base64Encode } from "@opencode-ai/core/util/encode"
+import { base64Encode } from "@recoder/opencode-core/util/encode"
 import {
   captureTabPointerDown,
   canStartTabDrag,

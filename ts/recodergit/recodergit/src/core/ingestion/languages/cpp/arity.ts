@@ -1,4 +1,4 @@
-import type { Callsite, SymbolDefinition } from 'recodergit-shared';
+import type { Callsite, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 /**
  * C++ arity compatibility: supports overloading and default parameters.

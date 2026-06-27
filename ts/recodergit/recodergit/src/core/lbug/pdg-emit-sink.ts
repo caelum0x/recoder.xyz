@@ -45,7 +45,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { GraphNode, GraphRelationship, RelationshipType } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship, RelationshipType } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../graph/types.js';
 import {
   BASICBLOCK_CSV_HEADER,

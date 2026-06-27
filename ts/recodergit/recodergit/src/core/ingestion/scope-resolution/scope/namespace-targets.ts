@@ -32,7 +32,7 @@
  * reference-site scope chain (mirror `findExportedDefByName`).
  */
 
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 
 export function collectNamespaceTargets(

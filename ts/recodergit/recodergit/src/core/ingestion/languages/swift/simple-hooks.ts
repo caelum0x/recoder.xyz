@@ -12,7 +12,7 @@ import type {
   ScopeId,
   ScopeTree,
   TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 // ─── bindingScopeFor ──────────────────────────────────────────────────────
 

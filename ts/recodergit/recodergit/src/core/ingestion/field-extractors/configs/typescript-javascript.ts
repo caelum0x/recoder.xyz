@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/field-extractors/configs/typescript-javascript.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { FieldExtractionConfig } from '../generic.js';
 import { hasKeyword, findVisibility, typeFromAnnotation } from './helpers.js';
 import type { FieldVisibility } from '../../field-types.js';

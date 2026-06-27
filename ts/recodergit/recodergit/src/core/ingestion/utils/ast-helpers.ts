@@ -1,5 +1,5 @@
 import type Parser from 'tree-sitter';
-import type { Capture, NodeLabel, Range } from 'recodergit-shared';
+import type { Capture, NodeLabel, Range } from '@recoder/recodergit-engine-shared';
 import type { LanguageProvider } from '../language-provider.js';
 import { generateId } from '../../../lib/utils.js';
 import {

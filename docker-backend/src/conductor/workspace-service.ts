@@ -31,6 +31,7 @@ import { startRunTail } from './run-tailer.js';
 import { getSubstrate } from './substrate.js';
 import { registerTmuxSubstrate } from './substrate-tmux.js';
 import { registerDaytonaSubstrate } from './substrate-daytona.js';
+import { TMUX_BIN } from './tmux-path.js';
 
 // Register execution substrates: local git worktree + tmux (default) and the
 // remote Daytona sandbox. Selection is per-workspace via Workspace.substrate.
@@ -269,7 +270,7 @@ export async function reconcile(): Promise<ReconcileReport> {
 /** Live tmux session names, queried directly (survives backend restart). */
 async function listLiveTmuxSessions(): Promise<string[]> {
   try {
-    const { stdout } = await exec('tmux', ['list-sessions', '-F', '#{session_name}']);
+    const { stdout } = await exec(TMUX_BIN, ['list-sessions', '-F', '#{session_name}']);
     return stdout
       .split('\n')
       .map((s) => s.trim())

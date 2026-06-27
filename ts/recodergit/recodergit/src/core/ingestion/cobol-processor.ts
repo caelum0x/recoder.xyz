@@ -15,7 +15,7 @@
 
 import path from 'node:path';
 import { generateId } from '../../lib/utils.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../graph/types.js';
 import {
   preprocessCobolSource,

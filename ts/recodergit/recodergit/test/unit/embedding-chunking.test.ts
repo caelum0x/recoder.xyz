@@ -22,7 +22,7 @@ const { getLanguageFromFilename } = vi.hoisted(() => ({
   getLanguageFromFilename: vi.fn().mockReturnValue('typescript'),
 }));
 
-vi.mock('recodergit-shared', () => ({
+vi.mock('@recoder/recodergit-engine-shared', () => ({
   getLanguageFromFilename,
 }));
 

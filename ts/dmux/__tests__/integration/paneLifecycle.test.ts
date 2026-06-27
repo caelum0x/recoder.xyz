@@ -459,7 +459,9 @@ describe('Pane Lifecycle Integration Tests', () => {
       const defaultExecSync = mockExecSync.getMockImplementation();
       mockExecSync.mockImplementation((command: string, options?: any) => {
         const cmd = command.toString().trim();
-        if (cmd === 'tmux list-panes -F "#{pane_id}"') {
+        // dmux routes tmux through the Conductor's pinned binary, so the command may be
+        // prefixed with an absolute path. Match on the tmux subcommand suffix.
+        if (cmd.endsWith('list-panes -F "#{pane_id}"')) {
           return options?.encoding === 'utf-8'
             ? '%0\n%1'
             : Buffer.from('%0\n%1');

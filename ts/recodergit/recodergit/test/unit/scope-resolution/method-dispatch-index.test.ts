@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildMethodDispatchIndex, type MethodDispatchInput, type DefId } from 'recodergit-shared';
+import { buildMethodDispatchIndex, type MethodDispatchInput, type DefId } from '@recoder/recodergit-engine-shared';
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
 

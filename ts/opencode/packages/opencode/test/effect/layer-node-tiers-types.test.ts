@@ -1,6 +1,6 @@
 import { test } from "bun:test"
 import { Context, Effect, Layer } from "effect"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@recoder/opencode-core/effect/layer-node"
 
 class A extends Context.Service<A, {}>()("test/TierA") {}
 class B extends Context.Service<B, {}>()("test/TierB") {}

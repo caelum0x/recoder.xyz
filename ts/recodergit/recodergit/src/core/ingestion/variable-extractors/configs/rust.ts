@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/variable-extractors/configs/rust.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { VariableExtractionConfig } from '../../variable-types.js';
 import type { VariableVisibility } from '../../variable-types.js';
 import { extractSimpleTypeName } from '../../type-extractors/shared.js';

@@ -12,8 +12,8 @@
  * ./query.ts (TYPESCRIPT_SCOPE_QUERY constant).
  */
 
-import type { NodeLabel, ParsedFile, ScopeId } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { NodeLabel, ParsedFile, ScopeId } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { generateId } from '../../../../lib/utils.js';
 import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
 import { populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';

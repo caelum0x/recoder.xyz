@@ -114,6 +114,12 @@ const isLocal = isLocalhost(normalizedUrl);
 const autoUpdateEnabled = process.env.DESKTOP_AUTO_UPDATE !== 'false';
 const crashWebhookUrl = process.env.DESKTOP_CRASH_WEBHOOK_URL || '';
 const dockerWorkflowApiUrl = process.env.DOCKER_BACKEND_URL || 'http://localhost:3100';
+// Cockpit mode: load the bundled conductor cockpit renderer instead of the web app.
+// Triggered by RECODER_COCKPIT=1 (env) or the "Open Cockpit" menu/tray item.
+const cockpitModeEnabledByEnv = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.RECODER_COCKPIT || '').trim().toLowerCase(),
+);
+const cockpitIndexPath = path.join(__dirname, 'cockpit', 'dist', 'index.html');
 const desktopWorkflowRetryRaw = process.env.RECODER_WORKFLOW_FETCH_RETRIES || process.env.OPENCLAW_WORKFLOW_FETCH_RETRIES || '2';
 const desktopWorkflowMaxAttempts = Number.isFinite(Number.parseInt(desktopWorkflowRetryRaw, 10))
   && Number.parseInt(desktopWorkflowRetryRaw, 10) > 0
@@ -330,6 +336,115 @@ function resolveDesktopRecoderApiKeyDetailed() {
     return { value: cacheKey.trim(), source: 'cache' };
   }
   return { value: '', source: 'none' };
+}
+
+/**
+ * Resolve the Better Auth session token the same way the workflow client does,
+ * checking the standard desktop env vars (no new auth scheme invented).
+ * @returns {{ value: string, source: 'env' | 'none' }}
+ */
+function resolveDesktopSessionTokenDetailed() {
+  const token =
+    process.env.RECODER_SESSION_TOKEN
+    || process.env.OPENCLAW_RECODER_SESSION_TOKEN
+    || process.env.SESSION_TOKEN
+    || '';
+  if (token.trim()) {
+    return { value: token.trim(), source: 'env' };
+  }
+  return { value: '', source: 'none' };
+}
+
+/**
+ * The Better Auth session-token cookie names the backend accepts, in priority
+ * order. This mirrors getSessionTokenFromRequest() in
+ * docker-backend/src/server.ts so the cockpit reuses the SAME session the web
+ * app established — no new auth scheme is invented here.
+ */
+const BETTER_AUTH_SESSION_COOKIE_NAMES = [
+  '__Secure-recoder.session_token',
+  'recoder.session_token',
+  'better-auth.session_token',
+  '__Secure-better-auth.session_token',
+  '__Secure-session_token',
+  'recoder_session_token',
+  'session_token',
+];
+
+/**
+ * Resolve the Better Auth session token from the Electron session cookies for
+ * the recoder.xyz origin. After the user signs in through the existing web auth
+ * flow, Better Auth sets this cookie; the backend accepts its value as a Bearer
+ * token. This is how a logged-in web session is handed to the cockpit.
+ * @returns {Promise<{ value: string, source: 'cookie' | 'none' }>}
+ */
+async function resolveDesktopSessionTokenFromCookies() {
+  try {
+    const session = BrowserWindow.getAllWindows()[0]?.webContents?.session || null;
+    if (!session) {
+      return { value: '', source: 'none' };
+    }
+    const cookies = await session.cookies.get({ url: normalizedUrl });
+    for (const name of BETTER_AUTH_SESSION_COOKIE_NAMES) {
+      const match = cookies.find((cookie) => cookie.name === name && cookie.value && cookie.value.trim());
+      if (match) {
+        return { value: match.value.trim(), source: 'cookie' };
+      }
+    }
+  } catch {
+    // Cookie store unavailable (e.g. window not ready) — fall through to none.
+  }
+  return { value: '', source: 'none' };
+}
+
+/**
+ * Build the config object injected into the cockpit renderer as
+ * window.__RECODER_COCKPIT__. The renderer sends `Authorization: Bearer <token>`
+ * to ${backendUrl}/api/conductor/*, which the backend's authenticateRequest
+ * accepts as a Better Auth session token (header path in getSessionTokenFromRequest).
+ *
+ * Token precedence matches the desktop workflow client: session token first,
+ * then the resolved Recoder API key as a fallback. This synchronous variant is
+ * used for the initial preload argument (cookies require an async read).
+ * @returns {{ backendUrl: string, token: string, tokenSource: string }}
+ */
+function resolveCockpitConfig() {
+  const backendUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
+  const sessionToken = resolveDesktopSessionTokenDetailed();
+  if (sessionToken.value) {
+    return { backendUrl, token: sessionToken.value, tokenSource: 'session-token' };
+  }
+  const apiKey = resolveDesktopRecoderApiKeyDetailed();
+  if (apiKey.value) {
+    return { backendUrl, token: apiKey.value, tokenSource: `api-key:${apiKey.source}` };
+  }
+  return { backendUrl, token: '', tokenSource: 'none' };
+}
+
+/**
+ * Async cockpit config resolver that ALSO consults the live web session cookie
+ * (the result of the existing recoder.xyz auth flow). Precedence:
+ *   1. env session token (RECODER_SESSION_TOKEN, ...)
+ *   2. Better Auth session cookie from the logged-in web session
+ *   3. resolved Recoder API key
+ * Used after a login completes so the cockpit picks up the freshly-set session.
+ * @returns {Promise<{ backendUrl: string, token: string, tokenSource: string }>}
+ */
+async function resolveCockpitConfigAsync() {
+  const backendUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
+  const envSession = resolveDesktopSessionTokenDetailed();
+  if (envSession.value) {
+    return { backendUrl, token: envSession.value, tokenSource: 'session-token' };
+  }
+  const cookieSession = await resolveDesktopSessionTokenFromCookies();
+  if (cookieSession.value) {
+    return { backendUrl, token: cookieSession.value, tokenSource: 'session-cookie' };
+  }
+  const apiKey = resolveDesktopRecoderApiKeyDetailed();
+  if (apiKey.value) {
+    return { backendUrl, token: apiKey.value, tokenSource: `api-key:${apiKey.source}` };
+  }
+  return { backendUrl, token: '', tokenSource: 'none' };
 }
 
 function resolveDesktopWorkflowAuthContext(params) {
@@ -1034,6 +1149,11 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: !isLocal,
       preload: path.join(__dirname, 'preload.js'),
+      // Pass the cockpit config to preload before any page script runs, so the
+      // renderer can read window.__RECODER_COCKPIT__ synchronously at module load.
+      additionalArguments: [
+        `--recoder-cockpit-config=${Buffer.from(JSON.stringify(resolveCockpitConfig())).toString('base64')}`,
+      ],
     },
   });
 
@@ -1101,10 +1221,30 @@ function createWindow() {
             }
           }
         },
-        { 
+        {
           label: 'Reload',
           accelerator: 'CmdOrCtrl+R',
           click: () => webContents.reload()
+        },
+        { type: 'separator' },
+        {
+          label: 'Open Cockpit',
+          accelerator: 'CmdOrCtrl+Shift+K',
+          click: () => {
+            if (typeof mainWindow.loadCockpit === 'function') {
+              mainWindow.loadCockpit();
+              mainWindow.show();
+              mainWindow.focus();
+            }
+          },
+        },
+        {
+          label: 'Open Web App',
+          click: () => {
+            mainWindow.loadURL(authUrl);
+            mainWindow.show();
+            mainWindow.focus();
+          },
         },
         { type: 'separator' },
         { role: 'toggleDevTools' },
@@ -1176,13 +1316,169 @@ function createWindow() {
   }
 
   // Always load auth page directly for desktop app
-  const authUrl = normalizedUrl.endsWith('/') 
-    ? normalizedUrl + 'auth' 
+  const authUrl = normalizedUrl.endsWith('/')
+    ? normalizedUrl + 'auth'
     : normalizedUrl + '/auth';
-  
-  // Load the actual URL after the loading screen is shown
+
+  // Load the bundled conductor cockpit renderer (real local file, not the web app).
+  // The renderer reads window.__RECODER_COCKPIT__ (injected via preload) for
+  // { backendUrl, token } and authenticates /api/conductor calls with it.
+  function loadCockpit(configOverride) {
+    if (!fs.existsSync(cockpitIndexPath)) {
+      const message = `Cockpit bundle not found at ${cockpitIndexPath}; falling back to web app.`;
+      console.warn(`[cockpit] ${message}`);
+      appendDesktopLog('cockpit.log', `${new Date().toISOString()} ${message}`);
+      mainWindow.loadURL(authUrl);
+      return;
+    }
+    // The preload --recoder-cockpit-config argument is fixed at window-creation
+    // time and cannot change on reload. When we reload the cockpit after a fresh
+    // login (cookie-derived token), pass the resolved config here so we can
+    // re-inject the live token into the reloaded page via executeJavaScript.
+    const cfg = configOverride || resolveCockpitConfig();
+    emitDesktopActivationEvent('desktop_cockpit_opened', {
+      backendUrl: cfg.backendUrl,
+      tokenSource: cfg.tokenSource,
+    });
+    const injectRuntimeConfig = () => {
+      if (!cfg.token) return;
+      // Set a plain (non-contextBridge) runtime override the renderer reads as a
+      // higher-priority source than the frozen preload-injected config.
+      const payload = JSON.stringify({
+        backendUrl: cfg.backendUrl,
+        token: cfg.token,
+        tokenSource: cfg.tokenSource,
+      });
+      mainWindow.webContents
+        .executeJavaScript(`window.__RECODER_COCKPIT_RUNTIME__ = ${payload}; true;`)
+        .catch((error) => logRuntimeError('cockpit-runtime-inject-failed', error));
+    };
+    mainWindow.webContents.once('did-finish-load', injectRuntimeConfig);
+    mainWindow.loadFile(cockpitIndexPath).catch((error) => {
+      logRuntimeError('cockpit-load-failed', error, { cockpitIndexPath });
+      mainWindow.loadURL(authUrl);
+    });
+  }
+
+  // Expose for menu/tray triggers
+  mainWindow.loadCockpit = loadCockpit;
+
+  // Tracks the live cockpit auth popup so a second login() reuses it.
+  let cockpitAuthWindow = null;
+
+  /**
+   * Drive the EXISTING recoder.xyz web auth flow for the cockpit. This does not
+   * invent a new auth scheme: it opens the same `/auth` URL the web app uses in
+   * a popup window that SHARES the default session (so its cookies are visible
+   * to the main process), lets the user sign in via the existing OAuth/callback
+   * machinery, waits for Better Auth to set its session cookie, then resolves
+   * with the freshly-resolved token.
+   *
+   * Crucially, the cockpit renderer stays alive in the main window the whole
+   * time, so the login() IPC promise resolves back into the SAME renderer, which
+   * stores the token in-memory and retries /api/conductor — no reload, no lost
+   * React state, and never a fabricated token.
+   * @returns {Promise<{ ok: boolean, token: string, tokenSource: string, backendUrl: string, reason?: string }>}
+   */
+  async function startCockpitLogin() {
+    // If we already have a usable token (env/cookie/api-key), don't force a
+    // re-login — just hand it back. This keeps the flow idempotent.
+    const existing = await resolveCockpitConfigAsync();
+    if (existing.token) {
+      return { ok: true, ...existing };
+    }
+
+    emitDesktopActivationEvent('desktop_cockpit_login_started', { backendUrl: existing.backendUrl });
+
+    // Open (or focus) the auth popup. It shares the default session partition,
+    // so the Better Auth cookie it sets is readable via the same cookie store
+    // the cockpit token resolver uses.
+    if (!cockpitAuthWindow || cockpitAuthWindow.isDestroyed()) {
+      cockpitAuthWindow = new BrowserWindow({
+        width: 600,
+        height: 800,
+        parent: mainWindow,
+        modal: false,
+        autoHideMenuBar: true,
+        title: 'Sign in to Recoder',
+        backgroundColor: '#000000',
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+      cockpitAuthWindow.on('closed', () => {
+        cockpitAuthWindow = null;
+      });
+      cockpitAuthWindow.loadURL(authUrl);
+    } else {
+      cockpitAuthWindow.show();
+      cockpitAuthWindow.focus();
+    }
+
+    // Poll for the Better Auth session cookie to appear (set once the existing
+    // auth flow completes). Bounded so a cancelled login resolves truthfully.
+    const deadline = Date.now() + 5 * 60 * 1000; // 5 minutes
+    const pollMs = 1000;
+    while (Date.now() < deadline) {
+      await sleepMs(pollMs);
+
+      if (mainWindow.isDestroyed()) {
+        return { ok: false, token: '', tokenSource: 'none', backendUrl: existing.backendUrl, reason: 'window-closed' };
+      }
+
+      const resolved = await resolveCockpitConfigAsync();
+      if (resolved.token) {
+        emitDesktopActivationEvent('desktop_cockpit_login_succeeded', {
+          tokenSource: resolved.tokenSource,
+        });
+        // Close the auth popup and return the real token to the live cockpit
+        // renderer, which applies it in-memory and retries /api/conductor.
+        if (cockpitAuthWindow && !cockpitAuthWindow.isDestroyed()) {
+          cockpitAuthWindow.close();
+          cockpitAuthWindow = null;
+        }
+        mainWindow.show();
+        mainWindow.focus();
+        return { ok: true, ...resolved };
+      }
+
+      // The user closed the popup without completing sign-in.
+      if (!cockpitAuthWindow || cockpitAuthWindow.isDestroyed()) {
+        return {
+          ok: false,
+          token: '',
+          tokenSource: 'none',
+          backendUrl: existing.backendUrl,
+          reason: 'cancelled',
+        };
+      }
+    }
+
+    emitDesktopActivationEvent('desktop_cockpit_login_timeout', {});
+    if (cockpitAuthWindow && !cockpitAuthWindow.isDestroyed()) {
+      cockpitAuthWindow.close();
+      cockpitAuthWindow = null;
+    }
+    return {
+      ok: false,
+      token: '',
+      tokenSource: 'none',
+      backendUrl: existing.backendUrl,
+      reason: 'timeout',
+    };
+  }
+
+  // Expose for the IPC bridge (cockpit "Sign in" button).
+  mainWindow.startCockpitLogin = startCockpitLogin;
+
+  // Load the actual surface after the loading screen is shown
   setTimeout(() => {
-    mainWindow.loadURL(authUrl);
+    if (cockpitModeEnabledByEnv) {
+      loadCockpit();
+    } else {
+      mainWindow.loadURL(authUrl);
+    }
   }, 100);
 
   // Intercept navigation to prevent going to homepage and handle OAuth
@@ -1261,7 +1557,11 @@ function createWindow() {
 
   // Inject homepage redirect protection on page load
   webContents.on('did-finish-load', () => {
-    
+    // Skip web-app-specific redirect/OAuth injection when showing the local cockpit file.
+    if (webContents.getURL().startsWith('file://')) {
+      return;
+    }
+
     // Inject homepage redirect protection
     webContents.executeJavaScript(`
       (function() {
@@ -1712,6 +2012,43 @@ ipcMain.handle('window:toggleFullscreen', () => {
 
 ipcMain.handle('app:version', () => app.getVersion());
 
+// ============== Cockpit auth (Sign in to Recoder) ==============
+// The cockpit renderer calls these when it gets a 401/403 (unauthenticated)
+// from /api/conductor. They reuse the EXISTING recoder.xyz web auth flow — no
+// new auth scheme, no fabricated token.
+
+/** Re-resolve the cockpit auth token (env -> web session cookie -> API key). */
+ipcMain.handle('cockpit:resolveToken', async (event) => {
+  const cfg = await resolveCockpitConfigAsync();
+  return { ok: Boolean(cfg.token), ...cfg };
+});
+
+/**
+ * Run the existing web auth flow and hand back the resolved session token.
+ * Delegates to mainWindow.startCockpitLogin (defined in createWindow), which
+ * navigates to /auth, lets the existing OAuth/callback handlers complete, waits
+ * for the Better Auth session cookie, then reloads the cockpit with the token.
+ */
+ipcMain.handle('cockpit:login', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+    || BrowserWindow.getAllWindows()[0]
+    || null;
+  if (!win || typeof win.startCockpitLogin !== 'function') {
+    return { ok: false, token: '', tokenSource: 'none', reason: 'no-window' };
+  }
+  try {
+    return await win.startCockpitLogin();
+  } catch (error) {
+    logRuntimeError('cockpit-login-failed', error);
+    return {
+      ok: false,
+      token: '',
+      tokenSource: 'none',
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
 ipcMain.handle('agent:getWorkflowPlan', async (_event, payload = {}) => {
   try {
     const remote = await fetchDesktopWorkflowFromBackend(payload);
@@ -1983,6 +2320,19 @@ app.whenReady().then(() => {
             win.webContents.send('a2a:openTasksPanel');
             win.show();
             win.focus();
+          }
+        },
+      },
+      {
+        label: 'Open Cockpit',
+        click: () => {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (win && typeof win.loadCockpit === 'function') {
+            win.loadCockpit();
+            win.show();
+            win.focus();
+          } else if (!win) {
+            createWindow();
           }
         },
       },

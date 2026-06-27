@@ -3,6 +3,7 @@ import { LogService } from '../services/LogService.js';
 import { TmuxService } from '../services/TmuxService.js';
 import { recalculateAndApplyLayout } from './layoutManager.js';
 import { execSync } from 'child_process';
+import { tmuxCommand } from './tmuxBin.js';
 
 // Layout configuration - adjust these to change layout behavior
 export const SIDEBAR_WIDTH = 40;
@@ -472,7 +473,7 @@ export const enforceControlPaneSize = async (
     let dimensions = getTerminalDimensions();
     try {
       const output = execSync(
-        `tmux display-message -t '${controlPaneId}' -p "#{client_width} #{client_height}"`,
+        tmuxCommand(`tmux display-message -t '${controlPaneId}' -p "#{client_width} #{client_height}"`),
         { encoding: 'utf-8' }
       ).trim();
       const [targetWidth, targetHeight] = output.split(' ').map(n => parseInt(n, 10));

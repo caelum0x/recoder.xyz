@@ -30,7 +30,7 @@ import type {
   ScopeTree,
   SymbolDefinition,
   TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../../../src/core/ingestion/model/scope-resolution-indexes.js';
 
 function fakeScope(

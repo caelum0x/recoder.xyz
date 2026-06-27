@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { GraphNode, GraphRelationship } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship } from '@recoder/recodergit-engine-shared';
 import { createKnowledgeGraph } from '../../src/core/graph/graph.js';
 import {
   extractChangedSubgraph,

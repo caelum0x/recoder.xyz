@@ -5,7 +5,7 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { Database } from "../database/database"
 import { ProjectV2 } from "../project"
 import { PermissionTable } from "./sql"
-import { PermissionSaved } from "@opencode-ai/schema/permission-saved"
+import { PermissionSaved } from "@recoder/opencode-schema/permission-saved"
 
 export const ID = PermissionSaved.ID
 export type ID = typeof ID.Type

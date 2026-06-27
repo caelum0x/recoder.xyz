@@ -41,7 +41,7 @@
  * follow-up plan.
  */
 
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import type { MutableSemanticModel, SemanticModel } from '../../model/semantic-model.js';
 import { simpleQualifiedName } from '../graph-bridge/ids.js';
 

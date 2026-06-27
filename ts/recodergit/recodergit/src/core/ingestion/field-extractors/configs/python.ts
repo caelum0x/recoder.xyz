@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/field-extractors/configs/python.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { FieldExtractionConfig } from '../generic.js';
 import { extractSimpleTypeName } from '../../type-extractors/shared.js';
 

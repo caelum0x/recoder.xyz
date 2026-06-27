@@ -1,5 +1,5 @@
-import { Glob } from "@opencode-ai/core/util/glob"
-import { ConfigPluginV1 } from "@opencode-ai/core/v1/config/plugin"
+import { Glob } from "@recoder/opencode-core/util/glob"
+import { ConfigPluginV1 } from "@recoder/opencode-core/v1/config/plugin"
 import { pathToFileURL } from "url"
 import { isPathPluginSpec, parsePluginSpecifier, resolvePathPluginTarget } from "@/plugin/shared"
 import path from "path"

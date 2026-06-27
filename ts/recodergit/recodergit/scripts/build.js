@@ -71,17 +71,20 @@ fs.cpSync(path.join(SHARED_ROOT, 'dist'), SHARED_DEST, { recursive: true });
 console.log('[build] rewriting recodergit-shared imports…');
 let rewritten = 0;
 
+const SHARED_PKG = '@recoder/recodergit-engine-shared';
+
 function rewriteFile(filePath) {
   const content = fs.readFileSync(filePath, 'utf-8');
-  if (!content.includes('recodergit-shared')) return;
+  if (!content.includes(SHARED_PKG)) return;
 
   const relDir = path.relative(path.dirname(filePath), SHARED_DEST);
   // Always use posix separators and point to the package index
   const relImport = relDir.split(path.sep).join('/') + '/index.js';
+  const sharedRe = SHARED_PKG.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
   const updated = content
-    .replace(/from\s+['"]recodergit-shared['"]/g, `from '${relImport}'`)
-    .replace(/import\(\s*['"]recodergit-shared['"]\s*\)/g, `import('${relImport}')`);
+    .replace(new RegExp(`from\\s+['"]${sharedRe}['"]`, 'g'), `from '${relImport}'`)
+    .replace(new RegExp(`import\\(\\s*['"]${sharedRe}['"]\\s*\\)`, 'g'), `import('${relImport}')`);
 
   if (updated !== content) {
     fs.writeFileSync(filePath, updated);
@@ -107,10 +110,21 @@ const cliEntry = path.join(DIST, 'cli', 'index.js');
 if (fs.existsSync(cliEntry)) fs.chmodSync(cliEntry, 0o755);
 
 // ── 6. Build & copy web UI ──────────────────────────────────────────
+// The browser-only web UI (recodergit-web) is out of scope for the Recoder
+// engine build (Recoder drives the Node CLI/MCP engine, not the WASM web app).
+// `RECODERGIT_SKIP_WEB=1` skips this heavy Vite build so the engine compiles
+// self-contained — the published-package guard above already ships a prebuilt
+// web/ dir when present.
 const WEB_ROOT = path.resolve(ROOT, '..', 'recodergit-web');
 const WEB_DEST = path.join(DIST, '..', 'web');
 
-if (fs.existsSync(path.join(WEB_ROOT, 'package.json'))) {
+const skipWeb = ['1', 'true', 'yes'].includes(
+  (process.env.RECODERGIT_SKIP_WEB ?? '').trim().toLowerCase(),
+);
+
+if (skipWeb) {
+  console.log('[build] skipping web UI (RECODERGIT_SKIP_WEB set)');
+} else if (fs.existsSync(path.join(WEB_ROOT, 'package.json'))) {
   console.log('[build] building recodergit-web…');
   if (!fs.existsSync(path.join(WEB_ROOT, 'node_modules'))) {
     console.log('[build] installing recodergit-web dependencies…');

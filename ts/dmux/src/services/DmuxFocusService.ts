@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'crypto';
 import { spawn, spawnSync } from 'child_process';
+import { tmuxBinFile } from '../utils/tmuxBin.js';
 import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
 import { EventEmitter } from 'events';
@@ -125,7 +126,7 @@ function readTmuxGlobalEnvironment(name: string): string | undefined {
     return undefined;
   }
 
-  const result = spawnSync('tmux', ['show-environment', '-g', name], {
+  const result = spawnSync(tmuxBinFile(), ['show-environment', '-g', name], {
     stdio: 'pipe',
     encoding: 'utf-8',
   });
@@ -166,7 +167,7 @@ function resolveTmuxSocketPath(): string | undefined {
     return undefined;
   }
 
-  const result = spawnSync('tmux', ['display-message', '-p', '#{socket_path}'], {
+  const result = spawnSync(tmuxBinFile(), ['display-message', '-p', '#{socket_path}'], {
     stdio: 'pipe',
     encoding: 'utf-8',
   });

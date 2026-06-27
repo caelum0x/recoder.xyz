@@ -57,7 +57,7 @@ import {
   type RegistryProviders,
   type Resolution,
   type ScopeId,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from './model/scope-resolution-indexes.js';
 
 // ─── Public API ─────────────────────────────────────────────────────────────

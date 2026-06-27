@@ -24,7 +24,7 @@ import { emitKotlinScopeCaptures } from '../../../src/core/ingestion/languages/k
 const Kotlin = requireVendoredGrammar('tree-sitter-kotlin');
 import { KOTLIN_QUERIES } from '../../../src/core/ingestion/tree-sitter-queries.js';
 import { FIXTURES, getRelationships, runPipelineFromRepo, type PipelineResult } from './helpers.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 // ---------------------------------------------------------------------------
 // F47 — callable references (scope layer)

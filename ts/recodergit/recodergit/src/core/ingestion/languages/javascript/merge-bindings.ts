@@ -13,7 +13,7 @@
  * the tier (local 0 / import-namespace-reexport 1 / wildcard 2) ordering.
  */
 
-import type { BindingRef } from 'recodergit-shared';
+import type { BindingRef } from '@recoder/recodergit-engine-shared';
 import { typescriptMergeBindings } from '../typescript/merge-bindings.js';
 
 export function jsMergeBindings(bindings: readonly BindingRef[]): readonly BindingRef[] {

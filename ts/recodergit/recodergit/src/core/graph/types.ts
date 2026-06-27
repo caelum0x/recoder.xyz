@@ -2,11 +2,11 @@
  * CLI-specific graph types.
  *
  * Shared types (NodeLabel, GraphNode, etc.) should be imported
- * directly from 'recodergit-shared' at call sites.
+ * directly from '@recoder/recodergit-engine-shared' at call sites.
  *
  * This file only defines the CLI's KnowledgeGraph with mutation methods.
  */
-import type { GraphNode, GraphRelationship, RelationshipType } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship, RelationshipType } from '@recoder/recodergit-engine-shared';
 
 // CLI-specific: full KnowledgeGraph with mutation methods for incremental updates
 export interface KnowledgeGraph {

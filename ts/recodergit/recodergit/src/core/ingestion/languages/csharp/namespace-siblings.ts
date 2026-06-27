@@ -52,7 +52,7 @@ import type {
   ScopeId,
   SymbolDefinition,
   TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import { getCsharpParser } from './query.js';
 

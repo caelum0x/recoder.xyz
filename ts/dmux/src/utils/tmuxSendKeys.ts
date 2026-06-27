@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { tmuxBinFile } from './tmuxBin.js';
 
 export function sendTmuxShellCommand(
   target: string,
@@ -6,7 +7,7 @@ export function sendTmuxShellCommand(
   stdio: 'pipe' | 'inherit' = 'pipe'
 ): void {
   const result = spawnSync(
-    'tmux',
+    tmuxBinFile(),
     ['send-keys', '-t', target, command, 'Enter'],
     { stdio }
   );

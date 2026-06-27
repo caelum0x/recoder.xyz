@@ -101,7 +101,7 @@ const VALID_RECORDER_INTENTS = new Set([
 const VALID_RECORDER_PLATFORMS = new Set([
     'codex',
     'claude_code',
-    'recoder_web',
+    'recoder_app',
     'recoder_pm',
     'recoder_agency',
     'recoder_backend',

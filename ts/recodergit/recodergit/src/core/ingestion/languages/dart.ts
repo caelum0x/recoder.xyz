@@ -14,8 +14,8 @@ import {
   FUNCTION_NODE_TYPES,
   type SyntaxNode,
 } from '../utils/ast-helpers.js';
-import type { NodeLabel } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { dartClassConfig } from '../class-extractors/configs/dart.js';
 import { defineLanguage } from '../language-provider.js';

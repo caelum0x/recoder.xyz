@@ -7,7 +7,7 @@
  * (array values) and arity-based filtering.
  */
 
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 // ---------------------------------------------------------------------------
 // Public read-only interface

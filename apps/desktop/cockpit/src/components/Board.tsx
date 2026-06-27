@@ -1,0 +1,66 @@
+/**
+ * Board — the conductor.build-style columned board. Renders live workspace cards
+ * grouped into lifecycle columns. Data comes only from GET /workspaces (polled
+ * ~2s by the parent). No mock cards: an empty backend yields empty columns.
+ */
+import { BOARD_COLUMNS, stateLabel, stateTone } from '../lib/workspace-state';
+import type { Workspace } from '../types';
+
+interface BoardProps {
+  workspaces: Workspace[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+export function Board({ workspaces, selectedId, onSelect }: BoardProps) {
+  return (
+    <div class="board">
+      {BOARD_COLUMNS.map((col) => {
+        const cards = workspaces.filter((w) => col.states.includes(w.state));
+        return (
+          <div class="board-col" key={col.id}>
+            <div class="board-col-header">
+              <span class="board-col-title">{col.title}</span>
+              <span class="board-col-count">{cards.length}</span>
+            </div>
+            <div class="board-col-cards">
+              {cards.length === 0 ? (
+                <div class="board-col-empty">—</div>
+              ) : (
+                cards.map((w) => (
+                  <button
+                    class={`card ${selectedId === w.workspaceId ? 'card-selected' : ''}`}
+                    key={w.workspaceId}
+                    onClick={() => onSelect(w.workspaceId)}
+                  >
+                    <div class="card-top">
+                      <span class={`badge tone-${stateTone(w.state)}`}>{stateLabel(w.state)}</span>
+                      <span class="card-runtime">{w.runtimeId}</span>
+                    </div>
+                    <div class="card-branch" title={w.branch}>{w.branch}</div>
+                    <div class="card-foot">
+                      <span class="card-substrate">{w.substrate}</span>
+                      <span class="card-time">{timeAgo(w.updatedAt)}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

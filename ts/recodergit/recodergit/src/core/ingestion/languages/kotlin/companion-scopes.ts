@@ -1,4 +1,4 @@
-import type { ScopeId } from 'recodergit-shared';
+import type { ScopeId } from '@recoder/recodergit-engine-shared';
 
 /**
  * Per-file set of `ScopeId`s that came from a `companion_object` AST node

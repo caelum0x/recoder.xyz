@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ParsedFile, ScopeId, Scope } from 'recodergit-shared';
+import type { ParsedFile, ScopeId, Scope } from '@recoder/recodergit-engine-shared';
 import {
   runScopeResolution,
   type ScopeResolutionSubPhase,

@@ -17,7 +17,7 @@ import {
   findExportedDefByName,
   lookupBindingsAt,
 } from '../../../src/core/ingestion/scope-resolution/scope/walkers.js';
-import type { BindingRef, Scope, ScopeId, ScopeTree, SymbolDefinition } from 'recodergit-shared';
+import type { BindingRef, Scope, ScopeId, ScopeTree, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../../src/core/ingestion/model/scope-resolution-indexes.js';
 import type { WorkspaceResolutionIndex } from '../../../src/core/ingestion/scope-resolution/workspace-index.js';
 

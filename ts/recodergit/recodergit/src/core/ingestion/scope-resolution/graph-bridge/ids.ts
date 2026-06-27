@@ -17,7 +17,7 @@
  * migrate.
  */
 
-import type { NodeLabel, ParameterTypeClass, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { NodeLabel, ParameterTypeClass, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import { generateId } from '../../../../lib/utils.js';
 import { qualifiedKey, simpleKey, type GraphNodeLookup } from '../graph-bridge/node-lookup.js';

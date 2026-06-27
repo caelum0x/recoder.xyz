@@ -13,7 +13,7 @@ import type {
 } from '../language-config.js';
 import type { SwiftPackageConfig } from '../language-config.js';
 import type { SuffixIndex } from './utils.js';
-import type { SupportedLanguages } from 'recodergit-shared';
+import type { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 
 /**
  * Result of resolving an import via language-specific dispatch.

@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { tmuxCommand } from '../utils/tmuxBin.js';
 import fs from 'fs/promises';
 import type { DmuxPane, ProjectSettings } from '../types.js';
 import { TmuxService } from '../services/TmuxService.js';
@@ -97,8 +98,8 @@ export default function usePaneRunner({ panes, savePanes, projectSettings, setSt
       const pane = panes.find(p => p.id === paneId);
       if (pane?.testWindowId) {
         try {
-          execSync(`tmux list-windows -F '#{window_id}' | rg -q '${pane.testWindowId}'`, { stdio: 'pipe' });
-          const paneOutput = execSync(`tmux capture-pane -t '${pane.testWindowId}' -p | tail -5`, { encoding: 'utf-8' });
+          execSync(tmuxCommand(`tmux list-windows -F '#{window_id}' | rg -q '${pane.testWindowId}'`), { stdio: 'pipe' });
+          const paneOutput = execSync(tmuxCommand(`tmux capture-pane -t '${pane.testWindowId}' -p | tail -5`), { encoding: 'utf-8' });
           if (paneOutput.includes('$') || paneOutput.includes('#')) {
             if (status === 'running') status = 'passed';
           }
@@ -125,7 +126,7 @@ export default function usePaneRunner({ panes, savePanes, projectSettings, setSt
       const pane = panes.find(p => p.id === paneId);
       let status: 'running' | 'stopped' = 'running';
       if (pane?.devWindowId) {
-        try { execSync(`tmux list-windows -F '#{window_id}' | rg -q '${pane.devWindowId}'`, { stdio: 'pipe' }); } catch { status = 'stopped'; }
+        try { execSync(tmuxCommand(`tmux list-windows -F '#{window_id}' | rg -q '${pane.devWindowId}'`), { stdio: 'pipe' }); } catch { status = 'stopped'; }
       }
       const updatedPanes = panes.map(p => p.id === paneId ? { ...p, devStatus: status, devUrl: devUrl || p.devUrl } : p);
       await savePanes(updatedPanes);

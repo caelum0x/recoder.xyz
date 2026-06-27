@@ -3,7 +3,7 @@
  * JVM-specific wildcard/member strategy, then standard fallback.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig, ImportResolverStrategy } from '../types.js';
 import { createStandardStrategy } from '../standard.js';
 import { resolveJvmWildcard, resolveJvmMemberImport, KOTLIN_EXTENSIONS } from '../jvm.js';

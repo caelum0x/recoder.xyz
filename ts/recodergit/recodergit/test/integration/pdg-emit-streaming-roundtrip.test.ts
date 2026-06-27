@@ -16,7 +16,7 @@ import os from 'os';
 
 import { createKnowledgeGraph } from '../../src/core/graph/graph.js';
 import { PdgEmitSink } from '../../src/core/lbug/pdg-emit-sink.js';
-import type { GraphNode, GraphRelationship } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship } from '@recoder/recodergit-engine-shared';
 
 let tmpBase: string;
 let storagePath: string;

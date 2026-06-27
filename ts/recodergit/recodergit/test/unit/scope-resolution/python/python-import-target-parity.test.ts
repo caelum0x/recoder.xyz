@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { resolvePythonImportTarget } from '../../../../src/core/ingestion/languages/python/index.js';
-import type { ParsedImport } from 'recodergit-shared';
+import type { ParsedImport } from '@recoder/recodergit-engine-shared';
 
 function mkImport(targetRaw: string): ParsedImport {
   return { kind: 'absolute', targetRaw, isRelative: false, names: [] } as unknown as ParsedImport;

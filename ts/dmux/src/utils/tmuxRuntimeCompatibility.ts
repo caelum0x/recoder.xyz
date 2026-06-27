@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { tmuxBinFile } from './tmuxBin.js';
 
 export const REQUIRED_TMUX_UPDATE_ENV = [
   'TERM_PROGRAM',
@@ -59,7 +60,7 @@ export function buildTmuxRuntimeCompatibilityCommands(
 function readTmuxArrayOption(sessionName: string, optionName: string): string[] {
   try {
     const result = spawnSync(
-      'tmux',
+      tmuxBinFile(),
       ['show-options', '-A', '-t', sessionName, optionName],
       {
         encoding: 'utf-8',
@@ -85,7 +86,7 @@ export function ensureTmuxRuntimeCompatibility(sessionName: string): void {
 
   for (const args of commands) {
     try {
-      spawnSync('tmux', args, { stdio: 'pipe' });
+      spawnSync(tmuxBinFile(), args, { stdio: 'pipe' });
     } catch {
       // Best effort only. Unknown options or older tmux versions should not block startup.
     }

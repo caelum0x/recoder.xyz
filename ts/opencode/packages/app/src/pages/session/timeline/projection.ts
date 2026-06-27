@@ -1,5 +1,5 @@
-import { Binary } from "@opencode-ai/core/util/binary"
-import type { AssistantMessage, Message, Part, SessionStatus, UserMessage } from "@opencode-ai/sdk/v2"
+import { Binary } from "@recoder/opencode-core/util/binary"
+import type { AssistantMessage, Message, Part, SessionStatus, UserMessage } from "@recoder/opencode-sdk/v2"
 import { createMemo, mapArray, type Accessor } from "solid-js"
 import { Timeline, TimelineRow } from "./rows"
 

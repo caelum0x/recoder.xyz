@@ -1,18 +1,17 @@
-<p align="center">
-  <img src="./dmux.png" alt="dmux logo" width="400" />
-</p>
+<h1 align="center">@recoder/dmux</h1>
 
-<h3 align="center">Parallel agents with tmux and worktrees</h3>
+<h3 align="center">Recoder operator console — the optional grid over N parallel Conductor agents</h3>
 
 <p align="center">
-  Manage multiple AI coding agents in isolated git worktrees.<br/>
+  The interactive grid view over Recoder's Conductor substrate: one tmux pane per task,
+  each in an isolated git worktree, with agent launch and lifecycle hooks.<br/>
   Branch, develop, and merge &mdash; all in parallel.
 </p>
 
 <p align="center">
-  <a href="https://dmux.ai"><strong>Documentation</strong></a> &nbsp;&middot;&nbsp;
-  <a href="https://dmux.ai#getting-started"><strong>Getting Started</strong></a> &nbsp;&middot;&nbsp;
-  <a href="https://github.com/formkit/dmux/issues"><strong>Issues</strong></a>
+  <a href="https://recoder.xyz"><strong>Recoder</strong></a> &nbsp;&middot;&nbsp;
+  <a href="../../docs/subsystems/substrate.md"><strong>Substrate (§4.3)</strong></a> &nbsp;&middot;&nbsp;
+  <a href="../../docker-backend/src/conductor/README.md"><strong>Conductor</strong></a>
 </p>
 
 <p align="center">
@@ -23,19 +22,39 @@
 
 ---
 
-<img src="./dmux.webp" alt="dmux demo" width="100%" />
+## What this is
 
-## Install
+`@recoder/dmux` is the **optional operator console** for Recoder's Conductor. It is a
+TypeScript + Ink TUI that gives a human operator a grid view over the parallel agent
+panes the Conductor runs. Per `docs/subsystems/substrate.md` §4.3 it is **never on the
+critical path**: if dmux is absent, the Conductor is fully functional via tmux alone.
 
-```bash
-npm install -g dmux
-```
+It is vendored and owned by Recoder under `ts/dmux`, forked from the original
+[dmux](https://github.com/formkit/dmux) by Justin Schroeder (MIT).
+
+### Shared tmux server (the Conductor bridge)
+
+dmux drives the **same pinned tmux binary** as the Conductor, resolved identically to
+`docker-backend/src/conductor/tmux-path.ts`:
+
+1. `DMUX_TMUX_BIN` / `CONDUCTOR_TMUX_BIN` (absolute path override)
+2. `RECODER_TMUX_BUILD_PATH` or the vendored `c/tmux/tmux` build
+3. system `tmux` on PATH (last resort)
+
+Because both halves share one tmux server, dmux observes and interacts with the
+Conductor's `recoder-*` sessions. The backend launches/attaches dmux via
+`docker-backend/src/conductor/dmux-adapter.ts`, propagating the pinned tmux env so the
+console and the headless conductor always agree on which tmux they drive.
 
 ## Quick Start
 
 ```bash
+# From the Recoder repo, build the operator console:
+cd ts/dmux && pnpm run build
+
+# Launch over a repo (the `dmux` and `recoder-dmux` bins are equivalent):
 cd /path/to/your/project
-dmux
+recoder-dmux
 ```
 
 Press `n` to create a new pane, type a prompt, pick one or more agents (or none for a plain terminal), and dmux handles the rest &mdash; worktree, branch, and agent launch.
@@ -92,12 +111,16 @@ dmux can use default branch behavior or let you override branch details when cre
 
 ## Documentation
 
-Full documentation is available at **[dmux.ai](https://dmux.ai)**, including setup guides, configuration, and hooks.
+- Recoder substrate: **[docs/subsystems/substrate.md](../../docs/subsystems/substrate.md)** §4.3 (operator console).
+- Conductor: **[docker-backend/src/conductor/README.md](../../docker-backend/src/conductor/README.md)**.
+- Operator-console maintainer guide: **[AGENTS.md](./AGENTS.md)** (config dirs, hooks, agent registry).
 
 ## Contributing
 
-See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the recommended local "dmux-on-dmux" development loop, hook setup, and PR workflow.
+See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for the recommended local development loop,
+hook setup, and PR workflow.
 
 ## License
 
-MIT
+MIT. Forked from [dmux](https://github.com/formkit/dmux) by Justin Schroeder; vendored
+and maintained by Recoder.

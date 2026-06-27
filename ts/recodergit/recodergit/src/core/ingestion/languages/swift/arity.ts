@@ -26,7 +26,7 @@
  * still considered when no compatible candidate exists), per RFC §4.
  */
 
-import type { Callsite, SymbolDefinition } from 'recodergit-shared';
+import type { Callsite, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 export function swiftArityCompatibility(
   def: SymbolDefinition,

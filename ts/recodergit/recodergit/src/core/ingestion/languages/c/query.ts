@@ -1,5 +1,5 @@
 import Parser from 'tree-sitter';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 // `tree-sitter-c` is vendored prebuild-only (#2116) and may be absent on a
 // toolchain-less / `--ignore-scripts` install. It is loaded lazily + guarded via
 // parser-loader rather than statically imported: this module is pulled onto the

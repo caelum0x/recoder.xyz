@@ -26,7 +26,7 @@
  * capture-time maps need to cross the boundary.
  */
 
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import { collectCppAdlSideChannel, applyCppAdlSideChannel, type CppAdlSideChannel } from './adl.js';
 import {
   collectCppInlineNamespaceSideChannel,

@@ -1,5 +1,5 @@
 import type { SyntaxNode } from '../utils/ast-helpers.js';
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import type {
   ClassExtractionConfig,
   ClassExtractor,

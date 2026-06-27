@@ -37,7 +37,7 @@ import type {
   ScopeId,
   ScopeTree,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../../src/core/ingestion/model/scope-resolution-indexes.js';
 import type { WorkspaceResolutionIndex } from '../../../src/core/ingestion/scope-resolution/workspace-index.js';
 

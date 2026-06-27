@@ -17,7 +17,7 @@
  * infrastructure (DoD.md §2.2).
  */
 
-import type { CaptureMatch, Scope, ScopeId, ScopeTree } from 'recodergit-shared';
+import type { CaptureMatch, Scope, ScopeId, ScopeTree } from '@recoder/recodergit-engine-shared';
 import { tsBindingScopeFor, walkToScope } from '../typescript/simple-hooks.js';
 
 export {

@@ -6,7 +6,7 @@
  * Also includes a separate index for Rust Impl blocks.
  */
 
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 const EMPTY: readonly SymbolDefinition[] = Object.freeze([]);
 

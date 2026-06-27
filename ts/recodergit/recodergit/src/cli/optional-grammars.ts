@@ -15,7 +15,7 @@
  * support is unavailable instead of silently getting a degraded index.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { isGrammarRuntimeSkipped } from '../core/tree-sitter/parser-loader.js';
 import { requireVendoredGrammar } from '../core/tree-sitter/vendored-grammars.js';
 import { cliWarn } from './cli-message.js';

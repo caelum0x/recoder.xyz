@@ -18,7 +18,7 @@
  * fans out to one CaptureMatch per inner clause.
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
 
 export type PhpImportKind = 'namespace' | 'alias' | 'function' | 'const';

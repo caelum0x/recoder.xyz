@@ -28,7 +28,7 @@ import type { PipelinePhase, PipelineContext, PhaseResult } from '../../pipeline
 import { getPhaseOutput } from '../../pipeline-phases/types.js';
 import type { StructureOutput } from '../../pipeline-phases/structure.js';
 import type { ParseOutput } from '../../pipeline-phases/parse.js';
-import { SupportedLanguages, getLanguageFromFilename } from 'recodergit-shared';
+import { SupportedLanguages, getLanguageFromFilename } from '@recoder/recodergit-engine-shared';
 import { readFileContents } from '../../filesystem-walker.js';
 import { runScopeResolution, type ScopeResolutionSubPhase } from './run.js';
 import { isLanguageAvailable } from '../../../tree-sitter/parser-loader.js';
@@ -137,7 +137,7 @@ export const scopeResolutionPhase: PipelinePhase<ScopeResolutionOutput> = {
     // path, since workers can't return tree-sitter Trees across the
     // MessageChannel and scope-resolution would otherwise re-parse
     // every file from scratch on the main thread.
-    const preExtractedByPath = new Map<string, import('recodergit-shared').ParsedFile>();
+    const preExtractedByPath = new Map<string, import('@recoder/recodergit-engine-shared').ParsedFile>();
     for (const pf of workerParsedFiles) {
       preExtractedByPath.set(pf.filePath, pf);
     }

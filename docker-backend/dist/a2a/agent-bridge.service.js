@@ -89,7 +89,7 @@ const KNOWN_BRIDGE_PLATFORMS = new Set([
     'cursor',
     'windsurf',
     'replit',
-    'recoder_web',
+    'recoder_app',
     'recoder_pm',
     'recoder_agency',
     'custom',

@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { tmuxBinFile } from './tmuxBin.js';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -76,7 +77,7 @@ export function isRemotePaneActionShortcut(
 
 export function getCurrentTmuxSessionName(): string | null {
   try {
-    const result = spawnSync('tmux', ['display-message', '-p', '#S'], {
+    const result = spawnSync(tmuxBinFile(), ['display-message', '-p', '#S'], {
       encoding: 'utf-8',
       stdio: 'pipe',
     });
@@ -93,7 +94,7 @@ export function getCurrentTmuxSessionName(): string | null {
 
 export function getCurrentTmuxPaneId(): string | null {
   try {
-    const result = spawnSync('tmux', ['display-message', '-p', '#{pane_id}'], {
+    const result = spawnSync(tmuxBinFile(), ['display-message', '-p', '#{pane_id}'], {
       encoding: 'utf-8',
       stdio: 'pipe',
     });
@@ -134,7 +135,7 @@ export function getTmuxSessionOption(
 
 export function showTmuxMessage(message: string): void {
   try {
-    spawnSync('tmux', ['display-message', '-d', '2500', message], {
+    spawnSync(tmuxBinFile(), ['display-message', '-d', '2500', message], {
       stdio: 'pipe',
     });
   } catch {

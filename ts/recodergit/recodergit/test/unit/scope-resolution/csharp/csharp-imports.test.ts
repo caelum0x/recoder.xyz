@@ -21,7 +21,7 @@ import {
 } from '../../../../src/core/ingestion/csharp-namespace-gate.js';
 import { csharpScopeResolver } from '../../../../src/core/ingestion/languages/csharp/scope-resolver.js';
 import type { CSharpProjectConfig } from '../../../../src/core/ingestion/language-config.js';
-import type { ParsedImport, WorkspaceIndex } from 'recodergit-shared';
+import type { ParsedImport, WorkspaceIndex } from '@recoder/recodergit-engine-shared';
 
 function importsFor(src: string): ParsedImport[] {
   const matches = emitCsharpScopeCaptures(src, 'test.cs');

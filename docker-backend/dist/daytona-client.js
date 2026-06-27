@@ -19,7 +19,7 @@
  * exec-based shell commands if the native endpoints fail or return 404.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DaytonaClient = void 0;
+exports.resolveDaytonaSdkConfig = exports.isDaytonaSdkEnabled = exports.getDaytonaSdk = exports.DaytonaClient = void 0;
 exports.getDaytonaClient = getDaytonaClient;
 exports.isDaytonaConfigured = isDaytonaConfigured;
 const logger_js_1 = require("./logger.js");
@@ -843,6 +843,16 @@ function getDaytonaClient() {
     }
     return _instance;
 }
+/**
+ * Owned Daytona SDK (@recoder/sandbox-daytona) — the merged, first-party Daytona
+ * TypeScript SDK. Re-exported from the canonical daytona client module so the
+ * product runs on owned code; callers can opt into its richer Sandbox API
+ * (filesystem/git/process/lsp) via getDaytonaSdk() gated by isDaytonaSdkEnabled().
+ */
+var daytona_sdk_js_1 = require("./daytona-sdk.js");
+Object.defineProperty(exports, "getDaytonaSdk", { enumerable: true, get: function () { return daytona_sdk_js_1.getDaytonaSdk; } });
+Object.defineProperty(exports, "isDaytonaSdkEnabled", { enumerable: true, get: function () { return daytona_sdk_js_1.isDaytonaSdkEnabled; } });
+Object.defineProperty(exports, "resolveDaytonaSdkConfig", { enumerable: true, get: function () { return daytona_sdk_js_1.resolveDaytonaSdkConfig; } });
 /**
  * Check if Daytona integration is configured (API key present).
  */

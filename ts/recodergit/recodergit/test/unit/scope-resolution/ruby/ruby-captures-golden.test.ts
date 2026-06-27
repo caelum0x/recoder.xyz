@@ -29,7 +29,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { emitRubyScopeCaptures } from '../../../../src/core/ingestion/languages/ruby/index.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 // This test lives at test/unit/scope-resolution/ruby/, so fixtures are THREE
 // levels up (like the sibling go-captures-golden.test.ts).

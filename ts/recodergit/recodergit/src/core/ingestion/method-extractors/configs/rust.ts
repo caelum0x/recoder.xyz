@@ -1,7 +1,7 @@
 // recodergit/src/core/ingestion/method-extractors/configs/rust.ts
 // Verified against tree-sitter-rust 0.23.1
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type {
   MethodExtractionConfig,
   ParameterInfo,

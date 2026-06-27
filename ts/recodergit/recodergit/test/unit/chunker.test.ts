@@ -22,7 +22,7 @@ vi.mock('../../src/core/tree-sitter/parser-loader.js', () => ({
   ),
 }));
 
-vi.mock('recodergit-shared', () => ({
+vi.mock('@recoder/recodergit-engine-shared', () => ({
   getLanguageFromFilename,
 }));
 

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { execSync, spawn, ChildProcess } from 'child_process';
+import { tmuxCommand } from '../utils/tmuxBin.js';
 import { existsSync, unlinkSync } from 'fs';
 import { Readable } from 'stream';
 import { StringDecoder } from 'string_decoder';
@@ -169,7 +170,7 @@ export class TerminalStreamer extends EventEmitter {
     try {
       // Stop any existing pipe-pane first
       try {
-        execSync(`tmux pipe-pane -t ${stream.tmuxPaneId}`, { stdio: 'pipe' });
+        execSync(tmuxCommand(`tmux pipe-pane -t ${stream.tmuxPaneId}`), { stdio: 'pipe' });
       } catch {
         // No existing pipe, which is fine
       }
@@ -373,7 +374,7 @@ export class TerminalStreamer extends EventEmitter {
 
     // Stop tmux pipe
     try {
-      execSync(`tmux pipe-pane -t ${stream.tmuxPaneId}`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux pipe-pane -t ${stream.tmuxPaneId}`), { stdio: 'pipe' });
     } catch (error) {
       // Ignore pipe-pane stop errors
     }
@@ -478,7 +479,7 @@ export class TerminalStreamer extends EventEmitter {
   private restartPiping(stream: StreamInfo): void {
     // Stop current pipe
     try {
-      execSync(`tmux pipe-pane -t ${stream.tmuxPaneId}`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux pipe-pane -t ${stream.tmuxPaneId}`), { stdio: 'pipe' });
     } catch {
       // Expected - no pipe exists yet
     }

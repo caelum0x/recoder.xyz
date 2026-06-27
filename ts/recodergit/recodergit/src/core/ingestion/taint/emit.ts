@@ -63,7 +63,7 @@
  * language (R4) — never dropped on the floor (the M2 lesson).
  */
 
-import type { ParsedImport } from 'recodergit-shared';
+import type { ParsedImport } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../graph/types.js';
 import { generateId } from '../../../lib/utils.js';
 import {

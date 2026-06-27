@@ -1,5 +1,5 @@
 {
-  "name": "@opencode-ai/app",
+  "name": "@recoder/opencode-app",
   "version": "1.17.11",
   "description": "",
   "type": "module",
@@ -45,10 +45,10 @@
   },
   "dependencies": {
     "@kobalte/core": "catalog:",
-    "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/sdk": "workspace:*",
-    "@opencode-ai/session-ui": "workspace:*",
-    "@opencode-ai/ui": "workspace:*",
+    "@recoder/opencode-core": "workspace:*",
+    "@recoder/opencode-sdk": "workspace:*",
+    "@recoder/opencode-session-ui": "workspace:*",
+    "@recoder/opencode-ui": "workspace:*",
     "@pierre/trees": "1.0.0-beta.4",
     "@sentry/solid": "catalog:",
     "@shikijs/transformers": "3.9.2",

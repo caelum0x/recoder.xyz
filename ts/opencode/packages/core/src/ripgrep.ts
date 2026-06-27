@@ -2,7 +2,7 @@ export * as Ripgrep from "./ripgrep"
 
 import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect"
 import { ChildProcess } from "effect/unstable/process"
-import { Entry, Match } from "@opencode-ai/schema/filesystem"
+import { Entry, Match } from "@recoder/opencode-schema/filesystem"
 import { LayerNode } from "./effect/layer-node"
 import { AppProcess, collectStream, waitForAbort } from "./process"
 import { NonNegativeInt, PositiveInt, RelativePath } from "./schema"

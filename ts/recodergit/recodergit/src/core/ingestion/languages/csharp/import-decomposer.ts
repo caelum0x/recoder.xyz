@@ -15,7 +15,7 @@
  *   using global::System.IO;                → namespace (global:: alias stripped)
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
 
 type ImportKind = 'namespace' | 'alias' | 'static';

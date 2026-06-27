@@ -14,7 +14,7 @@
  * source text and tree-sitter children to determine the flavor.
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
 
 type ImportKind = 'named' | 'wildcard' | 'static' | 'static-wildcard';

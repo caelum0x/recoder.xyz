@@ -19,7 +19,7 @@ import type {
   ScopeTree,
   Scope,
   TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 // ─── interpretImport ──────────────────────────────────────────────────────
 

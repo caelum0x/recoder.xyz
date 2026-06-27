@@ -8,8 +8,8 @@
  *   - mroStrategy: 'qualified-syntax' (Rust uses trait qualification, not MRO)
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
-import type { NodeLabel } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { rustClassConfig } from '../class-extractors/configs/rust.js';
 import { defineLanguage } from '../language-provider.js';

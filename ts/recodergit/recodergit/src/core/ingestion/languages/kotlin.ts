@@ -7,7 +7,7 @@
  * multiple interface implementation.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { kotlinClassConfig } from '../class-extractors/configs/jvm.js';
 import { defineLanguage } from '../language-provider.js';

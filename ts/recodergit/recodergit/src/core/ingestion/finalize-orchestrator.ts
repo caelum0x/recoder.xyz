@@ -41,7 +41,7 @@ import type {
   ScopeId,
   SymbolDefinition,
   WorkspaceIndex,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import {
   buildDefIndex,
   buildMethodDispatchIndex,
@@ -49,7 +49,7 @@ import {
   buildQualifiedNameIndex,
   buildScopeTree,
   finalize,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from './model/scope-resolution-indexes.js';
 import { parseTruthyEnv } from './utils/env.js';
 import { TransitionalScopeTree } from '../../storage/scope-index-store.js';

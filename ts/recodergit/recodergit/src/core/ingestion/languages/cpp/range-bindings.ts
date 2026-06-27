@@ -1,4 +1,4 @@
-import type { ParsedFile, Scope, TypeRef } from 'recodergit-shared';
+import type { ParsedFile, Scope, TypeRef } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import { getCppParser } from './query.js';
 import { getTreeSitterBufferSize } from '../../constants.js';

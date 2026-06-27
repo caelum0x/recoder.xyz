@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import os from 'node:os';
 import { join } from 'node:path';
-import { CircuitBreaker } from 'recodergit-shared';
+import { CircuitBreaker } from '@recoder/recodergit-engine-shared';
 import {
   applyHfEnvOverrides,
   isNetworkFetchError,

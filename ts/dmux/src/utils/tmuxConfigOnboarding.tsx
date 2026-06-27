@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { tmuxCommand } from './tmuxBin.js';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -172,7 +173,7 @@ async function writeRecommendedTmuxConfig(
 
 function sourceTmuxConfig(configPath: string): void {
   try {
-    execSync(`tmux source-file ${shellQuote(configPath)}`, { stdio: 'pipe' });
+    execSync(tmuxCommand(`tmux source-file ${shellQuote(configPath)}`), { stdio: 'pipe' });
   } catch {
     // Best effort only - server may not be running yet
   }

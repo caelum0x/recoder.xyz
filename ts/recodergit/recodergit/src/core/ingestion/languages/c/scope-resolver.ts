@@ -1,5 +1,5 @@
-import type { ParsedFile, SymbolDefinition } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { ParsedFile, SymbolDefinition } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
 import { populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';
 import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';

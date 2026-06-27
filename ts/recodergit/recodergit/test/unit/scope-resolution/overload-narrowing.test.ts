@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { narrowOverloadCandidates } from '../../../src/core/ingestion/scope-resolution/passes/overload-narrowing.js';
 
 const mkDef = (overrides: Partial<SymbolDefinition> & { nodeId: string }): SymbolDefinition => ({

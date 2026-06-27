@@ -8,7 +8,7 @@
  * scope-resolution Variable reconciliation entry.
  */
 
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 const EMPTY: readonly SymbolDefinition[] = Object.freeze([]);
 

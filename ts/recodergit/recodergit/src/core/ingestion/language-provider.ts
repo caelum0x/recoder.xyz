@@ -24,7 +24,7 @@ import type {
   SymbolDefinition,
   Callsite,
   WorkspaceIndex,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { LanguageTypeConfig } from './type-extractors/types.js';
 import type { CallRouter } from './call-routing.js';
 import type { CallExtractor } from './call-types.js';
@@ -36,7 +36,7 @@ import type { VariableExtractor } from './variable-types.js';
 import type { ImportResolverFn } from './import-resolvers/types.js';
 import type { SyntaxNode } from './utils/ast-helpers.js';
 import type { CfgVisitor } from './cfg/types.js';
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import type { ExtractedRoute } from './route-extractors/laravel.js';
 import type { SharedSpringType } from './route-extractors/spring-shared.js';
 import type Parser from 'tree-sitter';

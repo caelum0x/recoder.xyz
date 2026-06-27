@@ -3,7 +3,7 @@
  * Both use standard resolution for #include directives.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig } from '../types.js';
 import { createStandardStrategy } from '../standard.js';
 

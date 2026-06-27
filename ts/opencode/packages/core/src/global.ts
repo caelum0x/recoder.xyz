@@ -4,19 +4,25 @@ import { xdgData, xdgCache, xdgConfig, xdgState } from "xdg-basedir"
 import os from "os"
 import { Context, Effect, Layer } from "effect"
 import { Flock } from "./util/flock"
-import { Flag } from "./flag/flag"
+import { Flag, env } from "./flag/flag"
 import { LayerNode } from "./effect/layer-node"
 
 const app = "opencode"
-const data = path.join(xdgData!, app)
-const cache = path.join(xdgCache!, app)
+
+// Recoder ownership: when the control plane drives this runtime it can pin a
+// dedicated data root via RECODER_OPENCODE_DATA_DIR so per-run state (logs,
+// repos, snapshots) is sandboxed to the run's workspace instead of leaking into
+// the operator's global XDG dirs. Falls back to the standard XDG layout.
+const dataRoot = process.env["RECODER_OPENCODE_DATA_DIR"]
+const data = dataRoot ? path.join(dataRoot, "data") : path.join(xdgData!, app)
+const cache = dataRoot ? path.join(dataRoot, "cache") : path.join(xdgCache!, app)
 const config = path.join(xdgConfig!, app)
-const state = path.join(xdgState!, app)
+const state = dataRoot ? path.join(dataRoot, "state") : path.join(xdgState!, app)
 const tmp = path.join(os.tmpdir(), app)
 
 const paths = {
   get home() {
-    return process.env.OPENCODE_TEST_HOME ?? os.homedir()
+    return env("OPENCODE_TEST_HOME") ?? os.homedir()
   },
   data,
   bin: path.join(cache, "bin"),

@@ -76,4 +76,4 @@ export const defaultLayer = Service.defaultLayer.pipe(Layer.orDie)
 export const node = LayerNode.make({ service: Service, layer: defaultLayer, deps: [] })
 
 export * as RuntimeFlags from "./runtime-flags"
-import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LayerNode } from "@recoder/opencode-core/effect/layer-node"

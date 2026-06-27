@@ -1,0 +1,7 @@
+{"type":"step_start","timestamp":1,"sessionID":"ses_1","part":{"type":"step-start"}}
+{"type":"reasoning","timestamp":2,"sessionID":"ses_1","part":{"type":"reasoning","text":"I should read the file first.","time":{"start":1,"end":2}}}
+{"type":"tool_use","timestamp":3,"sessionID":"ses_1","part":{"type":"tool","tool":"read","callID":"call_read_1","state":{"status":"completed","input":{"filePath":"src/index.ts"},"output":"export const x = 1;\n"}}}
+{"type":"tool_use","timestamp":4,"sessionID":"ses_1","part":{"type":"tool","tool":"edit","callID":"call_edit_1","state":{"status":"completed","input":{"filePath":"src/index.ts","edits":[{"path":"src/index.ts"}]},"output":"edited"}}}
+{"type":"tool_use","timestamp":5,"sessionID":"ses_1","part":{"type":"tool","tool":"bash","callID":"call_bash_1","state":{"status":"error","input":{"command":"npm test"},"error":"exit code 1"}}}
+{"type":"text","timestamp":6,"sessionID":"ses_1","part":{"type":"text","text":"Done. The file was updated.","time":{"start":5,"end":6}}}
+{"type":"step_finish","timestamp":7,"sessionID":"ses_1","part":{"type":"step-finish","tokens":{"input":120,"output":45,"cache":{"read":10,"write":5}},"cost":0.0012}}

@@ -52,7 +52,7 @@ import { promises as fs, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import v8 from 'node:v8';
 import vm from 'node:vm';
-import type { ParsedFile, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { mapReplacer, mapReviver } from './parse-cache.js';
 
 const STORE_DIRNAME = 'parsedfile-store';

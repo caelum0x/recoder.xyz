@@ -4,10 +4,10 @@ import {
   getSyntaxLanguageFromFilename,
   isBladeTemplateFilename,
   SupportedLanguages,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import { getProvider, getProviderForFile } from '../../src/core/ingestion/languages/index.js';
 import type { SyntaxNode } from '../../src/core/ingestion/utils/ast-helpers.js';
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import type { LanguageProvider } from '../../src/core/ingestion/language-provider.js';
 import {
   getTreeSitterBufferSize,

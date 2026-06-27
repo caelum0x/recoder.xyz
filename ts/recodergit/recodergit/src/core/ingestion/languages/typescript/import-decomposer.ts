@@ -38,7 +38,7 @@
  * `import './polyfill'` as a module-reachability dependency only).
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import {
   findChild,
   nodeToCapture,

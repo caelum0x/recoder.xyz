@@ -8,7 +8,7 @@
  * 4. Run `tsc --noEmit` to verify
  */
 
-import { SupportedLanguages, isBladeTemplateFilename } from 'recodergit-shared';
+import { SupportedLanguages, isBladeTemplateFilename } from '@recoder/recodergit-engine-shared';
 import type { LanguageProvider } from '../language-provider.js';
 
 import { typescriptProvider, javascriptProvider } from './typescript.js';
