@@ -23,10 +23,14 @@
  *   DELETE /sessions/:id                  kill a session
  *   GET  /dmux                            dmux operator-console status + grid
  *   POST /dmux/launch                     launch the dmux console for a repo
+ *
+ * Sibling control-plane route (NOT under /api/conductor):
+ *   GET  /api/connectors                  per-channel connector health
  */
 import type {
   ApiEnvelope,
   ConductorSession,
+  ConnectorsHealth,
   CreatePrResult,
   CreateWorkspaceBody,
   DmuxLaunchBody,
@@ -82,9 +86,15 @@ function buildHeaders(hasBody: boolean): Record<string, string> {
   return headers;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+/**
+ * Core request against an absolute API base under the backend origin. Shared by
+ * the conductor client (`/api/conductor`) and sibling control-plane routes that
+ * live elsewhere (e.g. `/api/connectors`). Same envelope handling, same
+ * BackendUnreachable/Unauthorized classification — no mock fallbacks.
+ */
+async function requestAt<T>(base: string, method: string, path: string, body?: unknown): Promise<T> {
   const { backendUrl } = readConfig();
-  const url = `${backendUrl}/api/conductor${path}`;
+  const url = `${backendUrl}${base}${path}`;
 
   let res: Response;
   try {
@@ -129,6 +139,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return undefined as unknown as T;
 }
 
+/** Conductor-scoped request: every call hits `${backendUrl}/api/conductor/...`. */
+function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/conductor', method, path, body);
+}
+
 export const api = {
   health: () =>
     request<{ available: boolean; git?: boolean; tmux?: boolean; tmuxBin?: string; reason?: string }>(
@@ -163,4 +178,8 @@ export const api = {
   // --- dmux operator console ---
   dmux: () => request<DmuxStatus>('GET', '/dmux'),
   dmuxLaunch: (body: DmuxLaunchBody) => request<DmuxLaunchResult>('POST', '/dmux/launch', body),
+
+  // --- connectors (chat-channel bridge) ---
+  // NOTE: this route is mounted at /api/connectors, NOT under /api/conductor.
+  connectors: () => requestAt<ConnectorsHealth>('/api/connectors', 'GET', '/'),
 };

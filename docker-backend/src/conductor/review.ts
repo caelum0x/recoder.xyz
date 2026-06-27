@@ -13,6 +13,7 @@ import { createLogger } from '../logger';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
 import { getSubstrate } from './substrate.js';
 import { stopRunTail } from './run-tailer.js';
+import { releaseWorkspaceLock } from './conductor-locks.js';
 
 const logger = createLogger('conductor:review');
 
@@ -74,6 +75,19 @@ export async function archiveWorkspace(workspaceId: string): Promise<Workspace> 
   if (workspace.state === 'archived') return workspace;
 
   stopRunTail(workspaceId);
+
+  // Release the workspace's write-lock so its repo scope is freed for the next
+  // workspace. Owner/task scoped; degrade-safe (no-op when locking is disabled).
+  try {
+    await releaseWorkspaceLock({
+      workspaceId,
+      spaceId: workspace.spaceId,
+      taskId: workspace.taskId,
+    });
+  } catch (err) {
+    logger.warn({ workspaceId, err }, 'lock release on archive failed');
+  }
+
   await getSubstrate(workspace.substrate).teardown(
     { ref: workspaceId, sessionName: workspace.sessionName, worktreePath: workspace.worktreePath },
     { removeIsolation: true },

@@ -8,7 +8,16 @@
  *
  * pi is ESM-only with an exports map; load it via a dynamic import that survives
  * CJS output (mirrors docker-backend's A2A pi runtime adapter).
+ *
+ * Type-only `import('@recoder/pi-coding-agent')` references the real declarations
+ * (emitted to dist/index.d.ts) without producing a static runtime import, so the
+ * CJS dynamic-import survival trick in `loadPi()` is preserved while the boundary
+ * is fully typed instead of `any`.
  */
+
+/** The runtime module shape, taken straight from the package's emitted .d.ts. */
+type PiModule = typeof import('@recoder/pi-coding-agent');
+type PiAgentSessionEvent = import('@recoder/pi-coding-agent').AgentSessionEvent;
 
 export interface RunPiCodingTaskOptions {
   prompt: string;
@@ -31,8 +40,10 @@ export interface RunPiCodingTaskResult {
   filesChanged: string[];
 }
 
-async function loadPi(): Promise<any> {
-  const dynamicImport = new Function('specifier', 'return import(specifier)');
+async function loadPi(): Promise<PiModule> {
+  const dynamicImport = new Function('specifier', 'return import(specifier)') as (
+    specifier: string,
+  ) => Promise<PiModule>;
   return dynamicImport('@recoder/pi-coding-agent');
 }
 
@@ -64,7 +75,7 @@ export async function runPiCodingTask(options: RunPiCodingTaskOptions): Promise<
   }
 
   const modelRegistry = ModelRegistry.create(authStorage);
-  let model: any;
+  let model: ReturnType<typeof modelRegistry.find>;
   const requested = options.model?.trim();
   if (requested) {
     const slash = requested.indexOf('/');
@@ -93,19 +104,21 @@ export async function runPiCodingTask(options: RunPiCodingTaskOptions): Promise<
 
   const textParts: string[] = [];
   const filesChanged: string[] = [];
-  const unsubscribe = session.subscribe((event: any) => {
+  const unsubscribe = session.subscribe((event: PiAgentSessionEvent) => {
     if (event.type === 'message_end' && event.message?.role === 'assistant') {
-      for (const content of event.message.content || []) {
+      for (const content of event.message.content ?? []) {
         if (content.type === 'text') {
           textParts.push(content.text);
         }
       }
     }
     if (event.type === 'tool_execution_end') {
-      const toolName = event.toolName || event.name;
-      if (toolName === 'write' || toolName === 'edit') {
-        const path = event.args?.path || event.input?.path;
-        if (path) filesChanged.push(path);
+      if (event.toolName === 'write' || event.toolName === 'edit') {
+        // pi types the tool result as `any`; write/edit results carry the path.
+        const path = event.result?.path;
+        if (typeof path === 'string' && path.length > 0) {
+          filesChanged.push(path);
+        }
       }
     }
   });

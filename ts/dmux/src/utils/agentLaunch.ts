@@ -24,6 +24,7 @@ export const AGENT_IDS = [
   'cursor',
   'copilot',
   'crush',
+  'recoder-code',
 ] as const;
 
 export type AgentName = typeof AGENT_IDS[number];
@@ -350,6 +351,30 @@ export const AGENT_REGISTRY: Readonly<Record<AgentName, AgentRegistryEntry>> = {
       bypassPermissions: '--yolo',
     },
     defaultEnabled: false,
+  },
+  'recoder-code': {
+    id: 'recoder-code',
+    name: 'Recoder Code',
+    shortLabel: 'rc',
+    description: 'Recoder Code CLI',
+    slugSuffix: 'recoder-code',
+    installTestCommand: 'command -v recoder-code 2>/dev/null || which recoder-code 2>/dev/null',
+    commonPaths: [
+      '/usr/local/bin/recoder-code',
+      '/opt/homebrew/bin/recoder-code',
+      ...homePath('.local/bin/recoder-code'),
+      ...homePath('bin/recoder-code'),
+      ...homePath('.npm-global/bin/recoder-code'),
+    ],
+    promptCommand: 'recoder-code',
+    promptTransport: 'option',
+    promptOption: '--prompt',
+    permissionFlags: {
+      acceptEdits: '--permission-mode acceptEdits',
+      bypassPermissions: '--dangerously-skip-permissions',
+    },
+    defaultEnabled: false,
+    resumeCommandTemplate: 'recoder-code --continue{permissions}',
   },
 };
 

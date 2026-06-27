@@ -22,16 +22,18 @@ import {
   type TaskRun,
   type Workspace,
   type WorkspaceState,
+  type WorkspaceSubstrate,
 } from '@recoder/agent-os';
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
 import { resolveRuntimeCommand } from './runtime-commands.js';
 import { enrichPrompt } from './bundle.js';
 import { startRunTail } from './run-tailer.js';
-import { getSubstrate } from './substrate.js';
+import { getSubstrate, listSubstrates } from './substrate.js';
 import { registerTmuxSubstrate } from './substrate-tmux.js';
 import { registerDaytonaSubstrate } from './substrate-daytona.js';
 import { TMUX_BIN } from './tmux-path.js';
+import { acquireWorkspaceLock, releaseWorkspaceLock } from './conductor-locks.js';
 
 // Register execution substrates: local git worktree + tmux (default) and the
 // remote Daytona sandbox. Selection is per-workspace via Workspace.substrate.
@@ -51,6 +53,8 @@ export interface CreateWorkspaceInput {
   repoPath: string;
   /** Runtime that will drive the work (agent-os surface id, e.g. 'claude_code'). */
   runtimeId: string;
+  /** Execution substrate to launch on (defaults to 'tmux_worktree'). */
+  substrate?: WorkspaceSubstrate;
   /** Explicit command to run; if omitted, resolved from runtimeId + prompt. */
   command?: string;
   /** Task prompt — used to resolve the headless CLI invocation for the runtime. */
@@ -125,13 +129,21 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
     command = resolveRuntimeCommand(input.runtimeId, { prompt: enriched.prompt, model: input.model }).commandLine;
   }
 
+  // Honor the requested substrate when it is registered; otherwise default to the
+  // local tmux+worktree substrate. Never launch on an unknown substrate id.
+  const requestedSubstrate = input.substrate;
+  const substrate: WorkspaceSubstrate =
+    requestedSubstrate && listSubstrates().includes(requestedSubstrate)
+      ? requestedSubstrate
+      : 'tmux_worktree';
+
   let workspace: Workspace = {
     workspaceId,
     spaceId: input.spaceId,
     projectId: input.projectId,
     taskId: input.taskId,
     runtimeId: input.runtimeId,
-    substrate: 'tmux_worktree',
+    substrate,
     branch,
     baseRef: input.baseRef || 'HEAD',
     state: 'created',
@@ -145,6 +157,35 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   };
   // State of record FIRST — survives a crash mid-provision.
   workspace = await repository().upsertWorkspace(workspace);
+
+  // Collision-prevention moat: claim an exclusive write-lock over this
+  // workspace's scope BEFORE launching the agent. If another active workspace
+  // already holds an overlapping path in the same repo, do NOT launch — fail the
+  // workspace with a truthful conflict naming the holder. Degrade-safe: when the
+  // coordination engine is unavailable, locking is skipped (workspace launches).
+  const targetPaths = await resolveTargetPaths(input.taskId);
+  const lock = await acquireWorkspaceLock({
+    workspaceId,
+    spaceId: input.spaceId,
+    taskId: input.taskId,
+    repo: input.repoPath,
+    targetPaths,
+  });
+  if (lock.status === 'conflict') {
+    const detail = lock.conflicts
+      .map((c) => `${c.pathGlob} held by workspace ${c.ownerAgentId} (task ${c.taskId})`)
+      .join('; ');
+    const message = `write-lock conflict: ${detail}`;
+    workspace = await repository().upsertWorkspace(
+      transitionWorkspace(workspace, 'failed', {
+        metadata: { error: message, lockConflicts: lock.conflicts },
+      }),
+    );
+    logger.warn({ workspaceId, repo: input.repoPath, conflicts: lock.conflicts }, 'workspace launch refused — lock conflict');
+    return workspace;
+  }
+
+  let lockHeld = lock.status === 'acquired';
 
   try {
     workspace = await repository().upsertWorkspace(transitionWorkspace(workspace, 'setting_up'));
@@ -193,11 +234,43 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
     return workspace;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Provisioning/launch failed — release the write-lock so the scope is freed
+    // for another workspace (a held lock with no live agent would block forever).
+    if (lockHeld) {
+      try {
+        await releaseWorkspaceLock({
+          workspaceId,
+          spaceId: input.spaceId,
+          taskId: input.taskId,
+          repo: input.repoPath,
+        });
+      } catch (releaseErr) {
+        logger.warn({ workspaceId, releaseErr }, 'lock release after launch failure failed');
+      }
+      lockHeld = false;
+    }
     workspace = await repository().upsertWorkspace(
       transitionWorkspace(workspace, 'failed', { metadata: { error: message } }),
     );
     logger.error({ workspaceId, err }, 'workspace provisioning failed');
     return workspace;
+  }
+}
+
+/**
+ * Resolve a task's declared write surface (`TaskSpec.targetPaths`) for lock
+ * scoping. Returns `undefined` when the task is unknown — the lock layer then
+ * falls back to a repo-wide claim. Never throws: a lookup failure degrades to an
+ * undeclared scope rather than blocking workspace creation.
+ */
+async function resolveTargetPaths(taskId: string): Promise<string[] | undefined> {
+  try {
+    const tasks = await repository().listTasks();
+    const task = tasks.find((t) => t.taskId === taskId);
+    return task?.targetPaths;
+  } catch (err) {
+    logger.warn({ taskId, err }, 'resolveTargetPaths failed; using repo-wide lock scope');
+    return undefined;
   }
 }
 

@@ -13,6 +13,7 @@ import {
   startSession,
   capturePane,
   killSession,
+  paneExitCode,
 } from './tmux-orchestrator.js';
 import { TMUX_BIN } from './tmux-path.js';
 import {
@@ -60,12 +61,27 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
   },
 
   async alive(handle: SubstrateHandle): Promise<boolean> {
+    const sessionName = handle.sessionName ?? handle.ref;
     try {
-      await exec(TMUX_BIN, ['has-session', '-t', handle.sessionName ?? handle.ref]);
-      return true;
+      await exec(TMUX_BIN, ['has-session', '-t', sessionName]);
     } catch {
-      return false;
+      return false; // session entirely gone
     }
+    // Session exists — but with remain-on-exit, a dead pane keeps the session
+    // alive. Check if the pane is actually dead (agent finished/crashed).
+    try {
+      const { stdout: dead } = await exec(TMUX_BIN, [
+        'display-message', '-p', '-t', sessionName, '#{pane_dead}',
+      ]);
+      return dead.trim() !== '1';
+    } catch {
+      return true; // can't query pane state — assume alive (safe default)
+    }
+  },
+
+  async exitCode(handle: SubstrateHandle): Promise<number | null | undefined> {
+    const sessionName = handle.sessionName ?? handle.ref;
+    return paneExitCode(sessionName);
   },
 
   async diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff> {

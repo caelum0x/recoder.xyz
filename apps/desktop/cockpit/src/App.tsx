@@ -13,12 +13,13 @@ import { HealthStrip } from './components/HealthStrip';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
 import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { SessionsPanel } from './components/SessionsPanel';
+import { ConnectorsPanel } from './components/ConnectorsPanel';
 import { SignIn } from './components/SignIn';
 
 const WORKSPACE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
 
-type View = 'board' | 'sessions';
+type View = 'board' | 'sessions' | 'connectors';
 
 export function App() {
   const config = readConfig();
@@ -71,6 +72,7 @@ export function App() {
         <nav class="view-tabs">
           <button class={view === 'board' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('board')}>Board</button>
           <button class={view === 'sessions' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('sessions')}>Sessions</button>
+          <button class={view === 'connectors' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('connectors')}>Connectors</button>
         </nav>
         <div class="topbar-actions">
           <button class="btn btn-ghost btn-sm" onClick={reconcile} disabled={reconciling}>
@@ -128,9 +130,13 @@ export function App() {
             />
           )}
         </main>
-      ) : (
+      ) : view === 'sessions' ? (
         <main class="main">
           <SessionsPanel tmuxBin={tmuxBin} />
+        </main>
+      ) : (
+        <main class="main">
+          <ConnectorsPanel />
         </main>
       )}
 
