@@ -1,5 +1,5 @@
 import type { MethodInfo } from '../method-types.js';
-import { SupportedLanguages, type ParameterTypeClass } from 'recodergit-shared';
+import { SupportedLanguages, type ParameterTypeClass } from '@recoder/recodergit-engine-shared';
 
 /** Languages where class overload signatures are declaration-only contracts
  *  that should collapse to the implementation body's node ID. */

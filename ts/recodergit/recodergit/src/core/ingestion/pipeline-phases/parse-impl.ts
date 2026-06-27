@@ -49,7 +49,7 @@ import {
   type PipelineProgress,
   getLanguageFromFilename,
   SupportedLanguages,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import { readFileContents } from '../filesystem-walker.js';
 import {
   isLanguageAvailable,
@@ -392,7 +392,7 @@ export async function runChunkedParseAndResolve(
    *  Threaded into scope-resolution as a re-extract cache so the warm-
    *  cache analyze run can skip the dominant `extractParsedFile` cost
    *  (otherwise ~58s on a 1000-file repo). */
-  parsedFiles: import('recodergit-shared').ParsedFile[];
+  parsedFiles: import('@recoder/recodergit-engine-shared').ParsedFile[];
 }> {
   const model = createSemanticModel();
   const symbolTable = model.symbols;
@@ -632,7 +632,7 @@ export async function runChunkedParseAndResolve(
   // phase so it can SKIP its own re-extraction on cache hits — this is
   // the second-half of the parse-cache speedup since scope-resolution's
   // re-parse otherwise dominates the warm-cache wall-clock time.
-  const allParsedFiles: import('recodergit-shared').ParsedFile[] = [];
+  const allParsedFiles: import('@recoder/recodergit-engine-shared').ParsedFile[] = [];
 
   // Incremental parse cache (Option B): chunk-level content-addressed.
   // When the chunk's (filePath, content-hash) signature matches a prior

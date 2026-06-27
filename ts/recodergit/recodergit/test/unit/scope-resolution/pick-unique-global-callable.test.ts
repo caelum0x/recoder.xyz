@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import {
   buildGlobalCallableIndex,
   pickUniqueGlobalCallable,

@@ -5,7 +5,7 @@ import type {
   ScopeId,
   ScopeTree,
   TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 export function goBindingScopeFor(
   decl: CaptureMatch,

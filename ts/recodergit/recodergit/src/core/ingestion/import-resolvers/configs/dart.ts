@@ -3,7 +3,7 @@
  * SDK/package strategy first, then relative import strategy (with ./ prepending).
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig, ImportResolverStrategy } from '../types.js';
 import { resolveStandard } from '../standard.js';
 

@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { emitPhpScopeCaptures } from '../../../src/core/ingestion/languages/php/index.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 // ---------------------------------------------------------------------------
 // F53 — comma-separated use statements

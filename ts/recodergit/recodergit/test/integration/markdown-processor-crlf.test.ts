@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest';
 import { processMarkdown } from '../../src/core/ingestion/markdown-processor.js';
 import { createKnowledgeGraph } from '../../src/core/graph/graph.js';
 import { generateId } from '../../src/lib/utils.js';
-import type { GraphNode } from 'recodergit-shared';
+import type { GraphNode } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../src/core/graph/types.js';
 
 function getMarkdownSections(graph: KnowledgeGraph, filePath: string): GraphNode[] {

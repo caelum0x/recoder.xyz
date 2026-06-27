@@ -1,4 +1,4 @@
-import type { ParsedFile, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { isClassLike, populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';
 import { isCompanionScope } from './companion-scopes.js';
 

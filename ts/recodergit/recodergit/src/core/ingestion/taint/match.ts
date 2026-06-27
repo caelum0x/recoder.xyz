@@ -73,7 +73,7 @@
  *   matcher-visible local binding and are skipped by the index.
  */
 
-import type { ParsedImport } from 'recodergit-shared';
+import type { ParsedImport } from '@recoder/recodergit-engine-shared';
 import type { FunctionCfg, SiteRecord } from '../cfg/types.js';
 import type {
   TaintCallResultSourceEntry,

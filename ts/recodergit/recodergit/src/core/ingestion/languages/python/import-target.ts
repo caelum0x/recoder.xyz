@@ -10,7 +10,7 @@
  * `linkStatus: 'unresolved'`.
  */
 
-import type { ParsedImport, WorkspaceIndex } from 'recodergit-shared';
+import type { ParsedImport, WorkspaceIndex } from '@recoder/recodergit-engine-shared';
 import { resolvePythonImportInternal } from '../../import-resolvers/python.js';
 import { recordPythonFileIndexBuild } from './index-stats.js';
 

@@ -1,7 +1,7 @@
 export * as AgentV2 from "./agent"
 
 import { Array, Context, Effect, Layer, Types } from "effect"
-import { Agent } from "@opencode-ai/schema/agent"
+import { Agent } from "@recoder/opencode-schema/agent"
 import { State } from "./state"
 
 export const ID = Agent.ID

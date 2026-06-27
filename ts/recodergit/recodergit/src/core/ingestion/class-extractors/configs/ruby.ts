@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/class-extractors/configs/ruby.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ClassExtractionConfig } from '../../class-types.js';
 
 export const rubyClassConfig: ClassExtractionConfig = {

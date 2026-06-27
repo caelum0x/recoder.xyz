@@ -7,7 +7,7 @@
  * local declarations always shadow imported names.
  */
 
-import type { BindingRef } from 'recodergit-shared';
+import type { BindingRef } from '@recoder/recodergit-engine-shared';
 
 // Named tiers (lower = stronger), matching `languages/swift/merge-bindings.ts`.
 const TIER_LOCAL = 0;

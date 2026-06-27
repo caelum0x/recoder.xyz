@@ -59,7 +59,7 @@
  *     (which also doesn't track type-only separately) is preserved.
  */
 
-import type { BindingRef, NodeLabel } from 'recodergit-shared';
+import type { BindingRef, NodeLabel } from '@recoder/recodergit-engine-shared';
 
 /** Declaration spaces a TypeScript binding can occupy. */
 type Space = 'value' | 'type' | 'namespace';

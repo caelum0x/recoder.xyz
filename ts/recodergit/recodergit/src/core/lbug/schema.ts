@@ -10,10 +10,10 @@
  */
 
 // Import from shared package (single source of truth) — used in DDL templates below
-import { NODE_TABLES, REL_TABLE_NAME, REL_TYPES, EMBEDDING_TABLE_NAME } from 'recodergit-shared';
+import { NODE_TABLES, REL_TABLE_NAME, REL_TYPES, EMBEDDING_TABLE_NAME } from '@recoder/recodergit-engine-shared';
 // Re-export so downstream consumers keep the same import path
 export { NODE_TABLES, REL_TABLE_NAME, REL_TYPES, EMBEDDING_TABLE_NAME };
-export type { NodeTableName, RelType } from 'recodergit-shared';
+export type { NodeTableName, RelType } from '@recoder/recodergit-engine-shared';
 
 // ============================================================================
 // NODE TABLE SCHEMAS

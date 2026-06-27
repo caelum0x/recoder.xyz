@@ -9,7 +9,7 @@
  * per-language pipeline phase file.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolver } from '../contract/scope-resolver.js';
 import { pythonScopeResolver } from '../../languages/python/scope-resolver.js';
 import { csharpScopeResolver } from '../../languages/csharp/scope-resolver.js';

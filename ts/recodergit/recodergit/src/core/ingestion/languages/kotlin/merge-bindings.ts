@@ -1,4 +1,4 @@
-import type { BindingRef } from 'recodergit-shared';
+import type { BindingRef } from '@recoder/recodergit-engine-shared';
 
 function tierOf(binding: BindingRef): number {
   switch (binding.origin) {

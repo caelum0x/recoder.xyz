@@ -19,7 +19,7 @@
  * `linkStatus: 'unresolved'`.
  */
 
-import type { ParsedImport, WorkspaceIndex } from 'recodergit-shared';
+import type { ParsedImport, WorkspaceIndex } from '@recoder/recodergit-engine-shared';
 import type { CSharpProjectConfig, CSharpNamespaceEvidence } from '../../language-config.js';
 import { resolveCSharpImportInternal } from '../../import-resolvers/csharp.js';
 import { buildSuffixIndex, type SuffixIndex } from '../../import-resolvers/utils.js';

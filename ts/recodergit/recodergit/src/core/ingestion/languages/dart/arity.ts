@@ -16,7 +16,7 @@
  * The `ScopeResolver` wires an adapter that flips the order to `(callsite, def)`.
  */
 
-import type { Callsite, SymbolDefinition } from 'recodergit-shared';
+import type { Callsite, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 export function dartArityCompatibility(
   def: SymbolDefinition,

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { DefIndex, SymbolDefinition } from 'recodergit-shared';
+import type { DefIndex, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import {
   buildFieldRegistry,
   buildMethodRegistry,
@@ -16,7 +16,7 @@ import {
   type Scope,
   type ScopeId,
   type TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import { createSemanticModel } from '../../../src/core/ingestion/model/semantic-model.js';
 import { lookupOwnedMembersByOwner } from '../../../src/core/ingestion/model/owned-members-lookup.js';
 

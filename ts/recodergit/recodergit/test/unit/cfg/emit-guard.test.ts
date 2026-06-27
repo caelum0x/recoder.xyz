@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { ParsedFile, ScopeId, Scope } from 'recodergit-shared';
+import type { ParsedFile, ScopeId, Scope } from '@recoder/recodergit-engine-shared';
 import { runScopeResolution } from '../../../src/core/ingestion/scope-resolution/pipeline/run.js';
 import { createKnowledgeGraph } from '../../../src/core/graph/graph.js';
 import { createSemanticModel } from '../../../src/core/ingestion/model/semantic-model.js';

@@ -29,7 +29,7 @@
  * for a given ordered pair), so no local `seen` set is needed.
  */
 
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../../graph/types.js';
 import type { GraphNodeLookup } from '../../scope-resolution/graph-bridge/node-lookup.js';
 import { generateId } from '../../../../lib/utils.js';

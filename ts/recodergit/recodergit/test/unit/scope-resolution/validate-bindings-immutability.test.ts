@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { BindingRef, ScopeId } from 'recodergit-shared';
+import type { BindingRef, ScopeId } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../../src/core/ingestion/model/scope-resolution-indexes.js';
 import { validateBindingsImmutability } from '../../../src/core/ingestion/scope-resolution/pipeline/validate-bindings-immutability.js';
 

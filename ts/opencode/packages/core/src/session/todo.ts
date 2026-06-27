@@ -2,7 +2,7 @@ export * as SessionTodo from "./todo"
 
 import { asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
-import { SessionTodo } from "@opencode-ai/schema/session-todo"
+import { SessionTodo } from "@recoder/opencode-schema/session-todo"
 import { Database } from "../database/database"
 import { EventV2 } from "../event"
 import { SessionSchema } from "./schema"

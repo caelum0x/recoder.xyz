@@ -6,7 +6,7 @@ import type {
   ScopeTree,
   TypeRef,
   NodeLabel,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { SyntaxNode } from '../../utils/ast-helpers.js';
 
 export function rubyBindingScopeFor(

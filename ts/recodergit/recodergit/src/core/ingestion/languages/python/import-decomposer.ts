@@ -11,7 +11,7 @@
  * `ParsedImport` shape — see `interpret.ts`.
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import {
   findChild,
   nodeToCapture,

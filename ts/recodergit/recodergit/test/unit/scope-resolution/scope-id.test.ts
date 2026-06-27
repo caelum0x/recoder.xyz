@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { makeScopeId, clearScopeIdInternPool, type Range, type ScopeKind } from 'recodergit-shared';
+import { makeScopeId, clearScopeIdInternPool, type Range, type ScopeKind } from '@recoder/recodergit-engine-shared';
 
 const r = (startLine: number, startCol: number, endLine: number, endCol: number): Range => ({
   startLine,

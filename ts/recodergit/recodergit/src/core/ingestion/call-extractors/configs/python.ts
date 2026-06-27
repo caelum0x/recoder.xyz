@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/call-extractors/configs/python.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { CallExtractionConfig } from '../../call-types.js';
 
 export const pythonCallConfig: CallExtractionConfig = {

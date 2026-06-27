@@ -9,6 +9,10 @@ vi.mock('child_process', () => ({
 }));
 
 import { sendTmuxShellCommand } from '../src/utils/tmuxSendKeys.js';
+import { tmuxBinFile } from '../src/utils/tmuxBin.js';
+
+// dmux drives the Conductor's pinned tmux binary; assert against the resolver.
+const TMUX = tmuxBinFile();
 
 describe('sendTmuxShellCommand', () => {
   beforeEach(() => {
@@ -22,7 +26,7 @@ describe('sendTmuxShellCommand', () => {
     sendTmuxShellCommand('dmux-demo', commandWithSpaces, 'inherit');
 
     expect(spawnSyncMock).toHaveBeenCalledWith(
-      'tmux',
+      TMUX,
       ['send-keys', '-t', 'dmux-demo', commandWithSpaces, 'Enter'],
       { stdio: 'inherit' }
     );

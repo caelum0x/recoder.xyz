@@ -8,7 +8,7 @@
  * files — the Java equivalent of C#'s `populateNamespaceSiblings`.
  */
 
-import type { BindingRef, ParsedFile, ScopeId, TypeRef } from 'recodergit-shared';
+import type { BindingRef, ParsedFile, ScopeId, TypeRef } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import { isClassLike } from '../../scope-resolution/scope/walkers.js';
 import { getJavaParser } from './query.js';

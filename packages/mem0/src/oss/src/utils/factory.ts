@@ -1,5 +1,5 @@
 // Recoder-owned mem0 factory. Pruned to the providers Recoder ships SDKs for
-// (cloud LLM + Qdrant per docs/agent-os/16-oss-ownership-merge-plan.md). Dropped
+// (cloud LLM + Qdrant per docs/subsystems/README.md §5 OSS fusion stack). Dropped
 // upstream providers that pulled uninstalled deps (cloudflare/vectorize,
 // @azure/search-documents, langchain, supabase, lmstudio, mistral, groq, deepseek).
 // Re-add a provider here together with its dependency in packages/mem0/package.json.

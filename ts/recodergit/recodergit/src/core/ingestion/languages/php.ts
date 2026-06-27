@@ -17,7 +17,7 @@ import {
   phpReceiverBinding,
 } from './php/index.js';
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { phpClassConfig } from '../class-extractors/configs/php.js';
 import { createPhpCfgVisitor } from '../cfg/visitors/php.js';
@@ -37,7 +37,7 @@ import {
   createLeadingDocDescriptionExtractor,
   type SyntaxNode,
 } from '../utils/ast-helpers.js';
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import { createFieldExtractor } from '../field-extractors/generic.js';
 import { phpConfig as phpFieldConfig } from '../field-extractors/configs/php.js';
 import { createMethodExtractor } from '../method-extractors/generic.js';

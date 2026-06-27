@@ -1,4 +1,4 @@
-import type { BindingRef } from 'recodergit-shared';
+import type { BindingRef } from '@recoder/recodergit-engine-shared';
 
 const TIER: Record<BindingRef['origin'], number> = {
   local: 0,

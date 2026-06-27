@@ -1,9 +1,9 @@
-import type { ParsedFile, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import {
   findClassBindingInScope,
   findEnclosingClassDef,
 } from '../../scope-resolution/scope/walkers.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import {
   populateClassOwnedMembers,
   tagNamespacePrefixes,

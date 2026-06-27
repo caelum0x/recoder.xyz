@@ -1,4 +1,4 @@
-import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from 'recodergit-shared';
+import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from '@recoder/recodergit-engine-shared';
 
 export function interpretGoImport(captures: CaptureMatch): ParsedImport | null {
   const kind = captures['@import.kind']?.text;

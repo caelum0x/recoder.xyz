@@ -8,6 +8,7 @@ import { createMockPane } from '../fixtures/mockPanes.js';
 import { createMockContext } from '../fixtures/mockContext.js';
 import { expectNavigation, expectError } from '../helpers/actionAssertions.js';
 import { execSync } from 'child_process';
+import { tmuxCommand } from '../../src/utils/tmuxBin.js';
 
 // Mock child_process
 vi.mock('child_process', () => ({
@@ -36,9 +37,9 @@ describe('viewAction', () => {
 
     const result = await viewPane(mockPane, mockContext);
 
-    // Verify tmux command was called correctly
+    // Verify tmux command was called correctly, routed through the pinned binary.
     expect(execSync).toHaveBeenCalledWith(
-      `tmux select-pane -t '%42'`,
+      tmuxCommand(`tmux select-pane -t '%42'`),
       { stdio: 'pipe' }
     );
 

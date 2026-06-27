@@ -1,7 +1,7 @@
 export * as Reference from "./reference"
 
 import { Context, Effect, Layer, Scope, Types } from "effect"
-import { Reference } from "@opencode-ai/schema/reference"
+import { Reference } from "@recoder/opencode-schema/reference"
 import { Global } from "./global"
 import { EventV2 } from "./event"
 import { Repository } from "./repository"

@@ -90,9 +90,12 @@ const app_keys_js_1 = require("./public-api/routes/app-keys.js");
 const domains_js_1 = require("./public-api/routes/domains.js");
 const a2a_gateway_js_1 = require("./a2a-gateway.js");
 const index_js_5 = require("./agent-os/index.js");
+const conductor_routes_js_1 = require("./conductor/conductor.routes.js");
+const index_js_6 = require("./connectors/index.js");
+const workspace_service_js_1 = require("./conductor/workspace-service.js");
 const outbox_drain_loop_js_1 = require("./agent-os/outbox-drain-loop.js");
 const a2a_openclaw_adapter_js_1 = require("./a2a-openclaw-adapter.js");
-const index_js_6 = require("./a2a/index.js");
+const index_js_7 = require("./a2a/index.js");
 const workspace_routes_js_1 = require("./a2a/workspace.routes.js");
 const memory_routes_js_1 = require("./a2a/memory.routes.js");
 const code_search_routes_js_1 = require("./a2a/code-search.routes.js");
@@ -108,8 +111,8 @@ const openmeter_client_js_1 = require("./metering/openmeter-client.js");
 const zrok_preview_js_1 = require("./zrok-preview.js");
 const daytona_preview_js_1 = require("./daytona-preview.js");
 const daytona_runtime_js_1 = require("./daytona-runtime.js");
-const index_js_7 = require("./a2a/patterns/index.js");
-const index_js_8 = require("./policy/index.js");
+const index_js_8 = require("./a2a/patterns/index.js");
+const index_js_9 = require("./policy/index.js");
 const a2a_intent_worker_js_1 = require("./a2a-intent-worker.js");
 const a2a_agent_workers_js_1 = require("./a2a-agent-workers.js");
 const autonomous_routing_service_js_1 = require("./a2a/autonomous-routing.service.js");
@@ -126,7 +129,7 @@ const resource_optimizer_js_1 = require("./resource-optimizer.js");
 const daytona_client_js_1 = require("./daytona-client.js");
 const daytona_file_ops_js_1 = require("./daytona-file-ops.js");
 const container_recovery_js_1 = require("./container-recovery.js");
-const index_js_9 = require("./templates/index.js");
+const index_js_10 = require("./templates/index.js");
 const opencode_sandbox_js_1 = require("./opencode-sandbox.js");
 const auth_utils_js_1 = require("./auth-utils.js");
 const container_creation_js_1 = require("./container-creation.js");
@@ -137,9 +140,9 @@ const getNetlifyDeploy = () => Promise.resolve().then(() => __importStar(require
 const getCloudflareDeploy = () => Promise.resolve().then(() => __importStar(require('./deployment/cloudflare.js')));
 const middleware_js_1 = require("./public-api/middleware.js");
 const port_manager_js_1 = require("./port-manager.js");
-const index_js_10 = require("./enterprise/index.js");
-const index_js_11 = require("./mobile/index.js");
-const index_js_12 = require("./errors/index.js");
+const index_js_11 = require("./enterprise/index.js");
+const index_js_12 = require("./mobile/index.js");
+const index_js_13 = require("./errors/index.js");
 const subagent_workflow_js_1 = require("./subagent-workflow.js");
 // dotenv.config() is called at the top of this file before other imports
 // ==================== Environment Validation ====================
@@ -291,12 +294,12 @@ async function authenticateWebSocket(ws, req, options = {}) {
         // In migration mode, allow anonymous access with warning
         if (allowAnonymous && !STRICT_AUTH) {
             const anonymousIdentity = getAnonymousFallbackIdentity(req);
-            (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Anonymous WebSocket connection in migration mode', {
+            (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Anonymous WebSocket connection in migration mode', {
                 path: req.path,
             });
             return anonymousIdentity;
         }
-        (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Rejected WebSocket connection without auth token', {
+        (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Rejected WebSocket connection without auth token', {
             path: req.path,
         });
         ws.close(1008, 'Authentication required');
@@ -314,7 +317,7 @@ async function authenticateWebSocket(ws, req, options = {}) {
         negEntry.attempts++;
         // Only log once per NEG_AUTH_LOG_INTERVAL per token
         if (now - negEntry.lastLoggedAt > NEG_AUTH_LOG_INTERVAL) {
-            (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_INVALID_TOKEN, 'Rejected WebSocket connection with invalid token (cached, suppressing spam)', {
+            (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_INVALID_TOKEN, 'Rejected WebSocket connection with invalid token (cached, suppressing spam)', {
                 path: req.path,
                 attempts: negEntry.attempts,
             });
@@ -334,12 +337,12 @@ async function authenticateWebSocket(ws, req, options = {}) {
         // In migration mode, allow with warning
         if (allowAnonymous && !STRICT_AUTH) {
             const anonymousIdentity = getAnonymousFallbackIdentity(req);
-            (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_INVALID_TOKEN, 'Invalid WebSocket token accepted in migration mode', {
+            (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_INVALID_TOKEN, 'Invalid WebSocket token accepted in migration mode', {
                 path: req.path,
             });
             return anonymousIdentity;
         }
-        (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_INVALID_TOKEN, 'Rejected WebSocket connection with invalid token', {
+        (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_INVALID_TOKEN, 'Rejected WebSocket connection with invalid token', {
             path: req.path,
         });
         ws.close(1008, 'Invalid or expired session');
@@ -422,15 +425,15 @@ async function verifySessionToken(token) {
     }
     catch (error) {
         if (error.name === 'AbortError') {
-            (0, index_js_12.logError)({
-                errorCode: index_js_12.ErrorCode.AUTH_SERVICE_ERROR,
+            (0, index_js_13.logError)({
+                errorCode: index_js_13.ErrorCode.AUTH_SERVICE_ERROR,
                 message: 'Better Auth session verification timed out',
                 details: { timeoutMs: 5000 },
             });
         }
         else {
-            (0, index_js_12.logError)({
-                errorCode: index_js_12.ErrorCode.AUTH_SERVICE_ERROR,
+            (0, index_js_13.logError)({
+                errorCode: index_js_13.ErrorCode.AUTH_SERVICE_ERROR,
                 message: 'Error verifying Better Auth session',
                 details: {},
             });
@@ -497,15 +500,15 @@ async function checkProjectOwnership(userId, projectId) {
     }
     catch (error) {
         if (error.name === 'AbortError') {
-            (0, index_js_12.logError)({
-                errorCode: index_js_12.ErrorCode.AUTHZ_SERVICE_ERROR,
+            (0, index_js_13.logError)({
+                errorCode: index_js_13.ErrorCode.AUTHZ_SERVICE_ERROR,
                 message: 'Project ownership check timed out',
                 details: { timeoutMs: 5000 },
             });
         }
         else {
-            (0, index_js_12.logError)({
-                errorCode: index_js_12.ErrorCode.AUTHZ_SERVICE_ERROR,
+            (0, index_js_13.logError)({
+                errorCode: index_js_13.ErrorCode.AUTHZ_SERVICE_ERROR,
                 message: 'Error checking project ownership',
                 details: {},
             });
@@ -583,7 +586,7 @@ function authenticateRequest(req, res, next) {
         if (!STRICT_AUTH && isAllowedOrigin) {
             const anonymousIdentity = getAnonymousFallbackIdentity(req);
             // Migration mode: allow but log warning
-            (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Request without auth token accepted in migration mode', {
+            (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Request without auth token accepted in migration mode', {
                 origin: origin || 'same-origin',
                 method: req.method,
                 path: req.path,
@@ -603,7 +606,7 @@ function authenticateRequest(req, res, next) {
                 (ALLOW_LOCALHOST_ORIGIN && isLocalhostOrigin(origin));
             if (!STRICT_AUTH && isAllowedOrigin) {
                 const anonymousIdentity = getAnonymousFallbackIdentity(req);
-                (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_INVALID_TOKEN, 'Invalid token accepted in migration mode', {
+                (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_INVALID_TOKEN, 'Invalid token accepted in migration mode', {
                     origin: origin || 'same-origin',
                     method: req.method,
                     path: req.path,
@@ -618,15 +621,15 @@ function authenticateRequest(req, res, next) {
         req.sessionId = session.sessionId;
         next();
     }).catch((err) => {
-        (0, index_js_12.logError)({
-            errorCode: index_js_12.ErrorCode.AUTH_SERVICE_ERROR,
+        (0, index_js_13.logError)({
+            errorCode: index_js_13.ErrorCode.AUTH_SERVICE_ERROR,
             message: 'Authentication middleware error',
             details: { error: err.message },
         });
         // Allow in migration mode
         if (!STRICT_AUTH) {
             const anonymousIdentity = getAnonymousFallbackIdentity(req);
-            (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTH_SERVICE_ERROR, 'Auth service error accepted in migration mode', {
+            (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTH_SERVICE_ERROR, 'Auth service error accepted in migration mode', {
                 method: req.method,
                 path: req.path,
             });
@@ -673,7 +676,7 @@ function verifyProjectOwnership(req, res, next) {
     }
     // In migration mode, allow anonymous users
     if (req.userId === 'anonymous' && !STRICT_AUTH) {
-        (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Anonymous project access accepted in migration mode', {
+        (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Anonymous project access accepted in migration mode', {
             projectId: maskIdentifier(projectId),
             method: req.method,
             path: req.path,
@@ -687,7 +690,7 @@ function verifyProjectOwnership(req, res, next) {
         if (!isOwner) {
             // In migration mode, allow but log
             if (!STRICT_AUTH) {
-                (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED, 'Ownership check bypassed in migration mode', {
+                (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED, 'Ownership check bypassed in migration mode', {
                     userId: maskIdentifier(req.userId),
                     projectId: maskIdentifier(projectId),
                     method: req.method,
@@ -695,7 +698,7 @@ function verifyProjectOwnership(req, res, next) {
                 });
                 return next();
             }
-            (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Project access denied', {
+            (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Project access denied', {
                 userId: maskIdentifier(req.userId),
                 projectId: maskIdentifier(projectId),
             });
@@ -703,8 +706,8 @@ function verifyProjectOwnership(req, res, next) {
         }
         next();
     }).catch((err) => {
-        (0, index_js_12.logError)({
-            errorCode: index_js_12.ErrorCode.AUTHZ_SERVICE_ERROR,
+        (0, index_js_13.logError)({
+            errorCode: index_js_13.ErrorCode.AUTHZ_SERVICE_ERROR,
             message: 'Authorization middleware error',
             details: { error: err.message },
         });
@@ -1416,8 +1419,8 @@ app.use((_req, res, next) => {
     next();
 });
 // Add request ID and timing middleware for error tracking
-app.use(index_js_12.requestIdMiddleware);
-app.use(index_js_12.requestTimingMiddleware);
+app.use(index_js_13.requestIdMiddleware);
+app.use(index_js_13.requestTimingMiddleware);
 // Add metrics collection middleware
 app.use((0, metrics_js_1.metricsMiddleware)(metrics_js_1.metricsCollector));
 // Abuse prevention middleware — check IP blocklist on every request
@@ -1896,8 +1899,8 @@ app.get('/health', (_, res) => {
     // A2A subsystem health
     let a2aStatus = { enabled: false };
     try {
-        const sloSummary = (0, index_js_6.getA2ASloMetrics)().getSummary();
-        const heartbeat = (0, index_js_6.getHeartbeatTracker)();
+        const sloSummary = (0, index_js_7.getA2ASloMetrics)().getSummary();
+        const heartbeat = (0, index_js_7.getHeartbeatTracker)();
         const bridgeStats = (0, agent_bridge_service_js_1.getAgentBridgeService)().getStats();
         a2aStatus = {
             enabled: true,
@@ -2255,7 +2258,7 @@ app.get('/api/metrics', metricsAuth, (_, res) => {
     const wsStats = wsKeepalive.getStats();
     const cacheStats = fileCache.getStats();
     const portStats = (0, port_manager_js_1.getPortStats)();
-    const a2aSloSummary = (0, index_js_6.getA2ASloMetrics)().getSummary();
+    const a2aSloSummary = (0, index_js_7.getA2ASloMetrics)().getSummary();
     // Compile comprehensive metrics response
     const metrics = {
         timestamp: metricsSummary.timestamp,
@@ -2391,7 +2394,7 @@ app.get('/api/metrics/prometheus', metricsAuth, (_, res) => {
     lines.push(`recoder_ports_range_max ${portStats.portRange.max}`);
     // A2A SLO metrics
     lines.push('');
-    lines.push((0, index_js_6.getA2ASloMetrics)().getPrometheusFormat());
+    lines.push((0, index_js_7.getA2ASloMetrics)().getPrometheusFormat());
     res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
     res.send(lines.join('\n'));
 });
@@ -3960,7 +3963,7 @@ app.post('/api/workspace/copy', authenticateRequest, async (req, res) => {
                 if (STRICT_AUTH) {
                     return res.status(403).json({ error: 'Access denied: You do not own one or both projects' });
                 }
-                (0, index_js_12.logWarning)(index_js_12.ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED, 'Workspace copy ownership verification bypassed in migration mode', {
+                (0, index_js_13.logWarning)(index_js_13.ErrorCode.AUTHZ_OWNERSHIP_CHECK_FAILED, 'Workspace copy ownership verification bypassed in migration mode', {
                     userId: maskIdentifier(req.userId),
                     sourceProjectId: maskIdentifier(sourceProjectId),
                     targetProjectId: maskIdentifier(targetProjectId),
@@ -7533,121 +7536,6 @@ app.post('/api/git/:projectId/force-push', authenticateRequest, verifyProjectOwn
     }
 });
 // ==================== End Git API ====================
-// ==================== Visual Editing API ====================
-// Apply visual editing changes to source files
-app.post('/api/visual-edit/:projectId/apply', authenticateRequest, verifyProjectOwnership, async (req, res) => {
-    try {
-        const projectId = sanitizeProjectId(req.params.projectId);
-        const { changes } = req.body;
-        if (!changes || !Array.isArray(changes) || changes.length === 0) {
-            return res.status(400).json({ error: 'changes array is required' });
-        }
-        // Validate each change
-        for (const change of changes) {
-            if (!change.filePath || typeof change.filePath !== 'string') {
-                return res.status(400).json({ error: 'Each change must have a filePath' });
-            }
-            if (!change.lineNumber || typeof change.lineNumber !== 'number') {
-                return res.status(400).json({ error: 'Each change must have a lineNumber' });
-            }
-            if (!change.styles || typeof change.styles !== 'object') {
-                return res.status(400).json({ error: 'Each change must have a styles object' });
-            }
-        }
-        const entry = await getOrRecoverContainer(projectId);
-        if (!entry) {
-            return res.status(404).json({ error: 'Container not found' });
-        }
-        entry.lastActive = Date.now();
-        // Dynamically import visual editing transform (avoid loading babel unless needed)
-        const { transformContent } = await Promise.resolve().then(() => __importStar(require('./visual-editing-transform.js')));
-        // Helper: read file from container (routes through Daytona for sandboxes)
-        const readFileFromContainer = async (containerId, filePath) => {
-            if ((0, daytona_file_ops_js_1.isDaytonaSandbox)(entry)) {
-                // filePath is absolute like /workspace/src/App.tsx — convert to relative
-                const relativePath = filePath.startsWith('/workspace/') ? filePath.slice('/workspace/'.length) : filePath.startsWith('/home/daytona/') ? filePath.slice('/home/daytona/'.length) : filePath;
-                return (0, daytona_file_ops_js_1.daytonaReadFile)(containerId, relativePath);
-            }
-            const container = docker.getContainer(containerId);
-            const exec = await container.exec({
-                Cmd: ['cat', filePath],
-                AttachStdout: true,
-                AttachStderr: true,
-            });
-            const stream = await exec.start({ hijack: true, stdin: false });
-            return new Promise((resolve, reject) => {
-                let content = '';
-                stream.on('data', (chunk) => { content += chunk.subarray(8).toString(); });
-                stream.on('end', () => resolve(content));
-                stream.on('error', reject);
-            });
-        };
-        // Helper: write file to container (routes through Daytona for sandboxes)
-        const writeFileToContainer = async (containerId, filePath, content) => {
-            if ((0, daytona_file_ops_js_1.isDaytonaSandbox)(entry)) {
-                const relativePath = filePath.startsWith('/workspace/') ? filePath.slice('/workspace/'.length) : filePath.startsWith('/home/daytona/') ? filePath.slice('/home/daytona/'.length) : filePath;
-                await (0, daytona_file_ops_js_1.daytonaWriteFile)(containerId, relativePath, content);
-                return;
-            }
-            const container = docker.getContainer(containerId);
-            const exec = await container.exec({
-                Cmd: ['sh', '-c', `mkdir -p "$(dirname "${filePath}")" && cat > "${filePath}"`],
-                AttachStdin: true,
-                AttachStdout: true,
-                AttachStderr: true,
-            });
-            const stream = await exec.start({ hijack: true, stdin: true });
-            stream.write(content);
-            stream.end();
-        };
-        // Group changes by file
-        const changesByFile = new Map();
-        for (const change of changes) {
-            const existing = changesByFile.get(change.filePath) || [];
-            existing.push(change);
-            changesByFile.set(change.filePath, existing);
-        }
-        const modifiedFiles = [];
-        const errors = [];
-        for (const [filePath, fileChanges] of changesByFile) {
-            try {
-                // Read file from container
-                const content = await readFileFromContainer(entry.id, `/workspace/${filePath}`);
-                // Transform the content
-                const result = transformContent(content, fileChanges);
-                if (result.success && result.content) {
-                    // Write back to container
-                    await writeFileToContainer(entry.id, `/workspace/${filePath}`, result.content);
-                    modifiedFiles.push(filePath);
-                }
-                else {
-                    errors.push(`${filePath}: ${result.error}`);
-                }
-            }
-            catch (fileErr) {
-                errors.push(`${filePath}: ${fileErr.message}`);
-            }
-        }
-        if (modifiedFiles.length > 0) {
-            res.json({
-                success: true,
-                modifiedFiles,
-                errors: errors.length > 0 ? errors : undefined,
-            });
-        }
-        else {
-            res.status(400).json({
-                success: false,
-                error: errors.join('; ') || 'No files were modified',
-            });
-        }
-    }
-    catch (err) {
-        logger.error({ err }, 'VisualEdit: apply error');
-        res.status(500).json({ error: err.message });
-    }
-});
-// ==================== End Visual Editing API ====================
 // ==================== LSP API ====================
 // Start LSP servers for a project (auto-detect languages)
 app.post('/api/lsp/:projectId/start', authenticateRequest, verifyProjectOwnership, async (req, res) => {
@@ -9416,20 +9304,20 @@ function sanitizeShellToken(token) {
     return token.replace(/[^a-zA-Z0-9_\-\.]/g, '');
 }
 // POST /api/eas-build/:projectId - Trigger an EAS build
-app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { platform, expoToken, profile = 'preview', autoSubmit = false } = req.body;
     if (!platform || !['android', 'ios'].includes(platform)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
     }
     if (!expoToken || typeof expoToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
     }
     const validProfiles = ['development', 'preview', 'production'];
     const safeProfile = validProfiles.includes(profile) ? profile : 'preview';
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         // Ensure eas-cli is available
@@ -9484,7 +9372,7 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
         }
         catch {
             logger.error({ buildOutput }, 'EAS: failed to parse build output');
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `EAS build submitted but failed to parse output. Raw: ${buildOutput.slice(0, 500)}`));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `EAS build submitted but failed to parse output. Raw: ${buildOutput.slice(0, 500)}`));
         }
         const buildId = buildData?.id || buildData?.buildId || `build-${Date.now()}`;
         const expoProjectUrl = buildData?.projectUrl || buildData?.project?.url || null;
@@ -9500,7 +9388,7 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
         };
         easBuilds.set(buildId, buildInfo);
         logger.info({ buildId, projectId, platform, profile: safeProfile }, 'EAS: build submitted');
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             buildId,
             platform,
             status: buildInfo.status,
@@ -9511,21 +9399,21 @@ app.post('/api/eas-build/:projectId', authenticateRequest, verifyProjectOwnershi
     }
     catch (error) {
         logger.error({ err: error, projectId }, 'EAS: failed to start build');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'EAS build failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'EAS build failed'));
     }
 }));
 // GET /api/eas-build/:projectId/:buildId - Check build status
-app.get('/api/eas-build/:projectId/:buildId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/eas-build/:projectId/:buildId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId, buildId } = req.params;
     const expoToken = req.query.expoToken;
     const cached = easBuilds.get(buildId);
     if (!cached || cached.projectId !== projectId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Build not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Build not found'));
     }
     // If terminal status, return cached
     const terminalStatuses = ['finished', 'errored', 'canceled'];
     if (terminalStatuses.includes(cached.status)) {
-        return (0, index_js_12.sendSuccess)(res, cached);
+        return (0, index_js_13.sendSuccess)(res, cached);
     }
     // Poll EAS for updated status
     if (expoToken) {
@@ -9583,16 +9471,16 @@ app.get('/api/eas-build/:projectId/:buildId', authenticateRequest, verifyProject
             }
         }
     }
-    (0, index_js_12.sendSuccess)(res, cached);
+    (0, index_js_13.sendSuccess)(res, cached);
 }));
 // GET /api/eas-builds/:projectId - List builds for a project
-app.get('/api/eas-builds/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/eas-builds/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const projectBuilds = Array.from(easBuilds.values())
         .filter(b => b.projectId === projectId)
         .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
         .slice(0, 10);
-    (0, index_js_12.sendSuccess)(res, projectBuilds);
+    (0, index_js_13.sendSuccess)(res, projectBuilds);
 }));
 const easUpdates = new Map();
 /** Sanitize a message for safe shell interpolation — strip shell metacharacters */
@@ -9600,15 +9488,15 @@ function sanitizeShellMessage(msg) {
     return msg.replace(/["`$\\]/g, '');
 }
 // POST /api/eas-update/:projectId - Push an OTA update
-app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { expoToken, branch = 'preview', message = '' } = req.body;
     if (!expoToken || typeof expoToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         // Ensure eas-cli is available
@@ -9647,7 +9535,7 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
         }
         catch {
             logger.error({ updateOutput }, 'EAS Update: failed to parse update output');
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `EAS update pushed but failed to parse output. Raw: ${updateOutput.slice(0, 500)}`));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `EAS update pushed but failed to parse output. Raw: ${updateOutput.slice(0, 500)}`));
         }
         // Extract update group ID and platforms
         let updateId;
@@ -9677,7 +9565,7 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
         };
         easUpdates.set(updateId, updateInfo);
         logger.info({ updateId, projectId, branch: safeBranch }, 'EAS Update: update pushed');
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             updateId,
             branch: safeBranch,
             message: safeMessage,
@@ -9688,11 +9576,11 @@ app.post('/api/eas-update/:projectId', authenticateRequest, verifyProjectOwnersh
     }
     catch (error) {
         logger.error({ err: error, projectId }, 'EAS Update: failed to push update');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'EAS update failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'EAS update failed'));
     }
 }));
 // GET /api/eas-updates/:projectId - List update history
-app.get('/api/eas-updates/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/eas-updates/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const expoToken = req.query.expoToken;
     const branch = req.query.branch || 'preview';
@@ -9732,21 +9620,21 @@ app.get('/api/eas-updates/:projectId', authenticateRequest, verifyProjectOwnersh
     // Combine: remote updates take precedence, supplement with local
     const remoteIds = new Set(remoteUpdates.map((u) => u.group || u.id));
     const mergedLocal = localUpdates.filter(u => !remoteIds.has(u.updateId));
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         remote: remoteUpdates,
         local: mergedLocal,
     });
 }));
 // POST /api/eas-update/:projectId/rollback - Rollback to previous update
-app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { expoToken, branch = 'preview' } = req.body;
     if (!expoToken || typeof expoToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         const safeToken = sanitizeShellToken(expoToken);
@@ -9765,7 +9653,7 @@ app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProje
             // Not parseable as JSON — might be a message or error
         }
         logger.info({ projectId, branch: safeBranch }, 'EAS Update: rollback completed');
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             branch: safeBranch,
             rolled_back: true,
             details: rollbackData,
@@ -9775,22 +9663,22 @@ app.post('/api/eas-update/:projectId/rollback', authenticateRequest, verifyProje
     catch (error) {
         logger.error({ err: error, projectId }, 'EAS Update: rollback failed');
         // Could be that the command isn't available in this EAS CLI version
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'EAS update rollback failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'EAS update rollback failed'));
     }
 }));
 // ==================== END EAS UPDATE ====================
 // ==================== EAS SHARE (Tier 2: Share Link) ====================
 const easShares = new Map();
 // POST /api/eas-share/:projectId - Push EAS Update to 'shared' branch for sharing
-app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { expoToken, message = 'Shared from Recoder' } = req.body;
     if (!expoToken || typeof expoToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         const safeToken = sanitizeShellToken(expoToken);
@@ -9823,7 +9711,7 @@ app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnershi
         }
         catch {
             logger.error({ updateOutput }, 'EAS Share: failed to parse output');
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Share update pushed but output parse failed. Raw: ${updateOutput.slice(0, 500)}`));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Share update pushed but output parse failed. Raw: ${updateOutput.slice(0, 500)}`));
         }
         let updateId;
         if (Array.isArray(updateData)) {
@@ -9840,40 +9728,40 @@ app.post('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnershi
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareUrl)}&bgcolor=1a1a2e&color=ffffff&format=svg`;
         easShares.set(projectId, { projectId, shareUrl, updateId, createdAt: new Date().toISOString() });
         logger.info({ projectId, updateId }, 'EAS Share: share link created');
-        (0, index_js_12.sendSuccess)(res, { shareUrl, updateId, branch: 'shared', qrUrl });
+        (0, index_js_13.sendSuccess)(res, { shareUrl, updateId, branch: 'shared', qrUrl });
     }
     catch (error) {
         logger.error({ err: error, projectId }, 'EAS Share: failed');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'EAS share failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'EAS share failed'));
     }
 }));
 // GET /api/eas-share/:projectId - Get current share status
-app.get('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/eas-share/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const share = easShares.get(projectId);
     if (share) {
-        (0, index_js_12.sendSuccess)(res, { shared: true, shareUrl: share.shareUrl, updateId: share.updateId });
+        (0, index_js_13.sendSuccess)(res, { shared: true, shareUrl: share.shareUrl, updateId: share.updateId });
     }
     else {
-        (0, index_js_12.sendSuccess)(res, { shared: false });
+        (0, index_js_13.sendSuccess)(res, { shared: false });
     }
 }));
 startupInfo('routes.eas-share', 'registered');
 // ==================== END EAS SHARE ====================
 // ==================== EAS SUBMIT ====================
 // POST /api/eas-submit/:projectId - Submit build to App Store / Play Store
-app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { expoToken, platform, buildId } = req.body;
     if (!expoToken || typeof expoToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing expoToken.'));
     }
     if (!platform || !['android', 'ios'].includes(platform)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         const safeToken = sanitizeShellToken(expoToken);
@@ -9901,39 +9789,39 @@ app.post('/api/eas-submit/:projectId', authenticateRequest, verifyProjectOwnersh
         catch { /* ignore parse errors */ }
         const submitId = submitData?.id || `submit-${Date.now()}`;
         logger.info({ submitId, projectId, platform }, 'EAS Submit: submission completed');
-        (0, index_js_12.sendSuccess)(res, { submitId, status: submitData?.status || 'submitted', platform });
+        (0, index_js_13.sendSuccess)(res, { submitId, status: submitData?.status || 'submitted', platform });
     }
     catch (error) {
         logger.error({ err: error, projectId }, 'EAS Submit: failed');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'EAS submit failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'EAS submit failed'));
     }
 }));
 startupInfo('routes.eas-submit', 'registered');
 // ==================== END EAS SUBMIT ====================
 // ==================== APP CONFIG MANAGEMENT ====================
 // GET /api/app-config/:projectId - Read app.json expo config from container
-app.get('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         const appJsonRaw = await execInContainer(entry.id, 'cat /workspace/app.json 2>/dev/null');
         const appJson = JSON.parse(appJsonRaw);
-        (0, index_js_12.sendSuccess)(res, appJson.expo || appJson);
+        (0, index_js_13.sendSuccess)(res, appJson.expo || appJson);
     }
     catch (error) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Failed to read app.json'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Failed to read app.json'));
     }
 }));
 // PUT /api/app-config/:projectId - Update app.json expo config
-app.put('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.put('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const updates = req.body; // { name?, slug?, version?, icon?, splash?, ios?, android?, scheme? }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         // Read existing app.json
@@ -9959,19 +9847,19 @@ app.put('/api/app-config/:projectId', authenticateRequest, verifyProjectOwnershi
         const newContent = JSON.stringify(appJson, null, 2);
         await execInContainer(entry.id, `cat > /workspace/app.json << 'APPJSONEOF'\n${newContent}\nAPPJSONEOF`);
         logger.info({ projectId }, 'App Config: updated app.json');
-        (0, index_js_12.sendSuccess)(res, expoConfig);
+        (0, index_js_13.sendSuccess)(res, expoConfig);
     }
     catch (error) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Failed to update app.json'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Failed to update app.json'));
     }
 }));
 // PUT /api/eas-config/:projectId - Update eas.json submit config
-app.put('/api/eas-config/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.put('/api/eas-config/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const updates = req.body; // { submit?: { production?: { ios?, android? } } }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         let easJson;
@@ -10001,22 +9889,22 @@ app.put('/api/eas-config/:projectId', authenticateRequest, verifyProjectOwnershi
         const newContent = JSON.stringify(easJson, null, 2);
         await execInContainer(entry.id, `cat > /workspace/eas.json << 'EASJSONEOF'\n${newContent}\nEASJSONEOF`);
         logger.info({ projectId }, 'EAS Config: updated eas.json');
-        (0, index_js_12.sendSuccess)(res, easJson);
+        (0, index_js_13.sendSuccess)(res, easJson);
     }
     catch (error) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Failed to update eas.json'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Failed to update eas.json'));
     }
 }));
 startupInfo('routes.app-config', 'registered');
 // ==================== END APP CONFIG MANAGEMENT ====================
 // ==================== BUILT-IN BACKEND SERVICES ====================
 // POST /api/backend-db/:projectId/init - Initialize SQLite database in container
-app.post('/api/backend-db/:projectId/init', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/backend-db/:projectId/init', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { schema } = req.body; // optional initial SQL schema
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         // Create data directory
@@ -10029,22 +9917,22 @@ app.post('/api/backend-db/:projectId/init', authenticateRequest, verifyProjectOw
             await execInContainer(entry.id, `sqlite3 /workspace/data/app.db '${safeSchema}' 2>&1`);
         }
         logger.info({ projectId }, 'Backend DB: initialized SQLite');
-        (0, index_js_12.sendSuccess)(res, { initialized: true, path: '/workspace/data/app.db' });
+        (0, index_js_13.sendSuccess)(res, { initialized: true, path: '/workspace/data/app.db' });
     }
     catch (error) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Failed to initialize database'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Failed to initialize database'));
     }
 }));
 // POST /api/backend-db/:projectId/query - Run SQL query
-app.post('/api/backend-db/:projectId/query', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/backend-db/:projectId/query', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { query } = req.body;
     if (!query || typeof query !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing query.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing query.'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         const safeQuery = query.replace(/'/g, "'\\''");
@@ -10058,22 +9946,22 @@ app.post('/api/backend-db/:projectId/query', authenticateRequest, verifyProjectO
         catch {
             // Non-JSON output (e.g. INSERT/UPDATE/DELETE)
         }
-        (0, index_js_12.sendSuccess)(res, { rows, rowCount: rows.length });
+        (0, index_js_13.sendSuccess)(res, { rows, rowCount: rows.length });
     }
     catch (error) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Query failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Query failed'));
     }
 }));
 // POST /api/backend-db/:projectId/migrate - Run database migrations
-app.post('/api/backend-db/:projectId/migrate', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/backend-db/:projectId/migrate', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { migrations } = req.body; // [{ name: string, sql: string }]
     if (!Array.isArray(migrations) || migrations.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing migrations array.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing migrations array.'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         // Ensure migrations table exists
@@ -10104,22 +9992,22 @@ app.post('/api/backend-db/:projectId/migrate', authenticateRequest, verifyProjec
             appliedCount++;
         }
         logger.info({ projectId, appliedCount, skippedCount }, 'Backend DB: migrations complete');
-        (0, index_js_12.sendSuccess)(res, { applied: appliedCount, skipped: skippedCount });
+        (0, index_js_13.sendSuccess)(res, { applied: appliedCount, skipped: skippedCount });
     }
     catch (error) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Migration failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Migration failed'));
     }
 }));
 // POST /api/backend-scaffold/:projectId - Generate backend boilerplate
-app.post('/api/backend-scaffold/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/backend-scaffold/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { type, tableName } = req.body; // type: 'auth' | 'stripe' | 'crud'
     if (!type || !['auth', 'stripe', 'crud'].includes(type)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid type. Must be "auth", "stripe", or "crud".'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Invalid type. Must be "auth", "stripe", or "crud".'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         const files = [];
@@ -10267,10 +10155,10 @@ export function remove(id: string) {
             files.push(`src/backend/${name}.ts`);
         }
         logger.info({ type, projectId, files }, 'Backend Scaffold: generated scaffold');
-        (0, index_js_12.sendSuccess)(res, { files, message: `${type} scaffold generated successfully` });
+        (0, index_js_13.sendSuccess)(res, { files, message: `${type} scaffold generated successfully` });
     }
     catch (error) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Scaffold generation failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Scaffold generation failed'));
     }
 }));
 startupInfo('routes.backend-services', 'registered');
@@ -10384,22 +10272,22 @@ function figmaNodeToReactNative(node, indent = 2) {
     return `${pad}<View style={${JSON.stringify(style)}} />`;
 }
 // POST /api/figma-import/:projectId - Import Figma design and convert to RN components
-app.post('/api/figma-import/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/figma-import/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { figmaUrl, figmaToken, nodeIds } = req.body;
     if (!figmaUrl || typeof figmaUrl !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing figmaUrl.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing figmaUrl.'));
     }
     if (!figmaToken || typeof figmaToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing figmaToken.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing figmaToken.'));
     }
     const parsed = parseFigmaUrl(figmaUrl);
     if (!parsed) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid Figma URL. Expected format: https://www.figma.com/file/XXXXX/...'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Invalid Figma URL. Expected format: https://www.figma.com/file/XXXXX/...'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         // Fetch from Figma API
@@ -10413,7 +10301,7 @@ app.post('/api/figma-import/:projectId', authenticateRequest, verifyProjectOwner
         });
         if (!figmaResponse.ok) {
             const errText = await figmaResponse.text();
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Figma API error (${figmaResponse.status}): ${errText.slice(0, 300)}`));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Figma API error (${figmaResponse.status}): ${errText.slice(0, 300)}`));
         }
         const figmaData = await figmaResponse.json();
         // Get nodes to convert
@@ -10430,7 +10318,7 @@ app.post('/api/figma-import/:projectId', authenticateRequest, verifyProjectOwner
             }
         }
         if (nodesToConvert.length === 0) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No convertible nodes found in the Figma file.'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No convertible nodes found in the Figma file.'));
         }
         // Convert each node to a React Native component file
         const files = [];
@@ -10452,11 +10340,11 @@ ${jsxContent}
             files.push(filePath);
         }
         logger.info({ fileCount: files.length, projectId }, 'Figma Import: converted components');
-        (0, index_js_12.sendSuccess)(res, { files, componentCount: files.length });
+        (0, index_js_13.sendSuccess)(res, { files, componentCount: files.length });
     }
     catch (error) {
         logger.error({ err: error, projectId }, 'Figma Import: failed');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Figma import failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Figma import failed'));
     }
 }));
 startupInfo('routes.figma-import', 'registered');
@@ -10464,17 +10352,17 @@ startupInfo('routes.figma-import', 'registered');
 // ==================== APPETIZE.IO DEVICE CLOUD ====================
 const appetizeSessions = new Map();
 // POST /api/appetize-upload/:projectId - Upload build to Appetize.io
-app.post('/api/appetize-upload/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/appetize-upload/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { buildUrl, platform, appetizeApiToken } = req.body;
     if (!buildUrl || typeof buildUrl !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing buildUrl.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing buildUrl.'));
     }
     if (!platform || !['android', 'ios'].includes(platform)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Invalid platform. Must be "android" or "ios".'));
     }
     if (!appetizeApiToken || typeof appetizeApiToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing appetizeApiToken.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing appetizeApiToken.'));
     }
     try {
         logger.info({ platform, projectId }, 'Appetize: uploading build');
@@ -10491,33 +10379,33 @@ app.post('/api/appetize-upload/:projectId', authenticateRequest, verifyProjectOw
         });
         if (!appetizeResponse.ok) {
             const errText = await appetizeResponse.text();
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Appetize API error (${appetizeResponse.status}): ${errText.slice(0, 300)}`));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Appetize API error (${appetizeResponse.status}): ${errText.slice(0, 300)}`));
         }
         const appetizeData = await appetizeResponse.json();
         const publicKey = appetizeData.publicKey || appetizeData.appVersions?.[0]?.publicKey;
         if (!publicKey) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Appetize upload succeeded but no publicKey returned'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Appetize upload succeeded but no publicKey returned'));
         }
         const appUrl = `https://appetize.io/app/${publicKey}`;
         const embedUrl = `https://appetize.io/embed/${publicKey}`;
         appetizeSessions.set(projectId, { publicKey, appUrl, platform, projectId });
         logger.info({ projectId, publicKey }, 'Appetize: upload complete');
-        (0, index_js_12.sendSuccess)(res, { publicKey, appUrl, embedUrl });
+        (0, index_js_13.sendSuccess)(res, { publicKey, appUrl, embedUrl });
     }
     catch (error) {
         logger.error({ err: error, projectId }, 'Appetize: upload failed');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Appetize upload failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Appetize upload failed'));
     }
 }));
 // GET /api/appetize-status/:projectId - Get current Appetize session
-app.get('/api/appetize-status/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/appetize-status/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const session = appetizeSessions.get(projectId);
     if (session) {
-        (0, index_js_12.sendSuccess)(res, { active: true, ...session, embedUrl: `https://appetize.io/embed/${session.publicKey}` });
+        (0, index_js_13.sendSuccess)(res, { active: true, ...session, embedUrl: `https://appetize.io/embed/${session.publicKey}` });
     }
     else {
-        (0, index_js_12.sendSuccess)(res, { active: false });
+        (0, index_js_13.sendSuccess)(res, { active: false });
     }
 }));
 startupInfo('routes.appetize', 'registered');
@@ -10548,32 +10436,32 @@ function canvasElementToReactNative(element, indent = 4) {
     }
 }
 // POST /api/canvas-connect/:projectId - Check if OpenClaw Canvas is available
-app.post('/api/canvas-connect/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/canvas-connect/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { canvasHostUrl } = req.body;
     const gatewayUrl = canvasHostUrl || PUBLIC_OPENCLAW_GATEWAY_URL;
     try {
         const healthCheck = await fetch(`${gatewayUrl}/health`, { signal: AbortSignal.timeout(3000) });
         if (healthCheck.ok) {
-            (0, index_js_12.sendSuccess)(res, { connected: true, canvasUrl: gatewayUrl });
+            (0, index_js_13.sendSuccess)(res, { connected: true, canvasUrl: gatewayUrl });
         }
         else {
-            (0, index_js_12.sendSuccess)(res, { connected: false, error: 'Canvas health check failed' });
+            (0, index_js_13.sendSuccess)(res, { connected: false, error: 'Canvas health check failed' });
         }
     }
     catch {
-        (0, index_js_12.sendSuccess)(res, { connected: false, error: 'Canvas not reachable' });
+        (0, index_js_13.sendSuccess)(res, { connected: false, error: 'Canvas not reachable' });
     }
 }));
 // POST /api/canvas-generate/:projectId - Convert canvas elements to React Native
-app.post('/api/canvas-generate/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/canvas-generate/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const { elements } = req.body;
     if (!Array.isArray(elements) || elements.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing elements array.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing elements array.'));
     }
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         const files = [];
@@ -10595,11 +10483,11 @@ ${jsxContent}
             files.push(filePath);
         }
         logger.info({ fileCount: files.length, projectId }, 'Canvas: generated components');
-        (0, index_js_12.sendSuccess)(res, { files });
+        (0, index_js_13.sendSuccess)(res, { files });
     }
     catch (error) {
         logger.error({ err: error, projectId }, 'Canvas: generation failed');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, 'Canvas generation failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, 'Canvas generation failed'));
     }
 }));
 startupInfo('routes.openclaw-canvas', 'registered');
@@ -10845,7 +10733,7 @@ app.delete('/api/code-index/:projectId', authenticateRequest, verifyProjectOwner
 });
 // ==================== END CODE INDEX ====================
 // ==================== SUBAGENT WORKFLOW ====================
-app.post('/api/agent/workflow', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/agent/workflow', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { requestContract, task, paths, lanes, continuous, retryMax, retryBackoffMs } = (0, subagent_workflow_js_1.parseSubagentWorkflowRequest)(req.body);
     const contractValidation = (0, subagent_workflow_js_1.validateSubagentWorkflowRequestContract)(requestContract, subagent_workflow_js_1.INTERNAL_WORKFLOW_CONTRACT);
     if (!contractValidation.ok) {
@@ -10861,7 +10749,7 @@ app.post('/api/agent/workflow', authenticateRequest, (0, index_js_12.asyncHandle
     });
     return res.json((0, subagent_workflow_js_1.buildInternalWorkflowResponse)({ workflow, requestContract }));
 }));
-app.post('/api/agent/workflow/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/agent/workflow/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { requestContract, task, paths, lanes, continuous, retryMax, retryBackoffMs } = (0, subagent_workflow_js_1.parseSubagentWorkflowRequest)(req.body);
     const contractValidation = (0, subagent_workflow_js_1.validateSubagentWorkflowRequestContract)(requestContract, subagent_workflow_js_1.INTERNAL_WORKFLOW_CONTRACT);
     if (!contractValidation.ok) {
@@ -10881,11 +10769,11 @@ app.post('/api/agent/workflow/:projectId', authenticateRequest, verifyProjectOwn
         requestContract,
     }));
 }));
-app.post('/api/v1/agent/workflow', index_js_12.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (req, res) => {
+app.post('/api/v1/agent/workflow', index_js_13.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (req, res) => {
     const { requestContract, task, paths, lanes, continuous, retryMax, retryBackoffMs } = (0, subagent_workflow_js_1.parseSubagentWorkflowRequest)(req.body);
     const contractValidation = (0, subagent_workflow_js_1.validateSubagentWorkflowRequestContract)(requestContract, subagent_workflow_js_1.PUBLIC_WORKFLOW_CONTRACT);
     if (!contractValidation.ok) {
-        (0, index_js_12.sendError)(res, index_js_12.ErrorCode.VALIDATION_ERROR, {
+        (0, index_js_13.sendError)(res, index_js_13.ErrorCode.VALIDATION_ERROR, {
             message: contractValidation.error?.error || 'Invalid workflow request contract',
             details: contractValidation.error,
         });
@@ -10899,7 +10787,7 @@ app.post('/api/v1/agent/workflow', index_js_12.requestIdMiddleware, middleware_j
         retryMax,
         retryBackoffMs,
     });
-    (0, index_js_12.sendSuccess)(res, (0, subagent_workflow_js_1.buildPublicWorkflowResponseData)({ workflow, requestContract }));
+    (0, index_js_13.sendSuccess)(res, (0, subagent_workflow_js_1.buildPublicWorkflowResponseData)({ workflow, requestContract }));
 }));
 // Lane status store (in-memory)
 const laneStatusStore = new Map();
@@ -10964,7 +10852,7 @@ function resolveLaneHealthSnapshot(workflowRunId) {
         lanes,
     };
 }
-app.post('/api/agent/workflow/:laneId/status', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/agent/workflow/:laneId/status', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { laneId } = req.params;
     if (!(0, subagent_workflow_js_1.isKnownSubagentLaneId)(laneId)) {
         return res.status(400).json({ error: 'Invalid lane id.' });
@@ -10981,7 +10869,7 @@ app.post('/api/agent/workflow/:laneId/status', authenticateRequest, (0, index_js
         contract: subagent_workflow_js_1.INTERNAL_WORKFLOW_CONTRACT,
     });
 }));
-app.get('/api/agent/workflow/health', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/agent/workflow/health', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const workflowRunId = String(req.query.workflowRunId || '').trim() || undefined;
     const snapshot = resolveLaneHealthSnapshot(workflowRunId);
     return res.json({
@@ -10991,7 +10879,7 @@ app.get('/api/agent/workflow/health', authenticateRequest, (0, index_js_12.async
         ...snapshot,
     });
 }));
-app.post('/api/agent/workflow/health/reset', authenticateRequest, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.post('/api/agent/workflow/health/reset', authenticateRequest, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const cleared = laneStatusStore.size;
     laneStatusStore.clear();
     return res.json({
@@ -11000,44 +10888,44 @@ app.post('/api/agent/workflow/health/reset', authenticateRequest, (0, index_js_1
         cleared,
     });
 }));
-app.post('/api/v1/agent/workflow/:laneId/status', index_js_12.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (req, res) => {
+app.post('/api/v1/agent/workflow/:laneId/status', index_js_13.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (req, res) => {
     const { laneId } = req.params;
     if (!(0, subagent_workflow_js_1.isKnownSubagentLaneId)(laneId)) {
-        (0, index_js_12.sendError)(res, index_js_12.ErrorCode.VALIDATION_ERROR, { message: 'Invalid lane id.' });
+        (0, index_js_13.sendError)(res, index_js_13.ErrorCode.VALIDATION_ERROR, { message: 'Invalid lane id.' });
         return;
     }
     const parsed = parseLaneStatusBody(req.body);
     if (!parsed.status) {
-        (0, index_js_12.sendError)(res, index_js_12.ErrorCode.VALIDATION_ERROR, { message: 'Invalid status. Must be running, completed, or failed.' });
+        (0, index_js_13.sendError)(res, index_js_13.ErrorCode.VALIDATION_ERROR, { message: 'Invalid status. Must be running, completed, or failed.' });
         return;
     }
     upsertLaneStatus(laneId, parsed);
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         acknowledged: true,
         laneId,
         contract: subagent_workflow_js_1.PUBLIC_WORKFLOW_HEALTH_CONTRACT,
     });
 }));
-app.get('/api/v1/agent/workflow/health', index_js_12.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (req, res) => {
+app.get('/api/v1/agent/workflow/health', index_js_13.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (req, res) => {
     const workflowRunId = String(req.query.workflowRunId || '').trim() || undefined;
     const snapshot = resolveLaneHealthSnapshot(workflowRunId);
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         contract: subagent_workflow_js_1.PUBLIC_WORKFLOW_HEALTH_CONTRACT,
         ...(workflowRunId ? { workflowRunId } : {}),
         ...snapshot,
     });
 }));
-app.post('/api/v1/agent/workflow/health/reset', index_js_12.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (_req, res) => {
+app.post('/api/v1/agent/workflow/health/reset', index_js_13.requestIdMiddleware, middleware_js_1.authenticateApiKey, (0, middleware_js_1.requireScope)('projects:read'), (0, middleware_js_1.asyncApiHandler)(async (_req, res) => {
     const cleared = laneStatusStore.size;
     laneStatusStore.clear();
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         contract: subagent_workflow_js_1.PUBLIC_WORKFLOW_CONTRACT,
         cleared,
     });
 }));
 // ==================== END SUBAGENT WORKFLOW ====================
 // ==================== DATABASE EXPLORER ====================
-const index_js_13 = require("./database/index.js");
+const index_js_14 = require("./database/index.js");
 // Rate limit for database operations
 const databaseLimiter = (0, express_rate_limit_1.default)({
     windowMs: 60 * 1000, // 1 minute
@@ -11059,7 +10947,7 @@ app.post('/api/database/:projectId/connect', databaseLimiter, authenticateReques
         // Get workspace path for SQLite path validation
         const entry = await getOrRecoverContainer(projectId);
         const basePath = entry ? '/workspace' : '/tmp';
-        const result = await index_js_13.connectionManager.connect(projectId, params, basePath);
+        const result = await index_js_14.connectionManager.connect(projectId, params, basePath);
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });
         }
@@ -11088,7 +10976,7 @@ app.delete('/api/database/:projectId/disconnect/:connectionId', authenticateRequ
         return res.status(400).json({ error: 'Connection ID required' });
     }
     try {
-        const result = await index_js_13.connectionManager.disconnect(connectionId, projectId);
+        const result = await index_js_14.connectionManager.disconnect(connectionId, projectId);
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });
         }
@@ -11108,7 +10996,7 @@ app.delete('/api/database/:projectId/disconnect/:connectionId', authenticateRequ
 app.get('/api/database/:projectId/connections', authenticateRequest, verifyProjectOwnership, async (req, res) => {
     const { projectId } = req.params;
     try {
-        const connections = index_js_13.connectionManager.getProjectConnections(projectId);
+        const connections = index_js_14.connectionManager.getProjectConnections(projectId);
         res.json({
             success: true,
             connections: connections.map((c) => ({
@@ -11132,7 +11020,7 @@ app.get('/api/database/:projectId/tables', authenticateRequest, verifyProjectOwn
         return res.status(400).json({ error: 'Connection ID required' });
     }
     try {
-        const result = await index_js_13.schemaInspector.getSchemaOverview(connectionId, projectId, typeof schema === 'string' ? schema : undefined);
+        const result = await index_js_14.schemaInspector.getSchemaOverview(connectionId, projectId, typeof schema === 'string' ? schema : undefined);
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });
         }
@@ -11156,7 +11044,7 @@ app.get('/api/database/:projectId/schema/:table', authenticateRequest, verifyPro
         return res.status(400).json({ error: 'Table name required' });
     }
     try {
-        const result = await index_js_13.schemaInspector.getTableDetails(connectionId, projectId, table, typeof schema === 'string' ? schema : undefined);
+        const result = await index_js_14.schemaInspector.getTableDetails(connectionId, projectId, table, typeof schema === 'string' ? schema : undefined);
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });
         }
@@ -11180,7 +11068,7 @@ app.get('/api/database/:projectId/preview/:table', authenticateRequest, verifyPr
         return res.status(400).json({ error: 'Table name required' });
     }
     try {
-        const result = await index_js_13.schemaInspector.previewTable(connectionId, projectId, table, typeof schema === 'string' ? schema : undefined, typeof limit === 'string' ? parseInt(limit, 10) : 100);
+        const result = await index_js_14.schemaInspector.previewTable(connectionId, projectId, table, typeof schema === 'string' ? schema : undefined, typeof limit === 'string' ? parseInt(limit, 10) : 100);
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });
         }
@@ -11210,7 +11098,7 @@ app.post('/api/database/:projectId/query', databaseLimiter, authenticateRequest,
         return res.status(400).json({ error: 'Query params must be an array for parameterized queries' });
     }
     try {
-        const result = await index_js_13.queryExecutor.execute({
+        const result = await index_js_14.queryExecutor.execute({
             connectionId,
             projectId,
             query,
@@ -11259,7 +11147,7 @@ app.get('/api/database/:projectId/schemas', authenticateRequest, verifyProjectOw
         return res.status(400).json({ error: 'Connection ID required' });
     }
     try {
-        const result = await index_js_13.schemaInspector.listSchemas(connectionId, projectId);
+        const result = await index_js_14.schemaInspector.listSchemas(connectionId, projectId);
         if (!result.success) {
             return res.status(400).json({ success: false, error: result.error });
         }
@@ -11275,8 +11163,8 @@ app.get('/api/database/:projectId/schemas', authenticateRequest, verifyProjectOw
 // Get database connection statistics
 app.get('/api/database/stats', authenticateRequest, (_req, res) => {
     try {
-        const connectionStats = index_js_13.connectionManager.getStats();
-        const queryStats = index_js_13.queryExecutor.getStats();
+        const connectionStats = index_js_14.connectionManager.getStats();
+        const queryStats = index_js_14.queryExecutor.getStats();
         res.json({
             success: true,
             connections: connectionStats,
@@ -11289,12 +11177,12 @@ app.get('/api/database/stats', authenticateRequest, (_req, res) => {
 });
 // ==================== END DATABASE EXPLORER ====================
 // ==================== DEBUG ADAPTER PROTOCOL (DAP) ====================
-const index_js_14 = require("./debug/index.js");
+const index_js_15 = require("./debug/index.js");
 // Track debug event WebSocket clients per project
 const debugEventClients = new Map();
 // Forward debug events to WebSocket clients
-index_js_14.debugManager.on('debugEvent', (event) => {
-    const session = index_js_14.debugManager.getSession(event.sessionId);
+index_js_15.debugManager.on('debugEvent', (event) => {
+    const session = index_js_15.debugManager.getSession(event.sessionId);
     if (!session)
         return;
     const clients = debugEventClients.get(session.projectId);
@@ -11349,7 +11237,7 @@ app.post('/api/debug/:projectId/start', authenticateRequest, verifyProjectOwners
             env: env && typeof env === 'object' ? env : undefined,
             stopOnEntry: Boolean(stopOnEntry),
         };
-        const session = await index_js_14.debugManager.startSession(projectId, entry.id, config);
+        const session = await index_js_15.debugManager.startSession(projectId, entry.id, config);
         res.json({
             success: true,
             sessionId: session.id,
@@ -11371,7 +11259,7 @@ app.post('/api/debug/:projectId/stop', authenticateRequest, verifyProjectOwnersh
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
@@ -11385,7 +11273,7 @@ app.post('/api/debug/:projectId/stop', authenticateRequest, verifyProjectOwnersh
             details: { sessionId },
             ip: req.ip,
         });
-        await index_js_14.debugManager.terminateSession(sessionId);
+        await index_js_15.debugManager.terminateSession(sessionId);
         res.json({ success: true });
     }
     catch (err) {
@@ -11401,7 +11289,7 @@ app.post('/api/debug/:projectId/restart', authenticateRequest, verifyProjectOwne
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
@@ -11415,7 +11303,7 @@ app.post('/api/debug/:projectId/restart', authenticateRequest, verifyProjectOwne
             details: { sessionId },
             ip: req.ip,
         });
-        await index_js_14.debugManager.restart(sessionId);
+        await index_js_15.debugManager.restart(sessionId);
         res.json({
             success: true,
             session: {
@@ -11434,7 +11322,7 @@ app.post('/api/debug/:projectId/restart', authenticateRequest, verifyProjectOwne
 app.get('/api/debug/:projectId/sessions', authenticateRequest, verifyProjectOwnership, async (req, res) => {
     try {
         const projectId = sanitizeProjectId(req.params.projectId);
-        const sessions = index_js_14.debugManager.getProjectSessions(projectId);
+        const sessions = index_js_15.debugManager.getProjectSessions(projectId);
         res.json({
             success: true,
             sessions: sessions.map(s => ({
@@ -11466,7 +11354,7 @@ app.post('/api/debug/:projectId/breakpoints', authenticateRequest, verifyProject
         if (!Array.isArray(breakpoints)) {
             return res.status(400).json({ error: 'breakpoints must be an array' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
@@ -11486,7 +11374,7 @@ app.post('/api/debug/:projectId/breakpoints', authenticateRequest, verifyProject
                 logMessage: typeof bp.logMessage === 'string' ? bp.logMessage : undefined,
             };
         });
-        const verified = await index_js_14.debugManager.setBreakpoints(sessionId, sanitizePath(filePath), sourceBreakpoints);
+        const verified = await index_js_15.debugManager.setBreakpoints(sessionId, sanitizePath(filePath), sourceBreakpoints);
         res.json({
             success: true,
             breakpoints: verified,
@@ -11508,14 +11396,14 @@ app.delete('/api/debug/:projectId/breakpoints', authenticateRequest, verifyProje
         if (!filePath || typeof filePath !== 'string') {
             return res.status(400).json({ error: 'filePath is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        await index_js_14.debugManager.clearBreakpoints(sessionId, sanitizePath(filePath));
+        await index_js_15.debugManager.clearBreakpoints(sessionId, sanitizePath(filePath));
         res.json({ success: true });
     }
     catch (err) {
@@ -11531,14 +11419,14 @@ app.post('/api/debug/:projectId/continue', authenticateRequest, verifyProjectOwn
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        await index_js_14.debugManager.continue(sessionId, typeof threadId === 'number' ? threadId : undefined);
+        await index_js_15.debugManager.continue(sessionId, typeof threadId === 'number' ? threadId : undefined);
         res.json({ success: true });
     }
     catch (err) {
@@ -11554,14 +11442,14 @@ app.post('/api/debug/:projectId/stepOver', authenticateRequest, verifyProjectOwn
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        await index_js_14.debugManager.stepOver(sessionId, typeof threadId === 'number' ? threadId : undefined);
+        await index_js_15.debugManager.stepOver(sessionId, typeof threadId === 'number' ? threadId : undefined);
         res.json({ success: true });
     }
     catch (err) {
@@ -11577,14 +11465,14 @@ app.post('/api/debug/:projectId/stepInto', authenticateRequest, verifyProjectOwn
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        await index_js_14.debugManager.stepInto(sessionId, typeof threadId === 'number' ? threadId : undefined);
+        await index_js_15.debugManager.stepInto(sessionId, typeof threadId === 'number' ? threadId : undefined);
         res.json({ success: true });
     }
     catch (err) {
@@ -11600,14 +11488,14 @@ app.post('/api/debug/:projectId/stepOut', authenticateRequest, verifyProjectOwne
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        await index_js_14.debugManager.stepOut(sessionId, typeof threadId === 'number' ? threadId : undefined);
+        await index_js_15.debugManager.stepOut(sessionId, typeof threadId === 'number' ? threadId : undefined);
         res.json({ success: true });
     }
     catch (err) {
@@ -11623,14 +11511,14 @@ app.post('/api/debug/:projectId/pause', authenticateRequest, verifyProjectOwners
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        await index_js_14.debugManager.pause(sessionId, typeof threadId === 'number' ? threadId : undefined);
+        await index_js_15.debugManager.pause(sessionId, typeof threadId === 'number' ? threadId : undefined);
         res.json({ success: true });
     }
     catch (err) {
@@ -11646,14 +11534,14 @@ app.get('/api/debug/:projectId/threads', authenticateRequest, verifyProjectOwner
         if (!sessionId || typeof sessionId !== 'string') {
             return res.status(400).json({ error: 'sessionId query parameter is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        const threads = await index_js_14.debugManager.getThreads(sessionId);
+        const threads = await index_js_15.debugManager.getThreads(sessionId);
         res.json({
             success: true,
             threads,
@@ -11675,14 +11563,14 @@ app.get('/api/debug/:projectId/stacktrace', authenticateRequest, verifyProjectOw
         if (!threadId || isNaN(Number(threadId))) {
             return res.status(400).json({ error: 'threadId query parameter is required (number)' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        const stackFrames = await index_js_14.debugManager.getStackTrace(sessionId, Number(threadId));
+        const stackFrames = await index_js_15.debugManager.getStackTrace(sessionId, Number(threadId));
         res.json({
             success: true,
             stackFrames,
@@ -11704,14 +11592,14 @@ app.get('/api/debug/:projectId/scopes', authenticateRequest, verifyProjectOwners
         if (!frameId || isNaN(Number(frameId))) {
             return res.status(400).json({ error: 'frameId query parameter is required (number)' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        const scopes = await index_js_14.debugManager.getScopes(sessionId, Number(frameId));
+        const scopes = await index_js_15.debugManager.getScopes(sessionId, Number(frameId));
         res.json({
             success: true,
             scopes,
@@ -11733,14 +11621,14 @@ app.get('/api/debug/:projectId/variables', authenticateRequest, verifyProjectOwn
         if (!variablesReference || isNaN(Number(variablesReference))) {
             return res.status(400).json({ error: 'variablesReference query parameter is required (number)' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
         if (session.projectId !== projectId) {
             return res.status(403).json({ error: 'Session does not belong to this project' });
         }
-        const variables = await index_js_14.debugManager.getVariables(sessionId, Number(variablesReference));
+        const variables = await index_js_15.debugManager.getVariables(sessionId, Number(variablesReference));
         res.json({
             success: true,
             variables,
@@ -11762,7 +11650,7 @@ app.post('/api/debug/:projectId/evaluate', authenticateRequest, verifyProjectOwn
         if (!expression || typeof expression !== 'string') {
             return res.status(400).json({ error: 'expression is required' });
         }
-        const session = index_js_14.debugManager.getSession(sessionId);
+        const session = index_js_15.debugManager.getSession(sessionId);
         if (!session) {
             return res.status(404).json({ error: 'Debug session not found' });
         }
@@ -11771,7 +11659,7 @@ app.post('/api/debug/:projectId/evaluate', authenticateRequest, verifyProjectOwn
         }
         const validContexts = ['watch', 'repl', 'hover'];
         const evalContext = validContexts.includes(context) ? context : 'repl';
-        const result = await index_js_14.debugManager.evaluate(sessionId, expression, typeof frameId === 'number' ? frameId : undefined, evalContext);
+        const result = await index_js_15.debugManager.evaluate(sessionId, expression, typeof frameId === 'number' ? frameId : undefined, evalContext);
         res.json({
             success: true,
             result: result.result,
@@ -11787,7 +11675,7 @@ app.post('/api/debug/:projectId/evaluate', authenticateRequest, verifyProjectOwn
 // Get debug manager stats
 app.get('/api/debug/stats', authenticateRequest, (_req, res) => {
     try {
-        const stats = index_js_14.debugManager.getStats();
+        const stats = index_js_15.debugManager.getStats();
         res.json({
             success: true,
             stats,
@@ -11817,7 +11705,7 @@ app.ws('/api/debug/:projectId/events', async (ws, req) => {
     }
     debugEventClients.get(projectId).add(ws);
     // Send current sessions info
-    const sessions = index_js_14.debugManager.getProjectSessions(projectId);
+    const sessions = index_js_15.debugManager.getProjectSessions(projectId);
     if (ws.readyState === ws_1.default.OPEN) {
         ws.send(JSON.stringify({
             type: 'sessions',
@@ -12321,15 +12209,15 @@ const mobileApiConfig = {
         key: process.env.APNS_KEY || '',
     } : undefined,
 };
-(0, index_js_11.initializeMobileApi)(mobileApiConfig);
+(0, index_js_12.initializeMobileApi)(mobileApiConfig);
 // Create and mount mobile API router
-const mobileRouter = (0, index_js_11.createMobileApiRouter)(mobileApiDependencies);
+const mobileRouter = (0, index_js_12.createMobileApiRouter)(mobileApiDependencies);
 app.use('/api/mobile', mobileRouter);
 startupInfo('routes.mobile', 'mounted', { basePath: '/api/mobile' });
 // Mobile API stats endpoint
 app.get('/api/mobile/stats', authenticateRequest, (_req, res) => {
     try {
-        const stats = (0, index_js_11.getMobileApiStats)();
+        const stats = (0, index_js_12.getMobileApiStats)();
         res.json({
             success: true,
             stats,
@@ -12354,116 +12242,116 @@ function buildAuditActor(req) {
     };
 }
 // List organizations for current user
-app.get('/api/organizations', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
-    const organizations = (0, index_js_10.listUserOrganizations)(userId);
-    (0, index_js_12.sendSuccess)(res, { organizations });
+    const organizations = (0, index_js_11.listUserOrganizations)(userId);
+    (0, index_js_13.sendSuccess)(res, { organizations });
 }));
 // Create organization
-app.post('/api/organizations', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { name, slug, settings } = req.body;
-    const organization = (0, index_js_10.createOrganization)({
+    const organization = (0, index_js_11.createOrganization)({
         name,
         slug,
         ownerId: userId,
         settings,
     });
     // Log audit event
-    (0, index_js_10.logOrganizationAction)(organization.id, index_js_10.AuditAction.ORG_CREATED, buildAuditActor(req), organization.name);
-    (0, index_js_12.sendSuccess)(res, { organization }, { statusCode: 201 });
+    (0, index_js_11.logOrganizationAction)(organization.id, index_js_11.AuditAction.ORG_CREATED, buildAuditActor(req), organization.name);
+    (0, index_js_13.sendSuccess)(res, { organization }, { statusCode: 201 });
 }));
 // Get organization by ID
-app.get('/api/organizations/:orgId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const organization = (0, index_js_10.getOrganization)(orgId, userId);
-    (0, index_js_12.sendSuccess)(res, { organization });
+    const organization = (0, index_js_11.getOrganization)(orgId, userId);
+    (0, index_js_13.sendSuccess)(res, { organization });
 }));
 // Update organization
-app.put('/api/organizations/:orgId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.put('/api/organizations/:orgId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const input = req.body;
-    const oldOrg = (0, index_js_10.getOrganization)(orgId, userId);
-    const organization = (0, index_js_10.updateOrganization)(orgId, userId, input);
+    const oldOrg = (0, index_js_11.getOrganization)(orgId, userId);
+    const organization = (0, index_js_11.updateOrganization)(orgId, userId, input);
     // Log audit event
-    (0, index_js_10.logOrganizationAction)(organization.id, index_js_10.AuditAction.ORG_UPDATED, buildAuditActor(req), organization.name, [
+    (0, index_js_11.logOrganizationAction)(organization.id, index_js_11.AuditAction.ORG_UPDATED, buildAuditActor(req), organization.name, [
         ...(input.name && input.name !== oldOrg.name ? [{ field: 'name', oldValue: oldOrg.name, newValue: input.name }] : []),
         ...(input.slug && input.slug !== oldOrg.slug ? [{ field: 'slug', oldValue: oldOrg.slug, newValue: input.slug }] : []),
     ]);
-    (0, index_js_12.sendSuccess)(res, { organization });
+    (0, index_js_13.sendSuccess)(res, { organization });
 }));
 // Delete organization
-app.delete('/api/organizations/:orgId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/organizations/:orgId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const org = (0, index_js_10.getOrganization)(orgId, userId);
-    (0, index_js_10.deleteOrganization)(orgId, userId);
+    const org = (0, index_js_11.getOrganization)(orgId, userId);
+    (0, index_js_11.deleteOrganization)(orgId, userId);
     // Log audit event
-    (0, index_js_10.logOrganizationAction)(orgId, index_js_10.AuditAction.ORG_DELETED, buildAuditActor(req), org.name);
-    (0, index_js_12.sendSuccess)(res, { message: 'Organization deleted' });
+    (0, index_js_11.logOrganizationAction)(orgId, index_js_11.AuditAction.ORG_DELETED, buildAuditActor(req), org.name);
+    (0, index_js_13.sendSuccess)(res, { message: 'Organization deleted' });
 }));
 // Transfer organization ownership
-app.post('/api/organizations/:orgId/transfer', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/transfer', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { newOwnerId } = req.body;
     if (!newOwnerId) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'newOwnerId is required' });
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'newOwnerId is required' });
     }
-    (0, index_js_10.transferOwnership)(orgId, userId, newOwnerId);
+    (0, index_js_11.transferOwnership)(orgId, userId, newOwnerId);
     // Log audit event
-    (0, index_js_10.logOrganizationAction)(orgId, index_js_10.AuditAction.ORG_OWNERSHIP_TRANSFERRED, buildAuditActor(req), undefined, [{ field: 'ownerId', oldValue: userId, newValue: newOwnerId }]);
-    (0, index_js_12.sendSuccess)(res, { message: 'Ownership transferred successfully' });
+    (0, index_js_11.logOrganizationAction)(orgId, index_js_11.AuditAction.ORG_OWNERSHIP_TRANSFERRED, buildAuditActor(req), undefined, [{ field: 'ownerId', oldValue: userId, newValue: newOwnerId }]);
+    (0, index_js_13.sendSuccess)(res, { message: 'Ownership transferred successfully' });
 }));
 // Get organization settings
-app.get('/api/organizations/:orgId/settings', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/settings', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const organization = (0, index_js_10.getOrganization)(orgId, userId);
-    (0, index_js_12.sendSuccess)(res, { settings: organization.settings });
+    const organization = (0, index_js_11.getOrganization)(orgId, userId);
+    (0, index_js_13.sendSuccess)(res, { settings: organization.settings });
 }));
 // Update organization settings
-app.put('/api/organizations/:orgId/settings', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.put('/api/organizations/:orgId/settings', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const newSettings = req.body;
-    const oldOrg = (0, index_js_10.getOrganization)(orgId, userId);
-    const organization = (0, index_js_10.updateOrganization)(orgId, userId, { settings: newSettings });
+    const oldOrg = (0, index_js_11.getOrganization)(orgId, userId);
+    const organization = (0, index_js_11.updateOrganization)(orgId, userId, { settings: newSettings });
     // Log audit event for settings change
-    (0, index_js_10.logOrganizationAction)(organization.id, index_js_10.AuditAction.ORG_SETTINGS_UPDATED, buildAuditActor(req), organization.name, (0, index_js_10.calculateChanges)(oldOrg.settings, organization.settings));
-    (0, index_js_12.sendSuccess)(res, { settings: organization.settings });
+    (0, index_js_11.logOrganizationAction)(organization.id, index_js_11.AuditAction.ORG_SETTINGS_UPDATED, buildAuditActor(req), organization.name, (0, index_js_11.calculateChanges)(oldOrg.settings, organization.settings));
+    (0, index_js_13.sendSuccess)(res, { settings: organization.settings });
 }));
 // Get organization activity log
-app.get('/api/organizations/:orgId/activity', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/activity', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { limit, offset, actions, actorIds, startDate, endDate } = req.query;
@@ -12485,8 +12373,8 @@ app.get('/api/organizations/:orgId/activity', authenticateRequest, (0, index_js_
     if (endDate) {
         query.endDate = new Date(endDate);
     }
-    const result = (0, index_js_10.queryAuditLogs)(orgId, userId, query);
-    (0, index_js_12.sendSuccess)(res, {
+    const result = (0, index_js_11.queryAuditLogs)(orgId, userId, query);
+    (0, index_js_13.sendSuccess)(res, {
         activity: result.entries,
         total: result.total,
         limit: result.limit,
@@ -12496,220 +12384,220 @@ app.get('/api/organizations/:orgId/activity', authenticateRequest, (0, index_js_
 }));
 // ==================== Teams API ====================
 // List teams in organization
-app.get('/api/organizations/:orgId/teams', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/teams', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const teams = (0, index_js_10.listTeams)(orgId, userId);
-    (0, index_js_12.sendSuccess)(res, { teams });
+    const teams = (0, index_js_11.listTeams)(orgId, userId);
+    (0, index_js_13.sendSuccess)(res, { teams });
 }));
 // Create team
-app.post('/api/organizations/:orgId/teams', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/teams', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const input = req.body;
-    const team = (0, index_js_10.createTeam)(orgId, userId, input);
+    const team = (0, index_js_11.createTeam)(orgId, userId, input);
     // Log audit event
-    (0, index_js_10.logTeamAction)(orgId, index_js_10.AuditAction.TEAM_CREATED, buildAuditActor(req), team.id, team.name);
-    (0, index_js_12.sendSuccess)(res, { team }, { statusCode: 201 });
+    (0, index_js_11.logTeamAction)(orgId, index_js_11.AuditAction.TEAM_CREATED, buildAuditActor(req), team.id, team.name);
+    (0, index_js_13.sendSuccess)(res, { team }, { statusCode: 201 });
 }));
 // Get team
-app.get('/api/organizations/:orgId/teams/:teamId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/teams/:teamId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { teamId } = req.params;
-    const team = (0, index_js_10.getTeam)(teamId, userId);
-    (0, index_js_12.sendSuccess)(res, { team });
+    const team = (0, index_js_11.getTeam)(teamId, userId);
+    (0, index_js_13.sendSuccess)(res, { team });
 }));
 // Update team
-app.put('/api/organizations/:orgId/teams/:teamId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.put('/api/organizations/:orgId/teams/:teamId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, teamId } = req.params;
     const input = req.body;
-    const oldTeam = (0, index_js_10.getTeam)(teamId, userId);
-    const team = (0, index_js_10.updateTeam)(teamId, userId, input);
+    const oldTeam = (0, index_js_11.getTeam)(teamId, userId);
+    const team = (0, index_js_11.updateTeam)(teamId, userId, input);
     // Log audit event
-    (0, index_js_10.logTeamAction)(orgId, index_js_10.AuditAction.TEAM_UPDATED, buildAuditActor(req), team.id, team.name, [
+    (0, index_js_11.logTeamAction)(orgId, index_js_11.AuditAction.TEAM_UPDATED, buildAuditActor(req), team.id, team.name, [
         ...(input.name && input.name !== oldTeam.name ? [{ field: 'name', oldValue: oldTeam.name, newValue: input.name }] : []),
         ...(input.description !== undefined && input.description !== oldTeam.description ? [{ field: 'description', oldValue: oldTeam.description, newValue: input.description }] : []),
     ]);
-    (0, index_js_12.sendSuccess)(res, { team });
+    (0, index_js_13.sendSuccess)(res, { team });
 }));
 // Delete team
-app.delete('/api/organizations/:orgId/teams/:teamId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/organizations/:orgId/teams/:teamId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, teamId } = req.params;
-    const team = (0, index_js_10.getTeam)(teamId, userId);
-    (0, index_js_10.deleteTeam)(teamId, userId);
+    const team = (0, index_js_11.getTeam)(teamId, userId);
+    (0, index_js_11.deleteTeam)(teamId, userId);
     // Log audit event
-    (0, index_js_10.logTeamAction)(orgId, index_js_10.AuditAction.TEAM_DELETED, buildAuditActor(req), teamId, team.name);
-    (0, index_js_12.sendSuccess)(res, { message: 'Team deleted' });
+    (0, index_js_11.logTeamAction)(orgId, index_js_11.AuditAction.TEAM_DELETED, buildAuditActor(req), teamId, team.name);
+    (0, index_js_13.sendSuccess)(res, { message: 'Team deleted' });
 }));
 // Add member to team
-app.post('/api/organizations/:orgId/teams/:teamId/members', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/teams/:teamId/members', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, teamId } = req.params;
     const { targetUserId, role } = req.body;
     if (!targetUserId) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'targetUserId is required' });
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'targetUserId is required' });
     }
-    const team = (0, index_js_10.addTeamMember)(teamId, userId, targetUserId, role);
+    const team = (0, index_js_11.addTeamMember)(teamId, userId, targetUserId, role);
     // Log audit event
-    (0, index_js_10.logTeamAction)(orgId, index_js_10.AuditAction.TEAM_MEMBER_ADDED, buildAuditActor(req), teamId, team.name, undefined, { targetUserId, role: role || 'member' });
-    (0, index_js_12.sendSuccess)(res, { team });
+    (0, index_js_11.logTeamAction)(orgId, index_js_11.AuditAction.TEAM_MEMBER_ADDED, buildAuditActor(req), teamId, team.name, undefined, { targetUserId, role: role || 'member' });
+    (0, index_js_13.sendSuccess)(res, { team });
 }));
 // Remove member from team
-app.delete('/api/organizations/:orgId/teams/:teamId/members/:targetUserId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/organizations/:orgId/teams/:teamId/members/:targetUserId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, teamId, targetUserId } = req.params;
-    const team = (0, index_js_10.removeTeamMember)(teamId, userId, targetUserId);
+    const team = (0, index_js_11.removeTeamMember)(teamId, userId, targetUserId);
     // Log audit event
-    (0, index_js_10.logTeamAction)(orgId, index_js_10.AuditAction.TEAM_MEMBER_REMOVED, buildAuditActor(req), teamId, team.name, undefined, { targetUserId });
-    (0, index_js_12.sendSuccess)(res, { team });
+    (0, index_js_11.logTeamAction)(orgId, index_js_11.AuditAction.TEAM_MEMBER_REMOVED, buildAuditActor(req), teamId, team.name, undefined, { targetUserId });
+    (0, index_js_13.sendSuccess)(res, { team });
 }));
 // ==================== Members API ====================
 // List organization members
-app.get('/api/organizations/:orgId/members', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/members', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const members = (0, index_js_10.listMembers)(orgId, userId);
-    (0, index_js_12.sendSuccess)(res, { members });
+    const members = (0, index_js_11.listMembers)(orgId, userId);
+    (0, index_js_13.sendSuccess)(res, { members });
 }));
 // Get specific member
-app.get('/api/organizations/:orgId/members/:targetUserId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/members/:targetUserId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, targetUserId } = req.params;
-    const member = (0, index_js_10.getMember)(orgId, userId, targetUserId);
-    (0, index_js_12.sendSuccess)(res, { member });
+    const member = (0, index_js_11.getMember)(orgId, userId, targetUserId);
+    (0, index_js_13.sendSuccess)(res, { member });
 }));
 // Update member role
-app.put('/api/organizations/:orgId/members/:targetUserId/role', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.put('/api/organizations/:orgId/members/:targetUserId/role', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, targetUserId } = req.params;
     const { role } = req.body;
-    if (!role || !Object.values(index_js_10.OrganizationRole).includes(role)) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.INVALID_INPUT, { message: 'Invalid role' });
+    if (!role || !Object.values(index_js_11.OrganizationRole).includes(role)) {
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.INVALID_INPUT, { message: 'Invalid role' });
     }
-    const oldMember = (0, index_js_10.getMember)(orgId, userId, targetUserId);
-    const member = (0, index_js_10.updateMemberRole)(orgId, userId, targetUserId, role);
+    const oldMember = (0, index_js_11.getMember)(orgId, userId, targetUserId);
+    const member = (0, index_js_11.updateMemberRole)(orgId, userId, targetUserId, role);
     // Log audit event
-    (0, index_js_10.logMemberAction)(orgId, index_js_10.AuditAction.MEMBER_ROLE_CHANGED, buildAuditActor(req), member.id, member.email, [{ field: 'role', oldValue: oldMember.role, newValue: role }]);
-    (0, index_js_12.sendSuccess)(res, { member });
+    (0, index_js_11.logMemberAction)(orgId, index_js_11.AuditAction.MEMBER_ROLE_CHANGED, buildAuditActor(req), member.id, member.email, [{ field: 'role', oldValue: oldMember.role, newValue: role }]);
+    (0, index_js_13.sendSuccess)(res, { member });
 }));
 // Remove member from organization
-app.delete('/api/organizations/:orgId/members/:targetUserId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/organizations/:orgId/members/:targetUserId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, targetUserId } = req.params;
-    const member = (0, index_js_10.getMember)(orgId, userId, targetUserId);
-    (0, index_js_10.removeMember)(orgId, userId, targetUserId);
+    const member = (0, index_js_11.getMember)(orgId, userId, targetUserId);
+    (0, index_js_11.removeMember)(orgId, userId, targetUserId);
     // Log audit event
-    (0, index_js_10.logMemberAction)(orgId, index_js_10.AuditAction.MEMBER_REMOVED, buildAuditActor(req), member.id, member.email);
-    (0, index_js_12.sendSuccess)(res, { message: 'Member removed' });
+    (0, index_js_11.logMemberAction)(orgId, index_js_11.AuditAction.MEMBER_REMOVED, buildAuditActor(req), member.id, member.email);
+    (0, index_js_13.sendSuccess)(res, { message: 'Member removed' });
 }));
 // ==================== Invitations API ====================
 // List invitations
-app.get('/api/organizations/:orgId/invitations', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/invitations', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { status } = req.query;
-    const invitations = (0, index_js_10.listInvitations)(orgId, userId, status);
-    (0, index_js_12.sendSuccess)(res, { invitations });
+    const invitations = (0, index_js_11.listInvitations)(orgId, userId, status);
+    (0, index_js_13.sendSuccess)(res, { invitations });
 }));
 // Create invitation
-app.post('/api/organizations/:orgId/invitations', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/invitations', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const input = req.body;
     // Check member limits before creating invitation
-    (0, index_js_10.enforceMemberLimit)(orgId, 1);
-    const invitation = (0, index_js_10.createInvitation)(orgId, userId, input);
+    (0, index_js_11.enforceMemberLimit)(orgId, 1);
+    const invitation = (0, index_js_11.createInvitation)(orgId, userId, input);
     // Log audit event
-    (0, index_js_10.logInvitationAction)(orgId, index_js_10.AuditAction.INVITATION_CREATED, buildAuditActor(req), invitation.id, invitation.email, { role: input.role, teamIds: input.teamIds });
-    (0, index_js_12.sendSuccess)(res, { invitation }, { statusCode: 201 });
+    (0, index_js_11.logInvitationAction)(orgId, index_js_11.AuditAction.INVITATION_CREATED, buildAuditActor(req), invitation.id, invitation.email, { role: input.role, teamIds: input.teamIds });
+    (0, index_js_13.sendSuccess)(res, { invitation }, { statusCode: 201 });
 }));
 // Accept invitation (public endpoint - uses token)
-app.post('/api/invitations/:token/accept', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/invitations/:token/accept', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { token } = req.params;
     const { email, displayName } = req.body;
     if (!email) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'email is required' });
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'email is required' });
     }
-    const member = (0, index_js_10.acceptInvitation)(token, userId, email, displayName);
+    const member = (0, index_js_11.acceptInvitation)(token, userId, email, displayName);
     // Log audit event
-    (0, index_js_10.logMemberAction)(member.orgId, index_js_10.AuditAction.MEMBER_JOINED, buildAuditActor(req), member.id, member.email);
-    (0, index_js_12.sendSuccess)(res, { member });
+    (0, index_js_11.logMemberAction)(member.orgId, index_js_11.AuditAction.MEMBER_JOINED, buildAuditActor(req), member.id, member.email);
+    (0, index_js_13.sendSuccess)(res, { member });
 }));
 // Revoke invitation
-app.delete('/api/organizations/:orgId/invitations/:invitationId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/organizations/:orgId/invitations/:invitationId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, invitationId } = req.params;
-    (0, index_js_10.revokeInvitation)(orgId, userId, invitationId);
+    (0, index_js_11.revokeInvitation)(orgId, userId, invitationId);
     // Log audit event
-    (0, index_js_10.logInvitationAction)(orgId, index_js_10.AuditAction.INVITATION_REVOKED, buildAuditActor(req), invitationId);
-    (0, index_js_12.sendSuccess)(res, { message: 'Invitation revoked' });
+    (0, index_js_11.logInvitationAction)(orgId, index_js_11.AuditAction.INVITATION_REVOKED, buildAuditActor(req), invitationId);
+    (0, index_js_13.sendSuccess)(res, { message: 'Invitation revoked' });
 }));
 // Resend invitation
-app.post('/api/organizations/:orgId/invitations/:invitationId/resend', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/invitations/:invitationId/resend', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, invitationId } = req.params;
-    const invitation = (0, index_js_10.resendInvitation)(orgId, userId, invitationId);
+    const invitation = (0, index_js_11.resendInvitation)(orgId, userId, invitationId);
     // Log audit event
-    (0, index_js_10.logInvitationAction)(orgId, index_js_10.AuditAction.INVITATION_RESENT, buildAuditActor(req), invitation.id, invitation.email);
-    (0, index_js_12.sendSuccess)(res, { invitation });
+    (0, index_js_11.logInvitationAction)(orgId, index_js_11.AuditAction.INVITATION_RESENT, buildAuditActor(req), invitation.id, invitation.email);
+    (0, index_js_13.sendSuccess)(res, { invitation });
 }));
 // ==================== Audit Log API ====================
 // Query audit logs
-app.get('/api/organizations/:orgId/audit-log', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/audit-log', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { startDate, endDate, actions, actorIds, resourceTypes, severity, success, searchText, limit, offset, sortOrder, } = req.query;
@@ -12726,161 +12614,161 @@ app.get('/api/organizations/:orgId/audit-log', authenticateRequest, (0, index_js
         offset: offset ? parseInt(offset, 10) : undefined,
         sortOrder: sortOrder,
     };
-    const result = (0, index_js_10.queryAuditLogs)(orgId, userId, query);
-    (0, index_js_12.sendSuccess)(res, result);
+    const result = (0, index_js_11.queryAuditLogs)(orgId, userId, query);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
 // Get audit stats
-app.get('/api/organizations/:orgId/audit-log/stats', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/audit-log/stats', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { startDate, endDate } = req.query;
-    const stats = (0, index_js_10.getAuditStats)(orgId, userId, startDate ? new Date(startDate) : undefined, endDate ? new Date(endDate) : undefined);
-    (0, index_js_12.sendSuccess)(res, { stats });
+    const stats = (0, index_js_11.getAuditStats)(orgId, userId, startDate ? new Date(startDate) : undefined, endDate ? new Date(endDate) : undefined);
+    (0, index_js_13.sendSuccess)(res, { stats });
 }));
 // Export audit logs
-app.get('/api/organizations/:orgId/audit-log/export', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/audit-log/export', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { startDate, endDate, format } = req.query;
     if (!startDate || !endDate) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'startDate and endDate are required' });
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.MISSING_REQUIRED_FIELD, { message: 'startDate and endDate are required' });
     }
-    const result = (0, index_js_10.exportAuditLogs)(orgId, userId, new Date(startDate), new Date(endDate), format || 'json');
+    const result = (0, index_js_11.exportAuditLogs)(orgId, userId, new Date(startDate), new Date(endDate), format || 'json');
     res.setHeader('Content-Type', result.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
     res.send(result.data);
 }));
 // ==================== Billing API ====================
 // Get subscription
-app.get('/api/organizations/:orgId/subscription', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/subscription', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const subscription = (0, index_js_10.getSubscription)(orgId, userId);
-    (0, index_js_12.sendSuccess)(res, { subscription });
+    const subscription = (0, index_js_11.getSubscription)(orgId, userId);
+    (0, index_js_13.sendSuccess)(res, { subscription });
 }));
 // Get usage snapshot
-app.get('/api/organizations/:orgId/usage', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/usage', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const usage = (0, index_js_10.getUsageSnapshot)(orgId, userId);
-    (0, index_js_12.sendSuccess)(res, { usage });
+    const usage = (0, index_js_11.getUsageSnapshot)(orgId, userId);
+    (0, index_js_13.sendSuccess)(res, { usage });
 }));
 // Get usage history for a metric
-app.get('/api/organizations/:orgId/usage/history/:metric', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/usage/history/:metric', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, metric } = req.params;
     const { startDate, endDate } = req.query;
-    if (!Object.values(index_js_10.UsageMetric).includes(metric)) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.INVALID_INPUT, { message: 'Invalid metric' });
+    if (!Object.values(index_js_11.UsageMetric).includes(metric)) {
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.INVALID_INPUT, { message: 'Invalid metric' });
     }
-    const history = (0, index_js_10.getUsageHistory)(orgId, userId, metric, startDate ? new Date(startDate) : undefined, endDate ? new Date(endDate) : undefined);
-    (0, index_js_12.sendSuccess)(res, { history });
+    const history = (0, index_js_11.getUsageHistory)(orgId, userId, metric, startDate ? new Date(startDate) : undefined, endDate ? new Date(endDate) : undefined);
+    (0, index_js_13.sendSuccess)(res, { history });
 }));
 // Update seats
-app.post('/api/organizations/:orgId/subscription/seats', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/subscription/seats', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const seatChange = req.body;
     if (!seatChange.type || !['add', 'remove'].includes(seatChange.type)) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.INVALID_INPUT, { message: 'type must be "add" or "remove"' });
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.INVALID_INPUT, { message: 'type must be "add" or "remove"' });
     }
     if (!seatChange.count || seatChange.count < 1) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.INVALID_INPUT, { message: 'count must be at least 1' });
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.INVALID_INPUT, { message: 'count must be at least 1' });
     }
-    const subscription = (0, index_js_10.updateSeats)(orgId, userId, seatChange);
-    (0, index_js_12.sendSuccess)(res, { subscription });
+    const subscription = (0, index_js_11.updateSeats)(orgId, userId, seatChange);
+    (0, index_js_13.sendSuccess)(res, { subscription });
 }));
 // Upgrade tier
-app.post('/api/organizations/:orgId/subscription/upgrade', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/subscription/upgrade', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { tier, cycle } = req.body;
-    if (!tier || !Object.values(index_js_10.SubscriptionTier).includes(tier)) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.INVALID_INPUT, { message: 'Invalid tier' });
+    if (!tier || !Object.values(index_js_11.SubscriptionTier).includes(tier)) {
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.INVALID_INPUT, { message: 'Invalid tier' });
     }
-    const subscription = (0, index_js_10.upgradeTier)(orgId, userId, tier, cycle);
-    (0, index_js_12.sendSuccess)(res, { subscription });
+    const subscription = (0, index_js_11.upgradeTier)(orgId, userId, tier, cycle);
+    (0, index_js_13.sendSuccess)(res, { subscription });
 }));
 // Downgrade tier
-app.post('/api/organizations/:orgId/subscription/downgrade', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/subscription/downgrade', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { tier } = req.body;
-    if (!tier || !Object.values(index_js_10.SubscriptionTier).includes(tier)) {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.INVALID_INPUT, { message: 'Invalid tier' });
+    if (!tier || !Object.values(index_js_11.SubscriptionTier).includes(tier)) {
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.INVALID_INPUT, { message: 'Invalid tier' });
     }
-    const subscription = (0, index_js_10.downgradeTier)(orgId, userId, tier);
-    (0, index_js_12.sendSuccess)(res, { subscription });
+    const subscription = (0, index_js_11.downgradeTier)(orgId, userId, tier);
+    (0, index_js_13.sendSuccess)(res, { subscription });
 }));
 // Cancel subscription
-app.post('/api/organizations/:orgId/subscription/cancel', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/subscription/cancel', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { immediate } = req.body;
-    const subscription = (0, index_js_10.cancelSubscription)(orgId, userId, immediate);
-    (0, index_js_12.sendSuccess)(res, { subscription });
+    const subscription = (0, index_js_11.cancelSubscription)(orgId, userId, immediate);
+    (0, index_js_13.sendSuccess)(res, { subscription });
 }));
 // Reactivate subscription
-app.post('/api/organizations/:orgId/subscription/reactivate', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/organizations/:orgId/subscription/reactivate', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
-    const subscription = (0, index_js_10.reactivateSubscription)(orgId, userId);
-    (0, index_js_12.sendSuccess)(res, { subscription });
+    const subscription = (0, index_js_11.reactivateSubscription)(orgId, userId);
+    (0, index_js_13.sendSuccess)(res, { subscription });
 }));
 // List invoices
-app.get('/api/organizations/:orgId/invoices', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/invoices', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId } = req.params;
     const { status } = req.query;
-    const invoices = (0, index_js_10.getInvoices)(orgId, userId, status);
-    (0, index_js_12.sendSuccess)(res, { invoices });
+    const invoices = (0, index_js_11.getInvoices)(orgId, userId, status);
+    (0, index_js_13.sendSuccess)(res, { invoices });
 }));
 // Get specific invoice
-app.get('/api/organizations/:orgId/invoices/:invoiceId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/organizations/:orgId/invoices/:invoiceId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, index_js_12.ErrorCode.AUTH_REQUIRED);
+        return (0, index_js_13.sendError)(res, index_js_13.ErrorCode.AUTH_REQUIRED);
     }
     const { orgId, invoiceId } = req.params;
-    const invoice = (0, index_js_10.getInvoice)(orgId, userId, invoiceId);
-    (0, index_js_12.sendSuccess)(res, { invoice });
+    const invoice = (0, index_js_11.getInvoice)(orgId, userId, invoiceId);
+    (0, index_js_13.sendSuccess)(res, { invoice });
 }));
 // ==================== End Enterprise Organization API ====================
 // Global error handler - must be added after all routes
-app.use(index_js_12.globalErrorHandler);
+app.use(index_js_13.globalErrorHandler);
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, _promise) => {
     logger.error({
@@ -12918,7 +12806,7 @@ async function gracefulShutdown(signal) {
         await index_js_3.lspServerManager.shutdown();
         // Shutdown debug sessions
         logger.info('shutting down debug sessions');
-        await index_js_14.debugManager.shutdown();
+        await index_js_15.debugManager.shutdown();
         // Close WebSocket server
         logger.info('closing collaboration WebSocket server');
         collabWss.close();
@@ -12949,7 +12837,7 @@ async function gracefulShutdown(signal) {
         // Dispose A2A task lifecycle service (disconnects Redis, stops eviction timers)
         logger.info('disposing A2A task lifecycle service');
         try {
-            (0, index_js_6.disposeTaskLifecycleService)();
+            (0, index_js_7.disposeTaskLifecycleService)();
         }
         catch (err) {
             logger.error({ err }, 'A2A task lifecycle service dispose error');
@@ -13354,13 +13242,21 @@ app.use('/api/v1/api-keys', openclaw_keys_js_1.default);
 // This MUST be mounted BEFORE the authenticated routes
 app.use('/api/v1/auth', auth_moltbook_js_1.moltbookAuthRouter);
 // Apply public API middleware BEFORE mounting routes (auth, rate limiting, logging)
-app.use('/api/v1', index_js_12.requestIdMiddleware, middleware_js_1.authenticateApiKey, middleware_js_1.rateLimitMiddleware, middleware_js_1.requestLoggingMiddleware);
+app.use('/api/v1', index_js_13.requestIdMiddleware, middleware_js_1.authenticateApiKey, middleware_js_1.rateLimitMiddleware, middleware_js_1.requestLoggingMiddleware);
 app.use('/api/v1/sandboxes', sandboxes_js_1.sandboxRouter);
 app.use('/api/v1/projects', projects_js_1.projectRouter);
 // Agent OS API layer: canonical control-plane surface for tasks, agents,
 // runs, approvals, artifacts, memory, instructions, policy, events, workflows.
 app.use('/api/agent-os', authenticateRequest, (0, index_js_5.createAgentOsRouter)());
 app.use('/internal/agent-os', (0, index_js_5.createInternalAgentOsRouter)());
+// Recoder Conductor — parallel agent sessions (tmux + git worktrees). The pivot product.
+app.use('/api/conductor', authenticateRequest, (0, conductor_routes_js_1.createConductorRouter)());
+// Survivability: on boot, reconcile persisted workspaces against the real tmux +
+// git substrate (fire-and-forget; safe no-op when the substrate is unavailable).
+(0, workspace_service_js_1.reconcile)().catch((err) => logger.warn({ err }, 'conductor boot reconcile failed (non-fatal)'));
+// Connectors bridge — chat channels (telegram, …) -> gated -> Conductor workspace.
+// Status route is read-only and never leaks credentials (truthful health only).
+app.use('/api/connectors', (0, index_js_6.createConnectorsRouter)());
 // Identity token endpoints (requires API key auth, but /verify uses app key auth internally)
 app.use('/api/v1/identity', identity_js_1.identityRouter);
 // App key management endpoints (requires API key auth)
@@ -13369,12 +13265,12 @@ app.use('/api/v1/app-keys', app_keys_js_1.appKeysRouter);
 // Mounted BEFORE the legacy a2aRouter so the in-process AgentRegistryService (used by
 // external Claude Code / Codex clients) takes precedence over the admin-gated legacy
 // connector registry at a2a-gateway.ts (`GET /agents`, `PUT /agents/:id`).
-app.use('/api/a2a/agents', index_js_6.agentRegistryRouter);
+app.use('/api/a2a/agents', index_js_7.agentRegistryRouter);
 app.use('/api/a2a', authenticateMutatingRequest, a2a_gateway_js_1.a2aRouter);
-app.use('/api/a2a/tasks', authenticateMutatingRequest, index_js_6.taskLifecycleRouter);
-app.use('/api/a2a/channels', index_js_6.collaborationRouter);
-app.use('/api/a2a', index_js_6.heartbeatRouter);
-app.use('/api/a2a/approvals', index_js_8.approvalRouter);
+app.use('/api/a2a/tasks', authenticateMutatingRequest, index_js_7.taskLifecycleRouter);
+app.use('/api/a2a/channels', index_js_7.collaborationRouter);
+app.use('/api/a2a', index_js_7.heartbeatRouter);
+app.use('/api/a2a/approvals', index_js_9.approvalRouter);
 app.use('/api/a2a/openclaw', a2a_openclaw_adapter_js_1.openclawAdapterRouter);
 // OpenClaw Platform Hub — health + routing preview endpoints
 const openclaw_platform_hub_js_1 = require("./openclaw-platform-hub.js");
@@ -13386,21 +13282,21 @@ app.post('/api/a2a/openclaw/hub/preview', (req, res) => {
     const targets = (0, openclaw_platform_hub_js_1.previewRouting)(req.body);
     res.json({ ok: true, targets });
 });
-app.use('/api/a2a', promoteQueryToken, authenticateRequest, index_js_6.sseStreamRouter);
-app.use('/api/a2a/connectors/claude', index_js_6.claudeConnectorRouter);
-app.use('/api/a2a/connectors/codex', index_js_6.codexConnectorRouter);
-app.use('/api/a2a/connectors/opencode', index_js_6.opencodeConnectorRouter);
-app.use('/api/a2a/connectors/cursor', index_js_6.cursorConnectorRouter);
-app.use('/api/a2a/connectors/windsurf', index_js_6.windsurfConnectorRouter);
-app.use('/api/a2a/connectors/replit', index_js_6.replitConnectorRouter);
+app.use('/api/a2a', promoteQueryToken, authenticateRequest, index_js_7.sseStreamRouter);
+app.use('/api/a2a/connectors/claude', index_js_7.claudeConnectorRouter);
+app.use('/api/a2a/connectors/codex', index_js_7.codexConnectorRouter);
+app.use('/api/a2a/connectors/opencode', index_js_7.opencodeConnectorRouter);
+app.use('/api/a2a/connectors/cursor', index_js_7.cursorConnectorRouter);
+app.use('/api/a2a/connectors/windsurf', index_js_7.windsurfConnectorRouter);
+app.use('/api/a2a/connectors/replit', index_js_7.replitConnectorRouter);
 // These adapters can register REST/Git integrations against arbitrary
 // targets/repo paths and drive operations on them, so they MUST require auth.
 // (The standalone a2a-gateway process guards the same routers via its own
 // extractA2AIdentity middleware; the main server has no such guard, so add it
 // here explicitly.) No frontend/external consumers — purely additive hardening.
-app.use('/api/a2a/adapters/rest', authenticateRequest, index_js_6.restAdapterRouter);
-app.use('/api/a2a/adapters/git', authenticateRequest, index_js_6.gitAdapterRouter);
-app.use('/api/a2a/context', index_js_6.contextBridgeRouter);
+app.use('/api/a2a/adapters/rest', authenticateRequest, index_js_7.restAdapterRouter);
+app.use('/api/a2a/adapters/git', authenticateRequest, index_js_7.gitAdapterRouter);
+app.use('/api/a2a/context', index_js_7.contextBridgeRouter);
 app.use('/api/a2a/workspaces', promoteQueryToken, authenticateRequest, workspace_routes_js_1.workspaceRouter);
 app.use('/api/spaces', promoteQueryToken, authenticateRequest, workspace_routes_js_1.workspaceRouter);
 app.use('/api/a2a/memory', authenticateRequest, memory_routes_js_1.memoryRouter);
@@ -13418,17 +13314,17 @@ app.use('/api/a2a/canvas-update', authenticateRequest, (0, canvas_routes_js_1.cr
 }));
 startupInfo('routes.canvas-update', 'registered');
 app.use('/api/a2a/connectors', authenticateRequest);
-app.use('/api/a2a', index_js_6.connectorHealthRouter);
-app.use('/api/a2a/patterns', authenticateRequest, index_js_7.patternRouter);
-app.use('/api/a2a', index_js_6.a2aOpenApiRouter);
-app.use('/api/a2a', index_js_6.a2aSloMetricsRouter);
-app.use('/api/a2a/orchestration', authenticateRequest, index_js_6.orchestrationRouter);
+app.use('/api/a2a', index_js_7.connectorHealthRouter);
+app.use('/api/a2a/patterns', authenticateRequest, index_js_8.patternRouter);
+app.use('/api/a2a', index_js_7.a2aOpenApiRouter);
+app.use('/api/a2a', index_js_7.a2aSloMetricsRouter);
+app.use('/api/a2a/orchestration', authenticateRequest, index_js_7.orchestrationRouter);
 app.use(['/api/a2a/messages', '/api/a2a/delegations', '/api/a2a/handoffs'], authenticateRequest);
-app.use('/api/a2a', index_js_6.workflowMessagingRouter);
+app.use('/api/a2a', index_js_7.workflowMessagingRouter);
 // Cross-app A2A workflows (agents↔PM↔agency)
 const a2a_cross_app_workflows_js_1 = require("./a2a-cross-app-workflows.js");
 app.use('/api/a2a/workflows', authenticateRequest, a2a_cross_app_workflows_js_1.crossAppWorkflowRouter);
-app.use('/api/a2a/admin', authenticateRequest, index_js_6.adminRouter);
+app.use('/api/a2a/admin', authenticateRequest, index_js_7.adminRouter);
 // Daytona LSP integration for code intelligence
 const daytona_lsp_js_1 = require("./daytona-lsp.js");
 app.use('/api/daytona/lsp', authenticateRequest, daytona_lsp_js_1.daytonaLspRouter);
@@ -13442,17 +13338,17 @@ app.use('/api/edge', edge_routes_js_1.edgeRouter);
 // ── Coding Runtime API ──────────────────────────────────────────────────────
 // Deep coding mode: start/prompt/dispose sessions via runtime adapters
 const codingRuntimeSelectionByProject = new Map();
-app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getRuntime, listRuntimes } = await Promise.resolve().then(() => __importStar(require('./a2a/coding-runtime.js')));
     const { getCodingRuntimeHistoryService } = await Promise.resolve().then(() => __importStar(require('./coding-runtime-history.js')));
     const { projectId, sandboxId, runtimeType = 'opencode', model, provider, apiKey, prompt, executionMode } = req.body;
     if (!projectId)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId required'));
     let resolvedRuntimeType = runtimeType;
     let autoSelection;
     if (runtimeType === 'auto') {
         if (typeof prompt !== 'string' || !prompt.trim()) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'prompt is required when runtimeType=auto'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'prompt is required when runtimeType=auto'));
         }
         const { classifyIntent } = await Promise.resolve().then(() => __importStar(require('./a2a/intent-gate.js')));
         const { routeByCategory } = await Promise.resolve().then(() => __importStar(require('./a2a/category-router.js')));
@@ -13491,10 +13387,10 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
     }
     const runtime = getRuntime(resolvedRuntimeType);
     if (!runtime)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${resolvedRuntimeType}`));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${resolvedRuntimeType}`));
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No active sandbox container for project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No active sandbox container for project'));
     }
     const resolvedSandboxId = (0, daytona_file_ops_js_1.isDaytonaSandbox)(entry) ? entry.id : (sandboxId || entry.id);
     const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
@@ -13531,18 +13427,18 @@ app.post('/api/coding-runtime/session', authenticateRequest, flexibleProjectOwne
             logger.warn({ err, projectId }, 'code-graph auto-build failed');
         }
     })();
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         ...session,
         selectedRuntime: resolvedRuntimeType,
         autoSelection,
     });
 }));
-app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getRuntime } = await Promise.resolve().then(() => __importStar(require('./a2a/coding-runtime.js')));
     const { getCodingRuntimeHistoryService } = await Promise.resolve().then(() => __importStar(require('./coding-runtime-history.js')));
     const { projectId, prompt, runtimeType, agent, enableCompletionLoop, maxIterations, backoffMs, injectDocs, useMemory, memoryLimit, codeContext } = req.body;
     if (!projectId || !prompt)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId and prompt required'));
     const userId = req.userId;
     const selection = codingRuntimeSelectionByProject.get(projectId);
     let resolvedRuntimeType = typeof runtimeType === 'string' ? runtimeType : selection?.runtimeType ?? 'opencode';
@@ -13551,16 +13447,16 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
         : undefined;
     if (resolvedRuntimeType === 'auto') {
         if (!selection?.runtimeType) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No auto-selected runtime session. Call /session first.'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No auto-selected runtime session. Call /session first.'));
         }
         resolvedRuntimeType = selection.runtimeType;
     }
     const runtime = getRuntime(resolvedRuntimeType);
     if (!runtime)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${resolvedRuntimeType}`));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, `Unknown runtime: ${resolvedRuntimeType}`));
     const state = runtime.getState(projectId);
     if (!state || state.status !== 'ready')
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No ready session. Call /session first.'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No ready session. Call /session first.'));
     const daytonaUrl = (process.env.DAYTONA_SERVER_URL ?? 'http://localhost:3900/api').replace(/\/api\/?$/, '');
     // Auto-enrichment: in `auto` mode, turn on code-context and memory by default
     // for code-touching categories so callers don't have to opt in. Explicit
@@ -13684,7 +13580,7 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
             catch { /* skill tracking is best-effort */ }
         })();
         persistMemory(outcome.result, outcome.completed && !outcome.result.error);
-        return (0, index_js_12.sendSuccess)(res, {
+        return (0, index_js_13.sendSuccess)(res, {
             ...outcome.result,
             selectedRuntime: resolvedRuntimeType,
             autoSelection,
@@ -13720,21 +13616,21 @@ app.post('/api/coding-runtime/prompt', authenticateRequest, flexibleProjectOwner
         catch { /* skill tracking is best-effort */ }
     })();
     persistMemory(result, !result.error && Array.isArray(result.parts) && result.parts.length > 0);
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         ...result,
         selectedRuntime: resolvedRuntimeType,
         autoSelection,
     });
 }));
-app.get('/api/coding-runtime/history/:projectId', authenticateRequest, flexibleProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/coding-runtime/history/:projectId', authenticateRequest, flexibleProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getCodingRuntimeHistoryService } = await Promise.resolve().then(() => __importStar(require('./coding-runtime-history.js')));
     const projectId = String(req.params.projectId || '').trim();
     if (!projectId)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId required'));
     const rawLimit = Number(req.query.limit);
     const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 50;
     const historyService = getCodingRuntimeHistoryService();
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         projectId,
         entries: historyService.listProjectHistory(projectId, limit),
         total: historyService.getProjectHistoryCount(projectId),
@@ -13743,7 +13639,7 @@ app.get('/api/coding-runtime/history/:projectId', authenticateRequest, flexibleP
 }));
 app.get('/api/coding-runtime/runtimes', (_req, res) => {
     Promise.resolve().then(() => __importStar(require('./a2a/coding-runtime.js'))).then(({ listRuntimes, getRuntimeCatalog }) => {
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             runtimes: ['auto', ...listRuntimes()],
             catalog: getRuntimeCatalog(),
         });
@@ -13753,166 +13649,166 @@ app.get('/api/coding-runtime/runtimes', (_req, res) => {
 // Run AI-generated code / shell commands in secure, ephemeral E2B sandboxes.
 // Fail-safe: when the SDK or E2B_API_KEY is missing, health reports the reason
 // and exec/run return explicit errors — never fake success.
-app.get('/api/e2b/health', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/e2b/health', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { e2bHealth } = await Promise.resolve().then(() => __importStar(require('./e2b-client.js')));
-    (0, index_js_12.sendSuccess)(res, await e2bHealth());
+    (0, index_js_13.sendSuccess)(res, await e2bHealth());
 }));
-app.post('/api/e2b/exec', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/e2b/exec', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { command, timeoutMs, envs, sandboxId, keepAlive } = req.body ?? {};
     if (typeof command !== 'string' || !command.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'command (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'command (string) is required'));
     }
     const { e2bExec } = await Promise.resolve().then(() => __importStar(require('./e2b-client.js')));
     try {
         const result = await e2bExec({ command, timeoutMs, envs, sandboxId, keepAlive });
-        (0, index_js_12.sendSuccess)(res, result);
+        (0, index_js_13.sendSuccess)(res, result);
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B exec failed'));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B exec failed'));
     }
 }));
-app.post('/api/e2b/run', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/e2b/run', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { code, language, timeoutMs, envs, sandboxId, keepAlive } = req.body ?? {};
     if (typeof code !== 'string' || !code.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'code (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'code (string) is required'));
     }
     if (language && !['python', 'node', 'bash'].includes(language)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'language must be python, node, or bash'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'language must be python, node, or bash'));
     }
     const { e2bRunCode } = await Promise.resolve().then(() => __importStar(require('./e2b-client.js')));
     try {
         const result = await e2bRunCode({ code, language, timeoutMs, envs, sandboxId, keepAlive });
-        (0, index_js_12.sendSuccess)(res, result);
+        (0, index_js_13.sendSuccess)(res, result);
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B run failed'));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B run failed'));
     }
 }));
-app.delete('/api/e2b/sandbox/:sandboxId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/e2b/sandbox/:sandboxId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { sandboxId } = req.params;
     const { e2bKill } = await Promise.resolve().then(() => __importStar(require('./e2b-client.js')));
     const killed = await e2bKill(sandboxId);
-    (0, index_js_12.sendSuccess)(res, { killed });
+    (0, index_js_13.sendSuccess)(res, { killed });
 }));
 // ── Browser Verification API ────────────────────────────────────────────────
 // Drive a headless browser to verify a preview URL actually renders/behaves.
 // Deterministic checks (Puppeteer) + optional AI checks (Stagehand, fail-safe).
-app.get('/api/browser/verify/health', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/browser/verify/health', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { browserVerifyHealth } = await Promise.resolve().then(() => __importStar(require('./browser-verify.js')));
-    (0, index_js_12.sendSuccess)(res, await browserVerifyHealth());
+    (0, index_js_13.sendSuccess)(res, await browserVerifyHealth());
 }));
-app.post('/api/browser/verify', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/browser/verify', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { url, checks, timeoutMs, viewport, settleMs } = req.body ?? {};
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
     }
     if (checks !== undefined && !Array.isArray(checks)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'checks must be an array'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'checks must be an array'));
     }
     const { browserVerify } = await Promise.resolve().then(() => __importStar(require('./browser-verify.js')));
     const result = await browserVerify({ url, checks, timeoutMs, viewport, settleMs });
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.post('/api/browser/verify/ai', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/browser/verify/ai', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { url, instruction, timeoutMs } = req.body ?? {};
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
     }
     if (typeof instruction !== 'string' || !instruction.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'instruction (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'instruction (string) is required'));
     }
     const { browserAiVerify } = await Promise.resolve().then(() => __importStar(require('./browser-verify.js')));
     const result = await browserAiVerify({ url, instruction, timeoutMs });
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
 // ── mem0 Intelligent Agent Memory API ───────────────────────────────────────
 // LLM-managed memory (extract/dedupe/update) on top of the raw Qdrant store.
 // Fail-safe: reports availability truthfully; recall returns empty when off.
-app.get('/api/memory/mem0/health', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/memory/mem0/health', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { mem0Health } = await Promise.resolve().then(() => __importStar(require('./mem0-client.js')));
-    (0, index_js_12.sendSuccess)(res, await mem0Health());
+    (0, index_js_13.sendSuccess)(res, await mem0Health());
 }));
-app.post('/api/memory/mem0/add', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/memory/mem0/add', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { messages, userId, agentId, runId, metadata } = req.body ?? {};
     const scopeUserId = userId || req.userId;
     if (!Array.isArray(messages) || messages.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
     }
     if (!scopeUserId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'userId is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'userId is required'));
     }
     const { mem0Add } = await Promise.resolve().then(() => __importStar(require('./mem0-client.js')));
     const result = await mem0Add(messages, { userId: scopeUserId, agentId, runId, metadata });
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.post('/api/memory/mem0/search', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/memory/mem0/search', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { query, userId, agentId, runId, limit } = req.body ?? {};
     const scopeUserId = userId || req.userId;
     if (typeof query !== 'string' || !query.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
     }
     if (!scopeUserId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'userId is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'userId is required'));
     }
     const { mem0Search } = await Promise.resolve().then(() => __importStar(require('./mem0-client.js')));
     const result = await mem0Search(query, { userId: scopeUserId, agentId, runId }, typeof limit === 'number' ? limit : 10);
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.get('/api/memory/mem0/all', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/memory/mem0/all', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const scopeUserId = req.query.userId || req.userId;
     const agentId = req.query.agentId;
     if (!scopeUserId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'userId is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'userId is required'));
     }
     const { mem0GetAll } = await Promise.resolve().then(() => __importStar(require('./mem0-client.js')));
     const result = await mem0GetAll({ userId: scopeUserId, agentId });
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.delete('/api/memory/mem0/:memoryId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/memory/mem0/:memoryId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { mem0Delete } = await Promise.resolve().then(() => __importStar(require('./mem0-client.js')));
     const result = await mem0Delete(req.params.memoryId);
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
 // ── Context7 Up-to-date Docs API ────────────────────────────────────────────
 // Resolve a library and fetch current docs to inject into coding-agent context.
 app.get('/api/context7/health', (_req, res) => {
-    Promise.resolve().then(() => __importStar(require('./context7-client.js'))).then(({ context7Health }) => (0, index_js_12.sendSuccess)(res, context7Health()));
+    Promise.resolve().then(() => __importStar(require('./context7-client.js'))).then(({ context7Health }) => (0, index_js_13.sendSuccess)(res, context7Health()));
 });
-app.get('/api/context7/resolve', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/context7/resolve', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const library = req.query.library?.trim();
     const query = req.query.query ?? '';
     if (!library) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'library query param is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'library query param is required'));
     }
     const { resolveLibrary } = await Promise.resolve().then(() => __importStar(require('./context7-client.js')));
-    (0, index_js_12.sendSuccess)(res, await resolveLibrary(library, query));
+    (0, index_js_13.sendSuccess)(res, await resolveLibrary(library, query));
 }));
-app.post('/api/context7/docs', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/context7/docs', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { libraryId, query } = req.body ?? {};
     if (typeof libraryId !== 'string' || !libraryId.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'libraryId (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'libraryId (string) is required'));
     }
     if (typeof query !== 'string' || !query.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
     }
     const { getLibraryDocs } = await Promise.resolve().then(() => __importStar(require('./context7-client.js')));
-    (0, index_js_12.sendSuccess)(res, await getLibraryDocs(libraryId, query));
+    (0, index_js_13.sendSuccess)(res, await getLibraryDocs(libraryId, query));
 }));
-app.post('/api/context7/inject', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/context7/inject', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { libraryName, query } = req.body ?? {};
     if (typeof libraryName !== 'string' || !libraryName.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'libraryName (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'libraryName (string) is required'));
     }
     if (typeof query !== 'string' || !query.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
     }
     const { getDocsForQuery } = await Promise.resolve().then(() => __importStar(require('./context7-client.js')));
-    (0, index_js_12.sendSuccess)(res, await getDocsForQuery({ libraryName, query }));
+    (0, index_js_13.sendSuccess)(res, await getDocsForQuery({ libraryName, query }));
 }));
 // ── Platform Capabilities Aggregator ────────────────────────────────────────
 // Single call reporting the status of every agent capability, so UIs and
 // monitoring can discover what's wired and what needs configuration.
-app.get('/api/capabilities', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/capabilities', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const [{ listRuntimes, getRuntimeCatalog }, { e2bHealth }, { browserVerifyHealth }, { mem0Health }, { context7Health },] = await Promise.all([
         Promise.resolve().then(() => __importStar(require('./a2a/coding-runtime.js'))),
         Promise.resolve().then(() => __importStar(require('./e2b-client.js'))),
@@ -13925,7 +13821,7 @@ app.get('/api/capabilities', (0, index_js_12.asyncHandler)(async (_req, res) => 
         browserVerifyHealth(),
         mem0Health(),
     ]);
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         codingRuntimes: {
             available: true,
             runtimes: listRuntimes(),
@@ -13949,131 +13845,131 @@ app.get('/api/capabilities', (0, index_js_12.asyncHandler)(async (_req, res) => 
 // ── Squads API (agent + human teams) ────────────────────────────────────────
 // Named teams with a leader, per-member roles, and an activity log. Work can be
 // assigned to a team, not just a single agent.
-app.get('/api/a2a/squads', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/squads', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { listSquads } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
-    (0, index_js_12.sendSuccess)(res, { squads: listSquads(req.userId) });
+    (0, index_js_13.sendSuccess)(res, { squads: listSquads(req.userId) });
 }));
-app.post('/api/a2a/squads', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/squads', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { name, description, leaderId, projectId, members } = req.body ?? {};
     if (typeof name !== 'string' || !name.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
     }
     if (members !== undefined && !Array.isArray(members)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'members must be an array'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'members must be an array'));
     }
     if (projectId !== undefined && typeof projectId !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
     }
     const { createSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
-    (0, index_js_12.sendSuccess)(res, createSquad({ name, description, leaderId, projectId, members, ownerId: req.userId }));
+    (0, index_js_13.sendSuccess)(res, createSquad({ name, description, leaderId, projectId, members, ownerId: req.userId }));
 }));
-app.post('/api/a2a/squads/import', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/squads/import', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const data = req.body ?? {};
     if (typeof data.name !== 'string' || !data.name.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
     }
     if (data.members !== undefined && !Array.isArray(data.members)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'members must be an array'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'members must be an array'));
     }
     if (data.projectId !== undefined && typeof data.projectId !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
     }
     const { importSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
-    (0, index_js_12.sendSuccess)(res, importSquad(data, req.userId));
+    (0, index_js_13.sendSuccess)(res, importSquad(data, req.userId));
 }));
-app.get('/api/a2a/squads/:id', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/squads/:id', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const squad = getSquad(req.params.id);
     if (!squad)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'squad not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'squad not found'));
     if (req.query.withPresence === 'true') {
         const { buildPresenceMap } = await Promise.resolve().then(() => __importStar(require('./a2a/presence.service.js')));
         const agentIds = squad.members.filter((m) => m.kind === 'agent').map((m) => m.id);
         const presence = await buildPresenceMap(agentIds);
-        return (0, index_js_12.sendSuccess)(res, { ...squad, presence });
+        return (0, index_js_13.sendSuccess)(res, { ...squad, presence });
     }
-    (0, index_js_12.sendSuccess)(res, squad);
+    (0, index_js_13.sendSuccess)(res, squad);
 }));
-app.patch('/api/a2a/squads/:id', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.patch('/api/a2a/squads/:id', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { name, description, leaderId, projectId } = req.body ?? {};
     if (projectId !== undefined && projectId !== null && typeof projectId !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId must be a string or null'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId must be a string or null'));
     }
     const { updateSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const squad = updateSquad(req.params.id, { name, description, leaderId, projectId }, req.userId);
     if (!squad)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'squad not found'));
-    (0, index_js_12.sendSuccess)(res, squad);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'squad not found'));
+    (0, index_js_13.sendSuccess)(res, squad);
 }));
-app.delete('/api/a2a/squads/:id', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/a2a/squads/:id', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { deleteSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
-    (0, index_js_12.sendSuccess)(res, { deleted: deleteSquad(req.params.id) });
+    (0, index_js_13.sendSuccess)(res, { deleted: deleteSquad(req.params.id) });
 }));
-app.post('/api/a2a/squads/:id/clone', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/squads/:id/clone', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { cloneSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const squad = cloneSquad(req.params.id, req.userId);
     if (!squad)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'squad not found'));
-    (0, index_js_12.sendSuccess)(res, squad);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'squad not found'));
+    (0, index_js_13.sendSuccess)(res, squad);
 }));
-app.get('/api/a2a/squads/:id/export', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/squads/:id/export', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { exportSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const portable = exportSquad(req.params.id);
     if (!portable)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'squad not found'));
-    (0, index_js_12.sendSuccess)(res, portable);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'squad not found'));
+    (0, index_js_13.sendSuccess)(res, portable);
 }));
-app.post('/api/a2a/squads/:id/members', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/squads/:id/members', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { id, kind, role, projectId } = req.body ?? {};
     if (typeof id !== 'string' || !id.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'member id (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'member id (string) is required'));
     }
     if (projectId !== undefined && typeof projectId !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId must be a string'));
     }
     const { addMember } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const squad = addMember(req.params.id, { id, kind, role, projectId }, req.userId);
     if (!squad)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'squad not found'));
-    (0, index_js_12.sendSuccess)(res, squad);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'squad not found'));
+    (0, index_js_13.sendSuccess)(res, squad);
 }));
-app.patch('/api/a2a/squads/:id/members/:memberId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.patch('/api/a2a/squads/:id/members/:memberId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { role, projectId } = req.body ?? {};
     if (role !== undefined && typeof role !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'role must be a string'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'role must be a string'));
     }
     if (projectId !== undefined && projectId !== null && typeof projectId !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'projectId must be a string or null'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'projectId must be a string or null'));
     }
     if (role === undefined && projectId === undefined) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'role or projectId is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'role or projectId is required'));
     }
     const { setMemberRole } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const squad = setMemberRole(req.params.id, req.params.memberId, role, req.userId, { projectId });
     if (!squad)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'squad or member not found'));
-    (0, index_js_12.sendSuccess)(res, squad);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'squad or member not found'));
+    (0, index_js_13.sendSuccess)(res, squad);
 }));
-app.delete('/api/a2a/squads/:id/members/:memberId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/a2a/squads/:id/members/:memberId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { removeMember } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const squad = removeMember(req.params.id, req.params.memberId, req.userId);
     if (!squad)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'squad not found'));
-    (0, index_js_12.sendSuccess)(res, squad);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'squad not found'));
+    (0, index_js_13.sendSuccess)(res, squad);
 }));
 // ── Squad task dispatch (assign work to a team) ─────────────────────────────
-app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { task, strategy, projectId, execute, createSandbox } = req.body ?? {};
     if (typeof task !== 'string' || !task.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'task (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'task (string) is required'));
     }
     if (strategy !== undefined && !['all', 'leader', 'round-robin', 'best-match'].includes(strategy)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'strategy must be all|leader|round-robin|best-match'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'strategy must be all|leader|round-robin|best-match'));
     }
     const { dispatchToSquad } = await Promise.resolve().then(() => __importStar(require('./a2a/squad-dispatch.service.js')));
     const result = await dispatchToSquad({ squadId: req.params.id, task: task.trim(), strategy, createdBy: req.userId });
     if (!result.ok)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, result.reason ?? 'dispatch failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, result.reason ?? 'dispatch failed'));
     const explicitProjectId = typeof projectId === 'string' && projectId.trim() ? projectId.trim() : undefined;
     const { resolveSquadDispatchProject } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const resolvedProject = resolveSquadDispatchProject({
@@ -14166,12 +14062,12 @@ app.post('/api/a2a/squads/:id/dispatch', authenticateRequest, (0, index_js_12.as
         }
     }
     // `executed` kept for backward compatibility; `execution` carries the truth.
-    (0, index_js_12.sendSuccess)(res, { ...result.squadTask, deliveredTo: result.deliveredTo ?? [], executed: execution.started, execution });
+    (0, index_js_13.sendSuccess)(res, { ...result.squadTask, deliveredTo: result.deliveredTo ?? [], executed: execution.started, execution });
 }));
 // Cross-squad board: every task across the caller's squads, enriched with the
 // squad name so the frontend doesn't need an N+1 join. Scoped to squads the
 // caller owns so the board never leaks another user's dispatches.
-app.get('/api/a2a/squad-tasks', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/squad-tasks', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { listAllSquadTasks } = await Promise.resolve().then(() => __importStar(require('./a2a/squad-dispatch.service.js')));
     const { listSquads } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const squads = listSquads(req.userId);
@@ -14180,15 +14076,15 @@ app.get('/api/a2a/squad-tasks', authenticateRequest, (0, index_js_12.asyncHandle
         ...t,
         squadName: nameById.get(t.squadId) ?? t.squadId,
     }));
-    (0, index_js_12.sendSuccess)(res, { tasks });
+    (0, index_js_13.sendSuccess)(res, { tasks });
 }));
-app.get('/api/a2a/squads/:id/tasks', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/squads/:id/tasks', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { listSquadTasks } = await Promise.resolve().then(() => __importStar(require('./a2a/squad-dispatch.service.js')));
-    (0, index_js_12.sendSuccess)(res, { tasks: listSquadTasks(req.params.id) });
+    (0, index_js_13.sendSuccess)(res, { tasks: listSquadTasks(req.params.id) });
 }));
 // Per-agent run history: every squad-task assignment for one agent, newest
 // first, enriched with the squad name. Powers the agent drill-down beyond skills.
-app.get('/api/a2a/agents/:agentId/assignments', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/agents/:agentId/assignments', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getAgentAssignments } = await Promise.resolve().then(() => __importStar(require('./a2a/squad-dispatch.service.js')));
     const { listSquads } = await Promise.resolve().then(() => __importStar(require('./a2a/squad.service.js')));
     const nameById = new Map(listSquads(req.userId).map((s) => [s.id, s.name]));
@@ -14196,56 +14092,56 @@ app.get('/api/a2a/agents/:agentId/assignments', authenticateRequest, (0, index_j
         ...a,
         squadName: nameById.get(a.squadId) ?? a.squadId,
     }));
-    (0, index_js_12.sendSuccess)(res, { assignments });
+    (0, index_js_13.sendSuccess)(res, { assignments });
 }));
-app.get('/api/a2a/squads/:id/stats', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/squads/:id/stats', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getSquadStats } = await Promise.resolve().then(() => __importStar(require('./a2a/squad-dispatch.service.js')));
-    (0, index_js_12.sendSuccess)(res, getSquadStats(req.params.id));
+    (0, index_js_13.sendSuccess)(res, getSquadStats(req.params.id));
 }));
-app.post('/api/a2a/squad-tasks/:taskId/assignments/:memberId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/squad-tasks/:taskId/assignments/:memberId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { status } = req.body ?? {};
     if (!['queued', 'in_progress', 'completed', 'failed'].includes(status)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'status must be queued|in_progress|completed|failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'status must be queued|in_progress|completed|failed'));
     }
     const { transitionAssignment } = await Promise.resolve().then(() => __importStar(require('./a2a/squad-dispatch.service.js')));
     const result = await transitionAssignment(req.params.taskId, req.params.memberId, status, req.userId);
     if (!result.ok)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, result.reason ?? 'transition failed'));
-    (0, index_js_12.sendSuccess)(res, result.squadTask);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, result.reason ?? 'transition failed'));
+    (0, index_js_13.sendSuccess)(res, result.squadTask);
 }));
 // ── Collaboration activity feed (across all squads) ─────────────────────────
-app.get('/api/a2a/collaboration/feed', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/collaboration/feed', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getCollabFeed } = await Promise.resolve().then(() => __importStar(require('./a2a/collab-feed.service.js')));
     const limit = Number(req.query.limit) || 50;
-    (0, index_js_12.sendSuccess)(res, { feed: await getCollabFeed({ ownerId: req.userId, limit }) });
+    (0, index_js_13.sendSuccess)(res, { feed: await getCollabFeed({ ownerId: req.userId, limit }) });
 }));
-app.get('/api/a2a/collaboration/summary', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/collaboration/summary', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getCollabSummary } = await Promise.resolve().then(() => __importStar(require('./a2a/collab-feed.service.js')));
-    (0, index_js_12.sendSuccess)(res, await getCollabSummary({ ownerId: req.userId }));
+    (0, index_js_13.sendSuccess)(res, await getCollabSummary({ ownerId: req.userId }));
 }));
-app.get('/api/a2a/collaboration/events', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/collaboration/events', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { recentCollabEvents } = await Promise.resolve().then(() => __importStar(require('./a2a/collab-events.service.js')));
-    (0, index_js_12.sendSuccess)(res, { events: recentCollabEvents(Number(req.query.limit) || 50) });
+    (0, index_js_13.sendSuccess)(res, { events: recentCollabEvents(Number(req.query.limit) || 50) });
 }));
-app.get('/api/a2a/collaboration/roster', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/collaboration/roster', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getRoster } = await Promise.resolve().then(() => __importStar(require('./a2a/collab-feed.service.js')));
-    (0, index_js_12.sendSuccess)(res, { roster: await getRoster({ ownerId: req.userId }) });
+    (0, index_js_13.sendSuccess)(res, { roster: await getRoster({ ownerId: req.userId }) });
 }));
 // ── Workflow step runner (llm/http/code/branch/trigger/squad steps) ─────────
 // Exposes the step executor so composed step lists (incl. squad steps) run via HTTP.
-app.post('/api/workflows/run-steps', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/workflows/run-steps', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { steps, context } = req.body ?? {};
     if (!Array.isArray(steps) || steps.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'steps (non-empty array) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'steps (non-empty array) is required'));
     }
     const valid = steps.every((s) => s && typeof s.type === 'string' && typeof s.name === 'string' && typeof s.config === 'object');
     if (!valid) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'each step needs { type, name, config }'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'each step needs { type, name, config }'));
     }
     const { executeWorkflowSteps } = await Promise.resolve().then(() => __importStar(require('./a2a/workflow-step-executor.js')));
     const ctx = { ...(context && typeof context === 'object' ? context : {}), _userId: req.userId };
     const result = await executeWorkflowSteps(steps, ctx);
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
 // Live Server-Sent Events stream of collaboration events (real-time consumers).
 app.get('/api/a2a/collaboration/stream', promoteQueryToken, authenticateRequest, (req, res) => {
@@ -14276,148 +14172,148 @@ app.get('/api/a2a/collaboration/stream', promoteQueryToken, authenticateRequest,
     });
 });
 // ── Agent Presence API (availability × workload) ────────────────────────────
-app.get('/api/a2a/presence', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/presence', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const idsParam = req.query.agentIds ?? '';
     const agentIds = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
     if (agentIds.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'agentIds (comma-separated) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'agentIds (comma-separated) is required'));
     }
     const { buildPresenceMap } = await Promise.resolve().then(() => __importStar(require('./a2a/presence.service.js')));
-    (0, index_js_12.sendSuccess)(res, { presence: await buildPresenceMap(agentIds) });
+    (0, index_js_13.sendSuccess)(res, { presence: await buildPresenceMap(agentIds) });
 }));
-app.get('/api/a2a/presence/:agentId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/a2a/presence/:agentId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getPresence } = await Promise.resolve().then(() => __importStar(require('./a2a/presence.service.js')));
-    (0, index_js_12.sendSuccess)(res, await getPresence(req.params.agentId));
+    (0, index_js_13.sendSuccess)(res, await getPresence(req.params.agentId));
 }));
-app.post('/api/a2a/presence/:agentId/workload', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/presence/:agentId/workload', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { active, queued } = req.body ?? {};
     const { setWorkload, getPresence } = await Promise.resolve().then(() => __importStar(require('./a2a/presence.service.js')));
     setWorkload(req.params.agentId, {
         active: typeof active === 'number' ? active : undefined,
         queued: typeof queued === 'number' ? queued : undefined,
     });
-    (0, index_js_12.sendSuccess)(res, await getPresence(req.params.agentId));
+    (0, index_js_13.sendSuccess)(res, await getPresence(req.params.agentId));
 }));
 // ── Billing (Polar) API ─────────────────────────────────────────────────────
 // Additive, fail-safe billing via Polar. Does not touch existing entitlements.
-app.get('/api/billing/polar/health', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/billing/polar/health', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { polarHealth } = await Promise.resolve().then(() => __importStar(require('./polar-client.js')));
-    (0, index_js_12.sendSuccess)(res, await polarHealth());
+    (0, index_js_13.sendSuccess)(res, await polarHealth());
 }));
-app.get('/api/billing/polar/products', authenticateRequest, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/billing/polar/products', authenticateRequest, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { listProducts } = await Promise.resolve().then(() => __importStar(require('./polar-client.js')));
-    (0, index_js_12.sendSuccess)(res, await listProducts());
+    (0, index_js_13.sendSuccess)(res, await listProducts());
 }));
-app.post('/api/billing/polar/checkout', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/billing/polar/checkout', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { products, successUrl, customerEmail, metadata } = req.body ?? {};
     if (!Array.isArray(products) || products.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'products (non-empty array of product IDs) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'products (non-empty array of product IDs) is required'));
     }
     const { createCheckout } = await Promise.resolve().then(() => __importStar(require('./polar-client.js')));
     const result = await createCheckout({ products, successUrl, customerEmail, metadata });
     if (!result.available)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Polar unavailable'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Polar unavailable'));
     if (result.reason && !result.checkoutUrl)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, result.reason));
-    (0, index_js_12.sendSuccess)(res, result);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, result.reason));
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.get('/api/billing/polar/subscriptions', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/billing/polar/subscriptions', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { listSubscriptions } = await Promise.resolve().then(() => __importStar(require('./polar-client.js')));
-    (0, index_js_12.sendSuccess)(res, await listSubscriptions(req.query.customerId));
+    (0, index_js_13.sendSuccess)(res, await listSubscriptions(req.query.customerId));
 }));
 // ── Zero-Trust Network (OpenZiti) API ───────────────────────────────────────
 // Provision zero-trust identities/enrollment for runners. Fail-safe.
-app.get('/api/ziti/health', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/ziti/health', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { zitiHealth } = await Promise.resolve().then(() => __importStar(require('./ziti-client.js')));
-    (0, index_js_12.sendSuccess)(res, await zitiHealth());
+    (0, index_js_13.sendSuccess)(res, await zitiHealth());
 }));
-app.get('/api/ziti/identities', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/ziti/identities', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { listIdentities } = await Promise.resolve().then(() => __importStar(require('./ziti-client.js')));
-    (0, index_js_12.sendSuccess)(res, await listIdentities(req.query.filter));
+    (0, index_js_13.sendSuccess)(res, await listIdentities(req.query.filter));
 }));
-app.post('/api/ziti/identities', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/ziti/identities', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { name, isAdmin, roleAttributes } = req.body ?? {};
     if (typeof name !== 'string' || !name.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
     }
     const { createIdentity } = await Promise.resolve().then(() => __importStar(require('./ziti-client.js')));
     const result = await createIdentity({ name: name.trim(), isAdmin, roleAttributes });
     if (!result.available)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
-    (0, index_js_12.sendSuccess)(res, result);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.post('/api/ziti/runners', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/ziti/runners', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { name } = req.body ?? {};
     if (typeof name !== 'string' || !name.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
     }
     const { provisionRunnerIdentity } = await Promise.resolve().then(() => __importStar(require('./ziti-client.js')));
     const result = await provisionRunnerIdentity(name.trim());
     if (!result.available)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
-    (0, index_js_12.sendSuccess)(res, result);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.delete('/api/ziti/identities/:id', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/ziti/identities/:id', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { deleteIdentity } = await Promise.resolve().then(() => __importStar(require('./ziti-client.js')));
-    (0, index_js_12.sendSuccess)(res, await deleteIdentity(req.params.id));
+    (0, index_js_13.sendSuccess)(res, await deleteIdentity(req.params.id));
 }));
 // ── Agent Skill Profiles API (dynamic, outcome-driven proficiency) ──────────
 // Compound skills: record task outcomes and rank agents by demonstrated ability.
-app.post('/api/agent-skills/record', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/agent-skills/record', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { agentId, skills, success, durationMs } = req.body ?? {};
     if (typeof agentId !== 'string' || !agentId.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'agentId (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'agentId (string) is required'));
     }
     if (!Array.isArray(skills) || skills.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
     }
     if (typeof success !== 'boolean') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'success (boolean) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'success (boolean) is required'));
     }
     const { recordTaskOutcome } = await Promise.resolve().then(() => __importStar(require('./agent-skill-profile.js')));
-    (0, index_js_12.sendSuccess)(res, recordTaskOutcome({ agentId, skills, success, durationMs }));
+    (0, index_js_13.sendSuccess)(res, recordTaskOutcome({ agentId, skills, success, durationMs }));
 }));
-app.get('/api/agent-skills', authenticateRequest, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/agent-skills', authenticateRequest, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { listProfiles } = await Promise.resolve().then(() => __importStar(require('./agent-skill-profile.js')));
-    (0, index_js_12.sendSuccess)(res, { profiles: listProfiles() });
+    (0, index_js_13.sendSuccess)(res, { profiles: listProfiles() });
 }));
 // Registered before /:agentId so "leaderboard" isn't captured as an agentId.
-app.get('/api/agent-skills/leaderboard', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/agent-skills/leaderboard', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getLeaderboard } = await Promise.resolve().then(() => __importStar(require('./agent-skill-profile.js')));
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         leaderboard: getLeaderboard({ skill: req.query.skill, limit: Number(req.query.limit) || 20 }),
     });
 }));
-app.get('/api/agent-skills/:agentId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/agent-skills/:agentId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getAgentProfile } = await Promise.resolve().then(() => __importStar(require('./agent-skill-profile.js')));
     const profile = getAgentProfile(req.params.agentId);
     if (!profile)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'no profile for that agent yet'));
-    (0, index_js_12.sendSuccess)(res, profile);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'no profile for that agent yet'));
+    (0, index_js_13.sendSuccess)(res, profile);
 }));
-app.post('/api/agent-skills/rank', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/agent-skills/rank', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { agentIds, skills } = req.body ?? {};
     if (!Array.isArray(skills) || skills.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
     }
     const { rankAgentsForSkills } = await Promise.resolve().then(() => __importStar(require('./agent-skill-profile.js')));
-    (0, index_js_12.sendSuccess)(res, { rankings: rankAgentsForSkills(Array.isArray(agentIds) ? agentIds : undefined, skills) });
+    (0, index_js_13.sendSuccess)(res, { rankings: rankAgentsForSkills(Array.isArray(agentIds) ? agentIds : undefined, skills) });
 }));
 // ── Unified Multi-Model LLM Router API ──────────────────────────────────────
 // One endpoint routes to any provider by `provider/model`, BYOK-aware.
-app.get('/api/llm/providers', authenticateRequest, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/llm/providers', authenticateRequest, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { listProviders, llmRouterHealth } = await Promise.resolve().then(() => __importStar(require('./llm-router.js')));
-    (0, index_js_12.sendSuccess)(res, { health: llmRouterHealth(), providers: listProviders() });
+    (0, index_js_13.sendSuccess)(res, { health: llmRouterHealth(), providers: listProviders() });
 }));
-app.post('/api/llm/route', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/llm/route', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { prompt, provider } = req.body ?? {};
     if (typeof prompt !== 'string' || !prompt.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'prompt (string) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'prompt (string) is required'));
     }
     const { recommendModel } = await Promise.resolve().then(() => __importStar(require('./llm-router.js')));
-    (0, index_js_12.sendSuccess)(res, recommendModel({ prompt, provider }));
+    (0, index_js_13.sendSuccess)(res, recommendModel({ prompt, provider }));
 }));
-app.post('/api/llm/chat', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/llm/chat', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { model, messages, provider, apiKey, temperature, maxTokens, timeoutMs, autoModel } = req.body ?? {};
     // autoModel: pick a model by prompt complexity when no explicit model given.
     let resolvedModel = model;
@@ -14428,10 +14324,10 @@ app.post('/api/llm/chat', authenticateRequest, (0, index_js_12.asyncHandler)(asy
         resolvedModel = `${rec.provider}/${rec.model}`;
     }
     if (typeof resolvedModel !== 'string' || !resolvedModel.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'model (string) is required (or pass autoModel:true)'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'model (string) is required (or pass autoModel:true)'));
     }
     if (!Array.isArray(messages) || messages.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
     }
     const { chatComplete } = await Promise.resolve().then(() => __importStar(require('./llm-router.js')));
     const result = await chatComplete({
@@ -14445,86 +14341,86 @@ app.post('/api/llm/chat', authenticateRequest, (0, index_js_12.asyncHandler)(asy
         timeoutMs,
     });
     if (!result.ok) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, result.error ?? 'chat completion failed'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, result.error ?? 'chat completion failed'));
     }
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
 // ── Code Intelligence API (code knowledge graph) ────────────────────────────
 // Build a queryable symbol/import graph from project files so agents can
 // navigate a codebase: find symbols, list a file's exports, who-imports, deps.
-app.post('/api/code-graph/build', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/code-graph/build', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { files, graphId, maxFiles, maxFileBytes } = req.body ?? {};
     if (!Array.isArray(files) || files.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'files (non-empty array of {path, content}) is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'files (non-empty array of {path, content}) is required'));
     }
     const { buildCodeGraph, storeGraph } = await Promise.resolve().then(() => __importStar(require('./code-graph.js')));
     const graph = buildCodeGraph(files, { maxFiles, maxFileBytes });
     const id = (typeof graphId === 'string' && graphId.trim()) ? graphId.trim() : `graph_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     storeGraph(id, graph);
-    (0, index_js_12.sendSuccess)(res, { graphId: id, stats: graph.stats });
+    (0, index_js_13.sendSuccess)(res, { graphId: id, stats: graph.stats });
 }));
-app.get('/api/code-graph/:graphId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/code-graph/:graphId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getStoredGraph } = await Promise.resolve().then(() => __importStar(require('./code-graph.js')));
     const graph = getStoredGraph(req.params.graphId);
     if (!graph)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
     const full = req.query.full === 'true';
-    (0, index_js_12.sendSuccess)(res, full ? graph : { stats: graph.stats });
+    (0, index_js_13.sendSuccess)(res, full ? graph : { stats: graph.stats });
 }));
-app.get('/api/code-graph/:graphId/search', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/code-graph/:graphId/search', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getStoredGraph, searchSymbols } = await Promise.resolve().then(() => __importStar(require('./code-graph.js')));
     const graph = getStoredGraph(req.params.graphId);
     if (!graph)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
     const q = req.query.q?.trim();
     if (!q)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'q query param is required'));
-    (0, index_js_12.sendSuccess)(res, { results: searchSymbols(graph, q, Number(req.query.limit) || 50) });
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'q query param is required'));
+    (0, index_js_13.sendSuccess)(res, { results: searchSymbols(graph, q, Number(req.query.limit) || 50) });
 }));
-app.get('/api/code-graph/:graphId/symbol', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/code-graph/:graphId/symbol', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getStoredGraph, findSymbol } = await Promise.resolve().then(() => __importStar(require('./code-graph.js')));
     const graph = getStoredGraph(req.params.graphId);
     if (!graph)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
     const name = req.query.name?.trim();
     if (!name)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name query param is required'));
-    (0, index_js_12.sendSuccess)(res, { results: findSymbol(graph, name) });
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name query param is required'));
+    (0, index_js_13.sendSuccess)(res, { results: findSymbol(graph, name) });
 }));
-app.get('/api/code-graph/:graphId/file-symbols', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/code-graph/:graphId/file-symbols', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getStoredGraph, fileSymbols } = await Promise.resolve().then(() => __importStar(require('./code-graph.js')));
     const graph = getStoredGraph(req.params.graphId);
     if (!graph)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
     const path = req.query.path?.trim();
     if (!path)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'path query param is required'));
-    (0, index_js_12.sendSuccess)(res, { symbols: fileSymbols(graph, path) });
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'path query param is required'));
+    (0, index_js_13.sendSuccess)(res, { symbols: fileSymbols(graph, path) });
 }));
-app.get('/api/code-graph/:graphId/who-imports', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/code-graph/:graphId/who-imports', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getStoredGraph, whoImports } = await Promise.resolve().then(() => __importStar(require('./code-graph.js')));
     const graph = getStoredGraph(req.params.graphId);
     if (!graph)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
     const path = req.query.path?.trim();
     if (!path)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'path query param is required'));
-    (0, index_js_12.sendSuccess)(res, { importers: whoImports(graph, path) });
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'path query param is required'));
+    (0, index_js_13.sendSuccess)(res, { importers: whoImports(graph, path) });
 }));
-app.get('/api/code-graph/:graphId/dependencies', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/code-graph/:graphId/dependencies', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { getStoredGraph, dependenciesOf } = await Promise.resolve().then(() => __importStar(require('./code-graph.js')));
     const graph = getStoredGraph(req.params.graphId);
     if (!graph)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
     const path = req.query.path?.trim();
     if (!path)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'path query param is required'));
-    (0, index_js_12.sendSuccess)(res, { dependencies: dependenciesOf(graph, path) });
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'path query param is required'));
+    (0, index_js_13.sendSuccess)(res, { dependencies: dependenciesOf(graph, path) });
 }));
 // ── Agent Terminal Registry ─────────────────────────────────────────────────
 // Per-terminal discovery so the system knows exactly how many Claude Code,
 // Codex, OpenCode, etc. instances are connected and can route to each one.
-app.post('/api/a2a/terminals/register', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/terminals/register', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { registerTerminal } = await Promise.resolve().then(() => __importStar(require('./a2a/agent-terminal-registry.js')));
     const { agentType, sessionId, displayName, callbackUrl, projectId, workspaceDir, capabilities, version, hostname } = req.body || {};
     if (!agentType || typeof agentType !== 'string') {
@@ -14541,42 +14437,42 @@ app.post('/api/a2a/terminals/register', authenticateRequest, (0, index_js_12.asy
         version: typeof version === 'string' ? version : undefined,
         hostname: typeof hostname === 'string' ? hostname : undefined,
     });
-    (0, index_js_12.sendSuccess)(res, session);
+    (0, index_js_13.sendSuccess)(res, session);
 }));
-app.post('/api/a2a/terminals/:sessionId/heartbeat', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/terminals/:sessionId/heartbeat', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { heartbeat } = await Promise.resolve().then(() => __importStar(require('./a2a/agent-terminal-registry.js')));
     const ok = heartbeat(req.params.sessionId, req.body);
     if (!ok)
         return res.status(404).json({ success: false, error: 'Terminal not found' });
-    (0, index_js_12.sendSuccess)(res, { ok: true });
+    (0, index_js_13.sendSuccess)(res, { ok: true });
 }));
-app.delete('/api/a2a/terminals/:sessionId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/a2a/terminals/:sessionId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { deregisterTerminal } = await Promise.resolve().then(() => __importStar(require('./a2a/agent-terminal-registry.js')));
     deregisterTerminal(req.params.sessionId);
-    (0, index_js_12.sendSuccess)(res, { ok: true });
+    (0, index_js_13.sendSuccess)(res, { ok: true });
 }));
-app.get('/api/a2a/terminals', authenticateRequest, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/a2a/terminals', authenticateRequest, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { listTerminals, getSummary } = await Promise.resolve().then(() => __importStar(require('./a2a/agent-terminal-registry.js')));
-    (0, index_js_12.sendSuccess)(res, { terminals: listTerminals(), summary: getSummary() });
+    (0, index_js_13.sendSuccess)(res, { terminals: listTerminals(), summary: getSummary() });
 }));
-app.get('/api/a2a/terminals/summary', authenticateRequest, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/a2a/terminals/summary', authenticateRequest, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const { getSummary } = await Promise.resolve().then(() => __importStar(require('./a2a/agent-terminal-registry.js')));
-    (0, index_js_12.sendSuccess)(res, getSummary());
+    (0, index_js_13.sendSuccess)(res, getSummary());
 }));
-app.post('/api/a2a/terminals/:sessionId/push', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/a2a/terminals/:sessionId/push', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { pushToTerminal } = await Promise.resolve().then(() => __importStar(require('./a2a/agent-terminal-registry.js')));
     const ok = await pushToTerminal(req.params.sessionId, req.body);
-    (0, index_js_12.sendSuccess)(res, { delivered: ok });
+    (0, index_js_13.sendSuccess)(res, { delivered: ok });
 }));
 // Wire the A2A event bridge (TaskLifecycleService audit -> SSE event bus)
-(0, index_js_6.wireA2AEventBridge)();
+(0, index_js_7.wireA2AEventBridge)();
 // Wire cross-subsystem integration (delegation→queue, queue→messaging, etc.)
-(0, index_js_6.getIntegrationWiringService)().wireAll();
+(0, index_js_7.getIntegrationWiringService)().wireAll();
 // Wire autonomous @mention routing (collaboration mentions → delegation handoff)
 (0, autonomous_routing_service_js_1.wireAutonomousRouting)();
 logger.info('autonomous @mention routing wired');
 // Start heartbeat tracker background sweep
-(0, index_js_6.getHeartbeatTracker)().start();
+(0, index_js_7.getHeartbeatTracker)().start();
 // Wire Redis-backed A2A shared control plane (non-blocking)
 // Falls through to existing in-memory behavior if REDIS_URL is not set.
 if (process.env.REDIS_URL) {
@@ -14617,6 +14513,65 @@ if (POLAR_WEBHOOK_SECRET) {
 else {
     logger.info('POLAR_WEBHOOK_SECRET not set, Polar.sh webhooks disabled');
 }
+// Consolidated health of the Recoder-owned OSS integrations (mem0, context7,
+// daytona SDK) — surfaces which merged capabilities are live/configured.
+app.get('/api/integrations/health', authenticateRequest, async (_req, res) => {
+    const [{ mem0Health }, { isContext7Available }, { isDaytonaSdkEnabled }] = await Promise.all([
+        Promise.resolve().then(() => __importStar(require('./mem0-client.js'))),
+        Promise.resolve().then(() => __importStar(require('./context7.js'))),
+        Promise.resolve().then(() => __importStar(require('./daytona-sdk.js'))),
+    ]);
+    const mem0 = await mem0Health();
+    res.json({
+        success: true,
+        data: {
+            mem0: { available: mem0.available, mode: mem0.mode, reason: mem0.reason },
+            context7: { available: isContext7Available() },
+            daytonaSdk: { enabled: isDaytonaSdkEnabled() },
+        },
+    });
+});
+// List sandboxes via the owned Daytona SDK (@recoder/sandbox-daytona) when the
+// SDK-backed path is enabled (DAYTONA_USE_SDK). Degrades gracefully otherwise.
+app.get('/api/daytona/sdk/sandboxes', authenticateRequest, async (_req, res) => {
+    const { getDaytonaSdk, isDaytonaSdkEnabled } = await Promise.resolve().then(() => __importStar(require('./daytona-sdk.js')));
+    if (!isDaytonaSdkEnabled()) {
+        res.json({ success: true, data: { enabled: false, sandboxes: [] } });
+        return;
+    }
+    try {
+        const result = await getDaytonaSdk().list();
+        res.json({ success: true, data: { enabled: true, result } });
+    }
+    catch (err) {
+        res.status(502).json({ success: false, error: err instanceof Error ? err.message : 'daytona sdk list failed' });
+    }
+});
+// Live library documentation via the owned Context7 docs SDK (@recoder/context7-sdk).
+app.get('/api/context7/docs', authenticateRequest, async (req, res) => {
+    const library = String(req.query?.library ?? '');
+    const query = String(req.query?.q ?? req.query?.query ?? '');
+    if (!library) {
+        res.status(400).json({ success: false, error: 'library query param is required' });
+        return;
+    }
+    const { fetchLibraryDocs } = await Promise.resolve().then(() => __importStar(require('./context7.js')));
+    const result = await fetchLibraryDocs(library, query);
+    res.json({ success: true, data: result });
+});
+// Current user's entitlement tier, resolved on-demand from their active Polar
+// subscription (links billing/polar-webhook subscription state -> tier + limits).
+app.get('/api/billing/tier', authenticateRequest, async (req, res) => {
+    const userId = req.userId;
+    if (!userId) {
+        res.status(401).json({ success: false, error: 'unauthenticated' });
+        return;
+    }
+    const { resolveUserTier } = await Promise.resolve().then(() => __importStar(require('./billing/subscription-tier.js')));
+    const { getTierResourceLimits } = await Promise.resolve().then(() => __importStar(require('./resources/tier-limits.js')));
+    const tier = resolveUserTier(userId);
+    res.json({ success: true, data: { tier, limits: getTierResourceLimits(tier) } });
+});
 // Handle Polar webhook events - provision/deprovision resources on subscription changes
 (0, polar_webhook_js_1.onWebhookEvent)('subscription.active', async (data) => {
     logger.info({ subscriptionId: data.id, productId: data.product_id }, 'subscription activated — provisioning resources');
@@ -14663,63 +14618,63 @@ else {
 });
 // ==================== API Key Management Endpoints ====================
 // GET /api/v1/api-keys - list keys for authenticated user
-app.get('/api/v1/api-keys', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/v1/api-keys', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     const keys = (0, api_keys_js_1.listUserApiKeys)(userId);
-    (0, index_js_12.sendSuccess)(res, { keys });
+    (0, index_js_13.sendSuccess)(res, { keys });
 }));
 // POST /api/v1/api-keys - create a new API key
-app.post('/api/v1/api-keys', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/v1/api-keys', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     const { name, scopes, allowedIps, expiresAt, isTestKey, metadata } = req.body;
     if (!name || !scopes || !Array.isArray(scopes) || scopes.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name and scopes[] are required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name and scopes[] are required'));
     }
     try {
         const result = (0, api_keys_js_1.createApiKey)(userId, { name, scopes, allowedIps, expiresAt, isTestKey, metadata });
-        (0, index_js_12.sendSuccess)(res, result);
+        (0, index_js_13.sendSuccess)(res, result);
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, err.message));
     }
 }));
 // DELETE /api/v1/api-keys/:id - delete an API key
-app.delete('/api/v1/api-keys/:id', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/v1/api-keys/:id', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     const keyId = req.params.id;
     const deleted = (0, api_keys_js_1.deleteApiKey)(keyId, userId);
     if (!deleted) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'API key not found or access denied'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'API key not found or access denied'));
     }
-    (0, index_js_12.sendSuccess)(res, { deleted: true, id: keyId });
+    (0, index_js_13.sendSuccess)(res, { deleted: true, id: keyId });
 }));
 // PATCH /api/v1/api-keys/:id - revoke (deactivate) an API key without deleting
-app.patch('/api/v1/api-keys/:id', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.patch('/api/v1/api-keys/:id', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     const keyId = req.params.id;
     const revoked = (0, api_keys_js_1.revokeApiKey)(keyId, userId);
     if (!revoked) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'API key not found or access denied'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'API key not found or access denied'));
     }
-    (0, index_js_12.sendSuccess)(res, { revoked: true, id: keyId, status: 'inactive' });
+    (0, index_js_13.sendSuccess)(res, { revoked: true, id: keyId, status: 'inactive' });
 }));
 // GET /api/v1/api-keys/usage - get aggregated usage stats for user's keys
-app.get('/api/v1/api-keys/usage', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/v1/api-keys/usage', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     const keys = (0, api_keys_js_1.listUserApiKeys)(userId);
     const usageByKey = {};
@@ -14734,7 +14689,7 @@ app.get('/api/v1/api-keys/usage', authenticateRequest, (0, index_js_12.asyncHand
         };
         totalRequests += key.totalRequests;
     }
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         totalKeys: keys.length,
         activeKeys: keys.filter(k => k.isActive).length,
         totalRequests,
@@ -14744,10 +14699,10 @@ app.get('/api/v1/api-keys/usage', authenticateRequest, (0, index_js_12.asyncHand
 logger.info('API key management endpoints registered');
 // ==================== Usage, Subscription & Invoice Endpoints ====================
 // GET /api/usage - return usage aggregator data for the authenticated user
-app.get('/api/usage', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/usage', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     try {
         const usageAggregator = (0, usage_aggregator_js_1.getUsageAggregator)();
@@ -14764,41 +14719,41 @@ app.get('/api/usage', authenticateRequest, (0, index_js_12.asyncHandler)(async (
         catch (_) {
             // Quota enforcer may not be initialized
         }
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             summary,
             byProject,
             quota: quotaStatus,
         });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Failed to fetch usage data: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Failed to fetch usage data: ${err.message}`));
     }
 }));
 // GET /api/subscription - return subscription data from billing records
-app.get('/api/subscription', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/subscription', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     const active = (0, polar_webhook_js_1.getActiveSubscriptionByUserId)(userId);
     const all = (0, polar_webhook_js_1.getSubscriptionsByUserId)(userId);
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         active: active || null,
         subscriptions: all,
     });
 }));
 // GET /api/invoices - return invoice / webhook log data from billing records
-app.get('/api/invoices', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/invoices', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const userId = req.userId;
     if (!userId || userId === 'anonymous') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Authentication required'));
     }
     const limit = parseInt(req.query.limit) || 50;
     // Get subscription-related webhook logs as invoice proxy
     // In production this would query a dedicated invoices table
     const subscriptions = (0, polar_webhook_js_1.getSubscriptionsByUserId)(userId);
     const logs = (0, polar_webhook_js_1.getWebhookLogs)(limit);
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         subscriptions,
         recentEvents: logs,
     });
@@ -14806,110 +14761,110 @@ app.get('/api/invoices', authenticateRequest, (0, index_js_12.asyncHandler)(asyn
 logger.info('usage, subscription, and invoice endpoints registered');
 // ==================== Deployment Routes ====================
 // Vercel deployment routes
-app.post('/api/deploy/vercel/validate', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/vercel/validate', (0, index_js_13.asyncHandler)(async (req, res) => {
     const { token } = req.body;
     if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Token required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Token required'));
     const result = await (await getVercelDeploy()).validateToken(token);
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.get('/api/deploy/vercel/projects', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/deploy/vercel/projects', (0, index_js_13.asyncHandler)(async (req, res) => {
     const token = req.headers['x-vercel-token'];
     const teamId = req.query.teamId;
     if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Token required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Token required'));
     const projects = await (await getVercelDeploy()).listProjects({ provider: 'vercel', token, teamId });
-    (0, index_js_12.sendSuccess)(res, { projects });
+    (0, index_js_13.sendSuccess)(res, { projects });
 }));
-app.post('/api/deploy/vercel', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/vercel', (0, index_js_13.asyncHandler)(async (req, res) => {
     const { token, teamId, config, files } = req.body;
     if (!token || !config || !files)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
     const credentials = { provider: 'vercel', token, teamId };
     const deployment = await (await getVercelDeploy()).deploy(credentials, config, files);
-    (0, index_js_12.sendSuccess)(res, { deployment });
+    (0, index_js_13.sendSuccess)(res, { deployment });
 }));
-app.get('/api/deploy/vercel/:deploymentId', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/deploy/vercel/:deploymentId', (0, index_js_13.asyncHandler)(async (req, res) => {
     const token = req.headers['x-vercel-token'];
     const teamId = req.query.teamId;
     const { deploymentId } = req.params;
     const projectId = req.query.projectId || deploymentId;
     if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Token required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Token required'));
     const deployment = await (await getVercelDeploy()).getDeployment({ provider: 'vercel', token, teamId }, deploymentId, projectId);
-    (0, index_js_12.sendSuccess)(res, { deployment });
+    (0, index_js_13.sendSuccess)(res, { deployment });
 }));
-app.get('/api/deploy/vercel/:projectId/deployments', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/deploy/vercel/:projectId/deployments', (0, index_js_13.asyncHandler)(async (req, res) => {
     const token = req.headers['x-vercel-token'];
     const teamId = req.query.teamId;
     const { projectId } = req.params;
     if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Token required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Token required'));
     const deployments = await (await getVercelDeploy()).listDeployments({ provider: 'vercel', token, teamId }, { projectId, limit: 20 });
-    (0, index_js_12.sendSuccess)(res, { deployments });
+    (0, index_js_13.sendSuccess)(res, { deployments });
 }));
-app.post('/api/deploy/vercel/:projectId/rollback', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/vercel/:projectId/rollback', (0, index_js_13.asyncHandler)(async (req, res) => {
     const token = req.headers['x-vercel-token'];
     const teamId = req.query.teamId;
     const { projectId } = req.params;
     const { deploymentId } = req.body;
     if (!token || !deploymentId)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
     const deployment = await (await getVercelDeploy()).rollback({ provider: 'vercel', token, teamId }, projectId, deploymentId);
-    (0, index_js_12.sendSuccess)(res, { deployment });
+    (0, index_js_13.sendSuccess)(res, { deployment });
 }));
 // Netlify deployment routes
-app.post('/api/deploy/netlify/validate', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/netlify/validate', (0, index_js_13.asyncHandler)(async (req, res) => {
     const { token } = req.body;
     if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Token required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Token required'));
     const result = await (await getNetlifyDeploy()).validateToken(token);
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.get('/api/deploy/netlify/sites', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/deploy/netlify/sites', (0, index_js_13.asyncHandler)(async (req, res) => {
     const token = req.headers['x-netlify-token'];
     if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Token required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Token required'));
     const sites = await (await getNetlifyDeploy()).listSites({ provider: 'netlify', token });
-    (0, index_js_12.sendSuccess)(res, { sites });
+    (0, index_js_13.sendSuccess)(res, { sites });
 }));
-app.post('/api/deploy/netlify', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/netlify', (0, index_js_13.asyncHandler)(async (req, res) => {
     const { token, config, files } = req.body;
     if (!token || !config || !files)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
     const credentials = { provider: 'netlify', token };
     const deployment = await (await getNetlifyDeploy()).deploy(credentials, config, files);
-    (0, index_js_12.sendSuccess)(res, { deployment });
+    (0, index_js_13.sendSuccess)(res, { deployment });
 }));
-app.get('/api/deploy/netlify/:siteId/deployments', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/deploy/netlify/:siteId/deployments', (0, index_js_13.asyncHandler)(async (req, res) => {
     const token = req.headers['x-netlify-token'];
     const { siteId } = req.params;
     if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Token required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Token required'));
     const deployments = await (await getNetlifyDeploy()).listDeployments({ provider: 'netlify', token }, siteId, { limit: 20 });
-    (0, index_js_12.sendSuccess)(res, { deployments });
+    (0, index_js_13.sendSuccess)(res, { deployments });
 }));
-app.post('/api/deploy/netlify/:siteId/rollback', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/netlify/:siteId/rollback', (0, index_js_13.asyncHandler)(async (req, res) => {
     const token = req.headers['x-netlify-token'];
     const { siteId } = req.params;
     const { deploymentId, projectId } = req.body;
     if (!token || !deploymentId)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
     const deployment = await (await getNetlifyDeploy()).rollback({ provider: 'netlify', token }, siteId, deploymentId, projectId || siteId);
-    (0, index_js_12.sendSuccess)(res, { deployment });
+    (0, index_js_13.sendSuccess)(res, { deployment });
 }));
 // Cloudflare Workers deployment routes
-app.post('/api/deploy/cloudflare/validate', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/cloudflare/validate', (0, index_js_13.asyncHandler)(async (req, res) => {
     const { apiToken, accountId } = req.body;
     if (!apiToken || !accountId)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
     const result = await (await getCloudflareDeploy()).validateToken(apiToken, accountId);
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
-app.post('/api/deploy/cloudflare/deploy', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/cloudflare/deploy', (0, index_js_13.asyncHandler)(async (req, res) => {
     const { apiToken, accountId, projectId, workerName, config, files } = req.body;
     if (!apiToken || !accountId || !workerName || !files) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'API token, account ID, worker name, and files are required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'API token, account ID, worker name, and files are required'));
     }
     const credentials = { provider: 'cloudflare', token: apiToken, accountId };
     const deployConfig = {
@@ -14921,73 +14876,73 @@ app.post('/api/deploy/cloudflare/deploy', (0, index_js_12.asyncHandler)(async (r
         ...(config || {}),
     };
     const deployment = await (await getCloudflareDeploy()).deploy(credentials, deployConfig, files);
-    (0, index_js_12.sendSuccess)(res, { success: true, url: deployment.url, workerId: deployment.id, deployment });
+    (0, index_js_13.sendSuccess)(res, { success: true, url: deployment.url, workerId: deployment.id, deployment });
 }));
-app.get('/api/deploy/cloudflare/list', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/deploy/cloudflare/list', (0, index_js_13.asyncHandler)(async (req, res) => {
     const apiToken = req.query.apiToken || req.headers['x-cloudflare-token'];
     const accountId = req.query.accountId;
     if (!apiToken || !accountId)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
     const credentials = { provider: 'cloudflare', token: apiToken, accountId };
     const workers = await (await getCloudflareDeploy()).listWorkers(credentials);
-    (0, index_js_12.sendSuccess)(res, { workers });
+    (0, index_js_13.sendSuccess)(res, { workers });
 }));
-app.get('/api/deploy/cloudflare/:workerName/deployments', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/deploy/cloudflare/:workerName/deployments', (0, index_js_13.asyncHandler)(async (req, res) => {
     const apiToken = req.headers['x-cloudflare-token'];
     const accountId = req.query.accountId;
     const { workerName } = req.params;
     if (!apiToken || !accountId)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTH_REQUIRED, 'Token and account ID required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTH_REQUIRED, 'Token and account ID required'));
     const credentials = { provider: 'cloudflare', token: apiToken, accountId };
     const deployments = await (await getCloudflareDeploy()).listDeployments(credentials, workerName);
-    (0, index_js_12.sendSuccess)(res, { deployments });
+    (0, index_js_13.sendSuccess)(res, { deployments });
 }));
-app.post('/api/deploy/cloudflare/:workerName/rollback', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/deploy/cloudflare/:workerName/rollback', (0, index_js_13.asyncHandler)(async (req, res) => {
     const apiToken = req.headers['x-cloudflare-token'];
     const accountId = req.query.accountId;
     const { workerName } = req.params;
     const { versionId, projectId } = req.body;
     if (!apiToken || !accountId || !versionId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Token, account ID, and versionId required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Token, account ID, and versionId required'));
     }
     const credentials = { provider: 'cloudflare', token: apiToken, accountId };
     const deployment = await (await getCloudflareDeploy()).rollback(credentials, workerName, versionId, projectId || workerName);
-    (0, index_js_12.sendSuccess)(res, { deployment });
+    (0, index_js_13.sendSuccess)(res, { deployment });
 }));
 // Template routes
 app.get('/api/templates', (_req, res) => {
-    const templates = index_js_9.templateManager.getAllTemplates();
-    (0, index_js_12.sendSuccess)(res, { templates });
+    const templates = index_js_10.templateManager.getAllTemplates();
+    (0, index_js_13.sendSuccess)(res, { templates });
 });
 app.get('/api/templates/:templateId', (req, res) => {
-    const template = index_js_9.templateManager.getTemplate(req.params.templateId);
+    const template = index_js_10.templateManager.getTemplate(req.params.templateId);
     if (!template)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Template not found'));
-    (0, index_js_12.sendSuccess)(res, { template });
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Template not found'));
+    (0, index_js_13.sendSuccess)(res, { template });
 });
 app.get('/api/templates/search/:query', (req, res) => {
-    const results = index_js_9.templateManager.searchTemplates(req.params.query);
-    (0, index_js_12.sendSuccess)(res, { templates: results });
+    const results = index_js_10.templateManager.searchTemplates(req.params.query);
+    (0, index_js_13.sendSuccess)(res, { templates: results });
 });
 // Health monitor routes
-app.get('/api/health/containers', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/health/containers', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const statuses = health_monitor_js_1.healthMonitor.getAllStatuses();
-    (0, index_js_12.sendSuccess)(res, { containers: statuses });
+    (0, index_js_13.sendSuccess)(res, { containers: statuses });
 }));
-app.get('/api/health/containers/:containerId', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/health/containers/:containerId', (0, index_js_13.asyncHandler)(async (req, res) => {
     const status = health_monitor_js_1.healthMonitor.getHealthStatus(req.params.containerId);
     if (!status)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
-    (0, index_js_12.sendSuccess)(res, status);
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
+    (0, index_js_13.sendSuccess)(res, status);
 }));
 // Resource optimizer routes
-app.get('/api/resources/profiles', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/resources/profiles', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const profiles = resource_optimizer_js_1.resourceOptimizer.getAllProfiles();
-    (0, index_js_12.sendSuccess)(res, { profiles });
+    (0, index_js_13.sendSuccess)(res, { profiles });
 }));
-app.get('/api/resources/stats', (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/resources/stats', (0, index_js_13.asyncHandler)(async (_req, res) => {
     const stats = resource_optimizer_js_1.resourceOptimizer.getStats();
-    (0, index_js_12.sendSuccess)(res, stats);
+    (0, index_js_13.sendSuccess)(res, stats);
 }));
 // ==================== Publish (Go Live) Routes ====================
 const persistence_js_2 = require("./persistence.js");
@@ -15073,14 +15028,14 @@ async function detectBuildOutput(entry) {
     return { buildCmd: 'npm run build', outputDir: 'dist', framework: 'unknown', workspaceRoot };
 }
 // POST /api/publish/:projectId - Build and publish a project
-app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const userId = req.userId || 'anonymous';
     const existingSlug = (0, persistence_js_2.getSlugForProject)(projectId);
     let slug = existingSlug;
     const entry = await getOrRecoverContainer(projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found for this project'));
     }
     try {
         // 1. Detect framework
@@ -15138,7 +15093,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
                 }
             }
             if (!found) {
-                return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Build output not found at ${workDir}/${outputDir}. Build may have failed.`));
+                return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Build output not found at ${workDir}/${outputDir}. Build may have failed.`));
             }
         }
         // 5. Generate slug
@@ -15209,7 +15164,7 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
         if (zrokUrl) {
             logger.info({ projectId, zrokUrl }, 'Publish: persistent zrok URL ready');
         }
-        (0, index_js_12.sendSuccess)(res, { url, slug, publishedAt, ...(zrokUrl ? { zrokUrl } : {}) });
+        (0, index_js_13.sendSuccess)(res, { url, slug, publishedAt, ...(zrokUrl ? { zrokUrl } : {}) });
     }
     catch (error) {
         if (!existingSlug && slug) {
@@ -15218,15 +15173,15 @@ app.post('/api/publish/:projectId', authenticateRequest, verifyProjectOwnership,
         }
         logger.error({ err: error, projectId }, 'Publish: failed to publish project');
         const detail = error?.message || 'Unknown error';
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Publish failed: ${detail}`));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Publish failed: ${detail}`));
     }
 }));
 // POST /api/unpublish/:projectId - Remove a published project
-app.post('/api/unpublish/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/unpublish/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const slug = (0, persistence_js_2.unregisterSlug)(projectId);
     if (!slug) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Project is not published'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Project is not published'));
     }
     await (0, zrok_preview_js_1.destroyPublishedShare)(projectId, { deleteName: true }).catch((err) => {
         logger.warn({ err, projectId }, 'Publish: failed to destroy persistent zrok URL during unpublish');
@@ -15238,26 +15193,26 @@ app.post('/api/unpublish/:projectId', authenticateRequest, verifyProjectOwnershi
         fs.rmSync(publishedDir, { recursive: true });
     }
     logger.info({ projectId, slug }, 'Publish: project unpublished');
-    (0, index_js_12.sendSuccess)(res, { success: true });
+    (0, index_js_13.sendSuccess)(res, { success: true });
 }));
 // GET /api/publish-status/:projectId - Check publish status
-app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const slug = (0, persistence_js_2.getSlugForProject)(projectId);
     if (!slug) {
-        return (0, index_js_12.sendSuccess)(res, { published: false });
+        return (0, index_js_13.sendSuccess)(res, { published: false });
     }
     const fs = await Promise.resolve().then(() => __importStar(require('fs')));
     const publishedDir = (0, persistence_js_2.getPublishedPath)(slug);
     if (!fs.existsSync(publishedDir)) {
         (0, persistence_js_2.unregisterSlug)(projectId);
-        return (0, index_js_12.sendSuccess)(res, { published: false });
+        return (0, index_js_13.sendSuccess)(res, { published: false });
     }
     const meta = (0, persistence_js_2.getPublishMeta)(slug);
     const { getDomainsForProject } = await Promise.resolve().then(() => __importStar(require('./domain-manager.js')));
     const customDomains = getDomainsForProject(projectId);
     const zrokUrl = await ensurePublishedZrokUrl(projectId, publishedDir);
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         published: true,
         url: `${PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/published/${slug}`,
         slug,
@@ -15272,21 +15227,21 @@ app.get('/api/publish-status/:projectId', authenticateRequest, verifyProjectOwne
     });
 }));
 // POST /api/publish/:projectId/slug - Change the slug for a published project
-app.post('/api/publish/:projectId/slug', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/publish/:projectId/slug', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { projectId } = req.params;
     const newSlug = req.body?.slug;
     if (!newSlug || typeof newSlug !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Missing or invalid slug'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Missing or invalid slug'));
     }
     const result = (0, persistence_js_2.changeSlug)(projectId, newSlug.trim());
     if (!result.success) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, result.error || 'Failed to change slug'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, result.error || 'Failed to change slug'));
     }
     const publishedDir = (0, persistence_js_2.getPublishedPath)(result.slug);
     const url = `${PUBLIC_PREVIEW_URL.replace(/\/+$/, '')}/published/${result.slug}`;
     const zrokUrl = await ensurePublishedZrokUrl(projectId, publishedDir);
     logger.info({ projectId, slug: result.slug }, 'Publish: project slug changed');
-    (0, index_js_12.sendSuccess)(res, { url, slug: result.slug, changed: true, ...(zrokUrl ? { zrokUrl } : {}) });
+    (0, index_js_13.sendSuccess)(res, { url, slug: result.slug, changed: true, ...(zrokUrl ? { zrokUrl } : {}) });
 }));
 // ── Serve published sites at /published/{slug}/* ──
 // Static files from data/published/{slug}/ served with proper content types
@@ -15342,26 +15297,26 @@ backup_service_js_1.backupService.startScheduler();
 performance_profiler_js_1.performanceProfiler.startMonitoring();
 // ── S9-1: Abuse Prevention Endpoints ──
 // GET /api/admin/abuse/stats - Get abuse prevention statistics
-app.get('/api/admin/abuse/stats', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/admin/abuse/stats', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const stats = index_js_1.abusePrevention.getStats();
-    (0, index_js_12.sendSuccess)(res, stats);
+    (0, index_js_13.sendSuccess)(res, stats);
 }));
 // GET /api/admin/abuse/events - Get recent abuse events
-app.get('/api/admin/abuse/events', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/admin/abuse/events', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const limit = parseInt(req.query.limit) || 100;
     const events = index_js_1.abusePrevention.getRecentEvents(limit);
-    (0, index_js_12.sendSuccess)(res, { events, total: events.length });
+    (0, index_js_13.sendSuccess)(res, { events, total: events.length });
 }));
 // GET /api/admin/abuse/blocklist - Get blocklist entries
-app.get('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const blocklist = index_js_1.abusePrevention.getBlocklist();
-    (0, index_js_12.sendSuccess)(res, { blocklist, total: blocklist.length });
+    (0, index_js_13.sendSuccess)(res, { blocklist, total: blocklist.length });
 }));
 // POST /api/admin/abuse/blocklist - Add to blocklist
-app.post('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { type, value, reason, expiresAt } = req.body;
     if (!type || !value || !reason) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'type, value, and reason are required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'type, value, and reason are required'));
     }
     const entry = index_js_1.abusePrevention.addToBlocklist({
         type,
@@ -15370,21 +15325,21 @@ app.post('/api/admin/abuse/blocklist', authenticateRequest, requireAdmin, (0, in
         expiresAt: expiresAt ? new Date(expiresAt).getTime() : undefined,
         createdBy: req.userId,
     });
-    (0, index_js_12.sendSuccess)(res, { entry });
+    (0, index_js_13.sendSuccess)(res, { entry });
 }));
 // DELETE /api/admin/abuse/blocklist/:id - Remove from blocklist
-app.delete('/api/admin/abuse/blocklist/:id', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/admin/abuse/blocklist/:id', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const deleted = index_js_1.abusePrevention.removeFromBlocklist(id);
     if (!deleted) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Blocklist entry not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Blocklist entry not found'));
     }
-    (0, index_js_12.sendSuccess)(res, { deleted: true });
+    (0, index_js_13.sendSuccess)(res, { deleted: true });
 }));
 logger.info('abuse prevention endpoints registered');
 // ── S10-3: Admin Alert Endpoints ──
 // GET /api/admin/alerts - Get recent admin alerts
-app.get('/api/admin/alerts', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/admin/alerts', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const severity = req.query.severity;
     const category = req.query.category;
@@ -15396,25 +15351,25 @@ app.get('/api/admin/alerts', authenticateRequest, requireAdmin, (0, index_js_12.
         unacknowledgedOnly,
     });
     const counts = (0, index_js_1.getAlertCounts)();
-    (0, index_js_12.sendSuccess)(res, { alerts, counts, total: alerts.length });
+    (0, index_js_13.sendSuccess)(res, { alerts, counts, total: alerts.length });
 }));
 // POST /api/admin/alerts/:id/acknowledge - Acknowledge an alert
-app.post('/api/admin/alerts/:id/acknowledge', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/admin/alerts/:id/acknowledge', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const userId = req.userId || 'unknown';
     const success = (0, index_js_1.acknowledgeAlert)(id, userId);
     if (!success) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Alert not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Alert not found'));
     }
-    (0, index_js_12.sendSuccess)(res, { acknowledged: true });
+    (0, index_js_13.sendSuccess)(res, { acknowledged: true });
 }));
 // GET /api/admin/security/stats - Combined security statistics
-app.get('/api/admin/security/stats', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/admin/security/stats', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const abuseStats = index_js_1.abusePrevention.getStats();
     const alertCounts = (0, index_js_1.getAlertCounts)();
     const wsRateLimitStats = (0, ws_rate_limiter_js_1.getAllWsRateLimitStats)();
     const wsStats = wsKeepalive.getStats();
-    (0, index_js_12.sendSuccess)(res, {
+    (0, index_js_13.sendSuccess)(res, {
         abuse: abuseStats,
         alerts: alertCounts,
         websocket: {
@@ -15426,24 +15381,24 @@ app.get('/api/admin/security/stats', authenticateRequest, requireAdmin, (0, inde
 logger.info('admin alert endpoints registered');
 // ── S9-3: Backup & Recovery Endpoints ──
 // GET /api/admin/backups - List backups
-app.get('/api/admin/backups', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/admin/backups', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const jobs = backup_service_js_1.backupService.getJobs(limit);
-    (0, index_js_12.sendSuccess)(res, { jobs, total: jobs.length });
+    (0, index_js_13.sendSuccess)(res, { jobs, total: jobs.length });
 }));
 // GET /api/admin/backups/stats - Get backup statistics
-app.get('/api/admin/backups/stats', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/admin/backups/stats', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const stats = backup_service_js_1.backupService.getStats();
-    (0, index_js_12.sendSuccess)(res, stats);
+    (0, index_js_13.sendSuccess)(res, stats);
 }));
 // POST /api/admin/backups - Create a backup
-app.post('/api/admin/backups', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/admin/backups', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { type = 'full', scope = 'all' } = req.body;
     const job = await backup_service_js_1.backupService.createBackup(type, scope);
-    (0, index_js_12.sendSuccess)(res, { job });
+    (0, index_js_13.sendSuccess)(res, { job });
 }));
 // POST /api/admin/backups/:id/restore - Restore from a backup
-app.post('/api/admin/backups/:id/restore', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/admin/backups/:id/restore', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const { scope, targetDir, dryRun = true } = req.body;
     const result = await backup_service_js_1.backupService.restore({
@@ -15453,48 +15408,48 @@ app.post('/api/admin/backups/:id/restore', authenticateRequest, requireAdmin, (0
         dryRun,
     });
     if (!result.success) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, result.errors.join(', ')));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, result.errors.join(', ')));
     }
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
 // DELETE /api/admin/backups/:id - Delete a backup
-app.delete('/api/admin/backups/:id', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/admin/backups/:id', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { id } = req.params;
     const deleted = backup_service_js_1.backupService.deleteBackup(id);
     if (!deleted) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Backup not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Backup not found'));
     }
-    (0, index_js_12.sendSuccess)(res, { deleted: true });
+    (0, index_js_13.sendSuccess)(res, { deleted: true });
 }));
 logger.info('backup & recovery endpoints registered');
 // ── S9-4: Performance Profiling Endpoints ──
 // GET /api/admin/performance/metrics - Get performance metrics
-app.get('/api/admin/performance/metrics', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/admin/performance/metrics', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const metrics = performance_profiler_js_1.performanceProfiler.getMetrics();
-    (0, index_js_12.sendSuccess)(res, metrics);
+    (0, index_js_13.sendSuccess)(res, metrics);
 }));
 // GET /api/admin/performance/slow-requests - Get slow requests
-app.get('/api/admin/performance/slow-requests', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/admin/performance/slow-requests', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const slowRequests = performance_profiler_js_1.performanceProfiler.getSlowRequests(limit);
-    (0, index_js_12.sendSuccess)(res, { slowRequests, total: slowRequests.length });
+    (0, index_js_13.sendSuccess)(res, { slowRequests, total: slowRequests.length });
 }));
 // GET /api/admin/performance/alerts - Get performance alerts
-app.get('/api/admin/performance/alerts', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/admin/performance/alerts', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const limit = parseInt(req.query.limit) || 100;
     const alerts = performance_profiler_js_1.performanceProfiler.getAlerts(limit);
-    (0, index_js_12.sendSuccess)(res, { alerts, total: alerts.length });
+    (0, index_js_13.sendSuccess)(res, { alerts, total: alerts.length });
 }));
 // GET /api/admin/performance/traces - Get recent traces
-app.get('/api/admin/performance/traces', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/admin/performance/traces', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (req, res) => {
     const limit = parseInt(req.query.limit) || 100;
     const traces = performance_profiler_js_1.performanceProfiler.getTraces(limit);
-    (0, index_js_12.sendSuccess)(res, { traces, total: traces.length });
+    (0, index_js_13.sendSuccess)(res, { traces, total: traces.length });
 }));
 // GET /api/admin/performance/heap - Get V8 heap statistics
-app.get('/api/admin/performance/heap', authenticateRequest, requireAdmin, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/admin/performance/heap', authenticateRequest, requireAdmin, (0, index_js_13.asyncHandler)(async (_req, res) => {
     const heapStats = performance_profiler_js_1.performanceProfiler.getHeapStats();
-    (0, index_js_12.sendSuccess)(res, heapStats);
+    (0, index_js_13.sendSuccess)(res, heapStats);
 }));
 logger.info('performance profiling endpoints registered');
 // ==================== END SPRINT 9 ====================
@@ -15504,310 +15459,108 @@ startupInfo('routes.health-monitor', 'registered');
 startupInfo('routes.resource-optimizer', 'registered');
 startupInfo('middleware.public-api', 'applied', { modules: ['auth', 'rate-limiting', 'logging'] });
 // ==================== SPRINT 12: Integrations & Themes ====================
-const supabaseClient = __importStar(require("./integrations/supabase-client.js"));
 const neonClient = __importStar(require("./integrations/neon-client.js"));
 const integrationStore = __importStar(require("./integrations/integration-store.js"));
-const themeStore = __importStar(require("./integrations/theme-store.js"));
-const builtin_themes_js_1 = require("./integrations/builtin-themes.js");
-const theme_generator_js_1 = require("./integrations/theme-generator.js");
 const promptStore = __importStar(require("./integrations/prompt-store.js"));
-const vercelStore = __importStar(require("./integrations/vercel-store.js"));
-// ── Supabase Integration Routes ────────────────────────────────────
-// Connect Supabase (store access token)
-app.post('/api/integrations/supabase/connect', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { accessToken } = req.body;
-    if (!accessToken || typeof accessToken !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'accessToken is required'));
-    }
-    // Validate the token by listing organizations
-    const valid = await supabaseClient.validateAccessToken(accessToken);
-    if (!valid) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid Supabase access token'));
-    }
-    integrationStore.setUserCredentials(req.userId, 'supabase', { accessToken });
-    const organizations = await supabaseClient.listOrganizations(accessToken);
-    (0, index_js_12.sendSuccess)(res, { organizations });
-}));
-// Disconnect Supabase
-app.delete('/api/integrations/supabase/disconnect', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    integrationStore.removeUserCredentials(req.userId, 'supabase');
-    (0, index_js_12.sendSuccess)(res, { disconnected: true });
-}));
-// List Supabase organizations
-app.get('/api/integrations/supabase/organizations', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const organizations = await supabaseClient.listOrganizations(creds.supabase.accessToken);
-    (0, index_js_12.sendSuccess)(res, { organizations });
-}));
-// List Supabase projects
-app.get('/api/integrations/supabase/projects', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const projects = await supabaseClient.listProjects(creds.supabase.accessToken);
-    (0, index_js_12.sendSuccess)(res, { projects });
-}));
-// List Supabase project branches
-app.get('/api/integrations/supabase/projects/:supabaseProjectId/branches', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const branches = await supabaseClient.listBranches(creds.supabase.accessToken, req.params.supabaseProjectId);
-    (0, index_js_12.sendSuccess)(res, { branches });
-}));
-// Get Supabase project API keys
-app.get('/api/integrations/supabase/projects/:supabaseProjectId/api-keys', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const keys = await supabaseClient.getProjectApiKeys(creds.supabase.accessToken, req.params.supabaseProjectId);
-    (0, index_js_12.sendSuccess)(res, { keys });
-}));
-// Link Supabase project to Recoder project
-app.post('/api/integrations/supabase/:projectId/link', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { supabaseProjectId, organizationSlug } = req.body;
-    if (!supabaseProjectId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'supabaseProjectId is required'));
-    }
-    integrationStore.setProjectLink(req.params.projectId, 'supabase', {
-        projectId: supabaseProjectId,
-        organizationSlug: organizationSlug || '',
-    });
-    (0, index_js_12.sendSuccess)(res, { linked: true });
-}));
-// Unlink Supabase project
-app.delete('/api/integrations/supabase/:projectId/unlink', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    integrationStore.removeProjectLink(req.params.projectId, 'supabase');
-    (0, index_js_12.sendSuccess)(res, { unlinked: true });
-}));
-// Execute SQL on linked Supabase project
-app.post('/api/integrations/supabase/:projectId/sql', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const links = integrationStore.getProjectLinks(req.params.projectId);
-    if (!links.supabase) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
-    }
-    const { query } = req.body;
-    if (!query || typeof query !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'query is required'));
-    }
-    const result = await supabaseClient.executeSql(creds.supabase.accessToken, links.supabase.projectId, query);
-    (0, index_js_12.sendSuccess)(res, result);
-}));
-// Get schema of linked Supabase project
-app.get('/api/integrations/supabase/:projectId/schema', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const links = integrationStore.getProjectLinks(req.params.projectId);
-    if (!links.supabase) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
-    }
-    const schema = await supabaseClient.getTableSchema(creds.supabase.accessToken, links.supabase.projectId);
-    (0, index_js_12.sendSuccess)(res, { schema });
-}));
-// Deploy edge functions from container
-app.post('/api/integrations/supabase/:projectId/deploy-functions', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const links = integrationStore.getProjectLinks(req.params.projectId);
-    if (!links.supabase) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
-    }
-    // List edge function directories in the container
-    const entry = containers.get(req.params.projectId);
-    if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found'));
-    }
-    // Read supabase/functions directory
-    if ((0, daytona_file_ops_js_1.isDaytonaSandbox)(entry)) {
-        // Daytona sandbox — use Daytona helpers for file listing and reading
-        const listOutput = await execInContainer(entry.id, 'ls -d /home/daytona/supabase/functions/*/ 2>/dev/null || echo ""');
-        const output = listOutput.trim();
-        if (!output) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No edge functions found in supabase/functions/'));
-        }
-        const functionDirs = output.split('\n').filter(Boolean).map(d => d.replace('/home/daytona/supabase/functions/', '').replace(/\/$/, ''));
-        const results = [];
-        for (const funcName of functionDirs) {
-            try {
-                const content = await (0, daytona_file_ops_js_1.daytonaReadFile)(entry.id, `supabase/functions/${funcName}/index.ts`);
-                await supabaseClient.deployEdgeFunction(creds.supabase.accessToken, links.supabase.projectId, funcName, new Uint8Array(Buffer.from(content)));
-                results.push({ name: funcName, status: 'deployed' });
-            }
-            catch (err) {
-                results.push({ name: funcName, status: 'failed', error: err.message });
-            }
-        }
-        return (0, index_js_12.sendSuccess)(res, { deployed: results });
-    }
-    const docker = new dockerode_1.default();
-    const container = docker.getContainer(entry.id);
-    const exec = await container.exec({
-        Cmd: ['sh', '-c', 'ls -d /app/supabase/functions/*/ 2>/dev/null || echo ""'],
-        AttachStdout: true,
-        AttachStderr: true,
-    });
-    const execStream = await exec.start({ Detach: false, Tty: false });
-    const output = await new Promise((resolve) => {
-        let data = '';
-        execStream.on('data', (chunk) => { data += chunk.toString(); });
-        execStream.on('end', () => resolve(data.trim()));
-    });
-    if (!output) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No edge functions found in supabase/functions/'));
-    }
-    const functionDirs = output.split('\n').filter(Boolean).map(d => d.replace('/app/supabase/functions/', '').replace(/\/$/, ''));
-    const results = [];
-    for (const funcName of functionDirs) {
-        try {
-            // Read the function's index.ts file
-            const readExec = await container.exec({
-                Cmd: ['cat', `/app/supabase/functions/${funcName}/index.ts`],
-                AttachStdout: true,
-                AttachStderr: true,
-            });
-            const readStream = await readExec.start({ Detach: false, Tty: false });
-            const content = await new Promise((resolve) => {
-                let data = '';
-                readStream.on('data', (chunk) => { data += chunk.toString(); });
-                readStream.on('end', () => resolve(data));
-            });
-            await supabaseClient.deployEdgeFunction(creds.supabase.accessToken, links.supabase.projectId, funcName, new Uint8Array(Buffer.from(content)));
-            results.push({ name: funcName, status: 'deployed' });
-        }
-        catch (err) {
-            results.push({ name: funcName, status: 'failed', error: err.message });
-        }
-    }
-    (0, index_js_12.sendSuccess)(res, { deployed: results });
-}));
-// Get edge function logs
-app.get('/api/integrations/supabase/:projectId/edge-logs', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const creds = integrationStore.getUserCredentials(req.userId);
-    if (!creds.supabase?.accessToken) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Supabase not connected'));
-    }
-    const links = integrationStore.getProjectLinks(req.params.projectId);
-    if (!links.supabase) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Supabase project linked'));
-    }
-    const since = req.query.since ? parseInt(req.query.since) : undefined;
-    const logs = await supabaseClient.getEdgeFunctionLogs(creds.supabase.accessToken, links.supabase.projectId, since);
-    (0, index_js_12.sendSuccess)(res, { logs });
-}));
-startupInfo('routes.supabase', 'registered');
 // ── Neon PostgreSQL Integration Routes ─────────────────────────────
 // Connect Neon (store API key)
-app.post('/api/integrations/neon/connect', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/integrations/neon/connect', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { apiKey } = req.body;
     if (!apiKey || typeof apiKey !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'apiKey is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'apiKey is required'));
     }
     const valid = await neonClient.validateApiKey(apiKey);
     if (!valid) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid Neon API key'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Invalid Neon API key'));
     }
     integrationStore.setUserCredentials(req.userId, 'neon', { apiKey });
     const organizations = await neonClient.getOrganizations(apiKey);
-    (0, index_js_12.sendSuccess)(res, { organizations });
+    (0, index_js_13.sendSuccess)(res, { organizations });
 }));
 // Disconnect Neon
-app.delete('/api/integrations/neon/disconnect', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/integrations/neon/disconnect', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     integrationStore.removeUserCredentials(req.userId, 'neon');
-    (0, index_js_12.sendSuccess)(res, { disconnected: true });
+    (0, index_js_13.sendSuccess)(res, { disconnected: true });
 }));
 // List Neon projects
-app.get('/api/integrations/neon/projects', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/integrations/neon/projects', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const projects = await neonClient.listProjects(creds.neon.apiKey);
-    (0, index_js_12.sendSuccess)(res, { projects });
+    (0, index_js_13.sendSuccess)(res, { projects });
 }));
 // Create Neon project
-app.post('/api/integrations/neon/projects', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/integrations/neon/projects', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const { name, orgId } = req.body;
     if (!name || typeof name !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name is required'));
     }
     const result = await neonClient.createProject(creds.neon.apiKey, name, orgId);
-    (0, index_js_12.sendSuccess)(res, result);
+    (0, index_js_13.sendSuccess)(res, result);
 }));
 // List Neon project branches
-app.get('/api/integrations/neon/projects/:neonProjectId/branches', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/integrations/neon/projects/:neonProjectId/branches', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const branches = await neonClient.listBranches(creds.neon.apiKey, req.params.neonProjectId);
-    (0, index_js_12.sendSuccess)(res, { branches });
+    (0, index_js_13.sendSuccess)(res, { branches });
 }));
 // Link Neon project to Recoder project
-app.post('/api/integrations/neon/:projectId/link', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/integrations/neon/:projectId/link', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { neonProjectId, developmentBranchId, previewBranchId } = req.body;
     if (!neonProjectId || !developmentBranchId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'neonProjectId and developmentBranchId are required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'neonProjectId and developmentBranchId are required'));
     }
     integrationStore.setProjectLink(req.params.projectId, 'neon', {
         projectId: neonProjectId,
         developmentBranchId,
         previewBranchId,
     });
-    (0, index_js_12.sendSuccess)(res, { linked: true });
+    (0, index_js_13.sendSuccess)(res, { linked: true });
 }));
 // Unlink Neon project
-app.delete('/api/integrations/neon/:projectId/unlink', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/integrations/neon/:projectId/unlink', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     integrationStore.removeProjectLink(req.params.projectId, 'neon');
-    (0, index_js_12.sendSuccess)(res, { unlinked: true });
+    (0, index_js_13.sendSuccess)(res, { unlinked: true });
 }));
 // Get Neon connection URI for linked project
-app.get('/api/integrations/neon/:projectId/connection-uri', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/integrations/neon/:projectId/connection-uri', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const links = integrationStore.getProjectLinks(req.params.projectId);
     if (!links.neon) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
     }
     const branchId = req.query.branchId || links.neon.developmentBranchId;
     const uri = await neonClient.getConnectionUri(creds.neon.apiKey, links.neon.projectId, branchId);
-    (0, index_js_12.sendSuccess)(res, { uri });
+    (0, index_js_13.sendSuccess)(res, { uri });
 }));
 // Set POSTGRES_URL in container .env
-app.post('/api/integrations/neon/:projectId/set-env', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/integrations/neon/:projectId/set-env', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const links = integrationStore.getProjectLinks(req.params.projectId);
     if (!links.neon) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
     }
     const branchId = req.body.branchId || links.neon.developmentBranchId;
     const uri = await neonClient.getConnectionUri(creds.neon.apiKey, links.neon.projectId, branchId);
     // Write POSTGRES_URL to container's .env file
     const entry = containers.get(req.params.projectId);
     if (!entry) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.CONTAINER_NOT_FOUND, 'Container not found'));
     }
     if ((0, daytona_file_ops_js_1.isDaytonaSandbox)(entry)) {
         // Daytona sandbox — use Daytona helpers for file read/write
@@ -15817,7 +15570,7 @@ app.post('/api/integrations/neon/:projectId/set-env', authenticateRequest, verif
         lines.push(`DATABASE_URL=${uri}`);
         const newEnv = lines.filter(Boolean).join('\n') + '\n';
         await (0, daytona_file_ops_js_1.daytonaWriteFile)(entry.id, '.env', newEnv);
-        return (0, index_js_12.sendSuccess)(res, { set: true, branchId });
+        return (0, index_js_13.sendSuccess)(res, { set: true, branchId });
     }
     const docker = new dockerode_1.default();
     const container = docker.getContainer(entry.id);
@@ -15844,186 +15597,81 @@ app.post('/api/integrations/neon/:projectId/set-env', authenticateRequest, verif
         AttachStderr: true,
     });
     await writeExec.start({ Detach: false, Tty: false });
-    (0, index_js_12.sendSuccess)(res, { set: true, branchId });
+    (0, index_js_13.sendSuccess)(res, { set: true, branchId });
 }));
 // Create Neon branch
-app.post('/api/integrations/neon/:projectId/branches', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/integrations/neon/:projectId/branches', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const links = integrationStore.getProjectLinks(req.params.projectId);
     if (!links.neon) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
     }
     const { name, parentBranchId } = req.body;
     if (!name || !parentBranchId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name and parentBranchId are required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'name and parentBranchId are required'));
     }
     const branch = await neonClient.createBranch(creds.neon.apiKey, links.neon.projectId, name, parentBranchId);
-    (0, index_js_12.sendSuccess)(res, { branch });
+    (0, index_js_13.sendSuccess)(res, { branch });
 }));
 // Delete Neon branch
-app.delete('/api/integrations/neon/:projectId/branches/:branchId', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/integrations/neon/:projectId/branches/:branchId', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const links = integrationStore.getProjectLinks(req.params.projectId);
     if (!links.neon) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
     }
     await neonClient.deleteBranch(creds.neon.apiKey, links.neon.projectId, req.params.branchId);
-    (0, index_js_12.sendSuccess)(res, { deleted: true });
+    (0, index_js_13.sendSuccess)(res, { deleted: true });
 }));
 // Restore Neon branch
-app.post('/api/integrations/neon/:projectId/branches/:branchId/restore', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/integrations/neon/:projectId/branches/:branchId/restore', authenticateRequest, verifyProjectOwnership, (0, index_js_13.asyncHandler)(async (req, res) => {
     const creds = integrationStore.getUserCredentials(req.userId);
     if (!creds.neon?.apiKey) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Neon not connected'));
     }
     const links = integrationStore.getProjectLinks(req.params.projectId);
     if (!links.neon) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'No Neon project linked'));
     }
     const { timestamp } = req.body;
     if (!timestamp) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'timestamp is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'timestamp is required'));
     }
     await neonClient.restoreBranch(creds.neon.apiKey, links.neon.projectId, req.params.branchId, timestamp);
-    (0, index_js_12.sendSuccess)(res, { restored: true });
+    (0, index_js_13.sendSuccess)(res, { restored: true });
 }));
 startupInfo('routes.neon', 'registered');
-// ── Theme Routes ───────────────────────────────────────────────────
-// List all themes (built-in + custom)
-app.get('/api/themes', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const customThemes = themeStore.listThemes(req.userId);
-    (0, index_js_12.sendSuccess)(res, {
-        builtinThemes: builtin_themes_js_1.BUILTIN_THEMES.map(t => ({ id: t.id, name: t.name, description: t.description })),
-        customThemes,
-    });
-}));
-// Create custom theme
-app.post('/api/themes', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { name, description, prompt } = req.body;
-    if (!name || !prompt) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'name and prompt are required'));
-    }
-    const theme = themeStore.createTheme(req.userId, name, description || '', prompt);
-    (0, index_js_12.sendSuccess)(res, { theme });
-}));
-// Update custom theme
-app.put('/api/themes/:themeId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { name, description, prompt } = req.body;
-    const theme = themeStore.updateTheme(req.params.themeId, { name, description, prompt });
-    if (!theme) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Theme not found'));
-    }
-    (0, index_js_12.sendSuccess)(res, { theme });
-}));
-// Delete custom theme
-app.delete('/api/themes/:themeId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const deleted = themeStore.deleteTheme(req.params.themeId);
-    if (!deleted) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Theme not found'));
-    }
-    (0, index_js_12.sendSuccess)(res, { deleted: true });
-}));
-// Get project theme
-app.get('/api/themes/project/:projectId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const themeId = themeStore.getProjectTheme(req.params.projectId);
-    if (!themeId) {
-        return (0, index_js_12.sendSuccess)(res, { themeId: null, themeName: null, themePrompt: null });
-    }
-    const prompt = themeStore.resolveThemePrompt(themeId, req.userId);
-    const builtin = themeStore.getBuiltinTheme(themeId);
-    (0, index_js_12.sendSuccess)(res, {
-        themeId,
-        themeName: builtin?.name || 'Custom Theme',
-        themePrompt: prompt,
-    });
-}));
-// Set project theme
-app.post('/api/themes/project/:projectId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { themeId } = req.body;
-    if (!themeId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'themeId is required'));
-    }
-    themeStore.setProjectTheme(req.params.projectId, themeId);
-    (0, index_js_12.sendSuccess)(res, { set: true });
-}));
-// Remove project theme
-app.delete('/api/themes/project/:projectId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    themeStore.removeProjectTheme(req.params.projectId);
-    (0, index_js_12.sendSuccess)(res, { removed: true });
-}));
-// Generate theme via AI
-app.post('/api/themes/generate', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { images, keywords, generationMode, model, apiKey, provider } = req.body;
-    if (!images || !Array.isArray(images) || images.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'At least one image is required'));
-    }
-    if (images.length > 5) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Maximum 5 images allowed'));
-    }
-    if (!model || !apiKey || !provider) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'model, apiKey, and provider are required'));
-    }
-    if (!['inspired', 'high-fidelity'].includes(generationMode)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'generationMode must be "inspired" or "high-fidelity"'));
-    }
-    if (!['anthropic', 'openai', 'google', 'openrouter'].includes(provider)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'provider must be anthropic, openai, google, or openrouter'));
-    }
-    const startMs = Date.now();
-    const { prompt, inputTokens, outputTokens } = await (0, theme_generator_js_1.generateThemePrompt)({
-        images,
-        keywords: keywords || '',
-        generationMode,
-        model,
-        apiKey,
-        provider: provider,
-    });
-    (0, openmeter_client_js_1.trackLlmCall)({
-        userId: req.userId,
-        model,
-        provider,
-        inputTokens,
-        outputTokens,
-        durationMs: Date.now() - startMs,
-    });
-    (0, index_js_12.sendSuccess)(res, { prompt });
-}));
-startupInfo('routes.theme', 'registered');
-// ==================== END SPRINT 12 ====================
-// ==================== SPRINT 13: Prompt Library + Vercel Integration ====================
-// ── Prompt Library Routes ─────────────────────────────────────────
-// List user's prompts
-app.get('/api/prompts', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/prompts', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const prompts = promptStore.listPrompts(req.userId);
-    (0, index_js_12.sendSuccess)(res, { prompts });
+    (0, index_js_13.sendSuccess)(res, { prompts });
 }));
 // Create prompt
-app.post('/api/prompts', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/prompts', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { title, description, content } = req.body;
     if (!title || typeof title !== 'string' || !title.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Title is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Title is required'));
     }
     if (!content || typeof content !== 'string' || !content.trim()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Content is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Content is required'));
     }
     const prompt = promptStore.createPrompt(req.userId, title, description || '', content);
-    (0, index_js_12.sendSuccess)(res, { prompt });
+    (0, index_js_13.sendSuccess)(res, { prompt });
 }));
 // Update prompt
-app.put('/api/prompts/:promptId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.put('/api/prompts/:promptId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { promptId } = req.params;
     const existing = promptStore.getPrompt(promptId);
     if (!existing) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Prompt not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Prompt not found'));
     }
     if (existing.createdBy !== req.userId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Not your prompt'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Not your prompt'));
     }
     const updates = {};
     if (req.body.title !== undefined)
@@ -16033,301 +15681,31 @@ app.put('/api/prompts/:promptId', authenticateRequest, (0, index_js_12.asyncHand
     if (req.body.content !== undefined)
         updates.content = req.body.content;
     const updated = promptStore.updatePrompt(promptId, updates);
-    (0, index_js_12.sendSuccess)(res, { prompt: updated });
+    (0, index_js_13.sendSuccess)(res, { prompt: updated });
 }));
 // Delete prompt
-app.delete('/api/prompts/:promptId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/prompts/:promptId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { promptId } = req.params;
     const existing = promptStore.getPrompt(promptId);
     if (!existing) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Prompt not found'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Prompt not found'));
     }
     if (existing.createdBy !== req.userId) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Not your prompt'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Not your prompt'));
     }
     promptStore.deletePrompt(promptId);
-    (0, index_js_12.sendSuccess)(res, { deleted: true });
+    (0, index_js_13.sendSuccess)(res, { deleted: true });
 }));
 // Replace prompt references in text (utility endpoint for chat pipeline)
-app.post('/api/prompts/resolve', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/prompts/resolve', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     const { text } = req.body;
     if (!text || typeof text !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Text is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Text is required'));
     }
     const resolved = promptStore.replacePromptReferences(text);
-    (0, index_js_12.sendSuccess)(res, { resolved });
+    (0, index_js_13.sendSuccess)(res, { resolved });
 }));
 startupInfo('routes.prompt-library', 'registered');
-// ── Vercel Integration Routes ─────────────────────────────────────
-// Connect (save token)
-app.post('/api/integrations/vercel/connect', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { token } = req.body;
-    if (!token || typeof token !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Vercel access token is required'));
-    }
-    const validation = await vercelStore.validateVercelToken(token);
-    if (!validation.valid) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid Vercel access token'));
-    }
-    vercelStore.setVercelToken(req.userId, token);
-    const teams = await vercelStore.listVercelTeams(token);
-    (0, index_js_12.sendSuccess)(res, { username: validation.username, teams });
-}));
-// Disconnect
-app.delete('/api/integrations/vercel/disconnect', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    vercelStore.removeVercelToken(req.userId);
-    (0, index_js_12.sendSuccess)(res, { disconnected: true });
-}));
-// Check if connected
-app.get('/api/integrations/vercel/status', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const token = vercelStore.getVercelToken(req.userId);
-    if (!token) {
-        return (0, index_js_12.sendSuccess)(res, { connected: false });
-    }
-    const validation = await vercelStore.validateVercelToken(token);
-    if (!validation.valid) {
-        vercelStore.removeVercelToken(req.userId);
-        return (0, index_js_12.sendSuccess)(res, { connected: false });
-    }
-    const teams = await vercelStore.listVercelTeams(token);
-    (0, index_js_12.sendSuccess)(res, { connected: true, username: validation.username, teams });
-}));
-// List Vercel projects
-app.get('/api/integrations/vercel/projects', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const token = vercelStore.getVercelToken(req.userId);
-    if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
-    const teamId = req.query.teamId || null;
-    const projects = await vercelStore.listVercelProjects(token, teamId);
-    (0, index_js_12.sendSuccess)(res, { projects });
-}));
-// Check project name availability
-app.get('/api/integrations/vercel/available', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const token = vercelStore.getVercelToken(req.userId);
-    if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
-    const name = req.query.name;
-    if (!name)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Project name required'));
-    const teamId = req.query.teamId || null;
-    const available = await vercelStore.isProjectNameAvailable(token, name, teamId);
-    (0, index_js_12.sendSuccess)(res, { available });
-}));
-// Create new Vercel project
-app.post('/api/integrations/vercel/projects', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const token = vercelStore.getVercelToken(req.userId);
-    if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
-    const { name, framework, teamId } = req.body;
-    if (!name || typeof name !== 'string') {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Project name required'));
-    }
-    const project = await vercelStore.createVercelProject(token, name, framework, teamId || null);
-    (0, index_js_12.sendSuccess)(res, { project });
-}));
-// Link Vercel project to Recoder project
-app.post('/api/integrations/vercel/:projectId/link', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { projectId } = req.params;
-    const { vercelProjectId, vercelProjectName, vercelTeamId } = req.body;
-    if (!vercelProjectId || !vercelProjectName) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'vercelProjectId and vercelProjectName required'));
-    }
-    vercelStore.setVercelProjectLink(projectId, {
-        vercelProjectId,
-        vercelProjectName,
-        vercelTeamId: vercelTeamId || null,
-        vercelDeploymentUrl: null,
-    });
-    (0, index_js_12.sendSuccess)(res, { linked: true });
-}));
-// Unlink Vercel project
-app.delete('/api/integrations/vercel/:projectId/unlink', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    vercelStore.removeVercelProjectLink(req.params.projectId);
-    (0, index_js_12.sendSuccess)(res, { unlinked: true });
-}));
-// Get linked Vercel project info
-app.get('/api/integrations/vercel/:projectId/link', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const link = vercelStore.getVercelProjectLink(req.params.projectId);
-    (0, index_js_12.sendSuccess)(res, { link });
-}));
-// Get deployments for linked project
-app.get('/api/integrations/vercel/:projectId/deployments', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const token = vercelStore.getVercelToken(req.userId);
-    if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
-    const link = vercelStore.getVercelProjectLink(req.params.projectId);
-    if (!link)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No Vercel project linked'));
-    const deployments = await vercelStore.getVercelDeployments(token, link.vercelProjectId, link.vercelTeamId);
-    // Update deployment URL if we have a newer READY production deployment
-    const readyProd = deployments.find(d => d.readyState === 'READY' && d.target === 'production');
-    if (readyProd && readyProd.url !== link.vercelDeploymentUrl) {
-        vercelStore.setVercelProjectLink(req.params.projectId, {
-            ...link,
-            vercelDeploymentUrl: readyProd.url,
-        });
-    }
-    (0, index_js_12.sendSuccess)(res, { deployments, deploymentUrl: readyProd?.url || link.vercelDeploymentUrl });
-}));
-// Deploy to Vercel (upload files from container)
-app.post('/api/integrations/vercel/:projectId/deploy', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const token = vercelStore.getVercelToken(req.userId);
-    if (!token)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, 'Vercel not connected'));
-    const link = vercelStore.getVercelProjectLink(req.params.projectId);
-    if (!link)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No Vercel project linked'));
-    const { projectId } = req.params;
-    const container = containers.get(projectId);
-    if (!container)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
-    // Read the build output from container
-    // First try to detect the build output directory
-    const target = req.body.target || 'production';
-    // Collect files from the container's output directory
-    // Use the container exec to list and read files
-    const buildDir = req.body.buildDir || 'dist';
-    const files = [];
-    if ((0, daytona_file_ops_js_1.isDaytonaSandbox)(container)) {
-        // Daytona sandbox — list and read files via Daytona helpers
-        const listOutput = await execInContainer(container.id, `find /home/daytona/${buildDir} -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | head -5000`);
-        const filePaths = listOutput.trim().split('\n').filter(Boolean);
-        for (const fp of filePaths) {
-            const relativePath = fp.replace(`/home/daytona/${buildDir}/`, '');
-            if (!relativePath || relativePath.startsWith('.'))
-                continue;
-            try {
-                const content = await (0, daytona_file_ops_js_1.daytonaReadFile)(container.id, `${buildDir}/${relativePath}`);
-                const b64 = Buffer.from(content).toString('base64');
-                if (b64) {
-                    files.push({ file: relativePath, data: b64 });
-                }
-            }
-            catch {
-                // Skip files we can't read
-            }
-        }
-    }
-    else {
-        // Docker container — use Docker API directly
-        // Exec tar in the container to get all files
-        const exec = await docker.getContainer(container.id).exec({
-            Cmd: ['tar', '-cf', '-', '-C', `/app/${buildDir}`, '.'],
-            AttachStdout: true,
-            AttachStderr: true,
-        });
-        const stream = await exec.start({ hijack: true, stdin: false });
-        const chunks = [];
-        await new Promise((resolve, reject) => {
-            stream.on('data', (chunk) => chunks.push(chunk));
-            stream.on('end', resolve);
-            stream.on('error', reject);
-        });
-        // For Vercel, we deploy using their Files API
-        // Get file list from container
-        const listExec = await docker.getContainer(container.id).exec({
-            Cmd: ['find', `/app/${buildDir}`, '-type', 'f', '-not', '-path', '*/node_modules/*', '-not', '-path', '*/.git/*'],
-            AttachStdout: true,
-            AttachStderr: true,
-        });
-        const listStream = await listExec.start({ hijack: true, stdin: false });
-        let fileListStr = '';
-        await new Promise((resolve, reject) => {
-            listStream.on('data', (chunk) => { fileListStr += chunk.toString(); });
-            listStream.on('end', resolve);
-            listStream.on('error', reject);
-        });
-        const filePaths = fileListStr.trim().split('\n').filter(Boolean);
-        for (const fp of filePaths.slice(0, 5000)) { // Max 5000 files
-            const relativePath = fp.replace(`/app/${buildDir}/`, '');
-            if (!relativePath || relativePath.startsWith('.'))
-                continue;
-            try {
-                const readExec = await docker.getContainer(container.id).exec({
-                    Cmd: ['base64', '-w', '0', fp],
-                    AttachStdout: true,
-                    AttachStderr: true,
-                });
-                const readStream = await readExec.start({ hijack: true, stdin: false });
-                let content = '';
-                await new Promise((resolve, reject) => {
-                    readStream.on('data', (chunk) => { content += chunk.toString(); });
-                    readStream.on('end', resolve);
-                    readStream.on('error', reject);
-                });
-                // Strip docker stream header bytes
-                const cleanContent = content.replace(/^[\x00-\x1f]/g, '').trim();
-                if (cleanContent) {
-                    files.push({ file: relativePath, data: cleanContent });
-                }
-            }
-            catch {
-                // Skip files we can't read
-            }
-        }
-    }
-    if (files.length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, `No files found in ${buildDir}. Run a build first.`));
-    }
-    // Deploy via Vercel v13 API
-    const teamParam = link.vercelTeamId ? `?teamId=${link.vercelTeamId}` : '';
-    const deployRes = await fetch(`https://api.vercel.com/v13/deployments${teamParam}`, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            name: link.vercelProjectName,
-            project: link.vercelProjectId,
-            target,
-            files: files.map(f => ({
-                file: f.file,
-                data: f.data,
-                encoding: 'base64',
-            })),
-        }),
-    });
-    if (!deployRes.ok) {
-        const text = await deployRes.text().catch(() => '');
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Vercel deploy failed: ${text || deployRes.statusText}`));
-    }
-    const deployResult = await deployRes.json();
-    // Update deployment URL
-    vercelStore.setVercelProjectLink(req.params.projectId, {
-        ...link,
-        vercelDeploymentUrl: deployResult.url,
-    });
-    (0, index_js_12.sendSuccess)(res, {
-        deploymentId: deployResult.id,
-        url: deployResult.url,
-        readyState: deployResult.readyState,
-    });
-}));
-// Detect framework from container files
-app.get('/api/integrations/vercel/:projectId/detect-framework', authenticateRequest, verifyProjectOwnership, (0, index_js_12.asyncHandler)(async (req, res) => {
-    const { projectId } = req.params;
-    const container = containers.get(projectId);
-    if (!container)
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
-    const exec = await docker.getContainer(container.id).exec({
-        Cmd: ['ls', '/app'],
-        AttachStdout: true,
-        AttachStderr: true,
-    });
-    const stream = await exec.start({ hijack: true, stdin: false });
-    let output = '';
-    await new Promise((resolve, reject) => {
-        stream.on('data', (chunk) => { output += chunk.toString(); });
-        stream.on('end', resolve);
-        stream.on('error', reject);
-    });
-    const fileList = output.trim().split('\n').filter(Boolean);
-    const framework = vercelStore.detectFramework(fileList);
-    (0, index_js_12.sendSuccess)(res, { framework, files: fileList });
-}));
-startupInfo('routes.vercel', 'registered');
-startupInfo('routes.prompt-library-vercel', 'registered');
 // ==================== END SPRINT 13 ====================
 // ==================== SPRINT 14: Proposals + GitHub Collaborators ====================
 // ── GitHub Collaborators ────────────────────────────────────────────
@@ -16371,18 +15749,18 @@ app.get('/api/git/:projectId/github-repo', authenticateRequest, verifyProjectOwn
         const projectId = sanitizeProjectId(req.params.projectId);
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendSuccess)(res, { github: null, message: 'No origin remote' });
+            return (0, index_js_13.sendSuccess)(res, { github: null, message: 'No origin remote' });
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendSuccess)(res, { github: null, message: 'Origin is not a GitHub URL' });
-        (0, index_js_12.sendSuccess)(res, { github: parsed });
+            return (0, index_js_13.sendSuccess)(res, { github: null, message: 'Origin is not a GitHub URL' });
+        (0, index_js_13.sendSuccess)(res, { github: parsed });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // List collaborators for a GitHub repo
@@ -16391,20 +15769,20 @@ app.get('/api/git/:projectId/collaborators', authenticateRequest, verifyProjectO
         const projectId = sanitizeProjectId(req.params.projectId);
         const token = req.query.token;
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         const { status, data } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/collaborators`, token);
         if (status !== 200) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
         }
         const collaborators = (data || []).map((c) => ({
             id: c.id,
@@ -16413,10 +15791,10 @@ app.get('/api/git/:projectId/collaborators', authenticateRequest, verifyProjectO
             role: c.role_name || (c.permissions?.admin ? 'admin' : c.permissions?.push ? 'write' : 'read'),
             permissions: c.permissions,
         }));
-        (0, index_js_12.sendSuccess)(res, { collaborators, repo: parsed });
+        (0, index_js_13.sendSuccess)(res, { collaborators, repo: parsed });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // Invite a collaborator
@@ -16425,35 +15803,35 @@ app.post('/api/git/:projectId/collaborators', authenticateRequest, verifyProject
         const projectId = sanitizeProjectId(req.params.projectId);
         const { token, username, permission } = req.body;
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         if (!username)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Username required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Username required'));
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         // Validate permission level
         const validPerms = ['pull', 'push', 'admin', 'maintain', 'triage'];
         const perm = validPerms.includes(permission) ? permission : 'push';
         const { status, data } = await githubApi('PUT', `/repos/${parsed.owner}/${parsed.repo}/collaborators/${encodeURIComponent(username)}`, token, { permission: perm });
         if (status === 201) {
-            (0, index_js_12.sendSuccess)(res, { invited: true, invitation: data });
+            (0, index_js_13.sendSuccess)(res, { invited: true, invitation: data });
         }
         else if (status === 204) {
-            (0, index_js_12.sendSuccess)(res, { invited: true, alreadyCollaborator: true });
+            (0, index_js_13.sendSuccess)(res, { invited: true, alreadyCollaborator: true });
         }
         else {
-            (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to invite collaborator'));
+            (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to invite collaborator'));
         }
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // Remove a collaborator
@@ -16463,27 +15841,27 @@ app.delete('/api/git/:projectId/collaborators/:username', authenticateRequest, v
         const username = req.params.username;
         const token = req.query.token;
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         const { status, data } = await githubApi('DELETE', `/repos/${parsed.owner}/${parsed.repo}/collaborators/${encodeURIComponent(username)}`, token);
         if (status === 204) {
-            (0, index_js_12.sendSuccess)(res, { removed: true });
+            (0, index_js_13.sendSuccess)(res, { removed: true });
         }
         else {
-            (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to remove collaborator'));
+            (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to remove collaborator'));
         }
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // List pending invitations
@@ -16492,20 +15870,20 @@ app.get('/api/git/:projectId/invitations', authenticateRequest, verifyProjectOwn
         const projectId = sanitizeProjectId(req.params.projectId);
         const token = req.query.token;
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         const { status, data } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/invitations`, token);
         if (status !== 200) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
         }
         const invitations = (data || []).map((inv) => ({
             id: inv.id,
@@ -16514,10 +15892,10 @@ app.get('/api/git/:projectId/invitations', authenticateRequest, verifyProjectOwn
             permission: inv.permissions,
             createdAt: inv.created_at,
         }));
-        (0, index_js_12.sendSuccess)(res, { invitations, repo: parsed });
+        (0, index_js_13.sendSuccess)(res, { invitations, repo: parsed });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // Cancel a pending invitation
@@ -16527,27 +15905,27 @@ app.delete('/api/git/:projectId/invitations/:invitationId', authenticateRequest,
         const invitationId = req.params.invitationId;
         const token = req.query.token;
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         const { status, data } = await githubApi('DELETE', `/repos/${parsed.owner}/${parsed.repo}/invitations/${encodeURIComponent(invitationId)}`, token);
         if (status === 204) {
-            (0, index_js_12.sendSuccess)(res, { cancelled: true });
+            (0, index_js_13.sendSuccess)(res, { cancelled: true });
         }
         else {
-            (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to cancel invitation'));
+            (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'Failed to cancel invitation'));
         }
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // ==================== GITHUB PULL REQUESTS (first-class PR artifacts) ====================
@@ -16559,25 +15937,25 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
         const projectId = sanitizeProjectId(req.params.projectId);
         const token = (req.body?.token || req.query.token);
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
         if (!title)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'PR title required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'PR title required'));
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         // Default head to the current branch; base defaults to 'main'.
         const gitStatus = await git_operations_js_1.gitOperations.getStatus(entry.id);
         const head = (typeof req.body?.head === 'string' && req.body.head.trim()) || gitStatus.branch;
         if (!head)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Could not determine head branch'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Could not determine head branch'));
         const base = (typeof req.body?.base === 'string' && req.body.base.trim()) || 'main';
         const prBody = typeof req.body?.body === 'string' ? req.body.body : '';
         const draft = req.body?.draft === true;
@@ -16586,12 +15964,12 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
         });
         if (status !== 201) {
             const msg = data?.message || data?.errors?.[0]?.message || 'Failed to create pull request';
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, msg));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, msg));
         }
         const taskId = typeof req.body?.taskId === 'string' ? req.body.taskId.trim() : '';
         let taskAttachment = { attached: false };
         if (taskId) {
-            const lifecycle = (0, index_js_6.getTaskLifecycleService)();
+            const lifecycle = (0, index_js_7.getTaskLifecycleService)();
             const taskResult = lifecycle.getTask(taskId);
             if (!taskResult.ok) {
                 taskAttachment = { attached: false, taskId, error: taskResult.error.message };
@@ -16656,9 +16034,9 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
                 }
                 else {
                     taskAttachment = { attached: true, taskId };
-                    (0, index_js_6.getA2AEventBus)().publish({
+                    (0, index_js_7.getA2AEventBus)().publish({
                         id: `evt_${Date.now()}_github_pr_${taskId}_${data.number}`,
-                        type: index_js_6.A2AEventType.ArtifactAttached,
+                        type: index_js_7.A2AEventType.ArtifactAttached,
                         timestamp: new Date().toISOString(),
                         taskId,
                         workspaceId: taskResult.data.workspace_id,
@@ -16674,7 +16052,7 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
                 }
             }
         }
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             pullRequest: {
                 number: data.number,
                 url: data.html_url,
@@ -16690,7 +16068,7 @@ app.post('/api/git/:projectId/pull-request', authenticateRequest, verifyProjectO
         });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // GET /api/git/:projectId/pull-requests - List PRs for the project repo
@@ -16699,21 +16077,21 @@ app.get('/api/git/:projectId/pull-requests', authenticateRequest, verifyProjectO
         const projectId = sanitizeProjectId(req.params.projectId);
         const token = req.query.token;
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         const state = (['open', 'closed', 'all'].includes(req.query.state) ? req.query.state : 'open');
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         const { status, data } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/pulls?state=${state}&per_page=30`, token);
         if (status !== 200) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, data?.message || 'GitHub API error'));
         }
         const pullRequests = (data || []).map((pr) => ({
             number: pr.number,
@@ -16727,10 +16105,10 @@ app.get('/api/git/:projectId/pull-requests', authenticateRequest, verifyProjectO
             createdAt: pr.created_at,
             updatedAt: pr.updated_at,
         }));
-        (0, index_js_12.sendSuccess)(res, { pullRequests, repo: parsed });
+        (0, index_js_13.sendSuccess)(res, { pullRequests, repo: parsed });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 // GET /api/git/:projectId/pull-request/:number - PR detail with review + CI check state
@@ -16739,23 +16117,23 @@ app.get('/api/git/:projectId/pull-request/:number', authenticateRequest, verifyP
         const projectId = sanitizeProjectId(req.params.projectId);
         const token = req.query.token;
         if (!token)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'GitHub token required'));
         const number = parseInt(req.params.number, 10);
         if (!Number.isInteger(number) || number <= 0)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Invalid PR number'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Invalid PR number'));
         const entry = await getOrRecoverContainer(projectId);
         if (!entry)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'Container not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'Container not found'));
         const remotes = await git_operations_js_1.gitOperations.getRemotes(entry.id);
         const origin = remotes.find((r) => r.name === 'origin');
         if (!origin)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.NOT_FOUND, 'No origin remote'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.NOT_FOUND, 'No origin remote'));
         const parsed = parseGitHubRemoteUrl(origin.url);
         if (!parsed)
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Origin is not a GitHub URL'));
         const { status, data: pr } = await githubApi('GET', `/repos/${parsed.owner}/${parsed.repo}/pulls/${number}`, token);
         if (status !== 200) {
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, pr?.message || 'Pull request not found'));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, pr?.message || 'Pull request not found'));
         }
         // Review + CI check state (best-effort: don't fail the whole request if these error)
         const headSha = pr.head?.sha;
@@ -16775,7 +16153,7 @@ app.get('/api/git/:projectId/pull-request/:number', authenticateRequest, verifyP
             status: c.status,
             conclusion: c.conclusion,
         }));
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             pullRequest: {
                 number: pr.number,
                 url: pr.html_url,
@@ -16801,7 +16179,7 @@ app.get('/api/git/:projectId/pull-request/:number', authenticateRequest, verifyP
         });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, err.message));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, err.message));
     }
 });
 startupInfo('routes.github-pull-requests', 'registered');
@@ -16810,9 +16188,9 @@ startupInfo('routes.github-collaborators', 'registered');
 // REST-based Daytona sandbox management for Spaces projects.
 // Provides an alternative to local Docker containers using the self-hosted Daytona API.
 // POST /api/daytona/sandbox - Create a new Daytona sandbox
-app.post('/api/daytona/sandbox', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/daytona/sandbox', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     const { snapshot, envVars, labels, autoStopInterval, autoArchiveInterval, resources } = req.body;
     try {
@@ -16824,103 +16202,103 @@ app.post('/api/daytona/sandbox', authenticateRequest, (0, index_js_12.asyncHandl
             autoArchiveInterval,
             resources,
         });
-        (0, index_js_12.sendSuccess)(res, { sandbox });
+        (0, index_js_13.sendSuccess)(res, { sandbox });
     }
     catch (err) {
         logger.error({ err, userId: req.userId }, 'Failed to create Daytona sandbox');
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Daytona sandbox creation failed: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Daytona sandbox creation failed: ${err.message}`));
     }
 }));
 // GET /api/daytona/sandbox - List Daytona sandboxes
-app.get('/api/daytona/sandbox', authenticateRequest, (0, index_js_12.asyncHandler)(async (_req, res) => {
+app.get('/api/daytona/sandbox', authenticateRequest, (0, index_js_13.asyncHandler)(async (_req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     try {
         const sandboxes = await (0, daytona_client_js_1.getDaytonaClient)().listSandboxes();
-        (0, index_js_12.sendSuccess)(res, { sandboxes, total: sandboxes.length });
+        (0, index_js_13.sendSuccess)(res, { sandboxes, total: sandboxes.length });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Failed to list Daytona sandboxes: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Failed to list Daytona sandboxes: ${err.message}`));
     }
 }));
 // GET /api/daytona/sandbox/:sandboxId - Get Daytona sandbox info
-app.get('/api/daytona/sandbox/:sandboxId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/daytona/sandbox/:sandboxId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     try {
         const sandbox = await (0, daytona_client_js_1.getDaytonaClient)().getSandbox(req.params.sandboxId);
-        (0, index_js_12.sendSuccess)(res, { sandbox });
+        (0, index_js_13.sendSuccess)(res, { sandbox });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Failed to get Daytona sandbox: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Failed to get Daytona sandbox: ${err.message}`));
     }
 }));
 // POST /api/daytona/sandbox/:sandboxId/start - Start a stopped sandbox
-app.post('/api/daytona/sandbox/:sandboxId/start', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/daytona/sandbox/:sandboxId/start', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     try {
         await (0, daytona_client_js_1.getDaytonaClient)().startSandbox(req.params.sandboxId);
-        (0, index_js_12.sendSuccess)(res, { started: true, sandboxId: req.params.sandboxId });
+        (0, index_js_13.sendSuccess)(res, { started: true, sandboxId: req.params.sandboxId });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Failed to start Daytona sandbox: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Failed to start Daytona sandbox: ${err.message}`));
     }
 }));
 // POST /api/daytona/sandbox/:sandboxId/stop - Stop a running sandbox
-app.post('/api/daytona/sandbox/:sandboxId/stop', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/daytona/sandbox/:sandboxId/stop', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     try {
         await (0, daytona_client_js_1.getDaytonaClient)().stopSandbox(req.params.sandboxId);
-        (0, index_js_12.sendSuccess)(res, { stopped: true, sandboxId: req.params.sandboxId });
+        (0, index_js_13.sendSuccess)(res, { stopped: true, sandboxId: req.params.sandboxId });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Failed to stop Daytona sandbox: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Failed to stop Daytona sandbox: ${err.message}`));
     }
 }));
 // DELETE /api/daytona/sandbox/:sandboxId - Delete a sandbox
-app.delete('/api/daytona/sandbox/:sandboxId', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.delete('/api/daytona/sandbox/:sandboxId', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     try {
         await (0, daytona_client_js_1.getDaytonaClient)().deleteSandbox(req.params.sandboxId);
-        (0, index_js_12.sendSuccess)(res, { deleted: true, sandboxId: req.params.sandboxId });
+        (0, index_js_13.sendSuccess)(res, { deleted: true, sandboxId: req.params.sandboxId });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Failed to delete Daytona sandbox: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Failed to delete Daytona sandbox: ${err.message}`));
     }
 }));
 // POST /api/daytona/sandbox/:sandboxId/exec - Execute command in sandbox
-app.post('/api/daytona/sandbox/:sandboxId/exec', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/daytona/sandbox/:sandboxId/exec', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     const { command, cwd, timeoutSecs } = req.body;
     if (!command) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'command is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'command is required'));
     }
     try {
         const result = await (0, daytona_client_js_1.getDaytonaClient)().execCommand(req.params.sandboxId, command, { cwd, timeoutSecs });
-        (0, index_js_12.sendSuccess)(res, result);
+        (0, index_js_13.sendSuccess)(res, result);
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Command execution failed: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Command execution failed: ${err.message}`));
     }
 }));
 // POST /api/daytona/sandbox/:sandboxId/files/write - Write file to sandbox
-app.post('/api/daytona/sandbox/:sandboxId/files/write', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.post('/api/daytona/sandbox/:sandboxId/files/write', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     const { path: filePath, content } = req.body;
     if (!filePath || content === undefined) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'path and content are required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'path and content are required'));
     }
     try {
         await (0, daytona_client_js_1.getDaytonaClient)().uploadFile(req.params.sandboxId, filePath, content);
@@ -16933,44 +16311,44 @@ app.post('/api/daytona/sandbox/:sandboxId/files/write', authenticateRequest, (0,
             }
         }
         catch { /* trigger-jobs module may not be available */ }
-        (0, index_js_12.sendSuccess)(res, { written: true, path: filePath });
+        (0, index_js_13.sendSuccess)(res, { written: true, path: filePath });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `File write failed: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `File write failed: ${err.message}`));
     }
 }));
 // GET /api/daytona/sandbox/:sandboxId/files/read - Read file from sandbox
-app.get('/api/daytona/sandbox/:sandboxId/files/read', authenticateRequest, (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/daytona/sandbox/:sandboxId/files/read', authenticateRequest, (0, index_js_13.asyncHandler)(async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     const filePath = req.query.path;
     if (!filePath) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'path query parameter is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'path query parameter is required'));
     }
     try {
         const content = await (0, daytona_client_js_1.getDaytonaClient)().downloadFile(req.params.sandboxId, filePath);
-        (0, index_js_12.sendSuccess)(res, { path: filePath, content });
+        (0, index_js_13.sendSuccess)(res, { path: filePath, content });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `File read failed: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `File read failed: ${err.message}`));
     }
 }));
 // GET /api/daytona/sandbox/:sandboxId/preview - Get preview URL for a port
 app.get('/api/daytona/sandbox/:sandboxId/preview', authenticateRequest, async (req, res) => {
     if (!(0, daytona_client_js_1.isDaytonaConfigured)()) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
     const port = parseInt(req.query.port, 10);
     if (!port || isNaN(port)) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'port query parameter is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'port query parameter is required'));
     }
     try {
         const preview = await (0, daytona_client_js_1.getDaytonaClient)().getPortPreviewUrl(req.params.sandboxId, port);
-        (0, index_js_12.sendSuccess)(res, { ...preview, port });
+        (0, index_js_13.sendSuccess)(res, { ...preview, port });
     }
     catch (err) {
-        (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.INTERNAL_ERROR, `Failed to get Daytona preview URL: ${err.message}`));
+        (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.INTERNAL_ERROR, `Failed to get Daytona preview URL: ${err.message}`));
     }
 });
 startupInfo('routes.daytona-sandbox', (0, daytona_client_js_1.isDaytonaConfigured)() ? 'registered' : 'registered (not configured - set DAYTONA_API_KEY)');
@@ -16989,10 +16367,10 @@ const SEARXNG_BASE_URL = process.env.SEARXNG_URL || 'http://127.0.0.1:8888';
  * Query params: q (required), limit (default 10), categories (default general),
  *               time_range (optional: day|week|month|year), language (default en-US)
  */
-app.get('/api/web-search', (0, index_js_12.asyncHandler)(async (req, res) => {
+app.get('/api/web-search', (0, index_js_13.asyncHandler)(async (req, res) => {
     const query = req.query.q;
     if (!query || query.trim().length === 0) {
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.VALIDATION_ERROR, 'Query parameter "q" is required'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.VALIDATION_ERROR, 'Query parameter "q" is required'));
     }
     const limit = Math.min(parseInt(req.query.limit || '10', 10), 50);
     const categories = req.query.categories || 'general';
@@ -17011,7 +16389,7 @@ app.get('/api/web-search', (0, index_js_12.asyncHandler)(async (req, res) => {
         const response = await fetch(`${SEARXNG_BASE_URL}/search?${params.toString()}`);
         if (!response.ok) {
             logger.error(`SearXNG returned ${response.status} for query: ${query}`);
-            return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, `Search backend returned ${response.status}`));
+            return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, `Search backend returned ${response.status}`));
         }
         const data = await response.json();
         const results = (data.results || []).slice(0, limit).map(r => ({
@@ -17022,7 +16400,7 @@ app.get('/api/web-search', (0, index_js_12.asyncHandler)(async (req, res) => {
             published_date: r.publishedDate,
             score: r.score,
         }));
-        (0, index_js_12.sendSuccess)(res, {
+        (0, index_js_13.sendSuccess)(res, {
             query,
             total: results.length,
             results,
@@ -17031,7 +16409,7 @@ app.get('/api/web-search', (0, index_js_12.asyncHandler)(async (req, res) => {
     }
     catch (err) {
         logger.error({ err }, `Web search proxy error (SEARXNG_URL=${SEARXNG_BASE_URL})`);
-        return (0, index_js_12.sendError)(res, (0, index_js_12.createError)(index_js_12.ErrorCode.SERVICE_UNAVAILABLE, 'Search backend is unreachable'));
+        return (0, index_js_13.sendError)(res, (0, index_js_13.createError)(index_js_13.ErrorCode.SERVICE_UNAVAILABLE, 'Search backend is unreachable'));
     }
 }));
 startupInfo('routes.web-search', `registered (SearXNG at ${SEARXNG_BASE_URL})`);
@@ -17112,6 +16490,21 @@ server.listen(PORT, async () => {
     }
     catch (err) {
         startupInfo('a2a-standard', 'not available', {
+            error: err instanceof Error ? err.message : 'unknown',
+        });
+    }
+    // Connectors bridge: start ingress for any configured chat channel (telegram).
+    // Degrade-safe — no token/SDK => inert, never crashes boot.
+    try {
+        const gateway = await (0, index_js_6.startConnectors)();
+        const health = gateway ? await gateway.health() : { active: false, channels: [] };
+        startupInfo('connectors', health.active ? 'started' : 'inert', {
+            active: health.active,
+            channels: health.channels.map((c) => ({ channel: c.channel, connected: c.connected })),
+        });
+    }
+    catch (err) {
+        startupInfo('connectors', 'failed', {
             error: err instanceof Error ? err.message : 'unknown',
         });
     }

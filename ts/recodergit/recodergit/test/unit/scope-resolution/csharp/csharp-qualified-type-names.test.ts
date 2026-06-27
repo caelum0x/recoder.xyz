@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import { extractParsedFile } from '../../../../src/core/ingestion/scope-extractor-bridge.js';
 import { csharpProvider } from '../../../../src/core/ingestion/languages/csharp.js';
 import { populateClassOwnedMembers } from '../../../../src/core/ingestion/scope-resolution/scope/walkers.js';

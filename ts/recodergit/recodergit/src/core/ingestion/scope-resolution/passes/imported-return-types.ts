@@ -39,7 +39,7 @@
  * scope-resolution generalization plan.
  */
 
-import type { ParsedFile, ScopeId, TypeRef } from 'recodergit-shared';
+import type { ParsedFile, ScopeId, TypeRef } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import type { WorkspaceResolutionIndex } from '../workspace-index.js';
 import {

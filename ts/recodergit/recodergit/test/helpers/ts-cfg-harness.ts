@@ -11,7 +11,7 @@
  * this module is the thin TS binding that preserves the original exports.
  */
 import TypeScript from 'tree-sitter-typescript';
-import type { ParsedImport } from 'recodergit-shared';
+import type { ParsedImport } from '@recoder/recodergit-engine-shared';
 import { createTypeScriptCfgVisitor } from '../../src/core/ingestion/cfg/visitors/typescript.js';
 import { emitTsScopeCaptures } from '../../src/core/ingestion/languages/typescript/captures.js';
 import { interpretTsImport } from '../../src/core/ingestion/languages/typescript/interpret.js';

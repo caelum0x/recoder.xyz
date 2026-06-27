@@ -1,7 +1,7 @@
 // recodergit/src/core/ingestion/method-extractors/configs/csharp.ts
 // Verified against tree-sitter-c-sharp 0.23.1
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type {
   MethodExtractionConfig,
   MethodInfo,

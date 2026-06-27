@@ -40,7 +40,7 @@ import {
   type Scope,
   type ScopeId,
   type SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import { createKnowledgeGraph } from '../../src/core/graph/graph.js';
 import type { KnowledgeGraph } from '../../src/core/graph/types.js';
 import type { ScopeResolutionIndexes } from '../../src/core/ingestion/model/scope-resolution-indexes.js';

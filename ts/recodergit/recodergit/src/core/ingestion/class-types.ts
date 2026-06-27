@@ -1,4 +1,4 @@
-import type { NodeLabel, SupportedLanguages } from 'recodergit-shared';
+import type { NodeLabel, SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { SyntaxNode } from './utils/ast-helpers.js';
 
 export type ClassLikeNodeLabel = Extract<

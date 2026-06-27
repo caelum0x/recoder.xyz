@@ -1,6 +1,6 @@
-import type { FileContent } from "@opencode-ai/sdk/v2"
+import type { FileContent } from "@recoder/opencode-sdk/v2"
 import { createEffect, createMemo, createResource, Match, on, Show, Switch, type JSX } from "solid-js"
-import { useI18n } from "@opencode-ai/ui/context/i18n"
+import { useI18n } from "@recoder/opencode-ui/context/i18n"
 import {
   dataUrlFromMediaValue,
   hasMediaValue,

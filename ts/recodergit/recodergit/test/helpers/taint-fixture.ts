@@ -22,7 +22,7 @@ import fs from 'fs';
 import path from 'path';
 import Parser from 'tree-sitter';
 import TypeScript from 'tree-sitter-typescript';
-import type { ParsedImport } from 'recodergit-shared';
+import type { ParsedImport } from '@recoder/recodergit-engine-shared';
 import { collectFunctionCfgs } from '../../src/core/ingestion/cfg/collect.js';
 import { computeReachingDefs } from '../../src/core/ingestion/cfg/reaching-defs.js';
 import { DEFAULT_PDG_MAX_REACHING_DEF_FACTS_PER_FUNCTION } from '../../src/core/ingestion/cfg/emit.js';

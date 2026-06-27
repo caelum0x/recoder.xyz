@@ -1,0 +1,88 @@
+{
+  "name": "@recoder/connectors",
+  "version": "0.1.0",
+  "description": "Recoder's connectors / social-gateway package — owned in place from OpenClaw's extracted gateway-core + social-gateways + embedded agents. Foundation: the ConnectorPort contract, connector domain types, the connector trust boundary (allowlist + mention + command gating), and the embedded-agent auth/runner contracts. Per-channel adapters (telegram/slack/discord/signal/line/feishu/imessage/whatsapp) wrap each real gateway behind ConnectorPort.",
+  "type": "module",
+  "author": "Recoder (recoder.xyz)",
+  "license": "MIT",
+  "homepage": "https://recoder.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/recoder-xyz/recoder.git",
+    "directory": "ts/extracted-from-openclaw"
+  },
+  "keywords": [
+    "recoder",
+    "agent-os",
+    "connectors",
+    "social-gateway",
+    "telegram",
+    "slack",
+    "discord",
+    "signal",
+    "line",
+    "feishu",
+    "imessage",
+    "whatsapp",
+    "a2a",
+    "interop"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf .turbo dist node_modules"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.0"
+  },
+  "//peerDependencies": "Channel SDKs are loaded by the per-channel adapter phase (not the foundation). The foundation src/ imports none of them, keeping install ENOSPC-safe on the disk-constrained dev box. The real, working gateway source under social-gateways/* uses these; they are declared optional so adapters can pull them in without a root-workspace install.",
+  "peerDependencies": {
+    "@buape/carbon": "^0.16.0",
+    "@larksuiteoapi/node-sdk": "^1.68.0",
+    "@line/bot-sdk": "^11.0.0",
+    "@mariozechner/pi-agent-core": "^0.73.0",
+    "@mariozechner/pi-ai": "^0.73.0",
+    "@mariozechner/pi-coding-agent": "^0.73.0",
+    "@slack/bolt": "^4.7.0",
+    "@slack/web-api": "^7.0.0",
+    "discord-api-types": "^0.37.0",
+    "grammy": "^1.44.0",
+    "ws": "^8.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@buape/carbon": { "optional": true },
+    "@larksuiteoapi/node-sdk": { "optional": true },
+    "@line/bot-sdk": { "optional": true },
+    "@mariozechner/pi-agent-core": { "optional": true },
+    "@mariozechner/pi-ai": { "optional": true },
+    "@mariozechner/pi-coding-agent": { "optional": true },
+    "@slack/bolt": { "optional": true },
+    "@slack/web-api": { "optional": true },
+    "discord-api-types": { "optional": true },
+    "grammy": { "optional": true },
+    "ws": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "2.1.9"
+  }
+}

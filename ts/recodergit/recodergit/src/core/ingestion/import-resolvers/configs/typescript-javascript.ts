@@ -4,7 +4,7 @@
  * Vue delegates to TypeScript's resolver.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig } from '../types.js';
 import { createStandardStrategy } from '../standard.js';
 

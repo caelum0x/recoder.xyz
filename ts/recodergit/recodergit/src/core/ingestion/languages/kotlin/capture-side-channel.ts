@@ -29,7 +29,7 @@
  * only restores kotlin state and ignores a foreign-shaped snapshot.
  */
 
-import type { ParsedFile, ScopeId } from 'recodergit-shared';
+import type { ParsedFile, ScopeId } from '@recoder/recodergit-engine-shared';
 import { getCompanionScopesForFile, markCompanionScope } from './companion-scopes.js';
 
 /**

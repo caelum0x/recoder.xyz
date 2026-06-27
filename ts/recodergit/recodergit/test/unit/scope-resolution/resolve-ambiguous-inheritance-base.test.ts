@@ -17,7 +17,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { resolveAmbiguousInheritanceBaseViaImports } from '../../../src/core/ingestion/scope-resolution/scope/walkers.js';
-import type { ImportEdge, Scope, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { ImportEdge, Scope, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../../src/core/ingestion/model/scope-resolution-indexes.js';
 
 const MODULE = 'scope:module' as ScopeId;

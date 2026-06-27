@@ -54,7 +54,7 @@ import type {
   Scope,
   ScopeId,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../graph/types.js';
 import type { ScopeResolutionIndexes } from './model/scope-resolution-indexes.js';
 

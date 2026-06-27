@@ -18,8 +18,8 @@ import { buildSuffixIndex } from '../../../../src/core/ingestion/import-resolver
 import * as importResolverUtils from '../../../../src/core/ingestion/import-resolvers/utils.js';
 import { typescriptScopeResolver } from '../../../../src/core/ingestion/languages/typescript/scope-resolver.js';
 import type { SyntaxNode } from '../../../../src/core/ingestion/utils/ast-helpers.js';
-import type { ParsedImport, WorkspaceIndex } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { ParsedImport, WorkspaceIndex } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 
 function importsFor(src: string): ParsedImport[] {
   const matches = emitTsScopeCaptures(src, 'test.ts');

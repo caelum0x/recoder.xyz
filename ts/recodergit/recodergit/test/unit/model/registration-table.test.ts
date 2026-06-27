@@ -14,7 +14,7 @@ import {
   FREE_CALLABLE_TUPLE,
 } from '../../../src/core/ingestion/model/symbol-table.js';
 import { EMBEDDABLE_LABELS } from '../../../src/core/embeddings/types.js';
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { makeDef as makeBaseDef } from './helpers.js';
 
 // ---------------------------------------------------------------------------

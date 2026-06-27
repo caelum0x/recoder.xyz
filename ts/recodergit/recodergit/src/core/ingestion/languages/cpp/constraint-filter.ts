@@ -26,7 +26,7 @@ import type {
   ConstraintContext,
   ParameterTypeClass,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import { classifyType, type TypeClass } from './type-classifier.js';
 import type { ConstraintExpr, CppConstraintPayload } from './constraint-extractor.js';
 

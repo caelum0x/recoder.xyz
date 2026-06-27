@@ -3,6 +3,7 @@
  */
 
 import { execSync } from 'child_process';
+import { tmuxCommand } from '../../utils/tmuxBin.js';
 import * as fs from 'fs';
 import path from 'path';
 import type { DmuxPane, DmuxConfig } from '../../types.js';
@@ -79,7 +80,7 @@ async function killTmuxPaneReliably(pane: DmuxPane): Promise<boolean> {
   }
 
   try {
-    execSync(`tmux kill-pane -t '${pane.paneId}'`, {
+    execSync(tmuxCommand(`tmux kill-pane -t '${pane.paneId}'`), {
       stdio: 'pipe',
       timeout: 5000,
     });

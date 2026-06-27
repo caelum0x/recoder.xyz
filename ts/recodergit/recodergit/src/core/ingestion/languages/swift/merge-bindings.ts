@@ -17,7 +17,7 @@
  * Within a surviving tier we de-dup by `DefId`, last-write-wins.
  */
 
-import type { BindingRef } from 'recodergit-shared';
+import type { BindingRef } from '@recoder/recodergit-engine-shared';
 
 const TIER_LOCAL = 0;
 const TIER_IMPORT = 1;

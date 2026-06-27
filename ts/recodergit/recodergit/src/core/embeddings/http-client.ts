@@ -11,7 +11,7 @@
  * via `AbortSignal.timeout` on the underlying fetch.
  */
 
-import { CircuitOpenError, ResilientFetchExhaustedError, resilientFetch } from 'recodergit-shared';
+import { CircuitOpenError, ResilientFetchExhaustedError, resilientFetch } from '@recoder/recodergit-engine-shared';
 
 const HTTP_TIMEOUT_MS = 30_000;
 const HTTP_MAX_RETRIES = 2;

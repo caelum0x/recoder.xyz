@@ -29,17 +29,25 @@ const PI_PROMPT_TIMEOUT_MS = 45000;
 // ── Daytona-backed Operations ───────────────────────────────────────
 const DAYTONA_CWD = '/home/daytona';
 async function loadPiModule() {
-    const candidates = [
-        (0, path_1.join)(process.cwd(), '..', 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'index.js'),
-        (0, path_1.join)(process.cwd(), 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'index.js'),
-        (0, path_1.join)(__dirname, '..', '..', 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'index.js'),
-    ];
-    const modulePath = candidates.find((candidate) => (0, fs_1.existsSync)(candidate));
-    if (!modulePath) {
-        throw new Error('Pi runtime dist/index.js not found in node_modules');
-    }
+    // Recoder-owned pi runtime: @recoder/pi-coding-agent (merged from earendil-works/pi).
+    // Resolved via the workspace; falls back to scanning node_modules dist for
+    // resilience across build layouts.
     const dynamicImport = new Function('specifier', 'return import(specifier)');
-    return dynamicImport((0, url_1.pathToFileURL)(modulePath).href);
+    try {
+        return await dynamicImport('@recoder/pi-coding-agent');
+    }
+    catch {
+        const candidates = [
+            (0, path_1.join)(process.cwd(), '..', 'node_modules', '@recoder', 'pi-coding-agent', 'dist', 'index.js'),
+            (0, path_1.join)(process.cwd(), 'node_modules', '@recoder', 'pi-coding-agent', 'dist', 'index.js'),
+            (0, path_1.join)(__dirname, '..', '..', 'node_modules', '@recoder', 'pi-coding-agent', 'dist', 'index.js'),
+        ];
+        const modulePath = candidates.find((candidate) => (0, fs_1.existsSync)(candidate));
+        if (!modulePath) {
+            throw new Error('@recoder/pi-coding-agent runtime not found');
+        }
+        return dynamicImport((0, url_1.pathToFileURL)(modulePath).href);
+    }
 }
 function buildPiExecutionPrompt(userPrompt) {
     return [

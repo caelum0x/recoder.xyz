@@ -9,7 +9,7 @@
  */
 
 import type { SyntaxNode } from '../utils/ast-helpers.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { BaseFieldExtractor } from '../field-extractor.js';
 import type { FieldExtractor } from '../field-extractor.js';
 import type {

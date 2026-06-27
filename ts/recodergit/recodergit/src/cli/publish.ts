@@ -28,7 +28,7 @@ import {
   buildUqDispatchPayload,
   isValidOwnerRepo,
   parseOwnerRepoFromRemote,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import { getGitRoot, getRemoteOriginUrl, getCurrentCommit } from '../storage/git.js';
 import { hasIndex } from '../storage/repo-manager.js';
 import { cliInfo, cliError } from './cli-message.js';

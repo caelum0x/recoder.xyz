@@ -10,11 +10,11 @@
  * Processes help agents understand how features work through the codebase.
  */
 
-import type { GraphNode, NodeLabel } from 'recodergit-shared';
+import type { GraphNode, NodeLabel } from '@recoder/recodergit-engine-shared';
 import { KnowledgeGraph } from '../graph/types.js';
 import { CommunityMembership } from './community-processor.js';
 import { calculateEntryPointScore, isTestFile } from './entry-point-scoring.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { isDev } from './utils/env.js';
 
 import { logger } from '../logger.js';

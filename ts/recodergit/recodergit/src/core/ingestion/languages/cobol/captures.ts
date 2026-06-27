@@ -10,7 +10,7 @@
  * The regex tagger is synchronous — no async needed.
  */
 
-import type { Capture, CaptureMatch, Range } from 'recodergit-shared';
+import type { Capture, CaptureMatch, Range } from '@recoder/recodergit-engine-shared';
 import {
   extractCobolSymbolsWithRegex,
   preprocessCobolSource,

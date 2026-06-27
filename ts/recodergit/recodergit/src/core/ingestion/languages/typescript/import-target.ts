@@ -14,8 +14,8 @@
  * `linkStatus: 'unresolved'`.
  */
 
-import type { ParsedImport, WorkspaceIndex } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { ParsedImport, WorkspaceIndex } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { resolveImportPath } from '../../import-resolvers/standard.js';
 import type { SuffixIndex } from '../../import-resolvers/utils.js';
 import type { TsconfigPaths } from '../../language-config.js';

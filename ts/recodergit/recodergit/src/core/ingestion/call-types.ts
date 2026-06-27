@@ -7,7 +7,7 @@
  * consumed by createCallExtractor() and the per-language configs.
  */
 
-import type { SupportedLanguages } from 'recodergit-shared';
+import type { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { SyntaxNode } from './utils/ast-helpers.js';
 import type { MixedChainStep } from './utils/call-analysis.js';
 

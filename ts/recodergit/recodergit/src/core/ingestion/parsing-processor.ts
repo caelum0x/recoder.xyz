@@ -1,11 +1,11 @@
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import { KnowledgeGraph } from '../graph/types.js';
 import type { SymbolTableWriter } from './model/index.js';
-import { getLanguageFromFilename } from 'recodergit-shared';
+import { getLanguageFromFilename } from '@recoder/recodergit-engine-shared';
 
 import { accumulateExportedTypesFromParsedNode, type ExportedTypeMap } from './call-processor.js';
 
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import { WorkerPool } from './workers/worker-pool.js';
 import type { SkippedPath } from './workers/clone-safety.js';
 import type { CfgSkipCounts } from './cfg/collect.js';

@@ -14,15 +14,17 @@ import type { AgentSurface } from '@recoder/agent-os';
 const exec = promisify(execFile);
 
 /** Coding runtimes Conductor can drive headless (subset of AgentSurface). */
-export type ConductorRuntimeId = 'claude_code' | 'codex' | 'opencode' | 'recoder_code' | 'gemini_cli' | 'qwen_code';
+export type ConductorRuntimeId = 'claude_code' | 'codex' | 'opencode' | 'recoder_code' | 'pi' | 'gemini_cli' | 'qwen_code' | 'crush';
 
 const CONDUCTOR_RUNTIME_IDS: readonly ConductorRuntimeId[] = [
   'claude_code',
   'codex',
   'opencode',
   'recoder_code',
+  'pi',
   'gemini_cli',
   'qwen_code',
+  'crush',
 ];
 
 export function isConductorRuntimeId(value: string): value is ConductorRuntimeId {
@@ -79,6 +81,11 @@ const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     bin: 'recoder-code',
     build: (o) => `recoder-code --prompt ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${tail(o)}`,
   },
+  pi: {
+    // pi is the vendored coding-agent harness (@recoder/pi-*). Runs print mode.
+    bin: 'pi',
+    build: (o) => `pi ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${tail(o)}`,
+  },
   gemini_cli: {
     bin: 'gemini',
     build: (o) => `gemini --prompt ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${tail(o)}`,
@@ -86,6 +93,11 @@ const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
   qwen_code: {
     bin: 'qwen',
     build: (o) => `qwen --prompt ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${tail(o)}`,
+  },
+  crush: {
+    // crush is the Charm coding agent; runs in print mode (-p).
+    bin: 'crush',
+    build: (o) => `crush -p ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${tail(o)}`,
   },
 };
 

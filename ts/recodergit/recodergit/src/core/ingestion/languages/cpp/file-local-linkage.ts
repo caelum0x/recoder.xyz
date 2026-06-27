@@ -1,4 +1,4 @@
-import type { ParsedFile, Scope, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, Scope, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { isCppInlineNamespaceScope } from './inline-namespaces.js';
 
 /**

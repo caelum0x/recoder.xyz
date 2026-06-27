@@ -28,8 +28,8 @@
 
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import type { Scope, ScopeId, ScopeTree, SymbolDefinition } from 'recodergit-shared';
-import { buildScopeTree } from 'recodergit-shared';
+import type { Scope, ScopeId, ScopeTree, SymbolDefinition } from '@recoder/recodergit-engine-shared';
+import { buildScopeTree } from '@recoder/recodergit-engine-shared';
 import { mapReplacer } from './parse-cache.js';
 import { makeInterningReviver } from './parsedfile-store.js';
 

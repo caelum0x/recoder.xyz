@@ -6,7 +6,7 @@
  * test file that uses it.
  */
 
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 /**
  * Build a {@link SymbolDefinition} with sensible defaults. Every field

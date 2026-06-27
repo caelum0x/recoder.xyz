@@ -1,17 +1,17 @@
 {
-  "name": "recodergit",
+  "name": "@recoder/recodergit-engine",
   "version": "1.6.8",
-  "description": "Graph-powered code intelligence for AI agents. Index any codebase, query via MCP or CLI.",
-  "author": "Abhigyan Patwari",
+  "description": "Recoder code-knowledge-graph engine — tree-sitter parse -> scope resolution -> graph -> LadybugDB -> embeddings -> hybrid search, served via the `recodergit` CLI and MCP. The real engine behind Recoder's repo-intelligence (satisfies the @recoder/recodergit contract). Vendored and owned by Recoder.",
+  "author": "Recoder",
   "license": "PolyForm-Noncommercial-1.0.0",
-  "homepage": "https://github.com/abhigyanpatwari/RecoderGit#readme",
+  "homepage": "https://recoder.xyz",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/abhigyanpatwari/RecoderGit.git",
-    "directory": "recodergit"
+    "url": "git+https://github.com/caelum0x/recoder.xyz.git",
+    "directory": "ts/recodergit/recodergit"
   },
   "bugs": {
-    "url": "https://github.com/abhigyanpatwari/RecoderGit/issues"
+    "url": "https://github.com/caelum0x/recoder.xyz/issues"
   },
   "keywords": [
     "mcp",
@@ -106,7 +106,7 @@
     "@types/node": "^25.6.0",
     "@types/uuid": "^11.0.0",
     "@vitest/coverage-v8": "^4.0.18",
-    "recodergit-shared": "file:../recodergit-shared",
+    "@recoder/recodergit-engine-shared": "file:../recodergit-shared",
     "tsx": "^4.0.0",
     "typescript": "^5.4.5",
     "vitest": "^4.0.18"

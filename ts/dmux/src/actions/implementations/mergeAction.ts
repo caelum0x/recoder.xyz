@@ -6,6 +6,7 @@
  */
 
 import { execSync } from 'child_process';
+import { tmuxCommand } from '../../utils/tmuxBin.js';
 import type { DmuxPane } from '../../types.js';
 import type { ActionResult, ActionContext } from '../types.js';
 import { triggerHook } from '../../utils/hooks.js';
@@ -138,7 +139,7 @@ async function executeSingleRootMerge(
   const closeSiblings = async () => {
     for (const sibling of siblingPanes) {
       try {
-        execSync(`tmux kill-pane -t '${sibling.paneId}'`, { stdio: 'pipe', timeout: 5000 });
+        execSync(tmuxCommand(`tmux kill-pane -t '${sibling.paneId}'`), { stdio: 'pipe', timeout: 5000 });
       } catch {
         // Pane may already be gone
       }

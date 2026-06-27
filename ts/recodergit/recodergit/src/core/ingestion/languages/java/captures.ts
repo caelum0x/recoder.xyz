@@ -14,7 +14,7 @@
  * Pure given the input source text. No I/O, no globals consulted.
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { nodeIfType, nodeToCapture, syntheticCapture } from '../../utils/ast-helpers.js';
 import { splitImportDeclaration } from './import-decomposer.js';
 import { computeJavaArityMetadata } from './arity-metadata.js';

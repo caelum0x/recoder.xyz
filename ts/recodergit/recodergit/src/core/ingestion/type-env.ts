@@ -5,7 +5,7 @@ import {
   genericFuncName,
 } from './utils/ast-helpers.js';
 import { CALL_EXPRESSION_TYPES } from './utils/call-analysis.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { TYPED_PARAMETER_TYPES } from './type-extractors/shared.js';
 import { getProvider } from './languages/index.js';
 import type { BindingAccumulator, BindingEntry } from './binding-accumulator.js';
@@ -22,7 +22,7 @@ import {
   extractReturnTypeName,
 } from './type-extractors/shared.js';
 import type { SemanticModel } from './model/index.js';
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 
 import { logger } from '../logger.js';
 /**

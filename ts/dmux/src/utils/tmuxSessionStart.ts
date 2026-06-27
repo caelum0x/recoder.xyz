@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { tmuxBinFile } from './tmuxBin.js';
 
 function formatTmuxError(action: string, result: ReturnType<typeof spawnSync>): string {
   if (result.error) {
@@ -18,7 +19,7 @@ export function startDetachedTmuxSession(options: {
   command: string;
 }): void {
   const result = spawnSync(
-    'tmux',
+    tmuxBinFile(),
     [
       'new-session',
       '-d',
@@ -41,7 +42,7 @@ export function startDetachedTmuxSession(options: {
 
 export function attachTmuxSession(sessionName: string): void {
   const result = spawnSync(
-    'tmux',
+    tmuxBinFile(),
     ['attach-session', '-t', sessionName],
     { stdio: 'inherit' }
   );

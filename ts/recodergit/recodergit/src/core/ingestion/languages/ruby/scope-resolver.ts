@@ -1,5 +1,5 @@
-import type { ParsedFile, ScopeId } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { ParsedFile, ScopeId } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
 import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';
 import { rubyProvider } from '../ruby.js';

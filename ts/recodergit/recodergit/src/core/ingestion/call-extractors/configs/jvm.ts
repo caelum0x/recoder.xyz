@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/call-extractors/configs/jvm.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { CallExtractionConfig, ExtractedCallSite } from '../../call-types.js';
 import type { SyntaxNode } from '../../utils/ast-helpers.js';
 

@@ -21,7 +21,7 @@
  * fake `conn`/`db`, no `any`/`as any`).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { GraphNode, NodeProperties } from 'recodergit-shared';
+import type { GraphNode, NodeProperties } from '@recoder/recodergit-engine-shared';
 import { BASICBLOCK_CSV_HEADER, buildBasicBlockRow } from '../../src/core/lbug/csv-generator.js';
 import { getCopyQuery } from '../../src/core/lbug/lbug-adapter.js';
 import { BASICBLOCK_SCHEMA } from '../../src/core/lbug/schema.js';

@@ -49,7 +49,7 @@
  * `NodeLabel` is missing from all three sets.
  */
 
-import type { NodeLabel, SymbolDefinition } from 'recodergit-shared';
+import type { NodeLabel, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { ClassLikeLabel, FreeCallableLabel } from './symbol-table.js';
 import { FREE_CALLABLE_TYPES } from './symbol-table.js';
 import type { MutableTypeRegistry } from './type-registry.js';

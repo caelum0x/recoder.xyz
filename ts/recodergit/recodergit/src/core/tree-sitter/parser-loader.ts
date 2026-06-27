@@ -1,6 +1,6 @@
 import Parser from 'tree-sitter';
 import { createRequire } from 'node:module';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 
 import { logger } from '../logger.js';
 import { requireVendoredGrammar } from './vendored-grammars.js';

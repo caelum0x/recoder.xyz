@@ -6,8 +6,8 @@
  * queries (TypeScript grammar has interface/type nodes), and language ID.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
-import type { NodeLabel } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import { defineLanguage } from '../language-provider.js';
 import type { AstFrameworkPatternConfig } from '../language-provider.js';
 import { createClassExtractor } from '../class-extractors/generic.js';

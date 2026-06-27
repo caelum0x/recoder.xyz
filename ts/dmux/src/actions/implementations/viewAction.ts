@@ -3,6 +3,7 @@
  */
 
 import { execSync } from 'child_process';
+import { tmuxCommand } from '../../utils/tmuxBin.js';
 import type { DmuxPane } from '../../types.js';
 import type { ActionResult, ActionContext } from '../types.js';
 import { getPaneDisplayName } from '../../utils/paneTitle.js';
@@ -25,7 +26,7 @@ export async function viewPane(
   }
 
   try {
-    execSync(`tmux select-pane -t '${pane.paneId}'`, { stdio: 'pipe' });
+    execSync(tmuxCommand(`tmux select-pane -t '${pane.paneId}'`), { stdio: 'pipe' });
 
     return {
       type: 'navigation',

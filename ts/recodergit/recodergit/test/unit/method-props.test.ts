@@ -5,7 +5,7 @@ import {
   constTagForId,
 } from '../../src/core/ingestion/utils/method-props.js';
 import type { MethodInfo } from '../../src/core/ingestion/method-types.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 
 function makeMethodInfo(
   name: string,

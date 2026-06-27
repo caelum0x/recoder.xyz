@@ -8,7 +8,7 @@
  * for its left-to-right multiple inheritance resolution order.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { cClassConfig, cppClassConfig } from '../class-extractors/configs/c-cpp.js';
 import { defineLanguage } from '../language-provider.js';
@@ -32,7 +32,7 @@ const FUNCTION_DECLARATION_TYPES = new Set([
 ]);
 import type { SyntaxNode } from '../utils/ast-helpers.js';
 import { createLeadingDocDescriptionExtractor } from '../utils/ast-helpers.js';
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import type { LanguageProvider } from '../language-provider.js';
 import { createFieldExtractor } from '../field-extractors/generic.js';
 import {

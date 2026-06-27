@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { Flag } from "@opencode-ai/core/flag/flag"
+import { Flag } from "@recoder/opencode-core/flag/flag"
 import { Effect, Option, Schema, Stream } from "effect"
 
 test("embedded client uses the real router and handlers", async () => {

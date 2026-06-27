@@ -1,7 +1,7 @@
 // recodergit/src/core/ingestion/method-extractors/configs/swift.ts
 // Verified against tree-sitter-swift 0.7.x
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type {
   MethodExtractionConfig,
   ParameterInfo,

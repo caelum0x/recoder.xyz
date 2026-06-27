@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { Scope, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { Scope, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { pickImplicitThisOverload } from '../../../src/core/ingestion/scope-resolution/passes/free-call-fallback.js';
 import type { ScopeResolutionIndexes } from '../../../src/core/ingestion/model/scope-resolution-indexes.js';
 import type { SemanticModel } from '../../../src/core/ingestion/model/semantic-model.js';

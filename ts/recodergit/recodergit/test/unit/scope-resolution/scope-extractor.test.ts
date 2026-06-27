@@ -17,7 +17,7 @@ import type {
   Scope,
   ScopeKind,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import {
   extract,
   selectNodeBearingDef,

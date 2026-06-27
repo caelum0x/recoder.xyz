@@ -7,7 +7,7 @@
  * compatibility scan inside `lookupCore.collectOwnedMembers`.
  */
 
-import type { DefId, SymbolDefinition } from 'recodergit-shared';
+import type { DefId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { SemanticModel } from './semantic-model.js';
 
 const EMPTY: readonly SymbolDefinition[] = Object.freeze([]);

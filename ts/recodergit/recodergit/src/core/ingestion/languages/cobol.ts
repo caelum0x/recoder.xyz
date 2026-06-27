@@ -10,7 +10,7 @@
  * `emitScopeCaptures` which wraps the regex tagger. COPY statements are
  * interpreted as imports; there is no type system and no implicit receiver.
  */
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { defineLanguage } from '../language-provider.js';
 import {
   emitCobolScopeCaptures,

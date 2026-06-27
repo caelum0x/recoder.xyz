@@ -88,7 +88,7 @@ exports.claudeConnectorRouter.post('/execute', async (req, res) => {
                 thread_id: req.body.thread_id || (0, task_lifecycle_service_1.generateId)('thr'),
                 requester: {
                     agent_id: requester?.id || 'api-caller',
-                    platform: requester?.platform || 'recoder_web',
+                    platform: requester?.platform || 'recoder_app',
                     name: requester?.name || 'API Caller',
                 },
                 assignee: {
@@ -121,7 +121,7 @@ exports.claudeConnectorRouter.post('/execute', async (req, res) => {
             requester: {
                 id: requester?.id || 'api-caller',
                 name: requester?.name || 'API Caller',
-                platform: requester?.platform || 'recoder_web',
+                platform: requester?.platform || 'recoder_app',
             },
             artifacts,
         };

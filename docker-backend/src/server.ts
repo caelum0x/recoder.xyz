@@ -66,6 +66,7 @@ import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { createConductorRouter } from './conductor/conductor.routes.js';
+import { createConnectorsRouter, startConnectors } from './connectors/index.js';
 import { reconcile as reconcileConductor } from './conductor/workspace-service.js';
 import { startAgentOsOutboxDrainLoop } from './agent-os/outbox-drain-loop.js';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
@@ -15549,6 +15550,10 @@ reconcileConductor().catch((err) =>
   logger.warn({ err }, 'conductor boot reconcile failed (non-fatal)'),
 );
 
+// Connectors bridge — chat channels (telegram, …) -> gated -> Conductor workspace.
+// Status route is read-only and never leaks credentials (truthful health only).
+app.use('/api/connectors', createConnectorsRouter());
+
 // Identity token endpoints (requires API key auth, but /verify uses app key auth internally)
 app.use('/api/v1/identity', identityRouter);
 
@@ -19135,6 +19140,21 @@ server.listen(PORT, async () => {
     await mountA2AStandardServer(app as any);
   } catch (err) {
     startupInfo('a2a-standard', 'not available', {
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+
+  // Connectors bridge: start ingress for any configured chat channel (telegram).
+  // Degrade-safe — no token/SDK => inert, never crashes boot.
+  try {
+    const gateway = await startConnectors();
+    const health = gateway ? await gateway.health() : { active: false, channels: [] };
+    startupInfo('connectors', health.active ? 'started' : 'inert', {
+      active: health.active,
+      channels: health.channels.map((c) => ({ channel: c.channel, connected: c.connected })),
+    });
+  } catch (err) {
+    startupInfo('connectors', 'failed', {
       error: err instanceof Error ? err.message : 'unknown',
     });
   }

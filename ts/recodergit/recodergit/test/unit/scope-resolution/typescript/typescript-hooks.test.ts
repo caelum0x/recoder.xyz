@@ -38,7 +38,7 @@ import type {
   ScopeTree,
   SymbolDefinition,
   TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 // ─── Fake scope helpers ───────────────────────────────────────────────────
 

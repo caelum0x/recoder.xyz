@@ -1,4 +1,4 @@
-import type { ParsedImport, WorkspaceIndex } from 'recodergit-shared';
+import type { ParsedImport, WorkspaceIndex } from '@recoder/recodergit-engine-shared';
 
 export interface KotlinResolveContext {
   readonly fromFile: string;

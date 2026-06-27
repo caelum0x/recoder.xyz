@@ -126,7 +126,7 @@ function deriveRoutingPlan(prompt, routingHints) {
             runtimeCategory: 'visual',
             requiredCapabilities: ['web-interface'],
             preferredCapabilities: ['design', 'ui'],
-            preferredPlatform: 'recoder_web',
+            preferredPlatform: 'recoder_app',
         },
         debug: {
             runtimeCategory: 'debug',

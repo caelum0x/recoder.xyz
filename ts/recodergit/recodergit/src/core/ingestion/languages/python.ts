@@ -8,8 +8,8 @@
  *   - mroStrategy: 'c3' (Python C3 linearization for multiple inheritance)
  */
 
-import type { NodeLabel } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { pythonClassConfig } from '../class-extractors/configs/python.js';
 import { defineLanguage } from '../language-provider.js';

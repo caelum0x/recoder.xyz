@@ -8,7 +8,7 @@
  *   - callRouter: present (Go method calls may need routing)
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { goClassConfig } from '../class-extractors/configs/go.js';
 import { createLeadingDocDescriptionExtractor } from '../utils/ast-helpers.js';

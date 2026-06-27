@@ -10,8 +10,8 @@
  */
 
 import path from 'node:path';
-import type { ParsedFile } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';
 import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';
 import { cobolProvider } from '../cobol.js';

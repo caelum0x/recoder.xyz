@@ -3,7 +3,7 @@
  */
 
 import { createRequire } from 'node:module';
-import type { ParsedImport } from 'recodergit-shared';
+import type { ParsedImport } from '@recoder/recodergit-engine-shared';
 import { assert, describe, expect, it } from 'vitest';
 import { createJavaCfgVisitor } from '../../../src/core/ingestion/cfg/visitors/java.js';
 import { computeReachingDefs } from '../../../src/core/ingestion/cfg/reaching-defs.js';

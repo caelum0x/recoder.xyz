@@ -24,7 +24,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ParsedFile, Range, Scope, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, Range, Scope, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import {
   clearCompanionScopes,
   isCompanionScope,

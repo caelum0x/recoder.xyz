@@ -11,7 +11,7 @@
  */
 
 import { detectFrameworkFromPath } from './framework-detection.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { providers } from './languages/index.js';
 
 // ============================================================================

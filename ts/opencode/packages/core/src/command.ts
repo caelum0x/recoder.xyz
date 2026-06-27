@@ -1,7 +1,7 @@
 export * as CommandV2 from "./command"
 
 import { Context, Effect, Layer, Types } from "effect"
-import { Command } from "@opencode-ai/schema/command"
+import { Command } from "@recoder/opencode-schema/command"
 import { State } from "./state"
 
 export const Info = Command.Info

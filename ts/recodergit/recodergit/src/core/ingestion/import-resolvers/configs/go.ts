@@ -3,7 +3,7 @@
  * Go-specific package strategy (go.mod), then standard fallback.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig, ImportResolverStrategy } from '../types.js';
 import { createStandardStrategy } from '../standard.js';
 import { resolveGoPackageDir, resolveGoPackage } from '../go.js';

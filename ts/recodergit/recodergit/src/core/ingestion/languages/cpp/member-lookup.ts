@@ -1,4 +1,4 @@
-import type { ParsedFile, ReferenceSite, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, ReferenceSite, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../../graph/types.js';
 import type { GraphNodeLookup } from '../../scope-resolution/graph-bridge/node-lookup.js';
 import { resolveDefGraphId } from '../../scope-resolution/graph-bridge/ids.js';

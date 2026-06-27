@@ -25,7 +25,7 @@
  * (DoD.md §2.2).
  */
 
-import type { CaptureMatch, ParsedImport, ParsedTypeBinding } from 'recodergit-shared';
+import type { CaptureMatch, ParsedImport, ParsedTypeBinding } from '@recoder/recodergit-engine-shared';
 import { interpretTsImport, interpretTsTypeBinding } from '../typescript/interpret.js';
 
 export function interpretJsImport(captures: CaptureMatch): ParsedImport | null {
