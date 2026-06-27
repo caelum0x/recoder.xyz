@@ -157,10 +157,23 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
             <div class="log-empty">No interactive sessions running.</div>
           ) : (
             list.map((s) => (
-              <button
+              // Row is a clickable container (role=button), NOT a <button>: it
+              // holds a nested Kill <button>, and nesting interactive controls
+              // inside a <button> is invalid HTML — browsers reparent the inner
+              // button out, breaking layout and the stopPropagation handler.
+              <div
                 class={`session-row ${s.sessionId === selectedId ? 'session-row-active' : ''}`}
                 key={s.sessionId}
+                role="button"
+                tabIndex={0}
+                aria-pressed={s.sessionId === selectedId}
                 onClick={() => setSelectedId(s.sessionId)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedId(s.sessionId);
+                  }
+                }}
               >
                 <div class="session-row-main">
                   <span class="session-name">{s.sessionId}</span>
@@ -178,7 +191,7 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
                 >
                   {killBusy === s.sessionId ? '…' : 'Kill'}
                 </button>
-              </button>
+              </div>
             ))
           )}
         </div>

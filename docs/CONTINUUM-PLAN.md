@@ -9,7 +9,14 @@
 
 ## 1. Current state (honest)
 
-Continuum (`ts/continuum`, upstream `continuum-core` v0.7.1, Nikhil Kagita) is a mature,
+> **Update (post-fusion):** the baseline below described the *pre-fusion* state. F1–F3
+> are now **done** (`756cb7232`): continuum was promoted from `ts/continuum` to
+> **`packages/continuum`** (`@recoder/continuum`), the `ts/continuum` dir is gone, and
+> Brain calls the engine **in-process** — the `execFile` shell-out is deleted. See §6
+> for the current per-item status. The text in this section is retained as the
+> motivating baseline.
+
+Continuum (originally `ts/continuum`, upstream `continuum-core` v0.7.1, Nikhil Kagita) is a mature,
 local-first desktop-context memory. It is **not** a stub:
 
 - **Stage 1 — capture:** clipboard, editor, git, terminal, chrome, screen-vision (OCR), audio
