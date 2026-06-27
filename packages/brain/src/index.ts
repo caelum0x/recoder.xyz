@@ -108,6 +108,8 @@ export {
   type ProbeResult,
   type DoctorFetch,
   type DoctorFetchResult,
+  type LoadContinuumFn,
+  type ContinuumEngineShape,
   type RunDoctorOptions,
 } from "./runtime/doctor";
 

@@ -138,7 +138,7 @@ export function createConductorRouter(): Router {
 
   router.post('/workspaces', async (req: Request, res: Response) => {
     try {
-      const { spaceId, projectId, taskId, repoPath, runtimeId, command, prompt, model, createdBy, branch, baseRef, env, metadata } =
+      const { spaceId, projectId, taskId, repoPath, runtimeId, substrate, command, prompt, model, createdBy, branch, baseRef, env, metadata } =
         req.body ?? {};
       if (!spaceId || !projectId || !taskId || !repoPath || !runtimeId || !createdBy || (!command && !prompt)) {
         res.status(400).json({
@@ -153,6 +153,7 @@ export function createConductorRouter(): Router {
         taskId,
         repoPath,
         runtimeId,
+        substrate,
         command,
         prompt,
         model,

@@ -9,8 +9,16 @@
  * the returned `sources` list records provenance for the audit trail.
  *
  * See docs/CONDUCTOR-ARCHITECTURE.md (layer 6 — knowledge in the loop).
+ *
+ * @recoder/brain seam: when RECODER_BRAIN_ENABLED is truthy, the shared,
+ * flag-gated BrainService (agentOsContainer.brain) assembles ONE fused
+ * BrainContext (recodergit code-graph slice + mem0 + context7 + beads +
+ * continuum activity) and we append it as a clearly-labeled, provenance-carrying
+ * block. Flag off / brain unavailable / assemble fail-safe -> existing behavior
+ * unchanged. Provenance (sourceRefs) is rendered verbatim; nothing is fabricated.
  */
 import type { TaskSpec } from '@recoder/agent-os';
+import type { BrainContext } from '@recoder/brain';
 import { agentOsContainer } from '../agent-os/service-container';
 import { buildTaskContextPack } from '../git-context.js';
 import { fetchLibraryDocs, isContext7Available } from '../context7.js';
@@ -56,16 +64,102 @@ function taskConstraints(task: TaskSpec): string[] {
 }
 
 /**
+ * Render a fused BrainContext into a labeled, provenance-carrying prompt block.
+ *
+ * Only sections with real content are emitted (no fabrication). The recodergit
+ * code-graph slice (repo.sourceRefs / dependency edges / impacted packages /
+ * changed-file risks) is rendered verbatim from the assembled context so it is
+ * auditable. Returns null when the context carries no usable signal.
+ */
+function renderBrainContext(ctx: BrainContext): string | null {
+  const lines: string[] = [];
+
+  const repo = ctx.repo;
+  const refs = repo?.sourceRefs ?? [];
+  const edges = repo?.dependencyGraph?.edges ?? [];
+  const impactedPackages = repo?.impactReport?.impactedPackages ?? [];
+  const risks = repo?.impactReport?.changedFileRisks ?? [];
+
+  const repoLines: string[] = [];
+  if (refs.length) {
+    repoLines.push(
+      'Source refs (recodergit):',
+      ...refs.map((r) => `- [${r.kind}] ${r.ref}${r.detail ? ` — ${r.detail}` : ''}`),
+    );
+  }
+  if (impactedPackages.length) {
+    repoLines.push(`Impacted packages: ${impactedPackages.join(', ')}`);
+  }
+  if (risks.length) {
+    repoLines.push(
+      'Changed-file risk:',
+      ...risks.map((r) => `- [${r.risk}] ${r.path} — ${r.reason}`),
+    );
+  }
+  if (edges.length) {
+    repoLines.push(
+      'Dependency edges:',
+      ...edges.slice(0, 20).map((e) => `- ${e.from} --${e.kind}--> ${e.to}`),
+    );
+  }
+  if (repoLines.length) lines.push('### Code graph (recodergit)', ...repoLines, '');
+
+  if (ctx.memories?.length) {
+    lines.push(
+      '### Recalled memory (mem0)',
+      ...ctx.memories.map((m) => `- ${m.text}${typeof m.score === 'number' ? ` (score ${m.score.toFixed(2)})` : ''}`),
+      '',
+    );
+  }
+
+  if (ctx.docs?.length) {
+    lines.push(
+      '### Docs (context7)',
+      ...ctx.docs.map((d) => `- ${d.library}${d.title ? ` — ${d.title}` : ''}${d.url ? ` (${d.url})` : ''}: ${d.snippet}`),
+      '',
+    );
+  }
+
+  if (ctx.tasks?.length) {
+    lines.push(
+      '### Related task graph (beads)',
+      ...ctx.tasks.map((t) => `- ${t.id} [${t.status}] ${t.title}`),
+      '',
+    );
+  }
+
+  const activity = ctx.activity;
+  if (activity?.profile?.brief || activity?.recent?.length) {
+    lines.push('### Activity context (continuum)');
+    if (activity.profile?.brief) lines.push(`Profile: ${activity.profile.brief}`);
+    if (activity.recent?.length) {
+      lines.push(...activity.recent.map((a) => `- [${a.when}] ${a.app} (${a.who}/${a.type}): ${a.text}`));
+    }
+    lines.push('');
+  }
+
+  if (!lines.length) return null;
+
+  return [
+    '## Fused brain context (@recoder/brain)',
+    `_Assembled ${ctx.assembledAt}. Provenance below is from owned sources; do not treat as ground truth without verifying._`,
+    '',
+    ...lines,
+  ].join('\n').trimEnd();
+}
+
+/**
  * Build the enriched prompt + provenance. Always returns a usable prompt; missing
  * sources are simply omitted (never faked).
  */
 export async function enrichPrompt(input: EnrichPromptInput): Promise<EnrichedPrompt> {
   const sections: string[] = [];
   const sources: string[] = [];
+  let task: TaskSpec | undefined;
 
   if (input.taskId) {
     try {
-      const task = await findTask(input.taskId);
+      task = await findTask(input.taskId);
       if (task) {
         sections.push(taskConstraints(task).join('\n'));
         sources.push('agent-os:task');
@@ -109,6 +203,32 @@ export async function enrichPrompt(input: EnrichPromptInput): Promise<EnrichedPr
       }
     } catch (err) {
       logger.warn({ library: input.library, err }, 'context7 enrichment skipped');
+    }
+  }
+
+  // @recoder/brain — flag-gated (RECODER_BRAIN_ENABLED, default OFF) fused
+  // context. Reuses the shared, fail-safe BrainService; the recodergit
+  // code-graph slice flows through repo intel. Degrade-safe: disabled or
+  // null/empty -> existing behavior unchanged (never crashes, never fabricates).
+  if (input.repoPath) {
+    try {
+      const brain = agentOsContainer.brain;
+      if (brain.isEnabled()) {
+        const ctx = await brain.assembleForTask({
+          task: task?.title ?? input.prompt,
+          repoRoot: input.repoPath,
+          focusFiles: task?.targetPaths,
+        });
+        if (ctx) {
+          const block = renderBrainContext(ctx);
+          if (block) {
+            sections.push(block);
+            sources.push('brain');
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn({ taskId: input.taskId, err }, 'brain enrichment skipped');
     }
   }
 

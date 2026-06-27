@@ -17,6 +17,7 @@
     "smoke:prod": "node scripts/smoke-production.js",
     "validate:release": "node scripts/validate-release-artifacts.js",
     "build:cockpit": "cd cockpit && pnpm install --ignore-workspace && pnpm run build",
+    "prepackage": "node cockpit/build.mjs",
     "build": "electron-builder",
     "build:mac": "node -r dotenv/config -e 'require(\"./build-signed.js\")' || electron-builder --mac",
     "build:mac:ci-signed": "electron-builder --mac",
@@ -51,6 +52,7 @@
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist"
     },
+    "beforeBuild": "before-build.js",
     "afterSign": "notarize.js",
     "dmg": {
       "sign": false,
@@ -67,7 +69,8 @@
     "files": [
       "main.js",
       "preload.js",
-      "assets/**/*"
+      "assets/**/*",
+      "cockpit/dist/**/*"
     ],
     "publish": {
       "provider": "github",

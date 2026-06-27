@@ -119,7 +119,20 @@ export function startRunTail(input: RunTailInput): TailHandle {
 
     const alive = await substrate.alive(subHandle);
     if (!alive) {
-      await appendEvent(input, 'completed', 'Agent session ended', { sessionName: input.sessionName });
+      // Check the true exit code (upgrade over "session gone = done") —
+      // distinguishes success (exit 0 → completed) from crash (non-zero → failed).
+      const code = substrate.exitCode ? await substrate.exitCode(subHandle) : undefined;
+      if (code !== undefined && code !== null && code !== 0) {
+        await appendEvent(input, 'failed', `Agent session exited with code ${code}`, {
+          sessionName: input.sessionName,
+          exitCode: code,
+        });
+      } else {
+        await appendEvent(input, 'completed', 'Agent session ended', {
+          sessionName: input.sessionName,
+          exitCode: code ?? 0,
+        });
+      }
       handle.stop();
       return;
     }

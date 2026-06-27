@@ -15544,11 +15544,20 @@ app.use('/api/agent-os', authenticateRequest, createAgentOsRouter());
 app.use('/internal/agent-os', createInternalAgentOsRouter());
 // Recoder Conductor — parallel agent sessions (tmux + git worktrees). The pivot product.
 app.use('/api/conductor', authenticateRequest, createConductorRouter());
-// Survivability: on boot, reconcile persisted workspaces against the real tmux +
-// git substrate (fire-and-forget; safe no-op when the substrate is unavailable).
+// Survivability: on boot AND on a periodic timer, reconcile persisted workspaces
+// against the real tmux + git substrate (fire-and-forget; safe no-op when the
+// substrate is unavailable). Per docs/CONDUCTOR-ARCHITECTURE.md §1: the reconciler
+// is the heart of restart-survivability — it runs on boot AND on a timer.
 reconcileConductor().catch((err) =>
   logger.warn({ err }, 'conductor boot reconcile failed (non-fatal)'),
 );
+const RECONCILE_INTERVAL_MS = Number(process.env.CONDUCTOR_RECONCILE_INTERVAL_MS) || 5 * 60 * 1000;
+const reconcileTimer = setInterval(() => {
+  reconcileConductor().catch((err) =>
+    logger.warn({ err }, 'conductor periodic reconcile failed (non-fatal)'),
+  );
+}, RECONCILE_INTERVAL_MS);
+reconcileTimer.unref(); // don't keep the process alive on this timer alone
 
 // Connectors bridge — chat channels (telegram, …) -> gated -> Conductor workspace.
 // Status route is read-only and never leaks credentials (truthful health only).

@@ -1,0 +1,31 @@
+{
+  "//": "Owned by Recoder. Scoped typecheck for the Discord ConnectorPort adapter's foundation-facing surface (normalize.ts + its monitor/* dependency graph) against @buape/carbon + discord-api-types + the connectors foundation (src/connector, src/gating). This compiles normalize.ts and everything it transitively imports — monitor/listeners.ts, monitor/message-utils.ts, monitor/allow-list.ts, monitor/sender-identity.ts, pluralkit.ts — which previously failed with 14 TS2307 errors against un-extracted sibling modules (../../channels/{allowlist-match,channel-config}, ../../config/config, ../../infra/{format-duration,system-events,fetch}, ../../logging/subsystem, ../../routing/resolve-route, ../../globals, ../../runtime, ../../media/{fetch,store}). Those siblings are now resolved: the channels/* primitives re-point to the foundation's already-extracted modules (src/gating/allowlist-match) and the verbatim gateway-core/channels/channel-config; config/infra/logging/routing/media/globals/runtime are real ported implementations under social-gateways/ (NOT stubs). The full connector-port.ts dispatch pipeline (auto-reply/*, pairing/*, security/*, gateway/protocol/*, web/media, polls, ...) remains deferred — that is a separate, larger un-extracted surface, not part of this normalize-surface typecheck. Run: cd ts/extracted-from-openclaw && npx tsc --noEmit -p social-gateways/discord/tsconfig.adapter.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "noEmit": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": false
+  },
+  "include": [
+    "./normalize.ts",
+    "./monitor/format.ts",
+    "./monitor/system-events.ts",
+    "./monitor/typing.ts",
+    "./monitor/presence-cache.ts",
+    "./monitor/gateway-registry.ts",
+    "../../src/connector/**/*.ts",
+    "../../src/identity.ts"
+  ],
+  "exclude": []
+}

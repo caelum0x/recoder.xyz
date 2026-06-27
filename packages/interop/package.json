@@ -1,0 +1,38 @@
+{
+  "name": "@recoder/interop",
+  "version": "0.1.0",
+  "description": "Recoder's interop engine — fuses the A2A wire interoperability layer, the MCP host/registry with its authorize→risk→policy→audit gate, and the social/connector gateways into one owned, hostile-by-default control-plane library. Every inbound A2A envelope, MCP tool description, and connector message is untrusted until signature, identity, ownership, and policy are proven at the edge.",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "node --test --import tsx 'tests/**/*.test.ts' 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@recoder/agent-os": "workspace:*",
+    "@recoder/a2a-sdk": "workspace:*",
+    "@recoder/agent-mcp": "workspace:*",
+    "@recoder/agent-policy": "workspace:*",
+    "@recoder/agent-events": "workspace:*",
+    "@recoder/connectors": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}
