@@ -124,7 +124,8 @@ new capability (self-aware agent activity). **E1/T1** are deeper extensions.
 | F2 in-process fusion (kill shell-out) | brain+continuum | ✅ | `756cb7232` — adapter dynamic-imports engines; execFile/subprocess gone (grep-proven); mirrors recodergit |
 | F3 real-engine tests + verify | brain+continuum | ✅ | `756cb7232` — 90/90 brain tests (real temp store, no mocks); tsc 0; tsup build; dist runtime smoke |
 | R1 surface catch_up + snapshot | brain | ✅ | `756cb7232` — ActivityPort recent()+snapshot(); adapter implements both on the real engine |
-| R2 grounded recall (answerQuery) | brain | 📋 | KG + recall |
+| R2 grounded recall (answerQuery) | brain | ✅ | `f4c96aec0` — ActivityPort.answer() composes recall (sources) + answerQuery (answer); null answer w/o LLM |
+| Surface activity to agents (brain_activity MCP) | brain | ✅ | `479610a4f` — read-only brain_activity tool: no-query→recent+snapshot, query→grounded answer; makes R1/R2 + A1 usable; 94/94 tests |
 | A1 recoder agent-session adapter | continuum | ✅ | `913ab01be` — watchRecoder tails ~/.recoder/agent/sessions/*.jsonl; emits agent turns/bash/tool-results/model-switches as activity; wired first-class; opt-in/off; recoder.test 22/22, index.test 15/15, pipeline 7/7 |
 | E1 on-box Qdrant embed tier | continuum | 📋 | privacy-first |
 | T1 team/shared activity over A2A | continuum | 📋 | multi-agent |
