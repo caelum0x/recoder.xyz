@@ -18,6 +18,7 @@ import {
   getWorkspace,
   listWorkspaceEvents,
   reconcile,
+  ADMISSION_REJECTED_PREFIX,
 } from './workspace-service.js';
 import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
@@ -29,11 +30,12 @@ import {
   dmuxAttachCommand,
   dmuxVisibleSessions,
 } from './dmux-adapter.js';
-import { executeWorkflow, type WorkflowPattern } from './workflow-runner.js';
+import { executeWorkflow, type WorkflowPattern, type WorkflowStep } from './workflow-runner.js';
 import { conductorHealth } from './conductor-health.js';
 import { resourceSnapshot } from './resource-governor.js';
 import { steerRuntime, runtimeStatus } from './runtime-driver.js';
-import { getSubstrate as getSub } from './substrate.js';
+import type { SubstrateHandle } from './substrate.js';
+import { isTerminalWorkspaceState, type Workspace } from '@recoder/agent-os';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -179,7 +181,15 @@ export function createConductorRouter(): Router {
         env,
         metadata,
       });
-      res.status(workspace.state === 'failed' ? 409 : 201).json({ success: true, data: workspace });
+      // Resource-governor rejection maps to 429 (over budget, retry later);
+      // any other failed launch (lock conflict, provisioning error) stays 409.
+      if (workspace.state === 'failed') {
+        const reason = typeof workspace.metadata?.error === 'string' ? workspace.metadata.error : '';
+        const status = reason.startsWith(ADMISSION_REJECTED_PREFIX) ? 429 : 409;
+        res.status(status).json({ success: false, error: reason || 'workspace launch failed', data: workspace });
+        return;
+      }
+      res.status(201).json({ success: true, data: workspace });
     } catch (err) {
       res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'create failed' });
     }
@@ -249,5 +259,141 @@ export function createConductorRouter(): Router {
     res.json({ success: true, data: await reconcile() });
   });
 
+  // --- Capability surfaces: multi-agent workflows, rich health, resources, ---
+  // --- live workspace status, and steering. These drive the headline ---
+  // --- "many parallel agents" product on top of the proven tmux substrate. ---
+
+  // Unified production health: substrate + runtimes + resources + tails + dmux.
+  router.get('/health/full', async (_req: Request, res: Response) => {
+    res.json({ success: true, data: await conductorHealth() });
+  });
+
+  // Current resource-governor utilization vs. limits (truthful capacity view).
+  router.get('/resources', async (_req: Request, res: Response) => {
+    res.json({ success: true, data: await resourceSnapshot() });
+  });
+
+  // Launch a multi-agent workflow (direct | fan_out | pipeline | competitive).
+  // Each step is isolated in its own worktree; admission is resource-governed.
+  router.post('/workflows', async (req: Request, res: Response) => {
+    try {
+      const { spaceId, projectId, taskId, repoPath, createdBy, pattern, steps, baseRef, env, limits } =
+        req.body ?? {};
+      if (!spaceId || !projectId || !taskId || !repoPath || !createdBy || !pattern || !Array.isArray(steps)) {
+        res.status(400).json({
+          success: false,
+          error: 'spaceId, projectId, taskId, repoPath, createdBy, pattern, and steps[] are required',
+        });
+        return;
+      }
+      const validPatterns: WorkflowPattern[] = ['direct', 'fan_out', 'pipeline', 'competitive'];
+      if (!validPatterns.includes(pattern)) {
+        res.status(400).json({ success: false, error: `pattern must be one of: ${validPatterns.join(', ')}` });
+        return;
+      }
+      if (steps.length === 0) {
+        res.status(400).json({ success: false, error: 'steps[] must contain at least one step' });
+        return;
+      }
+      for (const step of steps as WorkflowStep[]) {
+        if (!step?.runtimeId || !step?.prompt) {
+          res.status(400).json({ success: false, error: 'each step requires runtimeId and prompt' });
+          return;
+        }
+      }
+      const result = await executeWorkflow({
+        spaceId,
+        projectId,
+        taskId,
+        repoPath,
+        createdBy,
+        pattern,
+        steps,
+        baseRef,
+        env,
+        limits,
+      });
+      // Resource rejection (over budget) is a 429, not a 5xx or generic 4xx.
+      if (result.state === 'rejected') {
+        res.status(429).json({ success: false, error: result.reason ?? 'resource limit reached', data: result });
+        return;
+      }
+      res.status(result.state === 'failed' ? 502 : 201).json({ success: true, data: result });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'workflow failed' });
+    }
+  });
+
+  // Live status of a running workspace's agent (alive + exit code + recent output),
+  // resolved through the workspace's own substrate handle.
+  router.get('/workspaces/:workspaceId/status', async (req: Request, res: Response) => {
+    try {
+      const workspace = await getWorkspace(req.params.workspaceId);
+      if (!workspace) {
+        res.status(404).json({ success: false, error: 'workspace not found' });
+        return;
+      }
+      const handle = workspaceHandle(workspace);
+      if (!handle) {
+        res.json({
+          success: true,
+          data: { alive: false, exitCode: null, recentOutput: null, state: workspace.state, reason: 'no live substrate handle' },
+        });
+        return;
+      }
+      const status = await runtimeStatus(workspace.substrate, handle);
+      res.json({ success: true, data: { ...status, state: workspace.state } });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'status failed' });
+    }
+  });
+
+  // Steer a running workspace's agent: send keys/input (approval, interrupt,
+  // instruction). Only interactive substrates (tmux) support steering.
+  router.post('/workspaces/:workspaceId/steer', async (req: Request, res: Response) => {
+    try {
+      const keys = String(req.body?.keys ?? '');
+      if (!keys) {
+        res.status(400).json({ success: false, error: 'keys is required' });
+        return;
+      }
+      const workspace = await getWorkspace(req.params.workspaceId);
+      if (!workspace) {
+        res.status(404).json({ success: false, error: 'workspace not found' });
+        return;
+      }
+      if (isTerminalWorkspaceState(workspace.state)) {
+        res.status(409).json({ success: false, error: `workspace is ${workspace.state} (cannot steer a terminal workspace)` });
+        return;
+      }
+      const handle = workspaceHandle(workspace);
+      if (!handle) {
+        res.status(409).json({ success: false, error: 'workspace has no live substrate handle to steer' });
+        return;
+      }
+      await steerRuntime(workspace.substrate, handle, keys);
+      res.json({ success: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'steer failed';
+      res.status(msg.includes('not supported') ? 400 : 500).json({ success: false, error: msg });
+    }
+  });
+
   return router;
+}
+
+/**
+ * Resolve a substrate handle from a persisted workspace record. The handle is
+ * reconstructed from the record's deterministic identifiers (workspaceId →
+ * substrate `ref`, plus persisted sessionName/worktreePath), so status/steer
+ * work even after a backend restart cleared the orchestrator's in-memory map.
+ * Returns `undefined` when the workspace was never provisioned (no session).
+ */
+function workspaceHandle(workspace: Workspace): SubstrateHandle | undefined {
+  if (!workspace.sessionName && !workspace.worktreePath) return undefined;
+  return {
+    ref: workspace.workspaceId,
+    sessionName: workspace.sessionName,
+    worktreePath: workspace.worktreePath,
+  };
 }

@@ -123,6 +123,18 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
   // Detached tmux session running the agent inside the worktree.
   await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command]);
 
+  // Set remain-on-exit PER-SESSION immediately after creation. The global option
+  // above primes any tmux server we had to bootstrap, but a per-session option is
+  // the deterministic guarantee: this exact session keeps its pane (and thus
+  // #{pane_dead_status}) after a clean exit-code-0 completion, regardless of the
+  // server's inherited global state or tmux version. Best-effort: a failure here
+  // only weakens exit-code detection, it must not abort a successful launch.
+  try {
+    await exec(TMUX_BIN, ['set-option', '-t', tmuxName, 'remain-on-exit', 'on']);
+  } catch (err) {
+    logger.warn({ sessionId: input.sessionId, err }, 'per-session remain-on-exit set failed (best effort)');
+  }
+
   const session: ConductorSession = {
     sessionId: input.sessionId,
     tmuxName,

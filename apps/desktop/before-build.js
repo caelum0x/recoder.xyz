@@ -35,7 +35,76 @@ function hasPnpm() {
   }
 }
 
+const appNodeModules = path.join(__dirname, 'node_modules');
+
+/**
+ * Assert the native-module inputs are present BEFORE electron-builder packages
+ * them. node-pty ships a native `pty.node` plus a `spawn-helper` exec'd at
+ * runtime; electron-updater is the auto-update engine. If a partial/corrupt
+ * install dropped either, the produced app silently loses its terminal or its
+ * updater. We fail the build here instead of shipping a broken artifact.
+ *
+ * This guards the INPUTS. The packaged OUTPUT (node-pty in app.asar.unpacked,
+ * electron-updater bundled) is asserted separately by the afterPack hook
+ * (after-pack.js), so a regression in the asar/asarUnpack config also fails.
+ */
+function assertNativeModuleInputs() {
+  // electron-updater must resolve as a real package directory with a main entry.
+  const updaterPkg = path.join(appNodeModules, 'electron-updater', 'package.json');
+  if (!fs.existsSync(updaterPkg)) {
+    throw new Error(
+      `[before-build] electron-updater not installed at ${updaterPkg}; ` +
+        'auto-update would be missing from the build. Run `npm install` in apps/desktop.',
+    );
+  }
+
+  // node-pty must be installed.
+  const ptyPkg = path.join(appNodeModules, 'node-pty', 'package.json');
+  if (!fs.existsSync(ptyPkg)) {
+    throw new Error(
+      `[before-build] node-pty not installed at ${ptyPkg}; the desktop terminal ` +
+        'would be missing. Run `npm install` in apps/desktop.',
+    );
+  }
+
+  // node-pty must carry at least one native binary for the platform(s) we ship.
+  // On posix it also ships a `spawn-helper` that node-pty exec()s at runtime, so
+  // it MUST end up on real disk (app.asar.unpacked) — see after-pack.js.
+  const ptyRoot = path.join(appNodeModules, 'node-pty');
+  const nativeBinaries = [];
+  const stack = [ptyRoot];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.name.endsWith('.node') || entry.name === 'spawn-helper') {
+        nativeBinaries.push(full);
+      }
+    }
+  }
+  if (nativeBinaries.length === 0) {
+    throw new Error(
+      `[before-build] node-pty has no native binaries under ${ptyRoot} ` +
+        '(.node / spawn-helper). The install is incomplete; rebuild node-pty.',
+    );
+  }
+  console.log(
+    `[before-build] native-module inputs OK: electron-updater present, ` +
+      `node-pty has ${nativeBinaries.length} native binary file(s).`,
+  );
+}
+
 exports.default = async function beforeBuild() {
+  assertNativeModuleInputs();
+
   if (!fs.existsSync(cockpitBuild)) {
     throw new Error(`[before-build] cockpit build script missing at ${cockpitBuild}`);
   }
