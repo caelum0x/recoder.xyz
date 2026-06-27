@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ContextPack } from "@recoder/recodergit";
 import { createBrain } from "../brain";
-import type { RepoIntelPort } from "../ports";
+import type { ActivityPort, RepoIntelPort } from "../ports";
+import type { BrainActivity } from "../domain";
 import { createBrainTools, BRAIN_TOOL_NAMES, type BrainTool } from "./mcp-seam";
 
 /** A repo-intel fake so the seam tests never touch the filesystem / indexer. */
@@ -11,6 +12,37 @@ const fakeRepo: RepoIntelPort = {
     return {} as ContextPack;
   },
 };
+
+/** A sample activity row with the correct `who` literal type. */
+const sampleRow: BrainActivity = {
+  when: "now",
+  app: "Terminal",
+  who: "you",
+  type: "command",
+  text: "deployed",
+  id: "a1",
+};
+
+/** A fully-populated activity fake (recent/snapshot/answer + recall/profile). */
+function fakeActivity(): ActivityPort {
+  return {
+    async recall() {
+      return [];
+    },
+    async profile() {
+      return null;
+    },
+    async recent(limit = 8) {
+      return [sampleRow].slice(0, limit);
+    },
+    async snapshot() {
+      return "active today mostly in Terminal";
+    },
+    async answer(query) {
+      return { answer: `grounded answer about ${query}`, sources: [sampleRow] };
+    },
+  };
+}
 
 /** A repo-intel fake that returns a "real" pack (a non-empty sourceRefs). */
 const richRepo: RepoIntelPort = {
@@ -33,16 +65,50 @@ function parseResult(result: { content: Array<{ text: string }>; isError?: boole
   return JSON.parse(result.content[0].text);
 }
 
-test("exposes exactly the three brain tools with correct read-only flags", () => {
+test("exposes exactly the four brain tools with correct read-only flags", () => {
   const tools = createBrainTools(createBrain({ repo: fakeRepo }));
   assert.deepEqual(
     tools.map((t) => t.name).sort(),
-    [BRAIN_TOOL_NAMES.assemble, BRAIN_TOOL_NAMES.recall, BRAIN_TOOL_NAMES.record].sort(),
+    [
+      BRAIN_TOOL_NAMES.assemble,
+      BRAIN_TOOL_NAMES.recall,
+      BRAIN_TOOL_NAMES.record,
+      BRAIN_TOOL_NAMES.activity,
+    ].sort(),
   );
   assert.equal(toolByName(tools, BRAIN_TOOL_NAMES.assemble).readOnly, true);
   assert.equal(toolByName(tools, BRAIN_TOOL_NAMES.recall).readOnly, true);
+  assert.equal(toolByName(tools, BRAIN_TOOL_NAMES.activity).readOnly, true);
   // record is a write tool (candidate / task update).
   assert.equal(toolByName(tools, BRAIN_TOOL_NAMES.record).readOnly, false);
+});
+
+test("brain_activity without a query returns recent activity + snapshot", async () => {
+  const tools = createBrainTools(createBrain({ repo: fakeRepo, activity: fakeActivity() }));
+  const result = parseResult(await toolByName(tools, BRAIN_TOOL_NAMES.activity).handler({}));
+  const payload = result as { recent: unknown[]; snapshot: string | null; degraded: string[] };
+  assert.equal(payload.recent.length, 1);
+  assert.equal(payload.snapshot, "active today mostly in Terminal");
+  assert.deepEqual(payload.degraded, []);
+});
+
+test("brain_activity with a query returns a grounded answer + sources", async () => {
+  const tools = createBrainTools(createBrain({ repo: fakeRepo, activity: fakeActivity() }));
+  const result = parseResult(
+    await toolByName(tools, BRAIN_TOOL_NAMES.activity).handler({ query: "deploys" }),
+  );
+  const payload = result as { answer: string | null; sources: unknown[]; degraded: string[] };
+  assert.equal(payload.answer, "grounded answer about deploys");
+  assert.equal(payload.sources.length, 1);
+  assert.deepEqual(payload.degraded, []);
+});
+
+test("brain_activity degrades when no activity adapter is wired", async () => {
+  const tools = createBrainTools(createBrain({ repo: fakeRepo }));
+  const noQuery = parseResult(await toolByName(tools, BRAIN_TOOL_NAMES.activity).handler({})) as {
+    degraded: string[];
+  };
+  assert.deepEqual(noQuery.degraded, ["activity"]);
 });
 
 test("brain_assemble maps the fused context and reports degraded sections", async () => {
