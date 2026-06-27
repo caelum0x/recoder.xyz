@@ -17,6 +17,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import { existsSync, rmSync } from 'node:fs';
 import { createLogger } from '../logger.js';
 import { TMUX_BIN } from './tmux-path.js';
 
@@ -136,46 +137,75 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
   return session;
 }
 
-/** Live tmux session names (recoder-prefixed). */
+/** Live tmux session names (recoder-prefixed), queried directly from tmux.
+ * Survives restarts: the in-memory map is only a cache; the tmux server is the source. */
 export async function listSessions(): Promise<ConductorSession[]> {
   try {
     const { stdout } = await exec(TMUX_BIN, ['list-sessions', '-F', '#{session_name}']);
-    const live = new Set(stdout.split('\n').map((s) => s.trim()).filter(Boolean));
-    return [...sessions.values()].filter((s) => live.has(s.tmuxName));
+    const liveNames = new Set(
+      stdout.split('\n').map((s) => s.trim()).filter((s) => s.startsWith(SESSION_PREFIX))
+    );
+    // Merge in-memory records with live tmux sessions discovered on the server.
+    const known = new Map(sessions);
+    for (const name of liveNames) {
+      const sessionId = name.slice(SESSION_PREFIX.length);
+      if (!known.has(sessionId)) {
+        // Session exists on the tmux server but not in memory (restarted backend).
+        // Reconstruct a minimal record from the deterministic naming.
+        known.set(sessionId, {
+          sessionId,
+          tmuxName: name,
+          worktreePath: path.join(WORKTREE_ROOT, name),
+          branch: `recoder/${sessionId}`,
+          repoPath: '',
+          command: '',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+    return [...known.values()].filter((s) => liveNames.has(s.tmuxName));
   } catch {
     return [];
   }
 }
 
-/** Capture the agent's current terminal output. */
+/** Capture the agent's current terminal output. Survives restarts: derives the
+ * tmux session name deterministically instead of relying on the in-memory map. */
 export async function capturePane(sessionId: string, lines = 200): Promise<string> {
-  const session = sessions.get(sessionId);
-  if (!session) throw new Error(`session not found: ${sessionId}`);
-  const { stdout } = await exec(TMUX_BIN, ['capture-pane', '-p', '-t', session.tmuxName, '-S', `-${lines}`]);
+  const tmuxName = tmuxNameFor(sessionId);
+  const { stdout } = await exec(TMUX_BIN, ['capture-pane', '-p', '-t', tmuxName, '-S', `-${lines}`]);
   return stdout;
 }
 
-/** Send input/keys to an agent session (e.g. an approval, an interrupt). */
+/** Send input/keys to an agent session (e.g. an approval, an interrupt).
+ * Survives restarts: derives the tmux session name deterministically. */
 export async function sendKeys(sessionId: string, keys: string): Promise<void> {
-  const session = sessions.get(sessionId);
-  if (!session) throw new Error(`session not found: ${sessionId}`);
-  await exec(TMUX_BIN, ['send-keys', '-t', session.tmuxName, keys, 'Enter']);
+  const tmuxName = tmuxNameFor(sessionId);
+  await exec(TMUX_BIN, ['send-keys', '-t', tmuxName, keys, 'Enter']);
 }
 
-/** Stop a session and remove its isolated worktree. */
-export async function killSession(sessionId: string, options?: { removeWorktree?: boolean }): Promise<void> {
+/** Stop a session and remove its isolated worktree. Survives restarts: derives
+ * the tmux name + worktree path deterministically when the in-memory record is gone. */
+export async function killSession(sessionId: string, options?: { removeWorktree?: boolean; repoPath?: string; worktreePath?: string }): Promise<void> {
+  const tmuxName = tmuxNameFor(sessionId);
   const session = sessions.get(sessionId);
-  if (!session) return;
   try {
-    await exec(TMUX_BIN, ['kill-session', '-t', session.tmuxName]);
+    await exec(TMUX_BIN, ['kill-session', '-t', tmuxName]);
   } catch {
     /* already gone */
   }
   if (options?.removeWorktree !== false) {
-    try {
-      await exec('git', ['-C', session.repoPath, 'worktree', 'remove', '--force', session.worktreePath]);
-    } catch (err) {
-      logger.warn({ sessionId, err }, 'worktree remove failed (best effort)');
+    const repo = options?.repoPath ?? session?.repoPath;
+    const wtPath = options?.worktreePath ?? session?.worktreePath ?? path.join(WORKTREE_ROOT, tmuxName);
+    if (repo) {
+      try {
+        await exec('git', ['-C', repo, 'worktree', 'remove', '--force', wtPath]);
+      } catch (err) {
+        logger.warn({ sessionId, err }, 'worktree remove failed (best effort)');
+      }
+    } else if (existsSync(wtPath)) {
+      // No repo ref — try to remove the worktree directory directly.
+      try { rmSync(wtPath, { recursive: true, force: true }); } catch { /* best effort */ }
     }
   }
   sessions.delete(sessionId);

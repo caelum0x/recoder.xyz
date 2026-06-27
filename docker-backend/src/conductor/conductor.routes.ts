@@ -10,6 +10,7 @@ import {
   capturePane,
   sendKeys,
   killSession,
+  paneExitCode,
 } from './tmux-orchestrator.js';
 import {
   createWorkspace,
@@ -28,6 +29,11 @@ import {
   dmuxAttachCommand,
   dmuxVisibleSessions,
 } from './dmux-adapter.js';
+import { executeWorkflow, type WorkflowPattern } from './workflow-runner.js';
+import { conductorHealth } from './conductor-health.js';
+import { resourceSnapshot } from './resource-governor.js';
+import { steerRuntime, runtimeStatus } from './runtime-driver.js';
+import { getSubstrate as getSub } from './substrate.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -82,6 +88,16 @@ export function createConductorRouter(): Router {
   router.delete('/sessions/:sessionId', async (req: Request, res: Response) => {
     await killSession(req.params.sessionId, { removeWorktree: req.query?.keepWorktree !== 'true' });
     res.json({ success: true });
+  });
+
+  // True exit code of a completed session's pane (distinguishes success from crash).
+  router.get('/sessions/:sessionId/exit-code', async (req: Request, res: Response) => {
+    try {
+      const code = await paneExitCode(`recoder-${req.params.sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}`);
+      res.json({ success: true, data: { exitCode: code } });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'exit-code check failed' });
+    }
   });
 
   // Which installed agent CLIs Conductor can actually launch (truthful availability).

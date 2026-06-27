@@ -38,8 +38,8 @@ export function Wordmark() {
 const NAV_LINKS = [
   { href: "/#how", label: "How it works" },
   { href: "/enterprise", label: "Enterprise" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/changelog", label: "Changelog" },
-  { href: "/docs", label: "Docs" },
 ];
 
 export function Nav() {
@@ -87,7 +87,7 @@ export function Footer() {
           title="Company"
           links={[
             { href: "/enterprise", label: "Enterprise" },
-            { href: "/docs", label: "Docs" },
+            { href: "/pricing", label: "Pricing" },
           ]}
         />
         <FooterCol
