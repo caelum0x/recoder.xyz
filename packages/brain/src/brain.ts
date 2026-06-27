@@ -107,6 +107,43 @@ export class Brain {
     return (await this.deps.memory?.recall(query, limit)) ?? [];
   }
 
+  /**
+   * Recent desktop/agent activity (newest-first, deduped) — the activity port's
+   * `recent()` (continuum catchUp). Degrade-safe: [] when no activity adapter is
+   * wired. The MCP `brain_activity` tool (no-query mode) maps to this so an agent
+   * gets "what the user just did" without a full assemble.
+   */
+  async recentActivity(limit: number = DEFAULT_LIMIT): Promise<BrainActivity[]> {
+    return (await this.deps.activity?.recent?.(limit)) ?? [];
+  }
+
+  /**
+   * One-line "who is this user" activity snapshot (no LLM). Degrade-safe: null
+   * when no activity adapter or no activity. Paired with recentActivity in the
+   * `brain_activity` tool's no-query mode.
+   */
+  async activitySnapshot(): Promise<string | null> {
+    return (await this.deps.activity?.snapshot?.()) ?? null;
+  }
+
+  /**
+   * Grounded Q&A over activity (continuum answerQuery): evidence rows (always)
+   * plus a synthesized answer when an LLM is wired. Degrade-safe: answer null +
+   * sources [] when no activity adapter. The MCP `brain_activity` tool's query
+   * mode maps to this.
+   */
+  async answerActivity(
+    query: string,
+    limit: number = DEFAULT_LIMIT,
+  ): Promise<{ answer: string | null; sources: BrainActivity[] }> {
+    return (
+      (await this.deps.activity?.answer?.(query, limit)) ?? {
+        answer: null,
+        sources: [] as BrainActivity[],
+      }
+    );
+  }
+
   /** Write an agent's outcome back so the next assemble() is richer. */
   async record(event: BrainEvent): Promise<void> {
     if (event.kind === "memory") {
