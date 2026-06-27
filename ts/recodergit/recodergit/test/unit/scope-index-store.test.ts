@@ -10,8 +10,8 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildScopeTree } from 'recodergit-shared';
-import type { Scope, ScopeId, SymbolDefinition, BindingRef } from 'recodergit-shared';
+import { buildScopeTree } from '@recoder/recodergit-engine-shared';
+import type { Scope, ScopeId, SymbolDefinition, BindingRef } from '@recoder/recodergit-engine-shared';
 import {
   persistScopeShards,
   DiskBackedScopeTree,

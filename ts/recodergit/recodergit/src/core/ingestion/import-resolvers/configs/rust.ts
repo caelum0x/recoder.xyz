@@ -3,7 +3,7 @@
  * Rust module strategy (grouped imports, crate/super/self paths), then standard fallback.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig, ImportResolverStrategy } from '../types.js';
 import { createStandardStrategy } from '../standard.js';
 import { resolveRustImportInternal } from '../rust.js';

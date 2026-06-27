@@ -1,4 +1,4 @@
-import { makeScopeId, type Capture, type CaptureMatch } from 'recodergit-shared';
+import { makeScopeId, type Capture, type CaptureMatch } from '@recoder/recodergit-engine-shared';
 import {
   nodeIfType,
   nodeToCapture,

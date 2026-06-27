@@ -1,4 +1,4 @@
-import type { GraphNode, GraphRelationship, NodeLabel } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship, NodeLabel } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../graph/types.js';
 import { parseTruthyEnv } from './utils/env.js';
 

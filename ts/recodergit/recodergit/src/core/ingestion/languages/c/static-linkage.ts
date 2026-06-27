@@ -1,4 +1,4 @@
-import type { ParsedFile, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 /**
  * Per-file set of function names declared with `static` storage class.

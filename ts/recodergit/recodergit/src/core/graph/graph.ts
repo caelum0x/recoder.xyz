@@ -1,4 +1,4 @@
-import type { GraphNode, GraphRelationship, RelationshipType } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship, RelationshipType } from '@recoder/recodergit-engine-shared';
 import { KnowledgeGraph } from './types.js';
 
 /** Fresh empty iterator per call — `[].values()` returns a new

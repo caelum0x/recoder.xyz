@@ -51,8 +51,8 @@
  * as resolved without requiring an import edge.
  */
 
-import type { ParsedFile } from 'recodergit-shared';
-import { SupportedLanguages, getLanguageFromFilename } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages, getLanguageFromFilename } from '@recoder/recodergit-engine-shared';
 import { generateId } from '../../../../lib/utils.js';
 import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
 import { populateClassOwnedMembers } from '../../scope-resolution/scope/walkers.js';

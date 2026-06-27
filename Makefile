@@ -4,7 +4,7 @@
 # See docs/RECODER-PRODUCT-ARCHITECTURE.md §4 and §6.
 
 .DEFAULT_GOAL := help
-.PHONY: help all verify ts site backend go-beads go-ziti rust-openfang rust-claw py-pal py-ops heavy
+.PHONY: help all verify ts site backend go-beads go-ziti rust-openfang rust-claw py-pal py-ops heavy build-tmux build-dmux substrate
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -15,6 +15,15 @@ ts: ## Build all TS packages
 
 backend: ## Typecheck the control-plane service
 	cd docker-backend && npx tsc --noEmit
+
+# ---- Substrate binaries (vendored C/TS, pinned in the runtime image) ----
+build-tmux: ## Build the vendored tmux binary from c/tmux (needs cc + libevent + ncurses)
+	./scripts/build-tmux.sh
+
+build-dmux: ## Build the vendored dmux operator console from ts/dmux
+	cd ts/dmux && pnpm install --frozen-lockfile && pnpm run build
+
+substrate: build-tmux build-dmux ## Build both substrate binaries (tmux + dmux)
 
 site: ## Build the marketing site
 	cd site && pnpm build

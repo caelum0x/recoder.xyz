@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/method-extractors/configs/jvm.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type {
   MethodExtractionConfig,
   ParameterInfo,

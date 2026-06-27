@@ -14,7 +14,7 @@
  *     container generics like `Future<X>`/`List<X>`, drop library prefixes).
  */
 
-import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from 'recodergit-shared';
+import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from '@recoder/recodergit-engine-shared';
 import { HERITAGE_MARKER_PREFIX } from '../../utils/heritage-marker.js';
 
 /** Marker prefix carried on a side-effect `ParsedImport.targetRaw` for

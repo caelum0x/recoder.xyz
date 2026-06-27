@@ -34,7 +34,7 @@
  * foreign-shaped snapshot.
  */
 
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import { getStaticNamesForFile, markStaticName } from './static-linkage.js';
 
 /**

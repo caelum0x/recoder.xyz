@@ -16,7 +16,7 @@
  * can extend the return shape without breaking existing consumers.
  */
 
-import type { MethodDispatchIndex } from 'recodergit-shared';
+import type { MethodDispatchIndex } from '@recoder/recodergit-engine-shared';
 
 const EMPTY_DEFS: readonly string[] = Object.freeze([]);
 

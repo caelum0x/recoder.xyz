@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "outDir": "../../dist-feishu-adapter",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "./connector.ts",
+    "./connector-index.ts",
+    "./normalize.ts",
+    "./auth-store.ts",
+    "./rest-client.ts",
+    "./errors.ts",
+    "./chunk.ts",
+    "./lark-ws-port.ts",
+    "./domain.ts",
+    "./connector.test.ts",
+    "../../src/connector/**/*.ts",
+    "../../src/agents/auth-profiles.ts",
+    "../../src/identity.ts"
+  ],
+  "exclude": []
+}

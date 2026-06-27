@@ -3,7 +3,7 @@
  * Require/require_relative suffix matching — no standard fallback.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig, ImportResolverStrategy } from '../types.js';
 import { suffixResolve } from '../utils.js';
 

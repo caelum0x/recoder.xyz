@@ -32,7 +32,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ParsedFile, SymbolDefinition } from 'recodergit-shared';
+import type { ParsedFile, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { runPipelineFromRepo } from '../../src/core/ingestion/pipeline.js';
 import {
   emitGoScopeCaptures,

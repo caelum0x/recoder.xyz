@@ -483,9 +483,23 @@ index abc123..def456 100644
         } as Response)
       );
 
+      // OpenRouter is the primary path; it no-ops without a key, so set one (fetch is mocked above).
+      process.env.OPENROUTER_API_KEY = 'test-key';
+      // Make the (mocked) `git diff` non-empty so generateCommitMessage reaches the AI call.
+      // Narrow to `git diff` so it can't accidentally match the claude-fallback prompt (which contains "Diff:").
+      mockExecSync.mockImplementation((command: any, options?: any) => {
+        const cmd = command.toString();
+        const ret = (v: string) => (options?.encoding === 'utf-8' ? v : Buffer.from(v));
+        if (cmd.startsWith('git diff') && cmd.includes('--stat')) return ret(' src/auth.ts | 12 ++++++++++++');
+        if (cmd.startsWith('git diff')) return ret('diff --git a/src/auth.ts b/src/auth.ts\n+ added JWT authentication');
+        return ret('');
+      });
+
       const { generateCommitMessage } = await import('../../src/utils/aiMerge.js');
 
-      const message = await generateCommitMessage('diff content here', '/test');
+      // Real current signature is generateCommitMessage(repoPath); it computes the diff itself.
+      const message = await generateCommitMessage('/test');
+      delete process.env.OPENROUTER_API_KEY;
 
       expect(message).toContain('feat:');
       expect(message).toContain('authentication');

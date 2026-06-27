@@ -6,8 +6,8 @@ import {
   resilientFetch,
   ResilientFetchExhaustedError,
   RETRY_AFTER_CAP_MS,
-} from 'recodergit-shared';
-import { __resetBreakerRegistry__, classifyOutcome } from 'recodergit-shared/test-helpers';
+} from '@recoder/recodergit-engine-shared';
+import { __resetBreakerRegistry__, classifyOutcome } from '@recoder/recodergit-engine-shared/test-helpers';
 
 describe('parseRetryAfter', () => {
   it('parses delta-seconds form', () => {

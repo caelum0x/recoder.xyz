@@ -18,7 +18,7 @@
  * format that downstream consumers (queries, edges, MCP) expect.
  */
 
-import type { NodeLabel, ParameterTypeClass } from 'recodergit-shared';
+import type { NodeLabel, ParameterTypeClass } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../../graph/types.js';
 import { isOverloadableCallable } from '../../utils/callable-labels.js';
 import { templateConstraintsIdTag } from '../../utils/template-arguments.js';

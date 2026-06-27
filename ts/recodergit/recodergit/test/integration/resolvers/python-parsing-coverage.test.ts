@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { emitPythonScopeCaptures } from '../../../src/core/ingestion/languages/python/index.js';
 import { extractParsedFile } from '../../../src/core/ingestion/scope-extractor-bridge.js';
 import { pythonProvider } from '../../../src/core/ingestion/languages/python.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 /**
  * Count matches whose capture-key set satisfies `predicate`.

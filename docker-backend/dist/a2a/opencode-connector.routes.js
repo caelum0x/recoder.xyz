@@ -85,7 +85,7 @@ function readStringRecord(value) {
 }
 function readRequesterPlatform(value) {
     if (typeof value !== 'string') {
-        return 'recoder_web';
+        return 'recoder_app';
     }
     switch (value) {
         case 'claude_code':
@@ -93,13 +93,13 @@ function readRequesterPlatform(value) {
         case 'cursor':
         case 'windsurf':
         case 'replit':
-        case 'recoder_web':
+        case 'recoder_app':
         case 'recoder_pm':
         case 'recoder_agency':
         case 'custom':
             return value;
         default:
-            return 'recoder_web';
+            return 'recoder_app';
     }
 }
 function readProjectId(body) {

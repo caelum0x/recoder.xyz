@@ -27,7 +27,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { emitRustScopeCaptures } from '../../../../src/core/ingestion/languages/rust/index.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 // This test lives at test/unit/scope-resolution/rust/, so fixtures are THREE
 // levels up (mirrors go-captures-golden.test.ts).

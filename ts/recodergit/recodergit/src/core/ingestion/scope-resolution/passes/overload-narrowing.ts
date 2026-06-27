@@ -49,7 +49,7 @@ import type {
   ConstraintContext,
   ParameterTypeClass,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 /**
  * Per-slot conversion-rank function. Returns a numeric cost for

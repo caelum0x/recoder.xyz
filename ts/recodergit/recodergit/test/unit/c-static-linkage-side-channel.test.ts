@@ -20,7 +20,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ParsedFile } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
 import {
   applyCStaticLinkageSideChannel,
   collectCStaticLinkageSideChannel,

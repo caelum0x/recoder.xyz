@@ -1,0 +1,573 @@
+/**
+ * Authentication Signin Page
+ * Unified authentication for all Recoder.xyz platforms
+ */
+
+'use client';
+
+import { useEffect, useState, Suspense } from 'react';
+import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import {
+  Github,
+  Mail,
+  Terminal,
+  Globe,
+  Bot,
+  LayoutDashboard,
+  Briefcase,
+  Workflow
+} from 'lucide-react';
+import { signIn } from '@/lib/auth-client';
+import { SiteHeader } from '@/components/SiteHeader';
+
+function SignInForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [emailNotVerified, setEmailNotVerified] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState(false);
+  const [gdprConsent, setGdprConsent] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const rawReturn = searchParams.get('redirect') || searchParams.get('return') || '/dashboard';
+  // Allow relative paths and *.recoder.xyz subdomains, block open redirects
+  const isRelative = rawReturn.startsWith('/') && !rawReturn.startsWith('//');
+  const isRecoderSubdomain = /^https:\/\/[a-z-]+\.recoder\.xyz(\/|$)/.test(rawReturn);
+  const returnUrl = isRelative || isRecoderSubdomain ? rawReturn : '/dashboard';
+
+  const resolveReturnUrl = async (targetUrl: string) => {
+    if (!targetUrl.startsWith('https://web.recoder.xyz')) {
+      return targetUrl;
+    }
+
+    try {
+      const response = await fetch('/api/platform/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          platform: 'web',
+          redirect: targetUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        return targetUrl;
+      }
+
+      const data = await response.json() as { bridgeUrl?: string };
+      return data.bridgeUrl || targetUrl;
+    } catch {
+      return targetUrl;
+    }
+  };
+
+  useEffect(() => {
+    if (!returnUrl.startsWith('https://web.recoder.xyz')) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/auth/session', {
+          credentials: 'include',
+        });
+        const data = await response.json() as { user?: { id: string } | null };
+
+        if (!data.user || cancelled) {
+          return;
+        }
+
+        const target = await resolveReturnUrl(returnUrl);
+        if (!cancelled) {
+          window.location.href = target;
+        }
+      } catch {
+        // Keep the user on the sign-in page if session detection fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [returnUrl]);
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      await signIn.email({
+        email,
+        password,
+      }, {
+        onSuccess: () => {
+          setSuccess(true);
+          setTimeout(async () => {
+            // Use window.location.href for cross-subdomain redirects (e.g. https://web.recoder.xyz)
+            // router.push() only works for same-origin relative paths
+            if (returnUrl.startsWith('http')) {
+              window.location.href = await resolveReturnUrl(returnUrl);
+            } else {
+              router.push(returnUrl);
+            }
+          }, 1000);
+        },
+        onError: (ctx) => {
+          const errorMsg = ctx.error.message || 'Authentication failed. Please try again.';
+          setError(errorMsg);
+          if (errorMsg.toLowerCase().includes('email') &&
+              (errorMsg.toLowerCase().includes('verif') || errorMsg.toLowerCase().includes('not verified'))) {
+            setEmailNotVerified(true);
+          }
+          setLoading(false);
+        }
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Network error. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setError('Please enter your email address first');
+      return;
+    }
+
+    setResendingEmail(true);
+    setResendSuccess(false);
+
+    try {
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setResendSuccess(true);
+        setError('');
+      } else {
+        setError(data.error || 'Failed to send verification email');
+      }
+    } catch (err: any) {
+      setError('Failed to send verification email. Please try again.');
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
+  const handleGitHubSignIn = async () => {
+    setLoading(true);
+    try {
+      await signIn.social({
+        provider: "github",
+        callbackURL: returnUrl,
+      });
+    } catch (err: any) {
+      setError(err?.message || 'GitHub authentication failed');
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      await signIn.social({
+        provider: "google",
+        callbackURL: returnUrl,
+      });
+    } catch (err: any) {
+      setError(err?.message || 'Google authentication failed');
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/verify-2fa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: twoFactorCode }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Invalid 2FA code');
+      }
+
+      setSuccess(true);
+      // Use window.location.href for cross-subdomain redirects
+      if (returnUrl.startsWith('http')) {
+        window.location.href = returnUrl;
+      } else {
+        router.push(returnUrl);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to verify 2FA code');
+      setLoading(false);
+    }
+  };
+
+  const platforms = [
+    { name: 'Agents', description: 'AI agent IDE', icon: Bot, url: 'https://agents.recoder.xyz' },
+    { name: 'Web', description: 'Browser-based IDE', icon: Globe, url: 'https://web.recoder.xyz' },
+    { name: 'PM', description: 'Project management', icon: LayoutDashboard, url: 'https://pm.recoder.xyz' },
+    { name: 'Agency', description: 'AI agency platform', icon: Briefcase, url: 'https://agency.recoder.xyz' },
+    { name: 'CLI', description: 'Terminal access', icon: Terminal, url: 'https://recoder.xyz/tools' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-black text-white relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-black to-purple-600/5" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s' }} />
+      </div>
+
+      <div className="relative z-10">
+        <SiteHeader />
+
+        <div className="container mx-auto px-6 py-16 lg:py-24">
+          <div className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-12 items-start">
+            {/* Left Column - Sign In Card */}
+            <div>
+              <div className="mb-8 p-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl">
+                <div className="text-center space-y-3 mb-8">
+                  <h1 className="text-3xl font-bold">Welcome Back</h1>
+                  <p className="text-gray-400">
+                    Sign in to access the Recoder platform
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  {searchParams.get('verified') === 'true' && (
+                    <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      Email verified successfully! You can now sign in.
+                    </div>
+                  )}
+
+                  {/* OAuth Buttons */}
+                  <button
+                    className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                    onClick={handleGitHubSignIn}
+                    disabled={loading}
+                  >
+                    <Github className="w-5 h-5" />
+                    <span>Continue with GitHub</span>
+                  </button>
+
+                  <button
+                    className="w-full px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span>Continue with Google</span>
+                  </button>
+
+                  <div className="relative my-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-white/10"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-4 bg-black text-gray-400">
+                        Or sign in with email
+                      </span>
+                    </div>
+                  </div>
+
+                  {!requires2FA ? (
+                    <form onSubmit={handleSignIn} className="space-y-4">
+                      {error && (
+                        <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
+                          {error}
+                          {emailNotVerified && (
+                            <button
+                              type="button"
+                              onClick={handleResendVerification}
+                              disabled={resendingEmail}
+                              className="mt-2 block w-full text-center text-orange-400 hover:text-orange-300 underline"
+                            >
+                              {resendingEmail ? 'Sending...' : 'Resend verification email'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {resendSuccess && (
+                        <div className="p-4 text-sm text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                          Verification email sent! Please check your inbox and spam folder.
+                        </div>
+                      )}
+                      {success && (
+                        <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
+                          Authentication successful! Redirecting...
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                          Email
+                        </label>
+                        <input
+                          id="email"
+                          type="email"
+                          placeholder="your@email.com"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="password" className="block text-sm font-medium text-gray-300">
+                            Password
+                          </label>
+                          <Link
+                            href="/auth/forgot-password"
+                            className="text-sm text-orange-500 hover:text-orange-400 transition-colors"
+                          >
+                            Forgot password?
+                          </Link>
+                        </div>
+                        <input
+                          id="password"
+                          type="password"
+                          placeholder="••••••••"
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-gray-500"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          id="rememberMe"
+                          type="checkbox"
+                          checked={rememberMe}
+                          onChange={(e) => setRememberMe(e.target.checked)}
+                          className="w-4 h-4 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                        />
+                        <label htmlFor="rememberMe" className="ml-2 text-sm text-gray-300">
+                          Remember me for 30 days
+                        </label>
+                      </div>
+
+                      {/* GDPR Consent */}
+                      <div className="flex items-start">
+                        <input
+                          id="gdprConsent"
+                          type="checkbox"
+                          checked={gdprConsent}
+                          onChange={(e) => setGdprConsent(e.target.checked)}
+                          className="w-4 h-4 mt-0.5 bg-white/5 border border-white/10 rounded text-orange-500 focus:ring-2 focus:ring-orange-500"
+                        />
+                        <label htmlFor="gdprConsent" className="ml-2 text-xs text-gray-400">
+                          I agree to the{' '}
+                          <Link href="/privacy" className="text-orange-500 hover:text-orange-400 underline">
+                            Privacy Policy
+                          </Link>{' '}
+                          and{' '}
+                          <Link href="/cookies" className="text-orange-500 hover:text-orange-400 underline">
+                            Cookie Policy
+                          </Link>
+                        </label>
+                      </div>
+
+                      <button
+                        className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-purple-600 hover:from-orange-600 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+                        type="submit"
+                        disabled={loading || !gdprConsent}
+                      >
+                        {loading ? (
+                          <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Signing In...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="w-5 h-5" />
+                            <span>Sign In with Email</span>
+                          </>
+                        )}
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleVerify2FA} className="space-y-4">
+                      {error && (
+                        <div className="p-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg">
+                          {error}
+                        </div>
+                      )}
+                      {success && (
+                        <div className="p-4 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg">
+                          Authentication successful! Redirecting...
+                        </div>
+                      )}
+                      <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                        <div className="text-sm text-blue-200">
+                          Two-factor authentication is enabled for this account. Please enter your 6-digit code from your authenticator app.
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="twoFactorCode" className="block text-sm font-medium text-gray-300">
+                          Authentication Code
+                        </label>
+                        <input
+                          id="twoFactorCode"
+                          type="text"
+                          placeholder="000000"
+                          maxLength={8}
+                          className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white text-center text-2xl tracking-widest placeholder-gray-500"
+                          value={twoFactorCode}
+                          onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                          required
+                          autoFocus
+                        />
+                        <p className="text-xs text-gray-400">
+                          Enter your 6-digit code or 8-character backup code
+                        </p>
+                      </div>
+                      <div className="flex space-x-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRequires2FA(false);
+                            setTwoFactorCode('');
+                            setError('');
+                          }}
+                          className="px-6 py-3 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-lg font-medium transition-all"
+                          disabled={loading}
+                        >
+                          Back
+                        </button>
+                        <button
+                          className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-lg font-medium transition-all flex items-center justify-center space-x-2"
+                          type="submit"
+                          disabled={loading || twoFactorCode.length < 6}
+                        >
+                          {loading ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Verifying...</span>
+                            </>
+                          ) : (
+                            <span>Verify & Sign In</span>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {!requires2FA && (
+                    <div className="text-center text-sm pt-4">
+                      <span className="text-gray-400">Don&apos;t have an account? </span>
+                      <Link href="/auth/signup" className="text-orange-500 hover:text-orange-400 transition-colors">
+                        Sign up
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Platform Showcase */}
+            <div className="hidden lg:block">
+              <div className="p-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl sticky top-24">
+                <div className="space-y-2 mb-6">
+                  <h2 className="text-xl font-bold">One Account. All Platforms.</h2>
+                  <p className="text-gray-400 text-sm">
+                    Your Recoder account gives you access to every platform
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {platforms.map((platform) => {
+                    const Icon = platform.icon;
+                    return (
+                      <div key={platform.name} className="flex items-center space-x-3 p-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Icon className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-white text-sm">{platform.name}</div>
+                          <div className="text-xs text-gray-500">{platform.description}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 p-4 rounded-lg border border-orange-500/20 bg-orange-500/5">
+                  <p className="text-sm text-gray-300">
+                    <span className="text-orange-400 font-medium">Unified SSO</span> — Sign in once and access all Recoder apps seamlessly.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile-only Platform Card */}
+            <div className="lg:hidden p-8 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl">
+              <div className="space-y-2 mb-6">
+                <h2 className="text-xl font-bold">One Account. All Platforms.</h2>
+                <p className="text-gray-400 text-sm">
+                  Your Recoder account gives you access to every platform
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {platforms.map((platform) => {
+                  const Icon = platform.icon;
+                  return (
+                    <div key={platform.name} className="flex items-center space-x-3 p-3 rounded-lg border border-white/5 bg-white/5">
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-white text-sm">{platform.name}</div>
+                        <div className="text-xs text-gray-500">{platform.description}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <SignInForm />
+    </Suspense>
+  );
+}

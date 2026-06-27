@@ -10,7 +10,7 @@
 // doesn't yet handle scope_resolution names end-to-end.
 import { describe, it, expect } from 'vitest';
 import { emitRubyScopeCaptures } from '../../../src/core/ingestion/languages/ruby/index.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 describe('Ruby namespaced class/module definitions (F62) — capture-level', () => {
   it('class Foo::Bar captures @declaration.class with tail constant (Bar)', () => {

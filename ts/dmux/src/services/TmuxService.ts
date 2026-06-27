@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import { LogService } from './LogService.js';
 import { execAsync } from '../utils/execAsync.js';
+import { tmuxCommand } from '../utils/tmuxBin.js';
 import type { PanePosition, WindowDimensions } from '../types.js';
 
 export type PaneListScope = 'window' | 'session';
@@ -143,8 +144,11 @@ export class TmuxService {
   ): string {
     const { encoding = 'utf-8', stdio = 'pipe', silent = false } = options;
 
+    // Route every `tmux …` invocation through Recoder's pinned binary (TMUX_BIN).
+    const resolved = tmuxCommand(command);
+
     try {
-      const result = execSync(command, {
+      const result = execSync(resolved, {
         encoding,
         stdio,
       });
@@ -174,8 +178,11 @@ export class TmuxService {
   ): Promise<string> {
     const { silent = false, timeout = 5000 } = options;
 
+    // Route every `tmux …` invocation through Recoder's pinned binary (TMUX_BIN).
+    const resolved = tmuxCommand(command);
+
     try {
-      return await execAsync(command, { timeout, silent });
+      return await execAsync(resolved, { timeout, silent });
     } catch (error) {
       if (!silent) {
         this.logger.debug(

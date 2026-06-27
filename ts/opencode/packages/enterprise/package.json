@@ -1,5 +1,5 @@
 {
-  "name": "@opencode-ai/enterprise",
+  "name": "@recoder/opencode-enterprise",
   "version": "1.17.11",
   "private": true,
   "type": "module",
@@ -13,9 +13,9 @@
     "shell-prod": "sst shell --target Teams --stage production"
   },
   "dependencies": {
-    "@opencode-ai/core": "workspace:*",
-    "@opencode-ai/session-ui": "workspace:*",
-    "@opencode-ai/ui": "workspace:*",
+    "@recoder/opencode-core": "workspace:*",
+    "@recoder/opencode-session-ui": "workspace:*",
+    "@recoder/opencode-ui": "workspace:*",
     "aws4fetch": "^1.0.20",
     "@pierre/diffs": "catalog:",
     "@solidjs/router": "catalog:",

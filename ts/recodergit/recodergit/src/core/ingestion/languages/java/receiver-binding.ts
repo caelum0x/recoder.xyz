@@ -7,7 +7,7 @@
  * Mirrors `languages/csharp/receiver-binding.ts` in structure.
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
 
 const TYPE_DECL_NODE_TYPES = new Set([

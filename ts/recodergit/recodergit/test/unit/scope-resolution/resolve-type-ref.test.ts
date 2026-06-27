@@ -20,7 +20,7 @@ import {
   type ScopeId,
   type SymbolDefinition,
   type TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
 

@@ -28,7 +28,7 @@
  * function. Rare in practice; the alternative (cross-wired summaries) is unsound.
  */
 
-import type { ParsedImport, GraphNode } from 'recodergit-shared';
+import type { ParsedImport, GraphNode } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../graph/types.js';
 import { computeReachingDefs, type ReachingDefsSolver } from '../cfg/reaching-defs.js';
 import { DEFAULT_PDG_MAX_REACHING_DEF_FACTS_PER_FUNCTION } from '../cfg/emit.js';

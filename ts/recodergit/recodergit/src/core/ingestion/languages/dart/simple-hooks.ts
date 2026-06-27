@@ -22,7 +22,7 @@ import type {
   ScopeTree,
   TypeRef,
   CaptureMatch,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 export function dartBindingScopeFor(
   decl: CaptureMatch,

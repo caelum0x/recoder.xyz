@@ -21,7 +21,7 @@ vi.mock('../../src/core/tree-sitter/safe-parse.js', async () => {
   return buildSafeParseMock(parseSourceSafeSpy);
 });
 
-vi.mock('recodergit-shared', () => ({
+vi.mock('@recoder/recodergit-engine-shared', () => ({
   getLanguageFromFilename,
 }));
 

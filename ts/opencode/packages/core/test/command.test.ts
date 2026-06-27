@@ -1,8 +1,8 @@
 import { describe, expect } from "bun:test"
 import { Effect } from "effect"
-import { CommandV2 } from "@opencode-ai/core/command"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { ProviderV2 } from "@opencode-ai/core/provider"
+import { CommandV2 } from "@recoder/opencode-core/command"
+import { ModelV2 } from "@recoder/opencode-core/model"
+import { ProviderV2 } from "@recoder/opencode-core/provider"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(CommandV2.locationLayer)

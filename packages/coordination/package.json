@@ -1,0 +1,34 @@
+{
+  "name": "@recoder/coordination",
+  "version": "0.1.0",
+  "description": "Recoder's coordination engine — fuses work-locks, dependency-aware dispatch, the A2A handoff bus, and shared-state coherence into one deterministic control-plane library that makes collisions, duplicate work, lost handoffs, and shared-state incoherence structurally impossible or loudly detected.",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "node --test --import tsx 'tests/**/*.test.ts' 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@recoder/agent-os": "workspace:*",
+    "@recoder/a2a-sdk": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}

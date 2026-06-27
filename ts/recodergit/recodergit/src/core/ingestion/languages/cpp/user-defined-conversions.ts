@@ -1,5 +1,5 @@
-import type { ParsedFile, SymbolDefinition } from 'recodergit-shared';
-import type { ScopeId } from 'recodergit-shared';
+import type { ParsedFile, SymbolDefinition } from '@recoder/recodergit-engine-shared';
+import type { ScopeId } from '@recoder/recodergit-engine-shared';
 import { normalizeCppParamType } from './arity-metadata.js';
 
 const userDefinedConversions = new Set<string>();

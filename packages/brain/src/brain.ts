@@ -25,10 +25,16 @@ import type {
   RepoIntelPort,
   TaskGraphPort,
 } from "./ports";
-import { createRepoIntel } from "./repo/repo-intel-adapter";
+import { createRepoIntelAuto } from "./repo/recodergit-repo-intel";
 
 export interface BrainDeps {
-  /** Repo intelligence engine (defaults to the git-nexus context-pack adapter). */
+  /**
+   * Repo intelligence engine. Defaults to the degrade-safe RecoderGit chain
+   * ({@link createRepoIntelAuto}): the persistent MCP graph when
+   * `RECODERGIT_MCP_URL` is set, else the built `recodergit` CLI engine
+   * (discovered via the engine-resolver / `RECODERGIT_BIN`), else the mock-backed
+   * context pack. Absence only ever costs richness, never correctness.
+   */
   repo?: RepoIntelPort;
   /** Semantic recall, bound to the owned mem0. */
   memory?: MemoryPort;
@@ -50,7 +56,7 @@ export class Brain {
   private readonly repo: RepoIntelPort;
 
   constructor(private readonly deps: BrainDeps = {}) {
-    this.repo = deps.repo ?? createRepoIntel();
+    this.repo = deps.repo ?? createRepoIntelAuto();
   }
 
   /**

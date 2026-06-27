@@ -15,7 +15,7 @@
  */
 
 import type { KnowledgeGraph } from '../../graph/types.js';
-import type { PipelineProgress } from 'recodergit-shared';
+import type { PipelineProgress } from '@recoder/recodergit-engine-shared';
 import type { PipelineOptions } from '../pipeline.js';
 
 // ── Shared context ─────────────────────────────────────────────────────────

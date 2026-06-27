@@ -12,6 +12,12 @@ import {
   attachTmuxSession,
   startDetachedTmuxSession,
 } from '../src/utils/tmuxSessionStart.js';
+import { tmuxBinFile } from '../src/utils/tmuxBin.js';
+
+// dmux drives the same pinned tmux binary as the Conductor (vendored c/tmux build,
+// env override, or system PATH). Assert against the resolver so the test verifies the
+// resolved binary is used rather than a hardcoded 'tmux'.
+const TMUX = tmuxBinFile();
 
 describe('tmux session startup', () => {
   beforeEach(() => {
@@ -28,7 +34,7 @@ describe('tmux session startup', () => {
     });
 
     expect(spawnSyncMock).toHaveBeenCalledWith(
-      'tmux',
+      TMUX,
       [
         'new-session',
         '-d',
@@ -51,7 +57,7 @@ describe('tmux session startup', () => {
     attachTmuxSession('dmux-demo');
 
     expect(spawnSyncMock).toHaveBeenCalledWith(
-      'tmux',
+      TMUX,
       ['attach-session', '-t', 'dmux-demo'],
       { stdio: 'inherit' }
     );

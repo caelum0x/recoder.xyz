@@ -20,7 +20,7 @@
  * their own `ConversionRankFn` in the future.
  */
 
-import type { ParameterTypeClass } from 'recodergit-shared';
+import type { ParameterTypeClass } from '@recoder/recodergit-engine-shared';
 import { normalizeCppParamType } from './arity-metadata.js';
 import { hasCppUserDefinedConversion } from './user-defined-conversions.js';
 

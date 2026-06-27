@@ -19,7 +19,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { NODE_TABLES } from 'recodergit-shared';
+import { NODE_TABLES } from '@recoder/recodergit-engine-shared';
 import { buildTestGraph } from '../helpers/test-graph.js';
 import { getNodeQuery } from '../../src/server/api.js';
 

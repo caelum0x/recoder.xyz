@@ -11,6 +11,39 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+// ============== Cockpit Config ==============
+// main.js passes the resolved { backendUrl, token } config via an
+// `--recoder-cockpit-config=<base64-json>` process argument. We decode it and
+// expose it as window.__RECODER_COCKPIT__ so the bundled cockpit renderer can
+// read it synchronously at module load and authenticate its /api/conductor
+// calls with `Authorization: Bearer <token>`.
+(() => {
+  try {
+    const prefix = '--recoder-cockpit-config=';
+    const arg = process.argv.find((a) => a.startsWith(prefix));
+    if (!arg) return;
+    const encoded = arg.slice(prefix.length);
+    if (!encoded) return;
+    const decoded = Buffer.from(encoded, 'base64').toString('utf-8');
+    const config = JSON.parse(decoded);
+    if (!config || typeof config !== 'object' || !config.backendUrl) return;
+    // Only expose the fields the renderer consumes, plus the auth bridge so the
+    // cockpit's "Sign in to Recoder" panel can drive the EXISTING recoder.xyz
+    // web auth flow in the main process (no new auth scheme, no fake token).
+    contextBridge.exposeInMainWorld('__RECODER_COCKPIT__', {
+      backendUrl: String(config.backendUrl),
+      token: typeof config.token === 'string' && config.token ? config.token : undefined,
+      defaults: config.defaults && typeof config.defaults === 'object' ? config.defaults : undefined,
+      // Trigger the real web auth flow; resolves to { ok, token, tokenSource }.
+      login: () => ipcRenderer.invoke('cockpit:login'),
+      // Re-resolve the token without showing UI (env -> web session cookie -> API key).
+      resolveToken: () => ipcRenderer.invoke('cockpit:resolveToken'),
+    });
+  } catch {
+    // If config is missing/malformed the renderer falls back to its localhost default.
+  }
+})();
+
 contextBridge.exposeInMainWorld('recoderDesktop', {
   // ============== Platform Info ==============
   platform: process.platform,
@@ -173,4 +206,11 @@ contextBridge.exposeInMainWorld('recoderDesktop', {
 
   /** Show item in file manager */
   showInFolder: (filePath) => ipcRenderer.invoke('app:showInFolder', filePath),
+
+  // ============== Cockpit auth ==============
+  /** Run the existing recoder.xyz web auth flow; resolves to { ok, token, tokenSource }. */
+  login: () => ipcRenderer.invoke('cockpit:login'),
+
+  /** Re-resolve the cockpit auth token (env -> web session cookie -> API key). */
+  resolveToken: () => ipcRenderer.invoke('cockpit:resolveToken'),
 });

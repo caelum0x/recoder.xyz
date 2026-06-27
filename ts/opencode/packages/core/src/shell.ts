@@ -202,7 +202,24 @@ export function args(file: string, command: string, cwd: string) {
 let defaultPreferred: string | undefined
 let defaultAcceptable: string | undefined
 
+/**
+ * Recoder ownership: when this runtime is driven by the Recoder Conductor it may
+ * be running inside a pinned tmux pane whose shell must match the one the
+ * Conductor spawned (docs/RECODER-PRODUCT-ARCHITECTURE.md §8c — tmux is a pinned
+ * vendored binary driven via its CLI). The Conductor exports the resolved shell
+ * as `RECODER_OPENCODE_SHELL`. It takes precedence over both opencode config and
+ * the operator's `$SHELL` so tool execution lands in the same environment the
+ * Conductor set up. Mirrors `CONDUCTOR_TMUX_BIN` resolution: explicit override
+ * first, then fall back to discovery.
+ */
+function recoderShellOverride(): string | undefined {
+  const override = process.env["RECODER_OPENCODE_SHELL"]
+  return override && override.length > 0 ? override : undefined
+}
+
 export function preferred(configShell?: string) {
+  const override = recoderShellOverride()
+  if (override) return select(override)
   if (configShell) return select(configShell)
   defaultPreferred ??= select(process.env.SHELL)
   return defaultPreferred
@@ -212,6 +229,8 @@ preferred.reset = () => {
 }
 
 export function acceptable(configShell?: string) {
+  const override = recoderShellOverride()
+  if (override) return select(override, { acceptable: true })
   if (configShell) return select(configShell, { acceptable: true })
   defaultAcceptable ??= select(process.env.SHELL, { acceptable: true })
   return defaultAcceptable

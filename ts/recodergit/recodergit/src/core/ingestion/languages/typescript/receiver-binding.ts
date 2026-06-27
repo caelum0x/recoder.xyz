@@ -44,7 +44,7 @@
  *   `@type-binding.type`  (the enclosing type's name)
  */
 
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { nodeToCapture, syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
 
 /** Node types that define a TypeScript "type with instance members". */

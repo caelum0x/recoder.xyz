@@ -23,7 +23,7 @@
  */
 
 import Parser from 'tree-sitter';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 // `tree-sitter-dart` is an optional/vendored grammar that may be absent on a
 // default install. Loaded lazily + guarded via parser-loader rather than
 // statically imported: this module is pulled onto the main thread eagerly by

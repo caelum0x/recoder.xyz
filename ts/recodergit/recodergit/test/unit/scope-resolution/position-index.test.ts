@@ -14,7 +14,7 @@ import {
   type Scope,
   type ScopeId,
   type ScopeKind,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
 

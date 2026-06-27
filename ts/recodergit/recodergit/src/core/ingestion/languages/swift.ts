@@ -5,8 +5,8 @@
  * LanguageProvider, following the Strategy pattern used by the pipeline.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
-import type { NodeLabel, SymbolDefinition } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
+import type { NodeLabel, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { swiftClassConfig } from '../class-extractors/configs/swift.js';
 import { defineLanguage } from '../language-provider.js';

@@ -28,7 +28,7 @@ import {
 import { decodeTaintPath } from '../../../src/core/ingestion/taint/path-codec.js';
 import { createKnowledgeGraph } from '../../../src/core/graph/graph.js';
 import type { KnowledgeGraph } from '../../../src/core/graph/types.js';
-import type { GraphRelationship } from 'recodergit-shared';
+import type { GraphRelationship } from '@recoder/recodergit-engine-shared';
 
 /** Mechanics spec (propagate.test.ts MECH): global exec sink, global escape sanitizer. */
 const MECH: SourceSinkSanitizerSpec = {

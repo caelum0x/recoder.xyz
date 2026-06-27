@@ -14,7 +14,7 @@ import type {
   ScopeId,
   ScopeTree,
   TypeRef,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { SyntaxNode } from 'tree-sitter';
 import { findAncestorBeforeBoundary, FUNCTION_NODE_TYPES } from '../../utils/ast-helpers.js';
 

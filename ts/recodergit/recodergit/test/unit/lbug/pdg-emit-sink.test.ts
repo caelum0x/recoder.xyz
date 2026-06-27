@@ -18,7 +18,7 @@ import path from 'node:path';
 import { createKnowledgeGraph } from '../../../src/core/graph/graph.js';
 import { streamAllCSVsToDisk, buildBasicBlockRow } from '../../../src/core/lbug/csv-generator.js';
 import { PdgEmitSink } from '../../../src/core/lbug/pdg-emit-sink.js';
-import type { GraphNode, GraphRelationship } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship } from '@recoder/recodergit-engine-shared';
 
 const bbNode = (fp: string, idx: number, line: number): GraphNode => ({
   id: `BasicBlock:${fp}:1:0:${idx}`,

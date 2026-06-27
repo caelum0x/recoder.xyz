@@ -1,7 +1,7 @@
 // recodergit/src/core/ingestion/method-extractors/configs/typescript-javascript.ts
 // Verified against tree-sitter-typescript ^0.23.2, tree-sitter-javascript ^0.23.0
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type {
   MethodExtractionConfig,
   ParameterInfo,

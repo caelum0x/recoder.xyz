@@ -7,7 +7,7 @@ import type {
   Scope,
   ScopeId,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../../../src/core/ingestion/model/scope-resolution-indexes.js';
 import {
   goArityCompatibility,

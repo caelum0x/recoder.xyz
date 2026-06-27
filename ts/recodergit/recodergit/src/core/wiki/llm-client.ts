@@ -1,5 +1,5 @@
 import { logger } from '../logger.js';
-import { CircuitOpenError, ResilientFetchExhaustedError, resilientFetch } from 'recodergit-shared';
+import { CircuitOpenError, ResilientFetchExhaustedError, resilientFetch } from '@recoder/recodergit-engine-shared';
 /**
  * LLM Client for Wiki Generation
  *

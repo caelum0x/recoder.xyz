@@ -17,7 +17,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import { createLogger } from '../logger';
+import { createLogger } from '../logger.js';
+import { TMUX_BIN } from './tmux-path.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor');
@@ -50,22 +51,32 @@ export interface StartSessionInput {
 
 const sessions = new Map<string, ConductorSession>();
 
-async function commandExists(bin: string): Promise<boolean> {
+async function commandExists(bin: string, args: string[] = ['--version']): Promise<boolean> {
   try {
-    await exec(bin, ['--version']);
+    await exec(bin, args);
     return true;
   } catch {
     return false;
   }
 }
 
-export async function conductorAvailability(): Promise<{ available: boolean; git: boolean; tmux: boolean; reason?: string }> {
-  const [git, tmux] = await Promise.all([commandExists('git'), commandExists('tmux')]);
+/** Which tmux binary the conductor drives (vendored/pinned or system PATH). */
+export function conductorTmuxBin(): string {
+  return TMUX_BIN;
+}
+
+export async function conductorAvailability(): Promise<{ available: boolean; git: boolean; tmux: boolean; tmuxBin: string; reason?: string }> {
+  const [git, tmux] = await Promise.all([
+    commandExists('git'),
+    // `tmux -V` is the canonical version flag.
+    commandExists(TMUX_BIN, ['-V']),
+  ]);
   const available = git && tmux;
   return {
     available,
     git,
     tmux,
+    tmuxBin: TMUX_BIN,
     reason: available ? undefined : `missing: ${[!git && 'git', !tmux && 'tmux'].filter(Boolean).join(', ')}`,
   };
 }
@@ -95,7 +106,7 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
   await exec('git', ['-C', input.repoPath, 'worktree', 'add', '-B', branch, worktreePath, input.baseRef || 'HEAD']);
 
   // Detached tmux session running the agent inside the worktree.
-  await exec('tmux', ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command]);
+  await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command]);
 
   const session: ConductorSession = {
     sessionId: input.sessionId,
@@ -114,7 +125,7 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
 /** Live tmux session names (recoder-prefixed). */
 export async function listSessions(): Promise<ConductorSession[]> {
   try {
-    const { stdout } = await exec('tmux', ['list-sessions', '-F', '#{session_name}']);
+    const { stdout } = await exec(TMUX_BIN, ['list-sessions', '-F', '#{session_name}']);
     const live = new Set(stdout.split('\n').map((s) => s.trim()).filter(Boolean));
     return [...sessions.values()].filter((s) => live.has(s.tmuxName));
   } catch {
@@ -126,7 +137,7 @@ export async function listSessions(): Promise<ConductorSession[]> {
 export async function capturePane(sessionId: string, lines = 200): Promise<string> {
   const session = sessions.get(sessionId);
   if (!session) throw new Error(`session not found: ${sessionId}`);
-  const { stdout } = await exec('tmux', ['capture-pane', '-p', '-t', session.tmuxName, '-S', `-${lines}`]);
+  const { stdout } = await exec(TMUX_BIN, ['capture-pane', '-p', '-t', session.tmuxName, '-S', `-${lines}`]);
   return stdout;
 }
 
@@ -134,7 +145,7 @@ export async function capturePane(sessionId: string, lines = 200): Promise<strin
 export async function sendKeys(sessionId: string, keys: string): Promise<void> {
   const session = sessions.get(sessionId);
   if (!session) throw new Error(`session not found: ${sessionId}`);
-  await exec('tmux', ['send-keys', '-t', session.tmuxName, keys, 'Enter']);
+  await exec(TMUX_BIN, ['send-keys', '-t', session.tmuxName, keys, 'Enter']);
 }
 
 /** Stop a session and remove its isolated worktree. */
@@ -142,7 +153,7 @@ export async function killSession(sessionId: string, options?: { removeWorktree?
   const session = sessions.get(sessionId);
   if (!session) return;
   try {
-    await exec('tmux', ['kill-session', '-t', session.tmuxName]);
+    await exec(TMUX_BIN, ['kill-session', '-t', session.tmuxName]);
   } catch {
     /* already gone */
   }

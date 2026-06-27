@@ -6,8 +6,8 @@
  * call-resolution path.
  */
 
-import type { ParsedFile, TypeRef } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { ParsedFile, TypeRef } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../../graph/types.js';
 import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
 import { resolveDefGraphId } from '../../scope-resolution/graph-bridge/ids.js';

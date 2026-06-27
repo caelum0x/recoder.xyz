@@ -16,7 +16,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { SourceSinkSanitizerSpec } from './source-sink-config.js';
 import { JAVA_TAINT_MODEL } from './java-model.js';
 import { PYTHON_TAINT_MODEL } from './python-model.js';

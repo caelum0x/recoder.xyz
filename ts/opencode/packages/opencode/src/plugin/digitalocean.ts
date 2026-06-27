@@ -1,6 +1,6 @@
-import type { Hooks, PluginInput } from "@opencode-ai/plugin"
-import type { Model } from "@opencode-ai/sdk/v2"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import type { Hooks, PluginInput } from "@recoder/opencode-plugin"
+import type { Model } from "@recoder/opencode-sdk/v2"
+import { InstallationVersion } from "@recoder/opencode-core/installation/version"
 import { createServer } from "http"
 import open from "open"
 

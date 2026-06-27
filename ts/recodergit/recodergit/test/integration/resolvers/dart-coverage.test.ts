@@ -25,7 +25,7 @@ import {
   loadLanguage,
 } from '../../../src/core/tree-sitter/parser-loader.js';
 import { SupportedLanguages } from '../../../src/config/supported-languages.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 let dartAvailable = isLanguageAvailable(SupportedLanguages.Dart);
 if (dartAvailable) {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { GraphNode, GraphRelationship, NodeLabel, RelationshipType } from 'recodergit-shared';
+import type { GraphNode, GraphRelationship, NodeLabel, RelationshipType } from '@recoder/recodergit-engine-shared';
 import { createKnowledgeGraph } from '../../src/core/graph/graph.js';
 import {
   pruneLocalValueSymbols,

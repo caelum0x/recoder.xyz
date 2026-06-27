@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SupportedLanguages, getLanguageFromFilename } from 'recodergit-shared';
+import { SupportedLanguages, getLanguageFromFilename } from '@recoder/recodergit-engine-shared';
 import { getProviderForFile } from '../../src/core/ingestion/languages/index.js';
 import { extractParsedFile } from '../../src/core/ingestion/scope-extractor-bridge.js';
 

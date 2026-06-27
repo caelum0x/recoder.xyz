@@ -23,7 +23,7 @@ import type {
   Reference,
   ScopeId,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../../graph/types.js';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import type { SemanticModel } from '../../model/semantic-model.js';
@@ -828,7 +828,7 @@ export function pickImplicitThisOverload(
     readonly name: string;
     readonly arity?: number;
     readonly argumentTypes?: readonly string[];
-    readonly argumentTypeClasses?: readonly import('recodergit-shared').ParameterTypeClass[];
+    readonly argumentTypeClasses?: readonly import('@recoder/recodergit-engine-shared').ParameterTypeClass[];
   },
   scopes: ScopeResolutionIndexes,
   workspaceIndex: WorkspaceResolutionIndex,

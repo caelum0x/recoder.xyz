@@ -1,4 +1,4 @@
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 
 /**
  * Callables whose same-name overloads occupy distinct graph nodes keyed by

@@ -74,8 +74,8 @@ import type {
   ScopeKind,
   SymbolDefinition,
   TypeRef,
-} from 'recodergit-shared';
-import { buildPositionIndex, buildScopeTree, canParentScope, makeScopeId } from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
+import { buildPositionIndex, buildScopeTree, canParentScope, makeScopeId } from '@recoder/recodergit-engine-shared';
 import type { LanguageProvider } from './language-provider.js';
 import { extractTemplateArguments } from './utils/template-arguments.js';
 

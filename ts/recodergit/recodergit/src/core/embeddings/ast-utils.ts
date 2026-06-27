@@ -4,7 +4,7 @@
  * used by both chunker.ts and structural-extractor.ts.
  */
 
-import { getLanguageFromFilename } from 'recodergit-shared';
+import { getLanguageFromFilename } from '@recoder/recodergit-engine-shared';
 import {
   createParserForLanguage,
   isLanguageAvailable,

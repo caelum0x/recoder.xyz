@@ -19,7 +19,7 @@ import {
   evaluateForTest,
   getRegistrySize,
 } from '../../../../src/core/ingestion/languages/cpp/constraint-filter.js';
-import type { ArityVerdict, ParameterTypeClass, SymbolDefinition } from 'recodergit-shared';
+import type { ArityVerdict, ParameterTypeClass, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 function templateConstraintsFor(src: string): CppConstraintPayload | undefined {
   const matches = emitCppScopeCaptures(src, 'test.cpp');

@@ -34,7 +34,7 @@
  * logic up the dependency chain instead.
  */
 
-import type { NodeLabel, ParameterTypeClass, SymbolDefinition } from 'recodergit-shared';
+import type { NodeLabel, ParameterTypeClass, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 
 /**
  * Class-like NodeLabels — used for qualifiedName fallback inside

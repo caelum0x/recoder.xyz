@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { CircuitBreaker, CircuitOpenError, getBreaker } from 'recodergit-shared';
-import { __resetBreakerRegistry__ } from 'recodergit-shared/test-helpers';
+import { CircuitBreaker, CircuitOpenError, getBreaker } from '@recoder/recodergit-engine-shared';
+import { __resetBreakerRegistry__ } from '@recoder/recodergit-engine-shared/test-helpers';
 
 describe('CircuitBreaker', () => {
   beforeEach(() => __resetBreakerRegistry__());

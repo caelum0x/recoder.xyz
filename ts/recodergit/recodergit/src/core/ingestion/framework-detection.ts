@@ -10,7 +10,7 @@
  * (no bonus, no penalty) - same behavior as before this feature.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { AstFrameworkPatternConfig } from './language-provider.js';
 import { providers } from './languages/index.js';
 

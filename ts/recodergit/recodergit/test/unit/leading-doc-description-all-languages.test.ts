@@ -26,7 +26,7 @@ import { getProvider } from '../../src/core/ingestion/languages/index.js';
 import { DOC_BEARING_LABELS } from '../../src/core/ingestion/utils/ast-helpers.js';
 import { EMBEDDABLE_LABELS } from '../../src/core/embeddings/types.js';
 import type { CaptureMap } from '../../src/core/ingestion/language-provider.js';
-import type { NodeLabel } from 'recodergit-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 
 function describeFromProvider(
   language: SupportedLanguages,

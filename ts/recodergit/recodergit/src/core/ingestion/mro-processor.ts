@@ -21,7 +21,7 @@
 
 import { KnowledgeGraph } from '../graph/types.js';
 import { generateId } from '../../lib/utils.js';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { getProvider } from './languages/index.js';
 import { c3Linearize, gatherAncestors } from './model/resolve.js';
 

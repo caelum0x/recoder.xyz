@@ -358,8 +358,8 @@ lerna-debug.log*
 .run/
 .scratch/upstream/
 
-# Local external reference checkouts
-oh-my-openagent/
+# Local external reference checkouts (root-only; ts/oh-my-openagent is owned + tracked)
+/oh-my-openagent/
 oh-my-codex/
 claw-code-parity/
 packages/recoder-code/packages/core/src/external/
@@ -642,7 +642,6 @@ go/multica/
 py/pal-mcp-server/
 py/ops-recorder/
 ts/oh-my-codex/
-ts/oh-my-openagent/
 ts/open-agents/
 ts/polar/
 

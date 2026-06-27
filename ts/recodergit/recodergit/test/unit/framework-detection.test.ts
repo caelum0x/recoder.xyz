@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import {
   detectFrameworkFromPath,
   detectFrameworkFromAST,

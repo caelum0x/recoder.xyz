@@ -17,7 +17,7 @@ import {
   type BindingRef,
   type SymbolDefinition,
   type ScopeId,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
 

@@ -24,7 +24,7 @@
  * ordering are identical to the old scan.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { ImportResolutionConfig, ImportResolverStrategy, ResolveCtx } from '../types.js';
 
 interface SwiftTargetIndex {

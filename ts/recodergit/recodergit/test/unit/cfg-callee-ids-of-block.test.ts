@@ -17,7 +17,7 @@ import type {
   FunctionCfg,
   SiteRecord,
 } from '../../src/core/ingestion/cfg/types.js';
-import type { GraphNode } from 'recodergit-shared';
+import type { GraphNode } from '@recoder/recodergit-engine-shared';
 
 /**
  * U3 (#2227 follow-up plan) — `BasicBlock.calleeIds` via the exact call-site

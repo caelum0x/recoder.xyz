@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"sess_abc123","tools":["Read","Write","Edit","Bash"],"model":"claude-opus-4-8"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"I should read the file first."},{"type":"text","text":"Let me read the config."},{"type":"tool_use","id":"toolu_01","name":"Read","input":{"file_path":"/repo/config.ts"}}],"usage":{"input_tokens":1200,"output_tokens":48,"cache_read_input_tokens":800}}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"export const port = 3001;","is_error":false}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Now I'll update the port."},{"type":"tool_use","id":"toolu_02","name":"Edit","input":{"file_path":"/repo/config.ts","old_string":"3001","new_string":"4000"}}],"usage":{"input_tokens":1320,"output_tokens":36}}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_02","content":"File updated.","is_error":false}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done. The port is now 4000."}],"usage":{"input_tokens":1380,"output_tokens":12}}}
+{"type":"result","subtype":"success","is_error":false,"result":"Done. The port is now 4000.","session_id":"sess_abc123","usage":{"input_tokens":3900,"output_tokens":96,"cache_read_input_tokens":800},"total_cost_usd":0.021}

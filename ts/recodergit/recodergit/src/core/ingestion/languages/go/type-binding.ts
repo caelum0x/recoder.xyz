@@ -1,4 +1,4 @@
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { syntheticCapture, type SyntaxNode } from '../../utils/ast-helpers.js';
 
 const COMPOSITE_LITERAL_TYPE_NODE_TYPES = new Set([

@@ -7,7 +7,7 @@ import type {
   Part,
   SessionMessageResponse,
   ToolPart,
-} from "@opencode-ai/sdk/v2"
+} from "@recoder/opencode-sdk/v2"
 import { Effect } from "effect"
 import { ACPSession } from "./session"
 import { ACPPermission } from "./permission"
@@ -20,6 +20,7 @@ import {
   shellOutputSnapshot,
   completedToolUpdate,
 } from "./tool"
+import { runEventSink } from "./recoder-runevent"
 
 type Connection = Pick<AgentSideConnection, "sessionUpdate"> &
   Partial<Pick<AgentSideConnection, "requestPermission" | "writeTextFile">>
@@ -42,6 +43,9 @@ export class Subscription {
   private readonly toolStarts = new Set<string>()
   private readonly permission: ACPPermission.Handler
   private started = false
+  // Recoder RunEvent seam: inert unless the control plane is driving this
+  // runtime (RECODER_RUN_ID + an output target). See ./recoder-runevent.ts.
+  private readonly runEvents = runEventSink()
 
   constructor(
     private readonly input: {
@@ -258,6 +262,11 @@ export class Subscription {
             }),
           },
         })
+        await this.runEvents.emit({
+          type: "log",
+          message: `tool ${part.tool} completed`,
+          data: { sessionId, toolCallId: part.callID, tool: part.tool, status: "completed" },
+        })
         return
 
       case "error":
@@ -272,6 +281,17 @@ export class Subscription {
               state: part.state,
               cwd,
             }),
+          },
+        })
+        await this.runEvents.emit({
+          type: "log",
+          message: `tool ${part.tool} errored`,
+          data: {
+            sessionId,
+            toolCallId: part.callID,
+            tool: part.tool,
+            status: "error",
+            error: part.state.status === "error" ? part.state.error : undefined,
           },
         })
         return
@@ -330,6 +350,11 @@ export class Subscription {
           cwd,
         }),
       },
+    })
+    await this.runEvents.emit({
+      type: "log",
+      message: `tool ${part.tool} started`,
+      data: { sessionId, toolCallId: part.callID, tool: part.tool, status: "started" },
     })
   }
 

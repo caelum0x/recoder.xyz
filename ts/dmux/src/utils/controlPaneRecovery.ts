@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+import { tmuxBinFile } from './tmuxBin.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,7 +25,7 @@ interface PaneRow {
 }
 
 function runTmux(args: string[]): TmuxResult {
-  const result = spawnSync('tmux', args, {
+  const result = spawnSync(tmuxBinFile(), args, {
     encoding: 'utf-8',
     stdio: 'pipe',
   });

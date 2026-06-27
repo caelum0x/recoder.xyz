@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync, spawnSync } from 'child_process';
+import { tmuxBinFile, tmuxCommand } from './utils/tmuxBin.js';
 import chalk from 'chalk';
 import fs from 'fs/promises';
 import * as fsSync from 'fs';
@@ -281,7 +282,7 @@ class Dmux {
       }
 
       try {
-        execSync(`tmux has-session -t ${this.sessionName} 2>/dev/null`, { stdio: 'pipe' });
+        execSync(tmuxCommand(`tmux has-session -t ${this.sessionName} 2>/dev/null`), { stdio: 'pipe' });
         sessionExists = true;
       } catch {
         sessionExists = false;
@@ -329,7 +330,7 @@ class Dmux {
         // Batch all session configuration commands into a single tmux call for faster startup
         // This reduces 5 process spawns to 1, significantly improving startup time
         this.applySessionPaneBorderOptions(this.sessionName, 'inherit');
-        execSync(`tmux select-pane -t ${this.sessionName} -T "dmux"`, { stdio: 'inherit' });
+        execSync(tmuxCommand(`tmux select-pane -t ${this.sessionName} -T "dmux"`), { stdio: 'inherit' });
       }
       attachTmuxSession(this.sessionName);
       return;
@@ -338,7 +339,7 @@ class Dmux {
     // Enable pane borders to show titles
     // NOTE: Temporarily disabled to test if border updates cause UI shifts
     // try {
-    //   execSync(`tmux set-option pane-border-status top`, { stdio: 'pipe' });
+    //   execSync(tmuxCommand(`tmux set-option pane-border-status top`), { stdio: 'pipe' });
     // } catch {
     //   // Ignore if it fails
     // }
@@ -346,7 +347,7 @@ class Dmux {
     // Set pane title for the current pane running dmux
     // TODO(future): Re-enable control pane title once UI shift issue is resolved
     // Setting the title can cause visual artifacts in some tmux configurations
-    // Original code: execSync(`tmux select-pane -T "dmux v${version} - ${project}"`)
+    // Original code: execSync(tmuxCommand(`tmux select-pane -T "dmux v${version} - ${project}"`))
     // See: Title updates are currently handled by enforcePaneTitles() in usePaneSync.ts
 
     try {
@@ -594,7 +595,7 @@ class Dmux {
           // Apply correct layout: sidebar (40) | welcome pane (rest)
           // Use "latest" mode so window auto-follows terminal size
           // Batch layout commands into single tmux call for better performance
-          execSync(`tmux set-window-option window-size latest \\; set-window-option main-pane-width ${SIDEBAR_WIDTH} \\; select-layout main-vertical`, { stdio: 'pipe' });
+          execSync(tmuxCommand(`tmux set-window-option window-size latest \\; set-window-option main-pane-width ${SIDEBAR_WIDTH} \\; select-layout main-vertical`), { stdio: 'pipe' });
           await tmuxService.refreshClient();
         }
       } else if (hasValidWelcomePane && hasAnyPanes) {
@@ -666,7 +667,7 @@ class Dmux {
 
   private getCurrentTmuxSessionName(): string | null {
     try {
-      const result = spawnSync('tmux', ['display-message', '-p', '#S'], {
+      const result = spawnSync(tmuxBinFile(), ['display-message', '-p', '#S'], {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
@@ -726,7 +727,7 @@ class Dmux {
 
   private getTmuxOptionValue(sessionName: string, optionName: string): string | null {
     try {
-      const result = spawnSync('tmux', ['show-options', '-v', '-t', sessionName, optionName], {
+      const result = spawnSync(tmuxBinFile(), ['show-options', '-v', '-t', sessionName, optionName], {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
@@ -740,12 +741,12 @@ class Dmux {
 
   private publishSessionMetadata(sessionName: string, controlPaneId?: string): void {
     try {
-      spawnSync('tmux', ['set-option', '-t', sessionName, '@dmux_project_root', this.projectRoot], { stdio: 'pipe' });
-      spawnSync('tmux', ['set-option', '-t', sessionName, '@dmux_project_name', this.projectName], { stdio: 'pipe' });
-      spawnSync('tmux', ['set-option', '-t', sessionName, '@dmux_config_path', this.panesFile], { stdio: 'pipe' });
-      spawnSync('tmux', ['set-option', '-t', sessionName, DMUX_CONTROLLER_PID_OPTION, String(process.pid)], { stdio: 'pipe' });
+      spawnSync(tmuxBinFile(), ['set-option', '-t', sessionName, '@dmux_project_root', this.projectRoot], { stdio: 'pipe' });
+      spawnSync(tmuxBinFile(), ['set-option', '-t', sessionName, '@dmux_project_name', this.projectName], { stdio: 'pipe' });
+      spawnSync(tmuxBinFile(), ['set-option', '-t', sessionName, '@dmux_config_path', this.panesFile], { stdio: 'pipe' });
+      spawnSync(tmuxBinFile(), ['set-option', '-t', sessionName, DMUX_CONTROLLER_PID_OPTION, String(process.pid)], { stdio: 'pipe' });
       if (controlPaneId) {
-        spawnSync('tmux', ['set-option', '-t', sessionName, DMUX_CONTROL_PANE_OPTION, controlPaneId], { stdio: 'pipe' });
+        spawnSync(tmuxBinFile(), ['set-option', '-t', sessionName, DMUX_CONTROL_PANE_OPTION, controlPaneId], { stdio: 'pipe' });
       }
     } catch {
       // Metadata is best-effort only
@@ -761,8 +762,8 @@ class Dmux {
         return;
       }
 
-      spawnSync('tmux', ['set-option', '-u', '-t', sessionName, DMUX_CONTROLLER_PID_OPTION], { stdio: 'pipe' });
-      spawnSync('tmux', ['set-option', '-u', '-t', sessionName, DMUX_CONTROL_PANE_OPTION], { stdio: 'pipe' });
+      spawnSync(tmuxBinFile(), ['set-option', '-u', '-t', sessionName, DMUX_CONTROLLER_PID_OPTION], { stdio: 'pipe' });
+      spawnSync(tmuxBinFile(), ['set-option', '-u', '-t', sessionName, DMUX_CONTROL_PANE_OPTION], { stdio: 'pipe' });
     } catch {
       // Metadata cleanup is best-effort only.
     }
@@ -774,13 +775,13 @@ class Dmux {
     try {
       try {
         const cleanupCommands = buildRemotePaneActionCleanupCommands().join(' \\; ');
-        execSync(`tmux ${cleanupCommands}`, { stdio: 'pipe' });
+        execSync(tmuxCommand(`tmux ${cleanupCommands}`), { stdio: 'pipe' });
       } catch {
         // Ignore stale binding cleanup errors during setup.
       }
 
       const commands = buildRemotePaneActionBindingCommands().join(' \\; ');
-      execSync(`tmux ${commands}`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux ${commands}`), { stdio: 'pipe' });
     } catch {
       LogService.getInstance().warn('Failed to set up remote pane action bindings', 'Setup');
     }
@@ -851,7 +852,7 @@ class Dmux {
       }
 
       const commands = buildRemotePaneActionCleanupCommands().join(' \\; ');
-      execSync(`tmux ${commands}`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux ${commands}`), { stdio: 'pipe' });
     } catch {
       // Ignore cleanup errors
     }
@@ -892,7 +893,7 @@ class Dmux {
 
   private inferSessionContextFromPanePaths(sessionName: string): ExistingSessionContext | null {
     try {
-      const listResult = spawnSync('tmux', ['list-panes', '-t', sessionName, '-F', '#{pane_current_path}'], {
+      const listResult = spawnSync(tmuxBinFile(), ['list-panes', '-t', sessionName, '-F', '#{pane_current_path}'], {
         encoding: 'utf-8',
         stdio: 'pipe',
       });
@@ -1281,7 +1282,7 @@ class Dmux {
       `set-option -t ${sessionName} pane-border-format " #{?@dmux_attention,#[bold]![ready] #[default],}${TMUX_PANE_TITLE_PREFIX_FORMAT}${TMUX_PANE_TITLE_LABEL_FORMAT} "`,
     ].join(' \\; ');
 
-    execSync(`tmux ${sessionOptions}`, { stdio });
+    execSync(tmuxCommand(`tmux ${sessionOptions}`), { stdio });
     applyTmuxThemeToSession(sessionName, this.projectRoot);
   }
 
@@ -1289,7 +1290,7 @@ class Dmux {
     const cleanPath = sanitizePathForInstalledDmux(process.env.PATH || '', this.projectRoot);
     if (!cleanPath) return;
 
-    spawnSync('tmux', ['set-environment', '-t', sessionName, 'PATH', cleanPath], {
+    spawnSync(tmuxBinFile(), ['set-environment', '-t', sessionName, 'PATH', cleanPath], {
       stdio: 'pipe',
     });
   }
@@ -1299,7 +1300,7 @@ class Dmux {
       // Set up session-specific hook that sends SIGUSR1 to dmux process on resize
       // This works inside tmux where normal SIGWINCH may not propagate
       const pid = process.pid;
-      execSync(`tmux set-hook -t '${sessionName}' client-resized 'run-shell "kill -USR1 ${pid} 2>/dev/null || true"'`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-hook -t '${sessionName}' client-resized 'run-shell "kill -USR1 ${pid} 2>/dev/null || true"'`), { stdio: 'pipe' });
       // LogService.getInstance().debug(`Set up resize hook for session ${this.sessionName}`, 'Setup');
     } catch (error) {
       LogService.getInstance().warn('Failed to set up resize hook', 'Setup');
@@ -1314,11 +1315,11 @@ class Dmux {
       const paneExitedHookCommand = buildPaneExitedHookCommandForSession(pid, sessionName);
 
       // Detect manually created panes via Ctrl+b %
-      execSync(`tmux set-hook -t '${sessionName}' after-split-window 'run-shell "kill -USR2 ${pid} 2>/dev/null || true # dmux-hook"'`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-hook -t '${sessionName}' after-split-window 'run-shell "kill -USR2 ${pid} 2>/dev/null || true # dmux-hook"'`), { stdio: 'pipe' });
 
       // Detect pane closures via Ctrl+b x or process exit.
       // If the control pane is closed, this also recreates a replacement pane.
-      execSync(`tmux set-hook -t '${sessionName}' pane-exited '${paneExitedHookCommand}'`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-hook -t '${sessionName}' pane-exited '${paneExitedHookCommand}'`), { stdio: 'pipe' });
 
       // LogService.getInstance().debug(`Set up pane detection hooks for session ${this.sessionName}`, 'Setup');
     } catch (error) {
@@ -1345,7 +1346,7 @@ class Dmux {
   private cleanupResizeHook(sessionName: string = this.getCurrentTmuxSessionName() || this.sessionName) {
     try {
       // Remove session-specific hook
-      execSync(`tmux set-hook -u -t '${sessionName}' client-resized`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-hook -u -t '${sessionName}' client-resized`), { stdio: 'pipe' });
       LogService.getInstance().debug('Cleaned up resize hook', 'Setup');
     } catch {
       // Ignore cleanup errors
@@ -1355,8 +1356,8 @@ class Dmux {
   private cleanupPaneSplitHook(sessionName: string = this.getCurrentTmuxSessionName() || this.sessionName) {
     try {
       // Remove pane hooks
-      execSync(`tmux set-hook -u -t '${sessionName}' after-split-window`, { stdio: 'pipe' });
-      execSync(`tmux set-hook -u -t '${sessionName}' pane-exited`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-hook -u -t '${sessionName}' after-split-window`), { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-hook -u -t '${sessionName}' pane-exited`), { stdio: 'pipe' });
       LogService.getInstance().debug('Cleaned up pane hooks', 'Setup');
     } catch {
       // Ignore cleanup errors
@@ -1365,7 +1366,7 @@ class Dmux {
 
   private cleanupPaneFocusHook(sessionName: string = this.getCurrentTmuxSessionName() || this.sessionName) {
     try {
-      execSync(`tmux set-hook -u -t '${sessionName}' after-select-pane`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-hook -u -t '${sessionName}' after-select-pane`), { stdio: 'pipe' });
       LogService.getInstance().debug('Cleaned up pane focus hook', 'Setup');
     } catch {
       // Ignore cleanup errors

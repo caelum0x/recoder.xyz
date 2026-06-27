@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { computeBackoffMs, withRetry, type RetryOptions } from 'recodergit-shared';
+import { computeBackoffMs, withRetry, type RetryOptions } from '@recoder/recodergit-engine-shared';
 
 describe('computeBackoffMs', () => {
   it('returns afterMs (capped) when caller supplies it', () => {

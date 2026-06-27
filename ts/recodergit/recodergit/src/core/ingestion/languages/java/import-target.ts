@@ -10,7 +10,7 @@
  * Returns `null` for unresolvable / JDK imports.
  */
 
-import type { ParsedImport, WorkspaceIndex } from 'recodergit-shared';
+import type { ParsedImport, WorkspaceIndex } from '@recoder/recodergit-engine-shared';
 
 export interface JavaResolveContext {
   readonly fromFile: string;

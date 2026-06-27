@@ -25,7 +25,7 @@
  * already parsed, reused via `treeCache` to avoid double-parsing.
  */
 
-import type { BindingRef, ParsedFile, Scope, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { BindingRef, ParsedFile, Scope, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import { getPhpParser } from './query.js';
 
@@ -353,7 +353,7 @@ export function populatePhpNamespaceSiblings(
     if (moduleScope === undefined) continue;
     const moduleTypeBindings = moduleScope.typeBindings as Map<
       string,
-      import('recodergit-shared').TypeRef
+      import('@recoder/recodergit-engine-shared').TypeRef
     >;
 
     const struct = structureByFile.get(parsed.filePath);

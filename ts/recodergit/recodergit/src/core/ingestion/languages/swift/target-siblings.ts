@@ -23,7 +23,7 @@
  * finalize and must not be mutated.
  */
 
-import type { BindingRef, ParsedFile, ScopeId, SymbolDefinition } from 'recodergit-shared';
+import type { BindingRef, ParsedFile, ScopeId, SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
 import { coerceSwiftTargets, groupSwiftFilesBySpmTarget } from './target-grouping.js';
 

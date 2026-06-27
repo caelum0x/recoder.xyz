@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { isBladeTemplateFilename } from 'recodergit-shared';
+import { isBladeTemplateFilename } from '@recoder/recodergit-engine-shared';
 import type { HttpLanguagePlugin } from './types.js';
 import { JAVA_HTTP_PLUGIN } from './java.js';
 import { KOTLIN_HTTP_PLUGIN } from './kotlin.js';

@@ -1,7 +1,7 @@
 // recodergit/src/core/ingestion/method-extractors/configs/php.ts
 // Verified against tree-sitter-php 0.23.12
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type {
   MethodExtractionConfig,
   ParameterInfo,

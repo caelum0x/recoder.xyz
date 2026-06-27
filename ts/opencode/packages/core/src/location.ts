@@ -1,5 +1,5 @@
 import { Context, Effect, Layer } from "effect"
-import { Info, Ref, response } from "@opencode-ai/schema/location"
+import { Info, Ref, response } from "@recoder/opencode-schema/location"
 import { Project } from "./project"
 
 export * as Location from "./location"

@@ -1,8 +1,8 @@
 export * as PluginV2 from "./plugin"
 
 import { Context, Deferred, Effect, Exit, Layer, Scope } from "effect"
-import type { Plugin as PluginRuntime } from "@opencode-ai/plugin/v2/effect"
-import { Plugin } from "@opencode-ai/schema/plugin"
+import type { Plugin as PluginRuntime } from "@recoder/opencode-plugin/v2/effect"
+import { Plugin } from "@recoder/opencode-schema/plugin"
 import { AgentV2 } from "./agent"
 import { AISDK } from "./aisdk"
 import { Catalog } from "./catalog"

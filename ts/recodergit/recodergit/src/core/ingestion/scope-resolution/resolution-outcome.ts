@@ -1,4 +1,4 @@
-import type { Range } from 'recodergit-shared';
+import type { Range } from '@recoder/recodergit-engine-shared';
 
 export type ResolutionSuppressionReason =
   | 'adl-ordinary-lookup-blocked'

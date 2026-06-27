@@ -1,7 +1,7 @@
 import os from 'node:os';
 import { join } from 'node:path';
 
-import { CircuitBreaker, withRetry } from 'recodergit-shared';
+import { CircuitBreaker, withRetry } from '@recoder/recodergit-engine-shared';
 
 // ---------------------------------------------------------------------------
 // Download resilience defaults

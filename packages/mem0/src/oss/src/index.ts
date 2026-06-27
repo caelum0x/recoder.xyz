@@ -1,5 +1,5 @@
 // Recoder-owned mem0 OSS barrel. Pruned to the providers Recoder ships SDKs for
-// (see ./utils/factory.ts + docs/agent-os/16-oss-ownership-merge-plan.md).
+// (see ./utils/factory.ts + docs/PACKAGES.md + docs/subsystems/README.md §5).
 export * from "./memory";
 export * from "./memory/memory.types";
 export * from "./types";

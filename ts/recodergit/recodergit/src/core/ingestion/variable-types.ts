@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/variable-types.ts
 
-import type { SupportedLanguages } from 'recodergit-shared';
+import type { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { FieldVisibility } from './field-types.js';
 import type { SyntaxNode } from './utils/ast-helpers.js';
 

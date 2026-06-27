@@ -1,6 +1,6 @@
 // recodergit/src/core/ingestion/field-extractors/configs/csharp.ts
 
-import { SupportedLanguages } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import type { FieldExtractionConfig } from '../generic.js';
 import { findVisibility, hasKeyword, hasModifier, collectModifierTexts } from './helpers.js';
 import { extractSimpleTypeName } from '../../type-extractors/shared.js';

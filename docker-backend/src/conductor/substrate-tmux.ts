@@ -14,6 +14,7 @@ import {
   capturePane,
   killSession,
 } from './tmux-orchestrator.js';
+import { TMUX_BIN } from './tmux-path.js';
 import {
   registerSubstrate,
   type ConductorSubstrate,
@@ -60,7 +61,7 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
 
   async alive(handle: SubstrateHandle): Promise<boolean> {
     try {
-      await exec('tmux', ['has-session', '-t', handle.sessionName ?? handle.ref]);
+      await exec(TMUX_BIN, ['has-session', '-t', handle.sessionName ?? handle.ref]);
       return true;
     } catch {
       return false;

@@ -1,11 +1,11 @@
 import { describe, expect } from "bun:test"
 import { Effect, Layer, Schema } from "effect"
-import { Database } from "@opencode-ai/core/database/database"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Project } from "@opencode-ai/core/project"
-import { ProjectDirectories } from "@opencode-ai/core/project/directories"
-import { ProjectTable } from "@opencode-ai/core/project/sql"
-import { AbsolutePath } from "@opencode-ai/core/schema"
+import { Database } from "@recoder/opencode-core/database/database"
+import { EventV2 } from "@recoder/opencode-core/event"
+import { Project } from "@recoder/opencode-core/project"
+import { ProjectDirectories } from "@recoder/opencode-core/project/directories"
+import { ProjectTable } from "@recoder/opencode-core/project/sql"
+import { AbsolutePath } from "@recoder/opencode-core/schema"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(Layer.mergeAll(Database.defaultLayer, EventV2.defaultLayer, ProjectDirectories.defaultLayer))

@@ -1,3 +1,34 @@
+# `@recoder/opencode` — Recoder-owned opencode coding-agent runtime
+
+> **This monorepo is owned and maintained by Recoder.** It is the `opencode`
+> coding-agent runtime that the Recoder **Runtime** subsystem drives and consumes
+> (see `docs/subsystems/runtime.md` §3.5 — the *opencode driver*, and §6 — the
+> opencode fusion rows). Recoder drives the `opencode` CLI from this repo
+> headless and consumes its **ACP session/tool types** (`packages/opencode/src/acp`,
+> `packages/sdk/js`). The runtime is built and owned **in place** here.
+>
+> **What "owned" means in this repo:**
+> - All workspace packages are scoped under **`@recoder/*`**: the monorepo root is
+>   `@recoder/opencode`, the agent runtime app is `@recoder/opencode-runtime`
+>   (formerly `opencode`), and every member is `@recoder/opencode-<name>`
+>   (e.g. `@recoder/opencode-core`, `@recoder/opencode-sdk`,
+>   `@recoder/opencode-plugin`, `@recoder/opencode-server`).
+> - The runtime honors Recoder conventions: env vars accept a
+>   `RECODER_OPENCODE_*` alias (precedence over `OPENCODE_*`); the shell/tmux
+>   resolution honors `RECODER_OPENCODE_SHELL` (mirrors the Conductor's
+>   `CONDUCTOR_TMUX_BIN` resolution); a sandboxed data root can be pinned via
+>   `RECODER_OPENCODE_DATA_DIR`; and when driven by the control plane
+>   (`RECODER_RUN_ID` set with an output target) the ACP session stream additionally
+>   emits canonical Recoder **`RunEvent`** records so runtime activity correlates
+>   to a run without a side channel (`packages/opencode/src/acp/recoder-runevent.ts`).
+>
+> Upstream `opencode` is created by the OpenCode team and is **not affiliated with
+> Recoder**. This fork is a Recoder-owned derivative; it is not the upstream
+> distribution. Run it as `opencode` (bin name preserved) or via the Recoder
+> runtime driver.
+
+---
+
 <p align="center">
   <a href="https://opencode.ai">
     <picture>
@@ -7,7 +38,7 @@
     </picture>
   </a>
 </p>
-<p align="center">The open source AI coding agent.</p>
+<p align="center">The open source AI coding agent — owned and fused into Recoder.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>

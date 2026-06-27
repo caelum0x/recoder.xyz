@@ -3,7 +3,7 @@
  */
 
 import Python from 'tree-sitter-python';
-import type { ParsedImport } from 'recodergit-shared';
+import type { ParsedImport } from '@recoder/recodergit-engine-shared';
 import { describe, expect, it } from 'vitest';
 import { createPythonCfgVisitor } from '../../../src/core/ingestion/cfg/visitors/python.js';
 import { emitPythonScopeCaptures } from '../../../src/core/ingestion/languages/python/captures.js';

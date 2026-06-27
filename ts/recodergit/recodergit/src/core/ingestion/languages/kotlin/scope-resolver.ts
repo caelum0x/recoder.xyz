@@ -1,4 +1,4 @@
-import { SupportedLanguages, type ParsedFile } from 'recodergit-shared';
+import { SupportedLanguages, type ParsedFile } from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../../graph/types.js';
 import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
 import type { ScopeResolver } from '../../scope-resolution/contract/scope-resolver.js';

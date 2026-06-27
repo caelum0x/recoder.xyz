@@ -1,5 +1,5 @@
 import type { SyntaxNode } from '../../utils/ast-helpers.js';
-import type { ParameterTypeClass } from 'recodergit-shared';
+import type { ParameterTypeClass } from '@recoder/recodergit-engine-shared';
 
 export interface CppArityInfo {
   parameterCount?: number;

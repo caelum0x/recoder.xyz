@@ -10,6 +10,7 @@ import {
   TMUX_COLORS,
 } from '../theme/colors.js';
 import { execSync } from 'child_process';
+import { tmuxCommand } from './tmuxBin.js';
 
 export const WELCOME_PANE_THEME_OPTION = '@dmux_welcome_theme';
 
@@ -66,8 +67,8 @@ export async function createWelcomePane(
       const dimensions = await tmuxService.getTerminalDimensions();
 
       // Apply main-vertical layout FIRST (this locks sidebar width)
-      execSync(`tmux set-window-option main-pane-width ${SIDEBAR_WIDTH}`, { stdio: 'pipe' });
-      execSync(`tmux select-layout main-vertical`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux set-window-option main-pane-width ${SIDEBAR_WIDTH}`), { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux select-layout main-vertical`), { stdio: 'pipe' });
 
       // Refresh to apply layout changes
       await tmuxService.refreshClient();
@@ -77,7 +78,7 @@ export async function createWelcomePane(
 
     // Switch focus back to the control pane (dmux sidebar)
     try {
-      execSync(`tmux select-pane -t '${controlPaneId}'`, { stdio: 'pipe' });
+      execSync(tmuxCommand(`tmux select-pane -t '${controlPaneId}'`), { stdio: 'pipe' });
     } catch {
       // Ignore if focus switch fails
     }

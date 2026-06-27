@@ -19,8 +19,8 @@
  * read (lazily, at resolution time), `phpProvider` is fully initialized.
  */
 
-import type { ParsedFile } from 'recodergit-shared';
-import { SupportedLanguages } from 'recodergit-shared';
+import type { ParsedFile } from '@recoder/recodergit-engine-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
 import { buildMro, defaultLinearize } from '../../scope-resolution/passes/mro.js';
 import {
   findReceiverTypeBinding,
@@ -36,7 +36,7 @@ import {
 import { narrowOverloadCandidates } from '../../scope-resolution/passes/overload-narrowing.js';
 import type { SemanticModel } from '../../model/semantic-model.js';
 import type { ScopeResolutionIndexes } from '../../model/scope-resolution-indexes.js';
-import type { SymbolDefinition } from 'recodergit-shared';
+import type { SymbolDefinition } from '@recoder/recodergit-engine-shared';
 import { phpProvider } from '../php.js';
 import { phpArityCompatibility, phpMergeBindings } from './index.js';
 import { resolvePhpImportTargetInternal, loadPhpComposerConfig } from './import-target.js';

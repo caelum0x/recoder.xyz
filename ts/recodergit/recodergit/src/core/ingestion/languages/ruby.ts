@@ -7,8 +7,8 @@
  * attr_reader/attr_writer (property definitions) as call expressions.
  */
 
-import { SupportedLanguages } from 'recodergit-shared';
-import type { NodeLabel } from 'recodergit-shared';
+import { SupportedLanguages } from '@recoder/recodergit-engine-shared';
+import type { NodeLabel } from '@recoder/recodergit-engine-shared';
 import { createClassExtractor } from '../class-extractors/generic.js';
 import { rubyClassConfig } from '../class-extractors/configs/ruby.js';
 import { defineLanguage } from '../language-provider.js';

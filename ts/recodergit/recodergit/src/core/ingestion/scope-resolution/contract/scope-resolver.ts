@@ -271,7 +271,7 @@ import type {
   ScopeId,
   SupportedLanguages,
   SymbolDefinition,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 import type { KnowledgeGraph } from '../../../graph/types.js';
 import type { GraphNodeLookup } from '../graph-bridge/node-lookup.js';
 import { LanguageProvider } from '../../language-provider.js';
@@ -298,7 +298,7 @@ export type ReceiverMemberResolution =
 
 /** Re-exported for ScopeResolver consumers — same shape as
  *  `RegistryProviders.constraintCompatibility`'s third parameter. */
-export type { ConstraintContext } from 'recodergit-shared';
+export type { ConstraintContext } from '@recoder/recodergit-engine-shared';
 
 export interface ScopeResolver {
   /** Identity for telemetry + per-language flag check. */
@@ -1010,7 +1010,7 @@ export interface ScopeResolver {
    */
   readonly collectScopeContextPaths?: (options: {
     readonly primaryFilePaths: readonly string[];
-    readonly preExtractedByPath: ReadonlyMap<string, import('recodergit-shared').ParsedFile>;
+    readonly preExtractedByPath: ReadonlyMap<string, import('@recoder/recodergit-engine-shared').ParsedFile>;
     readonly entryFileContents: ReadonlyMap<string, string>;
     readonly allScannedPaths: ReadonlySet<string>;
     readonly resolutionConfig: unknown;

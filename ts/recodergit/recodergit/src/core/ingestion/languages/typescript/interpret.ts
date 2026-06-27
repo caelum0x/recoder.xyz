@@ -14,7 +14,7 @@
  * `@type-binding.type`.
  */
 
-import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from 'recodergit-shared';
+import type { CaptureMatch, ParsedImport, ParsedTypeBinding, TypeRef } from '@recoder/recodergit-engine-shared';
 
 // ─── interpretImport ──────────────────────────────────────────────────────
 

@@ -19,7 +19,7 @@
  * translation is required for graph-edge correctness.
  */
 
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 import { extractVueScript } from '../../vue-sfc-extractor.js';
 import { emitTsScopeCaptures } from '../typescript/captures.js';
 import { emitJsScopeCaptures } from '../javascript/captures.js';

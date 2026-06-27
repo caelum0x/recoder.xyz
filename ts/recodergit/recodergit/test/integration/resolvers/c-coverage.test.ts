@@ -12,7 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { emitCScopeCaptures } from '../../../src/core/ingestion/languages/c/index.js';
 import { emitCppScopeCaptures } from '../../../src/core/ingestion/languages/cpp/index.js';
-import type { CaptureMatch } from 'recodergit-shared';
+import type { CaptureMatch } from '@recoder/recodergit-engine-shared';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.resolve(

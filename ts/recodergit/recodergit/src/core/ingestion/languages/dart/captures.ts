@@ -27,7 +27,7 @@
  */
 
 import Parser from 'tree-sitter';
-import type { Capture, CaptureMatch } from 'recodergit-shared';
+import type { Capture, CaptureMatch } from '@recoder/recodergit-engine-shared';
 import {
   nodeToCapture,
   syntheticCapture,

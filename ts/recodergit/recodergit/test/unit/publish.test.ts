@@ -9,7 +9,7 @@ import {
   parseOwnerRepoFromRemote,
   stripGitSuffix,
   UNDERSTAND_QUICKLY_TOKEN_ENV,
-} from 'recodergit-shared';
+} from '@recoder/recodergit-engine-shared';
 
 describe('understand-quickly helpers (recodergit-shared)', () => {
   describe('isValidOwnerRepo', () => {

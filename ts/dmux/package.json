@@ -1,19 +1,26 @@
 {
-  "name": "dmux",
+  "name": "@recoder/dmux",
   "version": "5.9.0",
-  "description": "Tmux pane manager with AI agent integration for parallel development workflows",
+  "description": "Recoder operator console — the optional grid view over N parallel Conductor agent panes (tmux + git worktrees). Vendored and owned by Recoder.",
   "type": "module",
-  "author": "Justin Schroeder",
+  "author": "Recoder (recoder.xyz)",
+  "contributors": [
+    "Justin Schroeder (original dmux author)"
+  ],
   "license": "MIT",
-  "homepage": "https://github.com/formkit/dmux#readme",
+  "homepage": "https://recoder.xyz",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/standardagents/dmux.git"
+    "url": "git+https://github.com/recoder-xyz/recoder.git",
+    "directory": "ts/dmux"
   },
   "bugs": {
-    "url": "https://github.com/formkit/dmux/issues"
+    "url": "https://recoder.xyz/support"
   },
   "keywords": [
+    "recoder",
+    "conductor",
+    "agent-os",
     "tmux",
     "claude",
     "ai",
@@ -44,8 +51,8 @@
   "scripts": {
     "build": "pnpm run generate:hooks-docs && pnpm run build:frontend && tsc",
     "build:macos-helper": "node scripts/build-macos-helper-bundle.js",
-    "build:frontend": "pnpm --filter dmux-frontend run build",
-    "build:docs": "pnpm --filter dmux-docs run build",
+    "build:frontend": "pnpm --filter @recoder/dmux-frontend run build",
+    "build:docs": "pnpm --filter @recoder/dmux-docs run build",
     "generate:hooks-docs": "node scripts/generate-hooks-docs.js",
     "hooks:install-local": "bash scripts/install-local-hooks.sh",
     "dev:bootstrap": "pnpm run generate:hooks-docs && pnpm run hooks:install-local",
@@ -56,8 +63,8 @@
     "dev:watch:run": "node scripts/dev-watch-run.js",
     "dev:guard-runtime": "node scripts/guard-runtime-parity.js",
     "dev:doctor": "node scripts/dev-doctor.js",
-    "dev:frontend": "pnpm --filter dmux-frontend run dev",
-    "dev:docs": "pnpm --filter dmux-docs run dev",
+    "dev:frontend": "pnpm --filter @recoder/dmux-frontend run dev",
+    "dev:docs": "pnpm --filter @recoder/dmux-docs run dev",
     "prepack": "pnpm run build:macos-helper",
     "start": "node dist/index.js",
     "typecheck": "pnpm run dev:guard-runtime && pnpm run generate:hooks-docs && tsc --noEmit",
@@ -70,7 +77,8 @@
     "release:major": "bumpp major --commit --push --tag"
   },
   "bin": {
-    "dmux": "./dmux"
+    "dmux": "./dmux",
+    "recoder-dmux": "./dmux"
   },
   "dependencies": {
     "chalk": "^5.3.0",

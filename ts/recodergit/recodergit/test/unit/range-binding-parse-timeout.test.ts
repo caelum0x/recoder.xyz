@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import type { ParsedFile, ScopeResolutionIndexes } from 'recodergit-shared';
+import type { ParsedFile, ScopeResolutionIndexes } from '@recoder/recodergit-engine-shared';
 import { extractParsedFile } from '../../src/core/ingestion/scope-extractor-bridge.js';
 import { goScopeResolver } from '../../src/core/ingestion/languages/go/scope-resolver.js';
 import { cppScopeResolver } from '../../src/core/ingestion/languages/cpp/scope-resolver.js';

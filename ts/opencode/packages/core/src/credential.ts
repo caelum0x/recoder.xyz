@@ -2,8 +2,8 @@ export * as Credential from "./credential"
 
 import { asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
-import { Credential } from "@opencode-ai/schema/credential"
-import { Integration } from "@opencode-ai/schema/integration"
+import { Credential } from "@recoder/opencode-schema/credential"
+import { Integration } from "@recoder/opencode-schema/integration"
 import { Database } from "./database/database"
 import { CredentialTable } from "./credential/sql"
 

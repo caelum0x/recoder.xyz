@@ -22,6 +22,12 @@ import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
+import {
+  dmuxAvailability,
+  launchDmuxConsole,
+  dmuxAttachCommand,
+  dmuxVisibleSessions,
+} from './dmux-adapter.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -89,6 +95,39 @@ export function createConductorRouter(): Router {
       listSubstrates().map(async (id) => ({ id, ...(await getSubstrate(id).available()) })),
     );
     res.json({ success: true, data });
+  });
+
+  // --- dmux operator console (OPTIONAL view layer over the tmux substrate) ---
+  // dmux is never on the critical path; if absent, conductor works via tmux alone.
+
+  router.get('/dmux', async (_req: Request, res: Response) => {
+    const [availability, visibleSessions] = await Promise.all([
+      dmuxAvailability(),
+      dmuxVisibleSessions(),
+    ]);
+    res.json({ success: true, data: { ...availability, visibleSessions } });
+  });
+
+  router.post('/dmux/launch', async (req: Request, res: Response) => {
+    try {
+      const { repoPath, extraArgs } = req.body ?? {};
+      if (!repoPath) {
+        res.status(400).json({ success: false, error: 'repoPath is required' });
+        return;
+      }
+      const availability = await dmuxAvailability();
+      if (!availability.available) {
+        res.status(409).json({ success: false, error: availability.reason ?? 'dmux unavailable' });
+        return;
+      }
+      const result = launchDmuxConsole({ repoPath, extraArgs });
+      res.status(201).json({
+        success: true,
+        data: { ...result, attachHint: `Run in your terminal: ${dmuxAttachCommand(repoPath)}` },
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'dmux launch failed' });
+    }
   });
 
   // --- Workspaces: the persisted, restart-survivable unit of parallel work ---
