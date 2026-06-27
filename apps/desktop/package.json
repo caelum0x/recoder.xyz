@@ -70,7 +70,13 @@
       "main.js",
       "preload.js",
       "assets/**/*",
-      "cockpit/dist/**/*"
+      "cockpit/dist/**/*",
+      "node_modules/node-pty/**/*",
+      "node_modules/electron-updater/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
     ],
     "publish": {
       "provider": "github",

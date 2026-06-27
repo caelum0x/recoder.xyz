@@ -244,6 +244,6 @@ export { HandoffBus } from './handoff/handoff-bus';
 
 // ── Built-in adapters ───────────────────────────────────────────────────────
 export * as memory from './persistence/memory';
+export * as postgres from './persistence/postgres';
 export { InProcEventBus } from './transport/inproc-event-bus';
-// TODO(wave-2): export * as postgres from './persistence/postgres';
 // TODO(wave-2): export { NatsEventBus } from './transport/nats-event-bus';

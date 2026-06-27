@@ -34,6 +34,10 @@ import { registerTmuxSubstrate } from './substrate-tmux.js';
 import { registerDaytonaSubstrate } from './substrate-daytona.js';
 import { TMUX_BIN } from './tmux-path.js';
 import { acquireWorkspaceLock, releaseWorkspaceLock } from './conductor-locks.js';
+import { admitWorkspace } from './resource-governor.js';
+
+/** Marker prefixed onto an admission-rejection error so routes can map it to 429. */
+export const ADMISSION_REJECTED_PREFIX = 'admission rejected: ';
 
 // Register execution substrates: local git worktree + tmux (default) and the
 // remote Daytona sandbox. Selection is per-workspace via Workspace.substrate.
@@ -157,6 +161,25 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   };
   // State of record FIRST — survives a crash mid-provision.
   workspace = await repository().upsertWorkspace(workspace);
+
+  // Resource governor: enforce per-project/user parallelism caps + disk/session
+  // limits on the PRIMARY path (not just the multi-agent workflow runner). If
+  // admission is refused, short-circuit to `failed` with the truthful reason and
+  // do NOT launch — never silently over-admit and exhaust the box.
+  const admission = await admitWorkspace(input.projectId, input.createdBy);
+  if (!admission.admitted) {
+    const message = `${ADMISSION_REJECTED_PREFIX}${admission.reason ?? 'resource limit reached'}`;
+    workspace = await repository().upsertWorkspace(
+      transitionWorkspace(workspace, 'failed', {
+        metadata: { error: message, admission: { reason: admission.reason, current: admission.current } },
+      }),
+    );
+    logger.warn(
+      { workspaceId, projectId: input.projectId, createdBy: input.createdBy, reason: admission.reason },
+      'workspace launch refused — resource admission rejected',
+    );
+    return workspace;
+  }
 
   // Collision-prevention moat: claim an exclusive write-lock over this
   // workspace's scope BEFORE launching the agent. If another active workspace
