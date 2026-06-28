@@ -1,5 +1,5 @@
 {
-  "//": "Owned by Recoder. The BUILD tsconfig used by tsup's .d.ts emit. It exists because @recoder/connectors ships multiple entry roots: the foundation (src/index.ts) PLUS the five typecheck-clean per-channel adapters under social-gateways/*/(connector|adapter)/index.ts. The package-root tsconfig.json pins rootDir=src and excludes social-gateways/ (raw reference source that does not compile in isolation); declaration emit across the adapter entries therefore needs a config that (a) drops the single src rootDir and (b) includes only the five clean adapter subtrees alongside src. This is NOT a type-error escape hatch: each adapter already type-checks clean against the foundation via its own scoped tsconfig (social-gateways/<ch>/(connector|adapter)/tsconfig.json). The known-broken discord adapter and the not-yet-extracted line/feishu adapters are intentionally excluded.",
+  "//": "Owned by Recoder. The BUILD tsconfig used by tsup's .d.ts emit. It exists because @recoder/connectors ships multiple entry roots: the foundation (src/index.ts) PLUS the seven typecheck-clean per-channel adapters (telegram/slack/signal/imessage/whatsapp/line/feishu). The package-root tsconfig.json pins rootDir=src and excludes social-gateways/ (raw reference source that does not compile in isolation); declaration emit across the adapter entries therefore needs a config that (a) drops the single src rootDir and (b) includes only the clean adapter subtrees/files alongside src. This is NOT a type-error escape hatch: each adapter already type-checks clean against the foundation via its own scoped tsconfig (social-gateways/<ch>/(connector|adapter)/tsconfig*.json). For telegram/slack/signal/imessage/whatsapp/line the whole connector|adapter subtree is clean and globbed; feishu's clean adapter files live alongside legacy OpenClaw-coupled siblings in the same dir, so only the specific clean files are listed (mirroring feishu/tsconfig.adapter.json). The Discord adapter is excluded: its full connector-port.ts dispatch pipeline still imports the un-extracted OpenClaw bot core (the extracted ../infra leaf cluster is verified separately via social-gateways/infra/tsconfig.json but is not a build entry).",
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": ".",
@@ -15,7 +15,17 @@
     "social-gateways/slack/adapter/**/*.ts",
     "social-gateways/signal/adapter/**/*.ts",
     "social-gateways/imessage/adapter/**/*.ts",
-    "social-gateways/whatsapp/adapter/**/*.ts"
+    "social-gateways/whatsapp/adapter/**/*.ts",
+    "social-gateways/line/connector/**/*.ts",
+    "social-gateways/feishu/connector-index.ts",
+    "social-gateways/feishu/connector.ts",
+    "social-gateways/feishu/normalize.ts",
+    "social-gateways/feishu/auth-store.ts",
+    "social-gateways/feishu/rest-client.ts",
+    "social-gateways/feishu/errors.ts",
+    "social-gateways/feishu/chunk.ts",
+    "social-gateways/feishu/lark-ws-port.ts",
+    "social-gateways/feishu/domain.ts"
   ],
   "exclude": [
     "dist",

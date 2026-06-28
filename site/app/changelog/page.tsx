@@ -1,23 +1,17 @@
 import type { Metadata } from "next";
 import { Nav, Footer } from "@/components/site";
+import { getChangelog } from "./entries";
 
 export const metadata: Metadata = {
   title: "Recoder changelog",
   description: "What's new in Recoder, the control plane for coding agents.",
+  alternates: {
+    canonical: "https://recoder.xyz/changelog",
+    types: { "application/rss+xml": "https://recoder.xyz/feed.xml" },
+  },
 };
 
-const ENTRIES = [
-  {
-    version: "0.1.0",
-    date: "2026-06-24",
-    title: "The coordination layer takes shape",
-    items: [
-      "Locked the direction: Recoder coordinates your own coding agents instead of being one.",
-      "Shared brain, work-locks, and A2A bus designed over the owned control plane.",
-      "New recoder.xyz site.",
-    ],
-  },
-];
+const ENTRIES = getChangelog();
 
 export default function Changelog() {
   return (
@@ -27,7 +21,15 @@ export default function Changelog() {
         <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
           Changelog
         </h1>
-        <p className="mt-3 text-muted">Everything we ship, with a date on it.</p>
+        <p className="mt-3 text-muted">
+          Everything we ship, with a date on it.{" "}
+          <a
+            href="/feed.xml"
+            className="text-accent underline-offset-4 hover:underline"
+          >
+            RSS
+          </a>
+        </p>
         <div className="mt-12 space-y-12">
           {ENTRIES.map((e) => (
             <article

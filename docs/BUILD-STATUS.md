@@ -12,14 +12,24 @@
 **Snapshot date:** 2026-06-28
 **Branch:** `fix/agent-blockers-create-loop-codemirror-sandbox-autowake`
 **Anchor commit (the big session merge):** `34b2d4a83` — *"feat: own ts/ engines, ship desktop cockpit + chat-control, brain code-graph live; resolve 95-file merge"*
-**Latest conductor commit:** `5fd5105b1` — *"feat(r2): mount conductor capability + governor + durable locks + build-break fixes"* (mounts `/health/full`, `/resources`, `/workflows`; governor enforced on `createWorkspace`; durable Postgres work-locks in `@recoder/coordination`).
+**Conductor capability commit:** `5fd5105b1` — *"feat(r2): mount conductor capability + governor + durable locks + build-break fixes"* (mounts `/health/full`, `/resources`, `/workflows`; governor enforced on `createWorkspace`; durable Postgres work-locks in `@recoder/coordination`).
+**Latest commit (this session, HEAD):** `5b86c4e14` — *"feat(r2b): connector adapters+dispatch, bd build, py durable persistence, site completion, truthful docs"* — exports **5 typecheck-clean per-channel connector adapters** as isolated subpaths + a real **inbound→gating→embedded-agent→outbound dispatch pipeline** + a concrete **`PiEmbeddedRunner`**; adds a **reproducible `bd` build** (`scripts/build-bd.sh` + `make bd`); graduates **py work-signals** persistence to durable Postgres; completes **site** download/lead-capture/marketing surfaces.
 
-> **Provenance note (updated 2026-06-28):** the earlier-snapshot working-tree items are now **committed**.
+> **Provenance note (updated 2026-06-28, r2b):** the earlier-snapshot working-tree items are now **committed**.
 > The **coordination work-lock wiring** + **conductor capability routes** + **resource governor** landed in
 > `dded81260` and `5fd5105b1`; the **cockpit ConnectorsPanel** and connector exports landed in `34819fc1e`.
-> The **brain-in-conductor-bundle** seam is committed in the conductor `bundle.ts`. The working tree is clean
-> for `docker-backend/src/conductor/` at this snapshot. Rows below that still read 🅦 working-tree from the
-> prior snapshot are superseded by these commits and are noted inline where it matters.
+> The **connector adapters + dispatch pipeline + PiEmbeddedRunner**, **`bd` reproducible build**, and **site
+> completion** landed in `5b86c4e14` (HEAD). The **brain-in-conductor-bundle** seam is committed in the
+> conductor `bundle.ts`. Rows below that still read 🅦 working-tree from a prior snapshot are superseded by
+> these commits and are noted inline where it matters.
+>
+> **Git-capture honesty (critical):** three trees this session touches are **gitignored vendored clones** and
+> are therefore **NOT-captured-in-git** — `git check-ignore` confirms each: `py/ops-recorder` (the durable
+> work-signals persistence below), `ts/oh-my-codex` (the codex-runtime engine), and `crates/openfang` (the
+> governance sidecar). `go/beads` is likewise ignored, but its **reproducible build is committed** as
+> `scripts/build-bd.sh` + the `make bd` target, so the binary the conductor depends on can be rebuilt from
+> committed source. Any row resting on a gitignored tree is marked **🚫 NOT-in-git** so this doc never implies
+> a fresh `git clone` reproduces it.
 
 ---
 
@@ -33,6 +43,7 @@
 | 🅦 working-tree | Built + tests green, but **uncommitted** at this snapshot. |
 | 📐 designed | Design/plan only — not built this session. |
 | ⏸ shelved | Built and green, but intentionally parked (incomplete to ship, or pending a decision). |
+| 🚫 NOT-in-git | Real on disk + verified, but lives in a **gitignored vendored clone** (`git check-ignore` true) — a fresh `git clone` does **not** reproduce it. |
 
 ---
 
@@ -67,19 +78,30 @@ Evidence: cleanup section of `34b2d4a83` commit message; `ts/` now contains only
 |---|---|---|
 | `@recoder/coordination` | ✅ green | `node --test` ⇒ **tests 252, pass 252, fail 0**. (`packages/coordination`, `0.1.0`.) Lock service, glob-overlap, TTL/fence, dispatch, handoff, reconciler. |
 | `@recoder/runtime` | ✅ green | `node --test` ⇒ **tests 160, pass 160, fail 0**. (`packages/runtime`, `0.1.0`.) Drivers: claude-code, codex, in-process tool-loop. |
-| `@recoder/connectors` | ✅ foundation green | Foundation: `vitest run src/gating` ⇒ **13/13 pass** (`command-gating` 8, `mention-gating` 5). Package = `ts/extracted-from-openclaw`, name `@recoder/connectors` `0.1.0`. **8 channel kinds declared** (`telegram, slack, discord, signal, line, feishu, imessage, whatsapp` — `ts/extracted-from-openclaw/src/connector/connector-kind.ts`), with real extracted source under `social-gateways/*`. |
+| `@recoder/connectors` | ✅ foundation + adapters + dispatch green | **Freshly re-run (this snapshot):** `vitest run src/gating src/dispatch` ⇒ **21/21 pass** (`command-gating` 8, `mention-gating` 5, `dispatch-inbound` 8). `tsc -p tsconfig.build.json --noEmit` ⇒ **exit 0**. Package = `ts/extracted-from-openclaw`, name `@recoder/connectors` `0.1.0`. **8 channel kinds declared** (`telegram, slack, discord, signal, line, feishu, imessage, whatsapp` — `ts/extracted-from-openclaw/src/connector/connector-kind.ts`); **5 of them now export typecheck-clean per-channel adapters** as isolated subpaths — `package.json` exposes `./telegram ./slack ./signal ./imessage ./whatsapp` (verified by reading the `exports` map). **`discord` (139 typecheck errors) + `line`/`feishu` are intentionally excluded** until they typecheck — the "soon 6" is discord. New this session: a real **dispatch pipeline** (`src/dispatch/`: `ConnectorRegistry` + `dispatchInbound` → truthful `DispatchOutcome`) and a concrete **`PiEmbeddedRunner`** (`src/agents/pi-embedded-runner.ts`, 421 lines) that drives the genuine `@mariozechner/pi-agent-core` `Agent` + `@mariozechner/pi-ai` `streamSimple`, with an ENOSPC-safe optional-peer loader. Committed in `5b86c4e14`. |
 
 **The "green-but-shelved, then wired" story (true):** the merge commit `34b2d4a83` explicitly shipped
 coordination + runtime as *"green; shelved pending wiring."* Since then, **coordination has been wired
 into the conductor and committed** (see §5; `dded81260`/`5fd5105b1`), including a **durable Postgres lock
 store**; **runtime remains green-but-shelved and parallel/demoted** — it is **not** the driver that ran the
-proven live agent (that was the canonical tmux+worktree conductor driver — see §7a and §10).
+proven live agent (that was the canonical tmux+worktree conductor driver — see §7a and §10). **Connectors
+advanced** this session (`5b86c4e14`) from a 13-test gating *foundation* to a **21-test package** with 5
+exported typecheck-clean adapters + a real dispatch pipeline + `PiEmbeddedRunner` — but that growth is at
+the **package layer**; the **backend gateway still wires only telegram** (§2 honesty note, §4).
 
-> **Channel-adapter honesty:** all **8 kinds** are *declared* and have extracted gateway source, but only
-> **`telegram` is a real, runnable adapter today**. `docker-backend/src/connectors/config.ts` hardcodes
-> `REAL_CHANNELS = ['telegram']` and `gateway.ts` only constructs `TelegramConnector`. The other 7 are
-> foundation-present, adapter-pending. The "7–8 channel adapters" phrasing means **8 declared kinds /
-> 1 live adapter**, not 8 runnable adapters.
+> **Channel-adapter honesty (precise, two distinct layers):**
+> 1. **Package layer (`@recoder/connectors`):** **5 per-channel adapters are exported + typecheck-clean** —
+>    `./telegram ./slack ./signal ./imessage ./whatsapp` (verified in `package.json` `exports`; `tsc` 0).
+>    `discord` is **excluded (139 typecheck errors)** — it is the "soon 6th"; `line`/`feishu` are also
+>    excluded. So at the package layer: **8 kinds declared / 5 exported typecheck-clean adapters / 1 (discord)
+>    pending typecheck**.
+> 2. **Live-wiring layer (`docker-backend`):** only **`telegram` is wired as a runnable adapter in the running
+>    backend today**. `docker-backend/src/connectors/config.ts` still hardcodes `REAL_CHANNELS = ['telegram']`
+>    and `gateway.ts` only constructs `TelegramConnector`. The other exported adapters are
+>    **package-ready but not yet wired into the backend gateway**.
+>
+> Net: *"5 (soon 6) channel adapters"* is true **of the package exports**, not of the backend's live gateway —
+> the backend still lights up **1 live adapter (telegram)**. Do not conflate the two layers.
 
 ---
 
@@ -112,7 +134,8 @@ Verified by a **live boot** of `docker-backend` (§7) plus reading the wiring so
 | **durable Postgres work-locks** (`@recoder/coordination`) | `packages/coordination/src/persistence/postgres/` | ✅ green | A durable `PostgresLockStore implements LockStorePort` (`postgres-lock-store.ts`, 180 lines) plus `pg-pool.ts` and `postgres-lease-fencer.ts` (lease-fence on top of Postgres). This makes work-locks **survive a backend restart** (the survivability invariant), not just in-memory. The in-memory store remains the degrade-safe default; Postgres store is selected when a pool is configured. |
 | **@recoder/brain in the conductor bundle** | conductor `bundle.ts` | 🟢 wired 🅦 working-tree | `bundle.ts` imports `BrainContext` from `@recoder/brain` and, **only when `RECODER_BRAIN_ENABLED` is truthy** and `brain.isEnabled()`, assembles ONE fused context block via `brain.assembleForTask(...)`; flag off / unavailable / assemble-fail ⇒ existing behavior (fail-safe). `bundle.ts` is **modified-uncommitted**. Flag also consumed by `agent-os/brain-service.ts`, `service-container.ts`, `internal.routes.ts`. |
 | **code-graph live via recodergit** | brain `RepoIntelPort` → recodergit engine | ✅ live | Driven by the real recodergit engine; proven by brain doctor (below) and recodergit resolver tests (`a12f10460`, `fbec0ae50`). |
-| **@recoder/connectors → docker-backend** (Telegram chat-control) | `docker-backend/src/connectors/` + `GET /api/connectors` | ✅ live | Route mounted at `server.ts:15555` (`app.use('/api/connectors', createConnectorsRouter())`). Live probe (§7): `GET /api/connectors` ⇒ `{"success":true,"data":{"active":false,"dispatchReady":false,"channels":[]}}` (truthful "inert, no channels configured" when no token present). Telegram adapter is real (grammy), degrade-safe. |
+| **@recoder/connectors → docker-backend** (Telegram chat-control) | `docker-backend/src/connectors/` + `GET /api/connectors` | ✅ live (1 adapter) | Route mounted at `server.ts:15555` (`app.use('/api/connectors', createConnectorsRouter())`). Live probe (§7): `GET /api/connectors` ⇒ `{"success":true,"data":{"active":false,"dispatchReady":false,"channels":[]}}` (truthful "inert, no channels configured" when no token present). Telegram adapter is real (grammy), degrade-safe. **The 5 exported package adapters + the new dispatch pipeline are NOT yet wired into this backend gateway** (`REAL_CHANNELS=['telegram']` unchanged) — see the channel-adapter honesty note in §2. |
+| **dispatch pipeline + `PiEmbeddedRunner`** (package layer) | `ts/extracted-from-openclaw/src/{dispatch,agents}/` | 🟢 green (package) | Real **inbound→gating→embedded-agent→outbound** path: `ConnectorRegistry` + `dispatchInbound` return a truthful `DispatchOutcome`; `PiEmbeddedRunner` drives the genuine pi `Agent` + `streamSimple`. `vitest run src/dispatch` ⇒ **8/8 pass** (part of the 21/21). Committed `5b86c4e14`. **Not yet mounted behind a backend ingress loop** — package-ready, backend-wiring pending (honest). |
 | **brain doctor: recodergit + continuum + bd LIVE** | `packages/brain/src/runtime/doctor.ts` | ✅ green | `doctor.test.ts` ⇒ **13/13 pass**. recodergit + bd proven by harmless `--version`/`--help` probe; continuum proven by the **in-process** `@recoder/continuum/engines` signal (no shell-out). `mem0`/`context7` reported as *configured-not-proven* until keys present (honest by design). |
 
 ---
@@ -190,12 +213,12 @@ canonical tmux+worktree driver.**
 ### Quality gate
 
 - **agent-os contracts:** `node --import tsx --test tests/contracts/agent-os/*.test.ts` ⇒ **tests 10, pass 10, fail 0** (the "10/10" claim — freshly re-run).
-- **Package tests directly re-run in this snapshot:** coordination **252**, runtime **160**, brain **98**, connectors-foundation **13**, conductor-locks **9**, agent-os contracts **10** = **542 verified here**.
+- **Package tests directly re-run in this snapshot:** coordination **252**, runtime **160**, brain **98**, connectors **21** (gating 13 + dispatch 8), conductor-locks **9**, agent-os contracts **10** = **550 verified here**. (Connectors rose from 13→21 this session with the new dispatch suite; connectors `tsc -p tsconfig.build.json` ⇒ **0**.)
 
-> **Honest note on "534 package tests":** 534 is the aggregate figure reported by the prior session's
-> quality gate. This snapshot did **not** re-run the *entire* package matrix; it re-ran the six suites
-> above (542 passing). Treat 534 as the *prior-session gate total* and the 542 above as *this snapshot's
-> directly-verified subset*. opencode's `bun test` suite was not part of this re-run.
+> **Honest note on the aggregate:** the prior session reported a 534-test gate total. This snapshot did
+> **not** re-run the *entire* package matrix; it re-ran the six suites above (**550 passing**, up from 542
+> as connectors gained the +8 dispatch suite). Treat 534 as the *prior-session gate total* and the 550 above
+> as *this snapshot's directly-verified subset*. opencode's `bun test` suite was **not** part of this re-run.
 
 ---
 
@@ -211,6 +234,9 @@ canonical tmux+worktree driver.**
 | **Live-agent run** | ✅ PROVEN | Executed for real — `claude -p` headless, isolated worktree, `GREETING.md` created, exit 0, diff captured, teardown. See **§7a**. Caveat: durable terminal-state write-back on the workspace record is **in progress**. |
 | Durable terminal-state on workspace record (post-run) | 🔄 in progress | The live run completed and the diff was captured, but persisting the agent's terminal/exit state durably into the workspace record (for reconciler + UI truth) is still being finished. See §7a caveat 2. |
 | coordination / capability-routes / governor / locks committed | ✅ committed | Built + tests green; **committed** in `dded81260` / `5fd5105b1` / `34819fc1e` (no longer working-tree). |
+| py work-signals durable Postgres persistence | 🚫 NOT-in-git | Real `PostgresWorkSignalStore` (asyncpg, `recoder_backend`) + `WorkSignalRepository` Protocol + in-memory fallback + `migrations/001_work_signals.sql` + FastAPI `lifespan` init/shutdown wiring (`py/ops-recorder/work-signals/`). `python3 -m py_compile` ⇒ **OK** on storage + main. **But `py/ops-recorder` is gitignored (`git check-ignore` true) — NOT-captured-in-git.** Live `pytest` blocked on absent Postgres env (reported as environment, not faked). |
+| 5 exported adapters + dispatch wired into the backend gateway | ⏸ open (package-ready) | Package exports 5 typecheck-clean adapters + a dispatch pipeline, but `docker-backend`'s gateway still only constructs `TelegramConnector` (`REAL_CHANNELS=['telegram']`). Backend wiring of the other adapters + a live ingress→`dispatchInbound` loop is the next step. |
+| discord adapter (the "6th") | ⏸ open (typecheck) | `discord` has **139 typecheck errors** and is intentionally excluded from the `exports` map until it typechecks clean. `line`/`feishu` likewise excluded. |
 
 ---
 
@@ -220,14 +246,20 @@ canonical tmux+worktree driver.**
 worktree, `GREETING.md` created, **exit 0**, diff captured, teardown (§7a) — on the **canonical
 tmux+worktree driver** (caveat: required clearing a stale `ANTHROPIC_API_KEY` from a lingering tmux
 server; durable terminal-state write-back is in progress). Owned `ts/` engines + new
-`@recoder/{coordination,runtime,connectors}` are **built and green** (252 / 160 / 13 re-verified); the
+`@recoder/{coordination,runtime,connectors}` are **built and green** (252 / 160 / **21** re-verified); the
 desktop cockpit ships **inside `Recoder.app`** over a **live conductor**; coordination work-locks (now also
 **durable in Postgres**), the conductor **capability routes** (`/health/full`, `/resources`, `/workflows`,
 mounted), the **resource governor** (enforced on `createWorkspace`), the brain bundle seam, and Telegram
 chat-control are **wired, running, and committed** (`dded81260` / `5fd5105b1` / `34819fc1e`); the 95-file
-merge is resolved with **docker-backend `tsc` at 0**. What is **not** yet proven: durable post-run
-terminal-state persistence, `@recoder/runtime` as a live driver (parallel/demoted until wired — §10), the
-non-Telegram channel adapters, the mem0/context7 keys, and the substrate/interop subsystems.
+merge is resolved with **docker-backend `tsc` at 0**. This session (`5b86c4e14`): connectors grew to
+**5 exported typecheck-clean adapters + a real dispatch pipeline + `PiEmbeddedRunner`** (package layer), the
+**`bd` build is reproducible** from a committed script (`make bd`), **py work-signals** graduated to durable
+Postgres (real on disk but **gitignored / NOT-in-git**), and **site download + lead-capture** landed
+(legal/privacy still working-tree). What is **not** yet proven/landed: backend-wiring of the 5 adapters +
+dispatch loop (package-ready only), the **discord 6th** adapter (139 typecheck errs), durable post-run
+terminal-state persistence, `@recoder/runtime` as a live driver (parallel/demoted — §10), the mem0/context7
+keys, the substrate/interop subsystems, and the **gitignored vendored trees** (`py/ops-recorder`,
+`ts/oh-my-codex`, `crates/openfang`) which are **NOT-captured-in-git**.
 
 ---
 
@@ -250,3 +282,52 @@ path, the **tmux+worktree conductor driver is canonical** and `@recoder/runtime`
 conductor's `runtime-commands.ts` so there is **one** driver seam, then re-prove the live run through it.
 Only then does `@recoder/runtime` graduate from parallel/demoted to canonical. Doing this prematurely
 risks the proven tmux path, so it is **additive-only** and gated.
+
+---
+
+## 11. This session (r2b, `5b86c4e14`) — additions with evidence
+
+| Item | Status | Evidence (commands re-run / files read this snapshot) |
+|---|---|---|
+| **5 typecheck-clean connector adapters exported** | ✅ committed | `package.json` `exports` exposes `./telegram ./slack ./signal ./imessage ./whatsapp` (read directly). `tsc -p tsconfig.build.json --noEmit` ⇒ **exit 0**. discord excluded (139 errs) = "soon 6th"; line/feishu excluded. |
+| **Real dispatch pipeline** (`src/dispatch/`) | ✅ committed | `ConnectorRegistry` + `dispatchInbound` → truthful `DispatchOutcome`. `vitest run src/dispatch` ⇒ **8/8**. Package-layer only — not yet behind a backend ingress loop. |
+| **`PiEmbeddedRunner`** (the agent half of dispatch) | ✅ committed | `src/agents/pi-embedded-runner.ts` (421 lines) drives the genuine `@mariozechner/pi-agent-core` `Agent` + `@mariozechner/pi-ai` `streamSimple` (verified by reading the imports/`new core.Agent(...)`/`streamFn: pi.streamSimple`). ENOSPC-safe optional-peer loader (`optional-pi.ts`). |
+| **Reproducible `bd` build** | ✅ committed | `scripts/build-bd.sh` + Makefile `bd:` target (read directly). **Re-run this snapshot:** `bash scripts/build-bd.sh` ⇒ `✓ bd built`, then `bd version 1.0.5 (5b86c4e14)` — version-stamped from committed source (mirrors `go/beads/.goreleaser.yml` ldflags). `go/beads` itself is gitignored, but the build is reproducible from the **committed** script. |
+| **py work-signals → durable Postgres** | 🚫 NOT-in-git | `PostgresWorkSignalStore` (asyncpg, `recoder_backend`), `WorkSignalRepository` Protocol, in-memory fallback, `migrations/001_work_signals.sql`, FastAPI `lifespan` wiring (read directly). `python3 -m py_compile` ⇒ **OK**. **`py/ops-recorder` is gitignored — NOT-captured-in-git** (a fresh clone does not have it). Live `pytest` blocked on absent Postgres env (environment evidence, not faked). |
+| **Site: download / lead-capture / marketing** | ✅ committed | `site/app/download/page.tsx` (uses `<DownloadNotify/>`, dead `#`/`mailto` CTAs replaced), `site/app/api/leads/{route,store}.ts`, `site/components/{download-notify,lead-form}.tsx`, plus `icon.tsx`/`opengraph-image.tsx`/`twitter-image.tsx`/`social-image.tsx`, enterprise + pricing — **all committed in `5b86c4e14`** (`git show --name-only`). |
+| **Site: legal / privacy / changelog feed** | 🅦 working-tree | `site/app/legal/`, `site/app/privacy/`, `site/app/feed.xml/`, `site/app/changelog/entries.ts` exist on disk but are **uncommitted** (`git status` shows `??`). The legal/privacy surfaces are **drafted, not yet committed** — do not claim them as landed. |
+
+> **"download/lead/legal completed" — honest split:** **download + lead-capture are committed** (`5b86c4e14`);
+> **legal/privacy are working-tree (uncommitted)**. The CTA dead-link removal and lead pipeline are real and
+> landed; the legal pages are drafted but not yet in git.
+
+---
+
+## 12. Per-tree completeness (honest, evidence-bounded)
+
+> The prior cross-tree figure was **avg ≈ 47%**. The table below updates only the figures this snapshot can
+> **substantiate from committed evidence** (or marks them otherwise). "Completeness" = how much of the tree's
+> *intended* scope is built **and** captured in a way another agent/human can reproduce from `git`. Anything
+> **config/secret-gated** or living in a **gitignored vendored clone** is flagged — those are explicitly
+> **not** counted toward git-reproducible completeness.
+
+| Tree | Est. completeness | Basis (committed evidence) | Caveat |
+|---|---|---|---|
+| `packages/coordination` | **~95%** | 252/252 tests; wired into conductor (9/9); durable Postgres lock store. | Postgres path needs a live pool to exercise end-to-end. |
+| `packages/runtime` | **~80%** | 160/160 unit tests. | Parallel/demoted — not wired into the live conductor driver (§10). |
+| `packages/brain` | **~85%** | 98/98 (snapshot-run) / doctor 13/13; 5 sources behind ports; bundle seam committed. | mem0/context7 **config-gated** (keys absent) — *configured-not-proven*. |
+| `ts/extracted-from-openclaw` (`@recoder/connectors`) | **~60%** | 21/21 tests; `tsc` 0; 5 adapters exported; dispatch + `PiEmbeddedRunner`. | Backend gateway wires **1** adapter (telegram); discord(139 errs)/line/feishu excluded; dispatch not behind a backend loop. |
+| `docker-backend/src/conductor` | **~80%** | live boot, `/health` 200, capability routes mounted, governor enforced, live-agent run PROVEN (§7a). | Durable post-run terminal-state write-back **in progress** (§8). |
+| `apps/desktop/cockpit` | **~70%** | builds; bundled in shipped `Recoder.app` `app.asar`; board/terminals/sessions/auth/connectors panels. | Some panels are read-surfaces over the API; depth unverified per-panel. |
+| `packages/recoder-code/packages/{core,cli}` | **~75%** | `tsc` 0 in both; recodergit + brain MCP tools by default. | cli→core workspace-wiring prereq open (PRODUCT-PLAN §6); pi-tui Stage C/D pending. |
+| `site/` | **~70%** | download + lead-capture + marketing images committed; `tsc` 0 reported in commit. | legal/privacy/feed are **working-tree (uncommitted)**. |
+| **`py/ops-recorder`** (work-signals) | **🚫 NOT-captured-in-git** | durable Postgres persistence real on disk; `py_compile` OK. | **gitignored** — excluded from git-reproducible completeness. Live pytest env-blocked. |
+| **`ts/oh-my-codex`** (`@recoder/codex-runtime`) | **🚫 NOT-captured-in-git** | owned/rebranded per §1. | **gitignored** — engine source not in this repo's git; treat as vendored clone. |
+| **`crates/openfang`** (governance sidecar) | **🚫 NOT-captured-in-git** | designed (governance subsystem 📐). | **gitignored** — Rust sidecar not captured in git. |
+| **`go/beads`** (bd) | **🚫 source NOT-in-git / build IS** | `bd` binary builds + runs (version-stamped). | tree gitignored, but **`scripts/build-bd.sh` + `make bd` are committed** → reproducible from committed source. |
+
+> **Why some cells are not a percentage:** for the four trees above marked 🚫, a fresh `git clone` of this
+> repo does **not** contain the source, so a git-reproducible completeness percentage would be misleading.
+> They are real and verified *on this disk*, and (for `bd`) reproducible from a committed build script — but
+> they are **not** counted in the per-tree git-completeness figures, and any consumer must obtain the vendored
+> clone separately.
