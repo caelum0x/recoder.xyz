@@ -26,11 +26,28 @@ from ..billing.checkout.service import (
     PaymentProcessor,
 )
 from ..billing.order.service import OrderRepository, OrderService, RefundProcessor
+from ..billing.payout.account import PayoutAccount
+from ..billing.payout.service import (
+    FeeCalculator,
+    PayoutHooks,
+    PayoutLocker,
+    PayoutProcessorPort,
+    PayoutRepository,
+    PayoutService,
+)
 from ..billing.subscription.service import (
     LifecycleHooks,
     SubscriptionRepository,
     SubscriptionService,
 )
+from ..metering.event.service import (
+    EventRepository,
+    EventService,
+    EventSink,
+    OrganizationValidator,
+    UsageEvent,
+)
+from ..metering.meter.service import MeterRepository, MeterService
 from ..billing.webhook.service import (
     HostGuard,
     HttpDelivery,
@@ -63,6 +80,22 @@ class BillingPorts:
     http_delivery: HttpDelivery | None = None
     host_guard: HostGuard | None = None
     product_lookup: Callable[[uuid.UUID], Awaitable[Product | None]] | None = None
+
+    # Payout (Stripe Connect payout state machine behind the processor port).
+    payout_repository: PayoutRepository | None = None
+    payout_processor: PayoutProcessorPort | None = None
+    payout_fee_calculator: FeeCalculator | None = None
+    payout_locker: PayoutLocker | None = None
+    payout_hooks: PayoutHooks | None = None
+    payout_account_lookup: (
+        Callable[[uuid.UUID], Awaitable[PayoutAccount | None]] | None
+    ) = None
+
+    # Metering (usage-event ingestion + meter quantity).
+    event_repository: EventRepository | None = None
+    event_sink: EventSink | None = None
+    organization_validator: OrganizationValidator | None = None
+    meter_repository: MeterRepository | None = None
 
 
 def _address(value: dict[str, Any] | None) -> Address | None:
@@ -110,6 +143,19 @@ def _subscription_result(subscription: Any) -> dict[str, Any]:
     }
 
 
+def _payout_result(payout: Any) -> dict[str, Any]:
+    return {
+        "id": str(payout.id),
+        "status": payout.status.value,
+        "currency": payout.currency,
+        "amount": payout.amount,
+        "fees_amount": payout.fees_amount,
+        "account_currency": payout.account_currency,
+        "account_amount": payout.account_amount,
+        "transfer_id": payout.transfer_id,
+    }
+
+
 def build_billing_operations(
     ports: BillingPorts,
     *,
@@ -117,6 +163,9 @@ def build_billing_operations(
     order: OrderService | None = None,
     subscription: SubscriptionService | None = None,
     webhook: WebhookService | None = None,
+    payout: PayoutService | None = None,
+    event: EventService | None = None,
+    meter: MeterService | None = None,
 ) -> dict[str, Operation]:
     """Build the operation map for :func:`..ipc.internal_api.build_internal_router`.
 
@@ -126,6 +175,9 @@ def build_billing_operations(
     order_service = order or OrderService()
     subscription_service = subscription or SubscriptionService()
     webhook_service = webhook or WebhookService()
+    payout_service = payout or PayoutService()
+    event_service = event or EventService()
+    meter_service = meter or MeterService()
 
     operations: dict[str, Operation] = {}
 
@@ -258,6 +310,124 @@ def build_billing_operations(
             }
 
         operations["webhook.deliver"] = webhook_deliver
+
+    if (
+        ports.payout_repository is not None
+        and ports.payout_processor is not None
+        and ports.payout_fee_calculator is not None
+        and ports.payout_locker is not None
+        and ports.payout_hooks is not None
+        and ports.payout_account_lookup is not None
+    ):
+        payout_repository = ports.payout_repository
+        payout_processor = ports.payout_processor
+        payout_fee_calculator = ports.payout_fee_calculator
+        payout_locker = ports.payout_locker
+        payout_hooks = ports.payout_hooks
+        payout_account_lookup = ports.payout_account_lookup
+
+        async def payout_create(payload: dict[str, Any]) -> dict[str, Any]:
+            account = await payout_account_lookup(uuid.UUID(payload["account_id"]))
+            if account is None:
+                return {"error": "payout_account_not_found", "account_id": payload["account_id"]}
+            result = await payout_service.create(
+                payout_repository,
+                payout_fee_calculator,
+                payout_locker,
+                payout_hooks,
+                account,
+            )
+            return _payout_result(result)
+
+        async def payout_transfer(payload: dict[str, Any]) -> dict[str, Any]:
+            account = await payout_account_lookup(uuid.UUID(payload["account_id"]))
+            if account is None:
+                return {"error": "payout_account_not_found", "account_id": payload["account_id"]}
+            result = await payout_service.transfer(
+                payout_repository,
+                payout_processor,
+                uuid.UUID(payload["payout_id"]),
+                account,
+            )
+            return _payout_result(result)
+
+        async def payout_cancel(payload: dict[str, Any]) -> dict[str, Any]:
+            result = await payout_service.cancel(
+                payout_repository,
+                payout_processor,
+                uuid.UUID(payload["payout_id"]),
+            )
+            return _payout_result(result)
+
+        operations["payout.create"] = payout_create
+        operations["payout.transfer"] = payout_transfer
+        operations["payout.cancel"] = payout_cancel
+
+    if (
+        ports.event_repository is not None
+        and ports.organization_validator is not None
+    ):
+        event_repository = ports.event_repository
+        organization_validator = ports.organization_validator
+        event_sink = ports.event_sink
+
+        async def event_ingest(payload: dict[str, Any]) -> dict[str, Any]:
+            usage_events = [
+                UsageEvent(
+                    organization_id=uuid.UUID(e["organization_id"]),
+                    name=e["name"],
+                    customer_id=(
+                        uuid.UUID(e["customer_id"])
+                        if e.get("customer_id") is not None
+                        else None
+                    ),
+                    external_customer_id=e.get("external_customer_id"),
+                    metadata=e.get("metadata", {}),
+                )
+                for e in payload["events"]
+            ]
+            allowed = payload.get("allowed_customer_ids")
+            allowed_ids = (
+                frozenset(uuid.UUID(c) for c in allowed)
+                if allowed is not None
+                else None
+            )
+            result = await event_service.ingest(
+                event_repository,
+                organization_validator,
+                usage_events,
+                sink=event_sink,
+                allowed_customer_ids=allowed_ids,
+            )
+            return {"inserted": result.inserted, "duplicates": result.duplicates}
+
+        operations["event.ingest"] = event_ingest
+
+    if ports.meter_repository is not None:
+        meter_repository = ports.meter_repository
+
+        async def meter_get(payload: dict[str, Any]) -> dict[str, Any]:
+            meter_model = await meter_repository.get(uuid.UUID(payload["meter_id"]))
+            if meter_model is None:
+                return {"error": "meter_not_found", "meter_id": payload["meter_id"]}
+            usage_events = [
+                UsageEvent(
+                    organization_id=meter_model.organization_id,
+                    name=e["name"],
+                    customer_id=(
+                        uuid.UUID(e["customer_id"])
+                        if e.get("customer_id") is not None
+                        else None
+                    ),
+                    external_customer_id=e.get("external_customer_id"),
+                    metadata=e.get("metadata", {}),
+                )
+                for e in payload.get("events", [])
+            ]
+            quantity = meter_service.get_quantity(meter_model, usage_events)
+            return {"meter_id": str(meter_model.id), "quantity": quantity}
+
+        operations["meter.quantity"] = meter_get
 
     return operations
 
