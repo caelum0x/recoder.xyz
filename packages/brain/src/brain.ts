@@ -10,6 +10,7 @@
  */
 
 import { type CreateContextPackInput } from "@recoder/recodergit";
+import type { TaskSpec } from "@recoder/agent-os";
 import type {
   BrainActivity,
   BrainActivityProfile,
@@ -63,13 +64,19 @@ export class Brain {
    * One read. Repo intelligence + recall + docs + task graph + desktop
    * activity, fused into a single BrainContext that the whole agent team shares.
    */
-  async assemble(query: BrainQuery): Promise<BrainContext> {
+  async assemble(
+    query: BrainQuery,
+    repoInput?: CreateContextPackInput,
+  ): Promise<BrainContext> {
     const limit = query.limit ?? DEFAULT_LIMIT;
 
-    // git-nexus assembles around a TaskSpec; build a minimal one from the query
-    // (createContextPack only reads task.targetPaths). Callers can supply a full
-    // TaskSpec mapping via deps.repoMap.
+    // git-nexus assembles around a TaskSpec. Precedence:
+    //   1. an explicit pre-built input (assembleForTask passes the full spec),
+    //   2. a caller-supplied repoMap mapping, else
+    //   3. a minimal task synthesized from the query (createContextPack only reads
+    //      task.targetPaths, so the minimal shape is sufficient for the engine).
     const input: CreateContextPackInput =
+      repoInput ??
       this.deps.repoMap?.(query) ?? {
         task: { targetPaths: query.focusFiles ?? [] } as CreateContextPackInput["task"],
         repoRoot: query.repoRoot,
@@ -101,6 +108,38 @@ export class Brain {
       activity,
       assembledAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Assemble around a REAL {@link TaskSpec} — the on-path entry an orchestrator
+   * uses when it already has a compiled task. Unlike {@link assemble} (which
+   * synthesizes a minimal task from a free-text query), this feeds the engine the
+   * full spec: its `targetPaths` drive the repo-intel symbol resolution + impact,
+   * and its `title`/`goal` drive recall/docs/tasks/activity. The resulting
+   * BrainContext therefore carries real repo provenance (`repo.sourceRefs`) keyed
+   * to the task's own paths.
+   *
+   * Degrade-safe by construction: it reuses {@link assemble}, so a missing engine
+   * only costs richness. The `query` text defaults to the spec's goal (falling back
+   * to title), and `limit` is honored when provided.
+   */
+  async assembleForTask(
+    task: TaskSpec,
+    repoRoot: string,
+    options: { query?: string; limit?: number } = {},
+  ): Promise<BrainContext> {
+    const queryText = options.query ?? task.goal ?? task.title;
+    const query: BrainQuery = {
+      task: queryText,
+      repoRoot,
+      focusFiles: task.targetPaths,
+      limit: options.limit,
+    };
+    // Feed the engine the FULL spec (taskId + targetPaths) so the context pack's
+    // taskId, impact report, and provenance are keyed to the real task — not a
+    // synthesized one.
+    const repoInput: CreateContextPackInput = { task, repoRoot };
+    return this.assemble(query, repoInput);
   }
 
   /**

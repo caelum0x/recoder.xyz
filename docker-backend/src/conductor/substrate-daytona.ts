@@ -108,16 +108,60 @@ const daytonaSubstrate: ConductorSubstrate = {
   },
 
   async alive(handle: SubstrateHandle): Promise<boolean> {
+    // Liveness is decided by a sentinel the launched command writes ON EXIT
+    // (`.recoder/agent.exit`). Three cases, kept truthfully distinct:
+    //
+    //   1. marker present  → the agent finished → NOT alive.
+    //   2. marker absent    → the agent is still running → alive.
+    //   3. sandbox unreachable / transient exec failure → we do NOT know the
+    //      agent finished, so we must NOT report it as finished. Returning
+    //      `false` here is exactly the bug that finalizes a still-running remote
+    //      workspace on a blip; we return `true` (assume alive) instead. A truly
+    //      gone sandbox is detected by teardown/exitCode, not by a transient
+    //      probe.
     try {
-      // The exit-marker file exists once the agent command has finished.
       const res = await getDaytonaClient().execCommand(
         handle.ref,
-        `test -f ${EXIT_PATH} && echo done || echo running`,
+        // Emit an unambiguous token for each case so we never confuse an empty
+        // output (transient) with "running".
+        `if test -f ${EXIT_PATH}; then echo __FINISHED__; else echo __RUNNING__; fi`,
         { cwd: handle.worktreePath, timeoutSecs: 30 },
       );
-      return !(res.output ?? '').includes('done');
-    } catch {
-      return false;
+      const out = res.output ?? '';
+      if (out.includes('__FINISHED__')) return false;
+      if (out.includes('__RUNNING__')) return true;
+      // Neither token came back (truncated/garbled output) — treat as transient,
+      // not as finished.
+      logger.warn({ sandboxId: handle.ref, out }, 'daytona alive probe returned no marker token; assuming alive (transient)');
+      return true;
+    } catch (err) {
+      // Unreachable / transient: assume still alive rather than falsely finalize.
+      logger.warn({ sandboxId: handle.ref, err }, 'daytona alive probe failed (transient); assuming alive');
+      return true;
+    }
+  },
+
+  async exitCode(handle: SubstrateHandle): Promise<number | null | undefined> {
+    // Read the sentinel written by the launched command (`echo $? > .recoder/agent.exit`).
+    //   - file present + parseable int → that exit code (0 = success, >0 = failure).
+    //   - file absent (agent still running) → undefined (not finished yet).
+    //   - sandbox gone / transient failure → undefined (unknown), NOT a fabricated 0.
+    try {
+      const res = await getDaytonaClient().execCommand(
+        handle.ref,
+        `if test -f ${EXIT_PATH}; then printf '__EXIT__'; cat ${EXIT_PATH}; else printf '__NONE__'; fi`,
+        { cwd: handle.worktreePath, timeoutSecs: 30 },
+      );
+      const out = (res.output ?? '').trim();
+      if (out.includes('__NONE__')) return undefined; // still running / no marker
+      const marker = out.indexOf('__EXIT__');
+      if (marker === -1) return undefined; // garbled/transient — unknown
+      const raw = out.slice(marker + '__EXIT__'.length).trim();
+      const code = Number.parseInt(raw, 10);
+      return Number.isFinite(code) ? code : undefined;
+    } catch (err) {
+      logger.warn({ sandboxId: handle.ref, err }, 'daytona exit-code probe failed (transient/unreachable)');
+      return undefined;
     }
   },
 

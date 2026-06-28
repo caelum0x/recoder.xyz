@@ -112,6 +112,18 @@ export {
   type ContinuumEngineShape,
   type RunDoctorOptions,
 } from "./runtime/doctor";
+// Code-graph doctor — proves the knowledge graph is LIVE for a repo with REAL
+// node/edge counts (not just that the CLI is callable).
+export {
+  runCodeGraphDoctor,
+  parseCount,
+  buildCountArgs,
+  COUNT_NODES_CYPHER,
+  COUNT_EDGES_CYPHER,
+  type CodeGraphReport,
+  type CodeGraphExec,
+  type CodeGraphDoctorOptions,
+} from "./runtime/code-graph-doctor";
 
 // Domain types (data shapes)
 export type {

@@ -417,6 +417,195 @@ export async function userOwnsProjectSnapshotWithLegacyFallback(
   return false;
 }
 
+/**
+ * Hydrate real chat message counts for a set of project snapshots.
+ *
+ * A project snapshot is linked to chat activity through `chat_sessions`, which
+ * carry both a `projectId` and a unique `urlId`. The same snapshot may be keyed
+ * by its `projectId` OR its `urlId` (the projects API exposes both), so we match
+ * a session when EITHER identifier lines up.
+ *
+ * The authoritative message total is the live row count in `chat_messages`
+ * (the cached `chat_sessions.totalMessages` counter can drift), so we group a
+ * real `chat_messages.groupBy` by `sessionId` and fold it back onto each
+ * project identifier. The whole thing is two indexed queries regardless of how
+ * many projects are passed in (no per-project N+1).
+ *
+ * Returns a map from BOTH the projectId and the urlId of every matched project
+ * to its message count, so callers can look up by whichever key they hold.
+ * Projects with no chat sessions are simply absent from the map (treat as 0).
+ */
+export async function getProjectMessageCounts(
+  projects: Array<{ projectId: string; urlId: string | null }>,
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (projects.length === 0) {
+    return counts;
+  }
+
+  const projectIds = Array.from(
+    new Set(
+      projects
+        .map((p) => p.projectId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+  const urlIds = Array.from(
+    new Set(
+      projects
+        .map((p) => p.urlId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
+    ),
+  );
+
+  if (projectIds.length === 0 && urlIds.length === 0) {
+    return counts;
+  }
+
+  try {
+    // 1) Find every chat session that belongs to one of these projects, keyed by
+    //    either projectId or urlId. One indexed query.
+    const sessions: Array<{ id: string; projectId: string | null; urlId: string | null }> =
+      await prisma.chat_sessions.findMany({
+        where: {
+          OR: [
+            ...(projectIds.length > 0 ? [{ projectId: { in: projectIds } }] : []),
+            ...(urlIds.length > 0 ? [{ urlId: { in: urlIds } }] : []),
+          ],
+        },
+        select: { id: true, projectId: true, urlId: true },
+      });
+
+    if (sessions.length === 0) {
+      return counts;
+    }
+
+    // 2) Count live chat_messages rows grouped by sessionId. One indexed query.
+    const sessionIds = sessions.map((s) => s.id);
+    const grouped: Array<{ sessionId: string; _count: { _all: number } }> =
+      await prisma.chat_messages.groupBy({
+        by: ['sessionId'],
+        where: { sessionId: { in: sessionIds } },
+        _count: { _all: true },
+      });
+
+    const perSession = new Map<string, number>();
+    for (const row of grouped) {
+      perSession.set(row.sessionId, Number(row._count?._all ?? 0));
+    }
+
+    // 3) Fold per-session totals back onto each project identifier (both the
+    //    projectId and the urlId map to the same aggregate).
+    for (const session of sessions) {
+      const messageCount = perSession.get(session.id) ?? 0;
+      if (messageCount <= 0) continue;
+
+      for (const key of [session.projectId, session.urlId]) {
+        if (typeof key === 'string' && key.length > 0) {
+          counts.set(key, (counts.get(key) ?? 0) + messageCount);
+        }
+      }
+    }
+  } catch {
+    // Message-count hydration is a best-effort enrichment of the projects
+    // response. If the chat tables are unavailable we return an empty map and
+    // callers fall back to 0 rather than failing the whole projects request.
+    return new Map();
+  }
+
+  return counts;
+}
+
+/**
+ * Resolve the chat message count for a single project, by either its projectId
+ * or its urlId. Thin wrapper over {@link getProjectMessageCounts} for the
+ * project-detail route. Returns 0 when there is no linked chat activity.
+ */
+export async function getProjectMessageCount(
+  projectId: string,
+  urlId: string | null,
+): Promise<number> {
+  const counts = await getProjectMessageCounts([{ projectId, urlId }]);
+  return counts.get(projectId) ?? (urlId ? counts.get(urlId) ?? 0 : 0);
+}
+
+export type ProjectChatMessage = {
+  id: string;
+  role: string;
+  content: string;
+  createdAt: string;
+  metadata: Record<string, unknown>;
+};
+
+/**
+ * Hydrate the real chat transcript for a single project, ordered oldest-first.
+ *
+ * Resolves the chat session(s) linked to the project (by projectId or urlId)
+ * and returns their `chat_messages` rows. `limit` caps the number of returned
+ * messages (most recent `limit`, then re-ordered ascending) to keep detail
+ * payloads bounded; `messageCount` from {@link getProjectMessageCount} remains
+ * the authoritative total even when the transcript is truncated.
+ */
+export async function getProjectMessages(
+  projectId: string,
+  urlId: string | null,
+  limit = 200,
+): Promise<ProjectChatMessage[]> {
+  const projectIds = [projectId].filter((id) => typeof id === 'string' && id.length > 0);
+  const urlIds = [urlId].filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  if (projectIds.length === 0 && urlIds.length === 0) {
+    return [];
+  }
+
+  try {
+    const sessions: Array<{ id: string }> = await prisma.chat_sessions.findMany({
+      where: {
+        OR: [
+          ...(projectIds.length > 0 ? [{ projectId: { in: projectIds } }] : []),
+          ...(urlIds.length > 0 ? [{ urlId: { in: urlIds } }] : []),
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (sessions.length === 0) {
+      return [];
+    }
+
+    const sessionIds = sessions.map((s) => s.id);
+    const rows: Array<{
+      id: string;
+      role: string;
+      content: string;
+      createdAt: Date;
+      metadata: unknown;
+    }> = await prisma.chat_messages.findMany({
+      where: { sessionId: { in: sessionIds } },
+      select: { id: true, role: true, content: true, createdAt: true, metadata: true },
+      orderBy: { createdAt: 'desc' },
+      take: Math.max(1, limit),
+    });
+
+    return rows
+      .map((row) => ({
+        id: row.id,
+        role: row.role,
+        content: row.content,
+        createdAt: new Date(row.createdAt).toISOString(),
+        metadata:
+          row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+            ? (row.metadata as Record<string, unknown>)
+            : {},
+      }))
+      .reverse();
+  } catch {
+    // Transcript hydration is best-effort; fall back to an empty list rather
+    // than failing the project-detail request when chat tables are unavailable.
+    return [];
+  }
+}
+
 export async function patchProjectSnapshotFiles(
   userId: string,
   projectId: string,

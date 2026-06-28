@@ -144,14 +144,53 @@ The app registers the `recoder://` protocol for magic link authentication:
 
 The protocol is automatically registered when the app is installed.
 
-## Code Signing Status
+## Code Signing & Notarization (macOS)
 
-The CI/CD builds use **ad-hoc code signing** which means:
-- ✅ App is properly signed and not "damaged"
-- ⚠️ Not notarized with Apple (requires paid developer account)
-- 📝 Users must right-click → Open on first launch (macOS only)
+macOS distribution is handled by two electron-builder hooks wired in
+`package.json`:
 
-For production notarization, add Apple Developer credentials to GitHub Secrets.
+- **Code signing** uses the hardened runtime
+  (`build.mac.hardenedRuntime: true`) with the entitlements in
+  [`entitlements.mac.plist`](./entitlements.mac.plist). Those entitlements
+  enable V8 JIT (required for Electron), let `node-pty` fork child processes
+  (`com.apple.security.inherit`), and allow outbound network traffic.
+- **Notarization** runs in the `afterSign` hook
+  ([`notarize.js`](./notarize.js)), which submits the signed `.app` to Apple's
+  notary service with `notarytool` (via `@electron/notarize`) and staples the
+  ticket so Gatekeeper accepts the app offline.
+
+### Notarization is degrade-safe
+
+`notarize.js` is **gated on Apple credentials** and never breaks a build that
+lacks them:
+
+- **No credentials** → notarization is skipped with a clear log line
+  (`⏭️  Skipping notarization …`) and the build still succeeds (unsigned /
+  un-notarized — fine for local dev).
+- **Credentials present but notarization fails** → the build fails loudly, so CI
+  cannot publish an un-notarized artifact that looks successful.
+
+Two credential strategies are supported (set one fully):
+
+| Strategy | Required environment variables |
+| --- | --- |
+| Apple ID + app-specific password | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` |
+| App Store Connect API key | `APPLE_API_KEY` (path to `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` |
+
+A **partial** set (e.g. `APPLE_ID` without `APPLE_TEAM_ID`) is treated as "not
+configured" and skipped rather than attempted-and-failed. See
+[`.env.example`](./.env.example) and [INSTALLATION.md](./INSTALLATION.md#release-environment-macos-signing--notarization)
+for the full env reference.
+
+### Ad-hoc fallback
+
+If you build without Apple credentials, the artifact is ad-hoc signed:
+- ✅ App is signed and not reported as "damaged"
+- ⚠️ Not notarized (requires a paid Apple Developer account)
+- 📝 Users must right-click → Open on first launch (see INSTALLATION.md)
+
+For production notarization in CI, provide the GitHub secrets listed under
+[Release Ops](#release-ops).
 
 ## Release Ops
 

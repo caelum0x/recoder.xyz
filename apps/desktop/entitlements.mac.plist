@@ -2,6 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	  Hardened-runtime entitlements for the Recoder desktop app.
+
+	  Electron's bundled V8 needs JIT and writable+executable memory; the
+	  signing entitlement set must therefore relax the default hardened-runtime
+	  memory protections or the renderer will crash on launch under a notarized,
+	  hardened build. These four are the standard Electron baseline.
+	-->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
@@ -10,6 +18,23 @@
 	<true/>
 	<key>com.apple.security.cs.allow-dyld-environment-variables</key>
 	<true/>
+
+	<!--
+	  node-pty forks `spawn-helper` and the user's shell as child processes.
+	  Without the inherit entitlement, hardened-runtime child processes do not
+	  inherit the parent's entitlements and the terminal fails to fork.
+	-->
+	<key>com.apple.security.inherit</key>
+	<true/>
+
+	<!--
+	  The app talks to recoder.xyz / the docker backend and acts as a local
+	  client. Declaring the network-client entitlement keeps outbound HTTP(S)
+	  and WebSocket traffic working under the app sandbox / hardened runtime.
+	-->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
 </dict>
 </plist>
-

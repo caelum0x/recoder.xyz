@@ -1,4 +1,8 @@
-import type { CodexWireMessage, RecoderA2AEnvelope, RecoderAgentCard, RecoderAgentIdentity, RecoderAgentPlatform } from './types';
+import type { CodexWireMessage, RecoderAgentCard, RecoderAgentIdentity, RecoderAgentPlatform } from './types';
+import type { A2ATask } from './task-convergence';
+export type { A2ATask } from './task-convergence';
+export { a2aTaskToEnvelope, envelopeToA2ATask, agentIdentityToRef, agentRefToIdentity, } from './task-convergence';
+export type { A2ATaskToEnvelopeOptions } from './task-convergence';
 export type A2AProtocolKind = 'a2a' | 'mcp' | 'jsonrpc' | 'rest' | 'file_git';
 export type ConnectorTier = 'tier1' | 'tier2';
 export type ConnectorStatus = 'supported' | 'experimental' | 'backlog';
@@ -130,19 +134,6 @@ export declare class InMemoryCollaborationService implements CollaborationServic
     listChannels(): CollaborationChannel[];
     listThreads(channelId: string): CollaborationThread[];
     listMessages(threadId: string): CollaborationMessage[];
-}
-export interface A2ATask {
-    id: string;
-    threadId: string;
-    createdAt: string;
-    updatedAt: string;
-    requester: RecoderAgentIdentity;
-    assignee: RecoderAgentIdentity;
-    state: TaskState;
-    prompt: string;
-    envelope?: RecoderA2AEnvelope;
-    resultText?: string;
-    error?: string;
 }
 export declare class InMemoryTaskStore implements TaskStore {
     private readonly tasks;
