@@ -10,6 +10,17 @@
  */
 import type { Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
+
+// The reviewable-diff parsing (`git diff --stat`/`-p` + porcelain untracked →
+// SubstrateDiff) is now OWNED by @recoder/substrate (substrate.md §4.8 / §12
+// step 4). Both substrate impls produce their SubstrateDiff through it; re-export
+// the pure builders here so backend callers reach the single source of truth.
+export {
+  buildSubstrateDiff,
+  parseUntracked,
+  countChangedFiles,
+} from '@recoder/substrate';
+export type { RawGitDiffOutput } from '@recoder/substrate';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
 import { getSubstrate } from './substrate.js';
 import { stopRunTail } from './run-tailer.js';
