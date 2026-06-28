@@ -238,7 +238,18 @@ export function createConductorRouter(): Router {
         res.status(409).json({
           success: false,
           error: err.message,
-          data: { state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned },
+          data: {
+            state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned,
+            // Surface the @recoder/governance verdict so the cockpit can show the risk tier
+            // + Merkle audit hash (truthful: nulls when governance is degraded/unavailable).
+            governance: {
+              tier: err.governanceTier ?? null,
+              effect: err.governanceEffect ?? null,
+              auditHash: err.governanceAuditHash ?? null,
+              hardDeny: err.governanceHardDeny,
+              degraded: err.governanceDegraded ?? false,
+            },
+          },
         });
         return;
       }
@@ -259,7 +270,18 @@ export function createConductorRouter(): Router {
         res.status(409).json({
           success: false,
           error: err.message,
-          data: { state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned },
+          data: {
+            state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned,
+            // Surface the @recoder/governance verdict so the cockpit can show the risk tier
+            // + Merkle audit hash (truthful: nulls when governance is degraded/unavailable).
+            governance: {
+              tier: err.governanceTier ?? null,
+              effect: err.governanceEffect ?? null,
+              auditHash: err.governanceAuditHash ?? null,
+              hardDeny: err.governanceHardDeny,
+              degraded: err.governanceDegraded ?? false,
+            },
+          },
         });
         return;
       }
