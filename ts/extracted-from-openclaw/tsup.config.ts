@@ -11,13 +11,18 @@ import { defineConfig } from "tsup";
 //
 // Entries 2..n — the TYPECHECK-CLEAN per-channel adapters, each shipped as its
 // own subpath (`@recoder/connectors/telegram`, `/slack`, `/signal`, `/imessage`,
-// `/whatsapp`). They are separate entry points (not folded into the foundation)
-// so a consumer only pulls an adapter — and its optional channel SDK — when they
-// import that subpath. The known-broken discord adapter (139 type errors) and
-// the not-yet-extracted line/feishu adapters are intentionally NOT entries.
+// `/whatsapp`, `/line`, `/feishu`). They are separate entry points (not folded
+// into the foundation) so a consumer only pulls an adapter — and its optional
+// channel SDK — when they import that subpath.
 //
-// The raw-extracted gateway-core/, the rest of social-gateways/, and agents/ are
-// reference source and are NOT entry points.
+// The Discord adapter is still NOT an entry: its foundation-facing normalize
+// surface + the extracted infra leaf cluster (../infra/{retry,retry-policy,
+// errors,channel-activity,sleep}) now typecheck clean, but the full
+// connector-port.ts dispatch pipeline still imports the un-extracted OpenClaw bot
+// core (auto-reply/*, gateway/*, channels/*, pairing/*, security/*, web/media,
+// polls, markdown/*), so `./discord` stays out of exports until that surface is
+// extracted. The raw-extracted gateway-core/, the rest of social-gateways/, and
+// agents/ are reference source and are NOT entry points.
 export default defineConfig({
   entry: {
     index: "src/index.ts",
@@ -26,6 +31,8 @@ export default defineConfig({
     signal: "social-gateways/signal/adapter/index.ts",
     imessage: "social-gateways/imessage/adapter/index.ts",
     whatsapp: "social-gateways/whatsapp/adapter/index.ts",
+    line: "social-gateways/line/connector/index.ts",
+    feishu: "social-gateways/feishu/connector-index.ts",
   },
   format: ["esm", "cjs"],
   // The package ships multiple entry roots (foundation + 5 adapters); declaration

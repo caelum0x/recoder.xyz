@@ -88,6 +88,8 @@ export function Footer() {
           links={[
             { href: "/enterprise", label: "Enterprise" },
             { href: "/pricing", label: "Pricing" },
+            { href: "/privacy", label: "Privacy" },
+            { href: "/terms", label: "Terms" },
           ]}
         />
         <FooterCol

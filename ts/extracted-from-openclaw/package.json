@@ -94,9 +94,29 @@
         "default": "./dist/whatsapp.cjs"
       }
     },
+    "./line": {
+      "import": {
+        "types": "./dist/line.d.ts",
+        "default": "./dist/line.js"
+      },
+      "require": {
+        "types": "./dist/line.d.cts",
+        "default": "./dist/line.cjs"
+      }
+    },
+    "./feishu": {
+      "import": {
+        "types": "./dist/feishu.d.ts",
+        "default": "./dist/feishu.js"
+      },
+      "require": {
+        "types": "./dist/feishu.d.cts",
+        "default": "./dist/feishu.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
-  "//exports": "Subpaths ./telegram ./slack ./signal ./imessage ./whatsapp are the typecheck-clean per-channel ConnectorPort adapters; each is its own entry so importing one pulls only that channel's optional SDK. The known-broken discord adapter (139 type errors) and the not-yet-extracted line/feishu adapters are intentionally NOT exported.",
+  "//exports": "Subpaths ./telegram ./slack ./signal ./imessage ./whatsapp ./line ./feishu are the typecheck-clean per-channel ConnectorPort adapters; each is its own entry so importing one pulls only that channel's optional SDK. The Discord adapter is NOT exported: its foundation-facing normalize surface + the extracted infra leaf cluster (social-gateways/infra/{retry,retry-policy,errors,channel-activity,sleep}) typecheck clean, but the full connector-port.ts dispatch pipeline still imports the un-extracted OpenClaw bot core (auto-reply/*, gateway/*, channels/*, pairing/*, security/*, web/media, polls, markdown/*), so ./discord stays out of exports until that surface is extracted.",
   "files": ["dist"],
   "scripts": {
     "build": "tsup",

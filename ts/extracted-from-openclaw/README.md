@@ -50,13 +50,22 @@ importing one pulls only that channel's optional SDK:
 - `@recoder/connectors/signal` — signal-cli JSON-RPC.
 - `@recoder/connectors/imessage` — local iMessage RPC bridge.
 - `@recoder/connectors/whatsapp` — WhatsApp wire transport.
+- `@recoder/connectors/line` — LINE Messaging API (`@line/bot-sdk` optional, lazy).
+- `@recoder/connectors/feishu` — Feishu / Lark (`@larksuiteoapi/node-sdk` optional, lazy).
 
-The **discord** adapter is intentionally NOT exported: it currently has 139
-type errors and does not compile. The **line** and **feishu** adapters are not
-yet extracted behind `ConnectorPort`. None of the three is an entry point.
+The **discord** adapter is intentionally NOT exported. Its foundation-facing
+normalize surface typechecks clean (`social-gateways/discord/tsconfig.adapter.json`)
+and the `../infra/*` leaf cluster it depends on is now really extracted —
+`social-gateways/infra/{retry,retry-policy,errors,channel-activity,sleep}.ts`
+(verified via `social-gateways/infra/tsconfig.json`, 0 errors). But the full
+`connector-port.ts` dispatch pipeline still imports the un-extracted OpenClaw bot
+core (`auto-reply/*`, `gateway/*`, `channels/*`, `pairing/*`, `security/*`,
+`web/media`, `polls`, `markdown/*`, `config/{commands,sessions,markdown-tables}`,
+`routing/*`) — a deep, hundreds-of-files surface. Until that is extracted,
+`./discord` stays out of exports so the package build stays green.
 
 Verify: `npx tsc --noEmit` (clean) -> `vitest run` (13 gating + 8 dispatch tests
-pass) -> `tsup` (ESM + CJS + d.ts for the foundation + 5 adapter subpaths).
+pass) -> `tsup` (ESM + CJS + d.ts for the foundation + 7 adapter subpaths).
 
 ## Raw reference source (NOT compiled by this package)
 

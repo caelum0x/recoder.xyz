@@ -31,6 +31,20 @@ export interface SessionConfig {
   [key: string]: unknown;
 }
 
+/**
+ * Logging config surface the extracted infra/logging code consumes. Only the
+ * sensitive-text redaction knobs are typed; the rest of the logging surface is
+ * carried by the index signature.
+ */
+export interface LoggingConfig {
+  /** Sensitive-text redaction mode. "off" disables redaction; anything else
+   * (default) redacts tokens/keys/secrets before they reach logs/errors. */
+  redactSensitive?: string;
+  /** Optional custom redaction patterns (raw `/re/flags` or bare regex source). */
+  redactPatterns?: string[];
+  [key: string]: unknown;
+}
+
 /** The loaded gateway config surface the extracted Discord code consumes. */
 export interface OpenClawConfig {
   channels?: {
@@ -38,6 +52,8 @@ export interface OpenClawConfig {
     [channel: string]: unknown;
   };
   session?: SessionConfig;
+  /** Logging config (redaction knobs consumed by the extracted infra/logging). */
+  logging?: LoggingConfig;
   /** Configured agents, keyed by agent id (or a list of route configs). */
   agents?: Record<string, AgentRouteConfig> | AgentRouteConfig[];
   /** Agent id used when no binding matches an inbound route. */
