@@ -1,6 +1,37 @@
 # ── Stage 0: zrok2 client ──
 FROM docker.io/openziti/zrok2:latest AS zrok2
 
+# ── Stage 0b: Conductor substrate binaries (pinned tmux + bd) ──
+# The Conductor must drive its OWN pinned tmux (docker-backend/src/conductor/
+# tmux-path.ts) and its OWN reproducible bd (packages/brain engine-resolver),
+# not whatever apt happens to ship. We build both from the vendored sources here
+# in an isolated stage so the heavy toolchains (autotools, go, cgo) never bloat
+# the runtime image — only the two finished binaries are copied forward.
+#
+# Degrade-safe by design: scripts/build-substrate-binaries.sh warns + continues
+# if a toolchain or dev header is missing, so a partial build never breaks the
+# image. The runtime then degrades truthfully (falls back to system tmux/bd).
+FROM golang:1.26-bookworm AS substrate
+WORKDIR /src
+# Toolchains: autotools + libevent/ncurses dev headers for tmux, gcc for bd's cgo.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential autoconf automake pkg-config bison \
+      libevent-dev libncurses-dev ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
+# Only the inputs the substrate build needs (keeps the layer cache tight).
+COPY c/ ./c/
+COPY go/ ./go/
+COPY scripts/build-substrate-binaries.sh scripts/build-tmux.sh \
+     scripts/build-tmux-manual.sh scripts/build-bd.sh ./scripts/
+# Build both. Never fail the image build: a substrate build problem must degrade
+# truthfully at runtime, not block the deploy. The COPY guards in the runtime
+# stage tolerate an absent binary.
+RUN bash scripts/build-substrate-binaries.sh || true \
+    && mkdir -p /out \
+    && { [ -x c/tmux/tmux ]      && cp c/tmux/tmux      /out/tmux || echo "substrate: tmux not built"; } \
+    && { [ -x go/beads/bin/bd ]  && cp go/beads/bin/bd  /out/bd   || echo "substrate: bd not built";   } \
+    && touch /out/.keep
+
 # ── Stage 1: Build ──
 FROM node:20-slim AS builder
 
@@ -59,11 +90,24 @@ WORKDIR /app
 
 # Docker CLI for container management, curl for healthchecks, and git + tmux for
 # the Conductor: git worktrees isolate each parallel agent run and tmux hosts the
-# persistent per-agent terminal (survives backend restarts). Versions are pinned
-# by the node:20-slim (Debian stable) base tag.
+# persistent per-agent terminal (survives backend restarts). The apt `tmux` here
+# is only the DEGRADE-SAFE FALLBACK; the Conductor prefers the pinned vendored
+# tmux copied below (see tmux-path.ts). libevent + libncurses are the shared
+# libraries the vendored tmux links against at runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    docker.io curl git tmux \
+    docker.io curl git tmux libevent-2.1-7 libncursesw6 \
     && rm -rf /var/lib/apt/lists/*
+
+# Pinned Conductor substrate binaries from the substrate stage. The stage always
+# emits /out (with .keep), and emits tmux/bd only when the build succeeded, so
+# this COPY is robust whether or not a toolchain was available. The pinned
+# binaries are exposed to the Conductor by docker-substrate-entrypoint.sh at
+# container start, which exports RECODER_TMUX_BUILD_PATH / BD_BIN ONLY when the
+# file is really present — so a missing binary degrades to apt tmux / PATH bd
+# instead of pointing the runtime at a dead path.
+COPY --from=substrate /out/ /opt/recoder/substrate/
+COPY docker-backend/docker-substrate-entrypoint.sh /usr/local/bin/docker-substrate-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-substrate-entrypoint.sh
 
 RUN corepack enable pnpm && corepack prepare pnpm@10.30.3 --activate
 
@@ -106,4 +150,8 @@ ENV NODE_OPTIONS="--max-old-space-size=3072"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD curl -sf http://localhost:3100/health -o /dev/null || exit 1
 
+# Entrypoint pins the Conductor's tmux/bd to the vendored binaries when present,
+# then execs the real start command. Degrade-safe: absent binaries are simply
+# not exported, so the runtime falls back to system tmux/bd and reports it.
+ENTRYPOINT ["docker-substrate-entrypoint.sh"]
 CMD ["pnpm", "start"]
