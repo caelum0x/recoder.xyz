@@ -431,6 +431,9 @@ importers:
       '@recoder/agent-workflows':
         specifier: workspace:*
         version: link:../../packages/agent-workflows
+      '@recoder/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
     devDependencies:
       '@types/node':
         specifier: ^20.10.0
@@ -835,9 +838,15 @@ importers:
       '@recoder/agent-mcp':
         specifier: workspace:*
         version: link:../packages/agent-mcp
+      '@recoder/agent-memory':
+        specifier: workspace:*
+        version: link:../packages/agent-memory
       '@recoder/agent-os':
         specifier: workspace:*
         version: link:../packages/agent-os
+      '@recoder/agent-policy':
+        specifier: workspace:*
+        version: link:../packages/agent-policy
       '@recoder/brain':
         specifier: workspace:*
         version: link:../packages/brain
@@ -850,6 +859,9 @@ importers:
       '@recoder/coordination':
         specifier: workspace:*
         version: link:../packages/coordination
+      '@recoder/interop':
+        specifier: workspace:*
+        version: link:../packages/interop
       '@recoder/mem0':
         specifier: workspace:*
         version: link:../packages/mem0
@@ -862,6 +874,9 @@ importers:
       '@recoder/recodergit':
         specifier: workspace:*
         version: link:../packages/recodergit
+      '@recoder/runtime':
+        specifier: workspace:*
+        version: link:../packages/runtime
       '@recoder/sandbox-daytona':
         specifier: workspace:*
         version: link:../packages/sandbox-daytona
@@ -30929,7 +30944,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 1.2.0
-      vitest: 2.1.9(@types/node@20.19.27)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@6.0.6))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
+      vitest: 2.1.9(@types/node@25.9.4)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@5.0.10))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@5.0.10))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
 
   '@vitest/utils@2.1.9':
     dependencies:

@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { AgentOsController } from '../controllers/agent-os.controller';
 import { agentOsContainer } from '../service-container';
 import { createCodeGraphUserRouter } from './code-graph-user.routes';
+import { createPolicyEvaluateRouter } from './policy-evaluate.routes';
+import { createMemoryCandidateRouter } from './memory-candidate.routes';
 
 export function createAgentOsRouter(): Router {
   const router = Router();
@@ -16,6 +18,19 @@ export function createAgentOsRouter(): Router {
   // when the flag is off. Mounted additively under the same authenticateRequest
   // middleware the rest of this surface uses (see server.ts mount).
   router.use('/code-graph', createCodeGraphUserRouter());
+
+  // Surface @recoder/agent-policy live engine directly on the control plane
+  // (POST /api/agent-os/policy/evaluate -> real PolicyDecision). Additive; the
+  // existing /policies CRUD routes below are unchanged.
+  router.use('/policy', createPolicyEvaluateRouter(agentOsContainer.repository));
+
+  // Surface @recoder/agent-memory reviewed-candidate lifecycle directly on the
+  // control plane (GET/POST /api/agent-os/memory/lifecycle/candidates + review).
+  // Durable memory is only ever materialized through an accepted review, never
+  // written directly. Mounted under a distinct /memory/lifecycle prefix so it is
+  // strictly additive and never shadows the existing /memory/candidates routes
+  // registered below.
+  router.use('/memory/lifecycle', createMemoryCandidateRouter(agentOsContainer.repository));
 
   router.get('/health', controller.health);
   router.get('/summary', controller.summary);
