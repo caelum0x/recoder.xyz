@@ -7,6 +7,13 @@
       "@recoder/shared/a2a/schemas": ["./node_modules/@recoder/shared/src/a2a/schemas/index.ts"],
       "@recoder/shared/opencode-client": ["./node_modules/@recoder/shared/src/opencode-client.ts"],
       "@recoder/agent-instructions/agent-os-compiler": ["./node_modules/@recoder/agent-instructions/dist/agent-os-compiler.d.ts"],
+      "@recoder/connectors/telegram": ["./node_modules/@recoder/connectors/dist/telegram.d.ts"],
+      "@recoder/connectors/slack": ["./node_modules/@recoder/connectors/dist/slack.d.ts"],
+      "@recoder/connectors/signal": ["./node_modules/@recoder/connectors/dist/signal.d.ts"],
+      "@recoder/connectors/imessage": ["./node_modules/@recoder/connectors/dist/imessage.d.ts"],
+      "@recoder/connectors/whatsapp": ["./node_modules/@recoder/connectors/dist/whatsapp.d.ts"],
+      "@recoder/connectors/line": ["./node_modules/@recoder/connectors/dist/line.d.ts"],
+      "@recoder/connectors/feishu": ["./node_modules/@recoder/connectors/dist/feishu.d.ts"],
       "@recoder/stream/public-task-stream": ["../packages/stream/dist/public-task-stream"],
       "@recoder/vault": ["../packages/vault/dist/index"],
       "@recoder/vault/node-crypto": ["../packages/vault/dist/node-crypto"]
