@@ -1,18 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Footer } from "@/components/site";
+import { DownloadNotify } from "@/components/download-notify";
 
 export const metadata: Metadata = {
   title: "Download Recoder",
   description:
-    "Download Recoder for macOS, Windows, or Linux. Runs your own Claude Code, Codex, and opencode, coordinated.",
+    "Recoder for macOS, Windows, and Linux. Runs your own Claude Code, Codex, and opencode, coordinated. Get notified the moment builds land.",
 };
-
-const PLATFORMS = [
-  { os: "macOS", note: "Apple silicon & Intel", href: "#" },
-  { os: "Windows", note: "x64", href: "#" },
-  { os: "Linux", note: "AppImage & deb", href: "#" },
-];
 
 export default function Download() {
   return (
@@ -26,31 +21,19 @@ export default function Download() {
           Local-first. It drives the Claude Code and Codex you already have
           installed. Nothing leaves your machine unless you turn on team mode.
         </p>
-        <div className="mt-10 grid gap-4 sm:grid-cols-3">
-          {PLATFORMS.map((p) => (
-            <Link
-              key={p.os}
-              href={p.href}
-              className="rounded-xl border border-border bg-bg-soft p-6 transition-colors hover:border-border-strong"
-            >
-              <div className="text-lg font-medium">{p.os}</div>
-              <div className="mt-1 text-xs text-faint">{p.note}</div>
-              <div className="mt-4 text-sm text-accent">Download →</div>
-            </Link>
-          ))}
-        </div>
-        <p className="mt-8 text-xs text-faint">
-          Prefer the terminal?{" "}
-          <code className="rounded bg-bg-soft px-1.5 py-0.5 font-mono text-muted">
-            brew install recoder
-          </code>
+        <p className="text-balance mx-auto mt-4 max-w-lg text-sm text-faint">
+          Desktop builds aren&apos;t public yet. Pick your platform and we&apos;ll
+          email you the moment it ships.
         </p>
-        <p className="mt-2 text-xs text-faint">
-          Builds are coming online — follow the{" "}
+
+        <DownloadNotify />
+
+        <p className="mt-8 text-xs text-faint">
+          Follow the{" "}
           <Link href="/changelog" className="text-muted underline hover:text-fg">
             changelog
-          </Link>
-          .
+          </Link>{" "}
+          for the latest on builds.
         </p>
       </main>
       <Footer />

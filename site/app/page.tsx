@@ -131,7 +131,7 @@ function BrainPane() {
         <li>repo indexed · read once</li>
         <li>2 work-locks held</li>
         <li>3 handoffs on the bus</li>
-        <li className="text-emerald-400/80">~41% tokens saved</li>
+        <li className="text-emerald-400/80">context reused, not re-paid</li>
       </ul>
     </div>
   );

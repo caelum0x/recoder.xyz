@@ -1,0 +1,28 @@
+{
+  "//": "Owned by Recoder. The BUILD tsconfig used by tsup's .d.ts emit. It exists because @recoder/connectors ships multiple entry roots: the foundation (src/index.ts) PLUS the five typecheck-clean per-channel adapters under social-gateways/*/(connector|adapter)/index.ts. The package-root tsconfig.json pins rootDir=src and excludes social-gateways/ (raw reference source that does not compile in isolation); declaration emit across the adapter entries therefore needs a config that (a) drops the single src rootDir and (b) includes only the five clean adapter subtrees alongside src. This is NOT a type-error escape hatch: each adapter already type-checks clean against the foundation via its own scoped tsconfig (social-gateways/<ch>/(connector|adapter)/tsconfig.json). The known-broken discord adapter and the not-yet-extracted line/feishu adapters are intentionally excluded.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "declaration": true,
+    "declarationMap": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts",
+    "social-gateways/telegram/connector/**/*.ts",
+    "social-gateways/slack/adapter/**/*.ts",
+    "social-gateways/signal/adapter/**/*.ts",
+    "social-gateways/imessage/adapter/**/*.ts",
+    "social-gateways/whatsapp/adapter/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "**/*.test.ts",
+    "gateway-core",
+    "agents",
+    "skills-reference"
+  ]
+}

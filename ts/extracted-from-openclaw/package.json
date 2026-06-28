@@ -44,8 +44,59 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./telegram": {
+      "import": {
+        "types": "./dist/telegram.d.ts",
+        "default": "./dist/telegram.js"
+      },
+      "require": {
+        "types": "./dist/telegram.d.cts",
+        "default": "./dist/telegram.cjs"
+      }
+    },
+    "./slack": {
+      "import": {
+        "types": "./dist/slack.d.ts",
+        "default": "./dist/slack.js"
+      },
+      "require": {
+        "types": "./dist/slack.d.cts",
+        "default": "./dist/slack.cjs"
+      }
+    },
+    "./signal": {
+      "import": {
+        "types": "./dist/signal.d.ts",
+        "default": "./dist/signal.js"
+      },
+      "require": {
+        "types": "./dist/signal.d.cts",
+        "default": "./dist/signal.cjs"
+      }
+    },
+    "./imessage": {
+      "import": {
+        "types": "./dist/imessage.d.ts",
+        "default": "./dist/imessage.js"
+      },
+      "require": {
+        "types": "./dist/imessage.d.cts",
+        "default": "./dist/imessage.cjs"
+      }
+    },
+    "./whatsapp": {
+      "import": {
+        "types": "./dist/whatsapp.d.ts",
+        "default": "./dist/whatsapp.js"
+      },
+      "require": {
+        "types": "./dist/whatsapp.d.cts",
+        "default": "./dist/whatsapp.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
+  "//exports": "Subpaths ./telegram ./slack ./signal ./imessage ./whatsapp are the typecheck-clean per-channel ConnectorPort adapters; each is its own entry so importing one pulls only that channel's optional SDK. The known-broken discord adapter (139 type errors) and the not-yet-extracted line/feishu adapters are intentionally NOT exported.",
   "files": ["dist"],
   "scripts": {
     "build": "tsup",

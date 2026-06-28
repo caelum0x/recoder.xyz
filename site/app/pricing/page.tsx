@@ -31,7 +31,7 @@ const TIERS = [
       "Cross-machine coordination",
       "Approvals + audit trail",
     ],
-    cta: { label: "Contact sales", href: "mailto:founders@recoder.xyz?subject=Recoder%20Team" },
+    cta: { label: "Contact sales", href: "/enterprise#contact" },
     featured: true,
   },
   {
@@ -44,7 +44,7 @@ const TIERS = [
       "Permission rubrics + SSO",
       "Session replay + compliance",
     ],
-    cta: { label: "Contact sales", href: "mailto:founders@recoder.xyz?subject=Recoder%20Enterprise" },
+    cta: { label: "Contact sales", href: "/enterprise#contact" },
   },
 ];
 
