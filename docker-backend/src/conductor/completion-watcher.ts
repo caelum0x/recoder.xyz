@@ -1,0 +1,131 @@
+/**
+ * Auto-completion watcher — polls running workspaces, detects agent completion
+ * (via exit code), and auto-generates delivery summaries + memory candidates.
+ *
+ * Per docs/agent-os/02-task-lifecycle.md: the lifecycle is
+ * running → verifying → waiting_for_review. This watcher bridges the gap: when
+ * the run-tailer detects the agent finished, this module transitions the
+ * workspace from `running` to `awaiting_review` and attaches the delivery
+ * summary + memory candidate to its metadata.
+ *
+ * It is the autonomous "landing the plane" mechanism — no operator needed
+ * to notice a workspace finished.
+ */
+import { createLogger } from '../logger.js';
+import { agentOsContainer } from '../agent-os/service-container';
+import { getWorkspace, advanceWorkspace, listWorkspaces } from './workspace-service.js';
+import { getSubstrate } from './substrate.js';
+import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
+import { metrics } from './conductor-metrics.js';
+import { transitionWorkspace, type Workspace } from '@recoder/agent-os';
+
+const logger = createLogger('conductor:watcher');
+
+const POLL_INTERVAL_MS = Number(process.env.CONDUCTOR_WATCHER_INTERVAL_MS) || 10_000;
+
+let timer: ReturnType<typeof setInterval> | undefined;
+
+/**
+ * Start the auto-completion watcher. Polls running workspaces at a fixed interval,
+ * detects agent completion via substrate exitCode, and auto-transitions the
+ * workspace to awaiting_review with delivery summary + memory candidate.
+ */
+export function startCompletionWatcher(): void {
+  if (timer) return;
+  timer = setInterval(() => void pollRunningWorkspaces().catch(noop), POLL_INTERVAL_MS);
+  timer.unref();
+  logger.info({ intervalMs: POLL_INTERVAL_MS }, 'auto-completion watcher started');
+}
+
+export function stopCompletionWatcher(): void {
+  if (!timer) return;
+  clearInterval(timer);
+  timer = undefined;
+  logger.info('auto-completion watcher stopped');
+}
+
+async function noop(): Promise<void> {}
+
+async function pollRunningWorkspaces(): Promise<void> {
+  const workspaces = await listWorkspaces();
+  const running = workspaces.filter((w) => w.state === 'running');
+  if (running.length === 0) return;
+
+  logger.debug({ running: running.length }, 'watcher polling running workspaces');
+
+  await Promise.allSettled(running.map((ws) => checkWorkspaceCompletion(ws)));
+}
+
+async function checkWorkspaceCompletion(workspace: Workspace): Promise<void> {
+  if (!workspace.sessionName) return;
+
+  const substrate = getSubstrate(workspace.substrate);
+  const handle = {
+    ref: workspace.workspaceId,
+    sessionName: workspace.sessionName,
+    worktreePath: workspace.worktreePath,
+  };
+
+  let alive: boolean;
+  try {
+    alive = await substrate.alive(handle);
+  } catch {
+    return;
+  }
+  if (alive) return;
+
+  // Agent is no longer alive — it finished or crashed.
+  let exitCode: number | null | undefined = null;
+  if (substrate.exitCode) {
+    try {
+      exitCode = await substrate.exitCode(handle);
+    } catch {
+      exitCode = null;
+    }
+  }
+
+  metrics.counter('conductor_agent_completions', {
+    result: exitCode === 0 ? 'success' : 'failure',
+  });
+
+  logger.info(
+    { workspaceId: workspace.workspaceId, exitCode, state: workspace.state },
+    'agent completed — auto-transitioning to awaiting_review',
+  );
+
+  try {
+    // Generate the delivery summary + memory candidate.
+    const [summary, candidate] = await Promise.all([
+      generateDeliverySummary(workspace.workspaceId).catch((err) => {
+        logger.warn({ workspaceId: workspace.workspaceId, err }, 'delivery summary generation failed');
+        return null;
+      }),
+      generateMemoryCandidate(workspace.workspaceId).catch((err) => {
+        logger.warn({ workspaceId: workspace.workspaceId, err }, 'memory candidate generation failed');
+        return null;
+      }),
+    ]);
+
+    // Transition to awaiting_review with the delivery artifacts in metadata.
+    const metadata: Record<string, unknown> = {
+      completedAt: new Date().toISOString(),
+      exitCode,
+      delivery: summary
+        ? {
+            changedFiles: summary.changedFiles,
+            success: summary.success,
+            diffStat: summary.diffStat,
+          }
+        : undefined,
+      memoryCandidate: candidate ? { candidateId: candidate.candidateId, proposedAt: candidate.proposedAt } : undefined,
+    };
+
+    await advanceWorkspace(workspace.workspaceId, 'awaiting_review', undefined, metadata);
+    logger.info(
+      { workspaceId: workspace.workspaceId, changedFiles: summary?.changedFiles ?? 0 },
+      'workspace auto-transitioned to awaiting_review with delivery artifacts',
+    );
+  } catch (err) {
+    logger.error({ workspaceId: workspace.workspaceId, err }, 'auto-completion transition failed');
+  }
+}

@@ -40,6 +40,8 @@ import { isTerminalWorkspaceState, type Workspace } from '@recoder/agent-os';
 import { attachWorkspaceStream } from './live-events.js';
 import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
 import { metrics } from './conductor-metrics.js';
+import { bulkCancel, bulkArchive, listByState } from './batch-ops.js';
+import { cleanupStaleWorktrees } from './worktree-cleanup.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -451,6 +453,31 @@ export function createConductorRouter(): Router {
     } catch (err) {
       res.status(404).json({ success: false, error: err instanceof Error ? err.message : 'memory candidate failed' });
     }
+  });
+
+  // Batch: cancel all non-terminal workspaces (filter by projectId/createdBy).
+  router.post('/batch/cancel', async (req: Request, res: Response) => {
+    try {
+      const { projectId, createdBy } = req.body ?? {};
+      res.json({ success: true, data: await bulkCancel({ projectId, createdBy }) });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'batch cancel failed' });
+    }
+  });
+
+  // Batch: archive all terminal workspaces (frees disk).
+  router.post('/batch/archive', async (req: Request, res: Response) => {
+    try {
+      const { projectId, states } = req.body ?? {};
+      res.json({ success: true, data: await bulkArchive({ projectId, states }) });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'batch archive failed' });
+    }
+  });
+
+  // Worktree disk cleanup: prune stale worktrees + kill orphaned sessions.
+  router.post('/cleanup', async (_req: Request, res: Response) => {
+    res.json({ success: true, data: await cleanupStaleWorktrees() });
   });
 
   // WebSocket upgrade for live workspace events (operator console live terminal).
