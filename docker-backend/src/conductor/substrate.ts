@@ -27,6 +27,14 @@ export interface SubstrateLaunchInput {
   /** Daytona-specific context (sandbox provisioning) when substrate === 'daytona'. */
   projectId?: string;
   sandboxId?: string;
+  /**
+   * Rendered agent prompt (in_process substrate). The in-process driver runs an
+   * agent loop against this prompt rather than executing `command` as a shell.
+   * Optional and ignored by tmux_worktree / daytona, which use `command`.
+   */
+  prompt?: string;
+  /** Runtime surface to drive (in_process substrate). Defaults to `recoder_code`. */
+  runtimeId?: string;
 }
 
 export interface SubstrateHandle {

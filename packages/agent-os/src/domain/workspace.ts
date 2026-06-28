@@ -27,8 +27,17 @@ export type WorkspaceState =
 
 export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = ['archived'] as const;
 
-/** Substrate the workspace's execution runs on. */
-export type WorkspaceSubstrate = 'tmux_worktree' | 'daytona';
+/**
+ * Substrate the workspace's execution runs on.
+ *
+ * - `tmux_worktree` — local git worktree + persistent tmux session (default).
+ * - `daytona`       — remote Daytona sandbox.
+ * - `in_process`    — local git worktree, agent driven in-process by
+ *                     `@recoder/runtime`'s in-process driver (no tmux, no child
+ *                     CLI). Opt-in only; never the default. Selected solely when a
+ *                     Workspace is explicitly created with `substrate: 'in_process'`.
+ */
+export type WorkspaceSubstrate = 'tmux_worktree' | 'daytona' | 'in_process';
 
 export type Workspace = {
   workspaceId: string;
