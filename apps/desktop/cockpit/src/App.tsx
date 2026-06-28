@@ -21,6 +21,8 @@ import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { SessionsPanel } from './components/SessionsPanel';
 import { DmuxPanel } from './components/DmuxPanel';
 import { ConnectorsPanel } from './components/ConnectorsPanel';
+import { PolicyPanel } from './components/PolicyPanel';
+import { MemoryCandidatesPanel } from './components/MemoryCandidatesPanel';
 import { SignIn } from './components/SignIn';
 
 const WORKSPACE_POLL_MS = 2000;
@@ -53,7 +55,14 @@ export function App() {
     function onNavigate(e: Event) {
       const detail = (e as CustomEvent<{ view?: string }>).detail;
       const target = detail?.view;
-      if (target === 'board' || target === 'sessions' || target === 'dmux' || target === 'connectors') {
+      if (
+        target === 'board' ||
+        target === 'sessions' ||
+        target === 'dmux' ||
+        target === 'connectors' ||
+        target === 'policy' ||
+        target === 'memory'
+      ) {
         setView(target);
       }
     }
@@ -98,6 +107,8 @@ export function App() {
           <button class={view === 'sessions' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('sessions')}>Sessions</button>
           <button class={view === 'dmux' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('dmux')}>dmux</button>
           <button class={view === 'connectors' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('connectors')}>Connectors</button>
+          <button class={view === 'policy' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('policy')}>Policy</button>
+          <button class={view === 'memory' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('memory')}>Memory</button>
         </nav>
         <div class="topbar-actions">
           <button class="btn btn-ghost btn-sm" onClick={reconcile} disabled={reconciling}>
@@ -163,9 +174,17 @@ export function App() {
         <main class="main">
           <DmuxPanel />
         </main>
-      ) : (
+      ) : view === 'connectors' ? (
         <main class="main">
           <ConnectorsPanel />
+        </main>
+      ) : view === 'policy' ? (
+        <main class="main">
+          <PolicyPanel />
+        </main>
+      ) : (
+        <main class="main">
+          <MemoryCandidatesPanel />
         </main>
       )}
 
