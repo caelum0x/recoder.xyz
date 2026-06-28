@@ -1,0 +1,47 @@
+{
+  "name": "@recoder/distribution",
+  "version": "0.1.0",
+  "description": "Recoder Distribution subsystem — CLI device-flow auth (recoder.xyz source of truth), billing/entitlements over a typed Polar (Merchant of Record) port, Homebrew/desktop packaging, and the gated delivery engine. Adapter around Recoder state, never an owner of it.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./domain": {
+      "types": "./dist/domain/index.d.ts",
+      "import": "./dist/domain/index.mjs",
+      "require": "./dist/domain/index.js"
+    },
+    "./ports": {
+      "types": "./dist/ports/index.d.ts",
+      "import": "./dist/ports/index.mjs",
+      "require": "./dist/ports/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "node --test --import tsx \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@recoder/agent-events": "workspace:*",
+    "@recoder/agent-os": "workspace:*",
+    "@recoder/auth": "workspace:*",
+    "@recoder/vault": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}
