@@ -1,0 +1,15 @@
+[package]
+name = "recoder-governance-routing"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Complexity + risk routing for the Recoder governance kernel: token/tool/code/depth complexity scoring fused with the policy RiskTier to select a model + assurance tier."
+
+[dependencies]
+recoder-governance-types = { path = "../recoder-governance-types" }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

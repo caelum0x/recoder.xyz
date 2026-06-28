@@ -1,0 +1,15 @@
+[package]
+name = "recoder-governance-permission"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Deny-biased permission enforcement for the Recoder governance kernel: permission modes, rule parsing, workspace-boundary + read-only enforcement, and deny-wins tool-access resolution."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
