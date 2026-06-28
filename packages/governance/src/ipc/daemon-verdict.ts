@@ -28,7 +28,14 @@ export type DaemonDecideResult = {
   readonly approvalGateId?: string;
 };
 
-/** Validate the `decide` reply. Throws DaemonUnavailableError on violation. */
+/**
+ * Validate the `decide` reply. Throws DaemonUnavailableError on violation.
+ *
+ * The field names mirror the daemon's native `GovernanceVerdict` serialization
+ * (`recoder-governance-kernel/src/verdict.rs`): `effect`, `tier`, `reason`, and
+ * the snake_case `audit_hash`. The daemon does not surface an approval-gate id
+ * on a `decide` verdict, so none is read here.
+ */
 export function parseDaemonDecideResult(value: unknown): DaemonDecideResult {
   const v = asObject(value, 'decide');
   if (!isEffect(v.effect)) {
@@ -40,14 +47,13 @@ export function parseDaemonDecideResult(value: unknown): DaemonDecideResult {
   if (typeof v.reason !== 'string') {
     throw new DaemonUnavailableError("daemon 'decide' returned a non-string reason");
   }
-  const auditHash = optionalString(v.auditHash, "decide.auditHash");
-  const approvalGateId = optionalString(v.approvalGateId, 'decide.approvalGateId');
+  // The daemon emits the chain tip as snake_case `audit_hash`.
+  const auditHash = optionalString(v.audit_hash, 'decide.audit_hash');
   return {
     effect: v.effect,
     tier: v.tier,
     reason: v.reason,
     ...(auditHash !== undefined ? { auditHash } : {}),
-    ...(approvalGateId !== undefined ? { approvalGateId } : {}),
   };
 }
 
@@ -56,12 +62,19 @@ export type DaemonEnforceResult =
   | { readonly outcome: 'allowed' }
   | { readonly outcome: 'denied'; readonly tool: string; readonly reason: string };
 
+/**
+ * Validate the daemon's `enforce_tool` reply. The daemon serializes the kernel's
+ * `EnforcementResult` (`recoder-governance-permission/src/enforcer.rs`) with
+ * `#[serde(tag = "outcome")]`, so the wire `outcome` is the PascalCase variant
+ * name (`"Allowed"` / `"Denied"`) and the denied fields are snake_case. This
+ * normalizes to the lowercase outcome the facade consumes.
+ */
 export function parseDaemonEnforceResult(value: unknown): DaemonEnforceResult {
   const v = asObject(value, 'enforceTool');
-  if (v.outcome === 'allowed') {
+  if (v.outcome === 'Allowed') {
     return { outcome: 'allowed' };
   }
-  if (v.outcome === 'denied') {
+  if (v.outcome === 'Denied') {
     if (typeof v.tool !== 'string' || typeof v.reason !== 'string') {
       throw new DaemonUnavailableError("daemon 'enforceTool' denied reply is malformed");
     }
@@ -70,13 +83,16 @@ export function parseDaemonEnforceResult(value: unknown): DaemonEnforceResult {
   throw new DaemonUnavailableError("daemon 'enforceTool' returned an invalid outcome");
 }
 
-/** The daemon's `recordAudit` reply: the new Merkle tip hash. */
+/**
+ * The daemon's `record_audit` reply: the new Merkle tip hash. The daemon returns
+ * `{ "tip_hash": <hex> }` (see the RecordAudit arm in `dispatch.rs`).
+ */
 export function parseDaemonAuditHash(value: unknown): string {
   const v = asObject(value, 'recordAudit');
-  if (typeof v.hash !== 'string' || v.hash.length === 0) {
-    throw new DaemonUnavailableError("daemon 'recordAudit' returned an invalid hash");
+  if (typeof v.tip_hash !== 'string' || v.tip_hash.length === 0) {
+    throw new DaemonUnavailableError("daemon 'recordAudit' returned an invalid tip_hash");
   }
-  return v.hash;
+  return v.tip_hash;
 }
 
 // ---- helpers ----------------------------------------------------------------

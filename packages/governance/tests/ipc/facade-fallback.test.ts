@@ -125,13 +125,13 @@ describe('Governance facade — live daemon delegation', () => {
         for (const raw of decoder.push(chunk)) {
           const req = raw as IpcRequestEnvelope;
           // The daemon authoritatively DENIES even though the TS policy would allow.
+          // Native daemon decide verdict shape (verdict.rs): snake_case fields.
           const result =
             req.method === 'decide'
-              ? { effect: 'deny', tier: 'critical', reason: 'daemon authority' }
+              ? { effect: 'deny', tier: 'critical', reason: 'daemon authority', route: { kind: 'unrouted' } }
               : {};
-          socket.write(
-            encodeFrame({ kind: 'response', id: req.id, method: req.method, protocol: 1, ok: true, result }),
-          );
+          // Native daemon response envelope: { id, ok, result }.
+          socket.write(encodeFrame({ id: req.id, ok: true, result }));
         }
       });
       socket.on('error', () => {});
@@ -166,9 +166,8 @@ describe('Governance facade — live daemon delegation', () => {
           const req = raw as IpcRequestEnvelope;
           // Malformed: effect is not a valid governance effect.
           const result = req.method === 'decide' ? { effect: 'maybe', tier: 'low', reason: 'x' } : {};
-          socket.write(
-            encodeFrame({ kind: 'response', id: req.id, method: req.method, protocol: 1, ok: true, result }),
-          );
+          // Native daemon response envelope: { id, ok, result }.
+          socket.write(encodeFrame({ id: req.id, ok: true, result }));
         }
       });
       socket.on('error', () => {});

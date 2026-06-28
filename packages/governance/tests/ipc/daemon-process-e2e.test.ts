@@ -1,44 +1,36 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 
 import { GovernanceDaemonClient } from '../../src/ipc/daemon-client';
-import { encodeFrame, FrameDecoder } from '../../src/ipc/codec';
-import { type IpcMethod } from '../../src/ipc/envelope';
 
 /**
  * Cross-PROCESS round-trip proof: the REAL compiled `recoder-governance-daemon`
  * binary, spawned as a child process, answering REAL governance decisions over a
  * REAL Unix-domain socket, reached through the REAL `@recoder/governance`
- * `GovernanceDaemonClient` + the REAL `codec.ts` length-prefixed-JSON framing.
+ * `GovernanceDaemonClient` + the REAL `codec.ts` length-prefixed-JSON framing —
+ * with NO protocol-translation shim.
  *
  * This closes the honest gap in docs/subsystems/governance.md §13 #1 — the
  * facade↔daemon round-trip was integration-tested *in Rust* only; here it is
- * exercised at the OS-process boundary from the TypeScript side.
+ * exercised at the OS-process boundary from the TypeScript side, NATIVELY.
  *
- * NO STUB / NO MOCK of the governance logic or the transport:
+ * NO STUB / NO MOCK / NO SHIM:
  *  - The verdict is computed entirely by the spawned Rust `GovernanceKernel`.
- *  - The wire is two real UDS connections framed by the real `codec.ts`.
+ *  - The wire is ONE real UDS connection framed by the real `codec.ts`.
+ *  - The `GovernanceDaemonClient` connects DIRECTLY to the daemon's socket and
+ *    frames the daemon's REAL envelope: string id, snake_case method, params +
+ *    the shared `INTERNAL_SERVICE_KEY` inside `payload`, and parses the daemon's
+ *    real `{ id, ok, result?, error? }` reply. No field-rename proxy exists.
  *
- * WHY A PROTOCOL-TRANSLATION PROXY (and what it is NOT):
- *   The Rust daemon and the TS `daemon-client.ts` were built independently and
- *   pin DIFFERENT outer envelopes — verified empirically against the real binary:
- *     - TS client sends `{kind:'request', id:<number>, method:<camelCase>,
- *       protocol:1, params}` and validates a `{kind:'response', protocol:1,
- *       method, id:<number>, ok, result|error:{code,message}}` reply.
- *     - The Rust daemon expects `{id:<string>, method:<snake_case>, payload}`
- *       (auth key inside `payload.key`) and replies `{id:<string>, ok,
- *       result?, error?:<string>}`.
- *   So the raw client cannot frame a request the raw daemon will accept. The
- *   `proxy` below is a REAL `net` UDS server (real `codec.ts` framing on both
- *   legs) that performs ONLY a field-name/method-casing translation and injects
- *   the shared key — it computes NO governance verdict. Every effect/tier/
- *   auditHash asserted here is produced by the real Rust kernel in the child
- *   process; the proxy is a wire shim, not a fake daemon.
+ * The earlier revision of this test used a translating UDS proxy because the TS
+ * client and the Rust daemon pinned DIFFERENT outer envelopes. That mismatch is
+ * now reconciled on the TS side (`envelope.ts` + `daemon-client.ts` mirror the
+ * daemon's serde structs), so the proxy is deleted: the client speaks the
+ * daemon's native wire end to end.
  *
  * If the platform cannot build the binary the suite skips with a clear message;
  * on this darwin box it builds, so it does not silently skip.
@@ -46,141 +38,6 @@ import { type IpcMethod } from '../../src/ipc/envelope';
 
 const CRATE_DIR = path.resolve(__dirname, '../../../../crates/recoder-governance');
 const DAEMON_BIN = path.join(CRATE_DIR, 'target/release/recoder-governance-daemon');
-
-/** Map a TS-client method name to the daemon's snake_case wire method. */
-const METHOD_TO_DAEMON: Record<IpcMethod, string> = {
-  decide: 'decide',
-  enforceTool: 'enforce_tool',
-  route: 'route',
-  recordAudit: 'record_audit',
-  verifyAudit: 'verify_audit',
-  health: 'health',
-};
-
-type ProxyHandle = {
-  readonly clientSocketPath: string;
-  close: () => Promise<void>;
-};
-
-/**
- * A real translating UDS proxy. The REAL `GovernanceDaemonClient` connects to
- * `clientSocketPath`; each framed TS request is decoded, rewritten into the
- * daemon's envelope (string id, snake_case method, `payload` carrying params +
- * the shared `key`), forwarded over a fresh real UDS connection to the daemon,
- * and the daemon's reply is rewritten back into the TS response envelope. The
- * proxy holds NO policy — it is pure wire translation over real `codec.ts`.
- */
-function startProxy(daemonSocketPath: string, serviceKey: string): Promise<ProxyHandle> {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'gov-proxy-'));
-  const clientSocketPath = path.join(dir, 'proxy.sock');
-
-  const server = net.createServer((clientSock) => {
-    const decoder = new FrameDecoder();
-    clientSock.on('error', () => {});
-    clientSock.on('data', (chunk: Buffer) => {
-      let frames: unknown[];
-      try {
-        frames = decoder.push(chunk);
-      } catch {
-        clientSock.destroy();
-        return;
-      }
-      for (const raw of frames) {
-        forwardToDaemon(raw as Record<string, unknown>, daemonSocketPath, serviceKey)
-          .then((tsResponse) => clientSock.write(encodeFrame(tsResponse)))
-          .catch(() => clientSock.destroy());
-      }
-    });
-  });
-
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(clientSocketPath, () => {
-      resolve({
-        clientSocketPath,
-        close: () =>
-          new Promise<void>((res) => {
-            server.close(() => {
-              rmSync(dir, { recursive: true, force: true });
-              res();
-            });
-          }),
-      });
-    });
-  });
-}
-
-/** One real round-trip to the daemon for a single translated request. */
-function forwardToDaemon(
-  tsReq: Record<string, unknown>,
-  daemonSocketPath: string,
-  serviceKey: string,
-): Promise<Record<string, unknown>> {
-  const tsId = tsReq.id as number;
-  const tsMethod = tsReq.method as IpcMethod;
-  const daemonMethod = METHOD_TO_DAEMON[tsMethod] ?? String(tsMethod);
-  const params = (tsReq.params ?? {}) as Record<string, unknown>;
-
-  // Daemon envelope: string id, snake_case method, payload carries the shared
-  // key (health needs none, but injecting it is harmless and matches the
-  // INTERNAL_SERVICE_KEY contract the facade uses for the authenticated methods).
-  const daemonEnvelope = {
-    id: `e2e-${tsId}`,
-    method: daemonMethod,
-    payload: { ...params, key: serviceKey },
-    ts: Date.now(),
-  };
-
-  return new Promise((resolve, reject) => {
-    const sock = net.createConnection({ path: daemonSocketPath });
-    let buf = Buffer.alloc(0);
-    let settled = false;
-    const done = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      sock.destroy();
-      fn();
-    };
-    sock.on('connect', () => sock.write(encodeFrame(daemonEnvelope)));
-    sock.on('data', (chunk: Buffer) => {
-      buf = Buffer.concat([buf, chunk]);
-      if (buf.length < 4) return;
-      const n = buf.readUInt32BE(0);
-      if (buf.length < 4 + n) return;
-      let daemonResp: Record<string, unknown>;
-      try {
-        daemonResp = JSON.parse(buf.subarray(4, 4 + n).toString('utf8'));
-      } catch (e) {
-        done(() => reject(e));
-        return;
-      }
-      // Rewrite the daemon reply into the TS response envelope the real client
-      // validates. The daemon's `error` is a string; map it to the {code,message}
-      // shape the client's `parseResponseEnvelope` requires.
-      const ok = daemonResp.ok === true;
-      const tsResponse: Record<string, unknown> = ok
-        ? {
-            kind: 'response',
-            id: tsId,
-            method: tsMethod,
-            protocol: 1,
-            ok: true,
-            result: daemonResp.result ?? null,
-          }
-        : {
-            kind: 'response',
-            id: tsId,
-            method: tsMethod,
-            protocol: 1,
-            ok: false,
-            error: { code: 'DAEMON_ERROR', message: String(daemonResp.error ?? 'unknown') },
-          };
-      done(() => resolve(tsResponse));
-    });
-    sock.on('error', (err) => done(() => reject(err)));
-    setTimeout(() => done(() => reject(new Error('daemon forward timed out'))), 2_000);
-  });
-}
 
 /** Poll until the daemon's socket file exists (it binds asynchronously). */
 async function waitForSocket(socketPath: string, timeoutMs: number): Promise<void> {
@@ -196,6 +53,16 @@ function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Poll until `predicate` holds (e.g. a stderr line has been captured). */
+async function waitForStderr(predicate: () => boolean, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await delay(25);
+  }
+  throw new Error(`daemon did not emit the expected stderr line within ${timeoutMs}ms`);
+}
+
 /** Ensure the release binary exists; build it once if missing. */
 function ensureBinary(): boolean {
   if (existsSync(DAEMON_BIN)) return true;
@@ -207,7 +74,7 @@ function ensureBinary(): boolean {
   return build.status === 0 && existsSync(DAEMON_BIN);
 }
 
-describe('governance daemon — REAL cross-process round-trip over UDS', () => {
+describe('governance daemon — REAL cross-process round-trip over UDS (native wire, no shim)', () => {
   const binaryAvailable = ensureBinary();
   const skip = binaryAvailable ? undefined : 'recoder-governance-daemon binary unavailable (build failed on this platform)';
 
@@ -219,7 +86,6 @@ describe('governance daemon — REAL cross-process round-trip over UDS', () => {
 
   let daemon: ChildProcessWithoutNullStreams | undefined;
   let daemonStderr = '';
-  let proxy: ProxyHandle | undefined;
   let client: GovernanceDaemonClient | undefined;
   let exitInfo: { code: number | null; signal: NodeJS.Signals | null } | undefined;
 
@@ -238,13 +104,22 @@ describe('governance daemon — REAL cross-process round-trip over UDS', () => {
     });
 
     await waitForSocket(daemonSocketPath, 5_000);
-    proxy = await startProxy(daemonSocketPath, serviceKey);
-    client = new GovernanceDaemonClient({ socketPath: proxy.clientSocketPath, requestTimeoutMs: 2_000 });
+    // The socket binds before the "listening on" line is necessarily flushed to
+    // our captured stderr buffer; wait for that line too so the first assertion
+    // (which matches the announcement) does not race the async stderr pipe.
+    await waitForStderr(() => /listening on/.test(daemonStderr), 5_000);
+
+    // The REAL client, connecting DIRECTLY to the daemon's socket with the same
+    // INTERNAL_SERVICE_KEY the daemon requires (carried natively at payload.key).
+    client = new GovernanceDaemonClient({
+      socketPath: daemonSocketPath,
+      serviceKey,
+      requestTimeoutMs: 2_000,
+    });
   });
 
   after(async () => {
     client?.close();
-    await proxy?.close();
     if (daemon && exitInfo === undefined) {
       daemon.kill('SIGTERM');
       // Give the daemon a moment to run its SIGTERM handler + socket cleanup.

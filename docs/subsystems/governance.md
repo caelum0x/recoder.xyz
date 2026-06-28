@@ -33,8 +33,9 @@
 >
 > See the explicit **§13 Gaps / not-yet-live** section for what is *not* done — most
 > importantly: the facade↔daemon round-trip is now **runtime-proven at the OS-process
-> level** (a TS test spawns the real `recoder-governance-daemon` binary and round-trips
-> real `health`/`decide` verdicts over a real UDS —
+> level, NATIVELY (no protocol shim)** (a TS test spawns the real
+> `recoder-governance-daemon` binary and the real `GovernanceDaemonClient` round-trips real
+> `health`/`decide` verdicts over a real UDS using the daemon's own wire —
 > `packages/governance/tests/ipc/daemon-process-e2e.test.ts`), but the **cross-CONTAINER,
 > different-uid round-trip is still not runtime-proven** (needs a live Docker daemon + the
 > uid-1001 peer-cred path exercised end-to-end), and large parts of the
@@ -345,27 +346,34 @@ IPC fail-closed assertions in `tests/loopback.rs`).
 These are explicitly **not done** today. They were in the original design but are not in
 the repo, or are gated on infra/ops:
 
-1. **Facade ↔ daemon: cross-PROCESS round-trip now runtime-proven; cross-CONTAINER still
-   gated.** The Rust daemon binary builds and the IPC edge is integration-tested over a
-   real UDS *in Rust*. It is now **also proven at the OS-process boundary from the
-   TypeScript side**: `packages/governance/tests/ipc/daemon-process-e2e.test.ts` spawns the
-   real compiled `recoder-governance-daemon` child process with a throwaway in-test
-   `INTERNAL_SERVICE_KEY` + a temp `GOVERNANCE_SOCKET`, waits for the socket to bind, then
-   round-trips real calls over a real UDS using the package's real `codec.ts`
-   length-prefixed-JSON framing — asserting the real kernel's `health` (`status:"ok"`,
-   `audit_verified:true`), an `allow` `decide` verdict with a real SHA-256 audit-chain tip
-   hash + routing, and two genuine **deny-wins** outcomes (`command rm -rf /` → `deny`/high,
-   `file_write .env` → `deny`/critical, both `unrouted`), then SIGTERMs the daemon and
-   asserts a clean exit + socket unlink. The verdicts are computed entirely by the spawned
-   Rust `GovernanceKernel`; no governance logic is stubbed. (Implementation note: the
-   independently-built TS `daemon-client.ts` and Rust daemon pin *different* outer
-   envelopes — TS uses `{kind,protocol,numeric id,camelCase method,params}` and validates a
-   `{kind,protocol,...}` reply, while the daemon uses `{string id,snake_case method,
-   payload,key}` and replies `{id,ok,result|error:string}` — so the test puts a real
-   `net`-UDS protocol-translation shim (real `codec.ts` framing on both legs, zero policy)
-   between the real client and the real daemon. Reconciling the two envelopes natively so
-   `daemon-client.ts` speaks the daemon's wire directly is the remaining wire-format
-   follow-up.) The self-host stack also **launches** the daemon:
+1. **Facade ↔ daemon: cross-PROCESS round-trip now runtime-proven NATIVELY (no shim);
+   cross-CONTAINER still gated.** The Rust daemon binary builds and the IPC edge is
+   integration-tested over a real UDS *in Rust*. It is now **also proven at the OS-process
+   boundary from the TypeScript side, speaking the daemon's real wire directly**:
+   `packages/governance/tests/ipc/daemon-process-e2e.test.ts` spawns the real compiled
+   `recoder-governance-daemon` child process with a throwaway in-test `INTERNAL_SERVICE_KEY`
+   + a temp `GOVERNANCE_SOCKET`, waits for the socket to bind, then round-trips real calls
+   over a real UDS using the package's real `codec.ts` length-prefixed-JSON framing — via
+   the **real `GovernanceDaemonClient` connected DIRECTLY to the daemon socket** — asserting
+   the real kernel's `health` (`status:"ok"`, `audit_verified:true`), an `allow` `decide`
+   verdict with a real SHA-256 audit-chain tip hash + routing, and two genuine **deny-wins**
+   outcomes (`command rm -rf /` → `deny`/high, `file_write .env` → `deny`/critical, both
+   `unrouted`), then SIGTERMs the daemon and asserts a clean exit + socket unlink. The
+   verdicts are computed entirely by the spawned Rust `GovernanceKernel`; no governance
+   logic is stubbed and **no protocol-translation proxy is involved**.
+
+   **Wire reconciled (RESOLVED):** the previously-noted envelope mismatch is fixed on the TS
+   side. `packages/governance/src/ipc/{envelope,daemon-client}.ts` now mirror the daemon's
+   `serde` structs exactly: the client emits the daemon's request envelope
+   `{ id:<string>, method:<snake_case>, payload, ts }` with the shared `INTERNAL_SERVICE_KEY`
+   carried at `payload.key`, and parses the daemon's reply `{ id, ok, result? | error:<string> }`.
+   The correlation id is a monotonic string (`gov-<n>`), method names map TS-camelCase →
+   daemon snake_case (`enforceTool`→`enforce_tool`, `recordAudit`→`record_audit`,
+   `verifyAudit`→`verify_audit`), and `daemon-verdict.ts` reads the daemon's native result
+   fields (`audit_hash`, `route`, `tip_hash`, PascalCase `outcome`). The earlier `net`-UDS
+   shim is deleted; the client speaks the daemon's wire byte-for-byte. The Rust daemon (the
+   source of truth, 246 passing tests) was **not** changed. The self-host stack also
+   **launches** the daemon:
    `docker-compose.selfhost.yml` adds a `recoder-governance` service (built from
    `deploy/governance-daemon.Dockerfile`, uid-1001 to match the backend for same-uid
    peer-cred auth) that binds `GOVERNANCE_SOCKET` on a shared volume, and the backend gets
