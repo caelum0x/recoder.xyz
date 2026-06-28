@@ -90,6 +90,23 @@ export {
 } from './audit-event';
 
 export {
+  // -- recoder wire envelope (Zod) --------------------------------------------
+  RecoderPayloadSchema,
+  RecoderTextPayloadSchema,
+  RecoderJsonPayloadSchema,
+  RecoderCommandPayloadSchema,
+  RecoderArtifactPayloadSchema,
+  RecoderAgentIdentitySchema,
+  RecoderAgentPlatformSchema,
+  RecoderEnvelopeTraceSchema,
+  RecoderA2AEnvelopeSchema,
+  RecoderA2AEnvelopeStrictSchema,
+  getRecoderA2AEnvelopeSchema,
+  type RecoderPayloadInput,
+  type RecoderA2AEnvelopeInput,
+} from './recoder-envelope';
+
+export {
   // -- severity ---------------------------------------------------------------
   A2AErrorSeverityEnum,
 

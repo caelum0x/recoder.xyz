@@ -70,6 +70,68 @@ Delegated-task IPC surface:
 
 For end users, see [INSTALLATION.md](./INSTALLATION.md) for detailed installation instructions including how to bypass macOS Gatekeeper on first launch.
 
+## Cockpit (conductor board)
+
+The desktop app ships a bundled **Cockpit** — the conductor.build-style board
+where you run and review coding agents. It is a self-contained Preact bundle in
+[`cockpit/`](./cockpit/) that the Electron shell loads via `loadFile` (no dev
+server). The shell injects `window.__RECODER_COCKPIT__ = { backendUrl, token }`
+so the renderer authenticates its `/api/conductor/*` calls with your real
+recoder.xyz session — it never fabricates data.
+
+Open it from the **View** menu:
+
+| Menu item | Shortcut | Opens |
+| --- | --- | --- |
+| View → Open Cockpit | `Cmd/Ctrl+Shift+K` | The conductor board |
+| View → Open dmux Console | `Cmd/Ctrl+Shift+D` | The cockpit on the **dmux** view |
+
+Inside the cockpit, top-level view tabs make each surface discoverable:
+**Board** (lifecycle columns: Queued → Running → Review → Done), **Sessions**
+(live tmux+worktree agent sessions and their terminals), **dmux** (the dmux
+operator console — availability, the tmux sessions dmux can observe, and a
+launcher), and **Connectors** (chat-channel health).
+
+### Product flow (create → run → review → terminate)
+
+1. **Create** — Board → *New workspace*. Pick a repo path, write the task
+   prompt, and choose an installed runtime (only available agent CLIs are
+   selectable). Submitting `POST /api/conductor/workspaces` launches a
+   tmux+worktree workspace; the new card appears in **Queued**.
+2. **Run** — As the conductor advances the workspace (`setting_up → ready →
+   running`), the card moves to **Running**. Select it to watch the live
+   `RunEvent` log (`GET …/events`) and, once work exists, the reviewable diff
+   (`GET …/diff`).
+3. **Review** — When the workspace reaches `awaiting_review` the card moves to
+   **Review**, where *Open PR* / *Merge* become enabled exactly when the backend
+   state machine allows them.
+4. **Terminate** — *Archive* (`POST …/archive`) ends the workspace; the card
+   lands in **Done**.
+
+### dmux
+
+[dmux](https://github.com/justmiles/dmux) is the operator console for the shared
+tmux server the conductor runs agents on. The **dmux** view (and the *Open dmux
+Console* menu item) render `GET /api/conductor/dmux` — real availability, the
+pinned/system tmux binary, and the conductor tmux sessions dmux can observe — and
+let you launch the dmux TUI for a repo. When dmux is not installed the panel says
+so truthfully with the backend's own reason string; nothing is faked.
+
+### Cockpit tests
+
+The cockpit has an integration smoke harness that boots the **real** cockpit UI
+(the production `<App/>` Preact tree, its real API client and state machine) in
+jsdom against a real in-process **stub conductor** HTTP server it owns
+(`cockpit/src/test/stub-conductor.ts`), and drives the full
+create → events → diff → terminate flow plus dmux discoverability:
+
+```bash
+cd cockpit
+pnpm run check-types   # tsc --noEmit
+pnpm test              # vitest run (unit + integration)
+pnpm run build         # esbuild bundle -> dist/
+```
+
 ## Deep Linking
 
 The app registers the `recoder://` protocol for magic link authentication:

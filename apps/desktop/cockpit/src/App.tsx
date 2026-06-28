@@ -4,26 +4,33 @@
  * backend is unreachable it shows a truthful "backend unreachable" banner and
  * never fabricates workspaces.
  */
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { api, BackendUnreachableError, UnauthorizedError } from './lib/api';
 import { usePoll } from './lib/usePoll';
-import { readConfig, configWasInjected } from './lib/config';
+import {
+  readConfig,
+  configWasInjected,
+  readInitialView,
+  COCKPIT_NAVIGATE_EVENT,
+  type CockpitView,
+} from './lib/config';
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
 import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { SessionsPanel } from './components/SessionsPanel';
+import { DmuxPanel } from './components/DmuxPanel';
 import { ConnectorsPanel } from './components/ConnectorsPanel';
 import { SignIn } from './components/SignIn';
 
 const WORKSPACE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
 
-type View = 'board' | 'sessions' | 'connectors';
-
 export function App() {
   const config = readConfig();
-  const [view, setView] = useState<View>('board');
+  // Open on the deep-linked view when a launcher/menu requested one (e.g. the
+  // desktop "Open dmux Console" item), otherwise default to the board.
+  const [view, setView] = useState<CockpitView>(() => readInitialView() || 'board');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [reconciling, setReconciling] = useState(false);
@@ -37,6 +44,23 @@ export function App() {
     () => workspaces.find((w) => w.workspaceId === selectedId) || null,
     [workspaces, selectedId],
   );
+
+  // Let the desktop shell switch the cockpit view live (without a reload) when a
+  // menu/launcher action fires — e.g. "Open dmux Console" dispatches this event
+  // with detail.view = 'dmux'. This is how the dmux surface is reachable from a
+  // single menu click even when the cockpit is already open.
+  useEffect(() => {
+    function onNavigate(e: Event) {
+      const detail = (e as CustomEvent<{ view?: string }>).detail;
+      const target = detail?.view;
+      if (target === 'board' || target === 'sessions' || target === 'dmux' || target === 'connectors') {
+        setView(target);
+      }
+    }
+    if (typeof window === 'undefined') return;
+    window.addEventListener(COCKPIT_NAVIGATE_EVENT, onNavigate as EventListener);
+    return () => window.removeEventListener(COCKPIT_NAVIGATE_EVENT, onNavigate as EventListener);
+  }, []);
 
   const unreachable = board.error instanceof BackendUnreachableError;
   // The backend is reachable but rejected us as unauthenticated (401/403).
@@ -72,6 +96,7 @@ export function App() {
         <nav class="view-tabs">
           <button class={view === 'board' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('board')}>Board</button>
           <button class={view === 'sessions' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('sessions')}>Sessions</button>
+          <button class={view === 'dmux' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('dmux')}>dmux</button>
           <button class={view === 'connectors' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('connectors')}>Connectors</button>
         </nav>
         <div class="topbar-actions">
@@ -133,6 +158,10 @@ export function App() {
       ) : view === 'sessions' ? (
         <main class="main">
           <SessionsPanel tmuxBin={tmuxBin} />
+        </main>
+      ) : view === 'dmux' ? (
+        <main class="main">
+          <DmuxPanel />
         </main>
       ) : (
         <main class="main">

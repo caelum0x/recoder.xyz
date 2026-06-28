@@ -1,6 +1,7 @@
 export declare const RECODER_A2A_PROTOCOL_VERSION = "0.3.0";
 export declare const RECODER_A2A_ENVELOPE_VERSION = "2026-02-14";
 export declare const RECODER_A2A_ENVELOPE_TEXT_PREFIX = "recoder.a2a.envelope:";
+export { RecoderPayloadSchema, RecoderTextPayloadSchema, RecoderJsonPayloadSchema, RecoderCommandPayloadSchema, RecoderArtifactPayloadSchema, RecoderAgentIdentitySchema, RecoderAgentPlatformSchema, RecoderEnvelopeTraceSchema, RecoderA2AEnvelopeSchema, RecoderA2AEnvelopeStrictSchema, getRecoderA2AEnvelopeSchema, type RecoderPayloadInput, type RecoderA2AEnvelopeInput, } from './schemas/recoder-envelope';
 export type RecoderAgentPlatform = 'recoder' | 'cursor' | 'windsurf' | 'replit' | 'codex' | 'claude_code' | 'recoder_app' | 'recoder_pm' | 'recoder_agency' | 'recoder_backend' | 'recoder_desktop' | 'custom';
 export type RecoderIntent = 'plan' | 'execute' | 'review' | 'handoff' | 'status' | 'sync' | 'tool_call' | 'tool_result' | 'error' | (string & {});
 export interface RecoderAgentIdentity {
@@ -33,6 +34,8 @@ export interface RecoderArtifactPayload {
     path?: string;
 }
 export type RecoderPayload = RecoderTextPayload | RecoderJsonPayload | RecoderCommandPayload | RecoderArtifactPayload;
+/** Closed set of artifact payload types. */
+export declare const RECODER_ARTIFACT_TYPES: readonly ["patch", "file", "plan", "report"];
 export interface RecoderEnvelopeTrace {
     traceId: string;
     parentMessageId?: string;
@@ -46,7 +49,14 @@ export interface RecoderA2AEnvelope {
     from: RecoderAgentIdentity;
     to: RecoderAgentIdentity;
     intent: RecoderIntent;
-    payload: RecoderPayload[] | unknown[];
+    /**
+     * The ordered list of payload parts carried by this envelope.
+     *
+     * Tightened from the legacy `RecoderPayload[] | unknown[]` to the strict
+     * discriminated union: every part must be a known `RecoderPayload` variant.
+     * Runtime validation is enforced by `RecoderPayloadSchema`.
+     */
+    payload: RecoderPayload[];
     metadata?: Record<string, unknown>;
     trace?: RecoderEnvelopeTrace;
 }
@@ -108,6 +118,21 @@ export declare class RecoderA2AEnvelopeValidationError extends Error {
     issues: RecoderEnvelopeValidationIssue[];
     constructor(issues: RecoderEnvelopeValidationIssue[], message?: string);
 }
+/**
+ * Validate an unknown value against the canonical Recoder A2A envelope schema.
+ *
+ * Zod-backed: structural validation is delegated to `RecoderA2AEnvelopeSchema`
+ * (and its strict variant when `options.strictVersion` is set). The function
+ * signature and return shape are unchanged from the previous hand-rolled
+ * implementation -- it returns a flat list of `{ path, message }` issues and
+ * never throws -- so existing callers continue to work without modification.
+ *
+ * @param value - The raw, untrusted value to validate.
+ * @param options - When `strictVersion` is true, the envelope/protocol version
+ *   fields must equal the canonical pinned constants.
+ * @returns An array of validation issues; empty when the value is a valid
+ *   `RecoderA2AEnvelope`.
+ */
 export declare function validateRecoderA2AEnvelope(value: unknown, options?: RecoderEnvelopeValidationOptions): RecoderEnvelopeValidationIssue[];
 export declare function isRecoderA2AEnvelope(value: unknown): value is RecoderA2AEnvelope;
 export declare function assertRecoderA2AEnvelope(value: unknown, options?: RecoderEnvelopeValidationOptions): asserts value is RecoderA2AEnvelope;
