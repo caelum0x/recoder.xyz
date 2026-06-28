@@ -13,6 +13,14 @@
 **Branch:** `fix/agent-blockers-create-loop-codemirror-sandbox-autowake`
 **Anchor commit (the big session merge):** `34b2d4a83` — *"feat: own ts/ engines, ship desktop cockpit + chat-control, brain code-graph live; resolve 95-file merge"*
 **Conductor capability commit:** `5fd5105b1` — *"feat(r2): mount conductor capability + governor + durable locks + build-break fixes"* (mounts `/health/full`, `/resources`, `/workflows`; governor enforced on `createWorkspace`; durable Postgres work-locks in `@recoder/coordination`).
+**Current HEAD (this session, subsystem-deepening):** `74f8ccccf`. The most recent commits build/wire whole subsystems that were previously only designed or shelved:
+- `eaf916dd4` — **`@recoder/substrate`** real subsystem (contract + 6-CLI command resolver + registry + ports + errors, **46/46**), **adopted by the conductor** (`runtime-commands.ts`/`substrate.ts` import it).
+- `4011d96cb` — **`@recoder/governance`** real subsystem (domain/policy/approval/enforcement[deny-biased fallback]/Merkle-audit/routing/facade, **92/92**), **wired into the conductor delivery gate** (`governance-gate.ts decideDelivery`, **fails CLOSED**); `74f8ccccf` adds the conductor governance-wire tests.
+- `9148d82df` — **cockpit Policy + Memory-Candidate panels** over `/api/agent-os`.
+- `cfd181394` — **brain assemble-once content-addressed cache + tokens-saved metric** + degrade-safe mem0/context7 source-lighting (**161/161**).
+- `14ae06781` — **pinned tmux + bd native binaries** built in the deploy pipeline (Dockerfile `substrate` stage + `docker-substrate-entrypoint.sh`).
+- `b83e21ff0` — **W1 wire-in:** `@recoder/runtime` now drives `apps/agent-worker` runtime-registry + the conductor `in_process` substrate; **agent-policy + agent-memory** surfaced on `/api/agent-os/policy/evaluate` + `/memory/lifecycle/candidates`; **`@recoder/interop` ed25519 signed-ingress gate wired into the LIVE a2a gateway** (degrade-safe behind `RECODER_A2A_STRICT_INGRESS`).
+> Per-item evidence (re-run test counts, file paths, hashes) is in **§13** below. The §13 items SUPERSEDE the prior §8 open-item rows that called substrate/interop "shelved (incomplete)" / "empty" — those rows are corrected inline.
 **Latest commit (this session, HEAD):** `5b86c4e14` — *"feat(r2b): connector adapters+dispatch, bd build, py durable persistence, site completion, truthful docs"* — exports **5 typecheck-clean per-channel connector adapters** as isolated subpaths + a real **inbound→gating→embedded-agent→outbound dispatch pipeline** + a concrete **`PiEmbeddedRunner`**; adds a **reproducible `bd` build** (`scripts/build-bd.sh` + `make bd`); graduates **py work-signals** persistence to durable Postgres; completes **site** download/lead-capture/marketing surfaces.
 
 > **Provenance note (updated 2026-06-28, r2b):** the earlier-snapshot working-tree items are now **committed**.
@@ -229,8 +237,8 @@ canonical tmux+worktree driver.**
 | opencode cross-platform native `fetch` | ⏸ open (CI) | opencode runs under `bun`; cross-platform native-fetch behavior needs CI verification on the target platforms. Not re-run here. |
 | Discord full dispatch pipeline | ⏸ deferred | ~45 sibling files under `social-gateways/discord/` (extracted), but the full inbound→dispatch pipeline is **not** wired as a live adapter (only Telegram is). Deferred. |
 | mem0 / context7 brain sources | ⚠️ config-gated | Doctor reports them as *configured-not-proven*; they need real config keys (`MEM0_BASE_URL`, `CONTEXT7_API_KEY`) to go LIVE. Not lit up. |
-| substrate / interop subsystems | ⏸ shelved (incomplete) | `@recoder/substrate` (`0.1.0`) has command/exec/registry scaffolding; `packages/interop/src` is empty. Shelved as incomplete — do not claim them live. |
-| `@recoder/runtime` wired into a live agent run | ⏸ parallel/demoted | Built + 160/160 green, but **not** the driver that ran the live agent. The live run (§7a) went through the **canonical tmux+worktree conductor driver**, not `@recoder/runtime`. The runtime package is a **parallel/demoted** second driver path until it is wired into the conductor (see §10 dual-runtime reconciliation). |
+| ~~substrate / interop subsystems shelved~~ | ✅ **superseded** | **Corrected (this session):** `@recoder/substrate` is now a **real subsystem (46/46), adopted by the conductor** (`eaf916dd4`) and `packages/interop/src` is **not empty** — it has the real **ed25519 + signed-ingress gate (54/54)**, **wired into the LIVE a2a gateway** (`b83e21ff0`). See §13. (interop's *MCP host* is still in progress; substrate's full package-promotion of every conductor concern still ongoing.) |
+| `@recoder/runtime` wired into a live agent run | 🟡 wired, live-run-through-seam pending | Built + 160/160 green and **now imported** — it backs `apps/agent-worker`'s `runtime-registry` and the conductor's `in_process` substrate (`substrate-in-process.ts`, `b83e21ff0`). But the **proven** live run (§7a) still went through the **canonical tmux+worktree conductor driver**, not this package. Re-proving a live run *through the runtime seam* is the remaining dual-runtime reconciliation item (§10). |
 | **Live-agent run** | ✅ PROVEN | Executed for real — `claude -p` headless, isolated worktree, `GREETING.md` created, exit 0, diff captured, teardown. See **§7a**. Caveat: durable terminal-state write-back on the workspace record is **in progress**. |
 | Durable terminal-state on workspace record (post-run) | 🔄 in progress | The live run completed and the diff was captured, but persisting the agent's terminal/exit state durably into the workspace record (for reconciler + UI truth) is still being finished. See §7a caveat 2. |
 | coordination / capability-routes / governor / locks committed | ✅ committed | Built + tests green; **committed** in `dded81260` / `5fd5105b1` / `34819fc1e` (no longer working-tree). |
@@ -331,3 +339,32 @@ risks the proven tmux path, so it is **additive-only** and gated.
 > They are real and verified *on this disk*, and (for `bd`) reproducible from a committed build script — but
 > they are **not** counted in the per-tree git-completeness figures, and any consumer must obtain the vendored
 > clone separately.
+
+---
+
+## 13. This session (subsystem deepening, `…b83e21ff0 → 74f8ccccf`) — built/wired with re-run evidence
+
+Each row was **verified against the repo this snapshot** (test counts re-run via `node --test`; imports/wiring read in source). Test commands and outputs:
+`packages/governance` ⇒ **tests 92, pass 92, fail 0**; `packages/substrate` ⇒ **tests 46, pass 46, fail 0**;
+`packages/brain` ⇒ **tests 161, pass 161, fail 0**; `packages/interop` ⇒ **tests 54, pass 54, fail 0**;
+`packages/runtime` ⇒ **160/160** (prior-session figure, carried).
+
+| Item | Status | Evidence (re-run / files read this snapshot) | Commit |
+|---|---|---|---|
+| **`@recoder/governance` real subsystem** | ✅ built & green | `packages/governance/src/{domain,policy,approval,enforcement,audit,routing}` + `governance.ts` facade (read). Enforcement **deny-biased fallback** = `enforcement/fallback-enforcer.ts`; audit **SHA-256 Merkle** = `audit/merkle-verifier.ts`. `node --test` ⇒ **92/92**. | `4011d96cb` |
+| **governance WIRED into conductor delivery gate** | ✅ wired | `docker-backend/src/conductor/governance-gate.ts` `decideDelivery()` imports `@recoder/governance` and routes every PR/merge/push delivery action; **fails CLOSED** if governance errors (read line 32/42/149). Conductor-side tests (`governance-gate.test.ts` 7 cases + metrics/delivery-summary/live-events). | `4011d96cb` (+ tests `74f8ccccf`) |
+| **`@recoder/substrate` real subsystem** | ✅ built & green | `packages/substrate/src/{contract,command,registry,ports,errors,exec,factory,review,types}` (read). **6-CLI command resolver**: `command/{resolve-command,runtime-availability,runtime-specs,model-flag,extra-args,shell-quote}.ts`. `node --test` ⇒ **46/46**. | `eaf916dd4` |
+| **substrate ADOPTED by conductor** | ✅ wired | `docker-backend/src/conductor/runtime-commands.ts` (`import … from '@recoder/substrate'`, line 23/30) **and** `substrate.ts` (line 38) — command-resolution + contract + typed errors OWNED by the package. | `eaf916dd4` |
+| **`@recoder/runtime` now WIRED/USED** | 🟡 wired | `apps/agent-worker/src/runtimes/runtime-registry.ts` builds its adapter registry from `createRuntime().adapterFor(surface)` (read); conductor `in_process` substrate `docker-backend/src/conductor/substrate-in-process.ts` imports `@recoder/runtime` (degrade-safe `runtime_unavailable`). Was a 12.7k-LOC **zero-importer** shelf. Live-run-through-the-seam still pending (§8/§10). | `b83e21ff0` |
+| **agent-policy + agent-memory surfaced on /api/agent-os** | ✅ wired | `docker-backend/src/agent-os/routes/policy-evaluate.routes.ts` (`POST /evaluate` → real `evaluatePolicy` → `PolicyDecision`) + `memory-candidate.routes.ts` (`/candidates` list/propose-with-evidence/`:id/review`). Contract test `agent-os-policy-memory.routes.test.ts`. | `b83e21ff0` |
+| **`@recoder/interop` ed25519 signed-ingress gate** | ✅ built & green | `packages/interop/src/{ed25519.ts,signed-ingress-gate.ts}` + `a2a/sign/sign.ts` + agent-card builder (read). `node --test` ⇒ **54/54**. | `b83e21ff0` |
+| **interop gate WIRED into LIVE a2a gateway** | ✅ wired | `docker-backend/src/a2a/signed-ingress.middleware.ts` admits inbound through the interop gate (`interop-gate.adapter.ts` → `admitSignedMcpCall`/`verifyEd25519Signature`, imports `@recoder/interop` line 33); mounted on the running `gateway.router.ts`. Strict mode behind `RECODER_A2A_STRICT_INGRESS` (degrade-safe). MCP host build **in progress**. | `b83e21ff0` |
+| **brain assemble-once cache + tokens-saved metric** | ✅ built & green | content-addressed `packages/brain/src/persistence/memory-context-cache.ts` (+ `.test.ts`); `engine/token-estimator.ts` + `engine/context-tokens.ts` (+ `.test.ts`); `runtime/cache-doctor.ts`. Degrade-safe mem0/context7 source-lighting (config-gated). `node --test` ⇒ **161/161**. | `cfd181394` |
+| **native tmux + bd binaries in deploy pipeline** | ✅ built (pipeline) | `docker-backend/Dockerfile` `FROM golang:1.26-bookworm AS substrate` stage builds pinned tmux + `bd` via `scripts/build-substrate-binaries.sh` (+ `build-tmux*.sh`/`build-bd.sh`), copies to `/out`; exposed by `docker-substrate-entrypoint.sh` (`ENTRYPOINT`). Degrade-safe: missing build ⇒ truthful fallback to system tmux/bd (no longer **silent**). `go/beads` tree is gitignored but the build is reproducible from committed scripts. | `14ae06781` |
+| **cockpit Policy + Memory-Candidate panels** | ✅ built | `apps/desktop/cockpit/src/components/PolicyPanel.tsx` + `MemoryCandidatesPanel.tsx` over `/api/agent-os` (read). | `9148d82df` |
+
+> **Honest scope notes:** governance's **Rust crates** (`crates/recoder-governance-*` / `crates/openfang`) are
+> still **designed only** (the deny-wins policy + Merkle audit run today in owned TypeScript; `crates/openfang`
+> is a gitignored vendored clone). interop's **MCP host** is **in progress** (the ingress gate is the part that
+> is live). `network` (ziti) remains **infra-gated / not built**; `distribution` billing remains **not built**
+> (Polar retired). These are tracked honestly in §8 and in PRODUCT-PLAN §5/§6.
