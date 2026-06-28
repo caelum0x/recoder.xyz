@@ -21,8 +21,7 @@
     "test": "node --test --import tsx 'tests/**/*.test.ts' 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@recoder/agent-os": "workspace:*",
-    "zod": "catalog:"
+    "@recoder/agent-os": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
