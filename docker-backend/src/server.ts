@@ -66,6 +66,7 @@ import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { createConductorRouter } from './conductor/conductor.routes.js';
+import { createNetworkRouter, createNetworkInternalRouter } from './network/network.routes.js';
 import { createConnectorsRouter, startConnectors } from './connectors/index.js';
 import { createConnectorsWebhookRouter } from './connectors/webhook-ingress.js';
 import { reconcile as reconcileConductor } from './conductor/workspace-service.js';
@@ -15550,6 +15551,11 @@ app.use('/api/agent-os', authenticateRequest, createAgentOsRouter());
 app.use('/internal/agent-os', createInternalAgentOsRouter());
 // Recoder Conductor — parallel agent sessions (tmux + git worktrees). The pivot product.
 app.use('/api/conductor', authenticateRequest, createConductorRouter());
+// Recoder Network + XDR — Envoy control plane. /api/network is the authenticated
+// control surface (generated config, XDR detections, health); /internal/network/authz
+// is the Envoy ext_authz callback (service-to-service, default-deny, no user auth).
+app.use('/api/network', authenticateRequest, createNetworkRouter());
+app.use('/internal/network', createNetworkInternalRouter());
 // Auto-apply Agent OS Postgres migrations on boot when running on the Postgres
 // driver (idempotent + degrade-safe). This provisions the conductor_workspaces
 // schema for a fresh AGENT_OS_REPOSITORY=postgres deploy so the reconcile below
