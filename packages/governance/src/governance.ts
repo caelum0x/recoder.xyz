@@ -5,7 +5,20 @@ import type {
   PolicyEvaluationRequest,
 } from '@recoder/agent-os';
 
-import { type GovernanceConfig, type GovernanceConfigInput, loadGovernanceConfig } from './governance-config';
+import {
+  type GovernanceConfig,
+  type GovernanceConfigInput,
+  loadGovernanceConfig,
+  resolveDaemonSocketPath,
+} from './governance-config';
+import { GovernanceDaemonClient } from './ipc/daemon-client';
+import {
+  parseDaemonDecideResult,
+  parseDaemonEnforceResult,
+  parseDaemonAuditHash,
+} from './ipc/daemon-verdict';
+import { DaemonUnavailableError } from './errors';
+import { allowed, denied } from './domain/enforcement-result';
 import { GovernancePolicyEngine } from './policy/policy-port';
 import { RoutingService, DEFAULT_ROUTING_CATALOG, type RoutingCatalog } from './routing/router';
 import { classifyTier } from './routing/tier-classifier';
@@ -49,6 +62,14 @@ export class Governance implements PolicyEnginePort {
     private readonly approvals: ApprovalGateway,
     private readonly tierPolicy: RiskTierApprovalPolicy,
     private readonly autoApprover: AutoApprover,
+    /**
+     * The Rust governance daemon client, present only when a socket is
+     * configured (GOVERNANCE_SOCKET env or config.daemonSocketPath). When
+     * present, decide/enforceTool/recordAudit try it first and fall back to the
+     * pure-TS deny-biased path on DaemonUnavailable. When absent, the TS path is
+     * the only path (default — no behavior change).
+     */
+    private readonly daemon?: GovernanceDaemonClient,
   ) {}
 
   /** Build a Governance instance from a (validated) config. */
@@ -70,7 +91,22 @@ export class Governance implements PolicyEnginePort {
       ceiling: config.autoApprove.ceiling,
     });
 
-    return new Governance(config, policyEngine, routing, enforcer, audit, approvals, tierPolicy, autoApprover);
+    // Daemon delegation is OPT-IN: only when a socket path is resolved. Default
+    // (no socket) keeps the pure-TS path as the sole path — no behavior change.
+    const socketPath = resolveDaemonSocketPath(config);
+    const daemon = socketPath ? new GovernanceDaemonClient({ socketPath }) : undefined;
+
+    return new Governance(
+      config,
+      policyEngine,
+      routing,
+      enforcer,
+      audit,
+      approvals,
+      tierPolicy,
+      autoApprover,
+      daemon,
+    );
   }
 
   // ---- agent-os PolicyEnginePort -------------------------------------------
@@ -83,10 +119,61 @@ export class Governance implements PolicyEnginePort {
   // ---- the fused verdict ----------------------------------------------------
 
   /**
-   * The full fused decision pipeline. Always records an audit entry (when audit
-   * is enabled) so the trail reflects every decision, allow or deny.
+   * The full fused decision pipeline. When a daemon is configured it is asked
+   * FIRST; on `DaemonUnavailable` (no socket, transport/validation failure, or a
+   * daemon-reported error) it falls back to the pure-TS deny-biased path. The
+   * fallback NEVER fabricates an allow — it re-runs the conservative TS pipeline.
    */
   async decide(req: GovernanceRequest): Promise<GovernanceVerdict> {
+    if (this.daemon) {
+      try {
+        return await this.decideViaDaemon(req);
+      } catch (err) {
+        if (!(err instanceof DaemonUnavailableError)) throw err;
+        // Fall through to the pure-TS deny-biased path (fail closed).
+      }
+    }
+    return this.decideViaTs(req);
+  }
+
+  /**
+   * Delegate the decision to the Rust daemon. The daemon's effect/tier/reason
+   * are authoritative; routing is derived locally from that effect (a denied
+   * action is structurally unroutable). The daemon reply is validated hostilely:
+   * any malformed field throws DaemonUnavailableError -> the facade falls back.
+   */
+  private async decideViaDaemon(req: GovernanceRequest): Promise<GovernanceVerdict> {
+    const now = req.now ?? new Date().toISOString();
+    const raw = await this.daemon!.decide(toDaemonDecideParams(req));
+    const d = parseDaemonDecideResult(raw);
+
+    // The local policy decision is still computed for the verdict envelope so
+    // downstream consumers keep a structured policy view; the daemon's effect is
+    // authoritative and overrides it.
+    const policy = this.policyEngine.evaluate(toEvaluationRequest(req));
+    const routing = this.routing.route(req, d.effect);
+
+    const verdict: GovernanceVerdict = {
+      verdictId: `gov_verdict_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      requestId: req.requestId,
+      effect: d.effect,
+      tier: d.tier,
+      reason: d.reason,
+      policy,
+      routing,
+      auditHash: d.auditHash,
+      degraded: false, // authoritative daemon decision
+      approvalGateId: d.approvalGateId,
+      createdAt: now,
+    };
+    return verdict;
+  }
+
+  /**
+   * The pure-TS deny-biased pipeline. Always records an audit entry (when audit
+   * is enabled) so the trail reflects every decision, allow or deny.
+   */
+  private async decideViaTs(req: GovernanceRequest): Promise<GovernanceVerdict> {
     const now = req.now ?? new Date().toISOString();
 
     // 1. Policy chain (fused).
@@ -160,8 +247,36 @@ export class Governance implements PolicyEnginePort {
     return this.routing.route(req, policy.effect);
   }
 
-  /** Enforce a single tool invocation directly (runtime adapter seam). */
-  enforceTool(toolName: string, input: string, ctx: EnforcementContext, kind?: 'bash' | 'file_write' | 'generic') {
+  /**
+   * Enforce a single tool invocation directly (runtime adapter seam). When a
+   * daemon is configured it is asked FIRST; on DaemonUnavailable it falls back
+   * to the pure-TS deny-biased enforcer. The fallback never fabricates an allow.
+   */
+  async enforceTool(
+    toolName: string,
+    input: string,
+    ctx: EnforcementContext,
+    kind: 'bash' | 'file_write' | 'generic' = 'generic',
+  ): Promise<EnforcementResult> {
+    if (this.daemon) {
+      try {
+        const raw = await this.daemon.enforceTool(toDaemonEnforceParams(toolName, input, ctx, kind));
+        const d = parseDaemonEnforceResult(raw);
+        if (d.outcome === 'allowed') {
+          return allowed(false);
+        }
+        return denied({
+          tool: d.tool,
+          activeMode: resolveModeWithOverride(ctx.actor, ctx.modeOverride),
+          requiredMode: 'workspace_write',
+          reason: d.reason,
+          degraded: false,
+        });
+      } catch (err) {
+        if (!(err instanceof DaemonUnavailableError)) throw err;
+        // Fall through to the pure-TS deny-biased enforcer (fail closed).
+      }
+    }
     return this.enforcer.enforceTool(toolName, input, ctx, kind);
   }
 
@@ -202,13 +317,36 @@ export class Governance implements PolicyEnginePort {
 
   // ---- audit ----------------------------------------------------------------
 
-  /** Record an audit entry; returns the new Merkle tip hash. */
+  /**
+   * Record an audit entry into the local Merkle chain; returns the new tip hash.
+   * This is the synchronous pure-TS path (the fallback for `recordAuditViaDaemon`
+   * and the path used internally when no daemon is configured).
+   */
   recordAudit(input: AuditInput): string {
     if (!this.config.auditEnabled) {
       return this.audit.tipHash();
     }
     const entry = this.audit.record(input);
     return entry.hash;
+  }
+
+  /**
+   * Daemon-first audit record. When a daemon is configured it is asked FIRST and
+   * its returned tip hash is authoritative; on DaemonUnavailable it falls back to
+   * the local synchronous Merkle chain (`recordAudit`). The fallback always
+   * records — an audit write is never silently dropped on daemon failure.
+   */
+  async recordAuditViaDaemon(input: AuditInput): Promise<string> {
+    if (this.daemon) {
+      try {
+        const raw = await this.daemon.recordAudit(toDaemonAuditParams(input));
+        return parseDaemonAuditHash(raw);
+      } catch (err) {
+        if (!(err instanceof DaemonUnavailableError)) throw err;
+        // Fall through to the local Merkle chain (fail closed: still record).
+      }
+    }
+    return this.recordAudit(input);
   }
 
   /** Verify the audit chain integrity. */
@@ -230,7 +368,13 @@ export class Governance implements PolicyEnginePort {
     return this.config;
   }
 
-  /** Truthful health: degraded because the Rust daemon is deferred. */
+  /**
+   * Truthful synchronous health: reports the local pure-TS fallback view. When
+   * no daemon is configured this is the whole story (degraded). When a daemon IS
+   * configured, use `healthViaDaemon()` for a live probe; this sync view stays
+   * conservative ('degraded'/'unavailable') until that probe succeeds, never
+   * claiming the daemon is up without evidence.
+   */
   health(): { status: 'degraded'; daemon: 'unavailable'; fallback: 'pure-ts-deny-biased'; auditOk: boolean } {
     return {
       status: 'degraded',
@@ -238,6 +382,40 @@ export class Governance implements PolicyEnginePort {
       fallback: 'pure-ts-deny-biased',
       auditOk: this.verifyAudit().ok,
     };
+  }
+
+  /**
+   * Live daemon health probe. Returns the daemon's reported status when it
+   * answers; on DaemonUnavailable returns the conservative degraded view. Never
+   * claims 'up' without a real round-trip — fail closed to 'degraded'.
+   */
+  async healthViaDaemon(): Promise<{
+    status: 'ok' | 'degraded';
+    daemon: 'available' | 'unavailable';
+    fallback: 'pure-ts-deny-biased';
+    auditOk: boolean;
+  }> {
+    const auditOk = this.verifyAudit().ok;
+    if (!this.daemon) {
+      return { status: 'degraded', daemon: 'unavailable', fallback: 'pure-ts-deny-biased', auditOk };
+    }
+    try {
+      await this.daemon.health();
+      return { status: 'ok', daemon: 'available', fallback: 'pure-ts-deny-biased', auditOk };
+    } catch (err) {
+      if (!(err instanceof DaemonUnavailableError)) throw err;
+      return { status: 'degraded', daemon: 'unavailable', fallback: 'pure-ts-deny-biased', auditOk };
+    }
+  }
+
+  /** Whether a daemon client is wired (a socket was resolved at create time). */
+  hasDaemon(): boolean {
+    return this.daemon !== undefined;
+  }
+
+  /** Close the daemon connection (if any). Idempotent; safe when no daemon. */
+  close(): void {
+    this.daemon?.close();
   }
 
   // ---- internals ------------------------------------------------------------
@@ -287,6 +465,54 @@ export class Governance implements PolicyEnginePort {
 }
 
 // ---- helpers ----------------------------------------------------------------
+
+/**
+ * Serialize a GovernanceRequest into the daemon's `decide` params. The shape is
+ * a flat, JSON-safe projection of the request — the daemon re-derives policy,
+ * tier, routing, enforcement, and audit on its side.
+ */
+function toDaemonDecideParams(req: GovernanceRequest): Record<string, unknown> {
+  return {
+    requestId: req.requestId,
+    actor: req.actor,
+    task: req.task,
+    action: req.action,
+    target: { ...req.target },
+    workLocks: req.workLocks ? [...req.workLocks] : undefined,
+    context: req.context,
+    now: req.now,
+  };
+}
+
+/** Serialize an enforceTool call into the daemon's `enforceTool` params. */
+function toDaemonEnforceParams(
+  toolName: string,
+  input: string,
+  ctx: EnforcementContext,
+  kind: 'bash' | 'file_write' | 'generic',
+): Record<string, unknown> {
+  return {
+    toolName,
+    input,
+    kind,
+    actor: ctx.actor,
+    workspaceRoot: ctx.workspaceRoot,
+    modeOverride: ctx.modeOverride,
+  };
+}
+
+/** Serialize an AuditInput into the daemon's `recordAudit` params. */
+function toDaemonAuditParams(input: AuditInput): Record<string, unknown> {
+  return {
+    timestamp: input.timestamp,
+    actor: input.actor,
+    action: input.action,
+    detail: input.detail,
+    outcome: input.outcome,
+    runId: input.runId,
+    metadata: input.metadata,
+  };
+}
 
 function toEvaluationRequest(req: GovernanceRequest): PolicyEvaluationRequest {
   return {
