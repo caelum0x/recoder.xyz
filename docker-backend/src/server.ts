@@ -15575,6 +15575,15 @@ const reconcileTimer = setInterval(() => {
 }, RECONCILE_INTERVAL_MS);
 reconcileTimer.unref(); // don't keep the process alive on this timer alone
 
+// Auto-completion watcher: detects finished agents, generates delivery summaries,
+// transitions workspaces to awaiting_review. Autonomous "landing the plane".
+import { startCompletionWatcher } from './conductor/completion-watcher.js';
+startCompletionWatcher();
+
+// Worktree disk cleanup: prune stale worktrees + kill orphaned tmux sessions.
+import { startWorktreeCleanup } from './conductor/worktree-cleanup.js';
+startWorktreeCleanup();
+
 // Connectors bridge — chat channels (telegram, …) -> gated -> Conductor workspace.
 // Status route is read-only and never leaks credentials (truthful health only).
 app.use('/api/connectors', createConnectorsRouter());
