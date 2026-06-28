@@ -27,8 +27,14 @@ export * from './engine/index';
 // CLI distribution + device-flow auth
 export * from './channels/cli-dist/device-flow/index';
 
-// Billing + entitlements (TS view of fused Polar)
+// Billing + entitlements (TS view of fused Polar) + Polar webhook handling
 export * from './channels/billing/index';
+
+// Enterprise: orgs + seats, device registry, SSO (OIDC), usage metering
+export * from './channels/org/index';
+export * from './channels/device-registry/index';
+export * from './channels/sso/index';
+export * from './channels/usage/index';
 
 // Packaging (homebrew + desktop)
 export * from './channels/packaging/index';

@@ -4,24 +4,24 @@
   "description": "Recoder Distribution subsystem — CLI device-flow auth (recoder.xyz source of truth), billing/entitlements over a typed Polar (Merchant of Record) port, Homebrew/desktop packaging, and the gated delivery engine. Adapter around Recoder state, never an owner of it.",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./domain": {
       "types": "./dist/domain/index.d.ts",
-      "import": "./dist/domain/index.mjs",
-      "require": "./dist/domain/index.js"
+      "import": "./dist/domain/index.js",
+      "require": "./dist/domain/index.cjs"
     },
     "./ports": {
       "types": "./dist/ports/index.d.ts",
-      "import": "./dist/ports/index.mjs",
-      "require": "./dist/ports/index.js"
+      "import": "./dist/ports/index.js",
+      "require": "./dist/ports/index.cjs"
     }
   },
   "files": ["dist"],

@@ -66,6 +66,12 @@ import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { createConductorRouter } from './conductor/conductor.routes.js';
+import {
+  getDistributionModule,
+  createCliAuthRouter,
+  createBillingRouter,
+  createBillingWebhookRouter,
+} from './distribution/index.js';
 import { createNetworkRouter, createNetworkInternalRouter } from './network/network.routes.js';
 import { createConnectorsRouter, startConnectors } from './connectors/index.js';
 import { createConnectorsWebhookRouter } from './connectors/webhook-ingress.js';
@@ -1787,6 +1793,15 @@ app.use('/api/agent-os/github/webhook', express.raw({ type: 'application/json', 
 // a raw-body parser (inside the router) BEFORE the global JSON parser so the
 // HMAC signature verifies over the exact bytes the platform signed.
 app.use('/api/connectors/webhook', createConnectorsWebhookRouter());
+// Polar (Merchant-of-Record) billing webhook ingress: mounted with a raw-body
+// parser BEFORE the global JSON parser so the Standard-Webhooks signature
+// verifies over the exact bytes Polar signed. A missing secret / bad signature
+// / stale timestamp / malformed body all deny (fail safe — never a faked 200).
+app.use(
+  '/internal/billing/webhook',
+  express.raw({ type: '*/*', limit: '2mb' }),
+  createBillingWebhookRouter(getDistributionModule()),
+);
 app.use(express.json({ limit: '50mb' }));
 // Tighter body-size limit for public API routes (2 MB vs 50 MB global)
 app.use('/api/v1', express.json({ limit: '2mb' }));
@@ -15551,6 +15566,14 @@ app.use('/api/agent-os', authenticateRequest, createAgentOsRouter());
 app.use('/internal/agent-os', createInternalAgentOsRouter());
 // Recoder Conductor — parallel agent sessions (tmux + git worktrees). The pivot product.
 app.use('/api/conductor', authenticateRequest, createConductorRouter());
+// Recoder Distribution — CLI device-flow auth (recoder.xyz is the source of
+// truth), billing/entitlement/quota status over the provider-agnostic Polar
+// (Merchant-of-Record) port, the enterprise device kill-switch, and org seats.
+// CLI device-flow endpoints are intentionally unauthenticated at the route
+// layer (the flow IS the auth handshake; the browser-authorize step verifies
+// the recoder.xyz session cookie internally). Billing endpoints require auth.
+app.use('/api/auth/cli', createCliAuthRouter(getDistributionModule()));
+app.use('/api/billing', authenticateRequest, createBillingRouter(getDistributionModule()));
 // Recoder Network + XDR — Envoy control plane. /api/network is the authenticated
 // control surface (generated config, XDR detections, health); /internal/network/authz
 // is the Envoy ext_authz callback (service-to-service, default-deny, no user auth).

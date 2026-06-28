@@ -56,7 +56,24 @@ src/
 │   │   ├── billing-service, entitlement-resolver (deny-on-miss),
 │   │   ├── entitlement-cache, quota-service, quota-enforcer, license-key-service,
 │   │   ├── plan-catalog, health/billing-health,
-│   │   └── adapters/polar-billing-adapter  # REAL typed fetch client to Polar
+│   │   ├── adapters/polar-billing-adapter  # REAL typed fetch client to Polar
+│   │   └── webhook/                # Polar webhook → entitlement change
+│   │       ├── webhook-signature (Standard-Webhooks HMAC verify, replay guard),
+│   │       ├── webhook-event, webhook-to-entitlement, billing-webhook-handler
+│   ├── org/                    # ENTERPRISE: org + seat domain
+│   │   ├── organization (+ per-plan seat limits), seat, org-store,
+│   │   └── seat-service (assign/revoke, seat caps, org-scoped entitlements)
+│   ├── device-registry/        # ENTERPRISE: device registration + revoke
+│   │   ├── device-registration (SHA-256 fingerprint hash), device-store,
+│   │   ├── device-registry-service (register/list/revoke),
+│   │   └── device-bound-refresh  # a revoked device cannot refresh a CLI token
+│   ├── sso/                    # ENTERPRISE: org SSO
+│   │   ├── oidc-config, jwks (JWKS fetch + JWK import + cache),
+│   │   ├── oidc-verifier (REAL RS*/ES* id-token verify: sig + iss/aud/exp),
+│   │   └── saml (SamlPort contract + BLOCKED note — explicit deny, never faked)
+│   ├── usage/                  # ENTERPRISE: usage-priced add-ons (NOT token resale)
+│   │   ├── usage-event (idempotent), usage-meter-emitter (→ billing-port → Polar),
+│   │   └── usage-aggregator (per-window rollups, deduped)
 │   └── packaging/
 │       ├── homebrew/ (formula-renderer, formula-bump)  # FUSED recoder-code.rb
 │       └── desktop/ (notarize, entitlements, release-secrets)  # FUSED notarize.js
@@ -115,11 +132,42 @@ const result = await pollDeviceToken(cfg, grants, {         // /api/auth/cli/tok
 This is the contract `scripts/verify-cli-device-flow-e2e.sh` exercises against
 `https://recoder.xyz`.
 
+### Enterprise: orgs, seats, device revoke, SSO, usage, webhooks
+
+```ts
+import {
+  createSeatService, createInMemoryOrgStore, createInMemorySeatStore,
+  createDeviceRegistryService, createInMemoryDeviceStore, deviceBoundRefresh,
+  createOidcVerifier, createUsageMeterEmitter, createBillingWebhookHandler,
+} from '@recoder/distribution';
+
+// Seats: assign/revoke under a per-plan cap; org grants only flow to seated users.
+const seats = createSeatService({ orgs, seats: seatStore, billing });
+await seats.assignSeat({ orgId, userId, assignedBy }); // denied once seatLimit hit
+
+// Device registry: a REVOKED device cannot refresh a CLI token (kill-switch).
+const registry = createDeviceRegistryService({ devices: createInMemoryDeviceStore() });
+registry.register({ userId, rawFingerprint, name: 'Laptop' });
+await deviceBoundRefresh(cfg, auth, registry, { refreshToken, userId, rawFingerprint }, key);
+
+// Org SSO: REAL OIDC id-token verification (JWKS + signature + iss/aud/exp).
+const sso = createOidcVerifier({ config: oidcConfig });
+const identity = await sso.verifyIdToken(idToken); // Result — deny on any miss
+
+// Usage add-ons: emit metered usage → billing port → Polar (idempotent).
+const meter = createUsageMeterEmitter({ billing });
+await meter.emit({ subjectId: orgId, subjectKind: 'org', kind: 'agent_run', quantity: 1, /* … */ });
+
+// Polar webhooks: verify the signature (never trust the wire) → entitlement event.
+const webhooks = createBillingWebhookHandler({ secrets, events, taskId });
+await webhooks.process({ rawBody, headers }); // deny w/o POLAR_WEBHOOK_SECRET or bad sig
+```
+
 ## Verify
 
 ```bash
 pnpm -F @recoder/distribution check-types   # tsc --noEmit (0 errors)
-pnpm -F @recoder/distribution test          # node:test + tsx (45 tests)
+pnpm -F @recoder/distribution test          # node:test + tsx (88 tests)
 pnpm -F @recoder/distribution build         # tsup multi-entry (cjs+esm+dts)
 ```
 
@@ -136,3 +184,9 @@ pnpm -F @recoder/distribution build         # tsup multi-entry (cjs+esm+dts)
   custom-domain, `release/*` orchestration, `telemetry-optin/*`, BYOK gateway,
   mobile packaging) — domain + port seams are in place; channel publishers land
   incrementally.
+- **SAML 2.0 SSO** (`sso/saml.ts`) — the `SamlPort` contract is defined and the
+  placeholder adapter returns an **explicit `provider_unavailable` deny** (never
+  a faked allow). A correct verifier needs vetted XML-DSig + exclusive-c14n + XSW
+  hardening, which Node's stdlib cannot do safely; it lands as a single adapter
+  behind the existing contract once that dependency is wired. OIDC SSO is fully
+  implemented and tested now.
