@@ -155,7 +155,14 @@ function WorksWith() {
   );
 }
 
-const PILLARS = [
+interface Pillar {
+  title: string;
+  body: string;
+  foot: string;
+  link?: { href: string; label: string };
+}
+
+const PILLARS: Pillar[] = [
   {
     title: "One shared brain",
     body: "Every agent reads the repo once and reuses it. No more paying three times for the same context. The brain persists and compounds across runs.",
@@ -168,8 +175,9 @@ const PILLARS = [
   },
   {
     title: "Built for teams",
-    body: "Approvals, permission rubrics, audit trails, and session replay. Coordinate agents across machines and orgs over a zero-trust mesh. Self-host it.",
-    foot: "approvals · audit · self-host",
+    body: "Approvals, deny-biased policy, a tamper-evident audit chain, and security enforced below the model. Coordinate across machines and orgs. Self-host it.",
+    foot: "governance · audit · self-host",
+    link: { href: "/enterprise", label: "See the enterprise moat" },
   },
 ];
 
@@ -191,6 +199,14 @@ function Pillars() {
             <h3 className="text-lg font-medium">{p.title}</h3>
             <p className="mt-3 text-sm leading-relaxed text-muted">{p.body}</p>
             <p className="mt-5 font-mono text-[11px] text-faint">{p.foot}</p>
+            {p.link && (
+              <Link
+                href={p.link.href}
+                className="mt-4 inline-block text-sm text-accent transition-opacity hover:opacity-80"
+              >
+                {p.link.label} →
+              </Link>
+            )}
           </div>
         ))}
       </div>
@@ -221,8 +237,20 @@ function FinalCta() {
       <h2 className="text-balance mx-auto max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
         Stop your agents from stepping on each other.
       </h2>
-      <div className="mt-8 flex justify-center">
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
         <DownloadButton className="px-6 py-3 text-[15px]" />
+        <Link
+          href="/pricing"
+          className="text-sm text-muted transition-colors hover:text-fg"
+        >
+          See pricing →
+        </Link>
+        <Link
+          href="/self-host"
+          className="text-sm text-muted transition-colors hover:text-fg"
+        >
+          Self-host →
+        </Link>
       </div>
       <p className="mt-4 text-xs text-faint">Free for solo devs. No account required.</p>
     </section>

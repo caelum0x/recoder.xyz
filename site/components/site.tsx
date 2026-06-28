@@ -21,6 +21,34 @@ export function DownloadButton({
   );
 }
 
+/** Secondary action used on product pages (Contact sales, Read docs, etc.). */
+export function SecondaryButton({
+  href,
+  label,
+  className = "",
+}: {
+  href: string;
+  label: string;
+  className?: string;
+}) {
+  const external = href.startsWith("http");
+  const cls =
+    "inline-flex items-center justify-center rounded-lg border border-border-strong px-5 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-bg-soft " +
+    className;
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={cls}>
+        {label}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={cls}>
+      {label}
+    </Link>
+  );
+}
+
 export function Wordmark() {
   return (
     <Link href="/" className="flex items-center gap-2.5">
@@ -38,6 +66,7 @@ export function Wordmark() {
 const NAV_LINKS = [
   { href: "/#how", label: "How it works" },
   { href: "/enterprise", label: "Enterprise" },
+  { href: "/self-host", label: "Self-host" },
   { href: "/pricing", label: "Pricing" },
   { href: "/changelog", label: "Changelog" },
 ];
@@ -79,8 +108,8 @@ export function Footer() {
           links={[
             { href: "/download", label: "Download" },
             { href: "/#how", label: "How it works" },
+            { href: "/self-host", label: "Self-host" },
             { href: "/changelog", label: "Changelog" },
-            { href: "/pricing", label: "Pricing" },
           ]}
         />
         <FooterCol
