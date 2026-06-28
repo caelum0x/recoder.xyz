@@ -11,7 +11,11 @@ import uuid
 
 from recoder_billing.entitlements.benefit.grant import Benefit, Customer
 from recoder_billing.models.benefit_grant import BenefitGrant, BenefitGrantScope
+from recoder_billing.models.checkout import Checkout
 from recoder_billing.models.license_key import LicenseKey, LicenseKeyActivation
+from recoder_billing.models.order import Order
+from recoder_billing.models.product import Product
+from recoder_billing.models.subscription import Subscription
 
 
 class InMemoryLicenseKeyRepository:
@@ -112,3 +116,85 @@ class InMemoryBenefitGrantRepository:
             and g.customer_id == customer.id
             and g.is_granted
         ]
+
+
+class InMemoryCheckoutRepository:
+    """Real checkout store satisfying the CheckoutRepository port."""
+
+    def __init__(self) -> None:
+        self.checkouts: dict[uuid.UUID, Checkout] = {}
+
+    async def get(self, checkout_id: uuid.UUID) -> Checkout | None:
+        return self.checkouts.get(checkout_id)
+
+    async def save(self, checkout: Checkout) -> Checkout:
+        self.checkouts[checkout.id] = checkout
+        return checkout
+
+
+class InMemoryProductLookup:
+    """Real product lookup callable, satisfying the operations product_lookup port."""
+
+    def __init__(self) -> None:
+        self.products: dict[uuid.UUID, Product] = {}
+
+    def add(self, product: Product) -> Product:
+        self.products[product.id] = product
+        return product
+
+    async def __call__(self, product_id: uuid.UUID) -> Product | None:
+        return self.products.get(product_id)
+
+
+class InMemoryOrderRepository:
+    """Real order store satisfying the OrderRepository port."""
+
+    def __init__(self) -> None:
+        self.orders: dict[uuid.UUID, Order] = {}
+
+    async def get(self, order_id: uuid.UUID) -> Order | None:
+        return self.orders.get(order_id)
+
+    async def save(self, order: Order) -> Order:
+        self.orders[order.id] = order
+        return order
+
+
+class InMemorySubscriptionRepository:
+    """Real subscription store satisfying the SubscriptionRepository port."""
+
+    def __init__(self) -> None:
+        self.subscriptions: dict[uuid.UUID, Subscription] = {}
+
+    async def get(self, subscription_id: uuid.UUID) -> Subscription | None:
+        return self.subscriptions.get(subscription_id)
+
+    async def save(self, subscription: Subscription) -> Subscription:
+        self.subscriptions[subscription.id] = subscription
+        return subscription
+
+
+class RecordingLifecycleHooks:
+    """Real (recording) lifecycle hooks satisfying the LifecycleHooks port."""
+
+    def __init__(self) -> None:
+        self.canceled: list[bool] = []
+        self.uncanceled = 0
+        self.revoked = 0
+        self.past_due = 0
+        self.activated = 0
+
+    async def on_canceled(self, subscription, *, immediately: bool) -> None:
+        self.canceled.append(immediately)
+
+    async def on_uncanceled(self, subscription) -> None:
+        self.uncanceled += 1
+
+    async def on_revoked(self, subscription) -> None:
+        self.revoked += 1
+
+    async def on_past_due(self, subscription) -> None:
+        self.past_due += 1
+
+    async def on_activated(self, subscription) -> None:
+        self.activated += 1

@@ -10,10 +10,13 @@ from .envelope import (
     sign_envelope,
     verify_envelope,
 )
+from .operations import BillingPorts, build_billing_operations
 
 __all__ = [
+    "BillingPorts",
     "Envelope",
     "EnvelopeVerificationError",
+    "build_billing_operations",
     "sign_envelope",
     "verify_envelope",
 ]
