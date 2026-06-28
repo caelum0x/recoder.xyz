@@ -20,7 +20,13 @@ export interface ReconcileFinding {
   detail?: string;
 }
 
-export interface ReconcileReport {
+/**
+ * Findings-grouped reconcile report (design §4.6 vocabulary). The wired engine
+ * reports the proven string-id `ReconcileReport` (see engine/types.ts); this
+ * richer findings shape is retained for the future operator surface and is named
+ * distinctly to avoid colliding with the engine report.
+ */
+export interface SubstrateReconcileReport {
   /** ISO-8601 timestamp the reconcile ran. */
   at: string;
   live: ReconcileFinding[];

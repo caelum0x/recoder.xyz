@@ -16,5 +16,5 @@ export type { ProvisionResult } from './provision.js';
 export type {
   OrphanKind,
   ReconcileFinding,
-  ReconcileReport,
+  SubstrateReconcileReport,
 } from './reconcile.js';
