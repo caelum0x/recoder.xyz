@@ -13,6 +13,13 @@ import {
   type McpServerRegistration,
 } from '@recoder/interop';
 import type { McpToolCallInput, McpToolResult } from '@recoder/agent-mcp';
+import { McpToolRouter } from '@recoder/agent-mcp';
+import { agentOsContainer } from '../service-container';
+import type { AgentOsRepository } from '../repositories/agent-os.repository';
+import {
+  buildInProcEngineRouter,
+  forEachInProcEngineTool,
+} from './inproc-engines';
 import {
   billingMcpServer,
   browserMcpServer,
@@ -121,6 +128,19 @@ export interface InteropHostBundleOptions {
   readonly auditSink?: McpAuditSinkPort;
   /** Env overlay for the PAL process (e.g. provider keys from the host env). */
   readonly palEnv?: Readonly<Record<string, string>>;
+  /**
+   * Canonical agent-os store backing the in-proc tasks/runs MCP tools. Defaults
+   * to the live `agentOsContainer.repository` so MCP task/run reads + writes hit
+   * the SAME store of record as the rest of the control plane. Injectable for
+   * tests with an in-memory repository.
+   */
+  readonly repository?: AgentOsRepository;
+  /**
+   * Base directory the git_nexus repo-root resolver resolves relative repos
+   * against (mirrors the conductor's `repoPath` base). Defaults to
+   * `CONDUCTOR_REPO_ROOT` / `process.cwd()` inside the engine binding.
+   */
+  readonly baseRepoRoot?: string;
 }
 
 /** The PAL server descriptor surfaced to control routes with truthful health. */
@@ -168,6 +188,29 @@ export class InteropHostBundle {
     // its health stays truthful if the python env is absent.
     const palConfig = buildPalServerConfig({ rootDir: this.palRootDir, env: options.palEnv });
     this.host.registerExternalServer(palConfig);
+
+    // Wire the CONCRETE engines behind the runtime-agnostic git_nexus/tasks/runs
+    // MCP servers: the recodergit indexer over the resolved repo root, and the
+    // canonical agent-os store for task/run state. Authorized in-proc calls for
+    // these tools are delegated into the package's real handlers — the engines
+    // are injected, not the package fakes.
+    this.bindInProcEngines(
+      options.repository ?? agentOsContainer.repository,
+      options.baseRepoRoot,
+    );
+  }
+
+  /**
+   * Build the engine-backed `McpToolRouter` and register a delegating in-proc
+   * handler per engine tool. The interop gate still runs first
+   * (authorize → risk → audit); only AFTER authorization does the bundle invoke
+   * the real router, which executes the concrete recodergit / agent-os engine.
+   */
+  private bindInProcEngines(repository: AgentOsRepository, baseRepoRoot?: string): void {
+    const engineRouter: McpToolRouter = buildInProcEngineRouter(repository, { baseRepoRoot });
+    forEachInProcEngineTool((serverId, toolName) => {
+      this.registerInProcTool(serverId, toolName, (input) => engineRouter.call(input));
+    });
   }
 
   /**
