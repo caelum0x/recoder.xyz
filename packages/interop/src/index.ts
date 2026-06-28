@@ -26,3 +26,9 @@ export {
   toEd25519PublicKey,
   type Ed25519PublicKey,
 } from "./ed25519";
+
+// MCP host facade + registry + catalog gate + policy + external supervision
+export * from "./mcp";
+
+// A2A wire — agent-card builder, envelope builders, signing primitives
+export * from "./a2a";
