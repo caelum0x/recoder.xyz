@@ -21,9 +21,7 @@ export {
 
 export {
   IPC_METHODS,
-  IPC_PROTOCOL_VERSION,
   type IpcMethod,
-  type IpcError,
   type IpcRequestEnvelope,
   type IpcResponseEnvelope,
   isIpcMethod,

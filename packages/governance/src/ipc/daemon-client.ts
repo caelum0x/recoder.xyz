@@ -15,14 +15,21 @@ import {
  *
  * Transport: a single `node:net` Unix-domain-socket connection carrying
  * length-prefixed JSON frames (see `codec.ts`). Each call mints a correlation
- * id, frames a request envelope, awaits the matching response within a timeout,
- * and validates the decoded reply against the pinned envelope contract.
+ * id, frames a request envelope in the daemon's NATIVE wire (string id,
+ * snake_case method, `payload` carrying params + the shared key), awaits the
+ * matching response within a timeout, and validates the decoded reply against
+ * the daemon's real envelope contract (`{ id, ok, result?, error? }`).
+ *
+ * NATIVE WIRE (no shim): the request/response shapes mirror the Rust daemon's
+ * `serde` structs exactly (see `envelope.ts`). The public method surface is the
+ * TS-camelCase names the facade calls; the wire method is the daemon's
+ * snake_case form, mapped in `METHOD_WIRE`.
  *
  * FAIL-CLOSED CONTRACT: every failure mode — no socket, connect error, write
- * error, timeout, malformed/oversized frame, unknown method echoed, id
- * mismatch, or a daemon-reported error — surfaces as a `DaemonUnavailableError`.
- * The facade catches that and falls back to the pure-TS deny-biased path. The
- * client NEVER fabricates a success.
+ * error, timeout, malformed/oversized frame, id mismatch, or a daemon-reported
+ * error (`ok:false`) — surfaces as a `DaemonUnavailableError`. The facade
+ * catches that and falls back to the pure-TS deny-biased path. The client NEVER
+ * fabricates a success.
  *
  * No external dependency: `node:net` + JSON only.
  */
@@ -30,6 +37,13 @@ import {
 export type GovernanceDaemonClientOptions = {
   /** UDS path. Typically from `process.env.GOVERNANCE_SOCKET`. */
   readonly socketPath: string;
+  /**
+   * The shared `INTERNAL_SERVICE_KEY` injected at `payload.key` for the
+   * authenticated methods. When omitted, the env var `INTERNAL_SERVICE_KEY` is
+   * consulted; when neither is present no key is sent (the daemon then rejects
+   * every non-`health` method, which the facade treats as fail-closed).
+   */
+  readonly serviceKey?: string;
   /** Per-request timeout in ms (connect + round-trip). */
   readonly requestTimeoutMs?: number;
   /** Max reconnect attempts within a single call before giving up. */
@@ -40,8 +54,21 @@ export type GovernanceDaemonClientOptions = {
   readonly backoffMaxMs?: number;
 };
 
+/** TS-facing (camelCase) client method -> daemon snake_case wire method. */
+const METHOD_WIRE = {
+  decide: 'decide',
+  enforceTool: 'enforce_tool',
+  route: 'route',
+  recordAudit: 'record_audit',
+  verifyAudit: 'verify_audit',
+  health: 'health',
+} as const satisfies Record<string, IpcMethod>;
+
+/** The TS-facing method names the client exposes. */
+type ClientMethod = keyof typeof METHOD_WIRE;
+
 type Pending = {
-  readonly method: IpcMethod;
+  readonly method: ClientMethod;
   resolve: (value: IpcResponseEnvelope) => void;
   reject: (err: Error) => void;
   timer: NodeJS.Timeout;
@@ -56,6 +83,7 @@ const DEFAULTS = {
 
 export class GovernanceDaemonClient {
   private readonly socketPath: string;
+  private readonly serviceKey?: string;
   private readonly requestTimeoutMs: number;
   private readonly maxConnectRetries: number;
   private readonly backoffBaseMs: number;
@@ -64,7 +92,7 @@ export class GovernanceDaemonClient {
   private socket: net.Socket | null = null;
   private connecting: Promise<net.Socket> | null = null;
   private readonly decoder = new FrameDecoder();
-  private readonly pending = new Map<number, Pending>();
+  private readonly pending = new Map<string, Pending>();
   private nextId = 1;
   private closed = false;
 
@@ -73,6 +101,11 @@ export class GovernanceDaemonClient {
       throw new DaemonUnavailableError('GovernanceDaemonClient: socketPath is required');
     }
     this.socketPath = options.socketPath;
+    // Prefer an explicit key; otherwise read INTERNAL_SERVICE_KEY from the env
+    // (the same secret the daemon loads). A blank key is treated as absent.
+    const envKey = process.env.INTERNAL_SERVICE_KEY?.trim();
+    const optKey = options.serviceKey?.trim();
+    this.serviceKey = optKey && optKey.length > 0 ? optKey : envKey && envKey.length > 0 ? envKey : undefined;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULTS.requestTimeoutMs;
     this.maxConnectRetries = options.maxConnectRetries ?? DEFAULTS.maxConnectRetries;
     this.backoffBaseMs = options.backoffBaseMs ?? DEFAULTS.backoffBaseMs;
@@ -130,7 +163,7 @@ export class GovernanceDaemonClient {
    * Issue one validated round-trip. Resolves with the `result` payload on a
    * daemon `ok: true`; throws `DaemonUnavailableError` on EVERY other path.
    */
-  private async call(method: IpcMethod, params: unknown): Promise<unknown> {
+  private async call(method: ClientMethod, params: unknown): Promise<unknown> {
     if (this.closed) {
       throw new DaemonUnavailableError('GovernanceDaemonClient: client is closed');
     }
@@ -142,8 +175,13 @@ export class GovernanceDaemonClient {
       throw asDaemonUnavailable('connect failed', err);
     }
 
-    const id = this.nextId++;
-    const envelope = makeRequestEnvelope(id, method, params);
+    // A monotonic, per-process-unique STRING id (the daemon echoes it back). A
+    // counter is deterministic and collision-free within a client instance;
+    // bounded well under the daemon's MAX_ID_LEN.
+    const id = `gov-${this.nextId++}`;
+    const wireMethod = METHOD_WIRE[method];
+    const payload = this.buildPayload(wireMethod, params);
+    const envelope = makeRequestEnvelope(id, wireMethod, payload, Date.now());
 
     let frame: Buffer;
     try {
@@ -178,24 +216,36 @@ export class GovernanceDaemonClient {
       });
     });
 
-    // Validate the correlation + method echo (hostile: never trust the wire).
+    // Validate the correlation echo (hostile: never trust the wire). The daemon
+    // does not echo the method, so the id is the sole correlation field.
     if (response.id !== id) {
       this.dropSocket();
-      throw new DaemonUnavailableError(`GovernanceDaemonClient: response id ${response.id} != request id ${id}`);
-    }
-    if (response.method !== method) {
-      this.dropSocket();
-      throw new DaemonUnavailableError(`GovernanceDaemonClient: response method '${response.method}' != '${method}'`);
+      throw new DaemonUnavailableError(`GovernanceDaemonClient: response id '${response.id}' != request id '${id}'`);
     }
 
     if (response.ok === true) {
       return response.result;
     }
-    // Daemon-reported error -> treat as unavailable so the facade falls back.
+    // Daemon-reported error (a string) -> treat as unavailable so the facade
+    // falls back.
     throw new DaemonUnavailableError(
-      `GovernanceDaemonClient: daemon error for '${method}': [${response.error.code}] ${response.error.message}`,
-      { daemonCode: response.error.code },
+      `GovernanceDaemonClient: daemon error for '${method}': ${response.error}`,
     );
+  }
+
+  /**
+   * Build the method payload in the daemon's native shape: the caller's params
+   * as the base object, with the shared `key` injected for the authenticated
+   * methods. `health` needs no key (the daemon serves it unauthenticated), but
+   * injecting it is harmless and matches the INTERNAL_SERVICE_KEY contract.
+   */
+  private buildPayload(wireMethod: IpcMethod, params: unknown): Record<string, unknown> {
+    const base: Record<string, unknown> =
+      typeof params === 'object' && params !== null ? { ...(params as Record<string, unknown>) } : {};
+    if (this.serviceKey !== undefined) {
+      base.key = this.serviceKey;
+    }
+    return base;
   }
 
   // ---- connection lifecycle -------------------------------------------------
