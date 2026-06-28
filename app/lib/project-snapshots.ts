@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { coerceDirectories, coerceFiles, mergeSnapshotState } from '@/lib/snapshot-paths';
 
 export type ProjectSnapshotRecord = {
   projectId: string;
@@ -69,26 +70,6 @@ async function ensureProjectSnapshotsTable(): Promise<void> {
   `);
 
   schemaEnsured = true;
-}
-
-function coerceFiles(files: unknown): Record<string, string> {
-  if (!files || typeof files !== 'object' || Array.isArray(files)) {
-    return {};
-  }
-
-  return Object.fromEntries(
-    Object.entries(files as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-  );
-}
-
-function coerceDirectories(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)),
-  ).sort();
 }
 
 function mapSnapshotRow(row: any): ProjectSnapshotRecord {
@@ -612,67 +593,20 @@ export async function patchProjectSnapshotFiles(
   input: SnapshotPatchInput,
 ): Promise<ProjectSnapshotRecord> {
   const existing = await getProjectSnapshot(projectId, userId);
-  const mergedFiles: Record<string, string> = { ...(existing?.files || {}) };
-  const mergedDirectories = new Set(existing?.directories || []);
 
-  if (input.files) {
-    for (const [path, content] of Object.entries(input.files)) {
-      if (typeof content === 'string') {
-        mergedFiles[path] = content;
-        const parent = path.split('/').slice(0, -1).join('/');
-        if (parent) mergedDirectories.add(parent);
-      }
-    }
-  }
-
-  for (const path of input.removePaths || []) {
-    delete mergedFiles[path];
-  }
-
-  for (const prefix of input.removePathPrefixes || []) {
-    for (const path of Object.keys(mergedFiles)) {
-      if (path === prefix || path.startsWith(`${prefix}/`)) {
-        delete mergedFiles[path];
-      }
-    }
-    for (const dir of Array.from(mergedDirectories)) {
-      if (dir === prefix || dir.startsWith(`${prefix}/`)) {
-        mergedDirectories.delete(dir);
-      }
-    }
-  }
-
-  for (const rename of input.renamePaths || []) {
-    const nextFiles: Record<string, string> = {};
-    for (const [path, content] of Object.entries(mergedFiles)) {
-      if (path === rename.from || path.startsWith(`${rename.from}/`)) {
-        nextFiles[`${rename.to}${path.slice(rename.from.length)}`] = content;
-      } else {
-        nextFiles[path] = content;
-      }
-    }
-    Object.keys(mergedFiles).forEach((path) => delete mergedFiles[path]);
-    Object.assign(mergedFiles, nextFiles);
-
-    const nextDirectories = new Set<string>();
-    for (const dir of mergedDirectories) {
-      if (dir === rename.from || dir.startsWith(`${rename.from}/`)) {
-        nextDirectories.add(`${rename.to}${dir.slice(rename.from.length)}`);
-      } else {
-        nextDirectories.add(dir);
-      }
-    }
-    mergedDirectories.clear();
-    nextDirectories.forEach((dir) => mergedDirectories.add(dir));
-  }
-
-  for (const dir of input.addDirectories || []) {
-    if (dir) mergedDirectories.add(dir);
-  }
-
-  for (const dir of input.removeDirectories || []) {
-    mergedDirectories.delete(dir);
-  }
+  // All file/directory bookkeeping (upsert, prefix removal, rename, ancestor
+  // directory registration) is delegated to the pure, unit-tested merge helper.
+  const { files: mergedFiles, directories: mergedDirectories } = mergeSnapshotState(
+    { files: existing?.files, directories: existing?.directories },
+    {
+      files: input.files,
+      removePaths: input.removePaths,
+      removePathPrefixes: input.removePathPrefixes,
+      addDirectories: input.addDirectories,
+      removeDirectories: input.removeDirectories,
+      renamePaths: input.renamePaths,
+    },
+  );
 
   const now = new Date();
   return upsertSnapshotRow({
@@ -682,7 +616,7 @@ export async function patchProjectSnapshotFiles(
     title: input.title ?? existing?.title ?? null,
     description: input.description ?? existing?.description ?? null,
     files: mergedFiles,
-    directories: Array.from(mergedDirectories).sort(),
+    directories: mergedDirectories,
     framework: input.framework ?? existing?.framework ?? null,
     starterId: existing?.starterId ?? null,
     source: input.source ?? existing?.source ?? 'web',
