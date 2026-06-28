@@ -17,6 +17,7 @@ import type { Artifact, MemoryCandidate, Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
 import { agentOsContainer } from '../agent-os/service-container';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
+import { enforceDeliveryApproval } from './delivery-approval.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:publish');
@@ -60,6 +61,12 @@ export async function createWorkspacePr(workspaceId: string, input: CreatePrInpu
   const remote = input.remote || 'origin';
   const base = input.base || (workspace.baseRef && workspace.baseRef !== 'HEAD' ? workspace.baseRef : 'main');
   if (!input.title?.trim()) throw new Error('PR title is required');
+
+  // Production rule: opening a PR pushes the branch (a customer-visible delivery
+  // action) and MUST be approval-gated. If no approval exists, this throws a
+  // DeliveryApprovalRequiredError and transitions the workspace to
+  // awaiting_approval — the branch is NOT pushed and the PR is NOT opened.
+  await enforceDeliveryApproval(workspace, 'pr');
 
   await run(cwd, 'git', ['push', '-u', remote, workspace.branch]);
 
@@ -108,6 +115,11 @@ export async function mergeWorkspace(workspaceId: string, input: MergeInput = {}
   const workspace = await requireWorktree(workspaceId);
   const cwd = workspace.worktreePath;
   const strategy = input.strategy || 'squash';
+
+  // Production rule: a merge is the customer-visible delivery and MUST be
+  // approval-gated. If no approval record exists, this throws and surfaces
+  // awaiting_approval instead of silently merging.
+  await enforceDeliveryApproval(workspace, 'merge');
 
   await advanceWorkspace(workspaceId, 'merging');
   try {

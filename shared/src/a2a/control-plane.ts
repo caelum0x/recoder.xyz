@@ -7,11 +7,24 @@ import {
 import type {
   ClaudeCodeWireMessage,
   CodexWireMessage,
-  RecoderA2AEnvelope,
   RecoderAgentCard,
   RecoderAgentIdentity,
   RecoderAgentPlatform,
 } from './types';
+// `A2ATask` is now a derived projection of the canonical `TaskEnvelope`.
+// It is declared once in `./task-convergence` (single source of truth) and
+// re-exported here under the same name so every existing importer is
+// unaffected. See that module for the lossless adapters and the compile-time
+// drift guards that pin the projection to the canonical envelope.
+import type { A2ATask } from './task-convergence';
+export type { A2ATask } from './task-convergence';
+export {
+  a2aTaskToEnvelope,
+  envelopeToA2ATask,
+  agentIdentityToRef,
+  agentRefToIdentity,
+} from './task-convergence';
+export type { A2ATaskToEnvelopeOptions } from './task-convergence';
 
 export type A2AProtocolKind = 'a2a' | 'mcp' | 'jsonrpc' | 'rest' | 'file_git';
 export type ConnectorTier = 'tier1' | 'tier2';
@@ -259,19 +272,8 @@ export class InMemoryCollaborationService implements CollaborationService {
   }
 }
 
-export interface A2ATask {
-  id: string;
-  threadId: string;
-  createdAt: string;
-  updatedAt: string;
-  requester: RecoderAgentIdentity;
-  assignee: RecoderAgentIdentity;
-  state: TaskState;
-  prompt: string;
-  envelope?: RecoderA2AEnvelope;
-  resultText?: string;
-  error?: string;
-}
+// NOTE: `A2ATask` is declared in `./task-convergence` as a derived projection
+// of the canonical `TaskEnvelope`, and re-exported at the top of this file.
 
 export class InMemoryTaskStore implements TaskStore {
   private readonly tasks = new Map<string, A2ATask>();

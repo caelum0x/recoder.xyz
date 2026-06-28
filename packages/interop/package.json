@@ -23,11 +23,7 @@
   "dependencies": {
     "@recoder/agent-os": "workspace:*",
     "@recoder/a2a-sdk": "workspace:*",
-    "@recoder/agent-mcp": "workspace:*",
-    "@recoder/agent-policy": "workspace:*",
-    "@recoder/agent-events": "workspace:*",
-    "@recoder/connectors": "workspace:*",
-    "zod": "catalog:"
+    "@recoder/agent-mcp": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

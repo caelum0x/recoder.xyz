@@ -37,6 +37,32 @@ export function LaunchWebIDEButton({
 
     setLoading(true);
 
+    // Check 2: BYOK gate. Recoder is bring-your-own-key, so the Web IDE is only
+    // useful once the user has at least one active AI provider key. Gate the
+    // handoff on the canonical key store; if there are none, surface the
+    // "API Key Required" modal instead of dropping the user into a dead IDE.
+    try {
+      const keysResponse = await fetch('/api/user/ai-provider-keys', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (keysResponse.ok) {
+        const keysData = await keysResponse.json() as { keys?: unknown[] };
+        const hasKey = Array.isArray(keysData.keys) && keysData.keys.length > 0;
+        if (!hasKey) {
+          setLoading(false);
+          setShowModal(true);
+          return;
+        }
+      }
+      // If the key check is unreachable (network/5xx), fail open and continue to
+      // the Web IDE rather than blocking a user who may already have a key.
+    } catch {
+      // Network failure on the key check: fail open and continue below.
+    }
+
     try {
       const response = await fetch('/api/platform/access', {
         method: 'POST',

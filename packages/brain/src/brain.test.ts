@@ -93,6 +93,62 @@ test("assemble yields empty activity when no activity port (non-breaking)", asyn
   assert.deepEqual(ctx.activity, { recent: [], profile: null });
 });
 
+test("assembleForTask feeds the FULL TaskSpec to the repo engine (taskId + paths)", async () => {
+  let seenInput: import("@recoder/recodergit").CreateContextPackInput | null = null;
+  const capturingRepo: RepoIntelPort = {
+    async contextPack(input) {
+      seenInput = input;
+      return {
+        taskId: input.task.taskId,
+        repoMap: { repoRoot: input.repoRoot, packageGlobs: [], indexedAt: "x" },
+        dependencyGraph: {
+          repoRoot: input.repoRoot,
+          nodes: ["src/sum.ts"],
+          edges: [{ from: "src/main.ts", to: "src/sum.ts", kind: "depends_on" }],
+          indexedAt: "x",
+        },
+        ownershipMap: { entries: [] },
+        testTargetMap: { targets: [] },
+        impactReport: {
+          taskId: input.task.taskId,
+          targetPaths: input.task.targetPaths,
+          impactedPackages: [],
+          relatedTests: [],
+          changedFileRisks: [],
+          generatedAt: "x",
+        },
+        sourceRefs: [{ kind: "git_nexus", ref: "src/sum.ts", detail: "Real RecoderGit impact" }],
+      } satisfies ContextPack;
+    },
+  };
+
+  const brain = createBrain({ repo: capturingRepo });
+  const task = {
+    taskId: "task-42",
+    title: "t",
+    intent: "refactor",
+    goal: "refactor sum",
+    spaceId: "s",
+    targetPaths: ["src/sum.ts"],
+    forbiddenPaths: [],
+    acceptanceCriteria: [],
+    verification: { commands: [] },
+    approvalRequired: [],
+    artifactRequired: [],
+  } as import("@recoder/agent-os").TaskSpec;
+
+  const ctx = await brain.assembleForTask(task, "/tmp/repo");
+
+  // The engine received the REAL spec, not a synthesized minimal task.
+  assert.equal(seenInput!.task.taskId, "task-42");
+  assert.deepEqual(seenInput!.task.targetPaths, ["src/sum.ts"]);
+  assert.equal(seenInput!.repoRoot, "/tmp/repo");
+  // Repo context is non-empty + provenance flows through.
+  assert.equal(ctx.repo.taskId, "task-42");
+  assert.equal(ctx.repo.dependencyGraph.edges.length, 1);
+  assert.match(ctx.repo.sourceRefs[0].detail ?? "", /Real RecoderGit impact/);
+});
+
 test("record routes memory events to memory.remember", async () => {
   let remembered = "";
   const brain = createBrain({
