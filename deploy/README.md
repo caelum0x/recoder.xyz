@@ -17,11 +17,54 @@ Everything here lives in `deploy/`, `scripts/`, and the top-level
 | postgres  | `postgres:17`                  | internal    | `recoder_main` + `recoder_backend` + `recoder_pm` |
 | redis     | `redis:7`                      | internal    | sessions + A2A bus                        |
 | qdrant    | `qdrant/qdrant`                | internal    | vector store (mem0 / embeddings)          |
+| recoder-xds | reuses `recoder/docker-backend:selfhost` | internal (18000/18001) | Envoy **xDS (ADS)** control plane — dynamic LDS/CDS/RDS |
+| recoder-governance | built from `deploy/governance-daemon.Dockerfile` | internal (UDS) | owned **Rust governance daemon** on a shared socket |
 | envoy     | `envoyproxy/envoy:v1.31`       | `8080`, `9901` | L7 edge proxy + admin                  |
 
 The backend image's `Dockerfile` includes a **substrate stage** that builds the
-pinned `tmux` + `bd` binaries the Conductor drives. They are baked into the image
-and degrade safely to system `tmux`/`bd` if a build toolchain was unavailable.
+pinned `tmux` + `bd` binaries the Conductor drives, **plus the `recoder-xds`
+binary** (Go was already in that stage). They are baked into the image and degrade
+safely to system `tmux`/`bd` (and a static Envoy bootstrap) if a build toolchain
+was unavailable.
+
+### xDS control plane (`recoder-xds`)
+
+`go/recoder-xds` is a real Envoy [xDS](https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol)
+control plane (built on the official `go-control-plane`). It serves **dynamic**
+LDS/CDS/RDS over ADS gRPC so a running Envoy receives live listener/cluster/route
+updates **without a restart**, mirroring the `NetworkConfig` that
+`docker-backend/src/network` generates statically.
+
+- The `recoder-xds` compose service **reuses the backend image** (the binary is
+  baked at `/opt/recoder/bin/recoder-xds`) and just overrides the entrypoint — no
+  second large build.
+- Envoy uses `deploy/envoy/envoy.xds.yaml`: an ADS `dynamic_resources` stanza
+  pointing at `recoder-xds` (node id **`recoder-mesh`**, which must match the xDS
+  server's NodeID) **with a static fallback listener on `:8080`**. If `recoder-xds`
+  is down or never built, Envoy keeps serving via that static listener — the edge
+  never goes dark. To pin the pure-static bootstrap, mount
+  `deploy/envoy/envoy.selfhost.yaml` instead.
+- `recoder-xds` is **not** a hard health gate in `selfhost-up.sh`; its status is
+  reported non-fatally.
+
+### Governance daemon (`recoder-governance`)
+
+`crates/recoder-governance/recoder-governance-daemon` is the owned **Rust
+governance daemon**: it boots a deny-biased `GovernanceKernel` and serves the typed
+IPC over a Unix-domain socket at `$GOVERNANCE_SOCKET`.
+
+- Built from its **own small image** (`deploy/governance-daemon.Dockerfile`,
+  `rust:1-bookworm` builder → `debian:bookworm-slim` runtime) to keep the Rust
+  toolchain out of the backend image.
+- The socket lives on a **shared named volume** (`governance-sock`) mounted into
+  both the daemon and the backend. Both run as **uid 1001** so the daemon's
+  peer-cred (same-uid) auth succeeds across containers, and both carry the shared
+  `INTERNAL_SERVICE_KEY` (the daemon **refuses to start** without it — fail-closed).
+- The backend's `@recoder/governance` facade delegates to the socket when
+  `GOVERNANCE_SOCKET` is set and **falls back to its pure-TS deny-biased path on any
+  failure** (no socket / connect error / timeout). So a down/absent daemon degrades
+  truthfully (verdicts marked `degraded`) — never an open gate, never a hard
+  dependency. It is **not** a hard health gate in `selfhost-up.sh`.
 
 ---
 
@@ -107,12 +150,17 @@ Set in `.env.selfhost` (template: `.env.selfhost.example`).
 
 ### Optional (degrade safely when unset)
 
-| Group   | Vars                                                                                   |
-|---------|----------------------------------------------------------------------------------------|
-| Ports   | `BACKEND_PORT` (3100), `EDGE_HTTP_PORT` (8080), `ENVOY_ADMIN_PORT` (9901)               |
-| Billing | `POLAR_ACCESS_TOKEN`, `POLAR_ORGANIZATION_ID`, `POLAR_WEBHOOK_SECRET`, `POLAR_SERVER`   |
-| Sandbox | `DAYTONA_API_KEY`, `DAYTONA_API_URL`, `DAYTONA_ORGANIZATION_ID`, `DAYTONA_TARGET`, `USE_DAYTONA_CONTAINERS` |
-| BYOK    | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`                                 |
+| Group      | Vars                                                                                |
+|------------|-------------------------------------------------------------------------------------|
+| Ports      | `BACKEND_PORT` (3100), `EDGE_HTTP_PORT` (8080), `ENVOY_ADMIN_PORT` (9901)            |
+| Governance | `GOVERNANCE_SOCKET` (`/run/recoder-governance/governance.sock`) — shared UDS path the daemon binds and the backend delegates to; backend falls back to pure-TS governance on failure |
+| xDS        | `XDS_LISTEN_PORT` (18000), `XDS_HEALTH_PORT` (18001), `XDS_LOG_LEVEL` (info), `XDS_CONFIG_URL` (empty → env-derived defaults) |
+| Billing    | `POLAR_ACCESS_TOKEN`, `POLAR_ORGANIZATION_ID`, `POLAR_WEBHOOK_SECRET`, `POLAR_SERVER`|
+| Sandbox    | `DAYTONA_API_KEY`, `DAYTONA_API_URL`, `DAYTONA_ORGANIZATION_ID`, `DAYTONA_TARGET`, `USE_DAYTONA_CONTAINERS` |
+| BYOK       | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`                              |
+
+The governance daemon **also** consumes the required `INTERNAL_SERVICE_KEY` (shared
+with the backend) and refuses to start without it.
 
 Missing optional keys make the corresponding feature report **unavailable**
 rather than fake success — billing/runtime health fail safe by design.
@@ -131,12 +179,21 @@ recoder_pm       ->  PM_DATABASE_URL (pgvector)
 
 ## Envoy config
 
-`deploy/envoy/envoy.selfhost.yaml` is a real, valid static bootstrap: an HTTP
-listener on `:8080` proxying to the `backend` cluster (`backend:3100`) with
-health checks + access logs, and the admin interface on `:9901`.
+Two real, valid Envoy bootstraps live here:
+
+- **`deploy/envoy/envoy.xds.yaml`** (the default the compose `envoy` service
+  mounts): an ADS `dynamic_resources` stanza that pulls LDS/CDS/RDS from
+  `recoder-xds` for live config updates, **plus a static fallback listener on
+  `:8080`** so the edge keeps serving when the control plane is down/absent. Node
+  id is `recoder-mesh` (must match the xDS server's NodeID).
+- **`deploy/envoy/envoy.selfhost.yaml`** (the pure-static fallback): an HTTP
+  listener on `:8080` proxying to the `backend` cluster (`backend:3100`) with
+  health checks + access logs, and the admin interface on `:9901`. To run Envoy
+  off this fixed config instead of xDS, point the `envoy` service's volume mount at
+  this file.
 
 When the backend's network module exposes `GET /api/network/envoy-config`, you
-can regenerate the file from the live control plane and reload Envoy:
+can regenerate the static file from the live control plane and reload Envoy:
 
 ```bash
 curl -fsS -H "X-Internal-Service-Key: $INTERNAL_SERVICE_KEY" \
@@ -144,6 +201,9 @@ curl -fsS -H "X-Internal-Service-Key: $INTERNAL_SERVICE_KEY" \
   -o deploy/envoy/envoy.selfhost.yaml
 docker compose -f docker-compose.selfhost.yml restart envoy
 ```
+
+For the dynamic path you do **not** regenerate a file — `recoder-xds` pushes
+config to Envoy live over ADS (optionally sourced from `XDS_CONFIG_URL`).
 
 ---
 
@@ -195,11 +255,20 @@ so a broken image fails the Packer build instead of shipping silently.
 ## Validate the artifacts
 
 ```bash
-# Compose is well-formed:
-docker compose -f docker-compose.selfhost.yml config -q
+# Compose is well-formed (incl. recoder-xds + recoder-governance). Needs an
+# env-file with the required vars (or export them) so the ${VAR:?} guards pass:
+docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml config -q
 
 # Shell scripts parse:
 bash -n scripts/selfhost-up.sh scripts/selfhost-down.sh deploy/packer/provision.sh
+
+# Envoy configs parse (static + xDS):
+python3 -c "import yaml; yaml.safe_load(open('deploy/envoy/envoy.selfhost.yaml'))"
+python3 -c "import yaml; yaml.safe_load(open('deploy/envoy/envoy.xds.yaml'))"
+
+# Build/run the daemons directly (proves the binaries are real, not stubs):
+( cd go/recoder-xds && CGO_ENABLED=0 go build ./cmd/recoder-xds )
+( cd crates/recoder-governance && cargo build --release -p recoder-governance-daemon )
 
 # Packer template (if packer is installed):
 packer validate deploy/packer/recoder.pkr.hcl

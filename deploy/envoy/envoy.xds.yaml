@@ -1,0 +1,139 @@
+# Recoder self-host Envoy bootstrap — DYNAMIC (xDS/ADS) with a static fallback.
+#
+# This is the variant the `envoy` compose service uses when `recoder-xds` is wired
+# in. It consumes LDS + CDS (and RDS, which the xDS snapshot delivers) DYNAMICALLY
+# over ADS gRPC from the `recoder-xds` control plane, so listener/cluster/route
+# changes pushed by the control plane take effect WITHOUT an Envoy restart.
+#
+# Fallback / degrade-safe by design:
+#   - The `node.id` / `node.cluster` MUST be `recoder-mesh` — that is the NodeID the
+#     recoder-xds server snapshots against (go/recoder-xds/internal/server). A
+#     mismatch means Envoy receives no resources.
+#   - `static_resources` still carries the `xds_cluster` (how Envoy reaches the
+#     control plane) AND a real static `recoder_backend` cluster + a static
+#     `recoder_http_fallback` listener on :8080. If recoder-xds is DOWN or has not
+#     yet pushed a dynamic listener, Envoy still serves traffic to the backend via
+#     this static listener. So a missing/broken control plane degrades to the same
+#     behavior as deploy/envoy/envoy.selfhost.yaml instead of dropping traffic.
+#   - The dynamic LDS listener, once delivered, is what recoder-xds names; it can
+#     coexist with the static fallback listener on a different role. The static
+#     :8080 listener is the always-on ingress.
+#
+# No secrets are embedded. Upstreams are reached over the compose network by DNS
+# name. Validates with `envoy --mode validate -c /etc/envoy/envoy.yaml`.
+
+node:
+  id: recoder-mesh
+  cluster: recoder-mesh
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
+
+# Dynamic resources: pull clusters (CDS) and listeners (LDS) — and routes (RDS,
+# referenced by the dynamically delivered listener) — from recoder-xds over ADS.
+dynamic_resources:
+  ads_config:
+    api_type: GRPC
+    transport_api_version: V3
+    grpc_services:
+      - envoy_grpc:
+          cluster_name: xds_cluster
+  cds_config:
+    ads: {}
+    resource_api_version: V3
+  lds_config:
+    ads: {}
+    resource_api_version: V3
+
+static_resources:
+  listeners:
+    # Always-on static ingress on :8080. This is the degrade-safe fallback that
+    # keeps the edge serving even if recoder-xds has not (yet) delivered a dynamic
+    # listener. Once the control plane is healthy you can route the edge through
+    # the dynamically delivered listener instead.
+    - name: recoder_http_fallback
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8080
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: recoder_ingress_fallback
+                codec_type: AUTO
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: recoder_routes_fallback
+                  virtual_hosts:
+                    - name: recoder_backend
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: recoder_backend
+                            timeout: 60s
+                http_filters:
+                  - name: envoy.filters.http.health_check
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.health_check.v3.HealthCheck
+                      pass_through_mode: false
+                      headers:
+                        - name: ":path"
+                          string_match:
+                            exact: "/healthz"
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    # How Envoy reaches the recoder-xds control plane (ADS over HTTP/2 gRPC).
+    - name: xds_cluster
+      type: STRICT_DNS
+      connect_timeout: 5s
+      lb_policy: ROUND_ROBIN
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: xds_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: recoder-xds
+                      port_value: 18000
+
+    # Static backend cluster for the fallback listener. The DYNAMIC CDS clusters
+    # from recoder-xds are delivered separately and do not collide with this one.
+    - name: recoder_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: recoder_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: backend
+                      port_value: 3100
+      health_checks:
+        - timeout: 5s
+          interval: 15s
+          unhealthy_threshold: 3
+          healthy_threshold: 1
+          http_health_check:
+            path: "/health"
