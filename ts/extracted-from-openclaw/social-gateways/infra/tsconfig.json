@@ -1,0 +1,33 @@
+{
+  "//": "Owned by Recoder. Scoped typecheck for the extracted infra leaf cluster the Discord send/monitor pipeline depends on: retry.ts (generic backoff runner), retry-policy.ts (Discord/Telegram retry runners over @buape/carbon RateLimitError), errors.ts (error normalization + redaction), sleep.ts (timer primitive), channel-activity.ts (in-process activity tracker), plus the existing format-duration.ts / system-events.ts. These are real ported implementations from OpenClaw's src/infra (NOT stubs); they resolve the discord adapter's ../infra/* imports. They are NOT package build entries (only the foundation + the 5 exported adapters are emitted); the full connector-port.ts dispatch pipeline that consumes them remains un-extracted (auto-reply/*, gateway/*, channels/*, pairing/*, security/*), so ./discord stays out of exports. Run: cd ts/extracted-from-openclaw && npx tsc --noEmit -p social-gateways/infra/tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "noEmit": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": false
+  },
+  "include": [
+    "retry.ts",
+    "retry-policy.ts",
+    "errors.ts",
+    "sleep.ts",
+    "channel-activity.ts",
+    "../logging/redact.ts",
+    "../config/config.ts",
+    "../config/types.ts",
+    "../config/types.base.ts",
+    "../config/types.discord.ts",
+    "../../src/identity.ts"
+  ]
+}
