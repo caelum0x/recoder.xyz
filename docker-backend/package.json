@@ -38,6 +38,7 @@
     "@recoder/brain": "workspace:*",
     "@recoder/connectors": "workspace:*",
     "@recoder/coordination": "workspace:*",
+    "@recoder/distribution": "workspace:*",
     "@recoder/governance": "workspace:*",
     "@recoder/oss-registry": "workspace:*",
     "@recoder/runtime": "workspace:*",
