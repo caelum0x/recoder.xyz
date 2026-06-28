@@ -15,8 +15,8 @@ import { resolveGate, type ConnectorPort, type ConnectorMonitorHandle, type Norm
 import type { Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
 import { createWorkspace, getWorkspace } from '../conductor/workspace-service.js';
-import { TelegramConnector } from './telegram-connector.js';
 import { loadConnectorsConfig, type ChannelConfig, type ConnectorsConfig } from './config.js';
+import { resolveAdapterFactory } from './channel-adapters.js';
 
 const logger = createLogger('connectors:gateway');
 
@@ -27,20 +27,32 @@ const STATUS_POLL_MAX_MS = 30 * 60_000; // 30 minutes
 /** Per-channel live state for truthful health reporting. */
 interface ChannelRuntime {
   readonly config: ChannelConfig;
-  readonly port: ConnectorPort;
+  /** The real ConnectorPort, lazily built behind the optional-SDK loader. */
+  port?: ConnectorPort;
   handle?: ConnectorMonitorHandle;
   /** Last probe result — never faked; only set after a real probe(). */
   lastProbe?: ConnectorProbeResult;
+  /** Set when the adapter subpath / SDK could not be loaded (truthful unavailability). */
+  buildError?: string;
 }
 
 export interface ChannelHealth {
   readonly channel: string;
   readonly accountId: string;
-  /** Credential present in env (so this channel was instantiated). */
+  /** Credentials present in env (so this channel was instantiated). */
   readonly configured: boolean;
+  /** The adapter port was built and its inbound monitor is available. */
+  readonly available: boolean;
   /** A real probe() reported the account reachable + authorized. */
   readonly connected: boolean;
+  /**
+   * Configured but needs an external dependency (HTTP ingress / bridge / daemon)
+   * to take inbound LIVE. The port still registers; this flags the gap truthfully.
+   */
+  readonly requiresExternal: boolean;
   readonly identity?: string;
+  /** When NOT configured: why. When requiresExternal: the missing dependency. */
+  readonly reason?: string;
   readonly error?: string;
   readonly checkedAt?: number;
 }
@@ -72,27 +84,43 @@ export class ConnectorsGateway {
 
   constructor(config: ConnectorsConfig = loadConnectorsConfig()) {
     this.config = config;
+    // One runtime per CONFIGURED channel (credentials present). Ports are built
+    // lazily in start() behind the optional-SDK loader so a missing channel SDK
+    // degrades to a truthful buildError, never a constructor throw.
     for (const channel of config.channels) {
-      const port = this.buildPort(channel);
-      if (port) this.runtimes.push({ config: channel, port });
+      this.runtimes.push({ config: channel });
     }
   }
 
-  /** Construct the real ConnectorPort for a configured channel. */
-  private buildPort(channel: ChannelConfig): ConnectorPort | null {
-    switch (channel.channel) {
-      case 'telegram':
-        return new TelegramConnector({ token: channel.token, accountId: channel.accountId });
-      default:
-        // No real adapter for this channel in the bridge yet — skip (config
-        // already filters to real channels, so this is defensive only).
-        return null;
-    }
-  }
-
-  /** True when at least one channel was configured (credential present). */
+  /** True when at least one channel was configured (credentials present). */
   get active(): boolean {
     return this.runtimes.length > 0;
+  }
+
+  /**
+   * Build the real ConnectorPort for a configured channel from its
+   * @recoder/connectors adapter subpath, behind the optional-SDK loader. Records
+   * a truthful buildError (and returns null) when the subpath/SDK is unavailable.
+   */
+  private async buildPort(runtime: ChannelRuntime): Promise<ConnectorPort | null> {
+    const factory = resolveAdapterFactory(runtime.config.channel);
+    if (!factory) {
+      runtime.buildError = `no adapter registered for ${runtime.config.channel}`;
+      return null;
+    }
+    try {
+      const port = await factory({
+        configured: true,
+        token: runtime.config.token,
+        accountId: runtime.config.accountId,
+      });
+      runtime.port = port;
+      runtime.buildError = undefined;
+      return port;
+    } catch (err) {
+      runtime.buildError = err instanceof Error ? err.message : 'adapter build failed';
+      return null;
+    }
   }
 
   /** Start ingress for every configured channel. Inert + safe when none. */
@@ -105,13 +133,33 @@ export class ConnectorsGateway {
     }
     for (const runtime of this.runtimes) {
       try {
+        const port = await this.buildPort(runtime);
+        if (!port) {
+          logger.warn(
+            { channel: runtime.config.channel, err: runtime.buildError },
+            'connectors channel adapter unavailable (degrading truthfully)',
+          );
+          runtime.lastProbe = {
+            channel: runtime.config.channel,
+            accountId: runtime.config.accountId,
+            ready: false,
+            error: runtime.buildError ?? 'adapter unavailable',
+            checkedAt: Date.now(),
+          };
+          continue;
+        }
         // Probe first so health is truthful even before the first message.
-        runtime.lastProbe = await runtime.port.probe(runtime.config.accountId);
-        runtime.handle = await runtime.port.monitor(runtime.config.accountId, (message) =>
+        runtime.lastProbe = await port.probe(runtime.config.accountId);
+        runtime.handle = await port.monitor(runtime.config.accountId, (message) =>
           this.handleInbound(runtime, message),
         );
         logger.info(
-          { channel: runtime.config.channel, ready: runtime.lastProbe?.ready, identity: runtime.lastProbe?.identity },
+          {
+            channel: runtime.config.channel,
+            ready: runtime.lastProbe?.ready,
+            identity: runtime.lastProbe?.identity,
+            requiresExternal: runtime.config.requiresExternal,
+          },
           'connectors channel monitoring',
         );
       } catch (err) {
@@ -142,38 +190,57 @@ export class ConnectorsGateway {
     this.started = false;
   }
 
-  /** Truthful per-channel health — re-probes each channel live. */
+  /** Truthful per-channel health — re-probes each configured channel live. */
   async health(): Promise<ConnectorsHealth> {
-    const channels = await Promise.all(
+    // Configured channels (credentials present): report build/probe truthfully.
+    const configured = await Promise.all(
       this.runtimes.map(async (r): Promise<ChannelHealth> => {
         let probe = r.lastProbe;
-        try {
-          probe = await r.port.probe(r.config.accountId);
-          r.lastProbe = probe;
-        } catch (err) {
-          probe = {
-            channel: r.config.channel,
-            accountId: r.config.accountId,
-            ready: false,
-            error: err instanceof Error ? err.message : 'probe failed',
-            checkedAt: Date.now(),
-          };
+        if (r.port) {
+          try {
+            probe = await r.port.probe(r.config.accountId);
+            r.lastProbe = probe;
+          } catch (err) {
+            probe = {
+              channel: r.config.channel,
+              accountId: r.config.accountId,
+              ready: false,
+              error: err instanceof Error ? err.message : 'probe failed',
+              checkedAt: Date.now(),
+            };
+          }
         }
         return {
           channel: r.config.channel,
           accountId: r.config.accountId,
           configured: true,
+          available: Boolean(r.port),
           connected: probe?.ready === true,
+          requiresExternal: r.config.requiresExternal,
           identity: probe?.identity,
-          error: probe?.error,
+          reason: r.config.note,
+          error: probe?.error ?? r.buildError,
           checkedAt: probe?.checkedAt,
         };
       }),
     );
+
+    // Unconfigured channels (no credentials): truthful configured:false, with the
+    // reason (which env var is missing). These never registered or touched a network.
+    const unconfigured: ChannelHealth[] = this.config.unconfigured.map((u) => ({
+      channel: u.channel,
+      accountId: u.channel,
+      configured: false,
+      available: false,
+      connected: false,
+      requiresExternal: false,
+      reason: u.reason,
+    }));
+
     return {
       active: this.active,
       dispatchReady: Boolean(this.config.dispatch),
-      channels,
+      channels: [...configured, ...unconfigured],
     };
   }
 
@@ -252,7 +319,7 @@ export class ConnectorsGateway {
 
     // Acknowledge with a real reaction (best effort) + a started message.
     await runtime.port
-      .react({
+      ?.react({
         channel: message.channel,
         accountId: message.accountId,
         conversationId: message.conversationId,
@@ -332,6 +399,7 @@ export class ConnectorsGateway {
 
   /** Send a reply to the originating conversation (threaded under the message). */
   private async reply(runtime: ChannelRuntime, message: NormalizedInboundMessage, text: string): Promise<void> {
+    if (!runtime.port) return; // no live port (SDK/build unavailable) — nothing to send through
     try {
       await runtime.port.send({
         target: {

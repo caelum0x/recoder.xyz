@@ -65,19 +65,15 @@ class FakeConnector implements ConnectorPort {
   }
 }
 
-// Replace the Telegram adapter so the gateway's buildPort() yields our fake.
-let lastFakeConnector: FakeConnector | null = null;
-vi.mock('./telegram-connector.js', () => ({
-  TelegramConnector: class {
-    constructor() {
-      lastFakeConnector = new FakeConnector();
-      return lastFakeConnector as unknown as object;
-    }
-  },
-}));
-
+// Replace the Telegram adapter FACTORY (the SDK seam) so the gateway's buildPort()
+// yields our in-memory fake instead of importing the real @recoder/connectors
+// adapter subpath + grammy. The gateway's real dispatch path is unchanged.
 import { ConnectorsGateway } from './gateway';
 import type { ConnectorsConfig } from './config';
+import { overrideAdapterFactory } from './channel-adapters';
+
+let lastFakeConnector: FakeConnector | null = null;
+let restoreFactory: (() => void) | null = null;
 
 function inbound(overrides: Partial<NormalizedInboundMessage> = {}): NormalizedInboundMessage {
   return {
@@ -96,7 +92,12 @@ function inbound(overrides: Partial<NormalizedInboundMessage> = {}): NormalizedI
   };
 }
 
-const TELEGRAM_CHANNEL = { channel: 'telegram' as const, token: 'tok', accountId: 'acct_1' };
+const TELEGRAM_CHANNEL = {
+  channel: 'telegram' as const,
+  token: 'tok',
+  accountId: 'acct_1',
+  requiresExternal: false,
+};
 const DISPATCH = {
   repoPath: '/repos/demo',
   runtimeId: 'claude_code' as const,
@@ -107,6 +108,7 @@ const DISPATCH = {
 function configWith(over: Partial<ConnectorsConfig> = {}): ConnectorsConfig {
   return {
     channels: [TELEGRAM_CHANNEL],
+    unconfigured: [],
     dispatch: DISPATCH,
     gating: { allowlist: ['alice'], requireMention: false },
     ...over,
@@ -118,9 +120,16 @@ describe('ConnectorsGateway — inbound dispatch wiring', () => {
     createWorkspace.mockReset();
     getWorkspace.mockReset();
     lastFakeConnector = null;
+    // Inject the in-memory fake at the telegram adapter factory seam.
+    restoreFactory = overrideAdapterFactory('telegram', async () => {
+      lastFakeConnector = new FakeConnector();
+      return lastFakeConnector;
+    });
   });
 
   afterEach(() => {
+    restoreFactory?.();
+    restoreFactory = null;
     vi.clearAllMocks();
   });
 
@@ -210,6 +219,7 @@ describe('ConnectorsGateway — inert when no channel configured', () => {
   it('is inactive and start() is a safe no-op (no token => no throw)', async () => {
     const gateway = new ConnectorsGateway({
       channels: [],
+      unconfigured: [],
       dispatch: undefined,
       gating: { allowlist: [], requireMention: true },
     });
