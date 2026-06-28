@@ -12,4 +12,5 @@ export * from "./identity.js";
 export * from "./connector/index.js";
 export * from "./gating/index.js";
 export * from "./agents/index.js";
+export * from "./dispatch/index.js";
 export * as Result from "./result/index.js";

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Nav, Footer } from "@/components/site";
+import { LeadForm } from "@/components/lead-form";
 
 export const metadata: Metadata = {
   title: "Recoder for teams & enterprise",
@@ -30,13 +30,25 @@ export default function Enterprise() {
             Everything in the solo cockpit, plus governance, audit, and a shared
             brain across your whole team. Self-hostable.
           </p>
-          <div className="mt-8 flex justify-center">
-            <Link
-              href="mailto:founders@recoder.xyz?subject=Recoder%20for%20our%20team"
-              className="inline-flex items-center justify-center rounded-lg bg-fg px-6 py-3 text-[15px] font-medium text-bg transition-opacity hover:opacity-90"
-            >
-              Contact sales
-            </Link>
+          <div id="contact" className="mx-auto mt-8 max-w-md scroll-mt-20 text-left">
+            <LeadForm
+              kind="sales"
+              source="enterprise"
+              plan="Enterprise"
+              withMessage
+              submitLabel="Contact sales"
+              successText="Thanks — we got it. The founders will reply to your email shortly."
+            />
+            <p className="mt-3 text-center text-xs text-faint">
+              Prefer email? Reach us at{" "}
+              <a
+                href="mailto:founders@recoder.xyz?subject=Recoder%20for%20our%20team"
+                className="text-muted underline hover:text-fg"
+              >
+                founders@recoder.xyz
+              </a>
+              .
+            </p>
           </div>
         </section>
         <section className="mx-auto max-w-6xl px-6 pb-24">
