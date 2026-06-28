@@ -5,8 +5,9 @@
  * LOCKED` exactly-once claim. `compareAndSet` succeeds only when no live (or
  * recovery-window-protected) claim already exists for the task — so two racing
  * dispatches of one task yield exactly one winner. Single-threaded JS makes the
- * read-then-write atomic without a real lock; the Postgres adapter (wave-2)
- * provides true concurrency safety.
+ * read-then-write atomic without a real lock; the Postgres adapter
+ * (`PostgresClaimStore`) provides true cross-process concurrency safety via a
+ * per-task `SELECT ... FOR UPDATE` row lock.
  *
  * The recovery window (multica `claimResponseRecoveryWindow`) is enforced via
  * the injected window length: an in-flight start that has not yet emitted

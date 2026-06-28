@@ -1,7 +1,8 @@
 /**
- * Postgres schema for the durable work-lock store + lease fencer.
+ * Postgres schema for the durable work-lock store, lease fencer, and task-claim
+ * store.
  *
- * Two tables:
+ * Three tables:
  *  - `coordination_work_locks` holds one row per lock. Durability + cross-process
  *    safety come from the DB: a `UNIQUE` constraint on the fencing scope
  *    (`space_id, repo, path_glob`) makes a second active acquire on the same
@@ -10,6 +11,12 @@
  *  - `coordination_fence_sequences` holds the monotonic high-water token per
  *    fencing scope, advanced atomically with `INSERT ... ON CONFLICT DO UPDATE`
  *    using `GREATEST`, so two processes can never issue the same token.
+ *  - `coordination_task_claims` holds one row per claimed task. `task_id` is the
+ *    primary key, so the database itself enforces "at most one live claim per
+ *    task": the exactly-once claim is a `SELECT ... FOR UPDATE` of the existing
+ *    row inside a transaction followed by an upsert, mirroring the lock store's
+ *    CAS. The `SKIP LOCKED` read of the per-task row makes a racing dispatch a
+ *    loser rather than a deadlock.
  *
  * `bootstrapSchema` is idempotent (`IF NOT EXISTS`) so callers can run it on
  * startup. It is intentionally plain SQL (no migration framework) to keep the
@@ -21,6 +28,7 @@ import type { PgQueryable } from './pg-pool';
 
 export const WORK_LOCKS_TABLE = 'coordination_work_locks';
 export const FENCE_SEQUENCES_TABLE = 'coordination_fence_sequences';
+export const TASK_CLAIMS_TABLE = 'coordination_task_claims';
 
 export const CREATE_WORK_LOCKS_SQL = `
 CREATE TABLE IF NOT EXISTS ${WORK_LOCKS_TABLE} (
@@ -45,8 +53,28 @@ CREATE TABLE IF NOT EXISTS ${FENCE_SEQUENCES_TABLE} (
 );
 `;
 
-/** Idempotently create the lock + fence tables. Safe to call on every startup. */
+export const CREATE_TASK_CLAIMS_SQL = `
+CREATE TABLE IF NOT EXISTS ${TASK_CLAIMS_TABLE} (
+  task_id         TEXT PRIMARY KEY,
+  claim_id        TEXT NOT NULL,
+  space_id        TEXT NOT NULL,
+  agent_id        TEXT NOT NULL,
+  run_id          TEXT,
+  status          TEXT NOT NULL,
+  claimed_at      TIMESTAMPTZ NOT NULL,
+  lease_until     TIMESTAMPTZ NOT NULL,
+  fence_token     BIGINT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  CONSTRAINT ${TASK_CLAIMS_TABLE}_claim_id_uniq UNIQUE (claim_id)
+);
+`;
+
+/**
+ * Idempotently create the lock + fence + claim tables. Safe to call on every
+ * startup.
+ */
 export async function bootstrapSchema(db: PgQueryable): Promise<void> {
   await db.query(CREATE_WORK_LOCKS_SQL);
   await db.query(CREATE_FENCE_SEQUENCES_SQL);
+  await db.query(CREATE_TASK_CLAIMS_SQL);
 }
