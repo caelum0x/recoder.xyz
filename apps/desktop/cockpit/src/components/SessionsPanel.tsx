@@ -4,7 +4,11 @@
  * Lists live agent sessions from GET /sessions (~3s), lets the operator start a
  * new one (POST /sessions), select one to open a live SessionTerminal (real local
  * pty via Electron, or the HTTP /sessions/:id/output+keys fallback), and kill it
- * (DELETE /sessions/:id). It also embeds the dmux operator-console grid.
+ * (DELETE /sessions/:id).
+ *
+ * The dmux operator console is its own discoverable surface (the "dmux" view
+ * tab and the desktop "Open dmux Console" menu item), so it is not duplicated
+ * here.
  *
  * No mock data: everything renders from real fetches; a backend failure surfaces
  * the truthful error rather than fabricating sessions.
@@ -15,7 +19,6 @@ import { usePoll } from '../lib/usePoll';
 import { readConfig } from '../lib/config';
 import { hasLocalTerminal } from '../lib/desktop';
 import { SessionTerminal } from './SessionTerminal';
-import { DmuxPanel } from './DmuxPanel';
 import type { ConductorSession } from '../types';
 
 const POLL_MS = 3000;
@@ -204,8 +207,6 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
           )}
         </div>
       </div>
-
-      <DmuxPanel />
     </section>
   );
 }

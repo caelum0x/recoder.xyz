@@ -17,8 +17,11 @@ import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import {
+  isTerminalTaskRunState,
   isTerminalWorkspaceState,
+  transitionTaskRun,
   transitionWorkspace,
+  type RunEvent,
   type TaskRun,
   type Workspace,
   type WorkspaceState,
@@ -33,7 +36,11 @@ import { getSubstrate, listSubstrates } from './substrate.js';
 import { registerTmuxSubstrate } from './substrate-tmux.js';
 import { registerDaytonaSubstrate } from './substrate-daytona.js';
 import { TMUX_BIN } from './tmux-path.js';
-import { acquireWorkspaceLock, releaseWorkspaceLock } from './conductor-locks.js';
+import {
+  acquireWorkspaceLock,
+  reacquireWorkspaceLock,
+  releaseWorkspaceLock,
+} from './conductor-locks.js';
 import { admitWorkspace } from './resource-governor.js';
 
 /** Marker prefixed onto an admission-rejection error so routes can map it to 429. */
@@ -187,6 +194,20 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   // workspace with a truthful conflict naming the holder. Degrade-safe: when the
   // coordination engine is unavailable, locking is skipped (workspace launches).
   const targetPaths = await resolveTargetPaths(input.taskId);
+
+  // Persist the lock scope (origin repo + declared write surface) into the record
+  // so reconcile() can re-acquire the EXACT same lock after a backend restart
+  // (the in-memory lock store is empty on restart). Without this, a surviving
+  // live workspace would no longer hold its scope and a peer could over-claim it.
+  workspace = await repository().upsertWorkspace({
+    ...workspace,
+    updatedAt: new Date().toISOString(),
+    metadata: {
+      ...(workspace.metadata ?? {}),
+      lockScope: { repo: input.repoPath, ...(targetPaths ? { targetPaths } : {}) },
+    },
+  });
+
   const lock = await acquireWorkspaceLock({
     workspaceId,
     spaceId: input.spaceId,
@@ -300,13 +321,37 @@ async function resolveTargetPaths(taskId: string): Promise<string[] | undefined>
 export interface ReconcileReport {
   /** Workspaces whose tmux session is still alive. */
   live: string[];
+  /** Live workspaces whose run-tailer was (re)bound this pass (streaming resumed). */
+  rebound: string[];
+  /** Live workspaces whose write-lock was re-acquired this pass (scope re-held). */
+  relocked: string[];
   /** Non-terminal workspaces whose tmux session is gone (agent ended/crashed). */
   orphanedWorkspaces: string[];
+  /** Orphaned workspaces finalized this pass (advanced to a terminal record state). */
+  finalized: string[];
   /** Live tmux sessions with no matching workspace record. */
   orphanedSessions: string[];
   /** Conductor worktrees on disk with no matching workspace record. */
   orphanedWorktrees: string[];
   checkedAt: string;
+}
+
+/** Persisted lock scope (origin repo + declared write surface) for re-acquire on reconcile. */
+interface PersistedLockScope {
+  repo: string;
+  targetPaths?: string[];
+}
+
+/** Read the persisted lock scope a workspace was launched with, if recorded. */
+function readLockScope(workspace: Workspace): PersistedLockScope | undefined {
+  const raw = workspace.metadata?.lockScope;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const scope = raw as Record<string, unknown>;
+  if (typeof scope.repo !== 'string') return undefined;
+  const targetPaths = Array.isArray(scope.targetPaths)
+    ? scope.targetPaths.filter((p): p is string => typeof p === 'string')
+    : undefined;
+  return { repo: scope.repo, targetPaths };
 }
 
 /**
@@ -327,24 +372,28 @@ export async function reconcile(): Promise<ReconcileReport> {
   const knownSessionNames = new Set<string>();
 
   const live: string[] = [];
+  const rebound: string[] = [];
+  const relocked: string[] = [];
   const orphanedWorkspaces: string[] = [];
+  const finalized: string[] = [];
 
   for (const ws of workspaces) {
     if (ws.sessionName) knownSessionNames.add(ws.sessionName);
     if (isTerminalWorkspaceState(ws.state)) continue;
     if (ws.sessionName && sessionSet.has(ws.sessionName)) {
+      // SURVIVABLE LIVE WORKSPACE: its tmux session is still alive after a
+      // backend restart. Rebind streaming + re-hold its write-lock so the run
+      // resumes exactly where it left off and its scope stays exclusively claimed.
       live.push(ws.workspaceId);
+      if (await rebindLiveWorkspace(ws)) rebound.push(ws.workspaceId);
+      if (await relockLiveWorkspace(ws)) relocked.push(ws.workspaceId);
     } else if (ws.state === 'running' || ws.state === 'awaiting_approval') {
+      // CRASHED ORPHAN: a non-terminal workspace whose session is gone. Finalize
+      // it — read the true exit code, emit a terminal RunEvent, advance the
+      // record + run to a terminal state, and free its lock — instead of leaving
+      // it dangling forever.
       orphanedWorkspaces.push(ws.workspaceId);
-      try {
-        await repository().upsertWorkspace({
-          ...ws,
-          updatedAt: new Date().toISOString(),
-          metadata: { ...(ws.metadata ?? {}), reconcile: { sessionMissing: true, at: new Date().toISOString() } },
-        });
-      } catch (err) {
-        logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile flag failed');
-      }
+      if (await finalizeOrphanedWorkspace(ws)) finalized.push(ws.workspaceId);
     }
   }
 
@@ -354,13 +403,172 @@ export async function reconcile(): Promise<ReconcileReport> {
 
   const report: ReconcileReport = {
     live,
+    rebound,
+    relocked,
     orphanedWorkspaces,
+    finalized,
     orphanedSessions,
     orphanedWorktrees,
     checkedAt: new Date().toISOString(),
   };
   logger.info(report, 'conductor reconcile complete');
   return report;
+}
+
+/**
+ * Rebind the run-tailer for a live workspace so terminal streaming resumes after
+ * a backend restart (the in-memory tail map is empty on restart). Idempotent:
+ * `startRunTail` no-ops if a tail is already active for this workspace, so a
+ * reconcile that runs while the original tail is still alive is harmless. Returns
+ * true when a (re)bind was attempted, false when the record lacks a run/session
+ * to tail. Never throws — a tail rebind failure must not fail reconcile.
+ */
+async function rebindLiveWorkspace(ws: Workspace): Promise<boolean> {
+  if (!ws.runId || !ws.sessionName) return false;
+  try {
+    startRunTail({
+      workspaceId: ws.workspaceId,
+      taskId: ws.taskId,
+      runId: ws.runId,
+      substrate: ws.substrate,
+      sessionName: ws.sessionName,
+      worktreePath: ws.worktreePath,
+    });
+    return true;
+  } catch (err) {
+    logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile: run-tail rebind failed');
+    return false;
+  }
+}
+
+/**
+ * Re-acquire a live workspace's write-lock using its persisted lock scope. After
+ * a restart the in-memory lock store is empty, so the surviving workspace no
+ * longer holds its scope; this re-binds it (self-safe — never conflicts with
+ * itself). Returns true when the lock is (re)held for this workspace, false when
+ * no scope was recorded or the engine is degraded. Never throws.
+ */
+async function relockLiveWorkspace(ws: Workspace): Promise<boolean> {
+  const scope = readLockScope(ws);
+  if (!scope) return false;
+  try {
+    const result = await reacquireWorkspaceLock({
+      workspaceId: ws.workspaceId,
+      spaceId: ws.spaceId,
+      taskId: ws.taskId,
+      repo: scope.repo,
+      targetPaths: scope.targetPaths,
+    });
+    if (result.status === 'acquired') return true;
+    if (result.status === 'conflict') {
+      logger.warn(
+        { workspaceId: ws.workspaceId, conflicts: result.conflicts },
+        'reconcile: live workspace lost its lock to a peer (scope contended)',
+      );
+    }
+    return false;
+  } catch (err) {
+    logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile: lock re-acquire failed');
+    return false;
+  }
+}
+
+/**
+ * Finalize a crashed orphan: its session is gone but the record is non-terminal.
+ * Read the true substrate exit code, emit a terminal RunEvent (completed on exit
+ * 0 / handle-gone, failed on a non-zero exit), advance the run + workspace to a
+ * terminal state, and release the write-lock. Best-effort and idempotent: a
+ * partial failure logs and reports false rather than throwing out of reconcile.
+ */
+async function finalizeOrphanedWorkspace(ws: Workspace): Promise<boolean> {
+  const at = new Date().toISOString();
+
+  // Read the true exit code from the substrate (distinguishes clean finish from
+  // a crash). A gone handle / unknown code is treated as a clean completion.
+  let exitCode: number | null | undefined;
+  try {
+    const substrate = getSubstrate(ws.substrate);
+    if (substrate.exitCode) {
+      exitCode = await substrate.exitCode({
+        ref: ws.workspaceId,
+        sessionName: ws.sessionName,
+        worktreePath: ws.worktreePath,
+      });
+    }
+  } catch (err) {
+    logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile: orphan exit-code probe failed');
+    exitCode = undefined;
+  }
+  const crashed = typeof exitCode === 'number' && exitCode !== 0;
+
+  // Emit a terminal RunEvent into the audit log (truthful: what the substrate
+  // reports, not a fabricated success).
+  if (ws.runId) {
+    const event: RunEvent = {
+      eventId: `event_${ws.runId}_reconcile_${Date.now()}`,
+      type: crashed ? 'failed' : 'completed',
+      taskId: ws.taskId,
+      runId: ws.runId,
+      message: crashed
+        ? `Agent session gone after restart; exited with code ${exitCode}`
+        : 'Agent session ended (finalized by reconcile after restart)',
+      createdAt: at,
+      data: { sessionName: ws.sessionName, exitCode: exitCode ?? 0, finalizedBy: 'reconcile' },
+    };
+    try {
+      await repository().appendEvent(event);
+    } catch (err) {
+      logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile: terminal event append failed');
+    }
+
+    // Advance the control-plane run to a terminal state when it is still open.
+    try {
+      const runs = await repository().listRuns();
+      const run = runs.find((r) => r.runId === ws.runId);
+      if (run && !isTerminalTaskRunState(run.state)) {
+        await repository().upsertRun(
+          transitionTaskRun(run, crashed ? 'failed' : 'completed', {
+            metadata: { finalizedBy: 'reconcile', exitCode: exitCode ?? 0 },
+          }),
+        );
+      }
+    } catch (err) {
+      logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile: run finalize failed');
+    }
+  }
+
+  // Advance the workspace record to a terminal lifecycle state. running |
+  // awaiting_approval → failed is legal; a clean completion is recorded as
+  // failed-with-clean-exit metadata since the lifecycle has no non-merge
+  // "completed" state (merged is reserved for the review/merge path).
+  let advanced = false;
+  try {
+    await repository().upsertWorkspace(
+      transitionWorkspace(ws, 'failed', {
+        metadata: {
+          reconcile: {
+            sessionMissing: true,
+            finalized: true,
+            exitCode: exitCode ?? null,
+            crashed,
+            at,
+          },
+        },
+      }),
+    );
+    advanced = true;
+  } catch (err) {
+    logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile: workspace finalize transition failed');
+  }
+
+  // Free the write-lock so the orphan's scope is released for the next workspace.
+  try {
+    await releaseWorkspaceLock({ workspaceId: ws.workspaceId, spaceId: ws.spaceId, taskId: ws.taskId });
+  } catch (err) {
+    logger.warn({ workspaceId: ws.workspaceId, err }, 'reconcile: orphan lock release failed');
+  }
+
+  return advanced;
 }
 
 /** Live tmux session names, queried directly (survives backend restart). */

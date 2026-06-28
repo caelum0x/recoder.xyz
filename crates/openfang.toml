@@ -1,0 +1,175 @@
+# OpenFang Agent OS — Recoder production configuration
+# =====================================================
+#
+# This is a Recoder-authored, production-oriented config for the openfang
+# sidecar. It is derived from `crates/openfang/openfang.toml.example` (the
+# upstream example) and tuned for running openfang as a backend sidecar behind
+# the Recoder control plane.
+#
+# IMPORTANT — this file is checked into the Recoder repo (the upstream
+# `crates/openfang/` clone is gitignored). It contains NO secrets: every API
+# key / token is referenced *by environment variable name only* (the `*_env`
+# fields). The actual secret values are injected at runtime via the process
+# environment (e.g. docker-compose `environment:`, PM2 `env`, or the host
+# shell). See `crates/openfang/.env.example` for the full env var list.
+#
+# Deploy this file by mounting/copying it to the openfang home as
+# `config.toml`. openfang resolves its home in this order (openfang-types
+# `openfang_home_dir()`):
+#   1. $OPENFANG_HOME            (the Docker image sets OPENFANG_HOME=/data)
+#   2. ~/.openfang
+# and loads `<home>/config.toml`. So in the published Docker image:
+#   cp crates/openfang.toml /data/config.toml
+# or bind-mount it read-only to /data/config.toml.
+#
+# ---------------------------------------------------------------------------
+# FAIL-SAFE BEHAVIOR (per Recoder AGENTS.md: "Missing keys must degrade safely
+# with explicit errors", "fail safe when keys or dependencies are missing")
+# ---------------------------------------------------------------------------
+# openfang already implements fail-safe degradation; this config does not
+# disable it. The verified contract (openfang source, not invented):
+#
+#   * Missing PROVIDER key  -> the driver returns a typed
+#     `LlmError::MissingApiKey("Set ANTHROPIC_API_KEY environment variable")`
+#     style error (see openfang-runtime/src/drivers/mod.rs). It does NOT panic
+#     and does NOT crash the daemon — the request fails with an explicit,
+#     actionable message and the daemon keeps serving.
+#
+#   * Missing CHANNEL token -> `KernelConfig::validate()`
+#     (openfang-types/src/config.rs) returns a warning string such as
+#     "Telegram configured but TELEGRAM_BOT_TOKEN is not set" instead of
+#     aborting boot. These warnings are surfaced truthfully at
+#     `GET /api/health/detail` under `config_warnings`, and the liveness probe
+#     `GET /api/health` reports `"status": "degraded"` when a dependency (e.g.
+#     the local DB) is unhealthy. Health is reported honestly, never faked.
+#
+#   * Unknown / forward-compat keys -> the top-level `KernelConfig` is
+#     `#[serde(default)]` WITHOUT `deny_unknown_fields`, so an unrecognized
+#     top-level key is ignored rather than failing the load. (Agent *bindings*
+#     are the deliberate exception: `[[bindings]]` uses `deny_unknown_fields`
+#     so a typo there fails loudly instead of silently matching everything.)
+#
+# To keep that fail-safe contract intact, this config does NOT hardcode any
+# secret and does NOT enable any channel that Recoder is not actually wiring up
+# yet. Enable a channel only once its token env var is provisioned.
+
+# ---------------------------------------------------------------------------
+# HTTP API
+# ---------------------------------------------------------------------------
+# Bind to loopback only. The openfang sidecar is an internal dependency of the
+# Recoder backend, not a public surface — Recoder's nginx/control-plane is the
+# only thing that should reach it. The published Docker image EXPOSEs 4200 and
+# publishes 4200:4200; override the in-container bind with
+# OPENFANG_LISTEN=0.0.0.0:4200 if you front it with Docker networking, but keep
+# it off the public internet.
+api_listen = "127.0.0.1:4200"
+
+# Bearer auth for the HTTP API. Leaving `api_key` empty means UNAUTHENTICATED
+# (acceptable only for a strictly-loopback dev box). For production, inject the
+# key via the environment and reference it here is NOT how openfang reads it —
+# `api_key` is a literal value field, so to avoid putting a secret in this file
+# we leave it empty and require the deployment to set it out-of-band:
+#   - either start the daemon with OPENFANG_API_KEY in the environment
+#     (the CLI reads OPENFANG_API_KEY and OPENFANG_LISTEN at start), or
+#   - render this file from a template at deploy time with the real value.
+# When a real key is present, every endpoint except /api/health requires
+# `Authorization: Bearer <key>`.
+api_key = ""
+
+log_level = "info"
+network_enabled = false
+
+# ---------------------------------------------------------------------------
+# Default model / provider
+# ---------------------------------------------------------------------------
+# Only the ENV VAR NAME is stored here (`api_key_env`). The secret lives in the
+# environment. If ANTHROPIC_API_KEY is unset, openfang degrades with an
+# explicit MissingApiKey error per the fail-safe contract above.
+[default_model]
+provider = "anthropic"
+model = "claude-sonnet-4-20250514"
+api_key_env = "ANTHROPIC_API_KEY"
+# base_url is intentionally omitted (uses the provider catalog default).
+
+# ---------------------------------------------------------------------------
+# Memory substrate
+# ---------------------------------------------------------------------------
+[memory]
+decay_rate = 0.05
+# sqlite_path defaults to <home>/data/openfang.db (i.e. /data/data/openfang.db
+# in the Docker image). Leave unset to use the default under OPENFANG_HOME.
+
+# ---------------------------------------------------------------------------
+# OFP P2P network — disabled for the sidecar deployment.
+# ---------------------------------------------------------------------------
+[network]
+listen_addr = "127.0.0.1:4200"
+# shared_secret is required ONLY if you enable P2P (network_enabled = true).
+# Leave empty while network_enabled = false.
+
+# ---------------------------------------------------------------------------
+# Shell / exec security policy
+# ---------------------------------------------------------------------------
+# Production-safe default: allowlist mode (openfang's own default), so agents
+# cannot run arbitrary shell commands. Add specific binaries to
+# `allowed_commands` only as needed. Do NOT set mode = "full" in production.
+[exec_policy]
+mode = "allowlist"
+allowed_commands = []
+timeout_secs = 30
+max_output_bytes = 102400
+
+# ---------------------------------------------------------------------------
+# Spending budget — fail-safe cost guardrails.
+# ---------------------------------------------------------------------------
+# 0.0 means unlimited (openfang default). Set non-zero limits in the deployment
+# overlay to cap spend. Alerts fire at `alert_threshold` of any limit.
+[budget]
+max_hourly_usd = 0.0
+max_daily_usd = 0.0
+max_monthly_usd = 0.0
+alert_threshold = 0.8
+
+# ---------------------------------------------------------------------------
+# OPTIONAL sections — left commented so they inherit safe defaults and do not
+# trip a `config.validate()` warning for a channel whose token is unset.
+# Enable a block only after its env var is provisioned in the deployment.
+# ---------------------------------------------------------------------------
+
+# Fallback provider chain (tried in order if the primary provider fails).
+# [[fallback_providers]]
+# provider = "groq"
+# model = "llama-3.3-70b-versatile"
+# api_key_env = "GROQ_API_KEY"
+
+# Channel adapters — keep DISABLED until Recoder wires the token. Uncommenting
+# without the matching env var will (by design) emit a `config_warnings` entry
+# at /api/health/detail rather than crash.
+#
+# NOTE on table paths: in the current openfang schema these are nested under
+# `[channels.*]` (the `ChannelsConfig` struct), e.g. `[channels.telegram]` —
+# NOT a top-level `[telegram]` table. (The upstream openfang.toml.example shows
+# a bare `[telegram]`, which does not match the current `ChannelsConfig` layout;
+# use the `[channels.*]` form below.)
+# [channels.telegram]
+# bot_token_env = "TELEGRAM_BOT_TOKEN"
+# allowed_users = []
+
+# [channels.discord]
+# bot_token_env = "DISCORD_BOT_TOKEN"
+# guild_ids = []
+
+# [channels.slack]
+# bot_token_env = "SLACK_BOT_TOKEN"
+# app_token_env = "SLACK_APP_TOKEN"
+
+# MCP server connections (external tools). Add entries as Recoder integrates
+# them; `env` lists which environment variables to pass through to the server.
+# [[mcp_servers]]
+# name = "filesystem"
+# timeout_secs = 30
+# env = []
+# [mcp_servers.transport]
+# type = "stdio"
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
