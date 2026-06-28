@@ -23,7 +23,8 @@
   "dependencies": {
     "@recoder/agent-memory": "workspace:*",
     "@recoder/agent-os": "workspace:*",
-    "@recoder/agent-policy": "workspace:*"
+    "@recoder/agent-policy": "workspace:*",
+    "@recoder/recodergit": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
