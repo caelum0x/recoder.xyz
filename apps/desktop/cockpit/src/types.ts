@@ -204,6 +204,147 @@ export interface ConnectorsHealth {
   channels: ChannelHealth[];
 }
 
+/**
+ * Agent OS control-plane contracts (mounted at /api/agent-os, NOT /api/conductor).
+ *
+ * Source of truth:
+ *  - packages/agent-os/src/domain/policy-decision.ts (PolicyDecision, effect)
+ *  - packages/agent-os/src/domain/memory-item.ts (MemoryCandidate, MemoryItem, scopes/status)
+ *  - docker-backend/src/agent-os/routes/policy-evaluate.routes.ts (request shape)
+ *  - docker-backend/src/agent-os/routes/memory-candidate.routes.ts (propose/review shapes)
+ *  - packages/agent-memory/src/memory-review-workflow.ts (ReviewMemoryResult)
+ */
+
+/** POST /api/agent-os/policy/evaluate — the real three-way decision effect. */
+export type PolicyDecisionEffect = 'allow' | 'deny' | 'needs_approval';
+
+/** The set of actions the live policy engine recognizes (engine.ts PolicyAction). */
+export type PolicyAction =
+  | 'file.read'
+  | 'file.write'
+  | 'command.run'
+  | 'tool.call'
+  | 'memory.write'
+  | 'artifact.publish'
+  | 'deploy.preview'
+  | 'branch.push'
+  | 'pr.create';
+
+/** POST /api/agent-os/policy/evaluate result (PolicyDecision). */
+export interface PolicyDecision {
+  decisionId: string;
+  effect: PolicyDecisionEffect;
+  action: string;
+  actorAgentId: string;
+  taskId?: string;
+  reason: string;
+  createdAt: string;
+  approval?: {
+    required: boolean;
+    gateId?: string;
+    reason?: string;
+  };
+  findings?: Array<Record<string, unknown>>;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * The target of a policy evaluation. All fields optional; which ones matter
+ * depends on the action (e.g. `path` for file.*, `command` for command.run).
+ */
+export interface PolicyTarget {
+  path?: string;
+  command?: string;
+  toolName?: string;
+  environment?: string;
+}
+
+/**
+ * POST /api/agent-os/policy/evaluate request body. The route requires a full
+ * AgentProfile-shaped actor (agentId + a permissions object) — the engine reads
+ * the actor's permission policy to make a real decision, so the cockpit must
+ * send a real (minimal-but-valid) permission policy, never a faked one.
+ */
+export interface PolicyEvaluateBody {
+  actor: {
+    agentId: string;
+    permissions: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+  action: PolicyAction;
+  target: PolicyTarget;
+}
+
+export type MemoryCandidateStatus =
+  | 'candidate_created'
+  | 'reviewed'
+  | 'accepted'
+  | 'rejected';
+
+export type MemoryScope = 'user' | 'org' | 'space' | 'repo' | 'path' | 'agent' | 'task-type';
+
+/** Evidence is mandatory on every candidate (taskId + artifactId). */
+export interface MemoryEvidence {
+  taskId: string;
+  artifactId: string;
+}
+
+/** GET /api/agent-os/memory/lifecycle/candidates — a reviewed-candidate row. */
+export interface MemoryCandidate {
+  candidateId: string;
+  scope: MemoryScope;
+  title: string;
+  body: string;
+  status: MemoryCandidateStatus;
+  evidence: MemoryEvidence;
+  proposedBy: string;
+  proposedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewReason?: string;
+  expiresAt?: string | null;
+}
+
+/** A durable memory item materialized from an accepted candidate. */
+export interface MemoryItem {
+  memoryId: string;
+  scope: MemoryScope;
+  title: string;
+  body: string;
+  status: 'active' | 'superseded' | 'expired';
+  evidence: MemoryEvidence;
+  createdAt: string;
+  acceptedBy: string;
+  expiresAt?: string | null;
+  supersedesMemoryId?: string;
+}
+
+/** POST /memory/lifecycle/candidates request body (propose WITH evidence). */
+export interface ProposeMemoryCandidateBody {
+  scope: MemoryScope;
+  title: string;
+  body: string;
+  evidence: MemoryEvidence;
+  proposedBy: string;
+  candidateId?: string;
+}
+
+/** POST /memory/lifecycle/candidates/:id/review request body. */
+export interface ReviewMemoryCandidateBody {
+  accepted: boolean;
+  reviewedBy: string;
+  reason?: string;
+}
+
+/**
+ * POST .../review result (ReviewMemoryResult). `memory` is present only when the
+ * candidate was accepted (a durable MemoryItem was materialized).
+ */
+export interface ReviewMemoryResult {
+  candidate: MemoryCandidate;
+  memory?: MemoryItem;
+}
+
 /** The standard backend envelope: { success, data?, error? }. */
 export interface ApiEnvelope<T> {
   success: boolean;

@@ -405,3 +405,44 @@ body {
 .connector-identity { font-size: 12px; color: var(--text-faint); }
 .connector-error { font-size: 11px; color: var(--bad); font-family: var(--mono); word-break: break-word; }
 .connector-checked { font-size: 11px; color: var(--text-faint); }
+
+/* Policy panel — live @recoder/agent-policy decision (POST /api/agent-os/policy/evaluate). */
+.policy-panel, .memory-panel { display: flex; flex-direction: column; gap: 12px; padding: 16px; width: 100%; }
+.policy-panel .panel-title, .memory-panel .panel-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.panel-head-sub { font-size: 12px; color: var(--text-faint); }
+.policy-form { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.policy-decision {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.policy-decision-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.policy-effect { text-transform: uppercase; font-weight: 700; letter-spacing: 0.04em; }
+.policy-decision-action { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.policy-decision-actor { font-size: 12px; color: var(--text-faint); }
+.policy-decision-reason { margin: 0; font-size: 13px; color: var(--text); line-height: 1.5; }
+.policy-decision-approval { margin: 0; font-size: 12px; color: var(--warn); }
+.policy-decision-meta { margin: 0; font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
+.policy-findings { font-size: 12px; color: var(--text-dim); }
+.policy-findings-pre {
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px; overflow: auto; max-height: 200px;
+}
+
+/* Memory candidates panel — reviewed-candidate lifecycle (/api/agent-os/memory/lifecycle). */
+.memory-propose { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.memory-list { display: flex; flex-direction: column; gap: 8px; }
+.memory-row {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
+}
+.memory-row-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.memory-scope { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+.memory-title { font-weight: 600; font-size: 13px; color: var(--text); }
+.memory-body { margin: 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.memory-evidence { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 11px; }
+.memory-evidence-ok { color: var(--good); font-family: var(--mono); word-break: break-word; }
+.memory-evidence-missing { color: var(--bad); font-family: var(--mono); }
+.memory-proposed { color: var(--text-faint); }
+.memory-reviewed { margin: 0; font-size: 11px; color: var(--text-faint); }
+.memory-row-actions { display: flex; gap: 8px; margin-top: 4px; }

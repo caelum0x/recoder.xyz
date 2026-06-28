@@ -24,8 +24,12 @@
  *   GET  /dmux                            dmux operator-console status + grid
  *   POST /dmux/launch                     launch the dmux console for a repo
  *
- * Sibling control-plane route (NOT under /api/conductor):
- *   GET  /api/connectors                  per-channel connector health
+ * Sibling control-plane routes (NOT under /api/conductor):
+ *   GET  /api/connectors                              per-channel connector health
+ *   POST /api/agent-os/policy/evaluate                real @recoder/agent-policy decision
+ *   GET  /api/agent-os/memory/lifecycle/candidates    reviewed memory candidates
+ *   POST /api/agent-os/memory/lifecycle/candidates             propose a candidate (with evidence)
+ *   POST /api/agent-os/memory/lifecycle/candidates/:id/review  accept/reject a candidate
  */
 import type {
   ApiEnvelope,
@@ -36,7 +40,13 @@ import type {
   DmuxLaunchBody,
   DmuxLaunchResult,
   DmuxStatus,
+  MemoryCandidate,
   MergeResult,
+  PolicyDecision,
+  PolicyEvaluateBody,
+  ProposeMemoryCandidateBody,
+  ReviewMemoryCandidateBody,
+  ReviewMemoryResult,
   RunEvent,
   RuntimeAvailability,
   SessionOutput,
@@ -144,6 +154,11 @@ function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/conductor', method, path, body);
 }
 
+/** Agent OS control-plane request: every call hits `${backendUrl}/api/agent-os/...`. */
+function agentOsRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/agent-os', method, path, body);
+}
+
 export const api = {
   health: () =>
     request<{ available: boolean; git?: boolean; tmux?: boolean; tmuxBin?: string; reason?: string }>(
@@ -182,4 +197,26 @@ export const api = {
   // --- connectors (chat-channel bridge) ---
   // NOTE: this route is mounted at /api/connectors, NOT under /api/conductor.
   connectors: () => requestAt<ConnectorsHealth>('/api/connectors', 'GET', '/'),
+
+  // --- Agent OS control plane (mounted at /api/agent-os, NOT /api/conductor) ---
+
+  /** Run the real @recoder/agent-policy engine -> PolicyDecision (allow|needs_approval|deny). */
+  evaluatePolicy: (body: PolicyEvaluateBody) =>
+    agentOsRequest<PolicyDecision>('POST', '/policy/evaluate', body),
+
+  /** List reviewed memory candidates from the lifecycle surface. */
+  listMemoryCandidates: () =>
+    agentOsRequest<MemoryCandidate[]>('GET', '/memory/lifecycle/candidates'),
+
+  /** Propose a memory candidate WITH evidence (taskId + artifactId required server-side). */
+  proposeMemoryCandidate: (body: ProposeMemoryCandidateBody) =>
+    agentOsRequest<MemoryCandidate>('POST', '/memory/lifecycle/candidates', body),
+
+  /** Accept/reject a candidate; on accept the backend materializes a durable MemoryItem. */
+  reviewMemoryCandidate: (candidateId: string, body: ReviewMemoryCandidateBody) =>
+    agentOsRequest<ReviewMemoryResult>(
+      'POST',
+      `/memory/lifecycle/candidates/${encodeURIComponent(candidateId)}/review`,
+      body,
+    ),
 };
