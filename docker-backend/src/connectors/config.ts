@@ -9,14 +9,33 @@
  */
 import { type ConnectorKind, isConnectorKind, readConnectorEnv } from '@recoder/connectors';
 import { isConductorRuntimeId, type ConductorRuntimeId } from '../conductor/runtime-commands.js';
+import { SUPPORTED_CHANNELS, getChannelAdapter } from './channel-adapters.js';
 
-/** Per-channel resolved configuration (currently telegram is the real adapter). */
+/** Per-channel resolved configuration for a channel whose credentials are present. */
 export interface ChannelConfig {
   readonly channel: ConnectorKind;
   /** Bot/account credential (telegram bot token, etc.). Never logged. */
   readonly token: string;
   /** Connector account id this credential authenticates as. */
   readonly accountId: string;
+  /**
+   * True when this configured channel still needs an external dependency (HTTP
+   * webhook ingress, bridge/daemon) to take inbound LIVE. Surfaced truthfully in
+   * health so the operator knows config alone is not enough for this channel.
+   */
+  readonly requiresExternal: boolean;
+  /** Human-readable note when `requiresExternal` (what dependency is missing). */
+  readonly note?: string;
+}
+
+/**
+ * A channel whose credentials are NOT present — reported truthfully in health as
+ * configured:false with the reason (which env var is missing), and NOT
+ * registered (it never contacts a network or fakes a connection).
+ */
+export interface UnconfiguredChannel {
+  readonly channel: ConnectorKind;
+  readonly reason: string;
 }
 
 /** Resolved dispatch defaults applied when an inbound command omits them. */
@@ -44,7 +63,10 @@ export interface GatingConfig {
 }
 
 export interface ConnectorsConfig {
+  /** Channels whose credentials are present — registered + monitored. */
   readonly channels: readonly ChannelConfig[];
+  /** Channels with no credentials — reported configured:false, never registered. */
+  readonly unconfigured: readonly UnconfiguredChannel[];
   readonly dispatch: DispatchConfig | undefined;
   readonly gating: GatingConfig;
 }
@@ -89,46 +111,50 @@ function resolveGating(): GatingConfig {
   };
 }
 
-/** Channels with a real adapter implementation in this bridge. */
-const REAL_CHANNELS: readonly ConnectorKind[] = ['telegram'];
+/** Channels with a real adapter implementation in this bridge (the seven subpaths). */
+const REAL_CHANNELS: readonly ConnectorKind[] = SUPPORTED_CHANNELS;
 
-/** Per-channel credential env name (only real adapters need to be resolvable). */
-function tokenEnvFor(channel: ConnectorKind): string | undefined {
-  switch (channel) {
-    case 'telegram':
-      // RECODER_CONNECTORS_TELEGRAM_BOT_TOKEN / OPENCLAW_TELEGRAM_BOT_TOKEN, or
-      // the plain TELEGRAM_BOT_TOKEN that operators expect.
-      return readConnectorEnv('TELEGRAM_BOT_TOKEN') ?? process.env.TELEGRAM_BOT_TOKEN;
-    default:
-      return undefined;
-  }
+interface ResolvedChannels {
+  readonly channels: ChannelConfig[];
+  readonly unconfigured: UnconfiguredChannel[];
 }
 
-function resolveChannels(): ChannelConfig[] {
-  // Operator may pin the enabled set via CONNECTORS_CHANNELS; otherwise we
-  // attempt every channel that has a real adapter and let token presence decide.
+function resolveChannels(): ResolvedChannels {
+  // Operator may pin the enabled set via CONNECTORS_CHANNELS; otherwise every
+  // channel that has a real adapter is a candidate and per-channel credential
+  // detection (delegated to the adapter descriptor) decides configured-or-not.
   const requested = splitList(readConnectorEnv('CHANNELS') ?? process.env.CONNECTORS_CHANNELS)
     .filter((c): c is ConnectorKind => isConnectorKind(c));
-  const candidates = requested.length > 0 ? requested : REAL_CHANNELS;
+  const candidates = requested.length > 0 ? requested.filter((c) => REAL_CHANNELS.includes(c)) : REAL_CHANNELS;
 
   const channels: ChannelConfig[] = [];
+  const unconfigured: UnconfiguredChannel[] = [];
   for (const channel of candidates) {
-    if (!REAL_CHANNELS.includes(channel)) continue; // no real adapter -> not enabled
-    const token = tokenEnvFor(channel)?.trim();
-    if (!token) continue; // no token -> not configured -> degrade-safe skip
+    const adapter = getChannelAdapter(channel);
+    if (!adapter) continue; // no real adapter -> not a candidate (defensive)
+    const detection = adapter.detect();
+    if (!detection.configured || !detection.token) {
+      // No credentials -> truthful configured:false, NOT registered, never faked.
+      unconfigured.push({ channel, reason: detection.reason ?? 'not configured' });
+      continue;
+    }
     channels.push({
       channel,
-      token,
-      accountId: (readConnectorEnv(`${channel.toUpperCase()}_ACCOUNT_ID`) ?? channel).trim() || channel,
+      token: detection.token,
+      accountId: detection.accountId ?? channel,
+      requiresExternal: adapter.requiresExternal,
+      note: adapter.requiresExternal ? detection.reason : undefined,
     });
   }
-  return channels;
+  return { channels, unconfigured };
 }
 
 /** Resolve the full connectors config from the current environment. */
 export function loadConnectorsConfig(): ConnectorsConfig {
+  const { channels, unconfigured } = resolveChannels();
   return {
-    channels: resolveChannels(),
+    channels,
+    unconfigured,
     dispatch: resolveDispatch(),
     gating: resolveGating(),
   };
