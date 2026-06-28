@@ -4,7 +4,7 @@
 # See docs/RECODER-PRODUCT-ARCHITECTURE.md §4 and §6.
 
 .DEFAULT_GOAL := help
-.PHONY: help all verify ts site backend go-beads go-ziti rust-openfang rust-claw py-pal py-ops heavy build-tmux build-dmux substrate
+.PHONY: help all verify ts site backend go-beads bd go-ziti rust-openfang rust-claw py-pal py-ops heavy build-tmux build-dmux substrate
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -35,8 +35,11 @@ site: ## Build the marketing site
 	cd site && pnpm build
 
 # ---- Go ----
-go-beads: ## Build beads (bd) issue tracker
-	cd go/beads && go build ./...
+bd: ## Build the reproducible, version-stamped bd binary (go/beads/bin/bd)
+	./scripts/build-bd.sh
+
+go-beads: ## Compile-check all beads packages (cgo + gms_pure_go)
+	cd go/beads && . ./.buildflags && go build -tags gms_pure_go ./...
 
 go-ziti: ## Build ziti zero-trust mesh (HEAVY)
 	cd go/ziti && go build ./...

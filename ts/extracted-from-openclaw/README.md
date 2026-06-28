@@ -21,14 +21,42 @@ that wrap each real gateway behind the `ConnectorPort`.
   verbatim from gateway-core — zero-dependency working code, not stubs),
   composed by `resolveGate()` into one decision. A message that fails gating
   produces **no** control-plane action.
-- `src/agents/` — multi-account `auth-profiles` + the embedded pi-agent
-  `EmbeddedRunner` contract (ported from `agents/agents/auth-profiles/*` and
-  `pi-embedded-runner/*`).
+- `src/agents/` — multi-account `auth-profiles`, the embedded pi-agent
+  `EmbeddedRunner` contract, and the **concrete `PiEmbeddedRunner`** that drives
+  the real pi coding-agent harness (`@mariozechner/pi-agent-core` `Agent` +
+  `@mariozechner/pi-ai` `streamSimple`). The pi SDKs are OPTIONAL peers: the
+  foundation imports only their *types* (erased at build) and loads their
+  *values* lazily via `loadOptionalPi` (`src/agents/optional-pi.ts`), so the
+  foundation bundle pulls in none of the heavy pi graph and install stays
+  ENOSPC-safe. A consumer without the pi SDKs gets a truthful, actionable error
+  the moment they call `run()` — never a fake success.
+- `src/dispatch/` — the inbound -> gating -> embedded-agent -> outbound
+  **dispatch pipeline**. `ConnectorRegistry` maps a `ConnectorKind` to a live
+  `ConnectorPort`; `dispatchInbound` runs `resolveGate`, and only on an
+  authorized message drives one embedded agent turn and delivers the collected
+  reply through the registered port. Every failure mode (blocked, empty reply,
+  unsupported channel, runner error, send error) is encoded in a truthful
+  `DispatchOutcome` — the pipeline never throws and never fakes a delivery.
 - `src/identity.ts` — `RECODER_CONNECTORS_*` env (legacy `OPENCLAW_*` honored as
   a deprecated fallback).
 
-Verify: `bun install` -> `tsc --noEmit` (clean) -> `vitest run` (13 real gating
-tests pass) -> `tsup` (ESM + CJS + d.ts).
+### Per-channel adapter subpaths (consumable)
+
+The typecheck-clean `ConnectorPort` adapters are shipped as their own subpaths so
+importing one pulls only that channel's optional SDK:
+
+- `@recoder/connectors/telegram` — raw Bot API over fetch (no SDK).
+- `@recoder/connectors/slack` — `@slack/web-api` / `@slack/bolt` (optional, lazy).
+- `@recoder/connectors/signal` — signal-cli JSON-RPC.
+- `@recoder/connectors/imessage` — local iMessage RPC bridge.
+- `@recoder/connectors/whatsapp` — WhatsApp wire transport.
+
+The **discord** adapter is intentionally NOT exported: it currently has 139
+type errors and does not compile. The **line** and **feishu** adapters are not
+yet extracted behind `ConnectorPort`. None of the three is an entry point.
+
+Verify: `npx tsc --noEmit` (clean) -> `vitest run` (13 gating + 8 dispatch tests
+pass) -> `tsup` (ESM + CJS + d.ts for the foundation + 5 adapter subpaths).
 
 ## Raw reference source (NOT compiled by this package)
 

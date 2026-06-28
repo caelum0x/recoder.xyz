@@ -96,9 +96,9 @@ Per [`docs/subsystems/README.md`](./subsystems/README.md). Each fuses OSS (merge
 |---|---|---|---|
 | 1 | **brain** | ✅ **built & green** | 5 real sources behind ports (recodergit · continuum · mem0 · context7 · beads); BrainService + brain MCP server; the token-waste-killer |
 | 2 | **governance** | 📐 designed | Rust crates (openfang + claw-code-parity) + TS policy spine |
-| 3 | **coordination** | ✅ **built & green; wired** | `@recoder/coordination` 252/252 tests; **work-locks now live in the conductor** (collision-prevention, 9/9 conductor-lock tests) — wiring in working-tree (uncommitted). dispatch/handoff/reconciler present. See BUILD-STATUS §4. |
-| 4 | **runtime** | 🟢 **built & green; shelved** | `@recoder/runtime` 160/160 tests (claude-code/codex/in-process tool-loop drivers); green-but-not-yet-wired into a live agent run. |
-| 5 | **substrate** | 🟡 partial | tmux+worktree / Daytona isolation (conductor live: `/api/conductor/health` 200, runtimes present); `@recoder/substrate` pkg scaffolding shelved-incomplete; interop empty. |
+| 3 | **coordination** | ✅ **built & green; wired & committed** | `@recoder/coordination` 252/252 tests; **work-locks live in the conductor** (collision-prevention, 9/9 conductor-lock tests) **+ durable Postgres lock store** (`packages/coordination/src/persistence/postgres/`, restart-survivable). Committed in `dded81260`/`5fd5105b1`. dispatch/handoff/reconciler present. See BUILD-STATUS §4. |
+| 4 | **runtime** | 🟢 **built & green; parallel/demoted** | `@recoder/runtime` 160/160 tests (claude-code/codex/in-process tool-loop drivers); **not** the driver that ran the live agent — the proven run went through the canonical **tmux+worktree conductor driver**. `@recoder/runtime` is a parallel/demoted second driver until wired into the conductor. See BUILD-STATUS §10. |
+| 5 | **substrate** | 🟡 partial — **but live-agent run PROVEN** | tmux+worktree / Daytona isolation (conductor live: `/api/conductor/health` 200, runtimes present). **A real `claude -p` headless run completed end-to-end** (isolated worktree, `GREETING.md`, exit 0, diff captured, teardown — BUILD-STATUS §7a). `@recoder/substrate` pkg scaffolding shelved-incomplete; interop empty. Capability routes (`/health/full`, `/resources`, `/workflows`) now **mounted** + resource governor enforced on `createWorkspace`. |
 | 6 | **network** | 📐 designed | OpenZiti zero-trust overlay |
 | 7 | **interop** | 📐 designed | A2A + MCP host + connectors |
 | 8 | **distribution** | 📐 designed | CLI dist + polar billing + signed delivery |
@@ -118,12 +118,16 @@ Legend: ✅ done · 🔄 in progress · 📐 designed · 📋 planned · ⚠️ 
 |---|---|---|---|
 | **Own `ts/` engines as `@recoder/*`** (dmux, codex-runtime, opencode-harness, open-agents, opencode, recodergit) | engines | ✅ | `34b2d4a83` — rebranded, build-green; `ts/qwen-code`, `ts/polar`, `ts/pi` (dup) retired. opencode 29/29 *prior-session reported* (not re-run). See BUILD-STATUS §1. |
 | **`@recoder/coordination`** built + green | coordination | ✅ | **252/252** (re-run). Locks/dispatch/handoff/reconciler. |
-| **`@recoder/coordination` wired into conductor** (work-locks) | coordination | ✅ 🅦 | collision-prevention live; **9/9** conductor-lock tests; wiring **uncommitted** (working-tree). BUILD-STATUS §4. |
-| **`@recoder/runtime`** built + green | runtime | ✅ | **160/160** (re-run); green-but-shelved (not yet wired to a live run). |
+| **`@recoder/coordination` wired into conductor** (work-locks) | coordination | ✅ | collision-prevention live; **9/9** conductor-lock tests; **+ durable Postgres lock store** (`packages/coordination/src/persistence/postgres/`). Committed `dded81260`/`5fd5105b1`. BUILD-STATUS §4. |
+| **Conductor capability routes mounted** (`/health/full`, `/resources`, `/workflows`) | conductor | ✅ | mounted in `conductor.routes.ts`; governor enforced on `createWorkspace` (429 on over-budget); committed `dded81260`/`5fd5105b1`. BUILD-STATUS §5. |
+| **`@recoder/runtime`** built + green | runtime | ✅ (parallel/demoted) | **160/160** (re-run); **not** the driver of the proven live run — tmux+worktree conductor driver is canonical. Parallel/demoted until wired. BUILD-STATUS §10. |
 | **`@recoder/connectors`** foundation + Telegram adapter | interop | ✅ | foundation **13/13**; 8 kinds declared; only **Telegram** is a real live adapter; `GET /api/connectors` live (`server.ts:15555`). |
 | **Desktop cockpit** over live `/api/conductor` | desktop | ✅ | board/terminals/sessions/auth/connectors-panel/lock-badges; **installable `Recoder.app`** with cockpit in `app.asar` (verified via `asar list`). |
 | **95-file merge resolved** (docker-backend tsc 114→0) | repo | ✅ | `34b2d4a83`; `tsc --noEmit` ⇒ **0** (re-run); 0 markers / 0 unmerged. |
-| **e2e: docker-backend boots (no Postgres), conductor live** | e2e | ✅ | `/api/conductor/health` 200 (tmux+git true), `/runtimes` shows claude/codex/opencode/pi present, `/api/connectors` truthful-inert. **Live-agent run NOT yet executed.** BUILD-STATUS §7. |
+| **e2e: docker-backend boots (no Postgres), conductor live** | e2e | ✅ | `/api/conductor/health` 200 (tmux+git true), `/runtimes` shows claude/codex/opencode/pi present, `/api/connectors` truthful-inert. BUILD-STATUS §7. |
+| **LIVE-AGENT RUN — core thesis PROVEN** | e2e | ✅ | conductor drove `claude -p` **headless end-to-end**: isolated worktree, `GREETING.md` created, **exit 0**, diff captured, teardown. Canonical tmux+worktree driver. Caveat: required clearing a stale `ANTHROPIC_API_KEY` in a lingering tmux server; durable terminal-state write-back **in progress**. BUILD-STATUS §7a. |
+| Durable post-run terminal-state on workspace record | conductor | 🔄 | run completed + diff captured; persisting the agent's terminal/exit state durably into the workspace record (reconciler + UI truth) still being finished. BUILD-STATUS §7a/§8. |
+| Wire `@recoder/runtime` behind the conductor driver seam (dual-runtime reconciliation) | runtime | 📋 | tmux+worktree driver is canonical; `@recoder/runtime` parallel/demoted until wired into `runtime-commands.ts` and a live run is re-proven through it. Additive-only, gated (don't destabilize the proven path). BUILD-STATUS §10. |
 | recodergit engine built + verified | code-graph | ✅ | live: analyze→graph, impact by UID |
 | recodergit full rebrand (zero gitnexus) | code-graph | ✅ | committed |
 | Brain: 5 real sources + MCP server | brain | ✅ | continuum/bd/recodergit live; mem0/context7 need config |
