@@ -140,6 +140,28 @@ describe('api URL construction', () => {
     expect(lastUrl).toBe(`${BACKEND_URL}/api/connectors/`);
   });
 
+  it('routes policy evaluate to /api/agent-os/policy/evaluate (NOT under /api/conductor)', async () => {
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: {} } }));
+    await api.evaluatePolicy({
+      actor: { agentId: 'a', permissions: {} },
+      action: 'file.write',
+      target: { path: 'x' },
+    });
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/agent-os/policy/evaluate`);
+  });
+
+  it('routes memory candidates list to /api/agent-os/memory/lifecycle/candidates', async () => {
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: [] } }));
+    await api.listMemoryCandidates();
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/agent-os/memory/lifecycle/candidates`);
+  });
+
+  it('encodes the candidate id in the review path', async () => {
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: {} } }));
+    await api.reviewMemoryCandidate('mc/9', { accepted: true, reviewedBy: 'op' });
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/agent-os/memory/lifecycle/candidates/mc%2F9/review`);
+  });
+
   it('strips a trailing slash from the injected backendUrl when building the URL', async () => {
     (globalThis as Record<string, unknown>).window = {
       __RECODER_COCKPIT__: { backendUrl: 'http://localhost:3100/', token: 't' },
@@ -175,5 +197,51 @@ describe('api request headers', () => {
     const headers = captured?.headers as Record<string, string>;
     expect(headers['Content-Type']).toBeUndefined();
     expect(captured?.body).toBeUndefined();
+  });
+
+  it('serializes the policy evaluate body verbatim as the request body', async () => {
+    let captured: RequestInit | undefined;
+    mockFetch((_url, init) => {
+      captured = init;
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: { effect: 'allow' } } });
+    });
+    const sent = {
+      actor: { agentId: 'a', permissions: { defaultFileEffect: 'allow' } },
+      action: 'file.write' as const,
+      target: { path: 'src/x.ts' },
+    };
+    await api.evaluatePolicy(sent);
+    expect(captured?.method).toBe('POST');
+    expect(JSON.parse(captured?.body as string)).toEqual(sent);
+  });
+});
+
+describe('api agent-os envelope unwrap', () => {
+  it('unwraps a PolicyDecision from {success,data}', async () => {
+    const decision = { decisionId: 'd1', effect: 'needs_approval', action: 'file.write' };
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: decision } }));
+    const result = await api.evaluatePolicy({
+      actor: { agentId: 'a', permissions: {} },
+      action: 'file.write',
+      target: {},
+    });
+    expect(result).toEqual(decision);
+  });
+
+  it('propagates a backend rejection (e.g. missing evidence) as an ApiError', async () => {
+    mockFetch(() =>
+      makeResponse({ status: 400, ok: false, body: { success: false, error: 'evidence.taskId is required' } }),
+    );
+    const err = await api
+      .proposeMemoryCandidate({
+        scope: 'repo',
+        title: 't',
+        body: 'b',
+        evidence: { taskId: '', artifactId: '' },
+        proposedBy: 'op',
+      })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toBe('evidence.taskId is required');
   });
 });
