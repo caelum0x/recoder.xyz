@@ -20,6 +20,14 @@
  * the workspace to `awaiting_approval` and returns that state. Degrade-safe: a
  * repository read failure is treated as "not approved" (fail closed — never
  * auto-deliver when the gate cannot prove an approval).
+ *
+ * This gate is BACKED by @recoder/governance (see governance-gate.ts). Every
+ * delivery is routed through `Governance.decide()` so the real tier-classifier,
+ * approval risk-tier policy, deny-biased policy chain (composing
+ * @recoder/agent-policy), and SHA-256 Merkle audit chain run for the action.
+ * Governance decides the risk; the conductor enforces what it returns. A
+ * governance HARD DENY is absolute — no control-plane Approval record overrides a
+ * policy veto. The existing awaiting_approval/409 behavior is preserved.
  */
 import {
   isAllowedWorkspaceTransition,
@@ -30,6 +38,7 @@ import {
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
 import { advanceWorkspace } from './workspace-service.js';
+import { decideDelivery, type DeliveryGovernanceDecision } from './governance-gate.js';
 
 const logger = createLogger('conductor:delivery-approval');
 
@@ -115,6 +124,17 @@ export class DeliveryApprovalRequiredError extends Error {
   readonly approvalId?: string;
   /** Whether the workspace record was actually transitioned to awaiting_approval. */
   readonly transitioned: boolean;
+  /**
+   * The @recoder/governance verdict that gated this delivery, when governance
+   * produced one. Carries the risk tier, effect, and Merkle audit hash so the
+   * route can surface a truthful, audited 409. `governanceHardDeny` is true when
+   * governance vetoed the action outright (no approval record can override it).
+   */
+  readonly governanceTier?: string;
+  readonly governanceEffect?: string;
+  readonly governanceAuditHash?: string;
+  readonly governanceHardDeny: boolean;
+  readonly governanceDegraded?: boolean;
 
   constructor(input: {
     workspaceId: string;
@@ -122,6 +142,7 @@ export class DeliveryApprovalRequiredError extends Error {
     reason: string;
     approvalId?: string;
     transitioned: boolean;
+    governance?: DeliveryGovernanceDecision;
   }) {
     super(input.reason);
     this.name = 'DeliveryApprovalRequiredError';
@@ -129,6 +150,11 @@ export class DeliveryApprovalRequiredError extends Error {
     this.action = input.action;
     this.approvalId = input.approvalId;
     this.transitioned = input.transitioned;
+    this.governanceTier = input.governance?.verdict.tier;
+    this.governanceEffect = input.governance?.verdict.effect;
+    this.governanceAuditHash = input.governance?.auditHash;
+    this.governanceHardDeny = input.governance?.hardDeny ?? false;
+    this.governanceDegraded = input.governance?.degraded;
   }
 }
 
@@ -148,25 +174,128 @@ export async function enforceDeliveryApproval(workspace: Workspace, action: Deli
   // An explicit override exists for tasks the operator has marked safe automation
   // (.claude/rules/production.md: "unless the task spec explicitly marks them as
   // safe automation"). It must be an explicit boolean true in workspace metadata.
+  // Even a safe-automation delivery is routed through governance (audited) — but
+  // the operator's explicit grant lets the governance auto-approver clear it.
   if (workspace.metadata?.deliveryApprovalBypass === true) {
+    const bypassDecision = await decideDelivery(workspace, action, true);
+    if (bypassDecision.hardDeny) {
+      // Governance vetoed the action itself (e.g. a critical policy deny). A
+      // safe-automation flag does NOT override a governance hard deny.
+      logger.warn(
+        { workspaceId: workspace.workspaceId, action, auditHash: bypassDecision.auditHash },
+        'safe-automation delivery vetoed by governance hard-deny',
+      );
+      throw new DeliveryApprovalRequiredError({
+        workspaceId: workspace.workspaceId,
+        action,
+        reason: bypassDecision.verdict.reason,
+        transitioned: false,
+        governance: bypassDecision,
+      });
+    }
     logger.info(
-      { workspaceId: workspace.workspaceId, action },
-      'delivery approval bypassed (workspace marked safe automation)',
+      {
+        workspaceId: workspace.workspaceId,
+        action,
+        effect: bypassDecision.verdict.effect,
+        auditHash: bypassDecision.auditHash,
+      },
+      'delivery approval bypassed (workspace marked safe automation) — governance audited',
     );
     return;
   }
 
   const check = await checkDeliveryApproval(workspace.taskId, action);
+
+  // Route the delivery through @recoder/governance. The control-plane approval
+  // record (when present) is the human sign-off governance consumes to clear the
+  // risk gate; governance still classifies the tier, applies the approval risk
+  // policy, and seals the decision into the Merkle audit chain. Governance decides;
+  // the conductor enforces what it returns.
+  const governance = await decideDelivery(workspace, action, check.approved);
+
+  // A governance HARD DENY is absolute: no approval record can override a policy
+  // veto (e.g. a forbidden-path / critical-tier deny). Block unconditionally.
+  if (governance.hardDeny) {
+    return await blockForApproval(workspace, action, governance.verdict.reason, undefined, governance);
+  }
+
   if (check.approved) {
+    if (governance.blocks) {
+      // The control plane recorded an approval but governance still requires a
+      // gate it could not clear (e.g. auto-approve disabled at this tier). Honor
+      // the approval record as the human sign-off that satisfies the gate, and
+      // record that governance was consulted.
+      logger.info(
+        {
+          workspaceId: workspace.workspaceId,
+          action,
+          approvalId: check.approvalId,
+          governanceEffect: governance.verdict.effect,
+          governanceTier: governance.verdict.tier,
+          auditHash: governance.auditHash,
+        },
+        'delivery approved by control-plane record (governance gate satisfied by human sign-off)',
+      );
+    } else {
+      logger.info(
+        {
+          workspaceId: workspace.workspaceId,
+          action,
+          approvalId: check.approvalId,
+          governanceTier: governance.verdict.tier,
+          auditHash: governance.auditHash,
+        },
+        'delivery approval gate passed (governance cleared + control-plane approved)',
+      );
+    }
+    return;
+  }
+
+  // No control-plane approval. If governance cleared it anyway (e.g. an explicit
+  // autonomous context within the tier ceiling), proceed; otherwise block.
+  if (!governance.blocks) {
     logger.info(
-      { workspaceId: workspace.workspaceId, action, approvalId: check.approvalId },
-      'delivery approval gate passed',
+      {
+        workspaceId: workspace.workspaceId,
+        action,
+        governanceEffect: governance.verdict.effect,
+        auditHash: governance.auditHash,
+      },
+      'delivery cleared by governance (no control-plane approval required at this tier)',
     );
     return;
   }
 
-  const reason = check.reason ?? `delivery ${action} requires approval`;
+  const reason =
+    governance.verdict.reason || check.reason || `delivery ${action} requires approval`;
+  return await blockForApproval(workspace, action, reason, check.approvalId, governance);
+}
+
+/**
+ * Block a delivery pending approval: transition the workspace into
+ * awaiting_approval when legal (else record the gate truthfully without an illegal
+ * transition) and throw a DeliveryApprovalRequiredError carrying the governance
+ * verdict. This preserves the exact awaiting_approval/409 contract callers already
+ * depend on, now backed by a real @recoder/governance verdict + Merkle audit hash.
+ */
+async function blockForApproval(
+  workspace: Workspace,
+  action: DeliveryAction,
+  reason: string,
+  approvalId: string | undefined,
+  governance: DeliveryGovernanceDecision,
+): Promise<never> {
   let transitioned = false;
+  // The governance verdict is part of the truthful audit trail recorded in the
+  // workspace metadata so the blocked merge/PR shows the risk tier + audit hash.
+  const governanceGate = {
+    effect: governance.verdict.effect,
+    tier: governance.verdict.tier,
+    auditHash: governance.auditHash ?? null,
+    hardDeny: governance.hardDeny,
+    degraded: governance.degraded,
+  };
   // Only transition into awaiting_approval when the state machine permits it
   // (running → awaiting_approval is legal; awaiting_review → awaiting_approval is
   // not, so for that case we record the gate without an illegal transition).
@@ -177,7 +306,7 @@ export async function enforceDeliveryApproval(workspace: Workspace, action: Deli
   ) {
     try {
       await advanceWorkspace(workspace.workspaceId, 'awaiting_approval', undefined, {
-        deliveryGate: { action, reason, approvalId: check.approvalId ?? null, at: new Date().toISOString() },
+        deliveryGate: { action, reason, approvalId: approvalId ?? null, governance: governanceGate, at: new Date().toISOString() },
       });
       transitioned = true;
     } catch (err) {
@@ -188,7 +317,7 @@ export async function enforceDeliveryApproval(workspace: Workspace, action: Deli
     // audit trail shows the merge/PR was blocked pending approval.
     try {
       await advanceWorkspace(workspace.workspaceId, workspace.state, undefined, {
-        deliveryGate: { action, reason, approvalId: check.approvalId ?? null, blocked: true, at: new Date().toISOString() },
+        deliveryGate: { action, reason, approvalId: approvalId ?? null, governance: governanceGate, blocked: true, at: new Date().toISOString() },
       });
     } catch (err) {
       logger.warn({ workspaceId: workspace.workspaceId, action, err }, 'delivery gate metadata record failed');
@@ -196,14 +325,23 @@ export async function enforceDeliveryApproval(workspace: Workspace, action: Deli
   }
 
   logger.warn(
-    { workspaceId: workspace.workspaceId, action, reason, transitioned },
-    'delivery action blocked — approval required',
+    {
+      workspaceId: workspace.workspaceId,
+      action,
+      reason,
+      transitioned,
+      governanceEffect: governance.verdict.effect,
+      governanceTier: governance.verdict.tier,
+      auditHash: governance.auditHash,
+    },
+    'delivery action blocked — approval required (governance gated)',
   );
   throw new DeliveryApprovalRequiredError({
     workspaceId: workspace.workspaceId,
     action,
     reason,
-    approvalId: check.approvalId,
+    approvalId,
     transitioned,
+    governance,
   });
 }
