@@ -12,7 +12,8 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger';
-import { ConnectorsGateway, type ConnectorsHealth } from './gateway.js';
+import { ConnectorsGateway, type ConnectorsHealth, type ChannelHealth } from './gateway.js';
+import { loadConnectorsConfig } from './config.js';
 
 const logger = createLogger('connectors');
 
@@ -46,10 +47,45 @@ export function getConnectorsGateway(): ConnectorsGateway | null {
   return gateway;
 }
 
-/** Truthful connectors health. When not started, reports inert with no channels. */
+/**
+ * Truthful connectors health. When the gateway is started, defers to its live
+ * per-channel probes. When NOT started, reports a config-derived snapshot so the
+ * endpoint still tells the truth about every channel (configured vs not + reason)
+ * without contacting any network.
+ */
 export async function connectorsHealth(): Promise<ConnectorsHealth> {
-  if (!gateway) return { active: false, dispatchReady: false, channels: [] };
-  return gateway.health();
+  if (gateway) return gateway.health();
+  // Inert: derive a truthful snapshot straight from the env config.
+  let config;
+  try {
+    config = loadConnectorsConfig();
+  } catch (err) {
+    logger.warn({ err }, 'connectors config load failed');
+    return { active: false, dispatchReady: false, channels: [] };
+  }
+  const configured: ChannelHealth[] = config.channels.map((c) => ({
+    channel: c.channel,
+    accountId: c.accountId,
+    configured: true,
+    available: false, // not started -> no live port yet
+    connected: false,
+    requiresExternal: c.requiresExternal,
+    reason: c.note,
+  }));
+  const unconfigured: ChannelHealth[] = config.unconfigured.map((u) => ({
+    channel: u.channel,
+    accountId: u.channel,
+    configured: false,
+    available: false,
+    connected: false,
+    requiresExternal: false,
+    reason: u.reason,
+  }));
+  return {
+    active: false,
+    dispatchReady: Boolean(config.dispatch),
+    channels: [...configured, ...unconfigured],
+  };
 }
 
 /** GET /api/connectors — per-channel health (configured? connected?). */
