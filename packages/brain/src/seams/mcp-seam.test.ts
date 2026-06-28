@@ -281,19 +281,33 @@ test("brain_record validates kind and required fields", async () => {
   assert.match(noId.content[0].text, /id/);
 });
 
-test("a handler never throws — an adapter failure becomes an isError result", async () => {
+test("a handler never throws — a repo-source failure degrades (truthful), it does not crash the read", async () => {
+  // Per brain.md §7 "fail safe": a source that throws must NOT fail the whole
+  // read. The repo source degrades to an empty pack and is reported as degraded
+  // in provenance; assemble still succeeds, so the agent gets the other sources.
   const brain = createBrain({
     repo: {
       async contextPack() {
         throw new Error("indexer exploded");
       },
     },
+    // Deterministic revision (no real git spawn).
+    runGit: async () => "deadbeef",
   });
   const tools = createBrainTools(brain);
   const result = await toolByName(tools, BRAIN_TOOL_NAMES.assemble).handler({
     task: "x",
     repoRoot: "/tmp/repo",
   });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /indexer exploded/);
+  // The read SUCCEEDS (no isError) — a single dark source can't fail it.
+  assert.notEqual(result.isError, true);
+  // The seam truthfully reports the repo section as degraded.
+  const payload = JSON.parse(result.content[0].text) as {
+    degraded: string[];
+    provenance?: { degraded: Array<{ source: string; degradeReason: string }> };
+  };
+  assert.ok(payload.degraded.includes("repo"));
+  // Provenance carries the truthful "repo unavailable" entry.
+  const repoProv = payload.provenance?.degraded.find((d) => d.source === "repo");
+  assert.equal(repoProv?.degradeReason, "unavailable");
 });

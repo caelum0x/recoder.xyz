@@ -3,6 +3,8 @@ import type { BrainMemory } from "./memory.types";
 import type { BrainDoc } from "./docs.types";
 import type { BrainTask } from "./task-graph.types";
 import type { BrainActivity, BrainActivityProfile } from "./activity.types";
+import type { Revision } from "./revision";
+import type { Provenance } from "./provenance";
 
 /** What an agent gets from one Brain read. Shared, reused, never re-fetched. */
 export interface BrainContext {
@@ -19,6 +21,23 @@ export interface BrainContext {
     recent: BrainActivity[];
     profile: BrainActivityProfile | null;
   };
+  /**
+   * The repo state this context was assembled against (git HEAD + dirty). Part
+   * of the cache key — a new HEAD invalidates this context. Optional so older
+   * serialized contexts (pre-cache) still typecheck.
+   */
+  revision?: Revision;
+  /**
+   * Truthful per-source provenance: which sources contributed vs degraded, with
+   * item counts and actionable reasons. The Brain never fabricates a source.
+   */
+  provenance?: Provenance;
+  /**
+   * Estimated token cost of this assembled context (real tokenizer estimate over
+   * the assembled material). On every cache HIT this is the value re-spent had
+   * the context been re-assembled — i.e. the tokens the shared brain saved.
+   */
+  estimatedTokens?: number;
   /** When this context was assembled (so peers know it's fresh and reusable). */
   assembledAt: string;
 }
