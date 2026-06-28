@@ -35,6 +35,7 @@ import { startRunTail } from './run-tailer.js';
 import { getSubstrate, listSubstrates } from './substrate.js';
 import { registerTmuxSubstrate } from './substrate-tmux.js';
 import { registerDaytonaSubstrate } from './substrate-daytona.js';
+import { registerInProcessSubstrate } from './substrate-in-process.js';
 import { TMUX_BIN } from './tmux-path.js';
 import {
   acquireWorkspaceLock,
@@ -50,6 +51,7 @@ export const ADMISSION_REJECTED_PREFIX = 'admission rejected: ';
 // remote Daytona sandbox. Selection is per-workspace via Workspace.substrate.
 registerTmuxSubstrate();
 registerDaytonaSubstrate();
+registerInProcessSubstrate();
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
