@@ -24,6 +24,7 @@ import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
+import { DeliveryApprovalRequiredError } from './delivery-approval.js';
 import {
   dmuxAvailability,
   launchDmuxConsole,
@@ -219,7 +220,9 @@ export function createConductorRouter(): Router {
     }
   });
 
-  // Open a PR for the workspace branch (outward-facing; caller enforces approval).
+  // Open a PR for the workspace branch. Approval-gated: when no approval record
+  // exists the workspace is moved to awaiting_approval and a 409 is returned (the
+  // branch is not pushed and no PR is opened).
   router.post('/workspaces/:workspaceId/pr', async (req: Request, res: Response) => {
     try {
       const { title, body, base, draft, remote } = req.body ?? {};
@@ -228,17 +231,35 @@ export function createConductorRouter(): Router {
         data: await createWorkspacePr(req.params.workspaceId, { title, body, base, draft, remote }),
       });
     } catch (err) {
+      if (err instanceof DeliveryApprovalRequiredError) {
+        res.status(409).json({
+          success: false,
+          error: err.message,
+          data: { state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned },
+        });
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'pr failed';
       res.status(msg.includes('not found') ? 404 : 400).json({ success: false, error: msg });
     }
   });
 
-  // Merge the workspace PR (outward-facing; caller enforces approval/policy).
+  // Merge the workspace PR. Approval-gated: a merge is a customer-visible delivery
+  // and requires an approval record. Absent one, the workspace is moved to
+  // awaiting_approval and a 409 is returned instead of silently merging.
   router.post('/workspaces/:workspaceId/merge', async (req: Request, res: Response) => {
     try {
       const { strategy, deleteBranch } = req.body ?? {};
       res.json({ success: true, data: await mergeWorkspace(req.params.workspaceId, { strategy, deleteBranch }) });
     } catch (err) {
+      if (err instanceof DeliveryApprovalRequiredError) {
+        res.status(409).json({
+          success: false,
+          error: err.message,
+          data: { state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned },
+        });
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'merge failed';
       res.status(msg.includes('not found') ? 404 : 400).json({ success: false, error: msg });
     }

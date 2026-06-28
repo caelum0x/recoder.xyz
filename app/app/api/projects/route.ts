@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureAppUserFromAuthUser, requireAuth } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
-import { listProjectSnapshotsWithLegacyFallback } from '@/lib/project-snapshots';
+import { getProjectMessageCounts, listProjectSnapshotsWithLegacyFallback } from '@/lib/project-snapshots';
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,23 +57,39 @@ export async function GET(request: NextRequest) {
       fallbackUserId ? [fallbackUserId] : [],
     );
     if (directSnapshots.length > 0) {
+      // Hydrate real chat message counts from chat_messages (linked via
+      // chat_sessions.projectId/urlId). One batched pair of queries for the
+      // whole page; absent entries mean no chat activity (count 0).
+      const messageCounts = await getProjectMessageCounts(
+        directSnapshots.map((project) => ({
+          projectId: project.projectId,
+          urlId: project.urlId,
+        })),
+      );
+
       return NextResponse.json({
         success: true,
-        data: directSnapshots.map((project) => ({
-          id: project.projectId,
-          urlId: project.urlId,
-          title: project.title || project.description || 'Untitled Project',
-          description: project.description,
-          timestamp: project.updatedAt,
-          createdAt: project.createdAt,
-          updatedAt: project.updatedAt,
-          messageCount: 0,
-          fileCount: Object.keys(project.files || {}).length,
-          directories: project.directories,
-          messages: [],
-          fileSnapshot: project.files,
-          webUrl: `/chat/${project.urlId || project.projectId}`,
-        })),
+        data: directSnapshots.map((project) => {
+          const messageCount =
+            messageCounts.get(project.projectId)
+            ?? (project.urlId ? messageCounts.get(project.urlId) : undefined)
+            ?? 0;
+          return {
+            id: project.projectId,
+            urlId: project.urlId,
+            title: project.title || project.description || 'Untitled Project',
+            description: project.description,
+            timestamp: project.updatedAt,
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt,
+            messageCount,
+            fileCount: Object.keys(project.files || {}).length,
+            directories: project.directories,
+            messages: [],
+            fileSnapshot: project.files,
+            webUrl: `/chat/${project.urlId || project.projectId}`,
+          };
+        }),
         total: directSnapshots.length,
       });
     }

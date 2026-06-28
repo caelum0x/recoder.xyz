@@ -12,6 +12,12 @@ export type AgentOsRepositoryDriver = 'memory' | 'json' | 'postgres';
 export type AgentOsServiceContainer = {
   repository: AgentOsRepository;
   repositoryDriver: AgentOsRepositoryDriver;
+  /**
+   * The live pg Pool backing the Postgres repository, when that driver is active.
+   * Undefined for the memory/json drivers. Exposed so boot can auto-apply the
+   * Agent OS schema migrations (degrade-safe) when running on Postgres.
+   */
+  pgPool?: Pool;
   workLocks: WorkLockService;
   // Flag-gated (RECODER_BRAIN_ENABLED). No-op when disabled; never throws.
   brain: BrainService;
@@ -27,7 +33,7 @@ export const agentOsContainer: AgentOsServiceContainer = {
   codeGraph: createRecoderGitService(),
 };
 
-function createRepository(): Pick<AgentOsServiceContainer, 'repository' | 'repositoryDriver'> {
+function createRepository(): Pick<AgentOsServiceContainer, 'repository' | 'repositoryDriver' | 'pgPool'> {
   const configuredDriver = process.env.AGENT_OS_REPOSITORY?.trim().toLowerCase();
   const databaseUrl = process.env.AGENT_OS_DATABASE_URL ?? process.env.DATABASE_URL;
   if (configuredDriver === 'postgres' || databaseUrl) {
@@ -35,9 +41,11 @@ function createRepository(): Pick<AgentOsServiceContainer, 'repository' | 'repos
       throw new Error('AGENT_OS_REPOSITORY=postgres requires AGENT_OS_DATABASE_URL or DATABASE_URL.');
     }
 
+    const pgPool = new Pool({ connectionString: databaseUrl });
     return {
-      repository: new PostgresAgentOsRepository(new Pool({ connectionString: databaseUrl })),
+      repository: new PostgresAgentOsRepository(pgPool),
       repositoryDriver: 'postgres',
+      pgPool,
     };
   }
 

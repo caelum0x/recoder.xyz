@@ -1,7 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.A2AControlPlane = exports.ClaudeConnectorAdapter = exports.CodexConnectorAdapter = exports.UnifiedPolicyPlane = exports.InMemoryTaskStore = exports.InMemoryCollaborationService = exports.InMemoryAuditLogService = exports.InMemoryAgentRegistry = void 0;
+exports.A2AControlPlane = exports.ClaudeConnectorAdapter = exports.CodexConnectorAdapter = exports.UnifiedPolicyPlane = exports.InMemoryTaskStore = exports.InMemoryCollaborationService = exports.InMemoryAuditLogService = exports.InMemoryAgentRegistry = exports.agentRefToIdentity = exports.agentIdentityToRef = exports.envelopeToA2ATask = exports.a2aTaskToEnvelope = void 0;
 const bridge_1 = require("./bridge");
+var task_convergence_1 = require("./task-convergence");
+Object.defineProperty(exports, "a2aTaskToEnvelope", { enumerable: true, get: function () { return task_convergence_1.a2aTaskToEnvelope; } });
+Object.defineProperty(exports, "envelopeToA2ATask", { enumerable: true, get: function () { return task_convergence_1.envelopeToA2ATask; } });
+Object.defineProperty(exports, "agentIdentityToRef", { enumerable: true, get: function () { return task_convergence_1.agentIdentityToRef; } });
+Object.defineProperty(exports, "agentRefToIdentity", { enumerable: true, get: function () { return task_convergence_1.agentRefToIdentity; } });
 class InMemoryAgentRegistry {
     agents = new Map();
     register(agent) {
@@ -114,6 +119,8 @@ class InMemoryCollaborationService {
     }
 }
 exports.InMemoryCollaborationService = InMemoryCollaborationService;
+// NOTE: `A2ATask` is declared in `./task-convergence` as a derived projection
+// of the canonical `TaskEnvelope`, and re-exported at the top of this file.
 class InMemoryTaskStore {
     tasks = new Map();
     events = new Map();

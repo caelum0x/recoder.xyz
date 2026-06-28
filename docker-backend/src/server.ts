@@ -69,6 +69,7 @@ import { createConductorRouter } from './conductor/conductor.routes.js';
 import { createConnectorsRouter, startConnectors } from './connectors/index.js';
 import { reconcile as reconcileConductor } from './conductor/workspace-service.js';
 import { startAgentOsOutboxDrainLoop } from './agent-os/outbox-drain-loop.js';
+import { agentOsContainer } from './agent-os/service-container';
 import { openclawAdapterRouter } from './a2a-openclaw-adapter.js';
 import { taskLifecycleRouter, collaborationRouter, heartbeatRouter, getHeartbeatTracker, sseStreamRouter, wireA2AEventBridge, connectorHealthRouter, claudeConnectorRouter, codexConnectorRouter, opencodeConnectorRouter, cursorConnectorRouter, windsurfConnectorRouter, replitConnectorRouter, contextBridgeRouter, a2aOpenApiRouter, a2aSloMetricsRouter, getA2ASloMetrics, restAdapterRouter, gitAdapterRouter, orchestrationRouter, workflowMessagingRouter, adminRouter, agentRegistryRouter, getIntegrationWiringService, disposeTaskLifecycleService, getTaskLifecycleService, getA2AEventBus, A2AEventType } from './a2a/index.js';
 import { workspaceRouter as a2aWorkspaceRouter } from './a2a/workspace.routes.js';
@@ -15544,6 +15545,21 @@ app.use('/api/agent-os', authenticateRequest, createAgentOsRouter());
 app.use('/internal/agent-os', createInternalAgentOsRouter());
 // Recoder Conductor — parallel agent sessions (tmux + git worktrees). The pivot product.
 app.use('/api/conductor', authenticateRequest, createConductorRouter());
+// Auto-apply Agent OS Postgres migrations on boot when running on the Postgres
+// driver (idempotent + degrade-safe). This provisions the conductor_workspaces
+// schema for a fresh AGENT_OS_REPOSITORY=postgres deploy so the reconcile below
+// (and all conductor persistence) has its tables. No-op for memory/json drivers.
+if (agentOsContainer.repositoryDriver === 'postgres' && agentOsContainer.pgPool) {
+  void (async () => {
+    const { applyAgentOsMigrations } = await import('./agent-os/migrations/apply-migrations.js');
+    const result = await applyAgentOsMigrations(agentOsContainer.pgPool!);
+    if (!result.ok) {
+      logger.warn({ error: result.error }, 'Agent OS Postgres migrations did not fully apply on boot (degrade-safe)');
+    } else if (result.applied.length > 0) {
+      logger.info({ applied: result.applied }, 'Agent OS Postgres migrations applied on boot');
+    }
+  })().catch((err) => logger.warn({ err }, 'Agent OS migration boot step failed (non-fatal)'));
+}
 // Survivability: on boot AND on a periodic timer, reconcile persisted workspaces
 // against the real tmux + git substrate (fire-and-forget; safe no-op when the
 // substrate is unavailable). Per docs/CONDUCTOR-ARCHITECTURE.md §1: the reconciler

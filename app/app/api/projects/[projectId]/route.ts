@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth-config';
 import { headers } from 'next/headers';
 import { ensureAppUserFromAuthUser } from '@/lib/auth-helpers';
 import { verifyInternalServiceRequest } from '@/lib/internal-service-auth';
-import { getProjectSnapshotWithLegacyFallback, patchProjectSnapshotFiles } from '@/lib/project-snapshots';
+import { getProjectMessageCount, getProjectMessages, getProjectSnapshotWithLegacyFallback, patchProjectSnapshotFiles } from '@/lib/project-snapshots';
 
 async function resolveEffectiveUserId(request: NextRequest): Promise<{ effectiveUserId: string | null; fallbackUserId: string | null }> {
   const hasInternalHeaders = Boolean(
@@ -63,6 +63,13 @@ export async function GET(
       fallbackUserId ? [fallbackUserId] : [],
     );
     if (directSnapshot) {
+      // Hydrate the real chat transcript + authoritative message count from
+      // chat_messages (linked via chat_sessions.projectId/urlId).
+      const [messages, messageCount] = await Promise.all([
+        getProjectMessages(directSnapshot.projectId, directSnapshot.urlId),
+        getProjectMessageCount(directSnapshot.projectId, directSnapshot.urlId),
+      ]);
+
       return NextResponse.json({
         success: true,
         data: {
@@ -73,10 +80,10 @@ export async function GET(
           timestamp: directSnapshot.updatedAt,
           createdAt: directSnapshot.createdAt,
           updatedAt: directSnapshot.updatedAt,
-          messageCount: 0,
+          messageCount,
           fileCount: Object.keys(directSnapshot.files || {}).length,
           directories: directSnapshot.directories,
-          messages: [],
+          messages,
           fileSnapshot: directSnapshot.files,
           webUrl: `/chat/${directSnapshot.urlId || directSnapshot.projectId}`,
         },
