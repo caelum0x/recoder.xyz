@@ -114,9 +114,19 @@
         "default": "./dist/feishu.cjs"
       }
     },
+    "./discord": {
+      "import": {
+        "types": "./dist/discord.d.ts",
+        "default": "./dist/discord.js"
+      },
+      "require": {
+        "types": "./dist/discord.d.cts",
+        "default": "./dist/discord.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
-  "//exports": "Subpaths ./telegram ./slack ./signal ./imessage ./whatsapp ./line ./feishu are the typecheck-clean per-channel ConnectorPort adapters; each is its own entry so importing one pulls only that channel's optional SDK. All seven are wired live end-to-end and proven by per-channel dispatch tests (social-gateways/_dispatch/*.dispatch.test.ts) that route a real channel-native event through the adapter's REAL normalize + REAL send (gate -> embedded runner -> port.send) doubling only each channel's true SDK seam. The Discord adapter is NOT exported: its foundation-facing normalize surface + the extracted infra leaf cluster (social-gateways/infra/{retry,retry-policy,errors,channel-activity,sleep}) typecheck clean, but the full connector-port.ts dispatch pipeline still imports the un-extracted OpenClaw bot core (172 errors; 74 TS2307 across 15 sibling clusters: auto-reply/*, channels/*, gateway/*, pairing/*, security/*, config/{commands,sessions,markdown-tables}, web/media, polls, markdown/*, agents/identity, infra/exec-approvals, utils*, logger/logging), so ./discord stays out of exports until that surface is extracted.",
+  "//exports": "Subpaths ./telegram ./slack ./signal ./imessage ./whatsapp ./line ./feishu ./discord are the typecheck-clean per-channel ConnectorPort adapters; each is its own entry so importing one pulls only that channel's optional SDK. All eight are wired live end-to-end and proven by per-channel dispatch tests (social-gateways/_dispatch/*.dispatch.test.ts) that route a real channel-native event through the adapter's REAL normalize + REAL send (gate -> embedded runner -> port.send) doubling only each channel's true SDK seam. The Discord adapter (./discord) is the social-gateways/discord/connector/ slice: a real, self-contained ConnectorPort over the Discord REST v10 wire surface (fetch is its SDK seam) that composes its own normalize / send / chunk / accounts and imports NOTHING from the un-extracted OpenClaw bot core (auto-reply/*, channels/*, gateway/*, pairing/*, security/*, config/*, routing/*, web/media, polls, markdown/*, agents/identity, logger/logging). The legacy bot-core-coupled discord siblings (../send.ts, ../normalize.ts, ../targets.ts, ../accounts.ts, ../token.ts, ../chunk.ts) are left untouched as reference source and are NOT entry points.",
   "files": ["dist"],
   "scripts": {
     "build": "tsup",
