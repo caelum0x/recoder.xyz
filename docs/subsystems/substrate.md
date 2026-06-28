@@ -4,15 +4,26 @@
 > One contract; two real backends today (local tmux + git worktrees, remote Daytona);
 > the seam where Recoder drives the user's OWN coding-agent CLIs in isolation.
 
-**Status (2026-06-28): BUILT & GREEN + ADOPTED.** `packages/substrate` is now a real package — `src/{contract,command,registry,ports,errors,exec,factory,review,types}` — exporting the substrate contract, a **6-CLI command resolver** (`command/resolve-command.ts` + `runtime-availability.ts`), a substrate registry, and a typed error hierarchy. **46/46 tests pass** (`node --test`, re-run this session). The conductor has **adopted it**: both `docker-backend/src/conductor/runtime-commands.ts` and `docker-backend/src/conductor/substrate.ts` `import … from '@recoder/substrate'` (committed `eaf916dd4`) — command-resolution + contract logic is OWNED by the package; the backend module is the thin wiring layer. The canonical **live-agent run was PROVEN** through the tmux+worktree driver (BUILD-STATUS §7a). Remaining: full `packages/substrate` promotion of every conductor concern + remote Daytona depth (still being completed).
+**Status (2026-06-29): BUILT & GREEN + ADOPTED (engine + supporting modules promoted; local/remote drivers still in the backend).**
+
+`packages/substrate` is a real, published-shape package (`@recoder/substrate` v0.1.0, `dependencies: @recoder/agent-os` only). Verified by reading the repo today:
+
+- **Shipped src modules** (12 dirs, **82 functional `.ts` files** under `src/`, counted via `find src -name '*.ts' ! -name '*.test.ts' | wc -l`): `contract/`, `types/`, `errors/`, `exec/`, `command/`, `registry/`, `review/`, `observe/`, `ports/`, `engine/`, `reconcile/`, `factory/`. The public barrel is `src/index.ts`.
+- **Command resolver is 8 CLIs, not 6** (`src/types/runtime-id.ts` + `src/command/runtime-specs.ts`): `claude_code`, `codex`, `opencode`, `recoder_code`, `pi`, `gemini_cli`, `qwen_code`, `crush`.
+- **64 tests pass, not 46** — `pnpm -F @recoder/substrate test` (`node --test --import tsx`) → `tests 64 / pass 64 / fail 0`, across **10 test files** under `tests/` (re-run this session, 2026-06-29).
+- **Adoption is real and broader than this doc previously claimed.** Eight backend conductor files import `@recoder/substrate`: `runtime-commands.ts`, `substrate.ts` (contract + errors), `review.ts` (diff builders re-export), `run-tailer.ts` (observe), `workspace-service.ts` (`WorkspaceEngine` + `reconcile`), `substrate-tmux.ts` + `substrate-daytona.ts` (`buildSubstrateDiff`), and the `coordination-integration.test.ts`. `workspace-service.ts` is now a thin adapter that constructs the package `WorkspaceEngine` with backend ports (repository/brain/lock/admission/runTailer/registry/scan).
+- The canonical **live-agent run** (`claude -p` through tmux + git worktree, exit 0, diff, teardown) is proven via the backend tmux+worktree driver (BUILD-STATUS §7a).
+
+**NOT yet in the package (honest gap):** the actual `tmux_worktree` and `daytona` substrate *implementations* still live in `docker-backend/src/conductor` (`substrate-tmux.ts`, `tmux-orchestrator.ts`, `substrate-daytona.ts`, `tmux-path.ts`, `dmux-adapter.ts`). The package owns the contract, command lines, engine, reconciler, observe, review, registry, errors, ports, and factory — but the local/remote driver bodies are not yet relocated behind the `ports/` seam. See §13 Gaps.
+
 **Owners:** Conductor / Agent OS platform.
-**Lives at:** `packages/substrate` (the portable engine) `+` `docker-backend/src/conductor` (backend wiring: routes, container glue, reconcile cron).
+**Lives at:** `packages/substrate` (contract + command + engine + reconcile + observe + review + registry + ports + factory) `+` `docker-backend/src/conductor` (backend wiring: routes, the tmux/Daytona/in-process driver impls, container glue, reconcile cron).
 
 ---
 
 ## 1. Purpose and boundaries
 
-Recoder runs the user's *own* coding agents (Claude Code, Codex, opencode, Recoder Code, Gemini CLI, Qwen Code) and coordinates many of them in parallel. The **substrate** is the layer that:
+Recoder runs the user's *own* coding agents — **8 CLIs** today (Claude Code, Codex, opencode, Recoder Code, pi, Gemini CLI, Qwen Code, crush; see `packages/substrate/src/types/runtime-id.ts`) — and coordinates many of them in parallel. The **substrate** is the layer that:
 
 1. **Provisions isolation** for a unit of work — a git worktree on a fresh branch (local) or a cloned repo in a remote sandbox (Daytona).
 2. **Launches the real agent CLI** headless inside that isolation. We *drive* the vendored binaries (`tmux`, `dmux`, `git`, `gh`, and each agent CLI) over their real command-line interface. **We never reimplement them.**
@@ -39,21 +50,30 @@ The control-plane `Workspace` lifecycle is **identical** regardless of substrate
 
 ## 2. Fusion map — what gets merged, from where
 
-This subsystem fuses three owned sources. Every cited path was read to ground this design.
+This subsystem fuses owned sources. The table below is split into **DONE** (already promoted into the package and imported by the backend, verified by reading both sides) and **PLANNED** (still living in `docker-backend/src/conductor`; the target location is a design intent, not a shipped path). Do not treat PLANNED rows as live.
 
-| Fused source (real path read) | Role today | Where it lands in `packages/substrate` |
+**Already promoted into `packages/substrate` and adopted by the backend (verified):**
+
+| Fused source (real path read) | Role today | Where it lives in `packages/substrate` (real) |
 |---|---|---|
-| `docker-backend/src/conductor/substrate.ts` | The `ConductorSubstrate` contract + in-process registry | `src/contract/*`, `src/registry/*` (verbatim contract, hardened registry) |
-| `docker-backend/src/conductor/substrate-tmux.ts` | `tmux_worktree` substrate impl | `src/local/tmux-worktree.substrate.ts` + split helpers |
-| `docker-backend/src/conductor/tmux-orchestrator.ts` | Real `tmux` + `git worktree` CLI driver | `src/local/tmux/*`, `src/local/worktree/*` |
-| `docker-backend/src/conductor/substrate-daytona.ts` | `daytona` remote substrate impl | `src/remote/daytona.substrate.ts` + split helpers |
+| `docker-backend/src/conductor/substrate.ts` | `ConductorSubstrate` contract + registry helpers | imports `src/contract/*` + `src/errors/*` from the package (backend keeps the in-process registry glue) |
+| `docker-backend/src/conductor/runtime-commands.ts` | Resolve runtime+prompt → real headless CLI line | **promoted** to `src/command/*` + `src/types/{runtime-id,command}.ts`; backend re-exports |
+| `docker-backend/src/conductor/review.ts` | `workspaceDiff` diff parsing | **promoted** to `src/review/*`; backend re-exports `buildSubstrateDiff`/`parseUntracked`/`countChangedFiles` |
+| `docker-backend/src/conductor/run-tailer.ts` | Polls substrate `capture`/`alive`, emits RunEvents | **promoted** to `src/observe/*`; backend `run-tailer.ts` is the adapter |
+| `docker-backend/src/conductor/workspace-service.ts` | Persisted Workspace lifecycle + reconciler | **promoted** to `src/engine/*` (`WorkspaceEngine`) + `src/reconcile/*`; backend is the thin port-wiring adapter |
+
+**PLANNED — design target, NOT yet in the package (still in the backend):**
+
+| Fused source (real path read) | Role today | Intended package home (not shipped) |
+|---|---|---|
+| `docker-backend/src/conductor/substrate-tmux.ts` | `tmux_worktree` substrate impl (LIVE in backend) | `src/local/*` — **directory does not exist yet** |
+| `docker-backend/src/conductor/tmux-orchestrator.ts` | Real `tmux` + `git worktree` CLI driver (LIVE in backend) | `src/local/tmux/*`, `src/local/worktree/*` — **not yet** |
+| `docker-backend/src/conductor/tmux-path.ts` | Resolves the vendored tmux binary via `TMUX_BIN` (LIVE in backend) | `src/local/*` — **not yet** |
+| `docker-backend/src/conductor/substrate-daytona.ts` | `daytona` remote substrate impl (LIVE in backend, tsc-verified) | `src/remote/*` — **directory does not exist yet** |
 | `packages/sandbox-daytona` (`Sandbox.ts`, `Process.ts`, `PtyHandle.ts`, `Git.ts`, `FileSystem.ts`) | Owned vendor of the Daytona TS SDK | consumed by `src/remote/*` via an owned client port (NOT re-vendored) |
 | `docker-backend/src/daytona-client.ts` (`getDaytonaClient`, `DaytonaClient`) | Backend Daytona client (createSandbox/execCommand/getWorkDir/deleteSandbox) | wrapped behind `src/remote/ports/daytona-client.port.ts` |
 | `docker-backend/src/conductor/run-tailer.ts` | Polls substrate `capture`/`alive`, emits RunEvents | `src/observe/run-tailer.ts` (substrate-pure) + backend event sink |
-| `docker-backend/src/conductor/review.ts` | `workspaceDiff`, `archiveWorkspace` | diff → `src/review/diff.ts`; archive orchestration stays in backend |
-| `docker-backend/src/conductor/review-publish.ts` | Push/PR/merge via `git` + `gh` CLI (approval-gated) | `src/publish/*` (mechanism); approval enforced by governance seam |
-| `docker-backend/src/conductor/runtime-commands.ts` | Resolve runtime+prompt → real headless CLI line (6 CLIs) | `src/command/*` |
-| `docker-backend/src/conductor/workspace-service.ts` | Persisted Workspace lifecycle + reconciler | engine → `src/engine/*`; persistence stays via repository port |
+| `docker-backend/src/conductor/review-publish.ts` | Push/PR/merge via `git` + `gh` CLI (approval-gated) — **LIVE in backend** | PLANNED `src/publish/*` (mechanism); **`src/publish/` does not exist yet** |
 | `docker-backend/src/conductor/bundle.ts` | Prompt enrichment (task/git-nexus/mem0/context7) | stays in backend; consumed via `BrainPort` seam |
 | `docker-backend/src/conductor/a2a-entry.ts` | A2A inbound → launch workspace | stays in backend (`coordination` seam) |
 | `docker-backend/src/conductor/conductor.routes.ts` | Express routes `/api/conductor/*` | stays in `docker-backend/src/conductor` (HTTP adapter over the package) |
@@ -64,6 +84,54 @@ This subsystem fuses three owned sources. Every cited path was read to ground th
 ---
 
 ## 3. File tree
+
+### 3a. REAL tree — what is actually in `packages/substrate` today (verified 2026-06-29)
+
+`82` functional `.ts` files under `src/` (12 module dirs), `10` test files under `tests/`. There is **no** `local/`, `remote/`, `publish/`, `config/`, or `observability/` directory in the package — those are PLANNED only (the local tmux + remote Daytona driver bodies still live in `docker-backend/src/conductor`).
+
+```
+packages/substrate/
+├── package.json            # @recoder/substrate v0.1.0; deps: @recoder/agent-os only
+├── tsconfig.json
+├── tsup.config.ts
+├── README.md
+├── src/
+│   ├── index.ts                # public barrel (the export surface in §6.1)
+│   ├── contract/               # ConductorSubstrate seam: substrate, handle, launch-input,
+│   │                           #   diff, availability, capabilities, lifecycle, index
+│   ├── types/                  # runtime-id (8 CLIs), command, capture, liveness, provision,
+│   │                           #   reconcile, substrate-id, index
+│   ├── errors/                 # substrate-error, codes, unavailable/provision/launch/diff/
+│   │                           #   teardown/handle-gone/not-registered, is-substrate-error, index
+│   ├── exec/                   # exec-file, which, command-exists, exec-result, exec-error, index
+│   ├── command/                # runtime-specs (8 CLIs), resolve-command, runtime-availability,
+│   │                           #   shell-quote, model-flag, extra-args, is-conductor-runtime, index
+│   ├── registry/               # registry, default-registry, select, index
+│   ├── review/                 # workspace-diff, diff-summary, untracked, index
+│   ├── observe/                # run-tailer, delta, tail-registry, event-sink.port, index
+│   ├── ports/                  # repository, logger, clock, id, brain, governance, memory,
+│   │                           #   metrics, run-event-sink, run-tailer, substrate-registry,
+│   │                           #   substrate-scan, work-lock, admission (.port.ts) + index
+│   ├── engine/                 # workspace-engine, deps, types, index (the WorkspaceEngine)
+│   ├── reconcile/              # reconcile, index (restart survivability, substrate-pure)
+│   └── factory/                # create-substrate-registry, resolve-ports, ports,
+│                               #   system-clock, uuid-id, index
+└── tests/                      # 10 files / 64 tests (node --test --import tsx)
+    ├── contract/conformance.test.ts
+    ├── command/{resolve-command,runtime-availability,shell-quote}.test.ts
+    ├── errors/is-substrate-error.test.ts
+    ├── factory/create-substrate-registry.test.ts
+    ├── observe/{delta,run-tailer}.test.ts
+    ├── registry/registry.test.ts
+    ├── review/workspace-diff.test.ts
+    └── helpers/fake-substrate.ts
+```
+
+Backend driver impls that the package does NOT yet contain (live in `docker-backend/src/conductor`): `substrate.ts`, `substrate-tmux.ts`, `tmux-orchestrator.ts`, `tmux-path.ts` (resolves the vendored tmux via `TMUX_BIN`), `dmux-adapter.ts`, `substrate-daytona.ts`, `substrate-in-process.ts`, `review-publish.ts`, `workspace-service.ts` (now a thin `WorkspaceEngine` adapter), `run-tailer.ts`, `review.ts`, `bundle.ts`, `a2a-entry.ts`, `conductor.routes.ts`, and the reconcile cron in `server.ts`.
+
+### 3b. PLANNED tree — the full extraction target (NOT yet shipped)
+
+> The tree below is the **design intent** for the completed extraction. Directories such as `local/`, `remote/`, `publish/`, `config/`, `observability/`, and `wiring/` **do not exist yet**. Read it as a roadmap, not as shipped state.
 
 ```
 packages/substrate/
@@ -86,7 +154,7 @@ packages/substrate/
 │   │
 │   ├── types/                                    # === shared domain-adjacent types (no behavior) ===
 │   │   ├── substrate-id.ts                       # re-export WorkspaceSubstrate from @recoder/agent-os (single source)
-│   │   ├── runtime-id.ts                         # ConductorRuntimeId union (6 CLIs) + isConductorRuntimeId
+│   │   ├── runtime-id.ts                         # ConductorRuntimeId union (8 CLIs) + isConductorRuntimeId
 │   │   ├── command.ts                            # ResolvedRuntimeCommand, RuntimeCommandOptions, RuntimeSpec
 │   │   ├── capture.ts                            # CaptureResult, CaptureDelta (full vs incremental pane text)
 │   │   ├── liveness.ts                           # Liveness (alive, exitCode?, finishedAt?, source)
@@ -112,7 +180,7 @@ packages/substrate/
 │   │   ├── select.ts                             # selectSubstrate(workspace) → resolve by Workspace.substrate
 │   │   └── index.ts
 │   │
-│   ├── command/                                  # === resolve runtime+prompt → REAL headless CLI line (6 CLIs) ===
+│   ├── command/                                  # === resolve runtime+prompt → REAL headless CLI line (8 CLIs) ===
 │   │   ├── runtime-specs.ts                       # RUNTIME_SPECS: bin + build() per runtime (claude/codex/opencode/…)
 │   │   ├── resolve-command.ts                    # resolveRuntimeCommand(runtimeId, opts) → ResolvedRuntimeCommand
 │   │   ├── runtime-availability.ts               # runtimeAvailability(): which CLIs are on PATH (truthful)
@@ -260,11 +328,11 @@ packages/substrate/
 │       ├── create-engine.ts                      # build WorkspaceEngine from registry + repository + ports
 │       └── index.ts
 │
-└── tests/                                         # mirrors src/ (vitest); see §11
+└── tests/                                         # PLANNED mirror of src/ (real runner is node --test); see §11
     ├── contract/
     │   └── conformance.test.ts                    # contract conformance suite ANY substrate must pass (fakes + real)
     ├── command/
-    │   ├── resolve-command.test.ts                # each of the 6 CLIs builds the exact expected line
+    │   ├── resolve-command.test.ts                # each of the 8 CLIs builds the exact expected line
     │   ├── shell-quote.test.ts                    # injection-safe quoting (single quotes, $(...), backticks)
     │   └── runtime-availability.test.ts
     ├── local/
@@ -335,7 +403,9 @@ docker-backend/src/conductor/                      # === backend wiring (thin ad
 └── README.md                                       # "this is the adapter; logic lives in packages/substrate"
 ```
 
-**Planned functional files (non-test):** `packages/substrate/src` ≈ **108** + `docker-backend/src/conductor` adapter ≈ **13** = **~121 functional files**. Tests add ~44 mirrored files.
+**Counts — REAL vs PLANNED:**
+- **Real today:** `packages/substrate/src` = **82** functional `.ts` files (12 dirs); `tests/` = **10** files / **64** passing tests. `docker-backend/src/conductor` = **29** `.ts` files (driver impls + adapters + routes; excludes `*.test.ts`).
+- **Planned (3b tree):** ~108 src files once `local/`, `remote/`, `publish/`, `config/`, `observability/`, and the `wiring/` adapters are extracted — **not reached yet**.
 
 ---
 
@@ -345,13 +415,15 @@ docker-backend/src/conductor/                      # === backend wiring (thin ad
 The verbatim, hardened version of today's `substrate.ts` interface. `ConductorSubstrate` has exactly six methods: `available`, `launch`, `capture`, `alive`, `diff`, `teardown`. Adds `capabilities()` so callers can branch on `supportsPty`/`remote` without sniffing the id, and a typed `lifecycle.ts` event union for observability. This is the *only* thing the engine, routes, run-tailer, review, and reconcile depend on — proven by the conformance suite (§11) that runs identical assertions against the fake, the local, and the remote substrate.
 
 ### 4.2 `command/` — drive the real CLIs
-Direct port of `runtime-commands.ts`. `RUNTIME_SPECS` maps each `ConductorRuntimeId` to its real binary and a `build()` that emits the exact headless invocation:
+Promotion of `runtime-commands.ts` (✅ done — backend re-exports from the package). `RUNTIME_SPECS` (`src/command/runtime-specs.ts`) maps each `ConductorRuntimeId` to its real binary and a `build()` that emits the exact headless invocation — **8 CLIs**:
 - `claude -p '<prompt>' --permission-mode acceptEdits [--model …]`
 - `codex exec '<prompt>' [--model …]`
 - `opencode run '<prompt>' [--model …]`
 - `recoder-code --prompt '<prompt>' [--model …]`
+- `pi '<prompt>' [--model …]`
 - `gemini --prompt '<prompt>' [--model …]`
 - `qwen --prompt '<prompt>' [--model …]`
+- `crush -p '<prompt>' [--model …]`
 
 `shell-quote.ts` is the single POSIX-quoting choke point used by both local and remote substrates (security-critical: the prompt is untrusted). `runtime-availability.ts` reports which CLIs are actually on PATH — truthful, never assumed.
 
@@ -450,17 +522,18 @@ inbound A2A message (data part: {conductor:true, projectId, repoPath, runtimeId,
 
 ## 6. Public API surface
 
-### 6.1 Package exports (`@recoder/substrate`)
-- **Contract:** `ConductorSubstrate`, `SubstrateHandle`, `SubstrateLaunchInput`, `SubstrateDiff`, `SubstrateAvailability`, `SubstrateCapabilities`.
-- **Registry:** `SubstrateRegistry`, `selectSubstrate(workspace)`.
-- **Engine:** `WorkspaceEngine` (`createWorkspace`, `advanceWorkspace`, `getWorkspace`, `listWorkspaces`, `teardownWorkspace`).
-- **Reconcile:** `reconcile()`, `ReconcileReport`.
-- **Observe:** `startRunTail`, `stopRunTail`, `activeTailCount`.
-- **Review/Publish:** `workspaceDiff`, `pushBranch`, `createPr`, `mergePr`.
-- **Command:** `resolveRuntimeCommand`, `runtimeAvailability`, `isConductorRuntimeId`.
+### 6.1 Package exports (`@recoder/substrate`) — verified against `src/index.ts` (2026-06-29)
+- **Contract:** `ConductorSubstrate`, `SubstrateHandle`, `SubstrateLaunchInput`, `SubstrateDiff`, `SubstrateAvailability`, `SubstrateCapabilities`, `SubstrateLifecycleEvent` (+ event variants).
+- **Registry:** `SubstrateRegistry`, `defaultRegistry`, `selectSubstrate`.
+- **Engine:** `WorkspaceEngine`, `ADMISSION_REJECTED_PREFIX` (types `WorkspaceEngineDeps`, `CreateWorkspaceInput`, `ReconcileReport`).
+- **Reconcile:** `reconcile`.
+- **Observe:** `startRunTail`, `stopRunTail`, `activeTailCount`, `TailRegistry`, `computeDelta` (+ `MAX_DELTA_CHARS`, `DEFAULT_INTERVAL_MS`, `DEFAULT_MAX_MS`, `CAPTURE_LINES`).
+- **Review (diff mechanism only):** `buildSubstrateDiff`, `parseUntracked`, `countChangedFiles`. **No `publish` exports** (`pushBranch`/`createPr`/`mergePr` are NOT in the package — they live in the backend `review-publish.ts`).
+- **Command:** `RUNTIME_SPECS`, `resolveRuntimeCommand`, `runtimeAvailability`, `shellQuote`, `modelFlag`, `extraArgs`, `isConductorRuntimeId`, `asConductorRuntime`, `CONDUCTOR_RUNTIME_IDS`.
+- **Exec:** `execFileSafe`, `which`, `commandExists`, `ExecError`, `toExecError`.
 - **Ports:** all `*.port.ts` interfaces (for adapters).
-- **Factory:** `createSubstrateRegistry(ports)`, `createEngine(deps)`.
-- **Errors:** `SubstrateError` + subclasses, `isSubstrateError`, `toErrorPayload`.
+- **Factory:** `createSubstrateRegistry`, `resolvePorts`, `systemClock`, `uuidId`. **No `createEngine` export** (the engine is constructed directly via `new WorkspaceEngine(deps)` in the backend `workspace-service.ts`).
+- **Errors:** `SubstrateError` + subclasses (`SubstrateUnavailableError`, `SubstrateNotRegisteredError`, `ProvisionError`, `LaunchError`, `HandleGoneError`, `DiffError`, `TeardownError`), `SubstrateErrorCode`, `isSubstrateError`, `toErrorPayload`.
 
 ### 6.2 HTTP surface (`docker-backend/src/conductor/conductor.routes.ts`, mounted `/api/conductor`)
 Unchanged contract, now backed by the package:
@@ -495,45 +568,65 @@ The hard rule (`.claude/rules/monorepo.md`): the substrate is an **adapter aroun
 
 ## 9. Configuration
 
-`config/env.ts` (zod, validated once, frozen, fail-fast):
-`CONDUCTOR_WORKTREE_ROOT` (default `/tmp/recoder-worktrees`) · session prefix · capture default lines · tail interval/max-duration/delta-cap · Daytona presence (`DAYTONA_API_KEY` / sdk enabled, presence-checked only — the secret never lives in the package). No hardcoded localhost; no secrets in source.
+> **Real state:** there is **no** `src/config/` in the package yet (a zod `env.ts` is PLANNED). Config today is read in the backend driver files.
+
+- **Vendored tmux** (verified, `docker-backend/src/conductor/tmux-path.ts`): the binary the conductor drives is resolved by `TMUX_BIN`, in order — `CONDUCTOR_TMUX_BIN` (explicit override) → the vendored build at `RECODER_TMUX_BUILD_PATH` or `<repo>/c/tmux/tmux` (the C source is vendored at `c/tmux/tmux.c`; a built `c/tmux/tmux` binary is present) → bare `tmux` on PATH (last resort). `TMUX_IS_VENDORED` reports whether the pinned binary is in use. tmux is **driven, never reimplemented** (the node-pty session-mux attempt was reverted because it cannot survive a backend restart).
+- **Worktree root / capture / tail intervals:** read from env/defaults in the backend `substrate-tmux.ts` / `run-tailer.ts` today, not a frozen package config.
+- **Daytona presence:** `DAYTONA_API_KEY` / SDK-enabled flag is presence-checked in the backend (`daytona-client.ts`, `daytona-sdk.ts`); the secret never lives in the package. No hardcoded localhost; no secrets in source.
 
 ## 10. Observability
 
-`GET /api/conductor/substrates` returns per-substrate `{id, available, reason}`. `observability/health.ts` aggregates it; `instrument.ts` records launch latency, capture/alive counts, active tails, reconcile orphan counts. Every lifecycle transition and outward git action is logged with `workspaceId`/`runId` and emitted as RunEvents (the audit trail).
+> **Real state:** there is **no** `src/observability/` in the package yet (health aggregation + `instrument.ts` are PLANNED). A `MetricsPort` interface exists (`src/ports/metrics.port.ts`) but the instrumentation wrapper is not shipped.
 
-## 11. Tests (mirror of `src/`)
+`GET /api/conductor/substrates` returns per-substrate `{id, available, reason}` (served by the backend routes). Every lifecycle transition and outward git action is logged with `workspaceId`/`runId` and emitted as RunEvents (the audit trail) via the package `observe/` tailer + the backend event sink.
 
-- **Contract conformance** (`tests/contract/conformance.test.ts`): one suite, run against the fake, the local (real temp git repo, tmux gated), and the remote (fake `DaytonaClientPort`) substrate — proves substrate-agnosticism.
-- **Command** (highest value, deterministic): each of the 6 CLIs builds its exact line; `shell-quote` is injection-safe.
-- **Engine**: record persisted *before* launch (crash-safety); launch-throws → `failed`; illegal transitions rejected.
-- **Reconcile**: fakes for tmux/git/sandbox → correct live/orphan classification; orphan-flagging never mutates execution.
-- **Observe**: fake substrate drives `started→log(delta)→completed`; delta prefix-diff + cap.
-- **Publish**: push/PR/merge arg vectors; **refused without approval**.
-- **Config**: missing/invalid env fails fast.
+## 11. Tests
+
+**Real, verified 2026-06-29** — `pnpm -F @recoder/substrate test` runs `node --test --import tsx` (NOT vitest) over **10 test files** = **64 passing tests**:
+
+- **Contract conformance** (`tests/contract/conformance.test.ts`): `runConformanceSuite` runs **against the in-memory `FakeSubstrate` only** today; the file's own header notes the local (real temp git repo, tmux-gated) and remote (fake `DaytonaClientPort`) stages are LATER stages, not yet wired (consistent with the local/remote drivers still living in the backend).
+- **Command** (`tests/command/{resolve-command,runtime-availability,shell-quote}.test.ts`): each of the **8 CLIs** builds its exact line; `shell-quote` is injection-safe.
+- **Observe** (`tests/observe/{run-tailer,delta}.test.ts`): fake substrate drives `started→log(delta)→completed`; delta prefix-diff + cap; non-zero exit → `failed`; max-duration safety stop → `failed`.
+- **Registry** (`tests/registry/registry.test.ts`): register/get/has/list, independent instances, `SubstrateNotRegisteredError`, `selectSubstrate`.
+- **Review** (`tests/review/workspace-diff.test.ts`): tracked + untracked counting against a real temp git repo; `parseUntracked`/`countChangedFiles`.
+- **Errors** (`tests/errors/is-substrate-error.test.ts`) and **Factory** (`tests/factory/create-substrate-registry.test.ts`).
+
+**Not present in the package yet** (PLANNED, listed in the 3b tree): dedicated `engine/`, `reconcile/`, `publish/`, and `config/` test suites. Engine + reconcile *code* ships and is exercised indirectly via the backend conductor tests (`docker-backend/src/conductor/*.test.ts`), but the package-local suites for them are not written.
 
 ### Verification commands
 ```bash
-pnpm -F @recoder/substrate test            # vitest unit + contract conformance
+pnpm -F @recoder/substrate test            # node --test --import tsx (64 tests, verified)
 pnpm -F @recoder/substrate check-types     # tsc --noEmit
 pnpm agent:instructions:check              # Agent OS boundary lint
 pnpm test:contracts:agent-os               # Workspace state-machine contract still holds
-# Real-binary smoke (gated; requires tmux + git on PATH):
-SUBSTRATE_REAL_TMUX=1 pnpm -F @recoder/substrate test local
-# Remote smoke (gated; requires Daytona creds + a repo with a reachable git remote):
-DAYTONA_API_KEY=… pnpm -F @recoder/substrate test remote
 ```
-Truthful posture: the local path is fully verifiable in CI; the remote path is `tsc`-verified and unit-tested against a fake client, with real-runtime verification gated on Daytona credentials (as noted in the shipped `substrate-daytona.ts` header).
+**Truthful posture:** the package's unit/conformance suite is fully verifiable in CI. The local tmux+worktree *driver* and remote Daytona *driver* are exercised by backend conductor tests (`substrate-e2e.test.ts`, `substrate-daytona.test.ts`, etc.), not by the package suite. The remote (Daytona) path is `tsc`-verified and unit-tested against a fake client; **real-runtime Daytona verification is gated on Daytona credentials + a repo with a reachable git remote** (as stated in the shipped `substrate-daytona.ts` header) — an honest gap, see §13.
 
 ---
 
-## 12. Migration notes (incremental, no big-bang)
+## 12. Migration notes (incremental, no big-bang) — progress
 
-1. Create `packages/substrate` with `contract/`, `types/`, `errors/`, `ports/` — pure, no behavior moved yet.
-2. Move `runtime-commands.ts` → `command/` (self-contained; easy first win + tests).
-3. Move `tmux-orchestrator.ts` + `substrate-tmux.ts` → `local/`; `substrate-daytona.ts` → `remote/` behind ports.
-4. Move `workspace-service.ts` lifecycle → `engine/`, its reconciler → `reconcile/`, `run-tailer.ts` → `observe/`, `review.ts` diff → `review/`, `review-publish.ts` → `publish/`.
-5. Leave `bundle.ts`, `a2a-entry.ts`, and `conductor.routes.ts` in `docker-backend/src/conductor`; add `wiring/*` adapters; point routes at `@recoder/substrate`.
-6. Move the inline boot/cron reconcile from `server.ts` (line ~15549) into `reconcile-cron.ts`.
+Status verified 2026-06-29. ✅ done · ⏳ partial · ⬜ not started.
+
+1. ✅ Create `packages/substrate` with `contract/`, `types/`, `errors/`, `ports/`, `exec/` — pure.
+2. ✅ Move `runtime-commands.ts` → `command/` (8 CLIs); backend re-exports from the package.
+3. ⬜ Move `tmux-orchestrator.ts` + `substrate-tmux.ts` → `local/`; `substrate-daytona.ts` → `remote/` behind ports. **Not done — these driver bodies still live in `docker-backend/src/conductor`; only `buildSubstrateDiff` is imported from the package.**
+4. ⏳ Move `workspace-service.ts` lifecycle → `engine/` (✅ `WorkspaceEngine` shipped + adopted), its reconciler → `reconcile/` (✅ shipped + adopted), `run-tailer.ts` → `observe/` (✅ shipped + adopted), `review.ts` diff → `review/` (✅ shipped + adopted). `review-publish.ts` → `publish/` is ⬜ **not done** (`src/publish/` does not exist; push/PR/merge still live in the backend).
+5. ⏳ `bundle.ts`, `a2a-entry.ts`, `conductor.routes.ts` remain in `docker-backend/src/conductor` (✅ as planned). The dedicated `wiring/*` adapter files (`build-substrate.ts`, `repository-adapter.ts`, …) are ⬜ **not created**; the port wiring is currently inline in `workspace-service.ts` rather than in a `wiring/` dir.
+6. ⬜ Extract the boot/cron reconcile from `server.ts` into a `reconcile-cron.ts` — **not done**; boot reconcile still runs inline.
 
 Each step keeps `/api/conductor/*` green and is independently shippable.
+
+---
+
+## 13. Gaps / not-yet-live (honest)
+
+These are open or gated. None should be read as complete:
+
+- **Local/remote driver bodies not yet in the package.** `src/local/` and `src/remote/` do not exist. `substrate-tmux.ts`, `tmux-orchestrator.ts`, `tmux-path.ts`, `dmux-adapter.ts`, and `substrate-daytona.ts` still live in `docker-backend/src/conductor`. The package owns the contract + command + engine + reconcile + observe + review; the actual provisioning/launch/capture code for both backends is not yet behind the `ports/` seam.
+- **`publish/` (push / PR / merge) not promoted.** `src/publish/` does not exist; the approval-gated `git push` / `gh pr create` / `gh pr merge` mechanism lives in `docker-backend/src/conductor/review-publish.ts`. The `ApprovalGuardPort`/`GovernancePort` interfaces exist in `src/ports/`, but the publish mechanism itself is not in the package.
+- **`config/` and `observability/` modules not built.** No frozen zod env config (`src/config/`) and no health/instrument wrapper (`src/observability/`) in the package — config + metrics are read/emitted in the backend. `MetricsPort` is defined but not wired to a metrics implementation here.
+- **Remote (Daytona) substrate is infra/secret-gated.** `substrate-daytona.ts` is `tsc`-verified and unit-tested against a fake client only. **Real-runtime verification requires `DAYTONA_API_KEY` + a repo with a reachable git remote** and has NOT been run in CI. Treat the Daytona path as built-but-unproven-against-real-infra.
+- **Conformance suite is fake-only today.** `tests/contract/conformance.test.ts` runs against the in-memory `FakeSubstrate`; the local (real temp git repo + gated tmux) and remote (fake Daytona client) conformance stages described in its header are not yet wired.
+- **No package-local engine/reconcile/publish/config test suites.** Engine + reconcile ship and pass via backend conductor tests, but the mirrored package suites in the 3b tree are not written.
+- **`wiring/` adapter dir + `reconcile-cron.ts` not created.** Port wiring is inline in `workspace-service.ts`; boot reconcile is inline in `server.ts`.

@@ -1,22 +1,48 @@
 # Subsystem: `interop` — A2A Wire Interoperability + MCP Host/Registry
 
-> **Status (2026-06-28): PARTIAL — signed-ingress gate BUILT & WIRED LIVE; MCP host in progress.**
-> The real **ed25519 signed-ingress gate** is shipped in `packages/interop/src/{ed25519.ts,signed-ingress-gate.ts}`
-> (+ `a2a/` agent-card/sign), **54/54 tests pass** (`node --test`, re-run this session). It is **wired into the
-> LIVE A2A gateway** — `docker-backend/src/a2a/signed-ingress.middleware.ts` admits inbound envelopes through the
-> interop gate (`interop-gate.adapter.ts` → `admitSignedMcpCall`/`verifyEd25519Signature`), mounted on the running
-> `gateway.router.ts`; degrade-safe, strict mode behind `RECODER_A2A_STRICT_INGRESS` (committed `b83e21ff0`).
-> The **MCP host build is in progress**, and the full `packages/interop` consolidation (folding `a2a-sdk` +
-> `agent-mcp` + `pal-mcp-server` + connectors into one owned engine) below remains the design of record.
+> **Status (2026-06-29): PARTIAL. Signed-ingress gate + MCP host facade SHIPPED & wired live;
+> 7 connector channels exported (Discord NOT); the full §6 engine tree below is DESIGN-OF-RECORD, not shipped.**
+>
+> **Verified shipped (read + test-run this session):**
+> - `packages/interop/src/` is **20 source files**, not the ~178 in §6. What exists today:
+>   `signed-ingress-gate.ts`, `ed25519.ts`, `a2a/{agent-card,envelope,sign}`, and
+>   `mcp/{host,registry,policy,audit,external}` (host facade + registry + catalog-validator +
+>   pal-server supervision). There is **no** `connectors/`, `engine/`, `transport/`, `persistence/`,
+>   `seams/`, `ports/`, `observability/`, or SQL migration code in the package yet.
+> - **`node --test` → 54 tests pass, 0 fail** (`packages/interop/tests/*.test.ts`, 8 files; re-run this
+>   session). They cover: ed25519 sign/verify, the HMAC + ed25519 signed-ingress gate (admit/reject/replay/
+>   tampered/missing-secret/forbidden-tool/disabled-server), MCP host authorize→audit, registry,
+>   catalog-validator (no surface-widening), agent-card builder, and PAL external-server health.
+> - The gate is **wired into the live A2A gateway**: `docker-backend/src/a2a/signed-ingress.middleware.ts`
+>   → `interop-gate.adapter.ts` → `admitSignedMcpCall`/`verifyEd25519Signature`, mounted on
+>   `gateway.router.ts`; degrade-safe, strict mode behind `RECODER_A2A_STRICT_INGRESS`
+>   (commits `b83e21ff0`, `d120c80fb`). The MCP host facade was adopted by `/api/mcp` (`d120c80fb`).
+> - `ed25519.ts` closes the asymmetric gap the SDK leaves open (`@recoder/a2a-sdk`'s
+>   `validateSignedEnvelopeIngress` only verifies `hmac-sha256`); signs over the SDK's `canonicalJson`.
+>
+> **Connectors — verified `@recoder/connectors` (`ts/extracted-from-openclaw/package.json`):**
+> **7 channels exported live** — `telegram, slack, signal, imessage, whatsapp, line, feishu` — each a
+> typecheck-clean per-channel `ConnectorPort` subpath export, each proven by a real
+> `social-gateways/_dispatch/<channel>.dispatch.test.ts` (7 dispatch test files present).
+> **Discord is NOT exported** (`./discord` is deliberately absent from `exports`): its foundation-facing
+> `normalize` + infra leaf cluster typecheck clean, but the full `connector-port.ts` dispatch pipeline
+> still imports the **un-extracted OpenClaw bot core — 172 TS errors (74 × TS2307 across 15 clusters:
+> auto-reply, channels, gateway, pairing, security, config, web/media, polls, markdown, agents/identity,
+> infra/exec-approvals, utils, logger)**. This is an **honest gap**, not a live connector (see §6 note + §17).
+>
+> **Design-of-record (NOT yet built):** the full §3–§16 fusion — folding `a2a-sdk` + `agent-mcp` +
+> `pal-mcp-server` + the 8 connector channels into one owned `engine/`/`ports/`/`transport/`/`persistence/`/
+> `seams/` package — is the architectural target. The §6 file tree, public API in §9, and per-module
+> designs in §7 describe the **intended** package, much of which is not on disk. Sections below are kept
+> as the design spec; treat any claim not in this status block as planned unless a cited file/test exists.
 > See BUILD-STATUS §2.
+>
 > **Owner:** Lead architect, interop subsystem.
-> **Location:** `packages/interop` (TypeScript control-plane engine) — consolidates the existing
-> `packages/a2a-sdk` (wire-level A2A contracts) and `packages/agent-mcp` (MCP registry + tool-permission
-> contracts) into one owned engine, and fuses the real MCP host (`mcp/`, `py/pal-mcp-server`) and the
-> social/connector gateways (`ts/extracted-from-openclaw`) plus the running A2A services in
-> `docker-backend/src/a2a/`.
-> **Scope:** First-party fusion. All code here is owned and merged — never a thin HTTP wrapper around the
-> originals (per `.claude/rules/security.md` and the repo "deep integration LOCKED" rule).
+> **Location:** `packages/interop` (TS engine, partial) + `packages/a2a-sdk` + `packages/agent-mcp`
+> (live contract packages) + `ts/extracted-from-openclaw` (`@recoder/connectors`) + the running A2A
+> services in `docker-backend/src/a2a/` + the external MCP host (`mcp/`, `py/pal-mcp-server`).
+> **Scope:** First-party fusion. Owned and merged — never a thin HTTP wrapper around the originals
+> (per `.claude/rules/security.md`).
 
 ---
 
@@ -35,11 +61,12 @@ boundary where *external* parties — other agents (A2A), tool servers (MCP), an
    oss), route tool calls, **gate every call by permission + risk + policy**, and audit it. Plus host
    *external* MCP servers (the real cloned `py/pal-mcp-server`, project-scoped stdio servers) without
    trusting their self-described tool surface.
-3. **Connector gateways.** Bridge social/messaging channels (Telegram, Slack, Discord, Signal, LINE,
-   Feishu, iMessage, WhatsApp, and additional gateways the framework can host) into A2A task/message
-   envelopes so a human can dispatch and supervise agents from a chat app — with mention-gating,
+3. **Connector gateways.** Bridge social/messaging channels into A2A task/message envelopes so a human
+   can dispatch and supervise agents from a chat app — with mention-gating,
    allowlists, and sender-identity tracking so unauthenticated channel traffic never drives the control
-   plane.
+   plane. **Shipped today** (`@recoder/connectors`, exported live, dispatch-tested): Telegram, Slack,
+   Signal, iMessage, WhatsApp, LINE, Feishu — seven channels. **Discord is NOT exported** (un-extracted
+   bot core, 172 TS errors — honest gap; see §6 note + §17).
 
 The single most important rule for this subsystem is the **trust boundary**. Everything that enters here
 is hostile until proven otherwise: A2A inbound envelopes, MCP tool *descriptions*, remote-repo
@@ -110,7 +137,7 @@ signed-envelope integrity, task ownership, and policy **before** any of it touch
   │  wire surfaces (owned, merged)                                                     │ │
   │  • A2A REST/JSON-RPC + /.well-known/agent.json   (from a2a-sdk + docker-backend)  │ │
   │  • MCP host: in-proc TS servers + external stdio (mcp/, py/pal-mcp-server)        │ │
-  │  • connector gateways (ts/extracted-from-openclaw: telegram/slack/discord/...)    │ │
+  │  • connector gateways (@recoder/connectors: 7 live; discord NOT exported)         │ │
   └───────────────────────────────────────────────────────────────────────────────────┘
                                        │
               external A2A agents · MCP tool servers · social channels · humans
@@ -162,14 +189,22 @@ Every row below cites a path verified on disk (Glob/Read) during design.
 | `mcp/recoder-a2a-server.js`, `mcp/recoder-codex-adapter.js`, `mcp/recoder-mcp-server/manifest.json` (+ bridge/adapter manifests) | The repo MCP host surface: WebSocket A2A bridge tools (`recoder_list_agents`, `recoder_list_tasks`, `recoder_send_task`, `recoder_create_thread`, `recoder_sandbox_exec`, `recoder_get_thread`), 15 registered canonical servers, runtime/adapter manifests | `mcp/external/recoder-a2a-server-adapter.ts` + `mcp/manifests/*` — the external host bridge is supervised; manifests become the registry seed. |
 | `py/pal-mcp-server/server.py` (+ `tools/`, `providers/`, `systemprompts/`) | Real cloned Python MCP server (`pal-mcp-server` v9.8.2): stdio transport, 18 tools (`chat`, `thinkdeep`, `planner`, `consensus`, `codereview`, `precommit`, `debug`, `secaudit`, `docgen`, `analyze`, `refactor`, `tracer`, `testgen`, `challenge`, `apilookup`, `clink`, `listmodels`, `version`), multi-provider | Hosted as an **external stdio MCP server** via `mcp/external/pal-server.ts` + `transport/stdio/stdio-client.ts`. Not transpiled; supervised + permission-gated + audited like any external server. |
 | `ts/extracted-from-openclaw/gateway-core/` (`gateway/server.impl.ts`, `channels/*`) | Channel framework: routing, sessions/lanes, mention-gating, allowlists, sender-identity, command-gating, device/Tailscale auth, abort, chunking | `connectors/gateway/*` + `connectors/channels/*` — the connector runtime core, owned. |
-| `ts/extracted-from-openclaw/social-gateways/{telegram,slack,discord,signal,line,feishu,imessage,whatsapp}/` | Per-channel clients: monitor/send/probe/accounts/bot-handlers (e.g. `sendMessageTelegram`, `monitorSlackProvider`, `probeSignal`, `createLineBot`, `whatsapp/normalize`) | `connectors/social/*` — each connector adapter, owned and normalized to one `ConnectorPort`. |
+| `ts/extracted-from-openclaw/social-gateways/{telegram,slack,signal,line,feishu,imessage,whatsapp}/` (+ `discord/`, present but un-exported) | Per-channel clients: monitor/send/probe/accounts/bot-handlers (e.g. `sendMessageTelegram`, `monitorSlackProvider`, `probeSignal`, `createLineBot`, `whatsapp/normalize`) | `@recoder/connectors` exports **7** as typecheck-clean per-channel `ConnectorPort` subpaths (telegram/slack/signal/imessage/whatsapp/line/feishu), each proven by `_dispatch/<channel>.dispatch.test.ts`. **Discord's source is present** but `./discord` is **not in `exports`** — its dispatch pipeline still imports the un-extracted OpenClaw bot core (172 TS errors). |
 
-> **Note on the connector roster.** The task brief named WordPress/Gmail/Teams/LinkedIn/Meet; the
-> *actually-present* gateways under `ts/extracted-from-openclaw/social-gateways/` are **Telegram, Slack,
-> Discord, Signal, LINE, Feishu, iMessage, WhatsApp**. This doc grounds in the real tree. The
-> `connectors/gateway/` framework is connector-agnostic, so WordPress/Gmail/Teams/LinkedIn/Meet are
-> future adapters that implement the same `ConnectorPort` — they are listed in §6 as planned adapter
-> files, clearly marked, not as already-extracted code.
+> **Note on the connector roster (verified `@recoder/connectors`).** Source dirs present under
+> `ts/extracted-from-openclaw/social-gateways/` are **Telegram, Slack, Discord, Signal, LINE, Feishu,
+> iMessage, WhatsApp**. But the package **`exports` only seven** of them (telegram/slack/signal/imessage/
+> whatsapp/line/feishu) as typecheck-clean per-channel `ConnectorPort` subpaths, each proven by a real
+> `_dispatch/<channel>.dispatch.test.ts`. **Discord is intentionally excluded from `exports`**: its
+> normalize surface + infra leaf cluster typecheck clean, but the full `connector-port.ts` dispatch
+> pipeline imports the un-extracted OpenClaw bot core (172 errors). It stays out of exports until that
+> surface is extracted — an explicit honest gap (see §17), not a live channel.
+>
+> WordPress/Gmail/Teams/LinkedIn/Meet (named in the original brief) are **not present** in the tree at all
+> — they are future adapters that would implement the same `ConnectorPort`, listed in §6 `connectors/planned/`
+> as clearly-marked stubs. Note that **neither the seven live adapters nor the `planned/` stubs live in
+> `packages/interop` yet** — the connector adapters ship from `@recoder/connectors`; the `connectors/`
+> module in the §6 interop tree is the (not-yet-built) consolidation target.
 
 > **Note on Go/Python.** We do **not** transpile the Python `pal-mcp-server`. We host it as a real MCP
 > server process behind `transport/stdio`, with the same authorize→risk→policy→audit gate every other
@@ -723,17 +758,23 @@ packages/interop/
         └── clock.ts                                # deterministic FakeClock + FakeIdGenerator
 ```
 
-### Planned functional file count
+### File count — design target vs what is on disk today
 
-- TypeScript `src/`: **~178** functional files (config, domain, ports, errors, result, a2a, mcp,
-  connectors, engine, transport, persistence, seams, observability, util — including the per-channel
-  social adapters and SQL migrations).
-- `tests/` mirror tree: **~95** files.
+> The §6 tree above is the **design-of-record target**, NOT the current package. Verified counts this session:
 
-The `src/` functional surface is well over the 100-file design target (the connector roster alone — 8
-real channels × ~5 files each, plus the gateway/channels/gating framework — accounts for ~70 files; the
-A2A + MCP engines another ~90). Excluding the `planned/` connector stubs (6 files, clearly marked), the
-**already-grounded functional surface is ~172 files**.
+- **`packages/interop/src/` today: 20 files** — `index.ts`, `signed-ingress-gate.ts`, `ed25519.ts`,
+  `a2a/{index, agent-card/{agent-card-types,builder}, envelope/builders, sign/sign}`,
+  `mcp/{index, audit/audit, external/{external-server-config,pal-server,process-manager,stdio-client},
+  host/{facade,host}, policy/index, registry/{catalog-validator,registry,tool-descriptor}}`.
+  No `connectors/`, `engine/`, `transport/`, `persistence/`, `seams/`, `ports/`, `observability/`,
+  `config/`, `errors/`, or `domain/` directories exist in the package yet.
+- **`packages/interop/tests/` today: 8 test files**, **54 tests total, all passing**
+  (`node --test --import tsx`): `ed25519`, `signed-ingress-gate`, `mcp-host`, `registry`,
+  `catalog-validator`, `pal-server`, `agent-card`, plus `_helpers`.
+- **Connectors ship from `@recoder/connectors`** (`ts/extracted-from-openclaw`), a *separate* package —
+  7 live per-channel adapters + the gateway/channels/gating framework, with 7 `_dispatch/*.dispatch.test.ts`
+  files. The interop `connectors/` module in §6 is the (unbuilt) consolidation of that package.
+- The design target (`~178` src / `~95` tests) is aspirational. Do not cite it as shipped.
 
 ---
 
@@ -1171,10 +1212,36 @@ observed event; missing keys/deps report environment evidence (truthful health),
 
 ## 16. Build & packaging
 
-- `tsup.config.ts` — ESM + CJS + `.d.ts`, multi-entry (mirrors `a2a-sdk`'s sub-path exports so
-  `@recoder/interop/schemas`, `/policy`, `/bridge-contract` resolve; mirrors `agent-mcp`'s tsup shape).
-- `package.json` deps: `@recoder/agent-os` (domain reuse), `@recoder/agent-policy` (intent decisions),
-  `@recoder/agent-memory` (candidate emission), `@recoder/agent-events` (outbox), `zod` (validation).
-  Optional peers: `nats` (event bus), `pg` (postgres adapter), `ioredis` (context/replay cache), and the
-  connector SDKs (`ws`, channel clients) — all lazy-loaded so the pure core has zero hard runtime deps.
+> **Verified `packages/interop/package.json` (v0.1.0) — actual, not the target below.**
+
+- **Actual deps today:** `@recoder/agent-os`, `@recoder/a2a-sdk`, `@recoder/agent-mcp` (workspace).
+  It does **not** yet depend on `@recoder/agent-policy`, `@recoder/agent-memory`, `@recoder/agent-events`,
+  or `zod`. The gate composes over the a2a-sdk's `canonicalJson` + `validateSignedEnvelopeIngress` and
+  agent-mcp's permission contracts.
+- **Actual build/test:** `tsup` (single `.` entry, ESM+CJS+dts), `tsc --noEmit` for `check-types`,
+  `node --test --import tsx` for tests. Exports a **single** `.` entry — no `/schemas`, `/policy`,
+  `/bridge-contract` subpaths yet.
 - No secrets in the package (per `feedback_no_secrets_in_packages` memory): env/vault only, templates only.
+
+**Design target (NOT current):** multi-entry tsup mirroring a2a-sdk subpaths; deps on agent-policy /
+agent-memory / agent-events / zod; lazy peers `nats` / `pg` / `ioredis` / connector SDKs. Adopt as the
+engine consolidation (§5, §15) lands.
+
+---
+
+## 17. Gaps / not-yet-live (honest)
+
+Per AGENTS.md ("never imply success without evidence") — what is genuinely **not** done:
+
+| Gap | Evidence | State |
+|-----|----------|-------|
+| **Discord connector** | `ts/extracted-from-openclaw/package.json` — `./discord` absent from `exports`; embedded note: 172 TS errors (74 × TS2307 across 15 clusters: auto-reply, channels, gateway, pairing, security, config, web/media, polls, markdown, agents/identity, infra/exec-approvals, utils, logger). Source dir present but dispatch pipeline imports un-extracted OpenClaw bot core. | **Blocked** on bot-core extraction. 7 of 8 channels live. |
+| **`packages/interop` engine consolidation** | `packages/interop/src/` = 20 files; no `engine/`, `ports/`, `connectors/`, `transport/`, `persistence/`, `seams/`, `observability/`, `domain/`, `errors/`, `config/`. | **Design-of-record** (§3–§16). Only signed-ingress gate + MCP host facade + a2a agent-card/envelope/sign + ed25519 are built. |
+| **Connectors not in interop yet** | The 7 live adapters ship from `@recoder/connectors`, a separate package; interop's §6 `connectors/` is unbuilt. | Planned fusion. |
+| **A2A-sdk / agent-mcp façade collapse** | interop still *depends on* both as workspace packages (does not re-export-replace them). §15 steps 2–6 not done. | Planned migration. |
+| **External MCP host breadth** | `mcp/external/` supervises PAL (`pal-server.ts`, health-tested) + process-manager + stdio-client. The 16 in-proc canonical servers, NATS event bus, postgres/redis adapters, replay cache, and SQL migrations in §6 are **not** in `packages/interop`. | Partial — PAL hosting + MCP facade adopted by `/api/mcp` (`d120c80fb`); rest design-of-record. |
+| **Signed-ingress strict mode** | `RECODER_A2A_STRICT_INGRESS` gates strict rejection; default is degrade-safe. | Live but **off by default** — secret/config-gated, not enforced everywhere. |
+| **Connector tokens / signing keys** | Connectors fail-safe to disabled without tokens; the ed25519/HMAC gate needs a configured key. | Infra/secret-gated; truthful `configured:false` health, never faked. |
+
+These are the only claims that should be read as "in progress / not shipped." Everything in the §0 status
+block is verified shipped (cited file + passing test); everything else in §3–§16 is the design spec.
