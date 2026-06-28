@@ -1,0 +1,26 @@
+[package]
+name = "recoder-governance-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The Recoder governance daemon: boots a GovernanceKernel and serves the typed IPC over $GOVERNANCE_SOCKET, with peer-cred + INTERNAL_SERVICE_KEY auth and graceful SIGTERM shutdown."
+
+[[bin]]
+name = "recoder-governance-daemon"
+path = "src/main.rs"
+
+[dependencies]
+recoder-governance-ipc = { path = "../recoder-governance-ipc" }
+recoder-governance-kernel = { path = "../recoder-governance-kernel" }
+serde_json = { workspace = true }
+# Disk-aware: the daemon needs the runtime, macros, and signal handling only.
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+    "macros",
+    "signal",
+    "net",
+    "io-util",
+    "sync",
+] }

@@ -21,6 +21,28 @@ down — it is usable governance, not a stub:
 - On any ambiguity the enforcer **denies** or requires approval. There is no
   silent-allow path.
 
+## Daemon delegation (opt-in, fail-closed)
+
+When `GOVERNANCE_SOCKET` (or `config.daemonSocketPath`) points at the owned Rust
+governance daemon's Unix-domain socket, `decide()`, `enforceTool()`, and
+`recordAuditViaDaemon()` ask the daemon **first** over a typed length-prefixed
+JSON transport (`src/ipc`). On **any** failure — no socket, connect/write error,
+timeout, malformed/oversized frame, unknown method, id mismatch, or a
+daemon-reported error — the call surfaces `DaemonUnavailableError` and the facade
+**falls back to the pure-TS deny-biased path**. The fallback never fabricates an
+allow; an over-policy action still denies.
+
+When no socket is configured (the default) the TS path is the only path — no
+behavior change.
+
+**Wire format** (pinned; the Rust transport must match byte-for-byte): a 4-byte
+big-endian `u32` payload length followed by that many UTF-8 JSON bytes, carrying
+an `IpcEnvelope` request/response (`src/ipc/envelope.ts`). No CBOR / heavy dep on
+either side — Node uses `node:net` + `JSON`; Rust uses `serde_json` + `tokio`.
+The client is hostile-by-default: every decoded frame is validated against the
+method allow-list and the envelope contract; anything unrecognized is rejected,
+never trusted.
+
 ## What it composes (does not absorb)
 
 `@recoder/agent-policy` is **fused by composition**: the governance policy chain
@@ -84,7 +106,7 @@ const decision = gov.evaluate({ actor, action: 'file.read', target: { path } });
 
 ```bash
 pnpm -F @recoder/governance check-types   # 0 errors
-pnpm -F @recoder/governance test          # 92 tests, mirrored under tests/
+pnpm -F @recoder/governance test          # 131 tests, mirrored under tests/
 pnpm -F @recoder/governance build         # tsup dual ESM/CJS + d.ts
 ```
 

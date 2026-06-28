@@ -1,0 +1,38 @@
+[package]
+name = "recoder-governance-ipc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Hostile-by-default typed IPC for the Recoder governance kernel: a tokio Unix-domain-socket server speaking length-prefixed JSON-line frames, with peer-cred + INTERNAL_SERVICE_KEY auth and fail-closed dispatch onto a GovernanceHandle."
+
+[dependencies]
+recoder-governance-kernel = { path = "../recoder-governance-kernel" }
+recoder-governance-types = { path = "../recoder-governance-types" }
+recoder-governance-permission = { path = "../recoder-governance-permission" }
+recoder-governance-routing = { path = "../recoder-governance-routing" }
+recoder-governance-approval = { path = "../recoder-governance-approval" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# Disk-aware: only the runtime + net + io + macros features. NO "full" — no
+# heavy transitive surface. NO CBOR/heavy framing dep: the frame is a 4-byte
+# big-endian length prefix + a JSON line, read/written by hand over the UDS.
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+    "net",
+    "io-util",
+    "macros",
+    "sync",
+] }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = [
+    "rt-multi-thread",
+    "net",
+    "io-util",
+    "macros",
+    "time",
+    "sync",
+] }
