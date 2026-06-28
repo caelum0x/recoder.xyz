@@ -63,6 +63,11 @@ import {
   reacquireWorkspaceLock,
   releaseWorkspaceLock,
 } from './conductor-locks.js';
+import {
+  claimTaskForWorkspace,
+  releaseTaskClaim,
+  emitReviewHandoff,
+} from './coordination-integration.js';
 import { admitWorkspace } from './resource-governor.js';
 
 /** Marker prefixed onto an admission-rejection error so routes can map it to 429. */
@@ -130,11 +135,55 @@ const brainPort: BrainPort = {
   },
 };
 
-/** Write-lock port over conductor-locks (acquire before launch; reacquire/release). */
+/**
+ * Write-lock port over conductor-locks, ADDITIVELY fronted by the coordination
+ * DISPATCH CLAIM (claim-before-launch).
+ *
+ * The engine calls `acquire` BEFORE provisioning/launch. We run the idempotent
+ * dispatch claim of the task FIRST: if another ACTIVE workspace already holds the
+ * task's claim, we surface a `conflict` in the EXACT shape of a work-lock
+ * conflict so the engine refuses the duplicate launch on the proven path (no new
+ * branch in the engine). Only when the claim is `claimed`/`skipped` do we proceed
+ * to the existing work-lock acquire — so the proven acquire→launch→release
+ * ordering and behavior is unchanged for the non-conflicting (common) case.
+ *
+ * `release` releases BOTH the work-lock and the dispatch claim (teardown/launch
+ * failure), which frees the task for a later re-claim. DEGRADE-SAFE: a skipped
+ * claim never blocks; the work-lock layer remains the sole gate exactly as today.
+ */
 const lockPort: WorkLockPort = {
-  acquire: (input) => acquireWorkspaceLock(input),
+  async acquire(input) {
+    const claim = await claimTaskForWorkspace({
+      workspaceId: input.workspaceId,
+      spaceId: input.spaceId,
+      taskId: input.taskId,
+      targetPaths: input.targetPaths,
+    });
+    if (claim.status === 'conflict') {
+      // Refuse the duplicate launch truthfully, mirroring the work-lock conflict
+      // shape so the engine's existing conflict path handles it unchanged.
+      return {
+        status: 'conflict',
+        conflicts: [
+          {
+            lockId: claim.conflict.claimId,
+            ownerAgentId: claim.conflict.heldByAgentId,
+            taskId: input.taskId,
+            pathGlob: '**',
+          },
+        ],
+      };
+    }
+    // claimed | skipped → proceed to the proven work-lock acquire (unchanged).
+    return acquireWorkspaceLock(input);
+  },
   reacquire: (input) => reacquireWorkspaceLock(input),
-  release: (input) => releaseWorkspaceLock(input),
+  async release(input) {
+    // Release the dispatch claim first so the task is re-claimable, then the
+    // work-lock (best-effort, never throws on the claim side).
+    await releaseTaskClaim({ workspaceId: input.workspaceId, taskId: input.taskId });
+    return releaseWorkspaceLock(input);
+  },
 };
 
 /** Resource-governor admission port. */
@@ -208,7 +257,36 @@ export async function advanceWorkspace(
   patch?: Partial<Workspace>,
   metadata?: Record<string, unknown>,
 ): Promise<Workspace> {
-  return engine.advanceWorkspace(workspaceId, to, patch, metadata);
+  const workspace = await engine.advanceWorkspace(workspaceId, to, patch, metadata);
+
+  // HANDOFF ON REVIEW: when a workspace enters review (awaiting_review — set on a
+  // review transition or when a PR is opened), emit a coordination `review`
+  // handoff transferring ownership of the task/run to the reviewer role. Recorded
+  // on the real A2A handoff bus, idempotent via the durable dedup ledger (the
+  // same review transition emits exactly one handoff).
+  //
+  // FIRE-AND-FORGET (not awaited): the persisted transition is the proven path —
+  // the handoff must NEVER add latency to it (e.g. a poller relying on the state
+  // flipping promptly must see no change in timing). The handoff is best-effort,
+  // degrade-safe, and idempotent, so emitting it out-of-band is safe; a failure
+  // here never affects the already-returned transition.
+  if (to === 'awaiting_review') {
+    // Defer to the next tick so even the FIRST call's synchronous engine build
+    // never runs inline with the transition — zero added latency on this path.
+    const handoffInput = {
+      workspaceId,
+      spaceId: workspace.spaceId,
+      taskId: workspace.taskId,
+      ...(workspace.runId ? { runId: workspace.runId } : {}),
+    };
+    setImmediate(() => {
+      void emitReviewHandoff(handoffInput).catch((err) => {
+        logger.warn({ workspaceId, err }, 'review handoff emit failed (transition unaffected)');
+      });
+    });
+  }
+
+  return workspace;
 }
 
 /**
