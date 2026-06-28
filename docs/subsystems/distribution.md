@@ -1,5 +1,29 @@
 # Subsystem: `packages/distribution`
 
+> **Status (2026-06-28 — BUILDING): the device-flow + billing facade are BUILT.** `@recoder/distribution`
+> exists and is green: **CLI device-flow auth** (`src/channels/cli-dist/device-flow`), a provider-agnostic
+> **`BillingPort`** (`src/ports/billing-port.ts`) with a **real Polar Merchant-of-Record adapter**
+> (`src/channels/billing/adapters/polar-billing-adapter.ts`), license-key + webhook→entitlement
+> (`src/channels/billing/`), org/seat + SSO + device-registry scaffolding (`src/channels/{org,sso,device-registry}`),
+> and **homebrew/desktop packaging** (`src/channels/packaging/{homebrew,desktop}`) — **88/88 tests**
+> (`node --test`, re-run this snapshot). A first Python fusion slice **`py/recoder-billing`** lands the
+> license_key/kit/benefit engine + a **signed internal-api** (`recoder_billing/ipc/`) — **AST-verified**
+> (`py_compile` OK; full-tree `ast.parse` OK), **pytest env-gated** (absent Postgres). Commit `f4e1c9382`.
+> See BUILD-STATUS §14.
+>
+> **Polar = Merchant of Record (the strategic choice).** Polar is the seller of record, which **solves
+> Turkey / no-Stripe**: Recoder does not need to be a merchant in every jurisdiction because the MoR is.
+> The `BillingPort` is **provider-agnostic** — Dodo / Creem / Paddle become a **one-adapter add** without
+> touching the delivery engine.
+>
+> **Honest caveats (in progress / ops-gated):** **enterprise billing wiring** (plumbing seats/SSO/device-registry
+> into the running `docker-backend`) is **in progress**; the **deep Polar Python fusion** (the full
+> checkout/stripe/webhook/meter plan in §1.1 below) is a **large follow-up** beyond the first
+> license_key/kit/benefit slice; and a **live Polar checkout** needs ops/creds. The §1.1 table below is the
+> remaining merge plan, not a completed merge.
+>
+> ---
+>
 > The Recoder **Distribution** subsystem. It is how Recoder *ships* and *monetizes*:
 > the CLI distribution channel + device-flow auth, package/tap publishing (npm + Homebrew +
 > signed desktop/mobile builds), billing & entitlements (the fused Polar monetization engine),
@@ -37,12 +61,13 @@ The hard boundary (from `.claude/rules/production.md` and `AGENTS.md`):
 
 ## 1. Fused sources (the merge plan)
 
-> **Status (truthful):** this is the **fusion plan**, not a completed merge. When written,
-> the `ts/polar/**` source paths below existed and were read. **`ts/polar` has since been
-> retired** (`34b2d4a83`), and the `Lands in` targets — `py/recoder-billing` and
-> `packages/distribution` — **do not exist yet**. Treat the "Owned source" / "Lands in"
-> columns as the intended merge mapping, not as code that is already present. Re-source the
-> upstream Polar tree (or its retired snapshot) before executing this merge.
+> **Status (truthful, updated 2026-06-28):** the `Lands in` targets now **exist** — `packages/distribution`
+> is built (88/88) with a real Polar MoR adapter, and `py/recoder-billing` exists with its **first slice**
+> landed: **license_key/kit/benefit + signed internal-api** (`f4e1c9382`, AST-verified, pytest env-gated).
+> The **full table below remains the remaining merge plan** (deep checkout/stripe/webhook/meter is a large
+> follow-up) — it is **not yet a completed merge**. The old `ts/polar` upstream was retired in `34b2d4a83`;
+> this fusion was rebuilt fresh rather than re-sourced, so treat the `ts/polar/**` paths as the original
+> reference shape, not present code.
 
 ### 1.1 Billing & entitlements — fused from Polar (`ts/polar/server/polar/**`, Python/FastAPI; `ts/polar` retired in `34b2d4a83`)
 
