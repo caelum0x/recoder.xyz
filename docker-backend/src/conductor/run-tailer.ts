@@ -1,24 +1,35 @@
 /**
- * Conductor run-tailer — stream a running agent's terminal output into the
- * control-plane RunEvent log (the audit trail + UI/A2A source).
+ * Conductor run-tailer — BACKEND ADAPTER over @recoder/substrate's observe/
+ * run-tailer (substrate.md §4.7 / §12 step 4).
  *
- * Polls the tmux pane DIRECTLY (so it is correct independent of the orchestrator's
- * in-memory map), appends `log` events for new output, and emits a terminal
- * `completed` event when the tmux session ends. Truthful: it reports what the
- * terminal actually shows; it never fabricates progress.
+ * The polling loop, prefix-diff delta + cap, exit-code → completed/failed
+ * discrimination, max-duration safety stop, and per-workspace idempotency now
+ * live (substrate-pure) in the package. This file is the thin wiring: it
+ * resolves the registered backend substrate, injects a RunEventSink backed by
+ * the agent-os repository, holds the process-wide active-tails registry, and
+ * keeps the SAME exported `startRunTail`/`stopRunTail`/`activeTailCount` names +
+ * `RunTailInput` shape so workspace-service.ts and review.ts callers are
+ * unchanged. The proven live tail path behaves identically.
  *
  * See docs/CONDUCTOR-ARCHITECTURE.md (RunEvent tailing).
  */
-import type { RunEvent, RunEventType, WorkspaceSubstrate } from '@recoder/agent-os';
+import type { RunEvent, WorkspaceSubstrate } from '@recoder/agent-os';
+import {
+  startRunTail as startPackageRunTail,
+  stopRunTail as stopPackageRunTail,
+  activeTailCount as packageActiveTailCount,
+  systemClock,
+  uuidId,
+  TailRegistry,
+  type RunEventSink,
+  type TailSubstrate,
+  type LoggerPort,
+} from '@recoder/substrate';
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
-import { getSubstrate, type SubstrateHandle } from './substrate.js';
+import { getSubstrate } from './substrate.js';
 
 const logger = createLogger('conductor:tail');
-
-const DEFAULT_INTERVAL_MS = 3000;
-const DEFAULT_MAX_MS = 30 * 60 * 1000; // safety stop for runaway tails
-const MAX_DELTA_CHARS = 8000;
 
 export interface RunTailInput {
   workspaceId: string;
@@ -38,121 +49,58 @@ interface TailHandle {
   stop(): void;
 }
 
-const active = new Map<string, TailHandle>();
+/** Process-wide active-tails registry (was the module-level Map here). */
+const registry = new TailRegistry();
 
-function eventId(runId: string, suffix: string): string {
-  return `event_${runId}_${suffix}_${Date.now()}`;
-}
+/** Bridge the package LoggerPort (message, context) to the pino-style logger. */
+const loggerPort: LoggerPort = {
+  info: (message, context) => logger.info(context ?? {}, message),
+  warn: (message, context) => logger.warn(context ?? {}, message),
+  error: (message, context) => logger.error(context ?? {}, message),
+};
 
-async function appendEvent(
-  input: RunTailInput,
-  type: RunEventType,
-  message: string,
-  data?: Record<string, unknown>,
-): Promise<void> {
-  const event: RunEvent = {
-    eventId: eventId(input.runId, type),
-    type,
-    taskId: input.taskId,
-    runId: input.runId,
-    agentId: input.agentId,
-    message,
-    createdAt: new Date().toISOString(),
-    data,
-  };
-  try {
+/** RunEventSink backed by the agent-os repository (the audit-trail of record). */
+const repositorySink: RunEventSink = {
+  async append(event: RunEvent): Promise<void> {
     await agentOsContainer.repository.appendEvent(event);
-  } catch (err) {
-    logger.warn({ workspaceId: input.workspaceId, err }, 'appendEvent failed');
-  }
-}
-
-function handleFor(input: RunTailInput): SubstrateHandle {
-  // ref = workspaceId (orchestrator session id); sessionName = tmux session name.
-  return { ref: input.workspaceId, sessionName: input.sessionName, worktreePath: input.worktreePath };
-}
+  },
+};
 
 /**
  * Start tailing a run. Emits `started`, then `log` events for new output, and a
- * terminal `completed` when the session ends (or `failed` on max-time stop).
- * Idempotent per workspace; returns a stop handle.
+ * terminal `completed` when the session ends (or `failed` on non-zero exit /
+ * max-time stop). Idempotent per workspace; returns a stop handle.
  */
 export function startRunTail(input: RunTailInput): TailHandle {
-  if (active.has(input.workspaceId)) return active.get(input.workspaceId)!;
-
-  const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
-  const maxMs = input.maxMs ?? DEFAULT_MAX_MS;
-  const startedAt = Date.now();
-  let lastCapture = '';
-  let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-
-  const handle: TailHandle = {
-    stop() {
-      if (stopped) return;
-      stopped = true;
-      if (timer) clearTimeout(timer);
-      active.delete(input.workspaceId);
+  // Resolve the registered substrate once; the package tailer polls its
+  // capture/alive/exitCode (exitCode is optional on the package contract).
+  const substrate = getSubstrate(input.substrate) as unknown as TailSubstrate;
+  return startPackageRunTail(
+    {
+      workspaceId: input.workspaceId,
+      taskId: input.taskId,
+      runId: input.runId,
+      agentId: input.agentId,
+      sessionName: input.sessionName,
+      worktreePath: input.worktreePath,
+      intervalMs: input.intervalMs,
+      maxMs: input.maxMs,
     },
-  };
-  active.set(input.workspaceId, handle);
-
-  void appendEvent(input, 'started', `Run started on session ${input.sessionName}`, {
-    sessionName: input.sessionName,
-  });
-
-  const substrate = getSubstrate(input.substrate);
-  const subHandle = handleFor(input);
-
-  const tick = async (): Promise<void> => {
-    if (stopped) return;
-
-    const pane = await substrate.capture(subHandle, 2000);
-    if (pane !== null && pane !== lastCapture) {
-      const delta = pane.startsWith(lastCapture) ? pane.slice(lastCapture.length) : pane;
-      lastCapture = pane;
-      const trimmed = delta.trim();
-      if (trimmed) {
-        await appendEvent(input, 'log', trimmed.slice(-MAX_DELTA_CHARS), { source: 'tmux' });
-      }
-    }
-
-    const alive = await substrate.alive(subHandle);
-    if (!alive) {
-      // Check the true exit code (upgrade over "session gone = done") —
-      // distinguishes success (exit 0 → completed) from crash (non-zero → failed).
-      const code = substrate.exitCode ? await substrate.exitCode(subHandle) : undefined;
-      if (code !== undefined && code !== null && code !== 0) {
-        await appendEvent(input, 'failed', `Agent session exited with code ${code}`, {
-          sessionName: input.sessionName,
-          exitCode: code,
-        });
-      } else {
-        await appendEvent(input, 'completed', 'Agent session ended', {
-          sessionName: input.sessionName,
-          exitCode: code ?? 0,
-        });
-      }
-      handle.stop();
-      return;
-    }
-    if (Date.now() - startedAt > maxMs) {
-      await appendEvent(input, 'failed', `Run tail stopped after max duration (${maxMs}ms)`, { reason: 'max_duration' });
-      handle.stop();
-      return;
-    }
-    timer = setTimeout(() => void tick(), intervalMs);
-  };
-
-  timer = setTimeout(() => void tick(), intervalMs);
-  logger.info({ workspaceId: input.workspaceId, runId: input.runId, session: input.sessionName }, 'run tail started');
-  return handle;
+    {
+      substrate,
+      sink: repositorySink,
+      registry,
+      clock: systemClock,
+      id: uuidId,
+      logger: loggerPort,
+    },
+  );
 }
 
 export function stopRunTail(workspaceId: string): void {
-  active.get(workspaceId)?.stop();
+  stopPackageRunTail(registry, workspaceId);
 }
 
 export function activeTailCount(): number {
-  return active.size;
+  return packageActiveTailCount(registry);
 }

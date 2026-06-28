@@ -94,6 +94,34 @@ export {
 } from './registry/index.js';
 export type { SubstrateSelectable } from './registry/index.js';
 
+// === Review — reviewable-diff mechanism (pure parsing of git output) ===
+export {
+  parseUntracked,
+  countChangedFiles,
+  buildSubstrateDiff,
+} from './review/index.js';
+export type { RawGitDiffOutput } from './review/index.js';
+
+// === Observe — substrate-pure run tailer (poll capture/alive → RunEvents) ===
+export {
+  startRunTail,
+  stopRunTail,
+  activeTailCount,
+  TailRegistry,
+  computeDelta,
+  MAX_DELTA_CHARS,
+  DEFAULT_INTERVAL_MS,
+  DEFAULT_MAX_MS,
+  CAPTURE_LINES,
+} from './observe/index.js';
+export type {
+  RunTailInput,
+  RunTailerDeps,
+  TailSubstrate,
+  TailHandle,
+  CaptureDeltaResult,
+} from './observe/index.js';
+
 // === Ports — every dependency-inversion seam (for backend adapters) ===
 export type {
   LoggerPort,

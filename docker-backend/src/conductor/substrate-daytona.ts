@@ -20,6 +20,7 @@ import { promisify } from 'node:util';
 import { getDaytonaClient } from '../daytona-client.js';
 import { isDaytonaSdkEnabled } from '../daytona-sdk.js';
 import { createLogger } from '../logger';
+import { buildSubstrateDiff } from '@recoder/substrate';
 import {
   registerSubstrate,
   type ConductorSubstrate,
@@ -174,14 +175,13 @@ const daytonaSubstrate: ConductorSubstrate = {
       dc.execCommand(handle.ref, `git --no-pager diff ${q(base)}`, opts),
       dc.execCommand(handle.ref, 'git status --porcelain', opts),
     ]);
-    const untracked = (status.output ?? '')
-      .split('\n')
-      .filter((line) => line.startsWith('??'))
-      .map((line) => line.slice(3).trim())
-      .filter(Boolean);
-    const statText = (stat.output ?? '').trim();
-    const changedFiles = statText.split('\n').filter((l) => l.includes('|')).length + untracked.length;
-    return { stat: statText, patch: patch.output ?? '', untracked, changedFiles };
+    // Same shared parser as the local substrate (git runs inside the sandbox
+    // here, host-side over the worktree there) — identical SubstrateDiff shape.
+    return buildSubstrateDiff({
+      stat: stat.output ?? '',
+      patch: patch.output ?? '',
+      status: status.output ?? '',
+    });
   },
 
   async teardown(handle: SubstrateHandle): Promise<void> {

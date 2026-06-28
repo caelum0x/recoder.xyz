@@ -16,6 +16,7 @@ import {
   paneExitCode,
 } from './tmux-orchestrator.js';
 import { TMUX_BIN } from './tmux-path.js';
+import { buildSubstrateDiff } from '@recoder/substrate';
 import {
   registerSubstrate,
   type ConductorSubstrate,
@@ -93,17 +94,10 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
       git(cwd, ['--no-pager', 'diff', base]),
       git(cwd, ['status', '--porcelain']),
     ]);
-    const untracked = status
-      .split('\n')
-      .filter((line) => line.startsWith('??'))
-      .map((line) => line.slice(3).trim())
-      .filter(Boolean);
-    const changedFiles =
-      stat
-        .trim()
-        .split('\n')
-        .filter((l) => l.includes('|')).length + untracked.length;
-    return { stat: stat.trim(), patch, untracked, changedFiles };
+    // Shared --stat/-p + porcelain-untracked parsing (host-side git over the
+    // worktree) — promoted to @recoder/substrate so local + remote produce the
+    // identical SubstrateDiff. Behavior unchanged.
+    return buildSubstrateDiff({ stat, patch, status });
   },
 
   async teardown(handle: SubstrateHandle, options?: { removeIsolation?: boolean }): Promise<void> {
