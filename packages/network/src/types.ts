@@ -1,13 +1,18 @@
 /**
- * Recoder Network + XDR — shared domain types.
+ * @recoder/network — shared domain types.
  *
  * This module realizes the Recoder network subsystem as an Envoy CONTROL PLANE:
- * we generate a real, deployable Envoy bootstrap config (envoy-config.ts), serve
- * the ext_authz decision the data plane calls back into (ext-authz.ts), and turn
+ * we generate a real, deployable Envoy bootstrap config (envoy-config.ts), decide
+ * the ext_authz allow/deny the data plane calls back into (ext-authz.ts), and turn
  * the data plane's access logs into security events + detections (xdr/).
  *
  * Hostile-by-default: authz is default-deny. Anything we cannot positively
  * authorize is denied.
+ *
+ * The pure pieces (config generation, the authz decision, the XDR pipeline) live
+ * here behind ports (see ports.ts). IO — the ext_authz HTTP handler, route
+ * mounting — and the concrete governance-backed port implementations (policy
+ * engine, Merkle audit sink) live in the adopting service as thin adapters.
  */
 
 /** A single upstream service the Envoy data plane can route to. */

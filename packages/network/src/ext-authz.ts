@@ -4,16 +4,21 @@
  * Envoy's HTTP ext_authz filter POSTs the inbound request to our authz endpoint.
  * A 2xx response means ALLOW; any non-2xx (we use 403) means DENY and Envoy
  * returns that status to the client. We delegate the actual allow/deny to the
- * REAL Recoder policy engine (`evaluatePolicy` from @recoder/governance) over a
- * NetworkAuthzRequest mapped into a PolicyInput.
+ * REAL Recoder policy engine over a NetworkAuthzRequest mapped into a PolicyInput.
+ *
+ * The engine call is injected as a PolicyAdvisorPort (see ports.ts): the mapping
+ * from a NetworkAuthzRequest to a PolicyInput stays here (it is domain logic),
+ * but the package never imports the policy engine's runtime — the adopting
+ * service wires `@recoder/governance` `evaluatePolicy` behind the port.
  *
  * HOSTILE-BY-DEFAULT: this is default-deny. Any unconfigured request, any error,
  * any policy result that is not an explicit `allow` results in 403.
  */
 import { randomUUID } from 'node:crypto';
-import { evaluatePolicy, type PolicyInput } from '@recoder/governance';
+import type { PolicyInput } from '@recoder/governance';
 import type { AgentProfile } from '@recoder/agent-os';
 import type { NetworkAuthzRequest, NetworkAuthzDecision } from './types';
+import type { PolicyAdvisorPort } from './ports';
 
 const DENY_STATUS = 403;
 const ALLOW_STATUS = 200;
@@ -116,10 +121,17 @@ function allow(reason: string): NetworkAuthzDecision {
 }
 
 /**
- * The core authz decision. Pure (modulo env reads + the policy engine) and
- * synchronous. Default-deny on every uncertain path.
+ * The core authz decision. Pure (modulo env reads + the injected policy advisor)
+ * and synchronous. Default-deny on every uncertain path.
+ *
+ * @param req     The mapped Envoy ext_authz request.
+ * @param advisor The real policy engine, injected as a port. The adopting service
+ *                wires `@recoder/governance` `evaluatePolicy` here.
  */
-export function decideNetworkAuthz(req: NetworkAuthzRequest): NetworkAuthzDecision {
+export function decideNetworkAuthz(
+  req: NetworkAuthzRequest,
+  advisor: PolicyAdvisorPort,
+): NetworkAuthzDecision {
   // 1) Reject structurally malformed requests outright.
   if (!req.method || !req.path) {
     return deny('Malformed authz request: missing method or path.');
@@ -142,7 +154,7 @@ export function decideNetworkAuthz(req: NetworkAuthzRequest): NetworkAuthzDecisi
 
   // 4) Delegate to the real Recoder policy engine. Any non-`allow` => deny.
   try {
-    const verdict = evaluatePolicy(toPolicyInput(req));
+    const verdict = advisor.evaluate(toPolicyInput(req));
     if (verdict.effect === 'allow') {
       return allow(verdict.reason || 'Allowed by Recoder network policy.');
     }

@@ -1,7 +1,11 @@
 /**
- * network.routes.ts — the Recoder Envoy control-plane HTTP surface.
+ * network.routes.ts — the Recoder Envoy control-plane HTTP surface (IO adapter).
  *
- * Two router groups are exported:
+ * The pure subsystem (config generation, the authz decision, the XDR pipeline)
+ * lives in @recoder/network. This file is the thin docker-backend adapter that
+ * exposes it over Express and injects the concrete governance-backed ports.
+ *
+ * Two router groups are exported (signatures unchanged so server.ts is untouched):
  *
  *  1. createNetworkRouter()      -> mounted at /api/network
  *       GET  /envoy-config       : the generated, deployable Envoy bootstrap
@@ -22,10 +26,13 @@ import {
   emitYaml,
   emitJson,
   defaultNetworkConfig,
-} from './envoy-config';
-import type { NetworkConfig } from './types';
-import { decideNetworkAuthz, extractAuthzRequest, DECISION_HEADER } from './ext-authz';
-import { getXdrSink } from './xdr/sink';
+  decideNetworkAuthz,
+  extractAuthzRequest,
+  DECISION_HEADER,
+  type NetworkConfig,
+} from '@recoder/network';
+import { governancePolicyAdvisor } from './governance-ports.js';
+import { getXdrSink } from './xdr-sink.js';
 
 export interface NetworkRouterOptions {
   /** Override the config used by /envoy-config + /health (defaults to env). */
@@ -128,7 +135,7 @@ export function createNetworkInternalRouter(): Router {
       ip: req.ip,
     });
 
-    const decision = decideNetworkAuthz(authzReq);
+    const decision = decideNetworkAuthz(authzReq, governancePolicyAdvisor);
 
     res.setHeader(DECISION_HEADER, decision.decisionId);
     // The ext_authz HTTP contract enforces on status code. We also return a tiny
