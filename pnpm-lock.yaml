@@ -1134,6 +1134,9 @@ importers:
       '@recoder/agent-policy':
         specifier: workspace:*
         version: link:../agent-policy
+      '@recoder/recodergit':
+        specifier: workspace:*
+        version: link:../recodergit
     devDependencies:
       '@types/node':
         specifier: ^20.10.0
@@ -30237,7 +30240,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 1.2.0
-      vitest: 2.1.9(@types/node@25.9.4)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@5.0.10))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@5.0.10))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
+      vitest: 2.1.9(@types/node@20.19.27)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@6.0.6))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
 
   '@vitest/utils@2.1.9':
     dependencies:
@@ -34667,7 +34670,7 @@ snapshots:
       is-in-ci: 2.0.0
       patch-console: 2.0.0
       react: 19.1.1
-      react-reconciler: 0.33.0(react@19.1.1)
+      react-reconciler: 0.33.0(react@19.2.4)
       scheduler: 0.27.0
       signal-exit: 3.0.7
       slice-ansi: 7.1.0
@@ -38895,11 +38898,6 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
-
-  react-reconciler@0.33.0(react@19.1.1):
-    dependencies:
-      react: 19.1.1
-      scheduler: 0.27.0
 
   react-reconciler@0.33.0(react@19.2.4):
     dependencies:
