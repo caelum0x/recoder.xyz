@@ -10,7 +10,18 @@
 #             / recoder_pm
 #   redis     redis:7 (sessions, A2A bus)
 #   qdrant    vector store (mem0 / embeddings)
-#   envoy     L7 edge proxy consuming the generated/static Envoy config
+#   recoder-xds       Go Envoy xDS (ADS) control plane — serves DYNAMIC
+#                     LDS/CDS/RDS so Envoy gets live network-config updates
+#                     without a restart (mirrors docker-backend/src/network).
+#   recoder-governance  Rust governance daemon — boots a deny-biased
+#                     GovernanceKernel and serves the typed IPC over a
+#                     Unix-domain socket on a SHARED volume. The backend's
+#                     @recoder/governance facade delegates to it via
+#                     GOVERNANCE_SOCKET and falls back to its pure-TS deny-biased
+#                     path on any failure (so this service is fail-safe, never a
+#                     hard dependency).
+#   envoy     L7 edge proxy. Consumes the DYNAMIC xDS config (ADS -> recoder-xds)
+#             with the static bootstrap as the always-on fallback.
 #
 # Bring it up with `scripts/selfhost-up.sh` (validates env, generates safe
 # secrets, waits for health). Never put real secrets in this file or in
@@ -87,6 +98,11 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      # Ordering only (service_started), NOT a health gate: the backend governs
+      # via its pure-TS fallback if the daemon is down, so we never block startup
+      # on governance. This just gives the socket a head start.
+      recoder-governance:
+        condition: service_started
     ports:
       - "${BACKEND_PORT:-3100}:3100"
     volumes:
@@ -94,6 +110,10 @@ services:
       # Docker socket. Mounted read-write because it must create/stop containers.
       - /var/run/docker.sock:/var/run/docker.sock
       - backenddata:/app/docker-backend/data
+      # Shared governance IPC socket dir. The recoder-governance daemon binds the
+      # socket here; the backend delegates to it via GOVERNANCE_SOCKET. Both run as
+      # uid 1001 so peer-cred (same-uid) auth succeeds across containers.
+      - governance-sock:/run/recoder-governance
     environment:
       NODE_ENV: production
       PORT: "3100"
@@ -108,6 +128,10 @@ services:
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required}
       RECODER_GOVERNANCE_SIGNING_KEY: ${RECODER_GOVERNANCE_SIGNING_KEY:?RECODER_GOVERNANCE_SIGNING_KEY is required}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      # Delegate governance to the owned Rust daemon over the shared socket. The
+      # facade falls back to its pure-TS deny-biased path on ANY failure, so an
+      # unset/dead socket degrades truthfully instead of failing the backend.
+      GOVERNANCE_SOCKET: ${GOVERNANCE_SOCKET:-/run/recoder-governance/governance.sock}
       # --- Billing (Polar) — optional; degrades safe when unset ---
       POLAR_ACCESS_TOKEN: ${POLAR_ACCESS_TOKEN:-}
       POLAR_ORGANIZATION_ID: ${POLAR_ORGANIZATION_ID:-}
@@ -130,12 +154,91 @@ services:
       retries: 3
       start_period: 40s
 
+  # ── Envoy xDS (ADS) control plane ──────────────────────────────────────────
+  # Serves DYNAMIC LDS/CDS/RDS so Envoy receives live network-config updates with
+  # no restart. It REUSES the backend image (recoder/docker-backend:selfhost),
+  # which bakes the recoder-xds binary at /opt/recoder/bin/recoder-xds in its
+  # substrate stage — so no second large build. The `build:` block is identical to
+  # `backend` so compose resolves the SAME image tag (built once) and this service
+  # just overrides the entrypoint to exec the xDS binary.
+  #
+  # Degrade-safe: if the binary was not built (toolchain absent), the entrypoint's
+  # guard exits non-zero, this service stays unhealthy, and Envoy keeps serving via
+  # its static fallback listener. The edge never goes dark because of xDS.
+  recoder-xds:
+    build:
+      context: .
+      dockerfile: docker-backend/Dockerfile
+    image: recoder/docker-backend:selfhost
+    <<: *restart
+    depends_on:
+      backend:
+        condition: service_healthy
+    # /opt/recoder/bin/recoder-xds is only present when the substrate build
+    # produced it. Fail loudly (not silently) if absent so the service reports
+    # unhealthy rather than pretending to serve.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        test -x /opt/recoder/bin/recoder-xds
+        || { echo "recoder-xds binary not built into image; Envoy keeps static bootstrap" >&2; exit 1; };
+        exec /opt/recoder/bin/recoder-xds
+        --xds-addr ":${XDS_LISTEN_PORT:-18000}"
+        --health-addr ":${XDS_HEALTH_PORT:-18001}"
+    environment:
+      # Derive the NetworkConfig from the live backend when its config route is
+      # available; if XDS_CONFIG_URL is empty the daemon uses env-derived defaults
+      # (matching the static generator). Never a hard failure.
+      XDS_CONFIG_URL: ${XDS_CONFIG_URL:-}
+      XDS_LOG_LEVEL: ${XDS_LOG_LEVEL:-info}
+    healthcheck:
+      # /healthz flips to 200 once the snapshot is installed and ADS is serving.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/${XDS_HEALTH_PORT:-18001} && echo -e 'GET /healthz HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | head -1 | grep -q '200'"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # ── Governance daemon (Rust) ───────────────────────────────────────────────
+  # Boots a deny-biased GovernanceKernel and serves the typed IPC over a Unix
+  # socket on the shared `governance-sock` volume. The backend delegates to it via
+  # GOVERNANCE_SOCKET and falls back to its pure-TS deny-biased path on any
+  # failure, so this is an enhancement, never a hard dependency. Built from its own
+  # small Dockerfile (deploy/governance-daemon.Dockerfile) to keep the Rust
+  # toolchain out of the main backend image.
+  recoder-governance:
+    build:
+      context: .
+      dockerfile: deploy/governance-daemon.Dockerfile
+    image: recoder/governance-daemon:selfhost
+    <<: *restart
+    environment:
+      # Required: the daemon refuses to start without it (fail-closed). Shared with
+      # the backend so both speak the same authenticated channel.
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required}
+      # Socket path on the shared volume; must match the backend's GOVERNANCE_SOCKET.
+      GOVERNANCE_SOCKET: ${GOVERNANCE_SOCKET:-/run/recoder-governance/governance.sock}
+    volumes:
+      - governance-sock:/run/recoder-governance
+    healthcheck:
+      # The socket file exists once the daemon has bound and is accepting.
+      test: ["CMD-SHELL", "test -S \"$${GOVERNANCE_SOCKET:-/run/recoder-governance/governance.sock}\""]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+
   envoy:
     image: envoyproxy/envoy:v1.31-latest
     <<: *restart
     depends_on:
       backend:
         condition: service_healthy
+      # Ordering only: Envoy must start whether or not xDS is healthy, because its
+      # static fallback listener keeps the edge serving. service_started, NOT
+      # service_healthy, so a degraded/absent xDS never blocks the edge.
+      recoder-xds:
+        condition: service_started
     command:
       - "-c"
       - "/etc/envoy/envoy.yaml"
@@ -145,7 +248,10 @@ services:
       - "${EDGE_HTTP_PORT:-8080}:8080"
       - "${ENVOY_ADMIN_PORT:-9901}:9901"
     volumes:
-      - ./deploy/envoy/envoy.selfhost.yaml:/etc/envoy/envoy.yaml:ro
+      # DYNAMIC xDS bootstrap (ADS -> recoder-xds) with a static fallback listener.
+      # To pin the pure-static bootstrap instead, point this at
+      # ./deploy/envoy/envoy.selfhost.yaml.
+      - ./deploy/envoy/envoy.xds.yaml:/etc/envoy/envoy.yaml:ro
     healthcheck:
       # Envoy admin /ready returns 200 LIVE once the listeners are warmed.
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9901 && echo -e 'GET /ready HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | grep -q LIVE"]
@@ -159,6 +265,7 @@ volumes:
   redisdata:
   qdrantdata:
   backenddata:
+  governance-sock:
 
 networks:
   default:

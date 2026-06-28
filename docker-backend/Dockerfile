@@ -32,6 +32,18 @@ RUN bash scripts/build-substrate-binaries.sh || true \
     && { [ -x go/beads/bin/bd ]  && cp go/beads/bin/bd  /out/bd   || echo "substrate: bd not built";   } \
     && touch /out/.keep
 
+# Also build the Recoder Envoy xDS control plane (go/recoder-xds). Go is already
+# in this stage, so this is cheap. recoder-xds serves DYNAMIC LDS/CDS/RDS over ADS
+# so a running Envoy gets live network-config updates without a restart; the static
+# bootstrap (deploy/envoy/envoy.selfhost.yaml) is the fallback when it is absent.
+# Degrade-safe: a build failure must NOT break the backend image — the recoder-xds
+# compose service simply won't have a binary and Envoy keeps using its static
+# config. CGO is disabled for a portable, statically-friendly binary.
+RUN cd go/recoder-xds \
+    && { CGO_ENABLED=0 go build -trimpath -o /out/recoder-xds ./cmd/recoder-xds \
+         && echo "substrate: recoder-xds built"; } \
+    || echo "substrate: recoder-xds not built (Envoy keeps static bootstrap)"
+
 # ── Stage 1: Build ──
 FROM node:20-slim AS builder
 
@@ -108,6 +120,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=substrate /out/ /opt/recoder/substrate/
 COPY docker-backend/docker-substrate-entrypoint.sh /usr/local/bin/docker-substrate-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-substrate-entrypoint.sh
+
+# Expose the recoder-xds control-plane binary on PATH-adjacent /opt/recoder/bin so
+# the `recoder-xds` compose service (which reuses THIS image) can exec it. Built in
+# the substrate stage above; the COPY guard tolerates its absence (degrade-safe:
+# if the binary was not built, Envoy keeps its static bootstrap). The trailing
+# `.keep` from /out guarantees the directory exists so the COPY never fails.
+RUN mkdir -p /opt/recoder/bin
+RUN if [ -x /opt/recoder/substrate/recoder-xds ]; then \
+      cp /opt/recoder/substrate/recoder-xds /opt/recoder/bin/recoder-xds; \
+    else \
+      echo "runtime: recoder-xds binary absent (Envoy keeps static bootstrap)"; \
+    fi
 
 RUN corepack enable pnpm && corepack prepare pnpm@10.30.3 --activate
 

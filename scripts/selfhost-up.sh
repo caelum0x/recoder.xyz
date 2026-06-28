@@ -120,7 +120,13 @@ info "building and starting the Recoder self-host stack"
 "${DC[@]}" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
 
 # --- Wait for healthchecks (bounded) ---
+# CORE services are HARD-GATED: bring-up fails if any never goes healthy.
+# recoder-xds and recoder-governance are deliberately NOT in this list because the
+# stack degrades safely without them (Envoy keeps its static fallback listener;
+# the backend governs via its pure-TS deny-biased fallback). They are reported
+# non-fatally below so a missing binary/toolchain never fails the whole bring-up.
 SERVICES=(postgres redis qdrant backend envoy)
+OPTIONAL_SERVICES=(recoder-xds recoder-governance)
 DEADLINE=$(( $(date +%s) + 600 ))  # 10 minutes max
 info "waiting for services to become healthy (timeout 600s)"
 
@@ -161,6 +167,26 @@ for svc in "${SERVICES[@]}"; do
   done
 done
 
+# --- Report optional (degrade-safe) services without failing the bring-up ---
+# These enhance the stack but are not required: recoder-xds gives Envoy dynamic
+# config (static fallback otherwise), recoder-governance gives the backend the
+# owned Rust governance daemon (pure-TS deny-biased fallback otherwise).
+info "optional services (degrade-safe; not gating bring-up):"
+for svc in "${OPTIONAL_SERVICES[@]}"; do
+  cid="$(container_id "$svc" || true)"
+  if [ -z "$cid" ]; then
+    echo "  $svc: not present (degraded — fallback path active)"
+    continue
+  fi
+  st="$(health_of "$cid")"
+  case "$st" in
+    healthy)   echo "  $svc: healthy" ;;
+    running)   echo "  $svc: running" ;;
+    unhealthy) echo "  $svc: unhealthy (degraded — fallback path active)" ;;
+    *)         echo "  $svc: $st (degraded — fallback path active)" ;;
+  esac
+done
+
 # --- Print URLs ---
 BACKEND_PORT="$(read_env BACKEND_PORT)"; BACKEND_PORT="${BACKEND_PORT:-3100}"
 EDGE_HTTP_PORT="$(read_env EDGE_HTTP_PORT)"; EDGE_HTTP_PORT="${EDGE_HTTP_PORT:-8080}"
@@ -174,6 +200,9 @@ Recoder self-host is up.
   Health:                   http://localhost:${BACKEND_PORT}/health
   Edge (Envoy):             http://localhost:${EDGE_HTTP_PORT}
   Envoy admin:              http://localhost:${ENVOY_ADMIN_PORT}
+
+  xDS control plane:        internal (recoder-xds, ADS on :18000, /healthz :18001)
+  Governance daemon:        internal (recoder-governance, UDS on governance-sock)
 
 Stop with:  scripts/selfhost-down.sh
 Logs with:  docker compose --env-file .env.selfhost -f docker-compose.selfhost.yml logs -f
