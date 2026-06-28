@@ -4,7 +4,7 @@
 > One contract; two real backends today (local tmux + git worktrees, remote Daytona);
 > the seam where Recoder drives the user's OWN coding-agent CLIs in isolation.
 
-**Status:** design (consolidates shipped code in `docker-backend/src/conductor/*` into a first-class `packages/substrate` package + a thin backend wiring layer).
+**Status (2026-06-28): BUILT & GREEN + ADOPTED.** `packages/substrate` is now a real package — `src/{contract,command,registry,ports,errors,exec,factory,review,types}` — exporting the substrate contract, a **6-CLI command resolver** (`command/resolve-command.ts` + `runtime-availability.ts`), a substrate registry, and a typed error hierarchy. **46/46 tests pass** (`node --test`, re-run this session). The conductor has **adopted it**: both `docker-backend/src/conductor/runtime-commands.ts` and `docker-backend/src/conductor/substrate.ts` `import … from '@recoder/substrate'` (committed `eaf916dd4`) — command-resolution + contract logic is OWNED by the package; the backend module is the thin wiring layer. The canonical **live-agent run was PROVEN** through the tmux+worktree driver (BUILD-STATUS §7a). Remaining: full `packages/substrate` promotion of every conductor concern + remote Daytona depth (still being completed).
 **Owners:** Conductor / Agent OS platform.
 **Lives at:** `packages/substrate` (the portable engine) `+` `docker-backend/src/conductor` (backend wiring: routes, container glue, reconcile cron).
 

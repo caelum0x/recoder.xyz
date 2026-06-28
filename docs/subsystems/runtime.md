@@ -5,6 +5,17 @@
 > uniform driver contract, and streams every byte of their work back to the control plane
 > as `RunEvent` records.
 
+> **Status (2026-06-28): BUILT & GREEN + NOW WIRED.** `@recoder/runtime` is real and green
+> (**160/160 tests**) and — as of `b83e21ff0` — **no longer a zero-importer shelf package**.
+> The real engine now backs two seams: (1) `apps/agent-worker/src/runtimes/runtime-registry.ts`
+> builds its `RuntimeAdapterPort` registry from `createRuntime().adapterFor(surface)`, and
+> (2) the conductor's new `in_process` `ConductorSubstrate` (`docker-backend/src/conductor/substrate-in-process.ts`)
+> is driven by `@recoder/runtime` (degrade-safe `runtime_unavailable` when absent).
+> **Honest caveat:** the **proven** live `claude -p` run (BUILD-STATUS §7a) went through the
+> canonical **tmux+worktree conductor driver**, not this package — `@recoder/runtime` is the
+> second, now-imported driver path whose live-run proof through the conductor seam is still the
+> dual-runtime reconciliation item (BUILD-STATUS §10).
+
 This is a **first-party** subsystem. Everything fused here is code we own and merge — we
 edit and reshape it, we never thin-HTTP-wrap it. The runtime is an **execution surface**,
 not a state-of-record: canonical task/approval/memory/artifact state lives in
