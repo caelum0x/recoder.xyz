@@ -29,6 +29,8 @@ import { startLineMonitor, type LineIngress } from "./line-monitor.js";
 import { normalizeLineEvent } from "./line-normalize.js";
 import { probeLineAccount } from "./line-probe.js";
 import { chunkLineText, deliverLineMessage } from "./line-send.js";
+import { createLineMessagingClient } from "./line-runtime.js";
+import type { LineMessagingApiClient } from "./line-sdk-types.js";
 
 const LINE_KIND: ConnectorKind = "line";
 
@@ -41,6 +43,14 @@ export interface LineConnectorOptions {
   log?: (message: string) => void;
   /** Optional probe timeout override (ms). */
   probeTimeoutMs?: number;
+  /**
+   * Optional Messaging API client factory override. Defaults to the real lazy
+   * `@line/bot-sdk` loader (`createLineMessagingClient`). This is the channel's
+   * SDK seam: a host that wants to inject an alternate transport — or a test that
+   * wants to drive the real send/react paths without the optional peer SDK —
+   * supplies its own factory. The dispatch/normalize/gating path is unchanged.
+   */
+  clientFactory?: (channelAccessToken: string) => LineMessagingApiClient;
 }
 
 /**
@@ -55,12 +65,16 @@ export class LineConnector implements ConnectorPort {
   private readonly ingress: LineIngress;
   private readonly log: (message: string) => void;
   private readonly probeTimeoutMs: number;
+  private readonly clientFactory: (channelAccessToken: string) => LineMessagingApiClient;
 
   constructor(options: LineConnectorOptions) {
     this.registry = new LineAccountRegistry(options.config ?? {});
     this.ingress = options.ingress;
     this.log = options.log ?? (() => {});
     this.probeTimeoutMs = options.probeTimeoutMs ?? 5000;
+    this.clientFactory =
+      options.clientFactory ??
+      ((channelAccessToken: string) => createLineMessagingClient({ channelAccessToken }));
   }
 
   /** All LINE account ids this connector can serve. */
@@ -118,6 +132,7 @@ export class LineConnector implements ConnectorPort {
       to: message.target.conversationId,
       chunks,
       replyToken: message.target.replyTo,
+      client: this.clientFactory(account.channelAccessToken),
     });
 
     return {
@@ -196,6 +211,7 @@ export class LineConnector implements ConnectorPort {
         channelAccessToken: account.channelAccessToken,
         to: request.conversationId,
         chunks: [emoji],
+        client: this.clientFactory(account.channelAccessToken),
       });
       return result.delivered && result.messageIds.length > 0;
     } catch (err: unknown) {

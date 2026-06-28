@@ -3,3 +3,4 @@
 
 export * from "./connector-registry.js";
 export * from "./dispatch-inbound.js";
+export * from "./default-gate-policy.js";

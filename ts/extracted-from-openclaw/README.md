@@ -37,6 +37,12 @@ that wrap each real gateway behind the `ConnectorPort`.
   reply through the registered port. Every failure mode (blocked, empty reply,
   unsupported channel, runner error, send error) is encoded in a truthful
   `DispatchOutcome` — the pipeline never throws and never fakes a delivery.
+  `makeAllowlistGatePolicy` is the default `GatePolicy`: it derives the pure
+  `GateInput` the trust boundary consumes directly from a normalized inbound
+  message + a small deployment policy (allowlist match against the sender
+  identity, group mention requirement, control-command prefixes), so any adapter
+  goes live end-to-end behind the gate without an integrator re-deriving the
+  mapping. Hostile-by-default: an empty allowlist authorizes nobody.
 - `src/identity.ts` — `RECODER_CONNECTORS_*` env (legacy `OPENCLAW_*` honored as
   a deprecated fallback).
 
@@ -53,19 +59,42 @@ importing one pulls only that channel's optional SDK:
 - `@recoder/connectors/line` — LINE Messaging API (`@line/bot-sdk` optional, lazy).
 - `@recoder/connectors/feishu` — Feishu / Lark (`@larksuiteoapi/node-sdk` optional, lazy).
 
+All seven adapters are wired **live end-to-end**: each is exercised by a real
+per-channel dispatch test (`social-gateways/_dispatch/*.dispatch.test.ts`) that
+feeds a real channel-native event through the adapter's **real `normalize`**,
+registers the **real adapter** in the **real `ConnectorRegistry`**, and runs
+**real `dispatchInbound`** so the gate -> embedded runner -> the adapter's **real
+`send()`** flow executes. The only thing doubled is each channel's true SDK seam:
+telegram's `fetchImpl`, slack's `clientFactory` (`SlackWebClient`), line's
+`clientFactory` (`MessagingApiClient`), signal/whatsapp/feishu's `globalThis.fetch`
+(their HTTP wire), and iMessage's `imsg rpc` subprocess
+(`RECODER_IMESSAGE_CLI_PATH`, a faithful in-memory JSON-RPC daemon double). The
+dispatch logic itself is never mocked.
+
 The **discord** adapter is intentionally NOT exported. Its foundation-facing
 normalize surface typechecks clean (`social-gateways/discord/tsconfig.adapter.json`)
 and the `../infra/*` leaf cluster it depends on is now really extracted —
 `social-gateways/infra/{retry,retry-policy,errors,channel-activity,sleep}.ts`
 (verified via `social-gateways/infra/tsconfig.json`, 0 errors). But the full
 `connector-port.ts` dispatch pipeline still imports the un-extracted OpenClaw bot
-core (`auto-reply/*`, `gateway/*`, `channels/*`, `pairing/*`, `security/*`,
-`web/media`, `polls`, `markdown/*`, `config/{commands,sessions,markdown-tables}`,
-`routing/*`) — a deep, hundreds-of-files surface. Until that is extracted,
-`./discord` stays out of exports so the package build stays green.
+core: **172 type errors** remain, of which **74 are `TS2307`** missing-module
+errors across **15 un-extracted sibling root clusters** —
+`auto-reply/*` (32 refs: `reply/{history,inbound-context,mentions,reply-dispatcher,
+provider-dispatcher,reply-reference}`, `commands-registry`, `dispatch`,
+`command-detection`, `envelope`, `inbound-debounce`, `skill-commands`, `chunk`,
+`types`), `channels/*` (15 refs), `config/{commands,sessions,markdown-tables}`,
+`gateway/{client,protocol}`, `pairing/{pairing-store,pairing-messages}`,
+`security/channel-metadata`, `web/media`, `polls`, `markdown/tables`,
+`agents/identity`, `infra/exec-approvals`, `utils*`, `logger`/`logging`. The
+remaining 98 errors (`TS2339`/`TS7006`/`TS2305`/…) are all downstream noise in
+discord's own `monitor/*` files caused by those unresolved imports and clear once
+the clusters are extracted. This is the entire OpenClaw agent reply pipeline, not
+a minimal leaf — so `./discord` stays out of exports and the package build stays
+green.
 
-Verify: `npx tsc --noEmit` (clean) -> `vitest run` (13 gating + 8 dispatch tests
-pass) -> `tsup` (ESM + CJS + d.ts for the foundation + 7 adapter subpaths).
+Verify: `npx tsc --noEmit` (0 errors) -> `vitest run` (51 tests: 21 gating +
+dispatch foundation, 16 default-gate-policy, 14 per-channel end-to-end dispatch)
+-> `tsup` (ESM + CJS + d.ts for the foundation + 7 adapter subpaths).
 
 ## Raw reference source (NOT compiled by this package)
 
