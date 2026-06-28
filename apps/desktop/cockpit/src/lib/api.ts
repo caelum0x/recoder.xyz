@@ -16,6 +16,7 @@
  *   GET  /substrates                      substrate availability strip
  *   POST /reconcile                       reconcile persisted state vs substrate
  *   GET  /health                          conductor availability
+ *   GET  /health/full                     unified health (substrate+runtimes+resources+tails)
  *   GET  /sessions                        live tmux+worktree agent sessions
  *   POST /sessions                        start an interactive tmux session
  *   GET  /sessions/:id/output             capture the tmux pane output
@@ -33,6 +34,7 @@
  */
 import type {
   ApiEnvelope,
+  ConductorHealth,
   ConductorSession,
   ConnectorsHealth,
   CreatePrResult,
@@ -59,10 +61,21 @@ import { readConfig } from './config';
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  /**
+   * The `data` payload the backend attached to a non-ok envelope, when present.
+   * Some control-plane rejections are *structured*, not just a message: the
+   * conductor PR/merge delivery gate returns a 409 with
+   * `{ success:false, error, data:{ state, action, approvalId, transitioned } }`
+   * (conductor.routes.ts). Carrying that `data` here lets the Governance panel
+   * surface the real awaiting_approval verdict instead of only the message —
+   * without inventing a route or faking the gate.
+   */
+  readonly data?: unknown;
+  constructor(message: string, status: number, data?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -72,8 +85,8 @@ export class ApiError extends Error {
  * a real "Sign in" panel instead of a misleading "backend unreachable" banner.
  */
 export class UnauthorizedError extends ApiError {
-  constructor(message: string, status: number) {
-    super(message, status);
+  constructor(message: string, status: number, data?: unknown) {
+    super(message, status, data);
     this.name = 'UnauthorizedError';
   }
 }
@@ -134,12 +147,16 @@ async function requestAt<T>(base: string, method: string, path: string, body?: u
     const message =
       (envelope && envelope.error) ||
       `${method} ${path} failed with status ${res.status}`;
+    // Preserve any structured `data` the backend attached to the rejection (e.g.
+    // the delivery gate's awaiting_approval verdict on a 409). It is genuinely
+    // part of a failed envelope, so it rides on the thrown error, not the value.
+    const data = envelope && 'data' in envelope ? envelope.data : undefined;
     // 401/403 means the backend is reachable but the request is unauthenticated.
     // Surface this distinctly so the cockpit prompts a real sign-in.
     if (res.status === 401 || res.status === 403) {
-      throw new UnauthorizedError(message, res.status);
+      throw new UnauthorizedError(message, res.status, data);
     }
-    throw new ApiError(message, res.status);
+    throw new ApiError(message, res.status, data);
   }
 
   if (envelope && 'data' in envelope) {
@@ -165,6 +182,8 @@ export const api = {
       'GET',
       '/health',
     ),
+  /** Unified conductor health: substrate + runtimes + resources + tails + workspaces. */
+  healthFull: () => request<ConductorHealth>('GET', '/health/full'),
   listWorkspaces: () => request<Workspace[]>('GET', '/workspaces'),
   getWorkspace: (id: string) => request<Workspace>('GET', `/workspaces/${encodeURIComponent(id)}`),
   createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/workspaces', body),

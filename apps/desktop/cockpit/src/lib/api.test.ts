@@ -98,6 +98,24 @@ describe('api request classification', () => {
     expect(err).not.toBeInstanceOf(UnauthorizedError);
     expect(err.message).toBe('logical failure');
   });
+
+  it('carries the structured `data` from a 409 rejection on the thrown ApiError (delivery gate)', async () => {
+    const gate = { state: 'awaiting_approval', action: 'merge', approvalId: 'appr_1', transitioned: true };
+    mockFetch(() =>
+      makeResponse({ status: 409, ok: false, body: { success: false, error: 'no approved merge approval', data: gate } }),
+    );
+    const err = await api.merge('w1', { strategy: 'squash' }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(409);
+    expect(err.data).toEqual(gate);
+  });
+
+  it('leaves ApiError.data undefined when the rejection envelope has no data', async () => {
+    mockFetch(() => makeResponse({ status: 500, ok: false, body: { success: false, error: 'boom' } }));
+    const err = await api.listWorkspaces().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.data).toBeUndefined();
+  });
 });
 
 describe('api envelope unwrap', () => {
@@ -126,6 +144,12 @@ describe('api URL construction', () => {
     mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: [] } }));
     await api.listWorkspaces();
     expect(lastUrl).toBe(`${BACKEND_URL}/api/conductor/workspaces`);
+  });
+
+  it('builds the unified health URL as /api/conductor/health/full', async () => {
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: { status: 'healthy' } } }));
+    await api.healthFull();
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/conductor/health/full`);
   });
 
   it('encodes workspace ids and uses the detail path', async () => {

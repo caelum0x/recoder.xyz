@@ -24,7 +24,7 @@ export type WorkspaceState =
   | 'cancelled'
   | 'archived';
 
-export type WorkspaceSubstrate = 'tmux_worktree' | 'daytona';
+export type WorkspaceSubstrate = 'tmux_worktree' | 'daytona' | 'in_process';
 
 export interface Workspace {
   workspaceId: string;
@@ -94,6 +94,77 @@ export interface SubstrateAvailability {
   id: WorkspaceSubstrate;
   available: boolean;
   reason?: string;
+}
+
+/**
+ * GET /health/full — the unified conductor health snapshot.
+ *
+ * Source of truth: docker-backend/src/conductor/conductor-health.ts
+ * (ConductorHealth). This is the single endpoint an operator/monitor checks:
+ * truthful substrate, runtime, resource, tail, and workspace state — never faked.
+ */
+export type ConductorHealthStatus = 'healthy' | 'degraded' | 'unhealthy';
+
+export interface ConductorHealth {
+  status: ConductorHealthStatus;
+  timestamp: string;
+  substrate: {
+    available: boolean;
+    git: boolean;
+    tmux: boolean;
+    tmuxBin: string;
+    reason?: string;
+  };
+  runtimes: RuntimeAvailability[];
+  resources: {
+    limits: {
+      maxConcurrentWorkspaces: number;
+      maxConcurrentPerUser: number;
+      maxTmuxSessions: number;
+      minFreeDiskGb: number;
+      maxWorktreeDiskGb: number;
+    };
+    current: {
+      projectWorkspaces: number;
+      userWorkspaces: number;
+      tmuxSessions: number;
+      freeDiskGb: number;
+    };
+  };
+  activeTails: number;
+  dmux: {
+    available: boolean;
+    bin: string;
+    vendored: boolean;
+    reason?: string;
+  };
+  workspaces: {
+    total: number;
+    active: number;
+    byState: Record<string, number>;
+  };
+}
+
+/**
+ * The structured `data` the conductor PR/merge delivery gate attaches to a 409
+ * when an action is blocked awaiting approval.
+ *
+ * Source of truth: docker-backend/src/conductor/conductor.routes.ts (the
+ * `DeliveryApprovalRequiredError` 409 handler) which serializes
+ * `{ state, action, approvalId, transitioned }`. The human-readable gate reason
+ * is the envelope `error` message (carried separately on the thrown ApiError).
+ */
+export type DeliveryGateAction = 'pr' | 'merge' | 'pr.create' | 'branch.push';
+
+export interface DeliveryGateDetail {
+  /** Always 'awaiting_approval' for the gate; the workspace's resulting state. */
+  state: string;
+  /** The delivery action that was gated. */
+  action: DeliveryGateAction | string;
+  /** The pending/blocking Approval record id, when the gate found one. */
+  approvalId?: string;
+  /** Whether the workspace record was actually moved to awaiting_approval. */
+  transitioned?: boolean;
 }
 
 /** POST /workspaces request body (conductor.routes.ts handler). */

@@ -41,7 +41,16 @@ declare global {
 }
 
 /** The discoverable cockpit surfaces a deep link / launcher can target. */
-export type CockpitView = 'board' | 'sessions' | 'dmux' | 'connectors' | 'policy' | 'memory';
+export type CockpitView =
+  | 'board'
+  | 'sessions'
+  | 'dmux'
+  | 'connectors'
+  | 'policy'
+  | 'memory'
+  | 'substrates'
+  | 'events'
+  | 'governance';
 
 const COCKPIT_VIEWS: readonly CockpitView[] = [
   'board',
@@ -50,6 +59,9 @@ const COCKPIT_VIEWS: readonly CockpitView[] = [
   'connectors',
   'policy',
   'memory',
+  'substrates',
+  'events',
+  'governance',
 ];
 
 /** Custom DOM event the shell dispatches to navigate the live cockpit. */
