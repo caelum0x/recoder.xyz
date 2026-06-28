@@ -23,6 +23,7 @@ import {
 import type { AgentProfile, PolicyDecision, TaskSpec } from '@recoder/agent-os';
 import type { McpServerRegistration, McpToolAuditEvent } from '@recoder/agent-mcp';
 import { agentOsContainer } from '../service-container';
+import { getInteropHostBundle, type InteropHostBundle } from '../mcp/interop-host';
 
 const defaultServers = [
   tasksMcpServer,
@@ -57,6 +58,13 @@ export type AgentMcpRouterOptions = {
   recordPolicyDecision?: (decision: PolicyDecision) => Promise<void> | void;
   /** Injectable for tests. Defaults to the live code-graph service. */
   codeGraph?: CodeGraphServerProvider;
+  /**
+   * Injectable for tests. The @recoder/interop MCP host bundle that backs the
+   * gated `/tools/:serverId/:toolName/call` route and `/external` PAL surface.
+   * Defaults to the process-wide shared bundle. Lazily resolved so existing
+   * routes keep working even if interop host construction is deferred.
+   */
+  interopBundle?: InteropHostBundle | (() => InteropHostBundle);
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -66,6 +74,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function createAgentMcpRouter(options: AgentMcpRouterOptions = {}): Router {
   const router = Router();
   const codeGraph: CodeGraphServerProvider = options.codeGraph ?? agentOsContainer.codeGraph;
+
+  /**
+   * Lazily resolve the interop MCP host bundle. Resolving is deferred until a
+   * route that actually needs it is hit, so the existing (non-interop) routes
+   * never depend on interop host construction succeeding.
+   */
+  let resolvedBundle: InteropHostBundle | null = null;
+  function interopBundle(): InteropHostBundle {
+    if (resolvedBundle) return resolvedBundle;
+    const provided = options.interopBundle;
+    resolvedBundle =
+      typeof provided === 'function'
+        ? provided()
+        : provided ?? getInteropHostBundle();
+    return resolvedBundle;
+  }
 
   /**
    * Effective server list exposed to agents. The recodergit code-graph server is
@@ -197,6 +221,118 @@ export function createAgentMcpRouter(options: AgentMcpRouterOptions = {}): Route
 
   router.get('/sessions', (_req, res) => {
     res.json({ success: true, data: [] });
+  });
+
+  /**
+   * Truthful status of the supervised EXTERNAL MCP servers (currently the real
+   * Python `py/pal-mcp-server`). Surfaces on-disk availability, the resolved
+   * launch config, and live supervisor health — degrade-safe: an absent python
+   * venv yields `available:false` with a reason, never a faked "ready".
+   */
+  router.get('/external', (_req, res) => {
+    let bundle: InteropHostBundle;
+    try {
+      bundle = interopBundle();
+    } catch (error) {
+      res.status(503).json({
+        success: false,
+        error: `Interop MCP host unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      return;
+    }
+    const pal = bundle.palStatus();
+    res.json({
+      success: true,
+      data: {
+        servers: [
+          {
+            serverId: pal.serverId,
+            displayName: pal.config.displayName,
+            command: pal.config.command,
+            args: pal.config.args,
+            cwd: pal.config.cwd,
+            toolNames: pal.config.toolNames,
+            available: pal.available,
+            reason: pal.reason,
+            pythonPath: pal.pythonPath,
+            serverEntry: pal.serverEntry,
+            health: pal.health,
+          },
+        ],
+      },
+    });
+  });
+
+  /**
+   * Execute a tool through the @recoder/interop MCP host: AUTHORIZE → RISK →
+   * EXECUTE → AUDIT. HOSTILE-BY-DEFAULT: the call is denied before the executor
+   * is ever touched unless the actor's policy + the registered server allowlist
+   * permit it. EVERY outcome (denied, needs_approval, completed, failed) is
+   * audited. This is additive to the pure `/check` route above.
+   */
+  router.post('/tools/:serverId/:toolName/call', async (req, res) => {
+    if (!isRecord(req.body?.actor)) {
+      res.status(400).json({ success: false, error: 'actor AgentProfile is required' });
+      return;
+    }
+
+    let bundle: InteropHostBundle;
+    try {
+      bundle = interopBundle();
+    } catch (error) {
+      res.status(503).json({
+        success: false,
+        error: `Interop MCP host unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      return;
+    }
+
+    const server = bundle.getServer(req.params.serverId);
+    if (!server) {
+      res.status(404).json({ success: false, error: `MCP server not found: ${req.params.serverId}` });
+      return;
+    }
+
+    const input = {
+      server,
+      toolName: req.params.toolName,
+      actor: req.body.actor as AgentProfile,
+      task: isRecord(req.body?.task) ? (req.body.task as TaskSpec) : undefined,
+      args: isRecord(req.body?.args) ? req.body.args : {},
+    };
+
+    const outcome = await bundle.call(input);
+
+    if (outcome.audit) {
+      await options.recordAuditEvent?.(outcome.audit);
+    }
+    if (outcome.decision.policyDecision) {
+      await options.recordPolicyDecision?.(outcome.decision.policyDecision);
+    }
+
+    const statusCode =
+      outcome.status === 'completed'
+        ? 200
+        : outcome.status === 'needs_approval'
+          ? 202
+          : outcome.status === 'denied'
+            ? 403
+            : 502;
+
+    res.status(statusCode).json({
+      success: outcome.status === 'completed',
+      data: {
+        status: outcome.status,
+        allowed: outcome.decision.allowed,
+        requiresApproval: outcome.decision.requiresApproval ?? false,
+        reason: outcome.decision.reason,
+        risk: outcome.risk,
+        result: outcome.status === 'completed' ? outcome.result : undefined,
+        error: outcome.status !== 'completed' && 'reason' in outcome ? outcome.reason : undefined,
+        policyDecision: outcome.decision.policyDecision,
+        audit: outcome.audit,
+      },
+    });
   });
 
   return router;
