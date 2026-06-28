@@ -1,0 +1,90 @@
+# Recoder self-host Envoy bootstrap config (static, hand-rendered).
+#
+# The Recoder backend's network module can emit an Envoy config at runtime
+# (GET /api/network/envoy-config). For a cold one-command bring-up there is no
+# backend running yet to ask, so this static config is the real, valid fallback
+# the `envoy` service mounts and runs immediately. Once the stack is up you can
+# regenerate it from the live backend:
+#
+#   curl -fsS -H "X-Internal-Service-Key: $INTERNAL_SERVICE_KEY" \
+#     http://localhost:3100/api/network/envoy-config \
+#     -o deploy/envoy/envoy.selfhost.yaml   # if/when the route is available
+#   docker compose -f docker-compose.selfhost.yml restart envoy
+#
+# This config is intentionally minimal and correct: an L7 HTTP listener on :8080
+# that proxies to the docker-backend control plane (service name `backend`,
+# port 3100) with health checks and access logging, plus the Envoy admin
+# interface on :9901. It validates with `envoy --mode validate`.
+#
+# No secrets are embedded. The upstream is reached over the compose network by
+# the service DNS name `backend`.
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 9901
+
+static_resources:
+  listeners:
+    - name: recoder_http
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 8080
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: recoder_ingress
+                codec_type: AUTO
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: recoder_routes
+                  virtual_hosts:
+                    - name: recoder_backend
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: recoder_backend
+                            timeout: 60s
+                http_filters:
+                  - name: envoy.filters.http.health_check
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.health_check.v3.HealthCheck
+                      pass_through_mode: false
+                      headers:
+                        - name: ":path"
+                          string_match:
+                            exact: "/healthz"
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: recoder_backend
+      type: STRICT_DNS
+      connect_timeout: 5s
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: recoder_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: backend
+                      port_value: 3100
+      health_checks:
+        - timeout: 5s
+          interval: 15s
+          unhealthy_threshold: 3
+          healthy_threshold: 1
+          http_health_check:
+            path: "/health"

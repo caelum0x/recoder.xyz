@@ -1,0 +1,165 @@
+# Recoder one-command self-host stack.
+#
+# Master plan wave 6: "single-command self-hosted Recoder (compose + daemon)".
+#
+# Brings up the full control plane and its data dependencies:
+#   backend   the Recoder control plane (docker-backend, port 3100, built from
+#             its Dockerfile — includes the substrate stage that bakes the pinned
+#             tmux + bd binaries the Conductor drives)
+#   postgres  postgres:17 with an init that creates recoder_main / recoder_backend
+#             / recoder_pm
+#   redis     redis:7 (sessions, A2A bus)
+#   qdrant    vector store (mem0 / embeddings)
+#   envoy     L7 edge proxy consuming the generated/static Envoy config
+#
+# Bring it up with `scripts/selfhost-up.sh` (validates env, generates safe
+# secrets, waits for health). Never put real secrets in this file or in
+# .env.selfhost.example — the up-script and your own .env.selfhost carry them.
+#
+# IMPORTANT build context: the backend image is built with the REPO ROOT as
+# context (`context: .`) because docker-backend/Dockerfile copies sibling paths
+# (packages/, shared/, pi-mono-dist/, c/, go/, scripts/) and the prebuilt
+# docker-backend/dist/server.js. See deploy/README.md for the prerequisites.
+
+name: recoder-selfhost
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17
+    <<: *restart
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: recoder_main
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    healthcheck:
+      # Wait for ALL three databases, not just the default, so dependents only
+      # start once the init script has finished creating them.
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U $${POSTGRES_USER} -d recoder_main && pg_isready -U $${POSTGRES_USER} -d recoder_backend && pg_isready -U $${POSTGRES_USER} -d recoder_pm"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7
+    <<: *restart
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    <<: *restart
+    volumes:
+      - qdrantdata:/qdrant/storage
+    healthcheck:
+      # Qdrant's readiness probe; the image ships a TCP listener on 6333.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo -e 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | head -1 | grep -q '200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker-backend/Dockerfile
+    image: recoder/docker-backend:selfhost
+    <<: *restart
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-3100}:3100"
+    volumes:
+      # The Conductor manages sibling containers (agent sandboxes) via the host
+      # Docker socket. Mounted read-write because it must create/stop containers.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - backenddata:/app/docker-backend/data
+    environment:
+      NODE_ENV: production
+      PORT: "3100"
+      # --- Datastores (compose-internal DNS names) ---
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_backend"
+      AGENT_OS_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_backend"
+      AUTH_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_main"
+      PM_DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/recoder_pm"
+      REDIS_URL: "redis://redis:6379"
+      QDRANT_URL: "http://qdrant:6333"
+      # --- Control-plane identity / governance (required) ---
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required}
+      RECODER_GOVERNANCE_SIGNING_KEY: ${RECODER_GOVERNANCE_SIGNING_KEY:?RECODER_GOVERNANCE_SIGNING_KEY is required}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      # --- Billing (Polar) — optional; degrades safe when unset ---
+      POLAR_ACCESS_TOKEN: ${POLAR_ACCESS_TOKEN:-}
+      POLAR_ORGANIZATION_ID: ${POLAR_ORGANIZATION_ID:-}
+      POLAR_WEBHOOK_SECRET: ${POLAR_WEBHOOK_SECRET:-}
+      POLAR_SERVER: ${POLAR_SERVER:-production}
+      # --- Agent sandboxes (Daytona) — optional; degrades safe when unset ---
+      DAYTONA_API_KEY: ${DAYTONA_API_KEY:-}
+      DAYTONA_API_URL: ${DAYTONA_API_URL:-}
+      DAYTONA_ORGANIZATION_ID: ${DAYTONA_ORGANIZATION_ID:-}
+      DAYTONA_TARGET: ${DAYTONA_TARGET:-}
+      USE_DAYTONA_CONTAINERS: ${USE_DAYTONA_CONTAINERS:-false}
+      # --- Model providers (BYOK) — optional ---
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  envoy:
+    image: envoyproxy/envoy:v1.31-latest
+    <<: *restart
+    depends_on:
+      backend:
+        condition: service_healthy
+    command:
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+      - "--service-cluster"
+      - "recoder-selfhost"
+    ports:
+      - "${EDGE_HTTP_PORT:-8080}:8080"
+      - "${ENVOY_ADMIN_PORT:-9901}:9901"
+    volumes:
+      - ./deploy/envoy/envoy.selfhost.yaml:/etc/envoy/envoy.yaml:ro
+    healthcheck:
+      # Envoy admin /ready returns 200 LIVE once the listeners are warmed.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9901 && echo -e 'GET /ready HTTP/1.0\\r\\n\\r\\n' >&3 && cat <&3 | grep -q LIVE"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+volumes:
+  pgdata:
+  redisdata:
+  qdrantdata:
+  backenddata:
+
+networks:
+  default:
+    name: recoder-selfhost
