@@ -4,6 +4,7 @@ import { agentOsContainer } from '../service-container';
 import { createCodeGraphUserRouter } from './code-graph-user.routes';
 import { createPolicyEvaluateRouter } from './policy-evaluate.routes';
 import { createMemoryCandidateRouter } from './memory-candidate.routes';
+import { createBrainStatsRouter } from './brain-stats.routes';
 
 export function createAgentOsRouter(): Router {
   const router = Router();
@@ -31,6 +32,12 @@ export function createAgentOsRouter(): Router {
   // strictly additive and never shadows the existing /memory/candidates routes
   // registered below.
   router.use('/memory/lifecycle', createMemoryCandidateRouter(agentOsContainer.repository));
+
+  // Surface the live @recoder/brain cache accounting + @recoder/governance audit
+  // integrity (GET /api/agent-os/brain/stats). Read-only and degrade-safe; reads
+  // the SAME shared Brain instance the conductor bundle assembles into so the
+  // "tokens saved by the shared brain" metric is real, not a throwaway snapshot.
+  router.use('/brain', createBrainStatsRouter());
 
   router.get('/health', controller.health);
   router.get('/summary', controller.summary);

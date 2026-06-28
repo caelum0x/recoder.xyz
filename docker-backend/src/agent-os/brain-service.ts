@@ -20,8 +20,10 @@ import {
   createContinuumActivity,
   createMem0Memory,
   createRepoIntelAuto,
+  runCacheDoctor,
   type Brain,
   type BrainContext,
+  type CacheReport,
 } from '@recoder/brain';
 
 const BRAIN_FLAG_ENV = 'RECODER_BRAIN_ENABLED';
@@ -36,6 +38,27 @@ export interface BrainAssembleInput {
 
 export interface BrainServiceLogger {
   error: (message: string, error: unknown) => void;
+}
+
+/**
+ * Truthful projection of the shared Brain's headline value metric — the
+ * assemble-once cache accounting (hits/misses/hitRate/tokensSaved) plus the
+ * human-readable cache-doctor summary.
+ *
+ * `enabled` reflects the RECODER_BRAIN_ENABLED gate. `report` carries the live
+ * {@link CacheReport} from `Brain.cacheStats()` projected through
+ * `runCacheDoctor()`. It is null ONLY when the brain is disabled or its stats
+ * could not be read (fail-safe) — never a fabricated zeroed "all good".
+ */
+export interface BrainCacheStatus {
+  /** True when RECODER_BRAIN_ENABLED is truthy. */
+  readonly enabled: boolean;
+  /**
+   * The live cache report, or null when disabled / unreadable. When non-null,
+   * `report.available` is false until the brain has been read at least once —
+   * that is honest ("nothing reported yet"), distinct from a fake 0-saved green.
+   */
+  readonly report: CacheReport | null;
 }
 
 export interface BrainServiceDeps {
@@ -105,6 +128,35 @@ export class BrainService {
     } catch (error: unknown) {
       this.logger.error('[brain-service] assembleForTask failed (degrading to null)', error);
       return null;
+    }
+  }
+
+  /**
+   * Surface the live, shared Brain's cache accounting — the headline
+   * "X tokens saved by the shared brain" metric — for the control plane to
+   * REPORT. Reads the SAME Brain instance used by assembleForTask() (and thus by
+   * the conductor bundle), so the numbers are real, not a throwaway snapshot.
+   *
+   * Degrade-safe and truthful:
+   * - Flag OFF  -> { enabled: false, report: null } (no brain constructed).
+   * - Flag ON   -> projects `brain.cacheStats()` through runCacheDoctor(). If the
+   *                brain has never been read, `report.available` is false (honest
+   *                "nothing reported yet"), NOT a fabricated zeroed success.
+   * - On any error reading stats -> { enabled: true, report: null } (logged),
+   *                never throws into the request path.
+   */
+  cacheReport(): BrainCacheStatus {
+    if (!this.isEnabled()) {
+      return { enabled: false, report: null };
+    }
+
+    try {
+      const brain = this.getBrain();
+      const report = runCacheDoctor(brain.cacheStats());
+      return { enabled: true, report };
+    } catch (error: unknown) {
+      this.logger.error('[brain-service] cacheReport failed (degrading to null)', error);
+      return { enabled: true, report: null };
     }
   }
 
