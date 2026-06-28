@@ -17,6 +17,7 @@
     "social-gateways/imessage/adapter/**/*.ts",
     "social-gateways/whatsapp/adapter/**/*.ts",
     "social-gateways/line/connector/**/*.ts",
+    "social-gateways/discord/connector/**/*.ts",
     "social-gateways/feishu/connector-index.ts",
     "social-gateways/feishu/connector.ts",
     "social-gateways/feishu/normalize.ts",

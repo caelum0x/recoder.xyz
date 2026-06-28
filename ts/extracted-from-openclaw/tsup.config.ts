@@ -11,18 +11,20 @@ import { defineConfig } from "tsup";
 //
 // Entries 2..n — the TYPECHECK-CLEAN per-channel adapters, each shipped as its
 // own subpath (`@recoder/connectors/telegram`, `/slack`, `/signal`, `/imessage`,
-// `/whatsapp`, `/line`, `/feishu`). They are separate entry points (not folded
-// into the foundation) so a consumer only pulls an adapter — and its optional
-// channel SDK — when they import that subpath.
+// `/whatsapp`, `/line`, `/feishu`, `/discord`). They are separate entry points
+// (not folded into the foundation) so a consumer only pulls an adapter — and its
+// optional channel SDK — when they import that subpath.
 //
-// The Discord adapter is still NOT an entry: its foundation-facing normalize
-// surface + the extracted infra leaf cluster (../infra/{retry,retry-policy,
-// errors,channel-activity,sleep}) now typecheck clean, but the full
-// connector-port.ts dispatch pipeline still imports the un-extracted OpenClaw bot
-// core (auto-reply/*, gateway/*, channels/*, pairing/*, security/*, web/media,
-// polls, markdown/*), so `./discord` stays out of exports until that surface is
-// extracted. The raw-extracted gateway-core/, the rest of social-gateways/, and
-// agents/ are reference source and are NOT entry points.
+// The Discord adapter is now an entry too: its `connector/` slice is a real,
+// self-contained ConnectorPort implementation that speaks the Discord REST v10
+// wire surface over `fetch` and composes its own normalize / send / chunk /
+// accounts. It imports NOTHING from the un-extracted OpenClaw bot core
+// (auto-reply/*, gateway/*, channels/*, pairing/*, security/*, web/media, polls,
+// markdown/*, config/*, routing/*) — the legacy bot-core-coupled siblings
+// (../send.ts, ../normalize.ts, ../targets.ts, ../accounts.ts, ../token.ts,
+// ../chunk.ts) are left untouched as reference source and are NOT entry points.
+// The raw-extracted gateway-core/, the rest of social-gateways/, and agents/ are
+// reference source and are NOT entry points.
 export default defineConfig({
   entry: {
     index: "src/index.ts",
@@ -33,6 +35,7 @@ export default defineConfig({
     whatsapp: "social-gateways/whatsapp/adapter/index.ts",
     line: "social-gateways/line/connector/index.ts",
     feishu: "social-gateways/feishu/connector-index.ts",
+    discord: "social-gateways/discord/connector/index.ts",
   },
   format: ["esm", "cjs"],
   // The package ships multiple entry roots (foundation + 5 adapters); declaration
