@@ -23,6 +23,9 @@ import { DmuxPanel } from './components/DmuxPanel';
 import { ConnectorsPanel } from './components/ConnectorsPanel';
 import { PolicyPanel } from './components/PolicyPanel';
 import { MemoryCandidatesPanel } from './components/MemoryCandidatesPanel';
+import { SubstratesPanel } from './components/SubstratesPanel';
+import { LiveEventsView } from './components/LiveEventsView';
+import { GovernancePanel } from './components/GovernancePanel';
 import { SignIn } from './components/SignIn';
 
 const WORKSPACE_POLL_MS = 2000;
@@ -61,7 +64,10 @@ export function App() {
         target === 'dmux' ||
         target === 'connectors' ||
         target === 'policy' ||
-        target === 'memory'
+        target === 'memory' ||
+        target === 'substrates' ||
+        target === 'events' ||
+        target === 'governance'
       ) {
         setView(target);
       }
@@ -107,6 +113,9 @@ export function App() {
           <button class={view === 'sessions' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('sessions')}>Sessions</button>
           <button class={view === 'dmux' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('dmux')}>dmux</button>
           <button class={view === 'connectors' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('connectors')}>Connectors</button>
+          <button class={view === 'substrates' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('substrates')}>Substrates</button>
+          <button class={view === 'events' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('events')}>Live Events</button>
+          <button class={view === 'governance' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('governance')}>Governance</button>
           <button class={view === 'policy' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('policy')}>Policy</button>
           <button class={view === 'memory' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('memory')}>Memory</button>
         </nav>
@@ -177,6 +186,18 @@ export function App() {
       ) : view === 'connectors' ? (
         <main class="main">
           <ConnectorsPanel />
+        </main>
+      ) : view === 'substrates' ? (
+        <main class="main">
+          <SubstratesPanel />
+        </main>
+      ) : view === 'events' ? (
+        <main class="main">
+          <LiveEventsView />
+        </main>
+      ) : view === 'governance' ? (
+        <main class="main">
+          <GovernancePanel />
         </main>
       ) : view === 'policy' ? (
         <main class="main">
