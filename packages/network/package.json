@@ -1,0 +1,52 @@
+{
+  "name": "@recoder/network",
+  "version": "0.1.0",
+  "description": "Recoder network subsystem — the Envoy control plane. Pure, dependency-free Envoy v3 bootstrap config generation, the ext_authz allow/deny decision logic (default-deny, hostile-by-default), and the XDR access-log -> security-event -> detection pipeline. IO (the ext_authz HTTP handler, route mounting) and the concrete governance-backed ports (policy engine, Merkle audit sink) live in the adopting service as thin adapters.",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "vitest run",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "@recoder/agent-os": "workspace:*",
+    "@recoder/governance": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.9"
+  },
+  "keywords": [
+    "recoder",
+    "network",
+    "envoy",
+    "control-plane",
+    "ext-authz",
+    "xdr",
+    "zero-trust"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ArhansGit/recoder.xyz.git",
+    "directory": "packages/network"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

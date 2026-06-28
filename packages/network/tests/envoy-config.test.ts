@@ -5,8 +5,8 @@ import {
   emitYaml,
   defaultNetworkConfig,
   ACCESS_LOG_JSON_FORMAT,
-} from './envoy-config';
-import type { NetworkConfig } from './types';
+} from '../src/envoy-config';
+import type { NetworkConfig } from '../src/types';
 
 function findDeep(obj: unknown, predicate: (node: Record<string, unknown>) => boolean): Record<string, unknown> | null {
   if (Array.isArray(obj)) {

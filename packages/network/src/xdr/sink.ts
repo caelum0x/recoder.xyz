@@ -1,20 +1,23 @@
 /**
  * xdr/sink.ts — the access-log -> SECURITY EVENT -> DETECTION pipeline, sealed
- * into the governance Merkle audit chain.
+ * into a tamper-evident audit chain.
  *
  * Flow:
  *   raw access-log buffer
  *     -> parseAccessLog (parser.ts)        : NetworkSecurityEvent[]
  *     -> detect (detections.ts)            : XdrDetection[]
- *     -> InMemoryAuditStore.record(...)    : seal each detection (SHA-256 chain)
+ *     -> AuditSinkPort.record(...)         : seal each detection (SHA-256 chain)
  *     -> in-memory detection store         : queryable recent detections
  *
- * The audit store is the REAL @recoder/governance InMemoryAuditStore — every
- * sealed detection advances the Merkle tip, so the detection feed is
- * tamper-evident. The sink is the single owner of network XDR state.
+ * The audit sink is injected as an AuditSinkPort (see ports.ts). In production it
+ * is the REAL @recoder/governance `InMemoryAuditStore` — every sealed detection
+ * advances the Merkle tip, so the detection feed is tamper-evident. The package
+ * never constructs the governance store itself: that concrete wiring (and the
+ * process-wide singleton) lives in the adopting service.
  */
-import { InMemoryAuditStore, type AuditInput } from '@recoder/governance';
+import type { AuditInput } from '@recoder/governance';
 import type { NetworkSecurityEvent, XdrDetection } from '../types';
+import type { AuditSinkPort, AuditChainIntegrity } from '../ports';
 import { parseAccessLog } from './parser';
 import { detect, DEFAULT_DETECTION_CONFIG, type DetectionConfig } from './detections';
 
@@ -38,17 +41,25 @@ function auditOutcomeFor(detection: XdrDetection): AuditInput['outcome'] {
 }
 
 export class XdrSink {
-  private readonly audit: InMemoryAuditStore;
+  private readonly audit: AuditSinkPort;
   private readonly detections: XdrDetection[] = [];
   private readonly maxRetained: number;
   private readonly config: DetectionConfig;
 
-  constructor(options?: {
-    auditStore?: InMemoryAuditStore;
-    maxRetained?: number;
-    config?: DetectionConfig;
-  }) {
-    this.audit = options?.auditStore ?? new InMemoryAuditStore();
+  /**
+   * @param audit   The audit sink port. REQUIRED — the package does not
+   *                construct a governance store; the adopting service injects the
+   *                real `@recoder/governance` `InMemoryAuditStore` here.
+   * @param options Retention + detection tuning.
+   */
+  constructor(
+    audit: AuditSinkPort,
+    options?: {
+      maxRetained?: number;
+      config?: DetectionConfig;
+    },
+  ) {
+    this.audit = audit;
     this.maxRetained = options?.maxRetained ?? 1000;
     this.config = options?.config ?? DEFAULT_DETECTION_CONFIG;
   }
@@ -121,7 +132,7 @@ export class XdrSink {
   }
 
   /** Verify the audit chain backing the detection feed is intact. */
-  verifyChain(): ReturnType<InMemoryAuditStore['verify']> {
+  verifyChain(): AuditChainIntegrity {
     return this.audit.verify();
   }
 
@@ -129,19 +140,4 @@ export class XdrSink {
   auditTip(): string {
     return this.audit.tipHash();
   }
-}
-
-/** Process-wide singleton sink for the network XDR feed. */
-let sharedSink: XdrSink | null = null;
-
-export function getXdrSink(): XdrSink {
-  if (sharedSink === null) {
-    sharedSink = new XdrSink();
-  }
-  return sharedSink;
-}
-
-/** Reset the shared sink (tests only). */
-export function __resetXdrSinkForTests(): void {
-  sharedSink = null;
 }

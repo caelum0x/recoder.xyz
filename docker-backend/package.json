@@ -40,6 +40,7 @@
     "@recoder/coordination": "workspace:*",
     "@recoder/distribution": "workspace:*",
     "@recoder/governance": "workspace:*",
+    "@recoder/network": "workspace:*",
     "@recoder/oss-registry": "workspace:*",
     "@recoder/runtime": "workspace:*",
     "@recoder/recodergit": "workspace:*",
