@@ -3,7 +3,8 @@
  * type used by the Postgres adapters. It is NOT a mock of the store: it is a
  * real (if minimal) SQL engine that backs the *exact* statements the adapters
  * emit (the lock upsert, the scope MAX(fence_token) read, the fence-sequence
- * upsert, list/get/delete), enforces the `UNIQUE (space_id, repo, path_glob)`
+ * upsert, the task-claim FOR UPDATE read + upsert + renew + release + list,
+ * list/get/delete), enforces the `UNIQUE (space_id, repo, path_glob)`
  * constraint, and implements BEGIN/COMMIT/ROLLBACK with snapshot isolation so
  * the CAS transaction logic is exercised for real.
  *
@@ -19,6 +20,7 @@ import type {
 } from '../../../src/persistence/postgres/pg-pool';
 import {
   FENCE_SEQUENCES_TABLE,
+  TASK_CLAIMS_TABLE,
   WORK_LOCKS_TABLE,
 } from '../../../src/persistence/postgres/schema';
 
@@ -40,15 +42,30 @@ interface FenceRow {
   fence_token: number;
 }
 
-/** The mutable shared state behind the pool — both tables. */
+interface ClaimRow extends PgRow {
+  task_id: string;
+  claim_id: string;
+  space_id: string;
+  agent_id: string;
+  run_id: string | null;
+  status: string;
+  claimed_at: string;
+  lease_until: string;
+  fence_token: number;
+  idempotency_key: string;
+}
+
+/** The mutable shared state behind the pool — all tables. */
 class Store {
   locks: LockRow[] = [];
   fences: FenceRow[] = [];
+  claims: ClaimRow[] = [];
 
   clone(): Store {
     const next = new Store();
     next.locks = this.locks.map((row) => ({ ...row }));
     next.fences = this.fences.map((row) => ({ ...row }));
+    next.claims = this.claims.map((row) => ({ ...row }));
     return next;
   }
 }
@@ -191,6 +208,74 @@ function exec(
     return { rows: [], rowCount: before - store.locks.length };
   }
 
+  // ── coordination_task_claims (PostgresClaimStore) ────────────────────────
+  const CLAIMS = TASK_CLAIMS_TABLE.toUpperCase();
+
+  // compareAndSet — the per-task FOR UPDATE read inside the transaction.
+  if (text.startsWith('SELECT TASK_ID') && text.includes('FOR UPDATE')) {
+    const row = store.claims.find((c) => c.task_id === values[0]);
+    return row ? { rows: [{ ...row }], rowCount: 1 } : { rows: [], rowCount: 0 };
+  }
+
+  // compareAndSet — the claim upsert (ON CONFLICT (task_id)).
+  if (text.startsWith(`INSERT INTO ${CLAIMS}`)) {
+    const candidate: ClaimRow = {
+      task_id: values[0] as string,
+      claim_id: values[1] as string,
+      space_id: values[2] as string,
+      agent_id: values[3] as string,
+      run_id: (values[4] as string | null) ?? null,
+      status: values[5] as string,
+      claimed_at: values[6] as string,
+      lease_until: values[7] as string,
+      fence_token: values[8] as number,
+      idempotency_key: values[9] as string,
+    };
+    const idx = store.claims.findIndex((c) => c.task_id === candidate.task_id);
+    if (idx >= 0) {
+      store.claims[idx] = candidate;
+    } else {
+      store.claims.push(candidate);
+    }
+    return { rows: [{ ...candidate }], rowCount: 1 };
+  }
+
+  // renew — UPDATE ... WHERE claim_id = $1 AND fence_token = $2.
+  if (text.startsWith(`UPDATE ${CLAIMS}`)) {
+    const [claimId, fenceToken, leaseUntil] = values as [string, number, string];
+    const row = store.claims.find(
+      (c) => c.claim_id === claimId && c.fence_token === fenceToken,
+    );
+    if (!row) {
+      return { rows: [], rowCount: 0 };
+    }
+    row.lease_until = leaseUntil;
+    return { rows: [{ ...row }], rowCount: 1 };
+  }
+
+  // release — DELETE FROM coordination_task_claims WHERE claim_id = $1.
+  if (text.startsWith(`DELETE FROM ${CLAIMS}`)) {
+    const claimId = values[0] as string;
+    const before = store.claims.length;
+    store.claims = store.claims.filter((c) => c.claim_id !== claimId);
+    return { rows: [], rowCount: before - store.claims.length };
+  }
+
+  // getByTask / listClaims — SELECT task_id, ... FROM coordination_task_claims.
+  if (text.startsWith('SELECT TASK_ID') && text.includes(CLAIMS)) {
+    if (text.includes('WHERE TASK_ID =')) {
+      const row = store.claims.find((c) => c.task_id === values[0]);
+      return row ? { rows: [{ ...row }], rowCount: 1 } : { rows: [], rowCount: 0 };
+    }
+    if (text.includes('SPACE_ID = ANY($1)')) {
+      const wanted = new Set(values[0] as string[]);
+      const rows = store.claims.filter((c) => wanted.has(c.space_id)).map((c) => ({ ...c }));
+      return { rows, rowCount: rows.length };
+    }
+    const rows = store.claims.map((c) => ({ ...c }));
+    return { rows, rowCount: rows.length };
+  }
+
   // DDL from bootstrapSchema — accepted as no-ops (tables always exist here).
   if (text.startsWith('CREATE TABLE')) {
     return { rows: [], rowCount: 0 };
@@ -256,5 +341,10 @@ export class FakePgPool implements PgPool {
   /** Test helper: current committed lock row count. */
   lockCount(): number {
     return this.store.locks.length;
+  }
+
+  /** Test helper: current committed claim row count. */
+  claimCount(): number {
+    return this.store.claims.length;
   }
 }
