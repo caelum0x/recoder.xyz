@@ -65,6 +65,29 @@ export const governanceConfigSchema = z.object({
 export type GovernanceConfig = z.infer<typeof governanceConfigSchema>;
 export type GovernanceConfigInput = z.input<typeof governanceConfigSchema>;
 
+/**
+ * Env var that points the facade at the Rust governance daemon's UDS. When set
+ * (and non-empty), `decide()/enforceTool()/recordAudit()` try the daemon first
+ * and fall back to the pure-TS deny-biased path on any failure. When unset, the
+ * TS path is the only path (no behavior change vs. the daemon-less build).
+ */
+export const GOVERNANCE_SOCKET_ENV = 'GOVERNANCE_SOCKET';
+
+/**
+ * Resolve the daemon socket path: an explicit `daemonSocketPath` in config wins;
+ * otherwise the `GOVERNANCE_SOCKET` env var is consulted. Returns undefined when
+ * neither is set, which keeps the facade on the pure-TS path by default.
+ */
+export function resolveDaemonSocketPath(
+  config: Pick<GovernanceConfig, 'daemonSocketPath'>,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const explicit = config.daemonSocketPath?.trim();
+  if (explicit) return explicit;
+  const fromEnv = env[GOVERNANCE_SOCKET_ENV]?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
+}
+
 /** Parse + validate a config. Throws GovernanceConfigError on invalid input. */
 export function loadGovernanceConfig(input: GovernanceConfigInput = {}): GovernanceConfig {
   const parsed = governanceConfigSchema.safeParse(input);

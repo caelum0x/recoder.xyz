@@ -6,6 +6,8 @@ export {
   loadGovernanceConfig,
   defaultGovernanceConfig,
   governanceConfigSchema,
+  resolveDaemonSocketPath,
+  GOVERNANCE_SOCKET_ENV,
 } from './governance-config';
 
 // Errors + result envelope
@@ -21,6 +23,9 @@ export * from './routing';
 export * from './approval';
 export * from './enforcement';
 export * from './audit';
+
+// IPC transport to the owned Rust governance daemon (UDS, length-prefixed JSON).
+export * from './ipc';
 
 // Compatibility seam: re-export the upstream @recoder/agent-policy public API for
 // one minor version so existing importers can switch to @recoder/governance.

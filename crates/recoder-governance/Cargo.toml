@@ -7,6 +7,8 @@ members = [
     "recoder-governance-approval",
     "recoder-governance-routing",
     "recoder-governance-kernel",
+    "recoder-governance-ipc",
+    "recoder-governance-daemon",
 ]
 
 [workspace.package]
@@ -19,7 +21,13 @@ repository = "https://github.com/recoder-xyz/recoder.xyz"
 # Disk-aware: the dependency surface is intentionally tiny. The deep governance
 # tier (the owned Rust kernel under the shipped TS facade in packages/governance)
 # only needs hashing, hex, serde, and a thin error type for the audit chain.
-# NO async runtime, NO heavy crates.
+# The kernel + the five domain crates pull NO async runtime, NO heavy crates.
+#
+# The ONLY crates that depend on tokio are the IPC edge (recoder-governance-ipc)
+# and the daemon (recoder-governance-daemon): tokio is used with a minimal
+# feature set (rt-multi-thread, net, io-util, macros, signal, sync) — never
+# "full" — and the wire framing is hand-rolled length-prefixed JSON, so there is
+# still NO CBOR/heavy framing dependency anywhere in the workspace.
 [workspace.dependencies]
 sha2 = "0.10"
 hex = "0.4"
