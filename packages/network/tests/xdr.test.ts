@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parseAccessLog } from './parser';
-import { detect, DEFAULT_DETECTION_CONFIG } from './detections';
-import { XdrSink } from './sink';
-import type { NetworkSecurityEvent } from '../types';
+import { parseAccessLog } from '../src/xdr/parser';
+import { detect, DEFAULT_DETECTION_CONFIG } from '../src/xdr/detections';
+import { XdrSink } from '../src/xdr/sink';
+import type { NetworkSecurityEvent } from '../src/types';
+import { newGovernanceAuditSink } from './governance-ports';
 
 function logLine(over: Partial<Record<string, unknown>>): string {
   return JSON.stringify({
@@ -109,7 +110,7 @@ describe('detect', () => {
 
 describe('XdrSink', () => {
   it('seals detections into the Merkle audit chain and keeps it intact', () => {
-    const sink = new XdrSink();
+    const sink = new XdrSink(newGovernanceAuditSink());
     const raw = Array.from({ length: 6 }, () =>
       logLine({ response_code: 403, response_flags: 'UAEX' }),
     ).join('\n');
@@ -126,7 +127,7 @@ describe('XdrSink', () => {
   });
 
   it('a clean stream produces no detections and an empty (genesis) chain', () => {
-    const sink = new XdrSink();
+    const sink = new XdrSink(newGovernanceAuditSink());
     const raw = Array.from({ length: 10 }, () => logLine({})).join('\n');
     const result = sink.ingest(raw);
     expect(result.detections).toHaveLength(0);
@@ -135,7 +136,7 @@ describe('XdrSink', () => {
   });
 
   it('advances the Merkle tip across ingest batches', () => {
-    const sink = new XdrSink();
+    const sink = new XdrSink(newGovernanceAuditSink());
     const raw = Array.from({ length: 6 }, () =>
       logLine({ response_code: 403, response_flags: 'UAEX' }),
     ).join('\n');

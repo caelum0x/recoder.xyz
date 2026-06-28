@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { decideNetworkAuthz, extractAuthzRequest } from './ext-authz';
-import type { NetworkAuthzRequest } from './types';
+import { decideNetworkAuthz, extractAuthzRequest } from '../src/ext-authz';
+import type { NetworkAuthzRequest } from '../src/types';
+import { governancePolicyAdvisor } from './governance-ports';
 
 const TRUSTED = 'spiffe://recoder.xyz/svc/docker-backend';
+
+/** The real governance engine, injected as the policy advisor port. */
+const advisor = governancePolicyAdvisor;
 
 describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
   const originalEnv = { ...process.env };
@@ -18,7 +22,7 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
 
   it('DENIES an unconfigured deployment (no trust, no public prefixes)', () => {
     const req: NetworkAuthzRequest = { method: 'GET', path: '/recoder-app/', headers: {} };
-    const d = decideNetworkAuthz(req);
+    const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('deny');
     expect(d.status).toBe(403);
   });
@@ -26,14 +30,14 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
   it('DENIES a request with no principal on a non-public path', () => {
     process.env.NETWORK_PUBLIC_PREFIXES = '/recoder-app/';
     const req: NetworkAuthzRequest = { method: 'GET', path: '/docker-backend/secret', headers: {} };
-    const d = decideNetworkAuthz(req);
+    const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('deny');
   });
 
   it('ALLOWS an anonymous request on an explicitly public prefix (read)', () => {
     process.env.NETWORK_PUBLIC_PREFIXES = '/recoder-app/';
     const req: NetworkAuthzRequest = { method: 'GET', path: '/recoder-app/index.html', headers: {} };
-    const d = decideNetworkAuthz(req);
+    const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('allow');
     expect(d.status).toBe(200);
   });
@@ -46,7 +50,7 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
       headers: {},
       principal: 'spiffe://evil/attacker',
     };
-    const d = decideNetworkAuthz(req);
+    const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('deny');
     expect(d.reason).toContain('Unrecognized');
   });
@@ -60,7 +64,7 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
       principal: TRUSTED,
       destination: 'docker-backend',
     };
-    const d = decideNetworkAuthz(req);
+    const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('allow');
     expect(d.status).toBe(200);
   });
@@ -75,21 +79,21 @@ describe('decideNetworkAuthz (default-deny / hostile-by-default)', () => {
       headers: {},
       destination: 'recoder-app',
     };
-    const d = decideNetworkAuthz(req);
+    const d = decideNetworkAuthz(req, advisor);
     expect(d.effect).toBe('deny');
     expect(d.status).toBe(403);
   });
 
   it('DENIES a structurally malformed request', () => {
-    const d = decideNetworkAuthz({ method: '', path: '', headers: {} });
+    const d = decideNetworkAuthz({ method: '', path: '', headers: {} }, advisor);
     expect(d.effect).toBe('deny');
     expect(d.reason).toContain('Malformed');
   });
 
   it('produces a stable decisionId per call', () => {
     const req: NetworkAuthzRequest = { method: 'GET', path: '/x', headers: {} };
-    const a = decideNetworkAuthz(req);
-    const b = decideNetworkAuthz(req);
+    const a = decideNetworkAuthz(req, advisor);
+    const b = decideNetworkAuthz(req, advisor);
     expect(a.decisionId).toMatch(/^netauthz_/);
     expect(a.decisionId).not.toBe(b.decisionId);
   });
