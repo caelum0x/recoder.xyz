@@ -99,6 +99,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "recoder-governance-approval"
+version = "0.1.0"
+dependencies = [
+ "recoder-governance-types",
+ "serde_json",
+]
+
+[[package]]
 name = "recoder-governance-audit"
 version = "0.1.0"
 dependencies = [
@@ -107,6 +115,23 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror",
+]
+
+[[package]]
+name = "recoder-governance-permission"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "recoder-governance-routing"
+version = "0.1.0"
+dependencies = [
+ "recoder-governance-types",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
