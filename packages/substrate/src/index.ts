@@ -44,7 +44,7 @@ export type {
   ProvisionResult,
   OrphanKind,
   ReconcileFinding,
-  ReconcileReport,
+  SubstrateReconcileReport,
 } from './types/index.js';
 export { CONDUCTOR_RUNTIME_IDS } from './types/index.js';
 
@@ -142,7 +142,31 @@ export type {
   MemoryCandidatePort,
   DeliveryEvidence,
   MemoryCandidateRef,
+  WorkLockPort,
+  LockConflictInfo,
+  AcquireWorkLockInput,
+  AcquireWorkLockResult,
+  ReacquireWorkLockResult,
+  ReleaseWorkLockInput,
+  AdmissionPort,
+  AdmissionDecision,
+  RunTailerPort,
+  RunTailAttachInput,
+  SubstrateScanPort,
+  SubstrateRegistryPort,
+  EngineSubstrate,
 } from './ports/index.js';
+
+// === Engine — the orchestration brain (persisted Workspace lifecycle) ===
+export { WorkspaceEngine, ADMISSION_REJECTED_PREFIX } from './engine/index.js';
+export type {
+  WorkspaceEngineDeps,
+  CreateWorkspaceInput,
+  ReconcileReport,
+} from './engine/index.js';
+
+// === Reconcile — restart survivability (join records × live substrate) ===
+export { reconcile } from './reconcile/index.js';
 
 // === Factory — the composition root (ports → registry) ===
 export {

@@ -12,6 +12,24 @@ export type { IdPort } from './id.port.js';
 export type { WorkspaceRepositoryPort } from './repository.port.js';
 export type { RunEventSink } from './run-event-sink.port.js';
 export type {
+  WorkLockPort,
+  LockConflictInfo,
+  AcquireWorkLockInput,
+  AcquireWorkLockResult,
+  ReacquireWorkLockResult,
+  ReleaseWorkLockInput,
+} from './work-lock.port.js';
+export type { AdmissionPort, AdmissionDecision } from './admission.port.js';
+export type {
+  RunTailerPort,
+  RunTailAttachInput,
+} from './run-tailer.port.js';
+export type { SubstrateScanPort } from './substrate-scan.port.js';
+export type {
+  SubstrateRegistryPort,
+  EngineSubstrate,
+} from './substrate-registry.port.js';
+export type {
   BrainPort,
   BrainEnrichInput,
   BrainEnrichResult,
