@@ -256,13 +256,24 @@ export interface DmuxLaunchResult {
  * /api/connectors, NOT under /api/conductor.
  */
 export interface ChannelHealth {
+  /** Channel id, e.g. 'telegram' | 'slack' | 'discord' | … (one of the 7). */
   channel: string;
-  accountId: string;
+  /** Account id for a configured channel; falls back to the channel id when not. */
+  accountId?: string;
   /** Credential present in env (so this channel was instantiated). */
   configured: boolean;
+  /** The adapter port was built and its inbound monitor is available. */
+  available?: boolean;
   /** A real probe() reported the account reachable + authorized. */
   connected: boolean;
+  /**
+   * This channel needs an out-of-process dependency (an external SDK / bridge /
+   * webhook) before it can go live, even once configured.
+   */
+  requiresExternal?: boolean;
   identity?: string;
+  /** When NOT configured: why. When requiresExternal: the missing dependency. */
+  reason?: string;
   error?: string;
   checkedAt?: number;
 }
@@ -273,6 +284,58 @@ export interface ConnectorsHealth {
   /** Whether inbound commands can launch a workspace (dispatch is configured). */
   dispatchReady: boolean;
   channels: ChannelHealth[];
+}
+
+/**
+ * GET /api/agent-os/brain/stats — the shared-brain reuse accounting + governance
+ * audit integrity.
+ *
+ * Source of truth:
+ *  - docker-backend/src/agent-os/routes/brain-stats.routes.ts (BrainStatsResponseData)
+ *  - docker-backend/src/agent-os/brain-service.ts (BrainCacheStatus)
+ *  - packages/brain/src/runtime/cache-doctor.ts (CacheReport)
+ *
+ * Mounted under /api/agent-os (NOT /api/conductor).
+ */
+
+/** The live cache-doctor projection of the brain's assemble-once reuse accounting. */
+export interface BrainCacheReport {
+  /** True once the brain has been read at least once (there is data to report). */
+  available: boolean;
+  /** Cache hits — reads served from a previously assembled context. */
+  hits: number;
+  /** Cache misses — reads that triggered a fresh assembly. */
+  misses: number;
+  /** hits / (hits + misses), 0..1. */
+  hitRate: number;
+  /** Cumulative estimated tokens saved by reuse — the headline metric. */
+  tokensSaved: number;
+  /** Human-readable summary the backend produced (cache-doctor `detail`). */
+  detail: string;
+}
+
+/** brain.* — { enabled, report } from BrainService.cacheReport(). */
+export interface BrainCacheStatus {
+  /** RECODER_BRAIN_ENABLED gate state. */
+  enabled: boolean;
+  /** Live cache report, or null when disabled / unreadable. */
+  report: BrainCacheReport | null;
+}
+
+/** governance.* — the @recoder/governance Merkle audit-chain verification. */
+export interface GovernanceAudit {
+  /** True only when the Merkle audit chain verified intact. */
+  ok: boolean;
+  /** Number of audit entries in the chain (0 when unavailable). */
+  entries: number;
+  /** Current Merkle tip hash, when available. */
+  tipHash?: string;
+}
+
+/** GET /api/agent-os/brain/stats response data. */
+export interface BrainStats {
+  brain: BrainCacheStatus;
+  governance: GovernanceAudit;
 }
 
 /**
