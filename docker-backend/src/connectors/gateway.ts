@@ -17,6 +17,7 @@ import { createLogger } from '../logger';
 import { createWorkspace, getWorkspace } from '../conductor/workspace-service.js';
 import { loadConnectorsConfig, type ChannelConfig, type ConnectorsConfig } from './config.js';
 import { resolveAdapterFactory } from './channel-adapters.js';
+import { hasWebhookSecret, WEBHOOK_INBOUND_CHANNELS } from './webhook-channels.js';
 
 const logger = createLogger('connectors:gateway');
 
@@ -81,6 +82,12 @@ export class ConnectorsGateway {
   private readonly config: ConnectorsConfig;
   private readonly runtimes: ChannelRuntime[] = [];
   private started = false;
+  /**
+   * Set true once the in-process HTTP webhook ingress route has registered
+   * itself with this gateway. Until then, push-only channels truthfully report
+   * `requiresExternal` (config alone cannot take their inbound live).
+   */
+  private webhookIngressActive = false;
 
   constructor(config: ConnectorsConfig = loadConnectorsConfig()) {
     this.config = config;
@@ -95,6 +102,41 @@ export class ConnectorsGateway {
   /** True when at least one channel was configured (credentials present). */
   get active(): boolean {
     return this.runtimes.length > 0;
+  }
+
+  /**
+   * Mark the in-process HTTP webhook ingress as mounted. Called once by the
+   * webhook route registration so health reports push-only channels (line/slack)
+   * as live-inbound-capable. Idempotent + truthful: it only affects channels
+   * that both belong to {@link WEBHOOK_INBOUND_CHANNELS} and have their secret.
+   */
+  markWebhookIngressActive(): void {
+    this.webhookIngressActive = true;
+  }
+
+  /** Whether the in-process webhook ingress has been mounted. */
+  get hasWebhookIngress(): boolean {
+    return this.webhookIngressActive;
+  }
+
+  /**
+   * Built (or buildable) ConnectorPort for a configured channel, used by the
+   * webhook ingress to run the channel's REAL normalize() on a verified event.
+   * Returns null when the channel is not configured or its port failed to build.
+   */
+  getChannelPort(channel: string): ConnectorPort | null {
+    const runtime = this.runtimes.find((r) => r.config.channel === channel);
+    return runtime?.port ?? null;
+  }
+
+  /** Resolved config for a configured channel (or null). */
+  getChannelConfig(channel: string): ChannelConfig | null {
+    return this.runtimes.find((r) => r.config.channel === channel)?.config ?? null;
+  }
+
+  /** True when dispatch is configured (an inbound command can launch a workspace). */
+  get dispatchReady(): boolean {
+    return Boolean(this.config.dispatch);
   }
 
   /**
@@ -210,15 +252,27 @@ export class ConnectorsGateway {
             };
           }
         }
+        // Push-only channels (line/slack HTTP Events) are no longer
+        // `requiresExternal` once the in-process webhook ingress is mounted AND
+        // the channel has its webhook verification secret — inbound is then LIVE
+        // in-process. Degrade-safe: with no ingress, or no secret, they stay
+        // truthfully `requiresExternal`.
+        const liveViaWebhook =
+          this.webhookIngressActive &&
+          WEBHOOK_INBOUND_CHANNELS.has(r.config.channel) &&
+          hasWebhookSecret(r.config.channel);
+        const requiresExternal = r.config.requiresExternal && !liveViaWebhook;
         return {
           channel: r.config.channel,
           accountId: r.config.accountId,
           configured: true,
           available: Boolean(r.port),
           connected: probe?.ready === true,
-          requiresExternal: r.config.requiresExternal,
+          requiresExternal,
           identity: probe?.identity,
-          reason: r.config.note,
+          reason: liveViaWebhook
+            ? 'configured; live inbound via in-process HTTP webhook ingress'
+            : r.config.note,
           error: probe?.error ?? r.buildError,
           checkedAt: probe?.checkedAt,
         };
@@ -254,6 +308,22 @@ export class ConnectorsGateway {
       .map((v) => v.toLowerCase());
     const normalizedList = list.map((v) => v.replace(/^@/, '').toLowerCase());
     return candidates.some((c) => normalizedList.includes(c.replace(/^@/, '')));
+  }
+
+  /**
+   * Ingest a normalized inbound message that arrived via the HTTP webhook
+   * ingress (push-only channels: line, slack). It resolves the channel's live
+   * runtime and runs the EXACT same trust-boundary gate -> dispatch ->
+   * createWorkspace path as a long-poll/socket message — the webhook is just a
+   * different transport, never a different control path. Returns true when the
+   * message reached the gate (regardless of the gate decision), false when the
+   * channel is not configured/built (so the route can report truthfully).
+   */
+  async ingestInbound(channel: string, message: NormalizedInboundMessage): Promise<boolean> {
+    const runtime = this.runtimes.find((r) => r.config.channel === channel);
+    if (!runtime) return false;
+    await this.handleInbound(runtime, message);
+    return true;
   }
 
   /**
