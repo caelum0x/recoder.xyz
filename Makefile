@@ -4,7 +4,7 @@
 # See docs/RECODER-PRODUCT-ARCHITECTURE.md §4 and §6.
 
 .DEFAULT_GOAL := help
-.PHONY: help all verify ts site backend go-beads bd go-ziti rust-openfang rust-claw py-pal py-ops heavy build-tmux build-dmux substrate
+.PHONY: help all verify ts site backend go-beads bd go-ziti rust-openfang rust-claw py-pal py-ops heavy build-tmux build-dmux substrate substrate-binaries
 
 help: ## Show targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -30,6 +30,15 @@ build-dmux: ## Build the vendored dmux operator console from ts/dmux
 	cd ts/dmux && pnpm install --frozen-lockfile && pnpm run build
 
 substrate: build-tmux build-dmux ## Build both substrate binaries (tmux + dmux)
+
+# The operational deploy/setup seam: produce the Conductor's PINNED runtime
+# binaries (vendored tmux + reproducible bd) so the conductor uses them instead
+# of whatever tmux/bd happens to be on PATH. Idempotent (skips present binaries)
+# and degrade-safe (a missing autotools/cc/go toolchain warns and continues,
+# never failing the deploy). Invoked by the deploy pipeline and the
+# docker-backend image build; safe to run repeatedly by hand.
+substrate-binaries: ## Build the Conductor's pinned runtime binaries (tmux + bd), idempotent + degrade-safe
+	./scripts/build-substrate-binaries.sh
 
 site: ## Build the marketing site
 	cd site && pnpm build
