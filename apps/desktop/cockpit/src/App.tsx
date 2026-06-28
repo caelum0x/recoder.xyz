@@ -26,6 +26,7 @@ import { MemoryCandidatesPanel } from './components/MemoryCandidatesPanel';
 import { SubstratesPanel } from './components/SubstratesPanel';
 import { LiveEventsView } from './components/LiveEventsView';
 import { GovernancePanel } from './components/GovernancePanel';
+import { BrainStatsPanel } from './components/BrainStatsPanel';
 import { SignIn } from './components/SignIn';
 
 const WORKSPACE_POLL_MS = 2000;
@@ -67,7 +68,8 @@ export function App() {
         target === 'memory' ||
         target === 'substrates' ||
         target === 'events' ||
-        target === 'governance'
+        target === 'governance' ||
+        target === 'brain'
       ) {
         setView(target);
       }
@@ -116,6 +118,7 @@ export function App() {
           <button class={view === 'substrates' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('substrates')}>Substrates</button>
           <button class={view === 'events' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('events')}>Live Events</button>
           <button class={view === 'governance' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('governance')}>Governance</button>
+          <button class={view === 'brain' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('brain')}>Brain</button>
           <button class={view === 'policy' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('policy')}>Policy</button>
           <button class={view === 'memory' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('memory')}>Memory</button>
         </nav>
@@ -198,6 +201,10 @@ export function App() {
       ) : view === 'governance' ? (
         <main class="main">
           <GovernancePanel />
+        </main>
+      ) : view === 'brain' ? (
+        <main class="main">
+          <BrainStatsPanel />
         </main>
       ) : view === 'policy' ? (
         <main class="main">

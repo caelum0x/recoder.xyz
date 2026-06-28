@@ -522,3 +522,20 @@ body {
 .gate-verdict-reason-cell { grid-column: 1 / -1; }
 .gate-verdict-reason { white-space: normal; word-break: break-word; }
 .gate-verdict-note { margin: 0; font-size: 12px; color: #f0c77a; line-height: 1.5; }
+
+/* Connectors: per-status summary header (truthful counts over the 7 channels). */
+.connector-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 4px; }
+
+/* Shared Brain & Governance panel. */
+.brain-panel { display: flex; flex-direction: column; gap: 12px; padding: 16px; width: 100%; }
+.brain-panel .panel-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.brain-headline {
+  font-size: 14px; line-height: 1.5; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text);
+}
+.brain-headline-reporting { border-color: var(--good); }
+.brain-headline-disabled { color: var(--text-dim); }
+.brain-headline-idle { color: var(--text-dim); }
+.brain-metric { font-size: 16px; font-weight: 600; color: var(--text); }
+.brain-idle-note { line-height: 1.5; margin: 0; }
+.brain-tiphash { white-space: normal; word-break: break-all; }

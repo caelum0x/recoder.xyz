@@ -1,17 +1,31 @@
 /**
- * ConnectorsPanel — live chat-channel connector health, polled from
- * GET /api/connectors (NOTE: mounted at /api/connectors, NOT /api/conductor).
+ * ConnectorsPanel — the social-channel surface: live per-channel connector health
+ * polled from GET /api/connectors (NOTE: mounted at /api/connectors, NOT
+ * /api/conductor). This lists all 7 channels the connectors gateway knows about,
+ * each with a TRUTHFUL status chip derived from the real probe result.
  *
- * Truthful by construction: every row is a real per-channel probe result from
- * the connectors gateway (configured? connected?). When no channel is configured
- * the gateway reports `active: false` with an empty `channels` array, and we show
- * a truthful "no channels configured" — never a fabricated/connected row.
+ * Truthful by construction. Each row's chip is one of four honest states
+ * (connectors-state.ts):
+ *   - live              : configured AND a real probe reported connected.
+ *   - requires external : configured but needs an out-of-process dependency.
+ *   - config only       : configured (credentials present) but not connected.
+ *   - unconfigured      : no credentials present (inert) + the gateway's reason.
+ * We never render a fabricated "connected" row: 'live' requires a real
+ * connected probe. When the gateway is inert the endpoint still reports every
+ * channel as unconfigured-with-reason, so the panel tells the whole truth.
  *
  * Errors are surfaced distinctly: a backend-unreachable / unauthorized / route
  * error renders the real message instead of an empty "all good" panel.
  */
 import { api } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
+import {
+  channelReason,
+  channelStatus,
+  channelStatusLabel,
+  channelStatusTone,
+  summarizeChannels,
+} from '../lib/connectors-state';
 import type { ChannelHealth } from '../types';
 
 const POLL_MS = 10_000;
@@ -26,20 +40,30 @@ function checkedAgo(checkedAt?: number): string {
 }
 
 function ChannelRow({ ch }: { ch: ChannelHealth }) {
-  const tone = ch.connected ? 'good' : ch.configured ? 'warn' : 'bad';
-  const status = ch.connected ? 'connected' : ch.configured ? 'configured (not connected)' : 'not configured';
+  const status = channelStatus(ch);
+  const tone = channelStatusTone(status);
+  const reason = channelReason(ch);
+  const account = ch.accountId && ch.accountId !== ch.channel ? ch.accountId : undefined;
   return (
     <div class="connector-row">
       <div class="connector-row-main">
-        <span class={`pill pill-${ch.connected ? 'good' : 'bad'}`}>
+        <span class={`pill pill-${status === 'live' ? 'good' : 'bad'}`}>
           <span class="pill-dot" /> {ch.channel}
         </span>
-        <span class={`badge tone-${tone}`}>{status}</span>
-        <span class="connector-account" title={ch.accountId}>{ch.accountId}</span>
+        <span class={`badge tone-${tone}`}>{channelStatusLabel(status)}</span>
+        {account && (
+          <span class="connector-account" title={account}>
+            {account}
+          </span>
+        )}
         {ch.identity && <span class="connector-identity">as {ch.identity}</span>}
       </div>
       <div class="connector-row-meta">
-        {ch.error && <span class="connector-error" title={ch.error}>{ch.error}</span>}
+        {reason && (
+          <span class="connector-error" title={reason}>
+            {reason}
+          </span>
+        )}
         {ch.checkedAt && <span class="connector-checked">probed {checkedAgo(ch.checkedAt)}</span>}
       </div>
     </div>
@@ -50,6 +74,7 @@ export function ConnectorsPanel() {
   const conn = usePoll(() => api.connectors(), POLL_MS);
   const health = conn.data;
   const channels = health?.channels ?? [];
+  const summary = summarizeChannels(channels);
 
   return (
     <div class="connectors-panel">
@@ -75,6 +100,15 @@ export function ConnectorsPanel() {
         </div>
       </div>
 
+      {channels.length > 0 && (
+        <div class="connector-summary">
+          <span class="badge tone-good">{summary.live} live</span>
+          <span class="badge tone-warn">{summary['requires-external']} requires external</span>
+          <span class="badge tone-progress">{summary['config-only']} config only</span>
+          <span class="badge tone-neutral">{summary.unconfigured} unconfigured</span>
+        </div>
+      )}
+
       {conn.error ? (
         <div class="banner banner-warn">
           <strong>Connectors health unavailable:</strong> {conn.error.message}
@@ -83,16 +117,16 @@ export function ConnectorsPanel() {
         <div class="panel-empty">Loading connector health…</div>
       ) : channels.length === 0 ? (
         <div class="panel-empty">
-          <p>No channels configured.</p>
+          <p>No channels reported.</p>
           <p class="panel-empty-sub">
-            The connectors gateway is inert. Configure a channel credential (e.g.
+            The connectors gateway is inert and reported no channels. Configure a channel credential (e.g.
             <code> CONNECTORS_TELEGRAM_TOKEN</code>) to bridge a chat channel into the Conductor.
           </p>
         </div>
       ) : (
         <div class="connector-list">
           {channels.map((ch) => (
-            <ChannelRow ch={ch} key={`${ch.channel}:${ch.accountId}`} />
+            <ChannelRow ch={ch} key={`${ch.channel}:${ch.accountId ?? ch.channel}`} />
           ))}
         </div>
       )}
