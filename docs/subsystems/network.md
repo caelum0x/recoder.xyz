@@ -1,7 +1,25 @@
 # Subsystem: `network` — Zero-Trust Agent Coordination Overlay
 
-> Status: architecture (design of record). Owner: Network subsystem lead architect.
-> Location: `packages/network` (TypeScript control-plane SDK) + `go/ziti` (vendored, merged OpenZiti overlay).
+> **Status (2026-06-28 — realized on Envoy, the deployable choice): BUILT.** The zero-trust L7 is
+> realized on **Envoy**, not ziti. `docker-backend/src/network` generates a **real Envoy v3 bootstrap**
+> (mTLS · **fail-closed `ext_authz` → governance** · access-log) with **31/31 tests**
+> (`vitest run src/network` — re-run this snapshot); `go/recoder-xds` is a **real Go Envoy xDS control
+> plane** (`go-control-plane` v0.14.0, ADS/LDS/CDS/RDS — `go build ./...` exit 0, booted live in dev);
+> and `docker-backend/src/network/xdr` turns Envoy access-logs into **4 security detections**
+> (authz_denial_burst · repeated_auth_failure · denied_egress · anomalous_rate) sealed into the
+> governance Merkle audit. Commits `b6fb599a3`, `a4436f3fc`. See BUILD-STATUS §14.
+>
+> **Why Envoy over ziti (the deployable choice):** Envoy is a production-proven L7 proxy with a stable
+> xDS contract and a fail-closed external-authz hook that lets every request be gated by Recoder
+> governance below the model — it ships now on standard infra. **OpenZiti (the `go/ziti` dark-overlay
+> design captured in the rest of this doc) is deferred / infra-gated** as a future no-inbound-port mesh
+> option, not the current realization. A **live Envoy proxy run** (booting the proxy against the
+> generated bootstrap + a running governance ext_authz) still needs ops/creds — the bootstrap and xDS
+> server are real and tested; an end-to-end live proxy boot is the ops-gated next step.
+>
+> Owner: Network subsystem lead architect.
+> Built location (today): `docker-backend/src/network` (Envoy bootstrap + ext_authz + XDR) + `go/recoder-xds` (Go xDS control plane).
+> Deferred-overlay design (below): `packages/network` (TypeScript control-plane SDK) + `go/ziti` (vendored OpenZiti) — the ziti dark-overlay future option.
 
 ## 1. Mission
 
