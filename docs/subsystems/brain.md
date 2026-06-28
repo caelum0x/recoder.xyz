@@ -7,11 +7,16 @@
 > the four sources into one `BrainContext`, and hands the same packed object to every runtime
 > (Claude Code, Codex, Recoder Code, browser agents) on every read.
 
-Status: **fusion already begun**. The reference seam exists at
-`packages/brain/src/{brain.ts,types.ts,index.ts}` (read and carried forward below). This doc
-turns that 3-file seam into a full production subsystem of **147 functional files** (plus a
-mirrored `tests/` tree). The `repo/` module is the richest — it merges the real RecoderGit
-code-knowledge-graph engine (40 files: Tree-sitter → ingestion → scope-resolution → graph →
+Status (2026-06-28): **BUILT & GREEN.** All 5 real sources sit behind ports (gitnexus ·
+continuum · mem0 · context7 · beads), wired into `docker-backend` `BrainService` (flag-gated,
+default off). The token-waste-killer is now real: **assemble-once content-addressed cache**
+(`packages/brain/src/persistence/memory-context-cache.ts`) + a **tokens-saved metric**
+(`engine/token-estimator.ts` + `engine/context-tokens.ts`) + **degrade-safe source-lighting**
+for mem0/context7 (config-gated, *configured-not-proven* until keys present). **161 tests pass**
+(`node --test --import tsx`, re-run this session); committed `cfd181394`. The reference seam at
+`packages/brain/src/{brain.ts,types.ts,index.ts}` has grown into the production subsystem this
+doc describes. The `repo/` module is the richest — it merges the real RecoderGit
+code-knowledge-graph engine (Tree-sitter → ingestion → scope-resolution → graph →
 LadybugDB → embeddings → hybrid search), not the 8-file context-pack stub it was first drafted against.
 
 This is a **first-party, owned** subsystem. We **merge and edit** the fused source code; we do

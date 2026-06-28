@@ -3,6 +3,18 @@
 > Routing + approval risk tiers + permission enforcement + audit/replay for the
 > Recoder Agent OS control plane.
 
+> **Status (2026-06-28): BUILT & GREEN (TS) + WIRED.** The TypeScript subsystem is real
+> and shipped: `packages/governance/src/{domain,policy,approval,enforcement,audit,routing}`
+> + `governance.ts` facade. Enforcement uses a **deny-biased fallback** (`enforcement/fallback-enforcer.ts`)
+> and audit is a **SHA-256 Merkle** chain (`audit/merkle-verifier.ts`). **92/92 tests pass**
+> (`node --test`, re-run this session). It is **wired into the conductor delivery gate** —
+> `docker-backend/src/conductor/governance-gate.ts` `decideDelivery()` routes every PR/merge/push
+> delivery action through `@recoder/governance` and **fails CLOSED** if governance itself errors.
+> Committed `4011d96cb`; conductor-side gate/metrics/summary tests committed `74f8ccccf`.
+> **Not yet built:** the Rust governance crates (`crates/recoder-governance-*` / `crates/openfang`)
+> — the deny-wins glob policy + audit run today in owned TypeScript, with the Rust typed-IPC kernel
+> below still **designed only** (and `crates/openfang` is a gitignored vendored clone). See BUILD-STATUS §5.
+
 The **governance** subsystem is the policy spine of Recoder. It decides whether an
 agent action is allowed, needs human approval, or is denied; it routes work to the
 right model/runtime tier by complexity and risk; it enforces permission modes and

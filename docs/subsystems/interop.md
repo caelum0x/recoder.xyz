@@ -1,6 +1,14 @@
 # Subsystem: `interop` — A2A Wire Interoperability + MCP Host/Registry
 
-> **Status:** Architecture spec (design of record).
+> **Status (2026-06-28): PARTIAL — signed-ingress gate BUILT & WIRED LIVE; MCP host in progress.**
+> The real **ed25519 signed-ingress gate** is shipped in `packages/interop/src/{ed25519.ts,signed-ingress-gate.ts}`
+> (+ `a2a/` agent-card/sign), **54/54 tests pass** (`node --test`, re-run this session). It is **wired into the
+> LIVE A2A gateway** — `docker-backend/src/a2a/signed-ingress.middleware.ts` admits inbound envelopes through the
+> interop gate (`interop-gate.adapter.ts` → `admitSignedMcpCall`/`verifyEd25519Signature`), mounted on the running
+> `gateway.router.ts`; degrade-safe, strict mode behind `RECODER_A2A_STRICT_INGRESS` (committed `b83e21ff0`).
+> The **MCP host build is in progress**, and the full `packages/interop` consolidation (folding `a2a-sdk` +
+> `agent-mcp` + `pal-mcp-server` + connectors into one owned engine) below remains the design of record.
+> See BUILD-STATUS §2.
 > **Owner:** Lead architect, interop subsystem.
 > **Location:** `packages/interop` (TypeScript control-plane engine) — consolidates the existing
 > `packages/a2a-sdk` (wire-level A2A contracts) and `packages/agent-mcp` (MCP registry + tool-permission
