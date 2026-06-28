@@ -124,6 +124,39 @@ export {
   type CodeGraphExec,
   type CodeGraphDoctorOptions,
 } from "./runtime/code-graph-doctor";
+// Cache doctor — surfaces the headline value metric: tokens saved by the shared
+// brain assembling once and reusing (hit rate + cumulative tokensSaved).
+export { runCacheDoctor, type CacheReport } from "./runtime/cache-doctor";
+
+// Assemble-once cache engine: content-addressed key, read-through cache with
+// hit/miss + tokensSaved accounting, revision resolution, token estimation, and
+// degrade-safe source running with truthful provenance.
+export {
+  estimateTokens,
+  estimateTokensOfParts,
+  estimateContextTokens,
+  buildCacheKey,
+  repoKeyPrefix,
+  ContextCache,
+  resolveRevision,
+  NO_HEAD_SENTINEL,
+  runSource,
+  buildProvenance,
+  type CacheKeyInput,
+  type CacheStats,
+  type CacheLookup,
+  type GitRunner,
+  type ResolveRevisionOptions,
+  type SourceOutcome,
+  type RunSourceInput,
+} from "./engine";
+
+// Context-cache store: the in-memory default + the injectable store port (a
+// Postgres/Redis store can be dropped in for cross-process / cross-agent reuse).
+export {
+  InMemoryContextCache,
+  createInMemoryContextCache,
+} from "./persistence/memory-context-cache";
 
 // Domain types (data shapes)
 export type {
@@ -135,6 +168,11 @@ export type {
   BrainTask,
   BrainActivity,
   BrainActivityProfile,
+  Revision,
+  Provenance,
+  SourceProvenance,
+  BrainSourceKind,
+  DegradeReason,
 } from "./domain";
 
 // Ports (source contracts; advanced wiring / alternative backends)
@@ -144,8 +182,11 @@ export type {
   DocsPort,
   TaskGraphPort,
   ActivityPort,
+  BrainContextCacheStore,
+  ClockPort,
   // Deprecated aliases, kept for backward compatibility:
   MemoryRecall,
   DocsSource,
   TaskGraph,
 } from "./ports";
+export { systemClock } from "./ports";
