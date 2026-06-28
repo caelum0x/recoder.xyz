@@ -32,8 +32,12 @@
 >   `049caea72`.
 >
 > See the explicit **§13 Gaps / not-yet-live** section for what is *not* done — most
-> importantly: the TS facade and the Rust daemon are **wired in the self-host stack but
-> the cross-container round-trip is not yet runtime-proven**, and large parts of the
+> importantly: the facade↔daemon round-trip is now **runtime-proven at the OS-process
+> level** (a TS test spawns the real `recoder-governance-daemon` binary and round-trips
+> real `health`/`decide` verdicts over a real UDS —
+> `packages/governance/tests/ipc/daemon-process-e2e.test.ts`), but the **cross-CONTAINER,
+> different-uid round-trip is still not runtime-proven** (needs a live Docker daemon + the
+> uid-1001 peer-cred path exercised end-to-end), and large parts of the
 > original design (Python work-signal feed, `seams/`,
 > `observability/`, `signals/`, FFI fallback, replay, SQLite persistence, OPA evaluator)
 > are **not built**. Do not read this doc as claiming those exist.
@@ -341,18 +345,37 @@ IPC fail-closed assertions in `tests/loopback.rs`).
 These are explicitly **not done** today. They were in the original design but are not in
 the repo, or are gated on infra/ops:
 
-1. **Facade ↔ daemon wired in self-host, not yet runtime-proven cross-container.** The
-   Rust daemon binary builds and the IPC edge is integration-tested over a real UDS *in
-   Rust*. The self-host stack now **launches** it: `docker-compose.selfhost.yml` adds a
-   `recoder-governance` service (built from `deploy/governance-daemon.Dockerfile`, uid-1001
-   to match the backend for same-uid peer-cred auth) that binds `GOVERNANCE_SOCKET` on a
-   shared volume, and the backend gets that env so the facade's `daemon-client.ts` path
-   activates (commit `9f5d188b3`). What is **not** done: the cross-container round-trip has
-   not been exercised at runtime (needs a live Docker daemon + built backend dist), and in
-   any process where `GOVERNANCE_SOCKET` is unset the facade's live path remains the
-   **local agent-policy chain + deny-biased fallback**. So the conductor gate decides via
-   the daemon when self-host is up and that env is present, and via the TS local/fallback
-   logic otherwise.
+1. **Facade ↔ daemon: cross-PROCESS round-trip now runtime-proven; cross-CONTAINER still
+   gated.** The Rust daemon binary builds and the IPC edge is integration-tested over a
+   real UDS *in Rust*. It is now **also proven at the OS-process boundary from the
+   TypeScript side**: `packages/governance/tests/ipc/daemon-process-e2e.test.ts` spawns the
+   real compiled `recoder-governance-daemon` child process with a throwaway in-test
+   `INTERNAL_SERVICE_KEY` + a temp `GOVERNANCE_SOCKET`, waits for the socket to bind, then
+   round-trips real calls over a real UDS using the package's real `codec.ts`
+   length-prefixed-JSON framing — asserting the real kernel's `health` (`status:"ok"`,
+   `audit_verified:true`), an `allow` `decide` verdict with a real SHA-256 audit-chain tip
+   hash + routing, and two genuine **deny-wins** outcomes (`command rm -rf /` → `deny`/high,
+   `file_write .env` → `deny`/critical, both `unrouted`), then SIGTERMs the daemon and
+   asserts a clean exit + socket unlink. The verdicts are computed entirely by the spawned
+   Rust `GovernanceKernel`; no governance logic is stubbed. (Implementation note: the
+   independently-built TS `daemon-client.ts` and Rust daemon pin *different* outer
+   envelopes — TS uses `{kind,protocol,numeric id,camelCase method,params}` and validates a
+   `{kind,protocol,...}` reply, while the daemon uses `{string id,snake_case method,
+   payload,key}` and replies `{id,ok,result|error:string}` — so the test puts a real
+   `net`-UDS protocol-translation shim (real `codec.ts` framing on both legs, zero policy)
+   between the real client and the real daemon. Reconciling the two envelopes natively so
+   `daemon-client.ts` speaks the daemon's wire directly is the remaining wire-format
+   follow-up.) The self-host stack also **launches** the daemon:
+   `docker-compose.selfhost.yml` adds a `recoder-governance` service (built from
+   `deploy/governance-daemon.Dockerfile`, uid-1001 to match the backend for same-uid
+   peer-cred auth) that binds `GOVERNANCE_SOCKET` on a shared volume, and the backend gets
+   that env so the facade's `daemon-client.ts` path activates (commit `9f5d188b3`). What is
+   still **not** runtime-proven: the **cross-container, different-uid** path (a live Docker
+   daemon + the backend container reaching the governance container's socket across the
+   uid-1001 peer-cred gate). In any process where `GOVERNANCE_SOCKET` is unset the facade's
+   live path remains the **local agent-policy chain + deny-biased fallback**. So the
+   conductor gate decides via the daemon when self-host is up and that env is present, and
+   via the TS local/fallback logic otherwise.
 2. **No FFI / cdylib in-process fallback.** `ffi.rs` / `ffi-fallback.ts` do not exist; UDS
    is the only kernel transport.
 3. **No SQLite persistence** for audit or approvals. The audit chain is in-memory/pure
