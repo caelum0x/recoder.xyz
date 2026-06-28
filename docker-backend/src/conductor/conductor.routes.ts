@@ -37,6 +37,9 @@ import { resourceSnapshot } from './resource-governor.js';
 import { steerRuntime, runtimeStatus } from './runtime-driver.js';
 import type { SubstrateHandle } from './substrate.js';
 import { isTerminalWorkspaceState, type Workspace } from '@recoder/agent-os';
+import { attachWorkspaceStream } from './live-events.js';
+import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
+import { metrics } from './conductor-metrics.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -289,6 +292,11 @@ export function createConductorRouter(): Router {
     res.json({ success: true, data: await conductorHealth() });
   });
 
+  // Prometheus-style metrics snapshot (counters, gauges, histograms).
+  router.get('/metrics', (_req: Request, res: Response) => {
+    res.json({ success: true, data: metrics.snapshot() });
+  });
+
   // Current resource-governor utilization vs. limits (truthful capacity view).
   router.get('/resources', async (_req: Request, res: Response) => {
     res.json({ success: true, data: await resourceSnapshot() });
@@ -398,6 +406,37 @@ export function createConductorRouter(): Router {
       const msg = err instanceof Error ? err.message : 'steer failed';
       res.status(msg.includes('not supported') ? 400 : 500).json({ success: false, error: msg });
     }
+  });
+
+  // Delivery summary for a completed workspace (diff + logs + exit code).
+  router.get('/workspaces/:workspaceId/delivery', async (req: Request, res: Response) => {
+    try {
+      res.json({ success: true, data: await generateDeliverySummary(req.params.workspaceId) });
+    } catch (err) {
+      res.status(404).json({ success: false, error: err instanceof Error ? err.message : 'delivery summary failed' });
+    }
+  });
+
+  // Memory candidate proposed by a completed workspace (review-gated, not durable).
+  router.get('/workspaces/:workspaceId/memory-candidate', async (req: Request, res: Response) => {
+    try {
+      const candidate = await generateMemoryCandidate(req.params.workspaceId);
+      if (!candidate) {
+        res.status(204).end();
+        return;
+      }
+      res.json({ success: true, data: candidate });
+    } catch (err) {
+      res.status(404).json({ success: false, error: err instanceof Error ? err.message : 'memory candidate failed' });
+    }
+  });
+
+  // WebSocket upgrade for live workspace events (operator console live terminal).
+  // The express-ws middleware injects the `ws` property onto the router; if the
+  // server doesn't have express-ws enabled, this route is simply not matched.
+  (router as any).ws('/workspaces/:workspaceId/stream', (ws: any, req: { params: { workspaceId: string } }) => {
+    const cleanup = attachWorkspaceStream(ws, req.params.workspaceId);
+    ws.on('close', cleanup);
   });
 
   return router;
