@@ -1,80 +1,87 @@
 /**
  * Conductor substrate — the swappable execution layer under a workspace.
  *
+ * ADOPTION (docs/subsystems/substrate.md §2/§4.1/§12 step 1): the contract is now
+ * OWNED by `@recoder/substrate` (`src/contract/*`) and the typed error hierarchy
+ * by `@recoder/substrate` (`src/errors/*`). This backend module imports those as
+ * the source of truth and keeps the in-process registry behavior so the proven
+ * path (workspace-service / run-tailer / review / conductor.routes) is unchanged.
+ *
+ * The tmux_worktree / daytona / in_process impls stay in docker-backend for now
+ * (substrate.md §12 steps 3-4 move their bodies later) but they now implement the
+ * PACKAGE's `ConductorSubstrate` contract type. Two backward-compatible local
+ * extensions are preserved so the proven impls keep compiling and running:
+ *   - `exitCode?` — the run-tailer's richer "exit 0 vs non-zero" completion check
+ *     (an upgrade over "session gone = done"); optional method on the package
+ *     contract surface here until it lands in the package contract itself.
+ *   - `SubstrateLaunchInput.prompt?` / `.runtimeId?` — the in_process driver runs
+ *     an agent loop against a rendered prompt rather than a shell `command`.
+ *
  * A substrate provisions isolation + launches the agent, and lets the
- * orchestration layer capture output, check liveness, and tear down. The
+ * orchestration layer capture output, check liveness, diff, and tear down. The
  * control-plane Workspace lifecycle is identical regardless of substrate
  * (`Workspace.substrate` selects it):
  *
  *   - `tmux_worktree` — local git worktree + tmux session (substrate-tmux.ts).
- *   - `daytona`       — remote sandbox via a2a/cli-agent-runtime (planned;
- *                       see CONDUCTOR-ARCHITECTURE.md step 6 reconciliation).
- *
- * Registering a substrate here keeps workspace-service / run-tailer / review free
- * of substrate-specific code.
+ *   - `daytona`       — remote sandbox (substrate-daytona.ts).
+ *   - `in_process`    — in-process agent loop (substrate-in-process.ts).
  */
 import type { WorkspaceSubstrate } from '@recoder/agent-os';
+import {
+  SubstrateNotRegisteredError,
+  type ConductorSubstrate as PackageConductorSubstrate,
+  type SubstrateLaunchInput as PackageSubstrateLaunchInput,
+  type SubstrateHandle,
+  type SubstrateDiff,
+  type SubstrateAvailability,
+  type SubstrateCapabilities,
+} from '@recoder/substrate';
 
-export interface SubstrateLaunchInput {
-  workspaceId: string;
-  /** Resolved headless command the agent runs. */
-  command: string;
-  /** Git repo to branch a worktree from (tmux_worktree). */
-  repoPath: string;
-  branch: string;
-  baseRef: string;
-  env?: Record<string, string>;
-  /** Daytona-specific context (sandbox provisioning) when substrate === 'daytona'. */
-  projectId?: string;
-  sandboxId?: string;
+// Re-export the package contract's data types so existing backend callers that
+// import them from `./substrate.js` (run-tailer, conductor.routes, the impls)
+// keep working unchanged — now sourced from the owned package.
+export type {
+  SubstrateHandle,
+  SubstrateDiff,
+  SubstrateAvailability,
+  SubstrateCapabilities,
+};
+
+/**
+ * Backend launch input = the package's substrate-agnostic input + the two
+ * in_process-only fields. Superset of the package type, so anything that
+ * satisfies the package input satisfies this.
+ */
+export interface SubstrateLaunchInput extends PackageSubstrateLaunchInput {
   /**
    * Rendered agent prompt (in_process substrate). The in-process driver runs an
    * agent loop against this prompt rather than executing `command` as a shell.
-   * Optional and ignored by tmux_worktree / daytona, which use `command`.
+   * Ignored by tmux_worktree / daytona, which use `command`.
    */
   prompt?: string;
   /** Runtime surface to drive (in_process substrate). Defaults to `recoder_code`. */
   runtimeId?: string;
 }
 
-export interface SubstrateHandle {
-  /** Substrate-specific handle id (e.g. tmux session name or sandbox id). */
-  ref: string;
-  worktreePath?: string;
-  sessionName?: string;
-}
-
-export interface SubstrateDiff {
-  /** `git diff --stat` summary against the base ref. */
-  stat: string;
-  /** Full unified patch of tracked changes against the base ref. */
-  patch: string;
-  /** Untracked files not yet in the patch. */
-  untracked: string[];
-  changedFiles: number;
-}
-
-export interface ConductorSubstrate {
-  id: WorkspaceSubstrate;
-  available(): Promise<{ available: boolean; reason?: string }>;
+/**
+ * Backend ConductorSubstrate = the package contract, with `capabilities()` kept
+ * optional (the proven impls predate it; §12 backfills it) and the `exitCode?`
+ * completion-detail method preserved. `launch` accepts the backend launch input
+ * superset. Everything else is the package contract verbatim.
+ */
+export interface ConductorSubstrate
+  extends Omit<PackageConductorSubstrate, 'capabilities' | 'launch'> {
+  /** Static description of what this substrate can structurally do (optional). */
+  capabilities?(): SubstrateCapabilities;
   /** Provision isolation and launch the agent command. */
   launch(input: SubstrateLaunchInput): Promise<SubstrateHandle>;
-  /** Capture recent agent output (null if the handle is gone). */
-  capture(handle: SubstrateHandle, lines?: number): Promise<string | null>;
-  /** Whether the agent process/session is still alive. */
-  alive(handle: SubstrateHandle): Promise<boolean>;
   /**
    * Exit code of the completed agent (0 = success, >0 = failure).
-   * Returns `undefined` when the agent is still alive, `null` when the handle
-   * is entirely gone (already cleaned up). Used by the run-tailer to distinguish
-   * `completed` (exit 0) from `failed` (non-zero) — the upgrade over "session
-   * gone = done" per docs/subsystems/substrate.md §4.3.
+   * Returns `undefined` when the agent is still alive, `null` when the handle is
+   * entirely gone (already cleaned up). Used by the run-tailer to distinguish
+   * `completed` (exit 0) from `failed` (non-zero) per substrate.md §4.3.
    */
   exitCode?(handle: SubstrateHandle): Promise<number | null | undefined>;
-  /** Reviewable diff of the work against `baseRef`. */
-  diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff>;
-  /** Stop the agent and (optionally) remove its isolation. */
-  teardown(handle: SubstrateHandle, options?: { removeIsolation?: boolean }): Promise<void>;
 }
 
 const registry = new Map<WorkspaceSubstrate, ConductorSubstrate>();
@@ -87,7 +94,7 @@ export function registerSubstrate(substrate: ConductorSubstrate): void {
 export function getSubstrate(id: WorkspaceSubstrate): ConductorSubstrate {
   const substrate = registry.get(id);
   if (!substrate) {
-    throw new Error(`conductor substrate not available: ${id} (registered: ${[...registry.keys()].join(', ') || 'none'})`);
+    throw new SubstrateNotRegisteredError(id, [...registry.keys()]);
   }
   return substrate;
 }

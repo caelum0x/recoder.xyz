@@ -45,6 +45,7 @@
     "@recoder/sandbox-daytona": "workspace:*",
     "@recoder/shared": "workspace:*",
     "@recoder/stream": "workspace:*",
+    "@recoder/substrate": "workspace:*",
     "@recoder/ui-agent-os": "workspace:*",
     "@recoder/vault": "workspace:*",
     "@types/ws": "^8.18.1",
