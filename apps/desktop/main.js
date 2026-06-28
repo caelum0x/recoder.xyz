@@ -1239,6 +1239,22 @@ function createWindow() {
           },
         },
         {
+          label: 'Open dmux Console',
+          accelerator: 'CmdOrCtrl+Shift+D',
+          click: () => {
+            // Discoverable launcher for the dmux operator console: opens the
+            // cockpit directly on its dmux view (or navigates there live if the
+            // cockpit is already open).
+            if (typeof mainWindow.openCockpitView === 'function') {
+              mainWindow.openCockpitView('dmux');
+            } else if (typeof mainWindow.loadCockpit === 'function') {
+              mainWindow.loadCockpit();
+              mainWindow.show();
+              mainWindow.focus();
+            }
+          },
+        },
+        {
           label: 'Open Web App',
           click: () => {
             mainWindow.loadURL(authUrl);
@@ -1339,16 +1355,21 @@ function createWindow() {
     emitDesktopActivationEvent('desktop_cockpit_opened', {
       backendUrl: cfg.backendUrl,
       tokenSource: cfg.tokenSource,
+      view: cfg.view,
     });
     const injectRuntimeConfig = () => {
-      if (!cfg.token) return;
       // Set a plain (non-contextBridge) runtime override the renderer reads as a
-      // higher-priority source than the frozen preload-injected config.
-      const payload = JSON.stringify({
+      // higher-priority source than the frozen preload-injected config. We inject
+      // it whenever there is a token OR an initial-view deep link to honor (e.g.
+      // "Open dmux Console" passes { view: 'dmux' } so the cockpit opens there).
+      if (!cfg.token && !cfg.view) return;
+      const runtime = {
         backendUrl: cfg.backendUrl,
-        token: cfg.token,
         tokenSource: cfg.tokenSource,
-      });
+      };
+      if (cfg.token) runtime.token = cfg.token;
+      if (cfg.view) runtime.view = cfg.view;
+      const payload = JSON.stringify(runtime);
       mainWindow.webContents
         .executeJavaScript(`window.__RECODER_COCKPIT_RUNTIME__ = ${payload}; true;`)
         .catch((error) => logRuntimeError('cockpit-runtime-inject-failed', error));
@@ -1362,6 +1383,39 @@ function createWindow() {
 
   // Expose for menu/tray triggers
   mainWindow.loadCockpit = loadCockpit;
+
+  /** True when the main window is currently showing the bundled cockpit page. */
+  function isCockpitLoaded() {
+    try {
+      const url = mainWindow.webContents.getURL() || '';
+      return url.startsWith('file://') && url.includes('/cockpit/dist/index.html');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Open the cockpit on a specific discoverable view (e.g. 'dmux'). If the
+   * cockpit is already showing, navigate it live via the COCKPIT_NAVIGATE_EVENT
+   * (no reload, no lost auth state). Otherwise load the cockpit with a view
+   * deep-link so it opens directly on that surface.
+   */
+  function openCockpitView(view) {
+    mainWindow.show();
+    mainWindow.focus();
+    if (isCockpitLoaded()) {
+      const detail = JSON.stringify({ view });
+      mainWindow.webContents
+        .executeJavaScript(
+          `window.dispatchEvent(new CustomEvent('recoder-cockpit:navigate', { detail: ${detail} })); true;`,
+        )
+        .catch((error) => logRuntimeError('cockpit-navigate-failed', error, { view }));
+      emitDesktopActivationEvent('desktop_cockpit_view_navigated', { view });
+      return;
+    }
+    loadCockpit({ ...resolveCockpitConfig(), view });
+  }
+  mainWindow.openCockpitView = openCockpitView;
 
   // Tracks the live cockpit auth popup so a second login() reuses it.
   let cockpitAuthWindow = null;

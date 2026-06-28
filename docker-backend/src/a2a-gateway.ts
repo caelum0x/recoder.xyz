@@ -5,6 +5,7 @@ import {
   type RecoderAgentSkill,
   type A2AEnvelopeValidationIssue,
   type RecoderA2AEnvelope,
+  type RecoderPayload,
 } from '@recoder/shared/a2a';
 import {
   A2AErrorCodeEnum,
@@ -530,7 +531,10 @@ function parseEnvelopeFromUnknown(
       version: asString(toRecord.version).trim() || undefined,
     },
     intent,
-    payload: payloadInput as unknown[],
+    // payloadInput is runtime-validated as an array above; the gateway accepts
+    // loose parts, so we assert the strict element type for the canonical
+    // RecoderA2AEnvelope.payload (RecoderPayload[]) shape.
+    payload: payloadInput as RecoderPayload[],
     metadata,
     trace,
   };

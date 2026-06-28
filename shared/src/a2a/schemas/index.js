@@ -25,7 +25,7 @@
  * ```
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.A2AStructuredError = exports.isA2AErrorCode = exports.getErrorCodeMeta = exports.buildA2AError = exports.A2A_ERROR_CODE_REGISTRY = exports.A2AErrorCodeEnum = exports.A2AErrorCategoryEnum = exports.A2AErrorSeverityEnum = exports.createAuditEvent = exports.AuditSeverityEnum = exports.AuditTargetKindEnum = exports.AuditActorKindEnum = exports.AUDIT_EVENT_TYPES = exports.AuditEventTypeEnum = exports.AUDIT_EVENT_VERSION = exports.createTaskEnvelope = exports.transitionTaskEnvelope = exports.isValidTransition = exports.ALLOWED_STATE_TRANSITIONS = exports.isTerminalState = exports.TERMINAL_TASK_STATES = exports.TASK_STATES = exports.TaskStateEnum = exports.TASK_ENVELOPE_VERSION = void 0;
+exports.A2AStructuredError = exports.isA2AErrorCode = exports.getErrorCodeMeta = exports.buildA2AError = exports.A2A_ERROR_CODE_REGISTRY = exports.A2AErrorCodeEnum = exports.A2AErrorCategoryEnum = exports.A2AErrorSeverityEnum = exports.getRecoderA2AEnvelopeSchema = exports.RecoderA2AEnvelopeStrictSchema = exports.RecoderA2AEnvelopeSchema = exports.RecoderEnvelopeTraceSchema = exports.RecoderAgentPlatformSchema = exports.RecoderAgentIdentitySchema = exports.RecoderArtifactPayloadSchema = exports.RecoderCommandPayloadSchema = exports.RecoderJsonPayloadSchema = exports.RecoderTextPayloadSchema = exports.RecoderPayloadSchema = exports.createAuditEvent = exports.AuditSeverityEnum = exports.AuditTargetKindEnum = exports.AuditActorKindEnum = exports.AUDIT_EVENT_TYPES = exports.AuditEventTypeEnum = exports.AUDIT_EVENT_VERSION = exports.createTaskEnvelope = exports.transitionTaskEnvelope = exports.isValidTransition = exports.ALLOWED_STATE_TRANSITIONS = exports.isTerminalState = exports.TERMINAL_TASK_STATES = exports.TASK_STATES = exports.TaskStateEnum = exports.TASK_ENVELOPE_VERSION = void 0;
 var task_envelope_1 = require("./task-envelope");
 // -- version ----------------------------------------------------------------
 Object.defineProperty(exports, "TASK_ENVELOPE_VERSION", { enumerable: true, get: function () { return task_envelope_1.TASK_ENVELOPE_VERSION; } });
@@ -54,6 +54,19 @@ Object.defineProperty(exports, "AuditTargetKindEnum", { enumerable: true, get: f
 Object.defineProperty(exports, "AuditSeverityEnum", { enumerable: true, get: function () { return audit_event_1.AuditSeverityEnum; } });
 // -- factory ----------------------------------------------------------------
 Object.defineProperty(exports, "createAuditEvent", { enumerable: true, get: function () { return audit_event_1.createAuditEvent; } });
+var recoder_envelope_1 = require("./recoder-envelope");
+// -- recoder wire envelope (Zod) --------------------------------------------
+Object.defineProperty(exports, "RecoderPayloadSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderPayloadSchema; } });
+Object.defineProperty(exports, "RecoderTextPayloadSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderTextPayloadSchema; } });
+Object.defineProperty(exports, "RecoderJsonPayloadSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderJsonPayloadSchema; } });
+Object.defineProperty(exports, "RecoderCommandPayloadSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderCommandPayloadSchema; } });
+Object.defineProperty(exports, "RecoderArtifactPayloadSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderArtifactPayloadSchema; } });
+Object.defineProperty(exports, "RecoderAgentIdentitySchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderAgentIdentitySchema; } });
+Object.defineProperty(exports, "RecoderAgentPlatformSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderAgentPlatformSchema; } });
+Object.defineProperty(exports, "RecoderEnvelopeTraceSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderEnvelopeTraceSchema; } });
+Object.defineProperty(exports, "RecoderA2AEnvelopeSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderA2AEnvelopeSchema; } });
+Object.defineProperty(exports, "RecoderA2AEnvelopeStrictSchema", { enumerable: true, get: function () { return recoder_envelope_1.RecoderA2AEnvelopeStrictSchema; } });
+Object.defineProperty(exports, "getRecoderA2AEnvelopeSchema", { enumerable: true, get: function () { return recoder_envelope_1.getRecoderA2AEnvelopeSchema; } });
 var error_taxonomy_1 = require("./error-taxonomy");
 // -- severity ---------------------------------------------------------------
 Object.defineProperty(exports, "A2AErrorSeverityEnum", { enumerable: true, get: function () { return error_taxonomy_1.A2AErrorSeverityEnum; } });

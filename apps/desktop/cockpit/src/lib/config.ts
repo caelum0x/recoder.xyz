@@ -25,9 +25,41 @@ import type { CockpitAuthResult, CockpitConfig } from '../types';
 declare global {
   interface Window {
     __RECODER_COCKPIT__?: CockpitConfig;
-    /** Runtime token override injected by the main process after a fresh login. */
-    __RECODER_COCKPIT_RUNTIME__?: { backendUrl?: string; token?: string; tokenSource?: string };
+    /**
+     * Runtime overrides injected by the main process. `token`/`backendUrl` are
+     * set after a fresh login; `view` is an optional initial-view deep link set
+     * by a menu/launcher action (e.g. "Open dmux Console") so the cockpit opens
+     * directly on that surface.
+     */
+    __RECODER_COCKPIT_RUNTIME__?: {
+      backendUrl?: string;
+      token?: string;
+      tokenSource?: string;
+      view?: string;
+    };
   }
+}
+
+/** The discoverable cockpit surfaces a deep link / launcher can target. */
+export type CockpitView = 'board' | 'sessions' | 'dmux' | 'connectors';
+
+const COCKPIT_VIEWS: readonly CockpitView[] = ['board', 'sessions', 'dmux', 'connectors'];
+
+/** Custom DOM event the shell dispatches to navigate the live cockpit. */
+export const COCKPIT_NAVIGATE_EVENT = 'recoder-cockpit:navigate';
+
+function isCockpitView(value: unknown): value is CockpitView {
+  return typeof value === 'string' && (COCKPIT_VIEWS as readonly string[]).includes(value);
+}
+
+/**
+ * The initial view the cockpit should open on, from a launcher/menu deep link
+ * (`window.__RECODER_COCKPIT_RUNTIME__.view`). Returns null when no valid hint
+ * was injected, so the App falls back to its default ('board').
+ */
+export function readInitialView(): CockpitView | null {
+  const runtime = typeof window !== 'undefined' ? window.__RECODER_COCKPIT_RUNTIME__ : undefined;
+  return isCockpitView(runtime?.view) ? runtime.view : null;
 }
 
 const DEFAULT_BACKEND_URL = 'http://localhost:3100';

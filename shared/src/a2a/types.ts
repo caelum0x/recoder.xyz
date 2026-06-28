@@ -1,6 +1,34 @@
+// Internal alias so the validator can use the schema selector without clashing
+// with the public re-export of the same name below (a name that is both
+// imported and re-exported breaks live-binding forwarding under some bundlers).
+import { getRecoderA2AEnvelopeSchema as selectEnvelopeSchema } from './schemas/recoder-envelope';
+
 export const RECODER_A2A_PROTOCOL_VERSION = '0.3.0';
 export const RECODER_A2A_ENVELOPE_VERSION = '2026-02-14';
 export const RECODER_A2A_ENVELOPE_TEXT_PREFIX = 'recoder.a2a.envelope:';
+
+// Re-export the Zod schemas + inferred types that back the validators below, so
+// consumers can use `safeParse` semantics directly and so the schema is part of
+// the public `@recoder/shared/a2a` surface.
+//
+// NOTE: these are pure re-exports (no local `import` of the same names) so the
+// live bindings forward correctly under both Node's CJS interop and the
+// bundler/SSR transforms used by consumers.
+export {
+  RecoderPayloadSchema,
+  RecoderTextPayloadSchema,
+  RecoderJsonPayloadSchema,
+  RecoderCommandPayloadSchema,
+  RecoderArtifactPayloadSchema,
+  RecoderAgentIdentitySchema,
+  RecoderAgentPlatformSchema,
+  RecoderEnvelopeTraceSchema,
+  RecoderA2AEnvelopeSchema,
+  RecoderA2AEnvelopeStrictSchema,
+  getRecoderA2AEnvelopeSchema,
+  type RecoderPayloadInput,
+  type RecoderA2AEnvelopeInput,
+} from './schemas/recoder-envelope';
 
 export type RecoderAgentPlatform =
   | 'recoder'
@@ -68,6 +96,9 @@ export type RecoderPayload =
   | RecoderCommandPayload
   | RecoderArtifactPayload;
 
+/** Closed set of artifact payload types. */
+export const RECODER_ARTIFACT_TYPES = ['patch', 'file', 'plan', 'report'] as const;
+
 export interface RecoderEnvelopeTrace {
   traceId: string;
   parentMessageId?: string;
@@ -82,7 +113,14 @@ export interface RecoderA2AEnvelope {
   from: RecoderAgentIdentity;
   to: RecoderAgentIdentity;
   intent: RecoderIntent;
-  payload: RecoderPayload[] | unknown[];
+  /**
+   * The ordered list of payload parts carried by this envelope.
+   *
+   * Tightened from the legacy `RecoderPayload[] | unknown[]` to the strict
+   * discriminated union: every part must be a known `RecoderPayload` variant.
+   * Runtime validation is enforced by `RecoderPayloadSchema`.
+   */
+  payload: RecoderPayload[];
   metadata?: Record<string, unknown>;
   trace?: RecoderEnvelopeTrace;
 }
@@ -185,168 +223,62 @@ export class RecoderA2AEnvelopeValidationError extends Error {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+/**
+ * Convert a Zod issue path (array of string/number segments) into the legacy
+ * dotted path notation used by `RecoderEnvelopeValidationIssue`:
+ * - object keys are joined with `.`
+ * - array indices use `[n]` bracket notation
+ *
+ * Example: `['payload', 0, 'text']` -> `payload[0].text`.
+ */
+function zodPathToString(path: ReadonlyArray<string | number>): string {
+  let out = '';
+  for (const segment of path) {
+    if (typeof segment === 'number') {
+      out += `[${segment}]`;
+    } else {
+      out += out.length === 0 ? segment : `.${segment}`;
+    }
+  }
+  return out;
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
-
-function validateIdentity(
-  identity: unknown,
-  path: string,
-  issues: RecoderEnvelopeValidationIssue[]
-): void {
-  if (!isRecord(identity)) {
-    issues.push({ path, message: 'must be an object' });
-    return;
-  }
-
-  if (!isNonEmptyString(identity.id)) {
-    issues.push({ path: `${path}.id`, message: 'must be a non-empty string' });
-  }
-  if (!isNonEmptyString(identity.name)) {
-    issues.push({ path: `${path}.name`, message: 'must be a non-empty string' });
-  }
-  if (
-    !isNonEmptyString(identity.platform) ||
-    !RECODER_AGENT_PLATFORMS.includes(identity.platform as RecoderAgentPlatform)
-  ) {
-    issues.push({
-      path: `${path}.platform`,
-      message: `must be one of ${RECODER_AGENT_PLATFORMS.join(', ')}`,
-    });
-  }
-}
-
-function validatePayload(payload: unknown, issues: RecoderEnvelopeValidationIssue[]): void {
-  if (!Array.isArray(payload)) {
-    issues.push({ path: 'payload', message: 'must be an array' });
-    return;
-  }
-
-  payload.forEach((part, index) => {
-    const basePath = `payload[${index}]`;
-    if (!isRecord(part)) {
-      issues.push({ path: basePath, message: 'must be an object' });
-      return;
-    }
-    if (!isNonEmptyString(part.kind)) {
-      issues.push({ path: `${basePath}.kind`, message: 'must be a non-empty string' });
-      return;
-    }
-
-    if (part.kind === 'text' && !isNonEmptyString(part.text)) {
-      issues.push({ path: `${basePath}.text`, message: 'must be a non-empty string' });
-      return;
-    }
-
-    if (part.kind === 'json' && !isRecord(part.data)) {
-      issues.push({ path: `${basePath}.data`, message: 'must be an object' });
-      return;
-    }
-
-    if (part.kind === 'command') {
-      if (!isNonEmptyString(part.command)) {
-        issues.push({ path: `${basePath}.command`, message: 'must be a non-empty string' });
-      }
-      if (part.args !== undefined && !Array.isArray(part.args)) {
-        issues.push({ path: `${basePath}.args`, message: 'must be an array of strings' });
-      }
-      return;
-    }
-
-    if (part.kind === 'artifact') {
-      if (!isNonEmptyString(part.mimeType)) {
-        issues.push({ path: `${basePath}.mimeType`, message: 'must be a non-empty string' });
-      }
-      if (!isNonEmptyString(part.content)) {
-        issues.push({ path: `${basePath}.content`, message: 'must be a non-empty string' });
-      }
-      if (!isNonEmptyString(part.artifactType)) {
-        issues.push({
-          path: `${basePath}.artifactType`,
-          message: 'must be one of patch, file, plan, report',
-        });
-      }
-      return;
-    }
-
-    if (part.kind !== 'text' && part.kind !== 'json' && part.kind !== 'command' && part.kind !== 'artifact') {
-      issues.push({
-        path: `${basePath}.kind`,
-        message: 'must be one of text, json, command, artifact',
-      });
-    }
-  });
-}
-
+/**
+ * Validate an unknown value against the canonical Recoder A2A envelope schema.
+ *
+ * Zod-backed: structural validation is delegated to `RecoderA2AEnvelopeSchema`
+ * (and its strict variant when `options.strictVersion` is set). The function
+ * signature and return shape are unchanged from the previous hand-rolled
+ * implementation -- it returns a flat list of `{ path, message }` issues and
+ * never throws -- so existing callers continue to work without modification.
+ *
+ * @param value - The raw, untrusted value to validate.
+ * @param options - When `strictVersion` is true, the envelope/protocol version
+ *   fields must equal the canonical pinned constants.
+ * @returns An array of validation issues; empty when the value is a valid
+ *   `RecoderA2AEnvelope`.
+ */
 export function validateRecoderA2AEnvelope(
   value: unknown,
   options: RecoderEnvelopeValidationOptions = {}
 ): RecoderEnvelopeValidationIssue[] {
-  const issues: RecoderEnvelopeValidationIssue[] = [];
-
-  if (!isRecord(value)) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return [{ path: '$', message: 'envelope must be an object' }];
   }
 
-  if (!isNonEmptyString(value.envelopeVersion)) {
-    issues.push({ path: 'envelopeVersion', message: 'must be a non-empty string' });
-  } else if (options.strictVersion && value.envelopeVersion !== RECODER_A2A_ENVELOPE_VERSION) {
-    issues.push({
-      path: 'envelopeVersion',
-      message: `must equal ${RECODER_A2A_ENVELOPE_VERSION}`,
-    });
+  const schema = selectEnvelopeSchema(options.strictVersion === true);
+  const result = schema.safeParse(value);
+  if (result.success) {
+    return [];
   }
 
-  if (!isNonEmptyString(value.protocolVersion)) {
-    issues.push({ path: 'protocolVersion', message: 'must be a non-empty string' });
-  } else if (options.strictVersion && value.protocolVersion !== RECODER_A2A_PROTOCOL_VERSION) {
-    issues.push({
-      path: 'protocolVersion',
-      message: `must equal ${RECODER_A2A_PROTOCOL_VERSION}`,
-    });
-  }
-
-  if (!isNonEmptyString(value.messageId)) {
-    issues.push({ path: 'messageId', message: 'must be a non-empty string' });
-  }
-  if (!isNonEmptyString(value.threadId)) {
-    issues.push({ path: 'threadId', message: 'must be a non-empty string' });
-  }
-  if (!isNonEmptyString(value.createdAt) || Number.isNaN(Date.parse(value.createdAt))) {
-    issues.push({ path: 'createdAt', message: 'must be a valid ISO-8601 timestamp string' });
-  }
-
-  validateIdentity(value.from, 'from', issues);
-  validateIdentity(value.to, 'to', issues);
-  validatePayload(value.payload, issues);
-
-  if (
-    !isNonEmptyString(value.intent) ||
-    !RECODER_ENVELOPE_INTENTS.includes(value.intent as (typeof RECODER_ENVELOPE_INTENTS)[number])
-  ) {
-    issues.push({
-      path: 'intent',
-      message: `must be one of ${RECODER_ENVELOPE_INTENTS.join(', ')}`,
-    });
-  }
-
-  if (value.metadata !== undefined && !isRecord(value.metadata)) {
-    issues.push({ path: 'metadata', message: 'must be an object when provided' });
-  }
-
-  if (value.trace !== undefined) {
-    if (!isRecord(value.trace)) {
-      issues.push({ path: 'trace', message: 'must be an object when provided' });
-    } else if (!isNonEmptyString(value.trace.traceId)) {
-      issues.push({ path: 'trace.traceId', message: 'must be a non-empty string' });
-    }
-  }
-
-  return issues;
+  return result.error.issues.map((issue): RecoderEnvelopeValidationIssue => {
+    const path = zodPathToString(issue.path);
+    return {
+      path: path.length > 0 ? path : '$',
+      message: issue.message,
+    };
+  });
 }
 
 export function isRecoderA2AEnvelope(value: unknown): value is RecoderA2AEnvelope {

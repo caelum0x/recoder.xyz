@@ -239,6 +239,126 @@ describe('conductor-locks (real @recoder/coordination engine)', () => {
   });
 });
 
+describe('reacquireWorkspaceLock (restart re-bind, self-safe)', () => {
+  beforeEach(() => {
+    // Drop any `vi.doMock('@recoder/coordination')` left registered by a prior
+    // degrade-safe test (doMock survives resetModules), then reset the graph so we
+    // get the REAL engine over an empty store — the post-restart state.
+    vi.doUnmock('@recoder/coordination');
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.doUnmock('@recoder/coordination');
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  it('re-acquires a workspace lock into an empty store (post-restart)', async () => {
+    const locks = await import('./conductor-locks.js');
+
+    const result = await locks.reacquireWorkspaceLock({
+      workspaceId: 'ws_live',
+      spaceId: SPACE,
+      taskId: 'task_live',
+      repo: REPO,
+      targetPaths: ['src/live'],
+    });
+
+    expect(result.status).toBe('acquired');
+    if (result.status === 'acquired') {
+      expect(result.lockIds).toHaveLength(1);
+      expect(result.alreadyHeld).toHaveLength(0);
+    }
+    const active = await locks.listActiveWorkspaceLocks({ spaceId: SPACE, repo: REPO });
+    expect(active).toHaveLength(1);
+    expect(active[0].ownerAgentId).toBe('ws_live');
+  });
+
+  it('is idempotent + self-safe: a second re-acquire holds, never duplicates or self-conflicts', async () => {
+    const locks = await import('./conductor-locks.js');
+
+    const first = await locks.reacquireWorkspaceLock({
+      workspaceId: 'ws_self',
+      spaceId: SPACE,
+      taskId: 'task_self',
+      repo: REPO,
+      targetPaths: ['src/me'],
+    });
+    const again = await locks.reacquireWorkspaceLock({
+      workspaceId: 'ws_self',
+      spaceId: SPACE,
+      taskId: 'task_self',
+      repo: REPO,
+      targetPaths: ['src/me'],
+    });
+
+    expect(first.status).toBe('acquired');
+    expect(again.status).toBe('acquired');
+    if (again.status === 'acquired') {
+      // The glob was already owned by THIS workspace => held, not re-locked.
+      expect(again.lockIds).toHaveLength(0);
+      expect(again.alreadyHeld).toHaveLength(1);
+    }
+    // Exactly ONE lock exists — no duplicate was created.
+    const active = await locks.listActiveWorkspaceLocks({ spaceId: SPACE, repo: REPO });
+    expect(active).toHaveLength(1);
+  });
+
+  it('reports a real conflict when a DIFFERENT workspace already holds the scope', async () => {
+    const locks = await import('./conductor-locks.js');
+
+    // A peer grabbed the scope first (e.g. the live workspace lost the race).
+    const holder = await locks.acquireWorkspaceLock({
+      workspaceId: 'ws_peer',
+      spaceId: SPACE,
+      taskId: 'task_peer',
+      repo: REPO,
+      targetPaths: ['src/contended'],
+    });
+    expect(holder.status).toBe('acquired');
+
+    const result = await locks.reacquireWorkspaceLock({
+      workspaceId: 'ws_late',
+      spaceId: SPACE,
+      taskId: 'task_late',
+      repo: REPO,
+      targetPaths: ['src/contended'],
+    });
+
+    expect(result.status).toBe('conflict');
+    if (result.status === 'conflict') {
+      expect(result.conflicts[0].ownerAgentId).toBe('ws_peer');
+    }
+    // Only the peer's lock remains; the conflicting re-acquire took nothing.
+    const active = await locks.listActiveWorkspaceLocks({ spaceId: SPACE, repo: REPO });
+    expect(active).toHaveLength(1);
+    expect(active[0].ownerAgentId).toBe('ws_peer');
+  });
+
+  it('degrade-safe: returns "skipped" when the engine cannot be built', async () => {
+    const real = await vi.importActual<typeof import('@recoder/coordination')>('@recoder/coordination');
+    vi.doMock('@recoder/coordination', () => ({
+      ...real,
+      LockService: class {
+        constructor() {
+          throw new Error('coordination engine unavailable (injected failure)');
+        }
+      },
+    }));
+
+    const locks = await import('./conductor-locks.js');
+    const result = await locks.reacquireWorkspaceLock({
+      workspaceId: 'ws_degraded',
+      spaceId: SPACE,
+      taskId: 'task_degraded',
+      repo: REPO,
+      targetPaths: ['src/anything'],
+    });
+    expect(result.status).toBe('skipped');
+  });
+});
+
 describe('deriveLockGlobs (write-scope derivation)', () => {
   it('widens concrete paths to recursive globs and dedupes', async () => {
     const { deriveLockGlobs } = await import('./conductor-locks.js');
