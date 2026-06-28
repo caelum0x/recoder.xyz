@@ -14,10 +14,30 @@ import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger';
 import { ConnectorsGateway, type ConnectorsHealth, type ChannelHealth } from './gateway.js';
 import { loadConnectorsConfig } from './config.js';
+import { WEBHOOK_INBOUND_CHANNELS, hasWebhookSecret } from './webhook-channels.js';
 
 const logger = createLogger('connectors');
 
 let gateway: ConnectorsGateway | null = null;
+
+/**
+ * Whether the in-process HTTP webhook ingress route has been mounted. Tracked at
+ * module scope because the route is mounted during server-route setup, BEFORE
+ * `startConnectors()` constructs the gateway during boot — so we remember the
+ * intent and apply it to the gateway whenever it is (re)built.
+ */
+let webhookIngressMounted = false;
+
+/**
+ * Record that the in-process webhook ingress route is mounted, and flag the
+ * current gateway if one already exists. Idempotent. Called once by the webhook
+ * router factory. This is what flips push-only channels (line/slack) to
+ * live-inbound-capable in health when their verification secret is configured.
+ */
+export function markWebhookIngressMounted(): void {
+  webhookIngressMounted = true;
+  gateway?.markWebhookIngressActive();
+}
 
 /**
  * Start the connectors gateway. Idempotent + degrade-safe. Returns the gateway
@@ -27,6 +47,8 @@ export async function startConnectors(): Promise<ConnectorsGateway | null> {
   if (gateway) return gateway;
   try {
     gateway = new ConnectorsGateway();
+    // Carry over a webhook ingress that was mounted before the gateway existed.
+    if (webhookIngressMounted) gateway.markWebhookIngressActive();
     await gateway.start();
     return gateway;
   } catch (err) {
@@ -36,10 +58,11 @@ export async function startConnectors(): Promise<ConnectorsGateway | null> {
   }
 }
 
-/** Stop the connectors gateway (graceful shutdown / tests). */
+/** Stop the connectors gateway (graceful shutdown / tests) and clear the singleton. */
 export async function stopConnectors(): Promise<void> {
   if (!gateway) return;
   await gateway.stop().catch((err) => logger.warn({ err }, 'connectors stop failed'));
+  gateway = null;
 }
 
 /** Current gateway instance, if started. */
@@ -63,15 +86,22 @@ export async function connectorsHealth(): Promise<ConnectorsHealth> {
     logger.warn({ err }, 'connectors config load failed');
     return { active: false, dispatchReady: false, channels: [] };
   }
-  const configured: ChannelHealth[] = config.channels.map((c) => ({
-    channel: c.channel,
-    accountId: c.accountId,
-    configured: true,
-    available: false, // not started -> no live port yet
-    connected: false,
-    requiresExternal: c.requiresExternal,
-    reason: c.note,
-  }));
+  const configured: ChannelHealth[] = config.channels.map((c) => {
+    // Push-only channels become live-inbound-capable once the webhook ingress is
+    // mounted and the channel has its verification secret — even before the
+    // gateway is started (the route is up, signatures verify in-process).
+    const liveViaWebhook =
+      webhookIngressMounted && WEBHOOK_INBOUND_CHANNELS.has(c.channel) && hasWebhookSecret(c.channel);
+    return {
+      channel: c.channel,
+      accountId: c.accountId,
+      configured: true,
+      available: false, // not started -> no live port yet
+      connected: false,
+      requiresExternal: c.requiresExternal && !liveViaWebhook,
+      reason: liveViaWebhook ? 'configured; live inbound via in-process HTTP webhook ingress' : c.note,
+    };
+  });
   const unconfigured: ChannelHealth[] = config.unconfigured.map((u) => ({
     channel: u.channel,
     accountId: u.channel,

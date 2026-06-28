@@ -67,6 +67,7 @@ import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { createConductorRouter } from './conductor/conductor.routes.js';
 import { createConnectorsRouter, startConnectors } from './connectors/index.js';
+import { createConnectorsWebhookRouter } from './connectors/webhook-ingress.js';
 import { reconcile as reconcileConductor } from './conductor/workspace-service.js';
 import { startAgentOsOutboxDrainLoop } from './agent-os/outbox-drain-loop.js';
 import { agentOsContainer } from './agent-os/service-container';
@@ -1781,6 +1782,10 @@ app.get('/api/a2a/.well-known/agent.json', (_req: express.Request, res: express.
 // Keep raw JSON text for signed A2A payload verification
 app.use('/api/a2a', express.text({ type: 'application/json', limit: '2mb' }));
 app.use('/api/agent-os/github/webhook', express.raw({ type: 'application/json', limit: '2mb' }), createAgentOsGitHubWebhookRouter());
+// Push-only connector channels (LINE / Slack HTTP Events) ingress: mounted with
+// a raw-body parser (inside the router) BEFORE the global JSON parser so the
+// HMAC signature verifies over the exact bytes the platform signed.
+app.use('/api/connectors/webhook', createConnectorsWebhookRouter());
 app.use(express.json({ limit: '50mb' }));
 // Tighter body-size limit for public API routes (2 MB vs 50 MB global)
 app.use('/api/v1', express.json({ limit: '2mb' }));
