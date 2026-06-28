@@ -1,0 +1,20 @@
+[package]
+name = "recoder-governance-kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The Recoder governance kernel: composes permission + approval + routing + audit behind one fail-closed decide(request) -> verdict pipeline, plus the orchestration lane PolicyEngine and a hot-reloadable policy state."
+
+[dependencies]
+recoder-governance-types = { path = "../recoder-governance-types" }
+recoder-governance-permission = { path = "../recoder-governance-permission" }
+recoder-governance-approval = { path = "../recoder-governance-approval" }
+recoder-governance-routing = { path = "../recoder-governance-routing" }
+recoder-governance-audit = { path = "../recoder-governance-audit" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

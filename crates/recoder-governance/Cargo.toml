@@ -6,6 +6,7 @@ members = [
     "recoder-governance-permission",
     "recoder-governance-approval",
     "recoder-governance-routing",
+    "recoder-governance-kernel",
 ]
 
 [workspace.package]
