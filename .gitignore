@@ -652,3 +652,6 @@ ts/recodergit/**/web/
 .recodergit/
 packages/*/.claude/skills/recodergit/
 .history/
+
+# Rust build artifacts (Recoder crates)
+crates/**/target/

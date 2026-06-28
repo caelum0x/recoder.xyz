@@ -1,0 +1,17 @@
+[package]
+name = "recoder-governance-audit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Tamper-evident SHA-256 Merkle hash-chain audit log for the Recoder governance kernel."
+
+[dependencies]
+recoder-governance-types = { path = "../recoder-governance-types" }
+sha2 = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
