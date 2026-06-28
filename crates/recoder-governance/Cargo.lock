@@ -118,6 +118,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "recoder-governance-kernel"
+version = "0.1.0"
+dependencies = [
+ "recoder-governance-approval",
+ "recoder-governance-audit",
+ "recoder-governance-permission",
+ "recoder-governance-routing",
+ "recoder-governance-types",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "recoder-governance-permission"
 version = "0.1.0"
 dependencies = [
