@@ -27,6 +27,7 @@
  *
  * Sibling control-plane routes (NOT under /api/conductor):
  *   GET  /api/connectors                              per-channel connector health
+ *   GET  /api/agent-os/brain/stats                    shared-brain reuse + governance audit
  *   POST /api/agent-os/policy/evaluate                real @recoder/agent-policy decision
  *   GET  /api/agent-os/memory/lifecycle/candidates    reviewed memory candidates
  *   POST /api/agent-os/memory/lifecycle/candidates             propose a candidate (with evidence)
@@ -34,6 +35,7 @@
  */
 import type {
   ApiEnvelope,
+  BrainStats,
   ConductorHealth,
   ConductorSession,
   ConnectorsHealth,
@@ -218,6 +220,12 @@ export const api = {
   connectors: () => requestAt<ConnectorsHealth>('/api/connectors', 'GET', '/'),
 
   // --- Agent OS control plane (mounted at /api/agent-os, NOT /api/conductor) ---
+
+  /**
+   * Shared-brain reuse accounting + governance audit integrity.
+   * GET /api/agent-os/brain/stats -> { brain: { enabled, report }, governance }.
+   */
+  brainStats: () => agentOsRequest<BrainStats>('GET', '/brain/stats'),
 
   /** Run the real @recoder/agent-policy engine -> PolicyDecision (allow|needs_approval|deny). */
   evaluatePolicy: (body: PolicyEvaluateBody) =>

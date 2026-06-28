@@ -164,6 +164,12 @@ describe('api URL construction', () => {
     expect(lastUrl).toBe(`${BACKEND_URL}/api/connectors/`);
   });
 
+  it('routes brain stats to /api/agent-os/brain/stats (NOT under /api/conductor)', async () => {
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: {} } }));
+    await api.brainStats();
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/agent-os/brain/stats`);
+  });
+
   it('routes policy evaluate to /api/agent-os/policy/evaluate (NOT under /api/conductor)', async () => {
     mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: {} } }));
     await api.evaluatePolicy({
@@ -250,6 +256,16 @@ describe('api agent-os envelope unwrap', () => {
       target: {},
     });
     expect(result).toEqual(decision);
+  });
+
+  it('unwraps a BrainStats payload from {success,data}', async () => {
+    const brainStats = {
+      brain: { enabled: true, report: { available: false, hits: 0, misses: 0, hitRate: 0, tokensSaved: 0, detail: 'not yet read' } },
+      governance: { ok: true, entries: 5, tipHash: 'abc123' },
+    };
+    mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: brainStats } }));
+    const result = await api.brainStats();
+    expect(result).toEqual(brainStats);
   });
 
   it('propagates a backend rejection (e.g. missing evidence) as an ApiError', async () => {

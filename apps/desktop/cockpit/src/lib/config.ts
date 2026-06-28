@@ -50,7 +50,8 @@ export type CockpitView =
   | 'memory'
   | 'substrates'
   | 'events'
-  | 'governance';
+  | 'governance'
+  | 'brain';
 
 const COCKPIT_VIEWS: readonly CockpitView[] = [
   'board',
@@ -62,6 +63,7 @@ const COCKPIT_VIEWS: readonly CockpitView[] = [
   'substrates',
   'events',
   'governance',
+  'brain',
 ];
 
 /** Custom DOM event the shell dispatches to navigate the live cockpit. */
