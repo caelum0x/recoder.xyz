@@ -1,8 +1,41 @@
 # Coordination Subsystem (`packages/coordination`)
 
-> **Status:** Architecture spec (design of record).
+> **Status:** Built & green; wired into the conductor. The package ships all four capability modules plus a durable Postgres claim/lock path. Sections 4–13 below remain the design-of-record; where the shipped code diverges from that design (NATS transport, contract/property/integration test suites, Postgres coverage for handoff/squad/presence), the divergence is called out in **§0 Shipped state** and **§0.1 Gaps / not-yet-live**.
 > **Owner:** Lead architect, coordination subsystem.
 > **Scope:** First-party fusion of three owned sources into one coordination engine. All code here is owned and merged — never a thin HTTP wrapper around the originals.
+
+---
+
+## 0. Shipped state (verified against the repo)
+
+This section is the ground truth as of the cited commits. Everything here was verified by reading the package and running its tests; the design narrative in §4 onward describes intent and may run ahead of shipped reality where §0.1 says so.
+
+- **Package:** `packages/coordination`, `@recoder/coordination` **v0.1.0** (`packages/coordination/package.json`). Deps: `@recoder/agent-os`, `@recoder/a2a-sdk`, `zod`. Build via `tsup`; tests via `node --test --import tsx`.
+- **Tests: 267 pass / 0 fail.** Verified by running `node --test --import tsx 'tests/**/*.test.ts' 'src/**/*.test.ts'` ⇒ `tests 267, pass 267, fail 0`. All under `tests/unit/` (locks, dispatch, handoff, coherence, persistence) — see `packages/coordination/tests/unit/`.
+- **All four capability modules ship** (not just a "foundation" slice — the package's own `README.md` "Status" paragraph is stale on this point):
+  - `src/locks/` — `LockService` (`lock-service.ts`), glob overlap, TTL, fencing, coverage, reaper, manager.
+  - `src/dispatch/` — `RoutingService`, candidate scorer, capability matcher, permission/space-policy filters, dependency resolver + graph walker + ready-set, `ClaimCoordinator`, duplicate guard, squad dispatch/leader policy, `orchestration/` (direct/fan-out/pipeline/competitive/aggregation), dispatch planner + manager.
+  - `src/handoff/` — `HandoffBus`, parser, `HandoffService`, `DelegationChainService`, cycle detector, depth guard, dedup ledger, envelope codec, context transfer, approval-gate adapter, handoff reconciler.
+  - `src/coherence/` — `Reconciler` (`reconciler-service.ts`), snapshot + loader, all ten `checks/`, heal actions, escalation, signal builder, reconcile scheduler.
+  - `src/engine/` — `CoordinationEngine`, `buildCoordinationEngine`, command/query bus, transaction, effect-runner.
+- **Durable Postgres claim store (the headline fact):** `src/persistence/postgres/postgres-claim-store.ts` — `PostgresClaimStore` implements the exactly-once dispatch claim with **`SELECT ... FOR UPDATE`** on the per-task row (line ~125) + **`ON CONFLICT (task_id) DO UPDATE`** (line ~146), so a dispatch claim survives across processes (not just in-memory). Commit `7807f9e94`. Tests: `tests/unit/persistence/postgres-claim-store.test.ts`.
+- **Durable Postgres lock store:** `src/persistence/postgres/postgres-lock-store.ts` — `PostgresLockStore` with `ON CONFLICT (lock_id) DO UPDATE` CAS + `postgres-lease-fencer.ts` for the fence token. Restart-survivable work-locks. Tests: `tests/unit/persistence/postgres-lock-store.test.ts`.
+- **Wired into the conductor (claim-before-launch + handoff-on-review):**
+  - `docker-backend/src/conductor/coordination-integration.ts` builds a real `CoordinationEngine`, prefers `PostgresClaimStore` when a pool is configured (else `MemoryClaimStore`), and exports `claimTaskForWorkspace`, `releaseTaskClaim`, `emitReviewHandoff`, `isDispatchDegraded`. Commit `fbe8cb4ea`.
+  - `docker-backend/src/conductor/workspace-service.ts` calls the dispatch claim **before** launch inside `lockPort.acquire` (it runs the idempotent task claim first; a conflict is surfaced in the exact work-lock-conflict shape so the engine refuses the duplicate launch), `releaseTaskClaim` on teardown, and emits a `review` handoff (fire-and-forget) when a workspace enters `awaiting_review`.
+  - Degrade-safe throughout: when coordination fails to load, claims/handoffs return `skipped` (never a fake claim) and the proven work-lock layer remains the sole gate. Tested in `coordination-integration.test.ts` (injected-failure path).
+- **Conductor coordination tests:** `docker-backend/src/conductor/conductor-locks.test.ts` and `coordination-integration.test.ts` (run with vitest under docker-backend).
+
+### 0.1 Gaps / not-yet-live (honest)
+
+These are real divergences from the §4+ design. They are **not** shipped today and must not be cited as done.
+
+- **NATS transport not shipped.** Only `src/transport/inproc-event-bus.ts` exists. `src/transport/nats-event-bus.ts` does **not** exist; `NatsEventBus` is a `TODO(wave-2)` comment in `src/index.ts`. The §3 tree, §6 fusion map, and §8 public API list `NatsEventBus`/`nats-event-bus.ts` — those entries are design intent, not current code.
+- **Postgres adapters cover only claim, lock, and lease-fencer.** `handoff-store`, `squad-store`, `presence-store`, `dependency-store`, and `signal-sink` ship as **memory-only** adapters (`src/persistence/memory/`). There are no `pg-handoff-store` / `pg-squad-store` / `pg-presence-store` / `pg-signal-sink` files yet, despite the §3 tree listing them.
+- **Postgres path is infra-gated, not exercised end-to-end here.** The Postgres claim/lock stores have unit tests, but a full cross-process E2E requires a live Postgres pool (`pg-pool.ts`), which is not run in the package test suite. Treat live-pool durability as gated until verified against a real DB.
+- **No `tests/contracts/`, `tests/property/`, or `tests/integration/` directories.** The §3 tree and §12 verification plan describe port-contract tests, property tests (`no-overlapping-active-locks`, `claim-exactly-once`, `handoff-no-cycles`), and multi-module integration tests. The shipped suite is `tests/unit/` only. The invariants are covered by unit tests (e.g. the claim store's "exactly one winner" test), not by the property/contract harness the design calls for.
+- **multica is a ported algorithm, not a transpiled service.** The claim recovery window and related semantics are re-implemented first-party in TS (`dispatch/claim-coordinator.ts`, `domain/claim-recovery.ts`). The Go `go/multica` service is not compiled into this package; this matches the design intent and is noted here only so "fused from multica" is read as *ported*, not *linked*.
+- **Redis fast-path adapters not shipped.** The §3 tree lists `persistence/redis/redis-claim-cache.ts` / `redis-lock-lease.ts`; no `redis/` directory exists in the package.
 
 ---
 
@@ -358,7 +391,7 @@ packages/coordination/
         └── clock.ts                              # deterministic FakeClock + FakeIdGenerator
 ```
 
-**Planned functional file count (src/, excluding tests/config/build):** ~118 TypeScript files. Including `tests/` the package is ~190 files; the design target of 80–150 *functional* files is met by `src/`.
+**File-count note (verified):** the tree above is the *design* layout. The **shipped** `src/` is ~155 TypeScript files across these modules, and `tests/` is **unit-only** (~53 `*.test.ts` files under `tests/unit/`) — there is no `tests/contracts/`, `tests/property/`, or `tests/integration/` directory yet, and `persistence/redis/`, `persistence/postgres/pg-handoff-store.ts` (and the other non-claim/lock pg stores), `transport/nats-event-bus.ts`, and `seams/` are not present. See **§0.1** for the full list of design-vs-shipped divergences.
 
 ---
 
@@ -556,6 +589,8 @@ for check in checks/*:  findings += check(snapshot)   [all PURE]
 
 ## 8. Public API surface (`src/index.ts`)
 
+> **Shipped vs. design:** the actual `src/index.ts` exports the engine, pure services (`LockService`, `RoutingService`, `ClaimCoordinator`, `Reconciler` from `coherence/reconciler-service`, `DelegationChainService`), managers (`LockManager`, `DispatchManager`, `HandoffService`, `HandoffBus`), domain types, ports, errors, `Result`, config, `memory` + `postgres` adapter namespaces, and `InProcEventBus`. **`NatsEventBus` is commented out as a `TODO(wave-2)`** and is not exported; the `postgres` namespace exposes **claim/lock/lease-fencer** stores only. The block below is the design-intent surface — read it against §0.1.
+
 ```ts
 // ── Engine (the primary entry) ──────────────────────────────────────────────
 export { CoordinationEngine } from './engine/coordination-engine';
@@ -662,39 +697,41 @@ Secrets (NATS creds, DB URL) are read from env only; fail-fast if a required one
 
 Per `.claude/rules/testing.md` — narrowest checks that prove touched behavior, captured as artifacts.
 
+**Shipped today** (the package exposes a single `test` script — `node --test --import tsx`, no split `test:unit`/`test:contracts`/`test:property`/`test:integration` scripts yet):
+
 ```bash
-# Type + format (repo gates)
+# Type-check
 pnpm --filter @recoder/coordination check-types
-pnpm --filter @recoder/coordination format
 
-# Unit (pure modules; no IO) — must hit ≥80% per common/testing.md
-pnpm --filter @recoder/coordination test:unit
-
-# Port-contract tests run against EVERY adapter (memory + postgres + redis + nats)
-pnpm --filter @recoder/coordination test:contracts
-
-# Property tests for the three core invariants
-pnpm --filter @recoder/coordination test:property
-
-# Integration (multi-module, memory adapters)
-pnpm --filter @recoder/coordination test:integration
+# Full unit suite — verified: tests 267, pass 267, fail 0
+pnpm --filter @recoder/coordination test
+#   (equivalently: node --test --import tsx 'tests/**/*.test.ts' 'src/**/*.test.ts')
 ```
 
-**Invariants the suite must prove (the reason this subsystem exists):**
+The split `test:contracts` / `test:property` / `test:integration` invocations below are **design intent**, not shipped scripts (see §0.1 — those test directories do not exist yet):
 
-1. **No overlapping active locks** — `property/no-overlapping-active-locks.prop.ts`: for any sequence of acquires/releases the engine never yields two overlapping `exclusive` active locks.
-2. **Claim exactly-once** — `property/claim-exactly-once.prop.ts` + `claim-store.contract.ts`: under concurrent claims at most one wins; the recovery window prevents double-dispatch.
-3. **No handoff cycles / unbounded depth** — `property/handoff-no-cycles.prop.ts`: any delegation graph with a cycle or depth > cap is rejected.
-4. **Collision prevented** — `integration/collision-prevented.test.ts`: two agents, overlapping target paths → the second is blocked with `LockConflictError` carrying the conflicting lock.
-5. **Duplicate work prevented** — `integration/duplicate-work-prevented.test.ts`: two dispatches of one task → exactly one claim, the other `ClaimConflictError`.
-6. **Reconciler heals safe, signals unsafe** — `integration/reconciler-heals-and-signals.test.ts`: seeded drift (expired lock, dead-agent claim, duplicate claim) → safe ones auto-healed, unsafe ones become `WorkSignal`s with `whyItMatters`/`recommendedNextAction`.
+```bash
+# NOT YET WIRED — design target:
+# pnpm --filter @recoder/coordination test:contracts   # port-contract tests per adapter
+# pnpm --filter @recoder/coordination test:property     # the three core invariants
+# pnpm --filter @recoder/coordination test:integration  # multi-module flows
+```
 
-CI runs unit + contracts + property on every push; integration on PR. Coverage gate 80% (per `common/testing.md`), with `engine/`, `locks/`, `dispatch/`, `handoff/`, `coherence/` expected ≥90% (pure code).
+**Invariants the suite must prove (the reason this subsystem exists).** Today these are covered by **unit tests** under `tests/unit/`; the dedicated `property/*.prop.ts`, `*.contract.ts`, and `integration/*.test.ts` files named below are the design target and **do not exist yet** (see §0.1):
+
+1. **No overlapping active locks** — unit-covered by `tests/unit/locks/lock-conflict-detector.test.ts` + `lock-coverage.test.ts`. _Design target:_ `property/no-overlapping-active-locks.prop.ts`.
+2. **Claim exactly-once** — unit-covered: `tests/unit/dispatch/claim-coordinator.test.ts` and `tests/unit/persistence/postgres-claim-store.test.ts` assert "two agents claiming the same task — exactly one winner, no double-assign" and "a retry with the same idempotency key returns the existing claim, never a second"; the recovery window prevents double-dispatch. _Design target:_ `property/claim-exactly-once.prop.ts` + `claim-store.contract.ts`.
+3. **No handoff cycles / unbounded depth** — unit-covered: `tests/unit/handoff/cycle-detector.test.ts` + `depth-guard.test.ts`. _Design target:_ `property/handoff-no-cycles.prop.ts`.
+4. **Collision prevented** — at the package level via the lock-conflict unit tests; **end-to-end in the conductor** via `docker-backend/src/conductor/conductor-locks.test.ts` (claim/lock conflict → refuse duplicate launch). _Design target:_ `integration/collision-prevented.test.ts`.
+5. **Duplicate work prevented** — unit-covered by the exactly-once claim tests in (2); conductor-level by `coordination-integration.test.ts`. _Design target:_ `integration/duplicate-work-prevented.test.ts`.
+6. **Reconciler heals safe, signals unsafe** — unit-covered: `tests/unit/coherence/reconciler-service.test.ts`, `reconciler.test.ts`, `heal-actions.test.ts`, and the per-check tests under `tests/unit/coherence/checks/`. _Design target:_ `integration/reconciler-heals-and-signals.test.ts`.
+
+CI runs the unit suite (`node --test`, 267 tests). The split contracts/property/integration runs and an enforced 80%/90% coverage gate are design targets, not yet wired in this package.
 
 ---
 
 ## 13. Build & packaging
 
 - `tsup.config.ts` — ESM + CJS + `.d.ts` (mirrors `packages/agent-os/tsup.config.ts`).
-- `package.json` deps: `@recoder/agent-os` (domain reuse), `@recoder/a2a-sdk` (wire interop), `zod` (validation). Optional peers: `nats` (transport), `pg` (postgres adapter), `ioredis` (redis adapter) — all lazy-loaded so the pure core has zero hard runtime deps (mirrors the A2A bus's lazy `import("nats")`).
+- **Verified `package.json` deps:** `@recoder/agent-os` (domain reuse), `@recoder/a2a-sdk` (wire interop), `zod` (validation). devDeps: `tsup`, `tsx`, `typescript`, `@types/node`. There are currently **no declared `peerDependencies`** and no `ioredis`; the Postgres adapter takes an injected pool (typed `as never` at the conductor seam) rather than depending on `pg` directly, and `nats`/`ioredis` adapters are not shipped (see §0.1). The design intent is that optional transport/store drivers stay lazy-loaded so the pure core has zero hard runtime deps — that intent holds for the inproc bus and memory/postgres stores that exist today.
 - No secrets in the package (per `feedback_no_secrets_in_packages` memory): env-only, templates only.

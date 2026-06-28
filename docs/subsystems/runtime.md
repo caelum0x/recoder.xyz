@@ -71,278 +71,132 @@ missing drivers.
 
 ## 2. File tree (`packages/runtime`)
 
+> **This tree is the ACTUAL shipped `src/` layout** (verified by reading the directory on
+> 2026-06-29), not a design wishlist. Where the original design named files that were never
+> landed, those are called out in §13 (Gaps). Notably: the **generic** surfaces
+> (`gemini_cli`, `qwen_code`, `acp`) are NOT separate driver folders — they are thin factories
+> over **one** `drivers/generic/generic-process-driver.ts`. Cross-subsystem **seams** are a
+> single `seams/index.ts` (interfaces only), not one file per port.
+
 ```text
 packages/runtime
-├── package.json                         # @recoder/runtime; deps: agent-runtimes, agent-os, pi-*, ai
-├── tsup.config.ts                       # multi-entry build (index, drivers/*, env/*)
+├── package.json                         # @recoder/runtime; deps: agent-runtimes, agent-os, agent-events, pi-{coding-agent,ai,agent-core}, ai
+├── tsup.config.ts                       # single-entry build (index)
 ├── tsconfig.json
 ├── README.md
+├── tests/                               # see §10 (ACTUAL: only unit driver tests landed)
 └── src
-    ├── index.ts                         # public barrel: createRuntime, registry, driver factories
-    ├── public-api.ts                    # the curated public surface (re-exports, nothing private leaks)
+    ├── index.ts                         # `export * from './public-api'`
+    ├── public-api.ts                    # the curated public surface (re-exports; see §5)
     │
-    ├── engine/                          # the uniform core that every driver plugs into
-    │   ├── runtime.ts                   # createRuntime(): builds registry + engine, top-level entry
-    │   ├── runtime-engine.ts            # orchestrates one sendTask(): lifecycle, gates, normalization
-    │   ├── run-context.ts               # per-run context object (ids, signal, emit, clock, deadlines)
-    │   ├── run-lifecycle.ts             # state machine wrapper aligned to TaskRunState transitions
-    │   ├── event-pipeline.ts            # async pipeline: driver frames -> middleware -> RunEvent sink
-    │   ├── event-normalizer.ts          # coerce RuntimeExecutionOutput -> canonical RunEvent (ids, agentId)
-    │   ├── terminal-event-guard.ts      # detect completed/failed; forbid post-terminal emissions
-    │   ├── cancellation.ts              # AbortController registry keyed by runId + taskId aliases
-    │   ├── deadline.ts                  # wall-clock + idle timeouts -> timeout RuntimeAdapterError
-    │   ├── backpressure.ts              # bounded queue between driver and consumer; drop/coalesce logs
-    │   ├── concurrency-limiter.ts       # per-surface + global max concurrent runs (semaphore)
-    │   ├── run-journal.ts               # append-only in-memory journal of emitted events for replay
-    │   ├── retry-policy.ts              # classify RuntimeErrorCode -> retryable; exponential backoff
-    │   ├── emit.ts                      # low-level RunEvent builder (wraps runtimeEvent factory)
+    ├── engine/                          # the uniform core every driver plugs into
+    │   ├── runtime.ts  runtime-engine.ts  run-context.ts  run-lifecycle.ts
+    │   ├── event-pipeline.ts  event-normalizer.ts  terminal-event-guard.ts
+    │   ├── cancellation.ts  deadline.ts  backpressure.ts  concurrency-limiter.ts
+    │   ├── run-journal.ts  retry-policy.ts  emit.ts
     │   └── index.ts
     │
-    ├── adapter/                         # the AgentRuntimeAdapter implementation over a driver
-    │   ├── runtime-adapter.ts           # createRuntimeAdapter(driver, opts): implements AgentRuntimeAdapter
-    │   ├── adapter-options.ts           # resolve id/kind/capabilities/health from driver descriptor
-    │   ├── send-task.ts                 # async generator: start->gate->run->normalize->terminal
-    │   ├── health-aggregator.ts         # merge driver health + env health + CLI-presence probe
-    │   ├── capability-resolver.ts       # AgentCapability[] from driver descriptor + CLI feature probe
-    │   ├── approve.ts                   # forward approval decisions to a paused, awaiting driver run
+    ├── adapter/                         # the AgentRuntimeAdapter skin over a driver
+    │   ├── runtime-adapter.ts  adapter-options.ts  send-task.ts
+    │   ├── health-aggregator.ts  capability-resolver.ts  approve.ts
     │   └── index.ts
     │
     ├── registry/                        # driver discovery + selection
-    │   ├── driver-registry.ts           # register/lookup drivers by AgentSurface + variant id
-    │   ├── driver-descriptor.ts         # static metadata: kind, surfaces, capabilities, modes, cli
-    │   ├── surface-resolver.ts          # TaskSpec/AgentProfile -> chosen driver descriptor
-    │   ├── builtin-drivers.ts           # register claude-code, codex, opencode, pi, in-process, browser
-    │   ├── variant-resolver.ts          # pick headless mode variant (json vs rpc vs acp vs exec)
-    │   └── index.ts
+    │   ├── driver-registry.ts  driver-descriptor.ts  surface-resolver.ts
+    │   ├── builtin-drivers.ts  variant-resolver.ts  index.ts
     │
-    ├── contracts/                       # the driver SPI every fused source implements
-    │   ├── runtime-driver.ts            # RuntimeDriver interface: start/run/cancel/approve/probe
-    │   ├── driver-context.ts            # DriverContext: cwd, env, signal, emit, policy, deadlines
-    │   ├── driver-frame.ts              # DriverFrame union (text, json-event, tool-call, error, done)
-    │   ├── driver-result.ts             # DriverResult: exit code, stop reason, usage, final text
-    │   ├── headless-mode.ts             # HeadlessMode enum: print | json | rpc | acp | exec | in_process
-    │   ├── cli-invocation.ts            # CliInvocation: command, args, stdin, env, cwd builder type
-    │   └── index.ts
+    ├── contracts/                       # the driver SPI every driver implements
+    │   ├── runtime-driver.ts  driver-context.ts  driver-frame.ts  driver-result.ts
+    │   ├── headless-mode.ts  cli-invocation.ts  index.ts
     │
-    ├── types/                           # subsystem-local domain types (Zod-backed)
-    │   ├── runtime-config.ts            # RuntimeConfig schema (timeouts, concurrency, paths)
-    │   ├── runtime-policy.ts            # re-export + Zod parse of RuntimePolicy from agent-runtimes
-    │   ├── run-id.ts                     # RunId/branded ids + makeRunId()
-    │   ├── usage.ts                      # TokenUsage/cost accounting shape (from pi-ai usage)
-    │   ├── tool-call.ts                  # normalized ToolCall/ToolResult shape across all CLIs
-    │   ├── stop-reason.ts               # unified StopReason mapping (end_turn|error|aborted|max_steps)
-    │   ├── evidence.ts                   # RuntimeEvidence artifact descriptors (diff, log, html, junit)
-    │   └── index.ts
+    ├── types/                           # subsystem-local domain types
+    │   ├── runtime-config.ts  runtime-policy.ts  run-id.ts  usage.ts
+    │   ├── tool-call.ts  stop-reason.ts  evidence.ts  index.ts
     │
-    ├── drivers/                         # ONE folder per fused agent; each implements RuntimeDriver
+    ├── drivers/                         # one folder per fused driver; each implements RuntimeDriver
+    │   ├── shared/                       # reusable CLI plumbing (the de-duped merge)
+    │   │   ├── process-driver.ts  spawn.ts  wait-for-exit.ts
+    │   │   ├── jsonl-reader.ts  jsonl-writer.ts  ansi-text-reader.ts
+    │   │   ├── env-builder.ts  arg-builder.ts  cwd-resolver.ts  prompt-writer.ts
+    │   │   ├── cli-locator.ts  cli-version-probe.ts  frame-debouncer.ts
+    │   │   ├── tool-call-tracker.ts  index.ts
     │   │
-    │   ├── shared/                       # reusable driver machinery (the merge of common CLI code)
-    │   │   ├── process-driver.ts        # base class: spawn CLI, wire stdio, stream frames, exit
-    │   │   ├── spawn.ts                  # MERGE of pi-coding-agent/src/utils/child-process.ts
-    │   │   ├── wait-for-exit.ts          # MERGE of waitForChildProcess (windows stdio grace handling)
-    │   │   ├── jsonl-reader.ts           # line-delimited JSON stream reader (MERGE pi rpc/jsonl.ts)
-    │   │   ├── jsonl-writer.ts           # write JSONL commands to a child's stdin (rpc steering)
-    │   │   ├── ansi-text-reader.ts       # buffer + strip ANSI for print-text CLIs (uses pi ansi util)
-    │   │   ├── env-builder.ts            # assemble child env: policy-scoped, secret-redacted, BYOK keys
-    │   │   ├── arg-builder.ts            # compose CLI args from TaskSpec + bundle + headless mode
-    │   │   ├── cwd-resolver.ts           # apply CwdPolicy: repo_root|workspace_root|task_path
-    │   │   ├── prompt-writer.ts          # write renderedPrompt to stdin or temp prompt file
-    │   │   ├── stdin-prompt.ts           # feed InstructionBundle.renderedPrompt as first message
-    │   │   ├── cli-locator.ts            # find the user's CLI binary (PATH, node_modules/.bin, config)
-    │   │   ├── cli-version-probe.ts      # `--version` probe -> health + capability gating
-    │   │   ├── frame-debouncer.ts        # coalesce token deltas into log RunEvents (rate-limited)
-    │   │   ├── tool-call-tracker.ts      # pair tool-call frames with results across the stream
-    │   │   └── index.ts
+    │   ├── claude-code/                  # drives the user's `claude` CLI (stream-json)
+    │   │   ├── claude-code-driver.ts  claude-args.ts  claude-stream-json.ts
+    │   │   ├── claude-tool-mapper.ts  claude-permission-bridge.ts  claude-mcp-config.ts
+    │   │   ├── claude-health.ts  claude-capabilities.ts  claude-descriptor.ts  index.ts
     │   │
-    │   ├── claude-code/                  # drives the user's `claude` CLI headless
-    │   │   ├── claude-code-driver.ts     # RuntimeDriver impl; spawns claude in stream-json mode
-    │   │   ├── claude-args.ts            # build `-p --output-format stream-json --verbose` args
-    │   │   ├── claude-stream-json.ts     # parse Anthropic stream-json frames -> DriverFrame
-    │   │   ├── claude-tool-mapper.ts     # map claude tool_use/tool_result -> normalized ToolCall
-    │   │   ├── claude-permission-bridge.ts # map policy -> --permission-mode / --allowedTools flags
-    │   │   ├── claude-mcp-config.ts      # write .mcp.json passthrough from agent-mcp registry
-    │   │   ├── claude-session.ts         # --resume / --session-id continuity for steering
-    │   │   ├── claude-health.ts          # claude CLI presence + auth-state probe
-    │   │   ├── claude-capabilities.ts    # static AgentCapability[] for claude_code surface
-    │   │   ├── claude-descriptor.ts      # DriverDescriptor wiring all of the above
-    │   │   └── index.ts
+    │   ├── codex/                        # drives `codex exec --json` (FUSE oh-my-codex)
+    │   │   ├── codex-driver.ts  codex-args.ts  codex-event-stream.ts  codex-tool-mapper.ts
+    │   │   ├── codex-approval-bridge.ts  codex-config-writer.ts  codex-mcp-registry.ts
+    │   │   ├── codex-runtime-bridge.ts  codex-profile.ts  codex-health.ts
+    │   │   ├── codex-capabilities.ts  codex-descriptor.ts  index.ts
     │   │
-    │   ├── codex/                        # drives the user's OpenAI `codex` CLI (FUSE oh-my-codex)
-    │   │   ├── codex-driver.ts           # RuntimeDriver impl; `codex exec --json` headless
-    │   │   ├── codex-args.ts             # build exec args, sandbox/approval flags, model/profile
-    │   │   ├── codex-event-stream.ts     # parse codex experimental JSON events -> DriverFrame
-    │   │   ├── codex-tool-mapper.ts      # codex tool/patch events -> normalized ToolCall/diff
-    │   │   ├── codex-approval-bridge.ts  # map codex on-request approvals -> approval_requested
-    │   │   ├── codex-config-writer.ts    # MERGE oh-my-codex/src/config/generator.ts (config.toml)
-    │   │   ├── codex-mcp-registry.ts     # MERGE oh-my-codex/src/config/mcp-registry.ts
-    │   │   ├── codex-runtime-bridge.ts   # ADAPT oh-my-codex/src/runtime/bridge.ts (omx-runtime sidecar, optional)
-    │   │   ├── codex-profile.ts          # ADAPT oh-my-codex/src/config/models.ts (model/profile select)
-    │   │   ├── codex-health.ts           # codex CLI presence + login state probe
-    │   │   ├── codex-capabilities.ts     # static AgentCapability[] for codex surface
-    │   │   ├── codex-descriptor.ts       # DriverDescriptor
-    │   │   └── index.ts
+    │   ├── opencode/                     # drives `opencode` (FUSE oh-my-openagent)
+    │   │   ├── opencode-driver.ts  opencode-args.ts  opencode-event-stream.ts
+    │   │   ├── opencode-tool-mapper.ts  opencode-plugin-config.ts  opencode-hooks-bridge.ts
+    │   │   ├── opencode-tools-bridge.ts  opencode-tmux-config.ts  opencode-health.ts
+    │   │   ├── opencode-capabilities.ts  opencode-descriptor.ts  index.ts
     │   │
-    │   ├── opencode/                     # drives the user's `opencode` CLI (FUSE oh-my-openagent)
-    │   │   ├── opencode-driver.ts        # RuntimeDriver impl; opencode run --print-logs / server
-    │   │   ├── opencode-args.ts          # build run/serve args, model, agent selection
-    │   │   ├── opencode-event-stream.ts  # parse opencode SSE/JSON message stream -> DriverFrame
-    │   │   ├── opencode-server-client.ts # talk to opencode's local server API when in server mode
-    │   │   ├── opencode-tool-mapper.ts   # opencode tool parts -> normalized ToolCall
-    │   │   ├── opencode-plugin-config.ts # ADAPT oh-my-openagent/src/plugin-config.ts (config load)
-    │   │   ├── opencode-hooks-bridge.ts  # ADAPT oh-my-openagent/src/create-hooks.ts -> RunEvent hooks
-    │   │   ├── opencode-tools-bridge.ts  # ADAPT oh-my-openagent/src/create-tools.ts (extra tools)
-    │   │   ├── opencode-tmux-config.ts   # ADAPT oh-my-openagent/src/create-runtime-tmux-config.ts
-    │   │   ├── opencode-health.ts        # opencode CLI presence + auth probe
-    │   │   ├── opencode-capabilities.ts  # static AgentCapability[]
-    │   │   ├── opencode-descriptor.ts    # DriverDescriptor
-    │   │   └── index.ts
-    │   │
-    │   ├── pi/                           # drives the in-repo `pi` agent (FUSE pi-coding-agent)
-    │   │   ├── pi-driver.ts              # RuntimeDriver impl; runs pi headless in-process or spawned
-    │   │   ├── pi-print-driver.ts        # IN-PROCESS via runPrintMode (pi-coding-agent print-mode.ts)
-    │   │   ├── pi-rpc-driver.ts          # JSONL RPC via pi rpc-mode (steer/follow_up/abort/get_state)
-    │   │   ├── pi-rpc-client.ts          # ADAPT pi-coding-agent/src/modes/rpc/rpc-client.ts
-    │   │   ├── pi-session-host.ts        # construct AgentSessionRuntime for in-process runs
-    │   │   ├── pi-event-mapper.ts        # pi session events (print-mode json) -> DriverFrame
-    │   │   ├── pi-rpc-command-mapper.ts  # RuntimeTaskInput/steer -> RpcCommand (rpc-types.ts)
-    │   │   ├── pi-model-resolver.ts      # bridge to pi-ai model registry + BYOK keys
-    │   │   ├── pi-tool-mapper.ts         # pi AgentToolCall/AgentToolResult -> normalized ToolCall
-    │   │   ├── pi-compaction.ts          # expose pi compaction as a control op (set_auto_compaction)
-    │   │   ├── pi-health.ts              # pi self-check (model auth, provider reachability)
-    │   │   ├── pi-capabilities.ts        # static AgentCapability[]
-    │   │   ├── pi-descriptor.ts          # DriverDescriptor
-    │   │   └── index.ts
+    │   ├── pi/                           # drives in-repo `pi` (FUSE packages/pi-coding-agent)
+    │   │   ├── pi-print-driver.ts  pi-rpc-driver.ts  pi-rpc-client.ts  pi-session-host.ts
+    │   │   ├── pi-event-mapper.ts  pi-model-resolver.ts  pi-wire-types.ts
+    │   │   ├── pi-descriptor.ts  index.ts
+    │   │   #  NOTE: factory is createPiDrivers() (plural) — returns print + rpc drivers
     │   │
     │   ├── in-process/                   # in-repo Vercel-AI agent (FUSE open-agents ToolLoopAgent)
-    │   │   ├── tool-loop-driver.ts       # RuntimeDriver impl over ai.ToolLoopAgent (open-agent.ts)
-    │   │   ├── tool-loop-stream.ts       # consume fullStream -> DriverFrame (text/tool/step/finish)
-    │   │   ├── tool-loop-tools.ts        # ADAPT open-agents tools (read/write/edit/bash/grep/glob)
-    │   │   ├── tool-loop-context.ts      # build AgentSandboxContext from DriverContext env
-    │   │   ├── tool-loop-models.ts       # ADAPT open-agents models.ts (gateway model selection)
-    │   │   ├── tool-loop-system-prompt.ts# ADAPT open-agents system-prompt.ts + bundle.renderedPrompt
-    │   │   ├── tool-loop-subagents.ts    # ADAPT open-agents subagents (executor/explorer) as RunEvents
-    │   │   ├── tool-loop-health.ts       # provider/gateway reachability probe
-    │   │   ├── tool-loop-capabilities.ts # static AgentCapability[]
-    │   │   ├── tool-loop-descriptor.ts   # DriverDescriptor
-    │   │   └── index.ts
+    │   │   ├── tool-loop-driver.ts  tool-loop-stream.ts  tool-loop-tools.ts
+    │   │   ├── tool-loop-context.ts  tool-loop-models.ts  tool-loop-system-prompt.ts
+    │   │   ├── tool-loop-health.ts  tool-loop-capabilities.ts  tool-loop-descriptor.ts
+    │   │   ├── local-sandbox.ts  path-security.ts  index.ts
     │   │
-    │   ├── recoder-code/                 # the Recoder-native surface (recoder_code)
-    │   │   ├── recoder-code-driver.ts    # delegates to pi or in-process per config (first-party default)
-    │   │   ├── recoder-code-descriptor.ts
-    │   │   └── index.ts
+    │   ├── recoder-code/                 # first-party surface; delegates to pi | in-process
+    │   │   ├── recoder-code-driver.ts  recoder-code-descriptor.ts  index.ts
     │   │
-    │   ├── gemini-cli/                   # drives `gemini` CLI headless (generic process driver)
-    │   │   ├── gemini-driver.ts
-    │   │   ├── gemini-args.ts
-    │   │   ├── gemini-event-stream.ts
-    │   │   ├── gemini-descriptor.ts
-    │   │   └── index.ts
+    │   ├── generic/                      # ONE process driver behind gemini_cli/qwen_code/acp
+    │   │   ├── generic-process-driver.ts  index.ts
+    │   │   #  index.ts exports createGeminiCliDriver / createQwenCodeDriver / createAcpDriver
+    │   │   #  as thin presets over createGenericProcessDriver — NO dedicated folders/parsers
     │   │
-    │   ├── qwen-code/                    # drives `qwen-code` CLI headless (generic process driver)
-    │   │   ├── qwen-driver.ts
-    │   │   ├── qwen-args.ts
-    │   │   ├── qwen-event-stream.ts
-    │   │   ├── qwen-descriptor.ts
-    │   │   └── index.ts
-    │   │
-    │   ├── acp/                          # Agent Client Protocol generic driver (Zed/Codex ACP)
-    │   │   ├── acp-driver.ts             # RuntimeDriver over JSON-RPC ACP transport
-    │   │   ├── acp-transport.ts          # newline-framed JSON-RPC over stdio
-    │   │   ├── acp-session.ts            # session/new, session/prompt, session/cancel
-    │   │   ├── acp-event-mapper.ts       # ACP session updates -> DriverFrame
-    │   │   ├── acp-permission-bridge.ts  # ACP requestPermission -> approval_requested
-    │   │   ├── acp-descriptor.ts
-    │   │   └── index.ts
-    │   │
-    │   └── index.ts                      # export all driver descriptors for builtin-drivers
+    │   └── index.ts                      # barrel re-exporting every driver factory
     │
     ├── env/                              # execution environments (where the CLI runs)
-    │   ├── execution-environment.ts      # ExecutionEnvironment port: spawn, exec, fs, cwd, dispose
-    │   ├── local-environment.ts          # local child_process environment (default)
-    │   ├── sandbox-environment.ts        # delegates to @recoder/agent-sandbox (Daytona/E2B)
-    │   ├── sandbox-exec-stream.ts        # stream remote exec stdout/stderr as frames
-    │   ├── hosted-environment.ts         # hosted/remote worker environment (internal service)
-    │   ├── env-factory.ts                # pick env from RuntimeKind + policy
-    │   ├── workspace-resolver.ts         # workspaceId -> concrete root path (git worktree aware)
-    │   ├── git-worktree-env.ts           # create/reuse worktree branch per branchPolicy
-    │   └── index.ts
+    │   ├── execution-environment.ts  local-environment.ts  sandbox-environment.ts
+    │   ├── env-factory.ts  git-worktree-env.ts  index.ts
     │
-    ├── policy/                           # runtime-layer ENFORCEMENT (not decision) of gates
-    │   ├── policy-gate.ts                # pre-run gate: refuse if signed-envelope/work-lock missing
-    │   ├── work-lock-guard.ts            # verify path/work-lock coverage before any write frame
-    │   ├── forbidden-path-guard.ts       # block writes hitting TaskSpec.forbiddenPaths
-    │   ├── target-path-guard.ts          # warn/deny writes outside TaskSpec.targetPaths
-    │   ├── approval-pause.ts             # pause run on approval_requested until approve() resolves
-    │   ├── network-guard.ts              # toggle CLI network flags from policy.allowNetwork
-    │   ├── shell-guard.ts                # toggle/deny shell tool from policy.allowShell
-    │   ├── secret-redactor.ts            # redact secrets from frames/logs before emit + journal
-    │   ├── envelope-verifier.ts          # verify signed envelope when policy.requireSignedEnvelope
-    │   └── index.ts
+    ├── policy/                           # runtime-layer ENFORCEMENT (not decision)
+    │   ├── policy-gate.ts  work-lock-guard.ts  forbidden-path-guard.ts  target-path-guard.ts
+    │   ├── approval-pause.ts  network-guard.ts  shell-guard.ts  secret-redactor.ts
+    │   ├── envelope-verifier.ts  path-match.ts  index.ts
     │
     ├── events/                           # the RunEvent emission seam
-    │   ├── run-event-sink.ts             # RunEventSink port (async push of RunEvent)
-    │   ├── outbox-sink.ts                # adapt to @recoder/agent-events outbox/run-event-mapper
-    │   ├── memory-sink.ts                # in-memory sink (tests + collectRuntimeEvents)
-    │   ├── tee-sink.ts                   # fan-out to journal + outbox + observability
-    │   ├── frame-to-event.ts            # DriverFrame -> RunEvent type mapping table
-    │   ├── usage-aggregator.ts           # accumulate TokenUsage across frames -> completed.data
-    │   └── index.ts
+    │   ├── run-event-sink.ts  outbox-sink.ts  memory-sink.ts  tee-sink.ts
+    │   ├── frame-to-event.ts  usage-aggregator.ts  index.ts
     │
     ├── evidence/                         # capture artifacts as run output
-    │   ├── evidence-collector.ts         # orchestrate diff/log/junit/html capture at terminal state
-    │   ├── git-diff-artifact.ts          # capture working-tree diff as artifact (uses git-nexus)
-    │   ├── log-artifact.ts               # full run log -> artifact (hashed)
-    │   ├── junit-artifact.ts             # parse verification junit output -> artifact
-    │   ├── verification-runner.ts        # run TaskSpec.verification.commands, emit verified/failed
-    │   ├── artifact-hasher.ts            # sha256 content hashing for provenance
-    │   ├── artifact-uploader.ts          # hand artifacts to agent-os artifact service (port)
-    │   └── index.ts
+    │   ├── evidence-collector.ts  git-diff-artifact.ts  verification-runner.ts
+    │   ├── artifact-hasher.ts  index.ts
     │
     ├── persistence/                      # replayable run journal storage
-    │   ├── run-store.ts                  # RunStore port: append/read/list run journals
-    │   ├── jsonl-run-store.ts            # ADAPT pi-agent-core jsonl-storage.ts (append RunEvents)
-    │   ├── memory-run-store.ts           # ADAPT pi-agent-core memory-storage.ts (ephemeral)
-    │   ├── run-replay.ts                 # replay a journal as AsyncIterable<RunEvent> (recovery)
-    │   ├── run-snapshot.ts               # snapshot run state for crash recovery / handoff
-    │   ├── store-factory.ts              # choose store from RuntimeConfig
-    │   └── index.ts
+    │   ├── run-store.ts  jsonl-run-store.ts  memory-run-store.ts  run-replay.ts
+    │   ├── store-factory.ts  index.ts
     │
     ├── observability/                    # truthful telemetry, never fakes success
-    │   ├── runtime-logger.ts             # structured logger (wraps @recoder/logger)
-    │   ├── run-metrics.ts                # counters/histograms: runs, duration, tokens, exit codes
-    │   ├── run-tracing.ts                # spans per run/step (langfuse/otel via observability pkg)
-    │   ├── health-monitor.ts             # periodic CLI/env health snapshots
-    │   ├── frame-debug-tap.ts            # opt-in raw-frame dump for debugging (redacted)
-    │   └── index.ts
+    │   ├── runtime-logger.ts  run-metrics.ts  health-monitor.ts  frame-debug-tap.ts  index.ts
     │
     ├── errors/                           # error taxonomy
-    │   ├── runtime-error.ts              # re-export RuntimeAdapterError + RuntimeErrorCode
-    │   ├── error-codes.ts                # extend codes: cli_not_found, spawn_failed, parse_error...
-    │   ├── error-classifier.ts           # exit code / stderr -> RuntimeErrorCode + retryable
-    │   ├── error-to-event.ts             # RuntimeAdapterError -> failed RunEvent (data.code)
-    │   └── index.ts
+    │   ├── runtime-error.ts  error-codes.ts  error-classifier.ts  error-to-event.ts  index.ts
     │
     ├── config/                           # configuration loading + validation
-    │   ├── runtime-config.ts             # load+validate RuntimeConfig (Zod, env overrides)
-    │   ├── defaults.ts                   # default timeouts, concurrency, paths
-    │   ├── env-keys.ts                   # documented env var names (no secrets inlined)
-    │   ├── cli-paths.ts                  # configurable CLI binary path overrides per surface
-    │   └── index.ts
+    │   ├── runtime-config.ts  defaults.ts  env-keys.ts  cli-paths.ts  index.ts
     │
-    └── seams/                            # typed ports to OTHER subsystems (no hard coupling)
-        ├── agent-os-port.ts             # read TaskSpec/bundle; write RunEvents (control plane)
-        ├── instructions-port.ts         # consume InstructionBundle from agent-instructions
-        ├── policy-port.ts               # request policy decisions from agent-policy (decide, not enforce here)
-        ├── brain-port.ts                # request model/route hints from brain subsystem
-        ├── coordination-port.ts         # report run progress to coordination (A2A handoff)
-        ├── governance-port.ts           # approval gate + audit hooks to governance subsystem
-        ├── memory-port.ts               # emit memory candidates (never write durable memory)
-        ├── mcp-port.ts                  # pull MCP server config from @recoder/agent-mcp
-        ├── sandbox-port.ts             # provision/exec via @recoder/agent-sandbox
-        └── index.ts
+    └── seams/                            # typed ports to OTHER subsystems
+        └── index.ts                      # AgentOsPort, InstructionsPort, PolicyPort, BrainPort,
+                                          # CoordinationPort, GovernancePort, MemoryPort, McpPort,
+                                          # SandboxPort — all interfaces in ONE file (no per-port files)
 ```
 
-A parallel `tests/` tree mirrors `src/` (see §10).
+A `tests/` tree mirrors only the **driver** part of `src/` today (see §10 + §13).
 
 ---
 
@@ -403,8 +257,8 @@ Each driver folder is where a fused source's real code is merged. Mapping in §6
 - **`opencode/`** is the **oh-my-openagent fusion**: drives the user's `opencode` CLI; `opencode-plugin-config.ts`/`opencode-hooks-bridge.ts`/`opencode-tools-bridge.ts`/`opencode-tmux-config.ts` adapt `ts/oh-my-openagent/src/{plugin-config,create-hooks,create-tools,create-runtime-tmux-config}.ts`.
 - **`pi/`** is the **pi-coding-agent fusion**: `pi-print-driver.ts` runs `runPrintMode` (`packages/pi-coding-agent/src/modes/print-mode.ts`) **in-process** with `mode: 'json'`, subscribing to the session event stream; `pi-rpc-driver.ts` speaks the JSONL `RpcCommand`/`RpcResponse` protocol (`packages/pi-coding-agent/src/modes/rpc/rpc-types.ts`) to enable steering/abort/compaction mid-run. The model layer bridges `@recoder/pi-ai`.
 - **`in-process/`** is the **open-agents fusion**: wraps `ToolLoopAgent` from `ts/open-agents/packages/agent/open-agent.ts`, consuming its `fullStream` and mapping `AgentSandboxContext` from our `ExecutionEnvironment`.
-- **`recoder-code/`** is the first-party default surface — delegates to `pi` or `in-process` per config.
-- **`acp/`**, **`gemini-cli/`**, **`qwen-code/`** are thinner generic process drivers for the remaining surfaces in `AgentSurface`.
+- **`recoder-code/`** is the first-party default surface — delegates to `pi` or `in-process` per config (`createRecoderCodeDriver({ delegate })`, default `pi`).
+- **`generic/`** is a **single** `generic-process-driver.ts`; `createGeminiCliDriver`, `createQwenCodeDriver`, and `createAcpDriver` are thin **preset factories** over it (`generic/index.ts`). There are **no** dedicated `gemini-cli/`, `qwen-code/`, or `acp/` driver folders, no bespoke event parsers, and no ACP JSON-RPC transport implementation — these are generic line-buffered process drivers only (see §13).
 
 ### 3.6 `env/` — execution environments
 Decouples *which CLI* from *where it runs*. `local-environment.ts` spawns locally;
@@ -506,34 +360,41 @@ driver resumes (pi via `rpc` `follow_up`, codex/acp via permission response).
 
 ## 5. Public API surface (`src/public-api.ts` / `index.ts`)
 
+> Exact export list verified against `src/public-api.ts`.
+
 ```ts
 // Engine entry
-export function createRuntime(config?: RuntimeConfig): Runtime;
-export interface Runtime {
-  adapterFor(surface: AgentSurface | string): AgentRuntimeAdapter;
-  registry: DriverRegistry;
-  health(): Promise<Record<string, RuntimeHealth>>;
-}
+export function createRuntime(input?: CreateRuntimeInput): Runtime;
+// CreateRuntimeInput = { drivers?, config?, ... } — NOT a bare RuntimeConfig.
 
-// Driver factories (drop-in replacements for agent-runtimes shells)
-export function createClaudeCodeDriver(opts?): RuntimeDriver;
-export function createCodexDriver(opts?): RuntimeDriver;
-export function createOpenCodeDriver(opts?): RuntimeDriver;
-export function createPiDriver(opts?): RuntimeDriver;
-export function createInProcessDriver(opts?): RuntimeDriver;
-export function createRecoderCodeDriver(opts?): RuntimeDriver;
-export function createAcpDriver(opts?): RuntimeDriver;
+// Adapter factory + registry
+export { createRuntimeAdapter } from './adapter/runtime-adapter';
+export { DriverRegistry, createDriverRegistry, registerBuiltinDrivers,
+         createBuiltinDrivers, resolveSurface, resolveVariant } from './registry';
+
+// Driver factories (real names — note the PLURAL pi factory + the generic preset family)
+export function createClaudeCodeDriver(opts?: ClaudeCodeDriverOptions): RuntimeDriver;
+export function createCodexDriver(opts?: CodexDriverOptions): RuntimeDriver;
+export function createOpenCodeDriver(opts?: OpenCodeDriverOptions): RuntimeDriver;
+export function createPiDrivers(opts?: PiDriverOptions): RuntimeDriver[];   // PLURAL → [print, rpc]
+export function createInProcessDriver(opts?: InProcessDriverOptions): RuntimeDriver;
+export function createRecoderCodeDriver(opts?: RecoderCodeDriverOptions): RuntimeDriver;
+export function createGeminiCliDriver(opts?: GenericProcessDriverOptions): RuntimeDriver;
+export function createQwenCodeDriver(opts?: GenericProcessDriverOptions): RuntimeDriver;
+export function createAcpDriver(opts?: GenericProcessDriverOptions): RuntimeDriver;
+export function createGenericProcessDriver(opts: GenericProcessDriverOptions): RuntimeDriver;
 
 // Contract re-exports (kept compatible)
 export type { AgentRuntimeAdapter, RuntimeHandle, RuntimePolicy,
              RuntimeStartInput, RuntimeTaskInput } from '@recoder/agent-runtimes';
-export { RuntimeAdapterError } from '@recoder/agent-runtimes';
+export { RuntimeAdapterError } from './errors';
 
-// Driver SPI (for custom first-party drivers)
-export type { RuntimeDriver, DriverContext, DriverFrame, DriverDescriptor } from './contracts';
-
-// Ports (for host wiring)
-export type { RunEventSink, ExecutionEnvironment, RunStore } from './engine';
+// Driver SPI, sinks, policy guards, env, evidence, persistence, observability, seams
+export type { RuntimeDriver, DriverContext, DriverFrame, DriverDescriptor } from '...';
+export { MemoryRunEventSink, OutboxRunEventSink, TeeRunEventSink } from './events';
+export { LocalEnvironment, SandboxEnvironment, createExecutionEnvironment } from './env';
+export { collectEvidence, runVerification } from './evidence';
+export { MemoryRunStore, JsonlRunStore, replayRun } from './persistence';
 ```
 
 The key compatibility promise: **`createRuntime().adapterFor('codex')` returns an
@@ -543,6 +404,23 @@ The key compatibility promise: **`createRuntime().adapterFor('codex')` returns a
 ---
 
 ## 6. Fusion map (which real files merge where)
+
+> **Fusion lineage = owned, in-process.** The owned drivers live in `packages/runtime`.
+> The upstream OSS sources are **fused in** (we own and reshape them), not thin-wrapped.
+> Their checkout status in this repo (verified 2026-06-29):
+>
+> | Fused source | Path | In-repo status |
+> |---|---|---|
+> | **oh-my-codex** | `ts/oh-my-codex` | **gitignored** (fused-in, not tracked) |
+> | **open-agents** | `ts/open-agents` | **gitignored** (fused-in, not tracked) |
+> | **oh-my-openagent** | `ts/oh-my-openagent` | tracked |
+> | **opencode** (upstream CLI) | `ts/opencode` | tracked |
+> | **pi** (coding agent) | `packages/pi-coding-agent`, `packages/pi-ai`, `packages/pi-agent-core` | tracked workspace packages |
+>
+> Because two of the lineage sources are gitignored, the rows below that cite
+> `ts/oh-my-codex/*` and `ts/open-agents/*` describe the **merge provenance**, not files a
+> fresh clone will see. The merged owned code under `packages/runtime/src/drivers/{codex,in-process}/`
+> is what ships and is tested.
 
 | Fused source (read) | Real path | Lands in `packages/runtime` |
 |---|---|---|
@@ -606,56 +484,38 @@ The key compatibility promise: **`createRuntime().adapterFor('codex')` returns a
 
 ---
 
-## 10. Tests tree (mirrors `src/`)
+## 10. Tests tree (ACTUAL, verified 2026-06-29)
+
+> **160/160 tests pass** (`node --test --import tsx`, run 2026-06-29: `tests 160 / pass 160 /
+> fail 0 / skipped 0`). **All landed tests are driver-level unit tests** under
+> `tests/unit/drivers/`. The broad `engine/ · adapter/ · registry/ · policy/ · events/ ·
+> evidence/ · persistence/ · errors/ · config/` unit folders and the separate `contract/`,
+> `integration/`, and `e2e/` suites from the original design have **not** been landed as their
+> own test files — see §13. There are **no co-located `src/**/*.test.ts` files** (the test
+> script globs both, but `src/` currently has none). Several driver tests double as
+> fixture-replay integration tests (`*.fixture.test.ts`).
 
 ```text
 packages/runtime/tests
-├── unit
-│   ├── engine/{event-normalizer,terminal-event-guard,cancellation,
-│   │           backpressure,deadline,retry-policy,run-journal}.test.ts
-│   ├── adapter/{send-task,health-aggregator,capability-resolver,approve}.test.ts
-│   ├── registry/{driver-registry,surface-resolver,variant-resolver}.test.ts
-│   ├── drivers/shared/{spawn,wait-for-exit,jsonl-reader,jsonl-writer,
-│   │           env-builder,arg-builder,cwd-resolver,cli-locator}.test.ts
-│   ├── drivers/claude-code/{claude-stream-json,claude-args,claude-tool-mapper,
-│   │           claude-permission-bridge}.test.ts
-│   ├── drivers/codex/{codex-event-stream,codex-args,codex-config-writer,
-│   │           codex-mcp-registry,codex-runtime-bridge}.test.ts
-│   ├── drivers/opencode/{opencode-event-stream,opencode-args,
-│   │           opencode-plugin-config,opencode-hooks-bridge}.test.ts
-│   ├── drivers/pi/{pi-event-mapper,pi-rpc-command-mapper,pi-model-resolver,
-│   │           pi-print-driver}.test.ts
-│   ├── drivers/in-process/{tool-loop-stream,tool-loop-tools,tool-loop-models}.test.ts
-│   ├── policy/{work-lock-guard,forbidden-path-guard,approval-pause,
-│   │           secret-redactor,envelope-verifier,network-guard}.test.ts
-│   ├── events/{frame-to-event,usage-aggregator,outbox-sink}.test.ts
-│   ├── evidence/{verification-runner,git-diff-artifact,artifact-hasher}.test.ts
-│   ├── persistence/{jsonl-run-store,memory-run-store,run-replay}.test.ts
-│   ├── errors/{error-classifier,error-to-event}.test.ts
-│   └── config/runtime-config.test.ts
-├── contract
-│   ├── adapter-conformance.test.ts      # every driver -> AgentRuntimeAdapter contract
-│   ├── runtime-adapter-port.test.ts     # matches agent-os RuntimeAdapterPort
-│   ├── run-event-shape.test.ts          # emitted events match agent-os RunEvent
-│   └── terminal-invariant.test.ts       # exactly-one-terminal, no post-terminal emit
-├── integration
-│   ├── codex-driver.fixture.test.ts     # replay recorded codex --json frames -> RunEvents
-│   ├── claude-stream-json.fixture.test.ts
-│   ├── opencode-sse.fixture.test.ts
-│   ├── pi-print-mode.inproc.test.ts     # in-process pi run, no network (faux provider)
-│   ├── pi-rpc-steering.test.ts          # steer/abort mid-run over JSONL
-│   ├── tool-loop.inproc.test.ts         # ToolLoopAgent w/ mock model
-│   ├── sandbox-environment.test.ts      # CLI run inside mock sandbox env
-│   └── policy-gate-refusal.test.ts      # missing work-lock -> policy_denied, no run
-├── e2e
-│   ├── full-task-codex.e2e.ts           # TaskSpec -> codex -> verified -> artifacts (gated)
-│   └── full-task-pi.e2e.ts
+├── unit/drivers
+│   ├── claude-code/   (5 test files)  claude-args · claude-code-driver · claude-permission-bridge
+│   │                                  · claude-stream-json · claude-tool-mapper
+│   ├── codex/         (8 test files)  codex-approval-bridge · codex-args · codex-config-writer
+│   │                                  · codex-driver · codex-event-stream · codex-mcp-registry
+│   │                                  · codex-profile · codex-runtime-bridge
+│   ├── in-process/    (3 test files)  local-sandbox · tool-loop-driver · tool-loop-stream
+│   │                                  (+ mock-model.ts helper)
+│   ├── opencode/      (6 test files)  opencode-args · opencode-driver.fixture · opencode-event-stream
+│   │                                  · opencode-hooks-bridge · opencode-plugin-config · opencode-tool-mapper
+│   └── pi/            (5 test files)  pi-descriptor · pi-event-mapper · pi-print-driver.fixture
+│                                      · pi-rpc-driver.fixture · pi-session-host
 └── fixtures
-    ├── codex-events.jsonl
-    ├── claude-stream-json.jsonl
-    ├── opencode-messages.jsonl
-    └── task-specs/*.json
+    ├── claude-stream-json.jsonl   codex-events.jsonl   opencode-messages.jsonl   pi-run-stream.jsonl
+    └── fake-opencode.mjs   fake-pi.mjs   fake-pi-no-done.mjs   (spawnable fake CLIs for fail-safe paths)
 ```
+
+**27 test files, 160 assertions, all green, fully offline** — fixture replays and spawnable
+fake CLIs (`fake-pi.mjs`, `fake-opencode.mjs`), no real model spend, no network.
 
 ---
 
@@ -664,17 +524,71 @@ packages/runtime/tests
 Per `.claude/rules/testing.md` (narrowest checks that prove behavior):
 
 ```bash
-pnpm --filter @recoder/runtime test           # unit + contract + integration
+pnpm --filter @recoder/runtime test           # 160 driver unit + fixture-replay tests (verified green)
 pnpm --filter @recoder/runtime check-types
-pnpm --filter @recoder/runtime build          # tsup multi-entry must succeed
+pnpm --filter @recoder/runtime build          # tsup single-entry build
 pnpm test:contracts:agent-os                  # ensures RuntimeAdapterPort still satisfied
 ```
 
-Driver integration tests run **offline** against recorded fixtures (`tests/fixtures/*.jsonl`)
-and the pi `faux` provider (`packages/pi-ai/src/providers/faux.ts`) — no real model spend, no
-network — so they are deterministic and CI-safe. E2E tests that spawn real user CLIs are
-gated behind an env flag and a present-binary probe (`cli-version-probe.ts`); when the binary
-is absent they **skip with a truthful reason**, never green-wash.
+> The `test` script is `node --test --import tsx 'tests/**/*.test.ts' 'src/**/*.test.ts'`
+> (no `vitest`). Run 2026-06-29 → `tests 160 / pass 160 / fail 0`.
+
+Driver tests run **offline** against recorded fixtures (`tests/fixtures/*.jsonl`) and
+spawnable fake CLIs (`tests/fixtures/fake-*.mjs`) — no real model spend, no network — so they
+are deterministic and CI-safe. There is **no landed e2e suite** spawning real user CLIs (see
+§13); the fail-safe paths (missing CLI → `runtime_unavailable`, no terminal frame → synthesized
+`failed`) are exercised by the fake-CLI fixtures and **never green-wash**.
+
+---
+
+## 13. Gaps / not-yet-live (honest status, verified 2026-06-29)
+
+This section keeps the doc truthful: the foundation + drivers are real and green, but parts of
+the original design above are **not yet shipped**. Treated as gaps, not as done:
+
+**Design-named source files that do NOT exist in `src/`:**
+- `drivers/pi/pi-driver.ts`, `pi-tool-mapper.ts`, `pi-compaction.ts`, `pi-rpc-command-mapper.ts`
+  — the pi driver ships as `pi-print-driver.ts` + `pi-rpc-driver.ts` (factory `createPiDrivers`, plural).
+- `drivers/claude-code/claude-session.ts` (no `--resume`/session-continuity module landed).
+- `drivers/opencode/opencode-server-client.ts` (no opencode server-mode client landed).
+- `drivers/shared/stdin-prompt.ts` (prompt handling is in `prompt-writer.ts`).
+- `drivers/in-process/tool-loop-subagents.ts` (no subagent executor/explorer mapping landed).
+- `env/sandbox-exec-stream.ts`, `env/hosted-environment.ts`, `env/workspace-resolver.ts`
+  (env ships local + sandbox + worktree only; no hosted/remote-worker env, no standalone
+  workspace resolver, no remote-exec stream module).
+- `evidence/log-artifact.ts`, `evidence/junit-artifact.ts`, `evidence/artifact-uploader.ts`
+  (evidence ships diff capture + verification-runner + hasher; **no junit parser, no
+  log-artifact module, no artifact-uploader port impl** — artifact handoff to agent-os is not
+  yet wired here).
+- `persistence/run-snapshot.ts` (no crash-recovery snapshot module).
+- `observability/run-tracing.ts` (no langfuse/otel span module; logger + metrics + health only).
+- `seams/*.ts` per-port files: all seam interfaces live in a **single** `seams/index.ts`; the
+  ports are **type contracts only** — no concrete host wiring (brain/coordination/governance/
+  memory/mcp hint resolution) is implemented inside this package.
+
+**Generic surfaces are shallow:** `gemini_cli`, `qwen_code`, `acp` are presets over one
+`generic-process-driver.ts`. There is **no ACP JSON-RPC transport**, **no per-CLI event
+parser**, and no fixtures for them — they are line-buffered process drivers, not the rich
+ACP/Gemini/Qwen drivers the design tree implies.
+
+**Test coverage is driver-only:** no landed `contract/`, `integration/`, or `e2e/` suites and
+no dedicated `engine/ · adapter/ · registry/ · policy/ · events/ · evidence/ · persistence/`
+unit tests. Those modules are currently covered only transitively through the 27 driver test
+files. The 80%-coverage rule in `.claude/rules/testing.md` is **not** demonstrated for the
+non-driver modules.
+
+**Live-run proof is still the conductor path, not this package (infra-gated):** the proven
+live `claude -p` run (BUILD-STATUS §7a) went through the canonical **tmux+worktree conductor
+driver**, NOT `@recoder/runtime`. This package is now *imported* by `apps/agent-worker`'s
+`runtime-registry.ts` and the conductor's `in_process` substrate
+(`docker-backend/src/conductor/substrate-in-process.ts`, commit `b83e21ff0`), but a proven
+end-to-end live run *through this package's adapter into the conductor seam* remains the
+dual-runtime reconciliation item (BUILD-STATUS §10). Do not read "wired" as "proven live".
+
+**Sandbox / artifact-service seams are stubs:** `env/sandbox-environment.ts` and the
+`SandboxPort`/agent-os artifact handoff are present as ports/skeletons; real Daytona/E2B remote
+execution and durable artifact upload are infra/secret-gated and **not exercised by the green
+test suite**.
 
 ---
 
