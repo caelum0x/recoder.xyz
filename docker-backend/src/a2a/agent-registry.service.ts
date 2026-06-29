@@ -223,18 +223,6 @@ export const DEFAULT_AGENTS: DefaultAgentConfig[] = [
     tags: ['workspace', 'web', 'core'],
   },
   {
-    id: 'recoder-agency',
-    name: 'Recoder Agency',
-    platform: 'recoder_agency',
-    description: 'Multi-agent orchestration layer for coordinating AI agents',
-    url: process.env.RECODER_AGENCY_URL || 'https://agency.recoder.xyz',
-    skills: [
-      { id: 'orchestration', name: 'Orchestration', description: 'Multi-agent orchestration', tags: ['orchestration', 'agency'] },
-      { id: 'agent-routing', name: 'Agent Routing', description: 'Route tasks to appropriate agents', tags: ['routing', 'dispatch'] },
-    ],
-    tags: ['orchestration', 'agency', 'core'],
-  },
-  {
     id: 'recoder-studio',
     name: 'Recoder Studio',
     platform: 'custom',
@@ -245,18 +233,6 @@ export const DEFAULT_AGENTS: DefaultAgentConfig[] = [
       { id: 'agent-config', name: 'Agent Configuration', description: 'Configure agent behaviors', tags: ['config', 'setup'] },
     ],
     tags: ['studio', 'workflow', 'visual'],
-  },
-  {
-    id: 'recoder-pm',
-    name: 'Recoder PM',
-    platform: 'recoder_pm',
-    description: 'Project management agent for tracking tasks and milestones',
-    url: process.env.RECODER_PM_URL || 'https://recoderpm.app',
-    skills: [
-      { id: 'project-management', name: 'Project Management', description: 'Manage projects and tasks', tags: ['pm', 'management'] },
-      { id: 'milestone-tracking', name: 'Milestone Tracking', description: 'Track project milestones', tags: ['milestones', 'tracking'] },
-    ],
-    tags: ['pm', 'management', 'core'],
   },
   {
     id: 'openclaw',

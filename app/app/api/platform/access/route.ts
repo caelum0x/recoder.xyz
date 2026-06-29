@@ -4,17 +4,14 @@ import { logger } from '@/lib/logger';
 import { findFallbackSessionByToken } from '@/lib/session-fallback';
 
 interface PlatformAccessRequest {
-  platform: 'web' | 'frontend' | 'studio' | 'pm' | 'agency' | 'cli' | 'extension';
+  platform: 'web' | 'studio' | 'cli' | 'extension';
   userId?: string;
   redirect?: string;
 }
 
 const PLATFORM_URLS: Record<string, string> = {
   web: process.env.RECODER_WEB_URL || (process.env.NODE_ENV === 'production' ? 'https://web.recoder.xyz' : 'http://localhost:5173'),
-  frontend: process.env.RECODER_FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://agents.recoder.xyz' : 'http://localhost:3001'),
-  studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
-  pm: process.env.RECODER_PM_URL || (process.env.NODE_ENV === 'production' ? 'https://pm.recoder.xyz' : 'http://localhost:3004'),
-  agency: process.env.RECODER_AGENCY_URL || (process.env.NODE_ENV === 'production' ? 'https://agency.recoder.xyz' : 'http://localhost:3007'),
+  studio: process.env.RECODER_STUDIO_URL || (process.env.NODE_ENV === 'production' ? 'https://studio.recoder.xyz' : 'http://localhost:3007'),
   cli: '/cli',
   extension: '/extension',
 };

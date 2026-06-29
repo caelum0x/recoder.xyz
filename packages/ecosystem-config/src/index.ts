@@ -79,10 +79,7 @@ export const RECODER_STUDIO_POSITIONING =
 
 export const RECODER_ECOSYSTEM_URLS = {
   home: "https://recoder.xyz",
-  agency: "https://agency.recoder.xyz",
-  pm: "https://pm.recoder.xyz",
   ui: "https://ui.recoder.xyz",
-  agents: "https://agents.recoder.xyz",
   stagingHome: "https://staging.recoder.xyz",
 } as const;
 
@@ -96,46 +93,14 @@ export const RECODER_SETTINGS_URLS = {
     integrations: `${RECODER_ECOSYSTEM_URLS.home}/settings/integrations`,
     aiProviders: `${RECODER_ECOSYSTEM_URLS.home}/settings/ai-providers`,
   },
-  agents: {
-    main: `${RECODER_ECOSYSTEM_URLS.agents}/settings`,
-    subscription: `${RECODER_ECOSYSTEM_URLS.agents}/subscription`,
-  },
-  pm: {
-    main: `${RECODER_ECOSYSTEM_URLS.pm}/settings`,
-    members: `${RECODER_ECOSYSTEM_URLS.pm}/settings/members`,
-    integrations: `${RECODER_ECOSYSTEM_URLS.pm}/settings/integrations`,
-  },
-  agency: {
-    main: `${RECODER_ECOSYSTEM_URLS.agency}/settings`,
-    account: `${RECODER_ECOSYSTEM_URLS.agency}/settings/account`,
-    team: `${RECODER_ECOSYSTEM_URLS.agency}/settings/team`,
-  },
 } as const;
 
 export const RECODER_ECOSYSTEM_APPS: readonly EcosystemApp[] = [
-  {
-    id: "agency",
-    label: "Agency",
-    description: "AI Agency Platform",
-    href: RECODER_ECOSYSTEM_URLS.agency,
-  },
-  {
-    id: "pm",
-    label: "PM",
-    description: "Product Management",
-    href: RECODER_ECOSYSTEM_URLS.pm,
-  },
   {
     id: "home",
     label: "Home",
     description: "Main Site",
     href: RECODER_ECOSYSTEM_URLS.home,
-  },
-  {
-    id: "agents",
-    label: "Agents",
-    description: "AI Agent IDE",
-    href: RECODER_ECOSYSTEM_URLS.agents,
   },
   {
     id: "ui",

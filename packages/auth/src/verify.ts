@@ -2,8 +2,8 @@
  * Cross-surface session verification helpers for @recoder/auth.
  *
  * This module provides utilities that can be used across all frontend surfaces
- * (app, recoder-frontend, recoder-agency, recoder-studio, recoder-pm) to
- * verify and extract Better Auth session tokens from requests/cookies.
+ * (app, recoder-studio) to verify and extract Better Auth session tokens
+ * from requests/cookies.
  *
  * IMPORTANT: The edge-compatible functions (hasSessionCookie, extractSessionToken)
  * do NOT import from Prisma and can safely be used in Edge Middleware.

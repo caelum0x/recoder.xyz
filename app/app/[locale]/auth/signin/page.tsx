@@ -13,9 +13,6 @@ import {
   Mail,
   Terminal,
   Globe,
-  Bot,
-  LayoutDashboard,
-  Briefcase,
   Workflow
 } from 'lucide-react';
 import { signIn } from '@/lib/auth-client';
@@ -227,10 +224,7 @@ function SignInForm() {
   };
 
   const platforms = [
-    { name: 'Agents', description: 'AI agent IDE', icon: Bot, url: 'https://agents.recoder.xyz' },
     { name: 'Web', description: 'Browser-based IDE', icon: Globe, url: 'https://web.recoder.xyz' },
-    { name: 'PM', description: 'Project management', icon: LayoutDashboard, url: 'https://pm.recoder.xyz' },
-    { name: 'Agency', description: 'AI agency platform', icon: Briefcase, url: 'https://agency.recoder.xyz' },
     { name: 'CLI', description: 'Terminal access', icon: Terminal, url: 'https://recoder.xyz/tools' },
   ];
 

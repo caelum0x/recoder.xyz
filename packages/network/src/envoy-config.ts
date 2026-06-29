@@ -410,9 +410,6 @@ export function defaultNetworkConfig(
     upstreams: [
       { name: 'docker-backend', host: env.SVC_DOCKER_BACKEND_HOST ?? 'docker-backend', port: 3100 },
       { name: 'recoder-app', host: env.SVC_RECODER_APP_HOST ?? 'recoder-app', port: 3000 },
-      { name: 'recoder-agents', host: env.SVC_RECODER_AGENTS_HOST ?? 'recoder-agents', port: 3001 },
-      { name: 'recoder-pm', host: env.SVC_RECODER_PM_HOST ?? 'recoder-pm', port: 8000 },
-      { name: 'recoder-agency', host: env.SVC_RECODER_AGENCY_HOST ?? 'recoder-agency', port: 3002 },
     ],
     extAuthz: {
       cluster: 'recoder_ext_authz',
