@@ -42,6 +42,9 @@ import { generateDeliverySummary, generateMemoryCandidate } from './delivery-sum
 import { metrics } from './conductor-metrics.js';
 import { bulkCancel, bulkArchive, listByState } from './batch-ops.js';
 import { cleanupStaleWorktrees } from './worktree-cleanup.js';
+import { planConductorRun, effectiveRuntimeId } from './conductor-planner.js';
+import { agentOsContainer } from '../agent-os/service-container.js';
+import type { TaskSpec } from '@recoder/agent-os';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -160,14 +163,60 @@ export function createConductorRouter(): Router {
     res.json({ success: true, data: await listWorkspaces() });
   });
 
+  // PRE-LAUNCH PLAN (advisory): run @recoder/pal's planner over a TaskSpec to
+  // recommend the runtime team + substrate + skills + tool grants + approval gates
+  // + risk for a workspace BEFORE one is created. Resolve the canonical TaskSpec by
+  // `taskId` from the agent-os repository (real control-plane state), or accept an
+  // inline `task` body for spaces not yet persisted. This route does NOT launch
+  // anything — it returns a recommendation the caller can act on (or override) when
+  // calling POST /workspaces. The proven create path is unchanged.
+  router.post('/workspaces/plan', async (req: Request, res: Response) => {
+    try {
+      const body = req.body ?? {};
+      let task: TaskSpec | undefined = body.task as TaskSpec | undefined;
+
+      if (!task && body.taskId) {
+        const tasks = await Promise.resolve(agentOsContainer.repository.listTasks());
+        task = tasks.find((t) => t.taskId === body.taskId);
+        if (!task) {
+          res.status(404).json({ success: false, error: `task not found: ${body.taskId}` });
+          return;
+        }
+      }
+
+      if (!task || !task.taskId) {
+        res.status(400).json({
+          success: false,
+          error: 'a persisted `taskId` or an inline `task` (TaskSpec) is required',
+        });
+        return;
+      }
+
+      const plan = planConductorRun(task);
+      res.json({
+        success: true,
+        data: {
+          ...plan,
+          // The runtime the caller should actually launch given Conductor support.
+          effectiveRuntimeId: effectiveRuntimeId(plan),
+        },
+      });
+    } catch (err) {
+      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'plan failed' });
+    }
+  });
+
   router.post('/workspaces', async (req: Request, res: Response) => {
     try {
       const { spaceId, projectId, taskId, repoPath, runtimeId, substrate, command, prompt, model, createdBy, branch, baseRef, env, metadata } =
         req.body ?? {};
-      if (!spaceId || !projectId || !taskId || !repoPath || !runtimeId || !createdBy || (!command && !prompt)) {
+      // `runtimeId` is now OPTIONAL: when omitted, the conductor resolves the
+      // task's canonical TaskSpec and lets @recoder/pal DEFAULT the runtime team +
+      // substrate on the real create path. A caller-provided runtimeId still wins.
+      if (!spaceId || !projectId || !taskId || !repoPath || !createdBy || (!command && !prompt)) {
         res.status(400).json({
           success: false,
-          error: 'spaceId, projectId, taskId, repoPath, runtimeId, createdBy, and one of (command|prompt) are required',
+          error: 'spaceId, projectId, taskId, repoPath, createdBy, and one of (command|prompt) are required (runtimeId optional — pal will default it)',
         });
         return;
       }
