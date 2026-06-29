@@ -623,6 +623,13 @@ export default function RootLayout() {
                                     }}
                                   />
                                   <Stack.Screen
+                                    name="conductor"
+                                    options={{
+                                      animation: 'slide_from_right',
+                                      gestureEnabled: true,
+                                    }}
+                                  />
+                                  <Stack.Screen
                                     name="share/[threadId]"
                                     options={{
                                       animation: 'slide_from_right',
