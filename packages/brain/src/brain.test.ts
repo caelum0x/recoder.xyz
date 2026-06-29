@@ -441,3 +441,139 @@ test("mem0 + context7 are genuinely INVOKED in assembly behind their ports", asy
     "context7 lookup was really invoked with the query + limit",
   );
 });
+
+// ---------------------------------------------------------------------------
+// RAG ingest: preprocess -> chunk (@recoder/rag) -> remember each chunk.
+// ---------------------------------------------------------------------------
+
+/** A preprocessor fake that returns fixed normalized text (no real extractor). */
+function fakePreprocessor(text: string, pageCount = 1) {
+  return {
+    async preprocess(doc: { title: string }) {
+      return { title: doc.title, text, pageCount };
+    },
+  };
+}
+
+/** A memory fake that records every (text, metadata) pair `remember` receives. */
+function recordingMemory() {
+  const writes: Array<{ text: string; metadata?: Record<string, unknown> }> = [];
+  return {
+    writes,
+    port: {
+      async recall() {
+        return [];
+      },
+      async remember(text: string, metadata?: Record<string, unknown>) {
+        writes.push({ text, metadata });
+      },
+    },
+  };
+}
+
+const rawDoc = {
+  title: "README.md",
+  data: new Uint8Array(),
+} as const;
+
+test("ingestDocument with NO chunker remembers the whole document as one memory", async () => {
+  const mem = recordingMemory();
+  const brain = createBrain({
+    repo: fakeRepo,
+    preprocessor: fakePreprocessor("line-1\nline-2\nline-3"),
+    memory: mem.port,
+  });
+
+  const result = await brain.ingestDocument(rawDoc);
+
+  assert.equal(result.remembered, true);
+  assert.equal(mem.writes.length, 1, "exactly one whole-document memory");
+  assert.equal(mem.writes[0]!.text, "line-1\nline-2\nline-3");
+  assert.equal(mem.writes[0]!.metadata?.["kind"], "document");
+  assert.equal(mem.writes[0]!.metadata?.["title"], "README.md");
+  assert.equal(
+    mem.writes[0]!.metadata?.["chunkIndex"],
+    undefined,
+    "no chunk metadata when no chunker is wired",
+  );
+});
+
+test("ingestDocument with a chunker (@recoder/rag shape) remembers EACH chunk with chunk metadata", async () => {
+  const mem = recordingMemory();
+  // A chunker matching @recoder/rag's `ChunkerFunction` contract: text -> chunks.
+  const brain = createBrain({
+    repo: fakeRepo,
+    preprocessor: fakePreprocessor("alpha\nbeta\ngamma"),
+    memory: mem.port,
+    chunker: { chunk: (text: string) => text.split("\n") },
+  });
+
+  const result = await brain.ingestDocument(rawDoc);
+
+  assert.equal(result.remembered, true);
+  assert.equal(mem.writes.length, 3, "one memory per chunk");
+  assert.deepEqual(
+    mem.writes.map((w) => w.text),
+    ["alpha", "beta", "gamma"],
+  );
+  // Each chunk carries its index + the total count, plus the shared base metadata.
+  mem.writes.forEach((w, i) => {
+    assert.equal(w.metadata?.["kind"], "document");
+    assert.equal(w.metadata?.["title"], "README.md");
+    assert.equal(w.metadata?.["chunkIndex"], i);
+    assert.equal(w.metadata?.["chunkCount"], 3);
+  });
+});
+
+test("ingestDocument degrades to a single whole-document memory when the chunker yields one piece", async () => {
+  const mem = recordingMemory();
+  const brain = createBrain({
+    repo: fakeRepo,
+    preprocessor: fakePreprocessor("only one chunk worth of text"),
+    memory: mem.port,
+    // A chunker that returns a single chunk — should behave like no chunker.
+    chunker: { chunk: (text: string) => [text] },
+  });
+
+  await brain.ingestDocument(rawDoc);
+
+  assert.equal(mem.writes.length, 1, "single chunk => one whole-doc memory");
+  assert.equal(
+    mem.writes[0]!.metadata?.["chunkIndex"],
+    undefined,
+    "no chunk metadata for the single-piece path",
+  );
+});
+
+test("ingestDocument never fails when the chunker throws — degrades to whole-document", async () => {
+  const mem = recordingMemory();
+  const brain = createBrain({
+    repo: fakeRepo,
+    preprocessor: fakePreprocessor("resilient text"),
+    memory: mem.port,
+    chunker: {
+      chunk() {
+        throw new Error("chunker blew up");
+      },
+    },
+  });
+
+  const result = await brain.ingestDocument(rawDoc);
+
+  assert.equal(result.remembered, true, "ingest still succeeds");
+  assert.equal(mem.writes.length, 1, "fell back to one whole-document memory");
+  assert.equal(mem.writes[0]!.text, "resilient text");
+});
+
+test("ingestDocument with no memory port returns the preprocessed text but remembers nothing", async () => {
+  const brain = createBrain({
+    repo: fakeRepo,
+    preprocessor: fakePreprocessor("text with no memory wired"),
+    chunker: { chunk: (text: string) => text.split(" ") },
+  });
+
+  const result = await brain.ingestDocument(rawDoc);
+
+  assert.equal(result.text, "text with no memory wired");
+  assert.equal(result.remembered, false, "nothing stored without a memory port");
+});
