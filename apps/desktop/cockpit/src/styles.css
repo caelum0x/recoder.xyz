@@ -76,7 +76,7 @@ body {
   height: 44px;
   padding: 0 14px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #16161a 0%, var(--bg-elev) 100%);
+  background: var(--bg-elev);
   -webkit-app-region: drag;
   user-select: none;
 }
@@ -140,10 +140,15 @@ body {
 .pill-bad { color: var(--text-faint); }
 .pill-bad .pill-dot { background: var(--bad); }
 
-/* Banners */
-.banner { padding: 10px 16px; font-size: 12px; border-bottom: 1px solid var(--border); }
-.banner-error { background: rgba(248, 81, 73, 0.12); color: #ffb4ae; }
-.banner-warn { background: rgba(210, 153, 34, 0.12); color: #f0c77a; }
+/* Banners — calm, low-noise notice bars with a thin accent edge, not a heavy
+   saturated block. */
+.banner {
+  padding: 9px 16px; font-size: 12px;
+  background: var(--bg-elev); border-bottom: 1px solid var(--border);
+  border-left: 2px solid var(--border-strong);
+}
+.banner-error { color: #ffb4ae; border-left-color: var(--bad); }
+.banner-warn { color: #f0c77a; border-left-color: var(--warn); }
 
 /* Main layout */
 .main { flex: 1; display: flex; min-height: 0; background: var(--bg); }
@@ -571,17 +576,15 @@ body {
 .view-tabs {
   display: flex; gap: 2px; margin: 0 auto 0 8px;
   padding: 3px; border-radius: 9px;
-  background: var(--bg-inset); border: 1px solid var(--border);
 }
 .view-tab {
   background: transparent; border: 1px solid transparent; color: var(--text-dim);
   border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500;
-  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  transition: color 0.12s, background 0.12s;
 }
 .view-tab:hover { color: var(--text); }
 .view-tab-active {
-  background: var(--bg-card); border-color: var(--border-strong); color: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  background: var(--bg-card); color: var(--text);
 }
 
 /* Sessions surface */
