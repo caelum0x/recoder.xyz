@@ -24,7 +24,7 @@ import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
-import { DeliveryApprovalRequiredError } from './delivery-approval.js';
+import { DeliveryApprovalRequiredError, type DeliveryIntent } from './delivery-approval.js';
 import {
   dmuxAvailability,
   launchDmuxConsole,
@@ -57,6 +57,36 @@ import {
   ingestWorkSignal,
   listWorkSignals,
 } from './work-signals.js';
+
+/**
+ * Build the user-initiated delivery intent for a merge/PR POST. A merge/PR
+ * request to this control plane is, by definition, the human operator initiating
+ * the delivery, so we mark it `approve: true`. In solo mode (single-user desktop)
+ * that click records the required approval automatically; for team/cloud
+ * (RECODER_SOLO_MODE off) the intent is inert and the standard approval gate runs.
+ *
+ * `decidedBy` is the actor recorded as the approver in the audited Approval
+ * record — taken from the request body (`decidedBy`/`createdBy`), defaulting to
+ * `desktop-user` for the embedded single-user backend. An explicit
+ * `approve: false` in the body opts out (treat as a non-user-initiated call).
+ */
+function buildDeliveryIntent(req: Request): DeliveryIntent {
+  const body = (req.body ?? {}) as {
+    approve?: unknown;
+    decidedBy?: unknown;
+    createdBy?: unknown;
+    intentReason?: unknown;
+  };
+  const approve = body.approve === false ? false : true;
+  const decidedBy =
+    typeof body.decidedBy === 'string' && body.decidedBy.trim()
+      ? body.decidedBy.trim()
+      : typeof body.createdBy === 'string' && body.createdBy.trim()
+        ? body.createdBy.trim()
+        : undefined;
+  const reason = typeof body.intentReason === 'string' && body.intentReason.trim() ? body.intentReason.trim() : undefined;
+  return { approve, decidedBy, reason };
+}
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -295,9 +325,10 @@ export function createConductorRouter(): Router {
   router.post('/workspaces/:workspaceId/pr', async (req: Request, res: Response) => {
     try {
       const { title, body, base, draft, remote } = req.body ?? {};
+      const intent = buildDeliveryIntent(req);
       res.status(201).json({
         success: true,
-        data: await createWorkspacePr(req.params.workspaceId, { title, body, base, draft, remote }),
+        data: await createWorkspacePr(req.params.workspaceId, { title, body, base, draft, remote, intent }),
       });
     } catch (err) {
       if (err instanceof DeliveryApprovalRequiredError) {
@@ -330,7 +361,14 @@ export function createConductorRouter(): Router {
   router.post('/workspaces/:workspaceId/merge', async (req: Request, res: Response) => {
     try {
       const { strategy, deleteBranch } = req.body ?? {};
-      res.json({ success: true, data: await mergeWorkspace(req.params.workspaceId, { strategy, deleteBranch }) });
+      // A merge POST is a user-initiated delivery: in solo mode (single-user
+      // desktop) this click IS the approval, so carry an explicit approve intent.
+      // Ignored for team/cloud (RECODER_SOLO_MODE off): the standard gate applies.
+      const intent = buildDeliveryIntent(req);
+      res.json({
+        success: true,
+        data: await mergeWorkspace(req.params.workspaceId, { strategy, deleteBranch, intent }),
+      });
     } catch (err) {
       if (err instanceof DeliveryApprovalRequiredError) {
         res.status(409).json({
