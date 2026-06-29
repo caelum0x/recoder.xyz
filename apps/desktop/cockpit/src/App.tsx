@@ -156,7 +156,7 @@ export function App() {
           <span class="traffic-light traffic-max" />
         </div>
         <div class="brand">
-          <span class="brand-mark" />
+          <img class="brand-mark" src="./logo.png" alt="Recoder" width={18} height={18} />
           <span class="brand-name">Cockpit</span>
           <span class="brand-sub">{config.backendUrl}</span>
         </div>
