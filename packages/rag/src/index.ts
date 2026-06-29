@@ -6,4 +6,5 @@ export * from "./embedder";
 export * from "./errors";
 export * from "./ingest";
 export * from "./query-service";
+export * from "./reranker";
 export * from "./utils";
