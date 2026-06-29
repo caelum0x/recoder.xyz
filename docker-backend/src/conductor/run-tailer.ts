@@ -59,10 +59,58 @@ const loggerPort: LoggerPort = {
   error: (message, context) => logger.error(context ?? {}, message),
 };
 
+/**
+ * Map a terminal RunEvent's message to friendly, user-facing copy.
+ *
+ * The substrate run-tailer (and reconcile) emit truthful-but-technical terminal
+ * messages ("Agent session ended", "Agent session exited with code N", "Pane is
+ * dead (status 0)"). For a LOCAL chat product those leak tmux/process internals.
+ * This maps the terminal event to plain language the user understands:
+ *   - completed (exit 0)      -> "Agent finished"
+ *   - failed / non-zero exit  -> "Agent stopped (error)"
+ * Non-terminal events (started/log/handoff/…) and any already-friendly message
+ * are passed through untouched. The technical detail is preserved on `data`
+ * (exitCode etc.) for the audit trail — only the human-facing `message` changes.
+ */
+function friendlyTerminalMessage(event: RunEvent): string | undefined {
+  if (event.type === 'completed') {
+    return 'Agent finished';
+  }
+  if (event.type === 'failed') {
+    const code =
+      typeof event.data?.exitCode === 'number' ? (event.data.exitCode as number) : undefined;
+    // Max-duration / safety stops carry a `reason` instead of an exit code; keep
+    // those as a distinct friendly line rather than a generic error.
+    if (event.data?.reason === 'max_duration') {
+      return 'Agent stopped (took too long)';
+    }
+    return code !== undefined && code !== 0
+      ? `Agent stopped (error, exit ${code})`
+      : 'Agent stopped (error)';
+  }
+  return undefined;
+}
+
+/**
+ * Return a copy of the event with a friendlier user-facing message, when
+ * applicable. Exported for unit testing the mapping in isolation.
+ */
+export function withFriendlyMessage(event: RunEvent): RunEvent {
+  const friendly = friendlyTerminalMessage(event);
+  if (!friendly || friendly === event.message) return event;
+  // Immutable: never mutate the input event. Preserve the technical message on
+  // `data.technicalMessage` so nothing is lost for debugging/audit.
+  return {
+    ...event,
+    message: friendly,
+    data: { ...(event.data ?? {}), technicalMessage: event.message },
+  };
+}
+
 /** RunEventSink backed by the agent-os repository (the audit-trail of record). */
 const repositorySink: RunEventSink = {
   async append(event: RunEvent): Promise<void> {
-    await agentOsContainer.repository.appendEvent(event);
+    await agentOsContainer.repository.appendEvent(withFriendlyMessage(event));
   },
 };
 

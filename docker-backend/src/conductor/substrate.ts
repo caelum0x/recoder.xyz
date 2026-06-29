@@ -82,6 +82,37 @@ export interface ConductorSubstrate
    * `completed` (exit 0) from `failed` (non-zero) per substrate.md §4.3.
    */
   exitCode?(handle: SubstrateHandle): Promise<number | null | undefined>;
+
+  /**
+   * CONTINUE/CHAT: start ANOTHER agent run in the SAME existing isolation (the
+   * worktree the prior run already produced changes in), driven by a new
+   * instruction. This is how a local chat keeps directing the agent — each user
+   * message is a new run in the same worktree, with the prior changes intact.
+   *
+   * OPTIONAL: a substrate that cannot relaunch in place omits this; the continue
+   * path then degrades truthfully (no new run) instead of re-provisioning. Returns
+   * a fresh handle for the new run (the prior handle's worktree is reused).
+   */
+  continueRun?(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle>;
+}
+
+/**
+ * Input for {@link ConductorSubstrate.continueRun}: the new instruction + the
+ * existing worktree to run it in. `command` (tmux) and `prompt`/`runtimeId`
+ * (in_process) mirror the launch input so each substrate drives its native path.
+ */
+export interface ContinueRunInput {
+  workspaceId: string;
+  /** The existing worktree to run in (the prior run's worktree). */
+  worktreePath: string;
+  /** Shell command to run (tmux_worktree). */
+  command?: string;
+  /** Rendered agent prompt (in_process). */
+  prompt?: string;
+  /** Runtime surface to drive (in_process). */
+  runtimeId?: string;
+  /** Environment for the relaunched run. */
+  env?: Record<string, string>;
 }
 
 const registry = new Map<WorkspaceSubstrate, ConductorSubstrate>();
