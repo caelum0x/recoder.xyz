@@ -22,8 +22,7 @@ test('COOKIE_DOMAIN is .recoder.xyz', () => {
 
 test('SURFACE_ORIGINS includes all production surfaces', () => {
   assert.equal(SURFACE_ORIGINS.app, 'https://recoder.xyz');
-  assert.equal(SURFACE_ORIGINS.agency, 'https://agency.recoder.xyz');
-  assert.equal(SURFACE_ORIGINS.pm, 'https://pm.recoder.xyz');
+  assert.equal(SURFACE_ORIGINS.studio, 'https://studio.recoder.xyz');
   assert.equal(SURFACE_ORIGINS.api, 'https://api.recoder.xyz');
 });
 

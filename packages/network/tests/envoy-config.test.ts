@@ -76,7 +76,7 @@ describe('generateEnvoyConfig', () => {
     const sr = bootstrap.static_resources as Record<string, unknown>;
     const clusters = sr.clusters as Array<Record<string, unknown>>;
     const clusterNames = clusters.map((c) => c.name);
-    for (const expected of ['docker-backend', 'recoder-app', 'recoder-agents', 'recoder-pm', 'recoder-agency']) {
+    for (const expected of ['docker-backend', 'recoder-app']) {
       expect(clusterNames).toContain(expected);
     }
     expect(clusterNames).toContain('recoder_ext_authz');
