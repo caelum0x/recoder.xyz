@@ -40,19 +40,23 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/recoder-xyz/recoder-xds/internal/config"
+	"github.com/recoder-xyz/recoder-xds/internal/contract"
 )
 
+// These names are sourced from the cross-language contract so the snapshot the
+// control plane serves, the Go server's NodeID, and the TS-emitted Envoy
+// bootstrap can never drift apart. See internal/contract.
 const (
 	// ListenerName is the single ingress HTTPS listener served via LDS.
-	ListenerName = "recoder_https_listener"
+	ListenerName = contract.ListenerName
 	// RouteConfigName is the RDS route configuration the HCM references.
-	RouteConfigName = "recoder_local_route"
+	RouteConfigName = contract.RouteConfigName
 	// VirtualHostName is the catch-all virtual host inside the route config.
-	VirtualHostName = "recoder_backend"
+	VirtualHostName = contract.VirtualHostName
 	// statPrefix for the HCM.
-	hcmStatPrefix = "recoder_ingress_http"
+	hcmStatPrefix = contract.HCMStatPrefix
 	// statPrefix for the local rate limiter.
-	rateLimitStatPrefix = "recoder_http_local_rate_limiter"
+	rateLimitStatPrefix = contract.RateLimitStatPrefix
 )
 
 // accessLogJSONFormat mirrors ACCESS_LOG_JSON_FORMAT in envoy-config.ts. The XDR
