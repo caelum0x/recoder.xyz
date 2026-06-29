@@ -22,12 +22,18 @@ import { defineConfig } from 'vitest/config';
 const conductorUiSrc = (file: string): string =>
   fileURLToPath(new URL(`../../../packages/conductor-ui/src/${file}`, import.meta.url));
 
+/** Same rationale for @recoder/design-tokens: resolve to package SOURCE. */
+const designTokensSrc = fileURLToPath(
+  new URL('../../../packages/design-tokens/src/index.ts', import.meta.url),
+);
+
 export default defineConfig({
   resolve: {
     alias: {
       '@recoder/conductor-ui/client': conductorUiSrc('client.ts'),
       '@recoder/conductor-ui/types': conductorUiSrc('types.ts'),
       '@recoder/conductor-ui': conductorUiSrc('index.ts'),
+      '@recoder/design-tokens': designTokensSrc,
     },
   },
   test: {
