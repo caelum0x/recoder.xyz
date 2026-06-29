@@ -5,4 +5,5 @@ export * from './browser-authorize';
 export * from './cli-token-issuer';
 export * from './cli-token-verifier';
 export * from './device-poll';
+export * from './device-auth-client';
 export * from './token-store';
