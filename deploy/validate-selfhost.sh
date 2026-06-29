@@ -11,7 +11,9 @@
 #      throwaway placeholder values (never real secrets, never written to the repo)
 #      so the required-var guards pass deterministically in CI.
 #   2. `bash -n` on every self-host shell script — they parse.
-#   3. YAML parse of both Envoy bootstraps (PyYAML if present, else skipped+reported).
+#   3. YAML parse of both Envoy bootstraps AND a structural FAIL-CLOSED posture
+#      assertion (every ext_authz filter has failure_mode_allow=false and targets
+#      the defined recoder_ext_authz cluster). PyYAML if present, else skipped+reported.
 #   4. `packer validate` of the AMI template IF packer is installed (else skip+report).
 #   5. `packer fmt -check` and HCL sanity IF packer is installed (advisory).
 #
@@ -25,6 +27,7 @@ COMPOSE_FILE="$ROOT_DIR/docker-compose.selfhost.yml"
 PACKER_FILE="$ROOT_DIR/deploy/packer/recoder.pkr.hcl"
 ENVOY_XDS="$ROOT_DIR/deploy/envoy/envoy.xds.yaml"
 ENVOY_STATIC="$ROOT_DIR/deploy/envoy/envoy.selfhost.yaml"
+CHECK_FAIL_CLOSED="$ROOT_DIR/deploy/envoy/check-fail-closed.py"
 
 SCRIPTS=(
   "$ROOT_DIR/scripts/selfhost-up.sh"
@@ -112,17 +115,28 @@ if command -v python3 >/dev/null 2>&1 && python3 -c 'import yaml' >/dev/null 2>&
       fail "yaml parse failed: ${y#"$ROOT_DIR"/}"
     fi
   done
-  # Truthfulness check: the static fallback path must carry the ext_authz filter
-  # (the governance gate). Assert it is present so we never ship an ungoverned edge.
-  for y in "$ENVOY_XDS" "$ENVOY_STATIC"; do
-    if python3 -c "import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); raw=open(sys.argv[1]).read(); sys.exit(0 if 'ext_authz' in raw and 'recoder_ext_authz' in raw else 1)" "$y"; then
-      pass "ext_authz->governance wired in ${y#"$ROOT_DIR"/}"
-    else
-      fail "ext_authz/recoder_ext_authz NOT wired in ${y#"$ROOT_DIR"/} (ungoverned edge)"
-    fi
-  done
+  # === FAIL-CLOSED posture (the security gate this image exists to enforce) ===
+  # A string grep for 'ext_authz' is NOT enough: a config could carry an ext_authz
+  # filter that is failure_mode_allow=TRUE (fail-OPEN) and still match. We instead
+  # walk the PARSED YAML (deploy/envoy/check-fail-closed.py) and prove, for EVERY
+  # ext_authz filter in BOTH bootstraps:
+  #   - at least one ext_authz filter exists       (the edge is governed)
+  #   - failure_mode_allow is explicitly false      (unreachable authz => DENY)
+  #   - the authz call targets recoder_ext_authz AND that cluster is defined
+  # Any violation is a HARD failure — we never ship a fail-open / ungoverned edge.
+  if [ -f "$CHECK_FAIL_CLOSED" ]; then
+    for y in "$ENVOY_XDS" "$ENVOY_STATIC"; do
+      if python3 "$CHECK_FAIL_CLOSED" "$y"; then
+        pass "fail-closed posture verified in ${y#"$ROOT_DIR"/}"
+      else
+        fail "fail-closed posture NOT verified in ${y#"$ROOT_DIR"/} (see error above)"
+      fi
+    done
+  else
+    fail "fail-closed checker missing: $CHECK_FAIL_CLOSED"
+  fi
 else
-  skip "python3+PyYAML not available — Envoy YAML parse skipped (compose config still validated the compose YAML)"
+  skip "python3+PyYAML not available — Envoy YAML parse AND fail-closed posture check skipped (compose config still validated the compose YAML; run on a host with python3+pyyaml to assert the governance gate)"
 fi
 
 # === 4. packer validate (if installed) =====================================

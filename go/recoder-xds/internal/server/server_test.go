@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/recoder-xyz/recoder-xds/internal/config"
 )
@@ -109,5 +111,104 @@ func TestUpdateConfigBumpsVersion(t *testing.T) {
 	}
 	if cp.version.Load() < 2 {
 		t.Errorf("version = %d, want >= 2 after one update", cp.version.Load())
+	}
+	if cp.Version() != cp.version.Load() {
+		t.Errorf("Version() = %d, want %d", cp.Version(), cp.version.Load())
+	}
+}
+
+// TestUpdateConfigRejectsBadConfigKeepsVersion proves a build/validation failure
+// does NOT advance the served version: the live snapshot is untouched so a bad
+// push can never blank the data plane (fail-safe no-restart update).
+func TestUpdateConfigRejectsBadConfigKeepsVersion(t *testing.T) {
+	cfg := config.Default(func(string) string { return "" })
+	ctx := context.Background()
+	cp, err := New(ctx, cfg, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	before := cp.Version()
+
+	bad := cfg
+	bad.Upstreams = nil // fails NetworkConfig.Validate (>=1 upstream required)
+	if err := cp.UpdateConfig(ctx, bad); err == nil {
+		t.Fatalf("UpdateConfig(bad) = nil, want validation error")
+	}
+	if got := cp.Version(); got != before {
+		t.Errorf("version advanced on rejected config: got %d, want %d", got, before)
+	}
+}
+
+// TestConcurrentUpdatesAreMonotonic hammers UpdateConfig from many goroutines and
+// asserts the final served version equals the number of successful updates. The
+// updateMu lock is what keeps assign-build-install ordered; without it a slow
+// build could install an older snapshot after a newer one.
+func TestConcurrentUpdatesAreMonotonic(t *testing.T) {
+	cfg := config.Default(func(string) string { return "" })
+	ctx := context.Background()
+	cp, err := New(ctx, cfg, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	start := cp.Version()
+
+	const n = 50
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			if err := cp.UpdateConfig(ctx, cfg); err != nil {
+				t.Errorf("UpdateConfig: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := cp.Version(); got != start+n {
+		t.Errorf("final version = %d, want %d (no lost/regressed updates)", got, start+n)
+	}
+}
+
+// TestHealthServiceReportsServing dials the gRPC health service the control
+// plane registers and asserts both the overall server and the ADS service
+// report SERVING — the standard probe an orchestrator uses for the gRPC port.
+func TestHealthServiceReportsServing(t *testing.T) {
+	cfg := config.Default(func(string) string { return "" })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cp, err := New(ctx, cfg, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	gs := NewGRPCServer()
+	cp.Register(gs)
+	go func() { _ = gs.Serve(lis) }()
+	defer gs.GracefulStop()
+
+	conn, err := grpc.NewClient(lis.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	hc := healthpb.NewHealthClient(conn)
+	checkCtx, checkCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer checkCancel()
+
+	for _, svc := range []string{"", adsServiceName} {
+		resp, err := hc.Check(checkCtx, &healthpb.HealthCheckRequest{Service: svc})
+		if err != nil {
+			t.Fatalf("health check %q: %v", svc, err)
+		}
+		if resp.GetStatus() != healthpb.HealthCheckResponse_SERVING {
+			t.Errorf("health %q = %v, want SERVING", svc, resp.GetStatus())
+		}
 	}
 }

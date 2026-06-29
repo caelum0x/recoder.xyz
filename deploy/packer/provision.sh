@@ -129,6 +129,8 @@ for required in \
   deploy/governance-daemon.Dockerfile \
   deploy/envoy/envoy.xds.yaml \
   deploy/envoy/envoy.selfhost.yaml \
+  deploy/envoy/check-fail-closed.py \
+  deploy/validate-selfhost.sh \
   deploy/postgres/init-databases.sh ; do
   [ -e "$RECODER_HOME/$required" ] || { echo "[provision] required self-host artifact missing: $required" >&2; exit 1; }
 done
