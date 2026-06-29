@@ -9,8 +9,7 @@
 > `recodergit --help` binary and degrades gracefully when it is absent).
 > Internal shared types live in
 > [`@recoder/recodergit-engine-shared`](../recodergit-shared).
-> See [`docs/subsystems/recodergit.md`](../../../docs/subsystems/recodergit.md)
-> for the integration design. The **CLI bin name stays `recodergit`** (the
+> The **CLI bin name stays `recodergit`** (the
 > brain probes exactly that). The browser-only web UI (`recodergit-web`) is out
 > of scope for this engine. Upstream lineage: RecoderGit (PolyForm Noncommercial).
 

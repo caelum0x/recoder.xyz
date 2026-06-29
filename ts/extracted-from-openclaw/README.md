@@ -7,8 +7,8 @@ env, `@recoder/*` naming).
 
 ## Foundation (`src/`) — built, type-checked, tested green
 
-This package's compiled surface is the **foundation** described in
-`docs/subsystems/interop.md` §7.4. The per-channel adapters
+This package's compiled surface is the **foundation** for the interop subsystem.
+The per-channel adapters
 (telegram/slack/discord/signal/line/feishu/imessage/whatsapp) are a later phase
 that wrap each real gateway behind the `ConnectorPort`.
 
