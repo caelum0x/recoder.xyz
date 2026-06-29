@@ -9,7 +9,7 @@
  * (default when no AGENT_OS_DATABASE_URL is set). Skips on a Postgres driver
  * rather than mutate a real database.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type { Approval, Workspace } from '@recoder/agent-os';
 import { agentOsContainer } from '../agent-os/service-container';
@@ -140,5 +140,56 @@ describe.skipIf(!usingMemoryRepo)('conductor delivery approval gate', () => {
       metadata: { ...ws.metadata, deliveryApprovalBypass: true },
     });
     await expect(enforceDeliveryApproval(bypassed, 'merge')).resolves.toBeUndefined();
+  });
+
+  describe('SOLO MODE', () => {
+    const prev = process.env.RECODER_SOLO_MODE;
+    afterEach(() => {
+      if (prev === undefined) delete process.env.RECODER_SOLO_MODE;
+      else process.env.RECODER_SOLO_MODE = prev;
+    });
+
+    it('solo + user-initiated merge: auto-records the approval and passes the gate (no approval pre-seeded)', async () => {
+      process.env.RECODER_SOLO_MODE = '1';
+      const ws = await seedWorkspace('running', taskId);
+
+      // No approval seeded. In team mode this would throw; in solo mode the
+      // user-initiated click records the approval and the gate clears.
+      await expect(
+        enforceDeliveryApproval(ws, 'merge', { approve: true, decidedBy: 'desktop-user' }),
+      ).resolves.toBeUndefined();
+
+      // The approval was actually recorded (audited), attributed to the user.
+      const approvals = await repo.listApprovals();
+      const recorded = approvals.find((a) => a.taskId === taskId && a.status === 'approved');
+      expect(recorded).toBeDefined();
+      expect(recorded?.decidedBy).toBe('desktop-user');
+      // Workspace was NOT pushed to awaiting_approval — the merge proceeds.
+      const after = await repo.getWorkspace(ws.workspaceId);
+      expect(after?.state).toBe('running');
+    });
+
+    it('solo BUT no user click (approve:false): still blocked, awaiting_approval (no silent bypass)', async () => {
+      process.env.RECODER_SOLO_MODE = '1';
+      const ws = await seedWorkspace('running', taskId);
+      await expect(
+        enforceDeliveryApproval(ws, 'merge', { approve: false }),
+      ).rejects.toBeInstanceOf(DeliveryApprovalRequiredError);
+      const after = await repo.getWorkspace(ws.workspaceId);
+      expect(after?.state).toBe('awaiting_approval');
+    });
+
+    it('team mode (solo off) + user-initiated intent: gate UNCHANGED — denies to awaiting_approval', async () => {
+      delete process.env.RECODER_SOLO_MODE;
+      const ws = await seedWorkspace('running', taskId);
+      await expect(
+        enforceDeliveryApproval(ws, 'merge', { approve: true, decidedBy: 'someone' }),
+      ).rejects.toBeInstanceOf(DeliveryApprovalRequiredError);
+      const after = await repo.getWorkspace(ws.workspaceId);
+      expect(after?.state).toBe('awaiting_approval');
+      // No approval was silently recorded for this task in team mode.
+      const approvals = await repo.listApprovals();
+      expect(approvals.some((a) => a.taskId === taskId && a.status === 'approved')).toBe(false);
+    });
   });
 });

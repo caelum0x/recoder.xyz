@@ -39,6 +39,13 @@ import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
 import { advanceWorkspace } from './workspace-service.js';
 import { decideDelivery, type DeliveryGovernanceDecision } from './governance-gate.js';
+import {
+  isUserInitiatedSoloApproval,
+  recordSoloApproval,
+  type DeliveryIntent,
+} from './solo-mode.js';
+
+export type { DeliveryIntent } from './solo-mode.js';
 
 const logger = createLogger('conductor:delivery-approval');
 
@@ -170,7 +177,11 @@ export class DeliveryApprovalRequiredError extends Error {
  * production rule: customer-visible delivery requires an approval record; absent
  * one, surface awaiting_approval rather than silently delivering.
  */
-export async function enforceDeliveryApproval(workspace: Workspace, action: DeliveryAction): Promise<void> {
+export async function enforceDeliveryApproval(
+  workspace: Workspace,
+  action: DeliveryAction,
+  intent?: DeliveryIntent,
+): Promise<void> {
   // An explicit override exists for tasks the operator has marked safe automation
   // (.claude/rules/production.md: "unless the task spec explicitly marks them as
   // safe automation"). It must be an explicit boolean true in workspace metadata.
@@ -205,7 +216,28 @@ export async function enforceDeliveryApproval(workspace: Workspace, action: Deli
     return;
   }
 
-  const check = await checkDeliveryApproval(workspace.taskId, action);
+  let check = await checkDeliveryApproval(workspace.taskId, action);
+
+  // SOLO MODE: on the single-user desktop, a user-initiated merge/PR click IS the
+  // approval. When RECODER_SOLO_MODE is on AND the request carries an explicit
+  // approve intent (decidedBy), and no control-plane approval already authorizes
+  // the action, record the canonical Approval now (attributed to the user) so the
+  // existing gate finds it. Governance below STILL classifies the tier and seals
+  // the audit entry — a hard deny still blocks. This never fires for team/cloud
+  // (RECODER_SOLO_MODE off) nor for an autonomous agent with no human click.
+  if (!check.approved && isUserInitiatedSoloApproval(intent)) {
+    try {
+      const recorded = await recordSoloApproval(workspace, action, intent as DeliveryIntent);
+      check = { approved: true, approvalId: recorded.approvalId };
+    } catch (err) {
+      // A solo-approval write failure must not silently deliver: leave `check`
+      // unapproved so the gate below fails closed exactly as the team path would.
+      logger.warn(
+        { workspaceId: workspace.workspaceId, action, err },
+        'solo-mode approval record failed — falling back to standard gate (fails closed)',
+      );
+    }
+  }
 
   // Route the delivery through @recoder/governance. The control-plane approval
   // record (when present) is the human sign-off governance consumes to clear the
