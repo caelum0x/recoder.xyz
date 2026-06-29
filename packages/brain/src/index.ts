@@ -68,6 +68,15 @@ export {
   type Mem0MemoryOptions,
 } from "./memory/mem0-memory";
 
+// Real document-preprocessor-backed RAG/context ingest (the owned
+// @recoder/document-preprocessor fusion seam; degrade-safe to empty text)
+export {
+  RecoderDocumentPreprocessor,
+  createDocumentPreprocessor,
+  type RecoderDocumentPreprocessorOptions,
+  type PdfiumWasmLoader,
+} from "./docs/document-preprocessor";
+
 // Real context7-backed docs (degrade-safe to empty when unavailable)
 export {
   Context7Docs,
@@ -165,6 +174,9 @@ export type {
   BrainEvent,
   BrainMemory,
   BrainDoc,
+  BrainDocumentFormat,
+  BrainRawDocument,
+  BrainPreprocessedDocument,
   BrainTask,
   BrainActivity,
   BrainActivityProfile,
@@ -182,6 +194,7 @@ export type {
   DocsPort,
   TaskGraphPort,
   ActivityPort,
+  DocumentPreprocessorPort,
   BrainContextCacheStore,
   ClockPort,
   // Deprecated aliases, kept for backward compatibility:

@@ -43,6 +43,12 @@ async function main() {
     jsx: 'automatic',
     jsxImportSource: 'preact',
     outfile: join(dist, 'cockpit.js'),
+    // apps/desktop is outside the pnpm workspace and the package ships no dist
+    // during dev, so resolve @recoder/conductor-ui to its TS source. esbuild
+    // bundles it in-tree, exactly like the cockpit's own src/.
+    alias: {
+      '@recoder/conductor-ui': join(root, '..', '..', '..', 'packages', 'conductor-ui', 'src', 'index.ts'),
+    },
     loader: { '.css': 'css' },
     logLevel: 'info',
     metafile: true,

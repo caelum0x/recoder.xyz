@@ -15,7 +15,13 @@
     "noEmit": true,
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
-    "types": []
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@recoder/conductor-ui": ["../../../packages/conductor-ui/src/index.ts"],
+      "@recoder/conductor-ui/client": ["../../../packages/conductor-ui/src/client.ts"],
+      "@recoder/conductor-ui/types": ["../../../packages/conductor-ui/src/types.ts"]
+    }
   },
   "include": ["src", "build.mjs"]
 }

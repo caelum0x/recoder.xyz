@@ -3,3 +3,4 @@ export * from './beads-client';
 export * from './task-spec-mapper';
 export * from './sync-to-recoder';
 export * from './sync-from-recoder';
+export * from './beads-issue-tracker';

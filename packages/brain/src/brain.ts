@@ -31,7 +31,9 @@ import type {
   BrainContext,
   BrainEvent,
   BrainMemory,
+  BrainPreprocessedDocument,
   BrainQuery,
+  BrainRawDocument,
   SourceProvenance,
 } from "./domain";
 import type {
@@ -39,6 +41,7 @@ import type {
   BrainContextCacheStore,
   ClockPort,
   DocsPort,
+  DocumentPreprocessorPort,
   MemoryPort,
   RepoIntelPort,
   TaskGraphPort,
@@ -74,6 +77,12 @@ export interface BrainDeps {
   tasks?: TaskGraphPort;
   /** Desktop-activity memory, bound to the owned continuum. */
   activity?: ActivityPort;
+  /**
+   * Document preprocessing for RAG/context ingest, bound to the owned
+   * @recoder/document-preprocessor. Turns raw docs (text/markdown/PDF) into
+   * clean text the brain can ingest into memory via {@link Brain.ingestDocument}.
+   */
+  preprocessor?: DocumentPreprocessorPort;
   /** How git-nexus builds the repo map (defaults to indexing repoRoot). */
   repoMap?: (q: BrainQuery) => CreateContextPackInput;
   /**
@@ -399,6 +408,35 @@ export class Brain {
         sources: [] as BrainActivity[],
       }
     );
+  }
+
+  /**
+   * RAG/context ingest: preprocess a raw document (text/markdown/PDF) into clean
+   * text via the document-preprocessor port, then remember it through the memory
+   * port so a later {@link Brain.recall} / {@link Brain.assemble} can surface it.
+   *
+   * Returns the preprocessed document (title + normalized text + page count) so
+   * the caller can inspect what was ingested. Degrade-safe end to end: with no
+   * preprocessor wired, nothing is preprocessed and an empty result is returned;
+   * with a preprocessor but no memory port, the text is returned but not stored.
+   * `remembered` reports whether the text was actually written to memory.
+   */
+  async ingestDocument(
+    doc: BrainRawDocument,
+  ): Promise<BrainPreprocessedDocument & { remembered: boolean }> {
+    if (!this.deps.preprocessor) {
+      return { title: doc.title, text: "", pageCount: 0, remembered: false };
+    }
+    const result = await this.deps.preprocessor.preprocess(doc);
+    if (!result.text || !this.deps.memory) {
+      return { ...result, remembered: false };
+    }
+    await this.deps.memory.remember(result.text, {
+      kind: "document",
+      title: result.title,
+      pageCount: result.pageCount,
+    });
+    return { ...result, remembered: true };
   }
 
   /** Write an agent's outcome back so the next assemble() is richer. */

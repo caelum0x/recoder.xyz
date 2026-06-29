@@ -33,6 +33,11 @@
  *   POST /api/agent-os/memory/lifecycle/candidates             propose a candidate (with evidence)
  *   POST /api/agent-os/memory/lifecycle/candidates/:id/review  accept/reject a candidate
  */
+import { ConductorClient } from '@recoder/conductor-ui';
+import type {
+  RunEventHandler as ConductorRunEventHandler,
+  StreamHandle as ConductorStreamHandle,
+} from '@recoder/conductor-ui';
 import type {
   ApiEnvelope,
   BrainStats,
@@ -178,6 +183,40 @@ function agentOsRequest<T>(method: string, path: string, body?: unknown): Promis
   return requestAt<T>('/api/agent-os', method, path, body);
 }
 
+/**
+ * Build the shared, typed {@link ConductorClient} from `@recoder/conductor-ui`,
+ * configured for the cockpit's runtime.
+ *
+ * The package is the canonical web front door for the conductor control plane.
+ * The cockpit reuses it instead of re-deriving the same workspace/stream contract
+ * a second time. Two cockpit-specific adaptations are wired in here, never faked:
+ *
+ *  - Auth: the cockpit authenticates with `Authorization: Bearer <session>`
+ *    (real recoder.xyz session), not the package's default `x-api-key`. We inject
+ *    a `fetch` wrapper that stamps the live Bearer token from {@link readConfig}
+ *    on every request — so the typed client speaks the cockpit's auth dialect.
+ *  - Origin: the client reads the same injected backendUrl the rest of api.ts uses.
+ *
+ * A fresh client is built per call so a token refreshed by a desktop login (see
+ * config.ts) is always honored — there is no stale captured token.
+ */
+function conductorClient(): ConductorClient {
+  const { backendUrl } = readConfig();
+  const baseFetch: typeof fetch =
+    typeof fetch !== 'undefined'
+      ? fetch
+      : ((globalThis as { fetch?: typeof fetch }).fetch as typeof fetch);
+  const authedFetch: typeof fetch = (input, init) => {
+    const { token } = readConfig();
+    const headers = new Headers(init?.headers ?? {});
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return baseFetch(input, { ...init, headers });
+  };
+  return new ConductorClient({ baseUrl: backendUrl, fetch: authedFetch });
+}
+
 export const api = {
   health: () =>
     request<{ available: boolean; git?: boolean; tmux?: boolean; tmuxBin?: string; reason?: string }>(
@@ -191,6 +230,19 @@ export const api = {
   createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/workspaces', body),
   listEvents: (id: string) =>
     request<RunEvent[]>('GET', `/workspaces/${encodeURIComponent(id)}/events`),
+  /**
+   * Open a LIVE RunEvent stream for a workspace via the shared
+   * `@recoder/conductor-ui` {@link ConductorClient}. The client upgrades to the
+   * conductor WS endpoint (`/workspaces/:id/stream`) when a WebSocket is
+   * available and transparently falls back to polling captured pane output —
+   * capability the cockpit's bespoke `listEvents` polling alone does not provide.
+   * Returns a {@link ConductorStreamHandle}; call `.close()` to stop streaming.
+   */
+  openStream: (
+    id: string,
+    onEvent: ConductorRunEventHandler,
+    opts?: { pollIntervalMs?: number; lines?: number },
+  ): ConductorStreamHandle => conductorClient().openStream(id, onEvent, opts),
   diff: (id: string) => request<WorkspaceDiff>('GET', `/workspaces/${encodeURIComponent(id)}/diff`),
   openPr: (id: string, body: { title: string; body?: string; base?: string; draft?: boolean }) =>
     request<CreatePrResult>('POST', `/workspaces/${encodeURIComponent(id)}/pr`, body),
