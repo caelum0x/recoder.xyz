@@ -11,6 +11,7 @@ import { promisify } from 'node:util';
 import {
   conductorAvailability,
   startSession,
+  continueSession,
   capturePane,
   killSession,
   paneExitCode,
@@ -20,6 +21,7 @@ import { buildSubstrateDiff } from '@recoder/substrate';
 import {
   registerSubstrate,
   type ConductorSubstrate,
+  type ContinueRunInput,
   type SubstrateDiff,
   type SubstrateHandle,
   type SubstrateLaunchInput,
@@ -50,6 +52,20 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
     });
     // ref = the orchestrator's session id (workspaceId, used by capturePane/killSession);
     // sessionName = the tmux session name (used for direct `tmux has-session`).
+    return { ref: input.workspaceId, worktreePath: session.worktreePath, sessionName: session.tmuxName };
+  },
+
+  async continueRun(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle> {
+    const worktreePath = input.worktreePath || handle.worktreePath;
+    if (!worktreePath) throw new Error('tmux_worktree continueRun requires an existing worktree');
+    if (!input.command) throw new Error('tmux_worktree continueRun requires a command');
+    // Reuse the EXISTING worktree (the prior run's changes are intact); start a
+    // fresh tmux session running the new instruction's command in place.
+    const session = await continueSession({
+      sessionId: input.workspaceId,
+      worktreePath,
+      command: input.command,
+    });
     return { ref: input.workspaceId, worktreePath: session.worktreePath, sessionName: session.tmuxName };
   },
 

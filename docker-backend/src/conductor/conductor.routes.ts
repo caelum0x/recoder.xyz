@@ -24,6 +24,7 @@ import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
+import { continueWorkspace } from './continue-workspace.js';
 import { DeliveryApprovalRequiredError, type DeliveryIntent } from './delivery-approval.js';
 import {
   dmuxAvailability,
@@ -391,6 +392,27 @@ export function createConductorRouter(): Router {
       }
       const msg = err instanceof Error ? err.message : 'merge failed';
       res.status(msg.includes('not found') ? 404 : 400).json({ success: false, error: msg });
+    }
+  });
+
+  // CONTINUE / CHAT: send a NEW message to an existing workspace, starting another
+  // agent run in the SAME worktree (the agent sees the prior changes). Each user
+  // message is a new run — this is how the local chat keeps directing the agent.
+  // Degrade-safe: a missing worktree, a running agent, a terminal state, or a
+  // substrate without in-place relaunch returns a clear 4xx instead of guessing.
+  router.post('/workspaces/:workspaceId/message', async (req: Request, res: Response) => {
+    try {
+      const { text, model, createdBy } = req.body ?? {};
+      if (typeof text !== 'string' || !text.trim()) {
+        res.status(400).json({ success: false, error: 'text is required' });
+        return;
+      }
+      const result = await continueWorkspace(req.params.workspaceId, { text, model, createdBy });
+      res.status(201).json({ success: true, data: result });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'message failed';
+      const status = msg.includes('not found') ? 404 : 400;
+      res.status(status).json({ success: false, error: msg });
     }
   });
 
