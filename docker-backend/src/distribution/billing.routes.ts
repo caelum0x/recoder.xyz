@@ -30,6 +30,7 @@ import {
 } from './entitlement-gate.middleware.js';
 import { isTerminalWorkspaceState, type Workspace } from '@recoder/agent-os';
 import { listWorkspaces } from '../conductor/workspace-service.js';
+import { billingIpcAvailability, billingIpcHealth } from './billing-ipc.js';
 import { createLogger } from './log.js';
 
 const logger = createLogger('distribution-billing');
@@ -129,6 +130,17 @@ export function createBillingRouter(mod: DistributionModule): Router {
   router.get('/health', async (_req: Request, res: Response) => {
     const health = await mod.billing.health();
     res.json({ success: true, data: health });
+  });
+
+  // GET /ipc-health — the optional py/recoder-billing IPC connect seam. Reports
+  // whether BILLING_BASE_URL is configured and, if so, probes the engine's
+  // `/internal/agent-os/billing/health`. Additive: the default Polar path above
+  // is unaffected. Degrade-safe — unset URL / unreachable → not-healthy, never
+  // a faked success.
+  router.get('/ipc-health', async (_req: Request, res: Response) => {
+    const availability = billingIpcAvailability();
+    const health = await billingIpcHealth();
+    res.json({ success: true, data: { ...availability, ...health } });
   });
 
   // POST /checkout — start a hosted Polar checkout for a product.

@@ -14,6 +14,8 @@ import { runtimeAvailability } from './runtime-commands.js';
 import { resourceSnapshot } from './resource-governor.js';
 import { activeTailCount } from './run-tailer.js';
 import { dmuxAvailability } from './dmux-adapter.js';
+import { colbertRerankAvailability } from './colbert-rerank.js';
+import { beadsAvailability } from './beads-sync.js';
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger.js';
 
@@ -61,6 +63,18 @@ export interface ConductorHealth {
     total: number;
     active: number;
     byState: Record<string, number>;
+  };
+  /**
+   * Cross-language service connect seams the conductor wires, reported truthfully
+   * as "configured to connect" (a config check, not a live probe — a real call
+   * degrades per-request when the service is down). Each is additive and the
+   * conductor is fully functional when all are absent.
+   */
+  services: {
+    /** `bd`/beads CLI (go) — shelled by the agent-os task sync when on PATH. */
+    beads: { available: boolean; bin: string; version?: string; reason?: string };
+    /** `py/colbert` rerank seam — connected when `COLBERT_RERANK_URL` is set. */
+    colbertRerank: { available: boolean; url?: string };
   };
 }
 
@@ -116,5 +130,9 @@ export async function conductorHealth(): Promise<ConductorHealth> {
       reason: dmux.reason,
     },
     workspaces,
+    services: {
+      beads: beadsAvailability(),
+      colbertRerank: colbertRerankAvailability(),
+    },
   };
 }
