@@ -85,9 +85,11 @@ Run `tools/list` against the server for the authoritative, complete schema set.
 |----------|----------|-------------|
 | `RECODER_API_TOKEN` | Yes | Bearer token for Docker/A2A routes, or a Recoder API key in `pk_xxx:sk_xxx` format for `api.recoder.xyz` |
 | `RECODER_SESSION_TOKEN` | No | Better Auth session token. Use this when `RECODER_API_TOKEN` is a `pk_xxx:sk_xxx` API key but A2A/WebSocket routes still need Bearer auth |
+| `PLATFORM_TOKEN` | No | Alias for `RECODER_SESSION_TOKEN` (control-plane + conductor bearer auth) |
 | `RECODER_DOCKER_URL` | No | Docker backend URL (default: `https://docker.recoder.xyz`) |
+| `RECODER_BACKEND_URL` | No | Backend Express base URL (e.g. `http://localhost:3100`). Used to derive the conductor mount when `*_CONDUCTOR_URL` is unset |
 | `RECODER_API_URL` | No | API URL (default: `https://api.recoder.xyz`) |
-| `RECODER_CONDUCTOR_URL` | No | Conductor base URL for workspace tools (default: `${RECODER_DOCKER_URL}/api/conductor`) |
+| `RECODER_CONDUCTOR_URL` / `CONDUCTOR_URL` | No | Conductor base URL for workspace tools. Point at the backend `:3100` mount for local use, e.g. `http://localhost:3100/api/conductor` (default: `${RECODER_DOCKER_URL}/api/conductor`) |
 | `DAYTONA_API_KEY` | No | Daytona API key for sandbox execution |
 | `RECODER_DAYTONA_URL` | No | Daytona API URL |
 
