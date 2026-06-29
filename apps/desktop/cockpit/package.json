@@ -13,6 +13,7 @@
   "dependencies": {
     "@recoder/conductor-ui": "file:../../../packages/conductor-ui",
     "@recoder/design-tokens": "file:../../../packages/design-tokens",
+    "@recoder/shared": "file:../../../shared",
     "preact": "^10.24.3"
   },
   "devDependencies": {
