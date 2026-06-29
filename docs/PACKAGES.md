@@ -59,7 +59,7 @@ These are the real net-new Recoder authorship. Mostly small/medium contract laye
 | `@recoder/agent-sandbox` | `agent-sandbox` | 6 | real | Sandbox provider contracts (Daytona/E2B/local) |
 | `@recoder/agent-schemas` | `agent-schemas` | 18 | real | Runtime-safe schema guards (no provider deps) |
 | `@recoder/agent-workflows` | `agent-workflows` | 16 | real | Workflow definition + driver contracts |
-| `@recoder/agent-kernel` | `agent-kernel` | 2 | **stub** | Compat facade re-exporting canonical contracts |
+| `@recoder/agent-kernel` | _removed_ | — | **removed** | Compat facade re-exporting canonical contracts — deleted in `067b1eb43`; importers use `@recoder/agent-os` (G10) |
 | `@recoder/a2a-sdk` | `a2a-sdk` | 40 | real | Owned A2A helpers: task-state map, error taxonomy, envelopes |
 | `@recoder/oss-registry` | `oss-registry` | 8 | real | OSS component registry + health descriptors |
 | `@recoder/pal` | `pal` | 12 | real | Planner + agent-team routing (risk/approval/sandbox) |
@@ -101,7 +101,7 @@ These are the real net-new Recoder authorship. Mostly small/medium contract laye
 | `@recoder/sandbox-daytona` | `sandbox-daytona` | 28 | vendored-oss | Daytona TS SDK (uses owned daytona-*-api-client) |
 | `@recoder/daytona-api-client` | `daytona-api-client` | 207 | **generated** | Daytona OpenAPI client |
 | `@recoder/daytona-toolbox-api-client` | `daytona-toolbox-api-client` | 101 | **generated** | Daytona toolbox OpenAPI client |
-| `@recoder/sandbox-providers` | `sandbox-providers` | 2 | **stub** | Compat shim re-exporting sandbox contracts |
+| `@recoder/sandbox-providers` | _removed_ | — | **removed** | Compat shim re-exporting sandbox contracts — deleted in `067b1eb43`; folded into `agent-sandbox` (G5) |
 
 ### 2d. Vendored OSS — `pi` cluster (one upstream `pi` monorepo split into 4)
 
@@ -146,7 +146,7 @@ The entire `@giselle-internal`/`@giselles-ai` internal monorepo renamed to
 | `@recoder/trigger-registry` | `trigger-registry` | 3 | vendored-oss | Giselle trigger registry (thin) |
 | `@recoder/vault` | `vault` | 7 | vendored-oss | Giselle secret vault |
 | `@recoder/design-tokens` | `design-tokens` | 1 | **stub** | Design tokens (index.ts + tokens.css); Giselle origin |
-| `@recoder/database` | `database` | 3 | **stub** | Thin DB client/types wrapper; Giselle-adjacent |
+| `@recoder/database` | _removed_ | — | **removed** | Thin DB client/types wrapper; Giselle-adjacent — deleted in `067b1eb43` (orphan, 0 importers) |
 
 ### 2f. Config / infra stubs
 
@@ -171,7 +171,7 @@ auxiliary integrations.
 
 | Dir | Files | Note |
 |-----|------:|------|
-| `ts/recodergit` (`recodergit-monorepo`) | 2101 | Full RecoderGit (= "git-nexus") impl. Contract stub is `packages/recodergit` (9). **Memory's "ts/gitnexus" path is stale — the dir is `ts/recodergit`.** |
+| `ts/recodergit` (`recodergit-monorepo`) | 2101 | Full RecoderGit (= "git-nexus") impl. Contract stub is `packages/recodergit` (9). The dir is `ts/recodergit` (the old `ts/gitnexus` path never existed on disk). |
 | `ts/pi` | — | **Retired** in `34b2d4a83` (duplicate of `packages/pi-*`). The vendored split `packages/pi-*` (4 pkgs, 407 files) is now the single source. |
 | `py/mem0` | 381 | Full mem0 Python impl. TS SDK vendored at `packages/mem0` (64). |
 | `py/browser-use` | 386 | Browser automation engine. |
@@ -218,13 +218,13 @@ Some are *intentional contract-vs-impl splits* — called out explicitly.
 
 ### G5 — sandbox / daytona (heavy layering — prime cleanup target)
 - `packages/agent-sandbox` (6, owned contracts). Canonical contract.
-- `packages/sandbox-providers` (2, **stub** compat shim).
+- ~~`packages/sandbox-providers`~~ (compat shim — **removed** in `067b1eb43`).
 - `packages/sandbox-daytona` (28, vendored Daytona TS SDK).
 - `packages/daytona-api-client` (207, **generated**).
 - `packages/daytona-toolbox-api-client` (101, **generated**).
-- **Verdict:** `sandbox-providers` is a pure compat shim → **fold into `agent-sandbox`
-  and delete.** Keep the generated clients (regenerable, don't hand-edit). Confirm
-  `sandbox-daytona` still imports both generated clients before touching them.
+- **Verdict:** `sandbox-providers` was a pure compat shim → **folded into `agent-sandbox`
+  and removed** (`067b1eb43`, 0 importers). Keep the generated clients (regenerable, don't
+  hand-edit). Confirm `sandbox-daytona` still imports both generated clients before touching them.
 
 ### G6 — browser (different layers; not a dup)
 - `packages/browser-verification` (2, **stub** contracts).
@@ -244,9 +244,9 @@ Some are *intentional contract-vs-impl splits* — called out explicitly.
 ### G8 — git / recodergit (contract-vs-impl — intentional, but path-confusing)
 - `packages/recodergit` (9, owned **contracts**). Canonical contract.
 - `ts/recodergit` (2101, full RecoderGit impl, a.k.a. git-nexus).
-- **Verdict:** Intentional contract/impl split. **Keep both.** Fix the stale
-  reference: docs/memory call the impl `ts/gitnexus`; the actual path is
-  `ts/recodergit`. Update references.
+- **Verdict:** Intentional contract/impl split. **Keep both.** The impl lives at
+  `ts/recodergit` (the legacy `ts/gitnexus` path was never on disk; stale references
+  have been corrected).
 
 ### G9 — beads (contract-vs-impl)
 - `packages/beads-adapter` (7, owned adapter → TaskSpec).
@@ -255,9 +255,9 @@ Some are *intentional contract-vs-impl splits* — called out explicitly.
 
 ### G10 — agent-core (compat facade)
 - `packages/agent-os` (40, canonical core).
-- `packages/agent-kernel` (2, **stub** facade re-exporting agent-os).
-- **Verdict:** `agent-kernel` exists only for back-compat imports. Once consumers
-  migrate to `@recoder/agent-os`, **delete `agent-kernel`.**
+- ~~`packages/agent-kernel`~~ (stub facade re-exporting agent-os — **removed** in `067b1eb43`).
+- **Verdict:** `agent-kernel` existed only for back-compat imports. Consumers migrated to
+  `@recoder/agent-os` and the facade was **removed** (`067b1eb43`, 0 importers).
 
 ### G11 — Giselle cluster (28 vendored pkgs as one unit)
 - Listed in §2e. These are one upstream monorepo, not 28 independent decisions.
@@ -274,11 +274,11 @@ Thin or placeholder packages (≤4 authored files, or pure re-export facades):
 
 | Package | Files | Kind | Recommendation |
 |---------|------:|------|----------------|
-| `packages/agent-kernel` | 2 | compat facade | Delete after consumers move to `agent-os` (G10) |
-| `packages/sandbox-providers` | 2 | compat shim | Fold into `agent-sandbox`, delete (G5) |
+| ~~`packages/agent-kernel`~~ | — | compat facade | **Removed** in `067b1eb43`; consumers use `agent-os` (G10) |
+| ~~`packages/sandbox-providers`~~ | — | compat shim | **Removed** in `067b1eb43`; folded into `agent-sandbox` (G5) |
 | `packages/browser-verification` | 2 | thin contracts | Flesh out or merge into observability (G6) |
 | `packages/ui-agent-os` | 4 | thin UI contracts | Keep if cockpit consumes it; else merge into `ui` consumers |
-| `packages/database` | 3 | thin DB wrapper | Verify usage; merge into `shared` if orphan |
+| ~~`packages/database`~~ | — | thin DB wrapper | **Removed** in `067b1eb43` (orphan, 0 importers) |
 | `packages/design-tokens` | 1 | single index + css | Keep (cheap), Giselle-origin |
 | `packages/ecosystem-config` | 1 | single-file config | Keep (cheap) |
 | `packages/tsconfig` | 0 | shared tsconfig | Keep (infra, no source by design) |
@@ -312,17 +312,20 @@ wins are: isolating vendored clusters, killing facades, and fixing version drift
    `py/mem0` (Python, 381) is true duplication. Check which `brain` actually imports;
    archive the other. Verify before deleting — `brain` fusion depends on it.
 
-4. **Delete the compat facades (G5, G10, low risk).** `agent-kernel` (2) and
-   `sandbox-providers` (2) exist only to re-export. Migrate importers to
-   `agent-os` / `agent-sandbox`, then remove. Two fewer packages, zero lost behavior.
+4. **~~Delete the compat facades (G5, G10)~~ — DONE.** `agent-kernel` and
+   `sandbox-providers` (plus the orphan `database` stub) were re-export-only / unused
+   and were **removed** in `067b1eb43` after confirming 0 importers. Three fewer
+   packages, zero lost behavior.
 
-5. **Fix stale path references (zero risk, do now).** Docs/memory call the RecoderGit
-   impl `ts/gitnexus`; it lives at **`ts/recodergit`** (2101 files). Update all
-   references so the G8 contract/impl split is navigable.
+5. **~~Fix stale path references~~ — DONE.** The RecoderGit impl lives at
+   **`ts/recodergit`** (2101 files), not the legacy `ts/gitnexus`. Stale references
+   (docs + the `git-worktree-env.ts` doc-comment) have been corrected so the G8
+   contract/impl split is navigable.
 
-6. **Audit the orphan-prone stubs (low risk).** `mcp-eternos`, `database`,
+6. **Audit the orphan-prone stubs (low risk).** `mcp-eternos`,
    `browser-verification`, `ui-agent-os`: confirm each has a live importer. Delete or
-   merge the ones that don't (§4).
+   merge the ones that don't (§4). (`database` had 0 importers and was already removed
+   in `067b1eb43`; `mcp-eternos` and `ui-agent-os` have live importers — keep.)
 
 7. **Keep — do not touch:** all `@recoder/agent-*` contracts, `a2a-sdk`, `oss-registry`,
    `pal`, `brain`, `recodergit` (contract), `beads-adapter`, `auth`; the generated
@@ -333,10 +336,10 @@ wins are: isolating vendored clusters, killing facades, and fixing version drift
 
 ## Appendix — counts
 
-- **Top-level `packages/*` (excl. `recoder-code` container):** 79
+- **Top-level `packages/*` (excl. `recoder-code` container):** 76 (was 79; `agent-kernel`, `sandbox-providers`, `database` removed in `067b1eb43`)
 - **`recoder-code` nested packages:** 4 (2 core: `cli`, `core`; 2 aux)
-- **Total inventoried packages:** 83
-- **Class breakdown (top-level 79):** real 33 · vendored-oss 36 · generated 2 · stub 8
+- **Total inventoried packages:** 80
+- **Class breakdown (top-level 76):** real 33 · vendored-oss 36 · generated 2 · stub 5 (all 3 removed packages were class `stub`: `agent-kernel`, `sandbox-providers`, `database`)
 - **Duplicate/overlap groups:** 11 (G1–G11)
-- **Stub/cruft packages:** 8 top-level + 1 aux (`mcp-eternos`)
+- **Stub/cruft packages:** 5 top-level + 1 aux (`mcp-eternos`)
 - **OSS dirs (`crates`/`go`/`py`/`ts`/`c`):** 4 + 3 + 5 + 7 + 1 = 20 vendored subsystems (`ts/` dropped from 11→7: `pi`/`qwen-code`/`polar` retired in `34b2d4a83`, `continuum` moved to `packages/continuum`)
