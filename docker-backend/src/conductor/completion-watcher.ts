@@ -26,6 +26,16 @@ const POLL_INTERVAL_MS = Number(process.env.CONDUCTOR_WATCHER_INTERVAL_MS) || 10
 let timer: ReturnType<typeof setInterval> | undefined;
 
 /**
+ * Workspaces whose completion is currently being processed. A completion check
+ * has an async gap (delivery-summary + memory-candidate generation) during which
+ * the workspace is still `state === 'running'`, so the next poll tick would
+ * otherwise re-select it and fire a SECOND `awaiting_review` transition before
+ * the first persists. This in-flight guard makes `checkWorkspaceCompletion`
+ * run at most once per workspace at a time. (recoder-38n3)
+ */
+const inFlight = new Set<string>();
+
+/**
  * Start the auto-completion watcher. Polls running workspaces at a fixed interval,
  * detects agent completion via substrate exitCode, and auto-transitions the
  * workspace to awaiting_review with delivery summary + memory candidate.
@@ -59,6 +69,20 @@ async function pollRunningWorkspaces(): Promise<void> {
 async function checkWorkspaceCompletion(workspace: Workspace): Promise<void> {
   if (!workspace.sessionName) return;
 
+  // Concurrency guard: never let two overlapping poll ticks process the same
+  // workspace — the completion path is not atomic (it persists only after the
+  // async delivery-summary gap), so a second entry would double-fire the
+  // awaiting_review transition. (recoder-38n3)
+  if (inFlight.has(workspace.workspaceId)) return;
+  inFlight.add(workspace.workspaceId);
+  try {
+    await runCompletionCheck(workspace);
+  } finally {
+    inFlight.delete(workspace.workspaceId);
+  }
+}
+
+async function runCompletionCheck(workspace: Workspace): Promise<void> {
   const substrate = getSubstrate(workspace.substrate);
   const handle = {
     ref: workspace.workspaceId,
@@ -83,6 +107,12 @@ async function checkWorkspaceCompletion(workspace: Workspace): Promise<void> {
       exitCode = null;
     }
   }
+
+  // Terminal-state guard: re-read the canonical record now that the agent is
+  // confirmed dead. If a prior tick already advanced it out of `running`, do
+  // nothing — the transition (and its artifacts) already happened exactly once.
+  const fresh = await getWorkspace(workspace.workspaceId);
+  if (!fresh || fresh.state !== 'running') return;
 
   metrics.counter('conductor_agent_completions', {
     result: exitCode === 0 ? 'success' : 'failure',
