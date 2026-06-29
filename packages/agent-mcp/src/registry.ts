@@ -3,6 +3,7 @@ export type McpServerKind =
   | 'repo'
   | 'tasks'
   | 'runs'
+  | 'workspace'
   | 'artifacts'
   | 'approvals'
   | 'browser'
