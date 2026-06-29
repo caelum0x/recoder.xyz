@@ -49,6 +49,16 @@ async function main() {
     alias: {
       '@recoder/conductor-ui': join(root, '..', '..', '..', 'packages', 'conductor-ui', 'src', 'index.ts'),
       '@recoder/design-tokens': join(root, '..', '..', '..', 'packages', 'design-tokens', 'src', 'index.ts'),
+      // Preact-native animation hooks (preact/hooks binding — never pulls in
+      // preact/compat). Source-resolved exactly like the packages above.
+      '@recoder/shared/animations/preact': join(root, '..', '..', '..', 'shared', 'src', 'animations', 'preact', 'index.ts'),
+      // Dedupe preact to the cockpit's OWN single copy. The shared animation
+      // hooks import bare `preact/hooks`; resolved from the shared package's
+      // location that would pick up a DIFFERENT physical preact than the
+      // cockpit renderer, and two copies share no hook dispatcher. esbuild's
+      // package-name alias applies to subpaths too, so `preact` and
+      // `preact/hooks` both collapse onto this single copy.
+      'preact': join(root, 'node_modules', 'preact'),
     },
     loader: { '.css': 'css' },
     logLevel: 'info',

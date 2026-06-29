@@ -27,14 +27,44 @@ const designTokensSrc = fileURLToPath(
   new URL('../../../packages/design-tokens/src/index.ts', import.meta.url),
 );
 
+/**
+ * Same rationale for @recoder/shared/animations/preact: resolve to package
+ * SOURCE. This is the Preact-native entry (hooks bound to `preact/hooks`), so
+ * the cockpit consumes the smooth-text hook without ever pulling preact/compat.
+ */
+const sharedAnimationsPreactSrc = fileURLToPath(
+  new URL('../../../shared/src/animations/preact/index.ts', import.meta.url),
+);
+
+/**
+ * Dedupe `preact` to the cockpit's OWN single copy.
+ *
+ * The shared animation hooks (`@recoder/shared/animations/preact`) import from
+ * bare `preact/hooks`. Resolved from the shared package's location, that would
+ * otherwise pick up a DIFFERENT physical preact (repo-root node_modules) than
+ * the cockpit's renderer — two copies share no hook dispatcher (`options`), so
+ * the hook crashes (`Cannot read properties of undefined (reading '__H')`).
+ * Anchored regex aliases force both `preact` core and `preact/hooks` onto the
+ * cockpit's copy, exactly as a real bundler dedupes a singleton dependency.
+ * Other subpaths (`preact/jsx-runtime`, `preact/test-utils`) are intentionally
+ * left to normal resolution.
+ */
+const cockpitPreact = fileURLToPath(new URL('./node_modules/preact/dist/preact.mjs', import.meta.url));
+const cockpitPreactHooks = fileURLToPath(
+  new URL('./node_modules/preact/hooks/dist/hooks.mjs', import.meta.url),
+);
+
 export default defineConfig({
   resolve: {
-    alias: {
-      '@recoder/conductor-ui/client': conductorUiSrc('client.ts'),
-      '@recoder/conductor-ui/types': conductorUiSrc('types.ts'),
-      '@recoder/conductor-ui': conductorUiSrc('index.ts'),
-      '@recoder/design-tokens': designTokensSrc,
-    },
+    alias: [
+      { find: /^preact\/hooks$/, replacement: cockpitPreactHooks },
+      { find: /^preact$/, replacement: cockpitPreact },
+      { find: '@recoder/conductor-ui/client', replacement: conductorUiSrc('client.ts') },
+      { find: '@recoder/conductor-ui/types', replacement: conductorUiSrc('types.ts') },
+      { find: '@recoder/conductor-ui', replacement: conductorUiSrc('index.ts') },
+      { find: '@recoder/design-tokens', replacement: designTokensSrc },
+      { find: '@recoder/shared/animations/preact', replacement: sharedAnimationsPreactSrc },
+    ],
   },
   test: {
     environment: 'node',
