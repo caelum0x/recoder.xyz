@@ -11,14 +11,15 @@
   "scripts": {
     "start": "electron .",
     "lint": "npm run lint:syntax",
-    "lint:syntax": "node --check main.js && node --check preload.js && node --check build-signed.js && node --check notarize.js && node --check backend-supervisor.js && node --check before-build.js && node --check after-pack.js",
+    "lint:syntax": "node --check main.js && node --check preload.js && node --check build-signed.js && node --check notarize.js && node --check backend-supervisor.js && node --check before-build.js && node --check after-pack.js && node --check scripts/generate-icon.js",
     "test": "vitest run",
     "dev:boot-proof": "node scripts/dev-boot-proof.js",
     "test:watch": "vitest",
     "smoke:prod": "node scripts/smoke-production.js",
     "validate:release": "node scripts/validate-release-artifacts.js",
     "build:cockpit": "cd cockpit && pnpm install --ignore-workspace && pnpm run build",
-    "prepackage": "node cockpit/build.mjs",
+    "generate:icon": "node scripts/generate-icon.js",
+    "prepackage": "node scripts/generate-icon.js && node cockpit/build.mjs",
     "build": "electron-builder",
     "build:mac": "node -r dotenv/config -e 'require(\"./build-signed.js\")' || electron-builder --mac",
     "build:mac:ci-signed": "electron-builder --mac",
@@ -54,6 +55,7 @@
       "entitlementsInherit": "entitlements.mac.plist"
     },
     "beforeBuild": "before-build.js",
+    "afterPack": "after-pack.js",
     "afterSign": "notarize.js",
     "dmg": {
       "sign": false,

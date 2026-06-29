@@ -25,6 +25,12 @@ const cockpitDist = path.join(cockpitDir, 'dist');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const backendDir = path.join(repoRoot, 'docker-backend');
 
+const assetsDir = path.join(__dirname, 'assets');
+const iconGenerator = path.join(__dirname, 'scripts', 'generate-icon.js');
+const iconSource = path.join(assetsDir, 'icon-source.png');
+const iconPng = path.join(assetsDir, 'icon.png');
+const iconIcns = path.join(assetsDir, 'icon.icns');
+
 function run(cmd) {
   console.log(`[before-build] $ ${cmd}`);
   execSync(cmd, { cwd: cockpitDir, stdio: 'inherit' });
@@ -65,7 +71,52 @@ function buildEmbeddedBackend() {
         'supervisor could not mint a conductor key. Check src/conductor/mint-conductor-key.ts.',
     );
   }
+  // The governance daemon (resource-governor + governance-gate) compiles into the
+  // backend dist alongside server.js; it is shipped as part of backend/dist, not
+  // as a separate binary. Surface its presence so a regression that drops it from
+  // the tsc output is visible in the build log (after-pack asserts it if present).
+  const governorEntry = path.join(backendDir, 'dist', 'conductor', 'resource-governor.js');
+  const gateEntry = path.join(backendDir, 'dist', 'conductor', 'governance-gate.js');
+  const governanceBundled = fs.existsSync(governorEntry) && fs.existsSync(gateEntry);
+  console.log(
+    `[before-build] governance daemon ${governanceBundled ? 'present' : 'NOT present'} ` +
+      'in embedded backend dist (conductor/resource-governor.js + governance-gate.js)',
+  );
+
   console.log('[before-build] embedded backend dist ready (server.js + mint-conductor-key.js)');
+}
+
+/**
+ * Regenerate the product icon (ROADMAP M1.4) from the canonical Recoder cube
+ * logo so the packaged app and dock show the real brand mark. The generator is
+ * dependency-free (macOS sips/iconutil, ImageMagick fallback). We fail the build
+ * if the load-bearing icon files are absent afterwards, so we never package an
+ * app whose electron-builder `icon` entries point at missing assets.
+ */
+function generateProductIcon() {
+  if (!fs.existsSync(iconGenerator)) {
+    throw new Error(`[before-build] icon generator missing at ${iconGenerator}`);
+  }
+  if (!fs.existsSync(iconSource)) {
+    throw new Error(
+      `[before-build] icon source (cube logo) missing at ${iconSource}; ` +
+        'cannot derive the product icon. Restore assets/icon-source.png.',
+    );
+  }
+
+  console.log('[before-build] generating product icon from cube logo (scripts/generate-icon.js)');
+  runIn(__dirname, 'node scripts/generate-icon.js');
+
+  if (!fs.existsSync(iconPng)) {
+    throw new Error(`[before-build] icon generation did not produce ${iconPng}`);
+  }
+  if (!fs.existsSync(iconIcns)) {
+    throw new Error(
+      `[before-build] icon generation did not produce ${iconIcns}; the macOS/dmg ` +
+        'target references this file. On non-macOS hosts ship a pre-built icon.icns.',
+    );
+  }
+  console.log('[before-build] product icon ready (assets/icon.png + assets/icon.icns)');
 }
 
 function hasPnpm() {
@@ -146,6 +197,7 @@ function assertNativeModuleInputs() {
 
 exports.default = async function beforeBuild() {
   assertNativeModuleInputs();
+  generateProductIcon();
   buildEmbeddedBackend();
 
   if (!fs.existsSync(cockpitBuild)) {
