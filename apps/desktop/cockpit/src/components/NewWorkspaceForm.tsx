@@ -62,7 +62,7 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
     setError(null);
 
     if (!repoPath.trim() || !prompt.trim() || !runtimeId) {
-      setError('Repo path, prompt, and runtime are required.');
+      setError('Please pick a folder, say what the agent should do, and choose an agent.');
       return;
     }
 
@@ -86,11 +86,11 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
       onClose();
     } catch (err) {
       if (err instanceof BackendUnreachableError) {
-        setError(`Backend unreachable: ${err.message}`);
+        setError(`Can't reach the backend: ${err.message}`);
       } else if (err instanceof ApiError) {
-        setError(`Backend rejected create (${err.status}): ${err.message}`);
+        setError(`Couldn't start the workspace (${err.status}): ${err.message}`);
       } else {
-        setError(err instanceof Error ? err.message : 'create failed');
+        setError(err instanceof Error ? err.message : "couldn't start the workspace");
       }
     } finally {
       setSubmitting(false);
@@ -106,7 +106,7 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
         </div>
 
         <label class="field">
-          <span>Repo path</span>
+          <span>Folder</span>
           <div class="field-with-action">
             <input
               type="text"
@@ -122,16 +122,16 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
             )}
           </div>
           {!folderPickerAvailable && (
-            <span class="field-hint">Native folder picker is only available in the desktop app — type the absolute path here.</span>
+            <span class="field-hint">You can pick a folder in the desktop app. Here, type the full path to your project.</span>
           )}
           {pickError && <span class="form-error">{pickError}</span>}
         </label>
 
         <label class="field">
-          <span>Prompt</span>
+          <span>What should the agent do?</span>
           <textarea
             rows={4}
-            placeholder="Describe the task for the agent…"
+            placeholder="Tell the agent what to work on…"
             value={prompt}
             onInput={(e) => setPrompt((e.target as HTMLTextAreaElement).value)}
             required
@@ -140,14 +140,14 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
 
         <div class="field-row">
           <label class="field">
-            <span>Runtime</span>
+            <span>Agent</span>
             <select
               value={runtimeId}
               onChange={(e) => setRuntimeId((e.target as HTMLSelectElement).value)}
               required
             >
               <option value="" disabled>
-                {runtimes.error ? 'runtimes unavailable' : 'select runtime…'}
+                {runtimes.error ? "can't load agents" : 'choose an agent…'}
               </option>
               {allRuntimes.map((r) => (
                 <option key={r.runtimeId} value={r.runtimeId} disabled={!r.available}>
@@ -231,17 +231,17 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
         </div>
 
         {runtimes.error && (
-          <p class="form-warn">Runtime list unavailable: {runtimes.error.message}</p>
+          <p class="form-warn">Couldn't load the list of agents: {runtimes.error.message}</p>
         )}
         {!runtimes.error && availableRuntimes.length === 0 && runtimes.data && (
-          <p class="form-warn">No agent CLIs are installed on the backend host. Install one (e.g. claude, codex) to run work.</p>
+          <p class="form-warn">No agents are set up yet. Install one (like claude or codex) to start work.</p>
         )}
         {error && <p class="form-error">{error}</p>}
 
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button type="submit" class="btn btn-primary" disabled={submitting}>
-            {submitting ? 'Creating…' : 'Create workspace'}
+            {submitting ? 'Starting…' : 'Start'}
           </button>
         </div>
       </form>

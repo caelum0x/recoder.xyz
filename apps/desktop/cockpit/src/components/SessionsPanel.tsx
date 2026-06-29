@@ -72,7 +72,7 @@ function StartSessionForm({ onStarted, onClose }: StartFormProps) {
         <input value={sessionId} onInput={(e) => setSessionId((e.target as HTMLInputElement).value)} placeholder="task-123" />
       </div>
       <div class="field">
-        <span>Repo path</span>
+        <span>Folder</span>
         <input value={repoPath} onInput={(e) => setRepoPath((e.target as HTMLInputElement).value)} placeholder="/abs/path/to/repo" />
       </div>
       <div class="field">
@@ -121,7 +121,7 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
     <section class="sessions-surface">
       <div class="sessions-toolbar">
         <div class="sessions-title">
-          <span class="panel-title">Interactive sessions</span>
+          <span class="panel-title">Runs</span>
           <span class={`pill ${hasLocalTerminal() ? 'pill-good' : ''}`} title={hasLocalTerminal() ? 'Electron node-pty terminal available' : 'No local pty — HTTP output fallback'}>
             <span class="pill-dot" /> {hasLocalTerminal() ? 'local terminal' : 'http output'}
           </span>
@@ -133,11 +133,11 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
 
       {unreachable && (
         <div class="banner banner-error">
-          <strong>Backend unreachable.</strong> Cannot list interactive sessions.
+          <strong>Can't reach the backend.</strong> Can't show your runs right now.
         </div>
       )}
       {sessions.error && !unreachable && (
-        <p class="action-error">Sessions error: {sessions.error.message}</p>
+        <p class="action-error">Couldn't load runs: {sessions.error.message}</p>
       )}
       {killError && <p class="action-error">{killError}</p>}
 

@@ -77,15 +77,15 @@ export function HealthStrip() {
       >
         <span class="health-sum-item">
           <span class={`health-sum-dot ${summaryTone(runtimeSummary)}`} />
-          Runtimes <span class="health-sum-count">{summaryLabel(runtimeSummary)}</span>
+          Tools <span class="health-sum-count">{summaryLabel(runtimeSummary)}</span>
         </span>
         <span class="health-sum-item">
           <span class={`health-sum-dot ${summaryTone(substrateSummary)}`} />
-          Substrates <span class="health-sum-count">{summaryLabel(substrateSummary)}</span>
+          Agents <span class="health-sum-count">{summaryLabel(substrateSummary)}</span>
         </span>
         <span class="health-sum-item">
           <span class={`health-sum-dot ${summaryTone(connectorSummary)}`} />
-          Channels <span class="health-sum-count">{summaryLabel(connectorSummary)}</span>
+          Chat <span class="health-sum-count">{summaryLabel(connectorSummary)}</span>
         </span>
         <span class="health-sum-chevron">{expanded ? '▾' : '▸'}</span>
       </button>
@@ -93,7 +93,7 @@ export function HealthStrip() {
       {expanded && (
         <div class="health-detail">
           <div class="health-group">
-            <span class="health-group-label">Runtimes</span>
+            <span class="health-group-label">Tools</span>
             {runtimes.error ? (
               <span class="health-error">unavailable: {runtimes.error.message}</span>
             ) : runtimes.data ? (
@@ -108,7 +108,7 @@ export function HealthStrip() {
           </div>
 
           <div class="health-group">
-            <span class="health-group-label">Substrates</span>
+            <span class="health-group-label">Agents</span>
             {substrates.error ? (
               <span class="health-error">unavailable: {substrates.error.message}</span>
             ) : substrates.data ? (
@@ -131,7 +131,7 @@ export function HealthStrip() {
           </div>
 
           <div class="health-group">
-            <span class="health-group-label">Connectors</span>
+            <span class="health-group-label">Chat</span>
             {connectors.error ? (
               <span class="health-error">unavailable: {connectors.error.message}</span>
             ) : connectors.data ? (

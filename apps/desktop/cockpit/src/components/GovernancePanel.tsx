@@ -115,7 +115,7 @@ export function GovernancePanel() {
   return (
     <div class="governance-panel">
       <div class="panel-head">
-        <h2 class="panel-title">Governance &amp; Approval</h2>
+        <h2 class="panel-title">Approvals</h2>
         <div class="panel-head-actions">
           <span class="panel-head-note">delivery gate via POST /workspaces/:id/{'{pr|merge}'}</span>
           <button class="btn btn-ghost btn-sm" onClick={() => board.refresh()} disabled={board.loading}>

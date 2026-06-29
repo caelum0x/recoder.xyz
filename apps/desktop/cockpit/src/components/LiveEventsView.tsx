@@ -56,7 +56,7 @@ export function LiveEventsView() {
   return (
     <div class="live-events-view">
       <div class="panel-head">
-        <h2 class="panel-title">Live Events</h2>
+        <h2 class="panel-title">Activity</h2>
         <div class="panel-head-actions">
           <span class="panel-head-note">polling GET /workspaces/:id/events</span>
           <button
