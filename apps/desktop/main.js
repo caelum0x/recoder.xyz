@@ -1131,7 +1131,7 @@ process.on('unhandledRejection', (reason) => {
 
 // Set app name for macOS menu bar
 if (process.platform === 'darwin') {
-  app.setName('Recoder');
+  app.setName('Cockpit');
 }
 
 // Register as default protocol handler for recoder://
@@ -1225,7 +1225,7 @@ const loadingHTML = `
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Recoder</title>
+  <title>Cockpit</title>
   <style>
     * {
       margin: 0;
@@ -1291,6 +1291,7 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
+    title: 'Cockpit',
     icon: iconPath,
     backgroundColor: '#000000',
     // Use default frame with native controls
@@ -1312,6 +1313,18 @@ function createWindow() {
   });
 
   const { webContents } = mainWindow;
+
+  // Keep the window-chrome title as just "Cockpit". Loaded pages (e.g. the
+  // bundled cockpit renderer) set their own document <title>; prevent that from
+  // leaking provider branding into the OS window title bar / dock tooltip.
+  mainWindow.on('page-title-updated', (event) => {
+    event.preventDefault();
+    try {
+      mainWindow.setTitle('Cockpit');
+    } catch {
+      // Window may be gone; ignore.
+    }
+  });
 
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     logRuntimeError('render-process-gone', new Error(details.reason), {
