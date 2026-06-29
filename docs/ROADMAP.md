@@ -29,9 +29,9 @@
 | | Step | Owner tree | Done-when |
 |---|------|-----------|-----------|
 | ✅ | **1.1 Self-contained desktop** — Electron spawns + supervises the embedded backend (TMUX_BIN→`c/tmux`, mint key, health-gate), points cockpit at it | apps/desktop | app boots backend, `/api/conductor/health` 200 via the app-spawned host |
-| ⬜ | **1.2 Bundle for `.dmg`** — electron-builder `extraResources` bundles backend dist + node_modules + `c/tmux` (+ governance daemon) | apps/desktop, deploy | `.dmg` opens on a clean Mac and boots its own backend |
-| ⬜ | **1.3 Real run proof** — open app → add repo → `claude -p` in a tmux worktree → output streams → diff → merge | apps/desktop + conductor | a recorded end-to-end agent run from the packaged app |
-| ⬜ | **1.4 Product icon** — replace the empty dock/tab icon with the real cube `icon.icns` | apps/desktop | dock shows the Recoder mark |
+| 🔄 | **1.2 Bundle for `.dmg`** — `extraResources` bundles backend dist+node_modules+`c/tmux`(+daemon); **fixed the never-invoked `afterPack` gate** so assertions actually fail the pack | apps/desktop, deploy | config done + asserted via harness; building the actual `.dmg` on a clean Mac still pending (disk) |
+| 🔄 | **1.3 Real run proof** — **headless e2e proof DONE**: `docker-backend/scripts/e2e-conductor-loop.ts` runs the real WorkspaceEngine+run-tailer+completion-watcher → running→awaiting_review with delivery summary, **no BYOK** (stub substrate) | conductor | loop proven end-to-end; a packaged-app BYOK run still needs a user key |
+| ✅ | **1.4 Product icon** — `scripts/generate-icon.js` derives `icon.icns`/`icon.png` from the cube logo; wired into electron-builder + dock | apps/desktop | icon generated from the brand cube + asserted present-in-asar |
 
 ---
 
@@ -77,7 +77,7 @@
 ---
 
 ## Always-on hygiene (parallel, never blocks shipping)
-- **Wire-up backlog** — connect built-but-unused packages into the product (see [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md)).
+- **Wire-up backlog** — **11/15 wired in-process** on the real product path (pal→createWorkspace, agent-workflows/hooks/schemas, beads live, agent-oss, document-preprocessor+rag, browser-verification(+lazy playwright), conductor-ui, design-tokens, animations-preact); 2 skipped (gateway/worker — engine already fused), 2 open (ops-recorder now committable; recoder-browser-tools dist ready). See [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md).
 - **Park vendored clones** under a labeled vendor area; drop dead dirs (see DIRECTORY-MAP §park/drop).
 - Truthful health everywhere; no fake-ready; `bd` for granular issues.
 
