@@ -31,6 +31,32 @@ absent, the conductor is fully functional via tmux alone.
   observes and interacts with them. `dmux-adapter.ts` resolves the binary (vendored →
   override → system PATH), reports availability, and launches the console.
 
+## hook gate — in-process @recoder/agent-hooks fusion
+
+The runtime launch path is gated by `@recoder/agent-hooks` fused **in-process**
+(no subprocess, no side-route, no HTTP between owned packages). `hook-gate.ts`
+imports the package's deterministic helpers and runs them on the conductor run
+loop's own call stack:
+
+- **Pre-launch gate** (`evaluatePreToolUse`): `launchRuntime` calls `gateLaunch`
+  AFTER resolving the headless CLI line and BEFORE the substrate spawns the
+  agent. It secret-scans the agent-controlled prompt + the resolved command line
+  and runs the deterministic path/command policy. A positive `block` decision
+  (detected secret, forbidden path/action) returns `{ success: false,
+  blockedByPolicy: true }` and the agent never spawns. A `needs_approval`
+  decision is logged but the sandboxed launch proceeds (additive, non-blocking).
+- **Post-launch capture** (`evaluatePostToolUse`): on a successful launch,
+  `captureLaunchArtifact` records a best-effort audit artifact key onto the
+  launch result.
+
+**Decision:** the embedded backend uses the in-process helpers (faster, we own
+the process). The package's subprocess `runHookCli` stays available for
+external-Claude-Code hook parity, but it is **not** the path wired here.
+
+**Degrade-safe:** if the hook package is unavailable or throws, the gate logs
+and falls back to allowing the launch — a failing policy gate never crashes or
+blocks a launch; it can only deny a launch it positively decided to block.
+
 ## Files
 
 | File | Role |
@@ -42,6 +68,8 @@ absent, the conductor is fully functional via tmux alone.
 | `substrate-daytona.ts` | `daytona` remote substrate impl |
 | `dmux-adapter.ts` | Optional dmux operator-console adapter (availability + launch) |
 | `runtime-commands.ts` | Resolve runtime+prompt → real headless CLI line (6 CLIs) |
+| `runtime-driver.ts` | Launch/stop/status a CLI through the substrate (gated by the hook) |
+| `hook-gate.ts` | In-process `@recoder/agent-hooks` gate: secret/path block + artifact capture |
 | `workspace-service.ts` | Persisted Workspace lifecycle + reconciler (the brain) |
 | `run-tailer.ts` | Poll substrate capture/alive → emit RunEvents |
 | `review.ts` / `review-publish.ts` | Diff → PR → merge → archive |
