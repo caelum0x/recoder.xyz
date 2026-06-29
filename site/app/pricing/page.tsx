@@ -16,13 +16,14 @@ export const metadata: Metadata = {
  * never present a dead or fake "Subscribe" button.
  */
 const POLAR_PRO_CHECKOUT = process.env.NEXT_PUBLIC_POLAR_PRO_CHECKOUT_URL?.trim();
-const PRO_CTA_HREF =
-  POLAR_PRO_CHECKOUT && /^https?:\/\//.test(POLAR_PRO_CHECKOUT)
-    ? POLAR_PRO_CHECKOUT
-    : "mailto:founders@recoder.xyz?subject=Recoder%20Pro%20early%20access";
 const PRO_CTA_CONFIGURED = Boolean(
   POLAR_PRO_CHECKOUT && /^https?:\/\//.test(POLAR_PRO_CHECKOUT),
 );
+// When Polar isn't live yet, the Pro CTA is an honest waitlist (mailto), never a
+// dead "Subscribe" button and never a link back into the old recoder.xyz web app.
+const PRO_CTA_HREF = PRO_CTA_CONFIGURED
+  ? (POLAR_PRO_CHECKOUT as string)
+  : "mailto:founders@recoder.xyz?subject=Recoder%20Pro%20waitlist";
 
 interface Tier {
   name: string;
@@ -68,7 +69,7 @@ const TIERS: Tier[] = [
       "Priority changelog and early builds",
     ],
     cta: {
-      label: PRO_CTA_CONFIGURED ? "Subscribe" : "Get early access",
+      label: PRO_CTA_CONFIGURED ? "Subscribe" : "Join the waitlist",
       href: PRO_CTA_HREF,
       external: true,
     },
