@@ -17,7 +17,7 @@ import type { Artifact, MemoryCandidate, Workspace } from '@recoder/agent-os';
 import { createLogger } from '../logger';
 import { agentOsContainer } from '../agent-os/service-container';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
-import { enforceDeliveryApproval } from './delivery-approval.js';
+import { enforceDeliveryApproval, type DeliveryIntent } from './delivery-approval.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:publish');
@@ -41,6 +41,12 @@ export interface CreatePrInput {
   base?: string;
   draft?: boolean;
   remote?: string;
+  /**
+   * User-initiated delivery intent. In solo mode a user-initiated PR records the
+   * required approval automatically (the click is the approval); ignored for
+   * team/cloud (RECODER_SOLO_MODE off), where the standard approval gate applies.
+   */
+  intent?: DeliveryIntent;
 }
 
 export interface CreatePrResult {
@@ -66,7 +72,7 @@ export async function createWorkspacePr(workspaceId: string, input: CreatePrInpu
   // action) and MUST be approval-gated. If no approval exists, this throws a
   // DeliveryApprovalRequiredError and transitions the workspace to
   // awaiting_approval — the branch is NOT pushed and the PR is NOT opened.
-  await enforceDeliveryApproval(workspace, 'pr');
+  await enforceDeliveryApproval(workspace, 'pr', input.intent);
 
   await run(cwd, 'git', ['push', '-u', remote, workspace.branch]);
 
@@ -98,6 +104,12 @@ export async function createWorkspacePr(workspaceId: string, input: CreatePrInpu
 export interface MergeInput {
   strategy?: 'squash' | 'merge' | 'rebase';
   deleteBranch?: boolean;
+  /**
+   * User-initiated delivery intent. In solo mode a user-initiated merge records
+   * the required approval automatically (the click is the approval); ignored for
+   * team/cloud (RECODER_SOLO_MODE off), where the standard approval gate applies.
+   */
+  intent?: DeliveryIntent;
 }
 
 export interface MergeResult {
@@ -119,7 +131,7 @@ export async function mergeWorkspace(workspaceId: string, input: MergeInput = {}
   // Production rule: a merge is the customer-visible delivery and MUST be
   // approval-gated. If no approval record exists, this throws and surfaces
   // awaiting_approval instead of silently merging.
-  await enforceDeliveryApproval(workspace, 'merge');
+  await enforceDeliveryApproval(workspace, 'merge', input.intent);
 
   await advanceWorkspace(workspaceId, 'merging');
   try {

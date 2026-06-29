@@ -243,6 +243,12 @@ function assembleBackendEnv(opts) {
     NODE_ENV: opts.baseEnv.NODE_ENV || 'production',
     API_KEY_HASH_SALT: opts.apiKeyHashSalt,
     INTERNAL_SERVICE_KEY: opts.internalServiceKey,
+    // The embedded backend is one user on their own machine, so delivery
+    // (merge/PR) is one-click: a user-initiated merge records its own audited
+    // approval (the click IS the approval) instead of stalling on awaiting_approval.
+    // Governance still classifies risk + seals the Merkle audit; a hard deny still
+    // blocks. Team/cloud surfaces leave this unset and keep the full approval gate.
+    RECODER_SOLO_MODE: '1',
     // tmux-path.ts resolves CONDUCTOR_TMUX_BIN (authoritative) first, then
     // RECODER_TMUX_BUILD_PATH. Set both plus TMUX_BIN for forward-compat.
     CONDUCTOR_TMUX_BIN: opts.tmuxBin,
