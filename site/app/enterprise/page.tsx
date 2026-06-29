@@ -6,7 +6,7 @@ import { LeadForm } from "@/components/lead-form";
 export const metadata: Metadata = {
   title: "Recoder for teams & enterprise",
   description:
-    "Govern your coding agents: approvals with deny-biased policy, a tamper-evident Merkle audit chain, security below the model with Envoy ext-authz and XDR detections, work-locks for coordination, SSO and seats, and full self-hosting.",
+    "Let your coding agents move fast while your org stays in control: approval gates on risky actions, deny-biased policy, a tamper-evident audit trail you can verify, security enforced at the edge instead of in a prompt, work-locks for coordination, SSO and seats, and full self-hosting.",
 };
 
 interface Capability {
@@ -33,25 +33,25 @@ const GOVERNANCE: Capability[] = [
   },
   {
     title: "Tamper-evident audit chain",
-    body: "Every governed decision is sealed into a SHA-256 Merkle chain. The hash for any entry is verifiable, so the record can't be quietly rewritten.",
+    body: "Governed decisions are sealed into a SHA-256 Merkle chain. Any entry's hash is verifiable, so a quiet rewrite of the record is detectable rather than silent.",
     subsystem: "governance · audit (merkle-verifier)",
   },
 ];
 
 const SECURITY: Capability[] = [
   {
-    title: "Security below the model",
-    body: "Trust is enforced at the edge, not in a prompt. An Envoy ext-authz check admits or rejects traffic before it ever reaches the control plane.",
+    title: "Authorization at the edge",
+    body: "Trust is enforced at the edge instead of in a prompt. An external authorization (Envoy ext-authz) check admits or rejects traffic ahead of the control plane.",
     subsystem: "network · ext-authz + envoy-config",
   },
   {
-    title: "XDR detections",
-    body: "Network and admission events feed detection rules so anomalous agent or connector behavior is surfaced, not silently allowed.",
+    title: "Threat detection on agent traffic",
+    body: "Network and admission events feed detection rules (XDR) so anomalous agent or connector behavior is surfaced for review rather than silently allowed.",
     subsystem: "network · xdr/detections",
   },
   {
     title: "Signed-envelope ingress",
-    body: "Every inbound A2A envelope is untrusted until its signature, identity, and policy are proven at the edge — HMAC and Ed25519 both verified.",
+    body: "Inbound A2A envelopes are treated as untrusted until signature, identity, and policy are verified at the edge — designed to check HMAC and Ed25519 signatures before admission.",
     subsystem: "interop · signed-ingress-gate",
   },
 ];
@@ -59,7 +59,7 @@ const SECURITY: Capability[] = [
 const COORDINATION: Capability[] = [
   {
     title: "Work-locks",
-    body: "Two agents can't edit the same file at once. Locks are held, reaped on expiry, and conflicts are detected before work collides.",
+    body: "Work-locks are designed to keep two agents from editing the same file at once. Locks are held, reaped on expiry, and overlaps are detected before work collides.",
     subsystem: "coordination · locks",
   },
   {
@@ -91,9 +91,14 @@ export default function Enterprise() {
             </h1>
             <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
               Everything in the cockpit, plus governance, tamper-evident audit,
-              security enforced below the model, and coordination across machines
-              and orgs. Self-hostable. You always bring your own agents — we never
-              resell tokens.
+              security enforced at the edge, and coordination across agents.
+              Self-hostable. You always bring your own agents — we never resell
+              tokens.
+            </p>
+            <p className="mx-auto mt-4 max-w-xl text-xs text-faint">
+              The control-plane spine is real and self-hostable today; some
+              surfaces are still maturing. Each capability below names the
+              subsystem it maps to so you can audit the claim.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
               <Link

@@ -1,17 +1,30 @@
 import type { Metadata } from "next";
-import { Nav, Footer, DownloadButton, SecondaryButton } from "@/components/site";
+import {
+  Nav,
+  Footer,
+  DownloadButton,
+  SecondaryButton,
+  PUBLIC_GITHUB_URL,
+} from "@/components/site";
 
 export const metadata: Metadata = {
   title: "Self-host Recoder",
   description:
-    "Run the entire Recoder control plane inside your own infrastructure: one command with docker-compose, a Packer-baked AMI / machine image, and an architecture built on a Postgres state-of-record behind an Envoy edge proxy. Your code never leaves.",
+    "Run the entire Recoder control plane inside your own infrastructure. A scripted docker-compose stack and a Packer-baked machine image stand up a Postgres state-of-record behind an edge proxy — so your code and your audit trail never leave your network.",
 };
 
-const REPO = "https://github.com/caelum0x/recoder.xyz";
-const README_URL = `${REPO}/blob/main/deploy/README.md`;
-const COMPOSE_URL = `${REPO}/blob/main/docker-compose.selfhost.yml`;
-const SCRIPT_URL = `${REPO}/blob/main/scripts/selfhost-up.sh`;
-const PACKER_URL = `${REPO}/blob/main/deploy/packer/recoder.pkr.hcl`;
+/**
+ * Source links are only rendered when a public repo URL is configured. The
+ * source is private today, so we surface a request-access path instead of
+ * shipping GitHub links that 404 for the public.
+ */
+const REPO = PUBLIC_GITHUB_URL;
+const README_URL = REPO ? `${REPO}/blob/main/deploy/README.md` : undefined;
+const COMPOSE_URL = REPO ? `${REPO}/blob/main/docker-compose.selfhost.yml` : undefined;
+const SCRIPT_URL = REPO ? `${REPO}/blob/main/scripts/selfhost-up.sh` : undefined;
+const PACKER_URL = REPO ? `${REPO}/blob/main/deploy/packer/recoder.pkr.hcl` : undefined;
+const ACCESS_HREF =
+  "mailto:founders@recoder.xyz?subject=Recoder%20self-host%20access";
 
 interface StackRow {
   service: string;
@@ -79,17 +92,27 @@ export default function SelfHost() {
               Your infrastructure. Your control plane.
             </span>
             <h1 className="text-balance mt-6 text-4xl font-semibold tracking-tight md:text-5xl">
-              Self-host Recoder in one command.
+              Self-host the whole control plane.
             </h1>
             <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
               Run the full control plane — Postgres state-of-record, the shared
               brain, governance, and an Envoy edge — inside your own network. Your
-              code never leaves your infrastructure.
+              code and audit trail never leave your infrastructure.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
-              <SecondaryButton href={README_URL} label="Read the deploy guide →" />
+              {README_URL ? (
+                <SecondaryButton href={README_URL} label="Read the deploy guide →" />
+              ) : (
+                <SecondaryButton href={ACCESS_HREF} label="Request deploy access →" />
+              )}
               <DownloadButton label="Download the cockpit" className="px-6 py-3 text-[15px]" />
             </div>
+            {!REPO && (
+              <p className="mx-auto mt-4 max-w-md text-xs text-faint">
+                The self-host source is in private preview. Request access and
+                we&apos;ll send the deploy bundle and walk you through it.
+              </p>
+            )}
           </div>
         </section>
 
@@ -97,7 +120,7 @@ export default function SelfHost() {
         <section className="mx-auto max-w-4xl px-6 py-20">
           <div className="max-w-2xl">
             <div className="text-xs font-medium uppercase tracking-wider text-accent">
-              One command
+              Scripted bring-up
             </div>
             <h2 className="text-balance mt-3 text-2xl font-semibold tracking-tight md:text-3xl">
               docker-compose, scripted and health-checked.
@@ -112,30 +135,39 @@ export default function SelfHost() {
                 scripts/selfhost-up.sh
               </code>
               , which validates env, generates secrets, and waits for health.
+              Once you have the deploy bundle, bring-up looks like this:
             </p>
           </div>
 
           <div className="mt-8 overflow-hidden rounded-xl border border-border-strong bg-bg-soft">
             <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-              <span className="h-3 w-3 rounded-full bg-faint/50" />
-              <span className="h-3 w-3 rounded-full bg-faint/40" />
-              <span className="h-3 w-3 rounded-full bg-faint/30" />
-              <span className="ml-3 text-xs text-faint">your-host · bash</span>
+              <span aria-hidden className="h-3 w-3 rounded-full bg-faint/50" />
+              <span aria-hidden className="h-3 w-3 rounded-full bg-faint/40" />
+              <span aria-hidden className="h-3 w-3 rounded-full bg-faint/30" />
+              <span className="ml-3 text-xs text-muted">your-host · bash</span>
             </div>
             <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-relaxed text-muted">
-              <span className="text-faint"># clone the repo</span>
-              {"\n"}
-              git clone {REPO}.git
-              {"\n"}
-              cd recoder.xyz
-              {"\n\n"}
-              <span className="text-faint"># configure secrets, then bring the stack up</span>
+              <span className="text-faint"># in the deploy bundle directory</span>
               {"\n"}
               cp .env.selfhost.example .env.selfhost
+              {"\n\n"}
+              <span className="text-faint"># validates env, generates secrets, waits for health</span>
               {"\n"}
               <span className="text-emerald-400">scripts/selfhost-up.sh</span>
             </pre>
           </div>
+          {!REPO && (
+            <p className="mt-4 text-xs text-faint">
+              The source repo is in private preview.{" "}
+              <a
+                href={ACCESS_HREF}
+                className="text-muted underline hover:text-fg"
+              >
+                Request access
+              </a>{" "}
+              to get the deploy bundle.
+            </p>
+          )}
 
           <div className="mt-8 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3">
             {STEPS.map((s) => (
@@ -215,10 +247,10 @@ export default function SelfHost() {
 
           <div className="mt-8 overflow-hidden rounded-xl border border-border-strong bg-bg-soft">
             <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-              <span className="h-3 w-3 rounded-full bg-faint/50" />
-              <span className="h-3 w-3 rounded-full bg-faint/40" />
-              <span className="h-3 w-3 rounded-full bg-faint/30" />
-              <span className="ml-3 text-xs text-faint">packer</span>
+              <span aria-hidden className="h-3 w-3 rounded-full bg-faint/50" />
+              <span aria-hidden className="h-3 w-3 rounded-full bg-faint/40" />
+              <span aria-hidden className="h-3 w-3 rounded-full bg-faint/30" />
+              <span className="ml-3 text-xs text-muted">packer</span>
             </div>
             <pre className="overflow-x-auto p-5 font-mono text-[13px] leading-relaxed text-muted">
               packer init deploy/packer/recoder.pkr.hcl
@@ -233,12 +265,18 @@ export default function SelfHost() {
             </pre>
           </div>
 
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <SecondaryButton href={README_URL} label="Deploy README" />
-            <SecondaryButton href={COMPOSE_URL} label="docker-compose.selfhost.yml" />
-            <SecondaryButton href={SCRIPT_URL} label="selfhost-up.sh" />
-            <SecondaryButton href={PACKER_URL} label="recoder.pkr.hcl" />
-          </div>
+          {REPO && README_URL && COMPOSE_URL && SCRIPT_URL && PACKER_URL ? (
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <SecondaryButton href={README_URL} label="Deploy README" />
+              <SecondaryButton href={COMPOSE_URL} label="docker-compose.selfhost.yml" />
+              <SecondaryButton href={SCRIPT_URL} label="selfhost-up.sh" />
+              <SecondaryButton href={PACKER_URL} label="recoder.pkr.hcl" />
+            </div>
+          ) : (
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <SecondaryButton href={ACCESS_HREF} label="Request the deploy bundle" />
+            </div>
+          )}
         </section>
 
         <section className="border-t border-border">
