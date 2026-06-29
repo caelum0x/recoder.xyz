@@ -11,8 +11,9 @@
   "scripts": {
     "start": "electron .",
     "lint": "npm run lint:syntax",
-    "lint:syntax": "node --check main.js && node --check preload.js && node --check build-signed.js && node --check notarize.js",
+    "lint:syntax": "node --check main.js && node --check preload.js && node --check build-signed.js && node --check notarize.js && node --check backend-supervisor.js && node --check before-build.js && node --check after-pack.js",
     "test": "vitest run",
+    "dev:boot-proof": "node scripts/dev-boot-proof.js",
     "test:watch": "vitest",
     "smoke:prod": "node scripts/smoke-production.js",
     "validate:release": "node scripts/validate-release-artifacts.js",
@@ -69,10 +70,36 @@
     "files": [
       "main.js",
       "preload.js",
+      "backend-supervisor.js",
       "assets/**/*",
       "cockpit/dist/**/*",
       "node_modules/node-pty/**/*",
       "node_modules/electron-updater/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../../docker-backend/dist",
+        "to": "backend/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../../docker-backend/node_modules",
+        "to": "backend/node_modules",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../../docker-backend/package.json",
+        "to": "backend/package.json"
+      },
+      {
+        "from": "../../docker-backend/data",
+        "to": "backend/data-template",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../../c/tmux/tmux",
+        "to": "backend/c/tmux/tmux"
+      }
     ],
     "asar": true,
     "asarUnpack": [
