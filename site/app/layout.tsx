@@ -9,9 +9,9 @@ const inter = Inter({
   display: "swap",
 });
 
-const TITLE = "Recoder — Run your coding agents as a team";
+const TITLE = "Recoder — Run your coding agents in parallel";
 const DESCRIPTION =
-  "Recoder runs your own Claude Code, Codex, and opencode in parallel and gives them one shared brain, so they stop colliding, repeating work, and burning tokens. Your agents, your keys.";
+  "Recoder is a desktop app for running your own Claude Code, Codex, Cursor, and opencode agents in isolated git-worktree workspaces — see what they're doing, review their diffs, and merge. Your agents, your keys.";
 const SITE_URL = "https://recoder.xyz";
 
 export const metadata: Metadata = {

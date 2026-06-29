@@ -11,7 +11,7 @@ export const PUBLIC_GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL?.trim();
 /** The single primary action on every page. One CTA discipline (Cursor/Conductor). */
 export function DownloadButton({
   className = "",
-  label = "Download Recoder",
+  label = "Download",
 }: {
   className?: string;
   label?: string;
@@ -115,7 +115,7 @@ export function Footer() {
         <div>
           <Wordmark />
           <p className="mt-3 max-w-xs text-sm text-muted">
-            The control plane for coding agents. Run your own, coordinated.
+            The desktop console for coding agents. Run your own, in parallel.
           </p>
         </div>
         <FooterCol
