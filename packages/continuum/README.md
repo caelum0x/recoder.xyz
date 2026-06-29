@@ -26,8 +26,6 @@ const index = await loadIndex(null);      // lexical-only when no embed model co
 const rows = await recall(index, episodes, { query, k: limit });   // REAL engine, in-process
 ```
 
-See `docs/CONTINUUM-PLAN.md` for the architecture, the fusion steps, and the functionality roadmap.
-
 ## What it does
 
 - **Captures your desktop** — clipboard, editor, git, terminal, browser (on-device OCR of the

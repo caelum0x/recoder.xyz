@@ -4,8 +4,7 @@ The Conductor runs the user's *own* coding-agent CLIs (Claude Code, Codex, openc
 pi, Gemini, Qwen) in parallel, each in an isolated git worktree driven through a
 pinned tmux session. State of record lives in `@recoder/agent-os` + Postgres; live
 execution lives in tmux + git worktrees (survives backend restart); a reconciler
-rebinds them on boot. See `docs/CONDUCTOR-ARCHITECTURE.md` and
-`docs/subsystems/substrate.md`.
+rebinds them on boot. See `docs/CONDUCTOR-ARCHITECTURE.md`.
 
 ## tmux — vendored + pinned binary
 

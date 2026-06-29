@@ -1,7 +1,7 @@
 # recoder-governance (Rust kernel — first slice)
 
 The deep (Rust) tier under the already-shipped TypeScript governance facade in
-`packages/governance`. See `docs/subsystems/governance.md` for the full design.
+`packages/governance`.
 
 This is a **small standalone cargo workspace** — intentionally **not** inside the
 gitignored vendored clones (`crates/openfang`, `crates/claw-code-parity`). It is
@@ -62,5 +62,4 @@ Disk-aware: the dependency surface is intentionally tiny — `sha2`, `hex`,
 ## Not yet built (future slices)
 
 `recoder-governance-permission`, `-approval`, `-routing`, `-kernel`, persistence,
-checkpoints, replay, and the typed IPC/FFI daemon boundary — see the file tree in
-`docs/subsystems/governance.md`.
+checkpoints, replay, and the typed IPC/FFI daemon boundary.

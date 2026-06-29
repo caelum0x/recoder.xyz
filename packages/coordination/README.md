@@ -27,9 +27,7 @@ It makes four classes of failure **structurally impossible or loudly detected**:
 
 It fuses three owned sources — agent-os `WorkLock`/`WorkSignal`/`TaskRouting`,
 the docker-backend A2A bus/squad/delegation services, and ported multica claim
-semantics — into one deterministic engine. See
-[`docs/subsystems/coordination.md`](../../docs/subsystems/coordination.md) for
-the full architecture spec.
+semantics — into one deterministic engine.
 
 ## Status
 

@@ -5,8 +5,7 @@ how every owned OSS component becomes one buildable product, grouped by **langua
 (for toolchains) and by **function** (for clarity), all in this one repo. No
 relocation into a separate folder, no rewrites — build on what exists.
 
-Read with `RECODER-OS-MASTER-PLAN.md` (the wedge & strategy) and
-`CONDUCTOR-ARCHITECTURE.md` (the execution spine).
+Read with `CONDUCTOR-ARCHITECTURE.md` (the execution spine).
 
 ## 1. The product (one paragraph)
 

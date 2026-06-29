@@ -13,8 +13,6 @@ It is the first-class promotion of the proven code in `docker-backend/src/conduc
 The backend keeps a thin adapter (`/api/conductor` routes, container glue, reconcile cron);
 the engine lives here.
 
-See the full blueprint: [`docs/subsystems/substrate.md`](../../docs/subsystems/substrate.md).
-
 ## Design rules
 
 - **Backend-free.** This package depends on **`@recoder/agent-os` only** (for the canonical

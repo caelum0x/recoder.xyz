@@ -10,9 +10,6 @@ This package is the real implementation behind the `AgentRuntimeAdapter` factory
 task/approval/memory/artifact state lives in `@recoder/agent-os`. The runtime only *emits*
 `RunEvent`s and *consumes* `TaskSpec` + `InstructionBundle` + `RuntimePolicy`.
 
-See `docs/subsystems/runtime.md` for the full architecture, file tree, fusion map, and
-verification plan.
-
 ## Status
 
 **Foundation landed.** The uniform engine, adapter skin, registry, driver SPI, shared

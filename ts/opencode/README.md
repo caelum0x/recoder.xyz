@@ -1,9 +1,8 @@
 # `@recoder/opencode` — Recoder-owned opencode coding-agent runtime
 
 > **This monorepo is owned and maintained by Recoder.** It is the `opencode`
-> coding-agent runtime that the Recoder **Runtime** subsystem drives and consumes
-> (see `docs/subsystems/runtime.md` §3.5 — the *opencode driver*, and §6 — the
-> opencode fusion rows). Recoder drives the `opencode` CLI from this repo
+> coding-agent runtime that the Recoder **Runtime** subsystem drives and consumes.
+> Recoder drives the `opencode` CLI from this repo
 > headless and consumes its **ACP session/tool types** (`packages/opencode/src/acp`,
 > `packages/sdk/js`). The runtime is built and owned **in place** here.
 >
