@@ -118,9 +118,41 @@ if [ ! -d pi-mono-dist ]; then
   printf '{"name":"@recoder/pi-coding-agent","version":"0.0.0","private":true}\n' > pi-mono-dist/coding-agent/package.json
 fi
 
+# --- Verify the self-host artifacts this image must ship are present ---
+# Fail loudly here (not at boot) if a required deploy artifact is missing, so a
+# broken image never ships and silently fails the first boot.
+for required in \
+  docker-compose.selfhost.yml \
+  .env.selfhost.example \
+  scripts/selfhost-up.sh \
+  scripts/selfhost-down.sh \
+  deploy/governance-daemon.Dockerfile \
+  deploy/envoy/envoy.xds.yaml \
+  deploy/envoy/envoy.selfhost.yaml \
+  deploy/postgres/init-databases.sh ; do
+  [ -e "$RECODER_HOME/$required" ] || { echo "[provision] required self-host artifact missing: $required" >&2; exit 1; }
+done
+
 # --- Pre-build the backend image into the local Docker cache ---
-log "pre-building the docker-backend image"
+log "pre-building the docker-backend image (backend + recoder-xds reuse this tag)"
 $SUDO docker build -f docker-backend/Dockerfile -t recoder/docker-backend:selfhost .
+
+# --- Pre-build the governance daemon image (own small Rust image) ---
+# Baked now so first boot does not need a Rust toolchain or registry access. The
+# stack still degrades safely to the backend's pure-TS governance if this is ever
+# absent, but a production image should ship it ready-to-run.
+log "pre-building the recoder-governance daemon image"
+$SUDO docker build -f deploy/governance-daemon.Dockerfile -t recoder/governance-daemon:selfhost .
+
+# --- Pre-pull the pinned third-party images so first boot is offline-safe ---
+# selfhost-up.sh runs `compose up -d --build`; pre-pulling means a booted machine
+# in a locked-down VPC (no egress to Docker Hub) still comes up. Pinned tags match
+# docker-compose.selfhost.yml. A pull failure is non-fatal (logged) so a builder
+# without egress still produces a working AMI for environments that DO have egress.
+log "pre-pulling pinned third-party images"
+for img in postgres:17 redis:7 qdrant/qdrant:latest envoyproxy/envoy:v1.31-latest; do
+  $SUDO docker pull "$img" || log "WARNING could not pre-pull $img (first boot will pull it)"
+done
 
 # --- Seed .env.selfhost from the example (secrets generated on first boot) ---
 if [ ! -f "$RECODER_HOME/.env.selfhost" ]; then
@@ -140,6 +172,15 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${RECODER_HOME}
+SyslogIdentifier=recoder-selfhost
+# selfhost-up.sh waits up to 600s for healthchecks on a cold (build) first boot.
+# Give systemd enough runway to cover that bounded wait plus image build time so
+# it does not kill the bring-up mid-flight. infinity is intentional: the script's
+# own deadline is the real bound and it fails fast/non-zero on a stuck service.
+TimeoutStartSec=infinity
+# Confirm the Docker daemon is actually accepting before we try to bring the
+# stack up (Requires/After order the unit but do not prove dockerd is ready).
+ExecStartPre=/usr/bin/env bash -c 'for i in $(seq 1 60); do docker info >/dev/null 2>&1 && exit 0; sleep 2; done; echo "docker daemon not ready" >&2; exit 1'
 # selfhost-up.sh validates env, generates safe secrets, builds (cached), waits
 # for health, and prints URLs. POSTGRES_PASSWORD must be set in .env.selfhost
 # (or injected by cloud-init/user-data) before first boot, or the service fails

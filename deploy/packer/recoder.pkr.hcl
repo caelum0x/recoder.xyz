@@ -150,8 +150,12 @@ build {
     inline = [
       "set -e",
       "sudo docker image inspect recoder/docker-backend:selfhost >/dev/null",
+      "sudo docker image inspect recoder/governance-daemon:selfhost >/dev/null",
+      "test -f /etc/systemd/system/recoder-selfhost.service",
+      "test -f /opt/recoder/docker-compose.selfhost.yml",
+      "test -f /opt/recoder/deploy/envoy/envoy.xds.yaml",
       "systemctl is-enabled recoder-selfhost.service",
-      "echo 'recoder image present and selfhost service enabled'",
+      "echo 'recoder backend + governance images present, compose + envoy staged, selfhost service enabled'",
     ]
   }
 }
