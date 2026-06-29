@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 /**
  * Public GitHub URL, only rendered when explicitly configured. The source repo
@@ -59,12 +60,14 @@ export function SecondaryButton({
 export function Wordmark() {
   return (
     <Link href="/" className="flex items-center gap-2.5">
-      <span
-        aria-hidden
-        className="grid h-6 w-6 place-items-center rounded-md border border-border-strong bg-bg-soft"
-      >
-        <span className="h-2 w-2 rounded-[2px] bg-fg" />
-      </span>
+      <Image
+        src="/logo.png"
+        alt="Recoder"
+        width={28}
+        height={28}
+        priority
+        className="h-7 w-7 rounded-md"
+      />
       <span className="text-[15px] font-semibold tracking-tight">Recoder</span>
     </Link>
   );
