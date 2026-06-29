@@ -2,9 +2,11 @@
  * NewWorkspaceForm — the "New workspace" creation form.
  *
  * Runtime options come from GET /runtimes (real availability), substrate context
- * from GET /substrates. Submitting POSTs /workspaces with the exact body the
- * handler requires: spaceId, projectId, taskId, repoPath, runtimeId, createdBy,
- * and one of (prompt|command). On success the board refreshes.
+ * from GET /substrates. Submitting POSTs /workspaces with the body the handler
+ * requires: spaceId, projectId, taskId, repoPath, runtimeId, createdBy. The
+ * first message (prompt) is OPTIONAL — you can start an empty workspace and chat
+ * after it's running; we only send a prompt when one was typed. On success the
+ * board refreshes.
  */
 import { useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
@@ -61,8 +63,11 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
     e.preventDefault();
     setError(null);
 
-    if (!repoPath.trim() || !prompt.trim() || !runtimeId) {
-      setError('Please pick a folder, say what the agent should do, and choose an agent.');
+    // Folder + agent are required to launch a workspace. The first message is
+    // OPTIONAL: goals change, so we never force one upfront — you can start with
+    // an empty workspace and chat after it's running.
+    if (!repoPath.trim() || !runtimeId) {
+      setError('Please pick a folder and choose an agent.');
       return;
     }
 
@@ -73,8 +78,9 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
       repoPath: repoPath.trim(),
       runtimeId,
       createdBy: createdBy.trim() || 'cockpit',
-      prompt: prompt.trim(),
     };
+    // Only send a prompt when the operator actually wrote one.
+    if (prompt.trim()) body.prompt = prompt.trim();
     if (substrate) body.substrate = substrate;
     if (model.trim()) body.model = model.trim();
     if (baseRef.trim()) body.baseRef = baseRef.trim();
@@ -128,14 +134,14 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
         </label>
 
         <label class="field">
-          <span>What should the agent do?</span>
+          <span>First message (optional)</span>
           <textarea
             rows={4}
-            placeholder="Tell the agent what to work on…"
+            placeholder="Optionally start the agent with a message — or leave this empty and chat once it's running…"
             value={prompt}
             onInput={(e) => setPrompt((e.target as HTMLTextAreaElement).value)}
-            required
           />
+          <span class="field-hint">You don't need a goal upfront — you can start empty and message the agent in the conversation.</span>
         </label>
 
         <div class="field-row">

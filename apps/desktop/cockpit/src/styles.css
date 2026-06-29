@@ -326,6 +326,18 @@ body {
 .ws-center-stream { display: flex; flex-direction: column; gap: 6px; min-height: 140px; }
 .ws-center-stream .event-log { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; }
 
+/* Conversation thread — interleaved user bubbles + agent activity. */
+.ws-conversation { display: flex; flex-direction: column; gap: 12px; }
+.ws-conversation-empty { color: var(--text-faint); font-size: 12px; padding: 8px 2px; }
+.ws-msg { display: flex; flex-direction: column; gap: 4px; }
+.ws-msg-user { align-items: flex-end; }
+.ws-msg-bubble {
+  max-width: 78%; background: var(--accent, #3a6df0); color: #ffffff;
+  border-radius: 12px 12px 4px 12px; padding: 9px 12px;
+  font-size: 13px; line-height: 1.4; white-space: pre-wrap; word-break: break-word;
+}
+.ws-msg-error { font-size: 11px; color: var(--bad); }
+
 .ws-summary {
   background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
   padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;

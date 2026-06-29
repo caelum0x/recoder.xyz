@@ -1,24 +1,31 @@
 /**
  * WorkspaceCenter — the Conductor-style CENTER pane for a selected workspace.
  *
- * Composes the live agent event stream (GET /workspaces/:id/events, polled) with
- * a truthful "What changed" summary (read from the backend's persisted delivery
- * summary in workspace.metadata, never fabricated) and a command bar at the
- * bottom that drives the live tmux session via POST /sessions/:id/keys.
+ * This is a real CONVERSATION, not a one-shot command box. It renders an
+ * interleaved thread of:
+ *   - USER messages: what the operator typed, shown as a bubble the instant they
+ *     press Enter (optimistic), keyed by send time.
+ *   - AGENT activity: the live + polled RunEvent stream ("what changed"), shown
+ *     inline as the agent's reply.
  *
- * The thread header shows a truthful tool-call / message count derived from the
- * real RunEvent stream, the three Conductor tabs (All changes / <task> / Review
- * branch changes), and a command bar carrying a model chip, "Link issue", and
- * the send button. The command bar input is only enabled when the workspace
- * actually has an attached tmux session AND is still live; otherwise it is
- * disabled with a truthful note — we never imply we can steer a stopped agent.
+ * Sending a message POSTs to POST /workspaces/:id/message {text}, which starts
+ * the next agent run with that text as the prompt. The user bubble is always
+ * rendered first; if the backend route 404s (not yet deployed) or otherwise
+ * fails, we show a truthful "couldn't send" note on that bubble but never drop
+ * it — the operator always sees what they said.
+ *
+ * The live event stream (api.openStream) stays merged into the polled history,
+ * so the agent's reply streams in with low latency. A truthful "What changed"
+ * summary (read from the backend's persisted delivery summary in
+ * workspace.metadata, never fabricated) and the three Conductor review tabs
+ * (All changes / <task> / Review branch changes) sit above the composer.
  */
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { RunEvent as ConductorRunEvent } from '@recoder/conductor-ui';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog } from './EventLog';
-import { isLive, stateLabel, statePill, stateTone } from '../lib/workspace-state';
+import { isLive, statePill, stateTone } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
 import type { RunEvent, Workspace } from '../types';
 
@@ -91,59 +98,62 @@ function WhatChanged({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function CommandBar({ workspace }: { workspace: Workspace }) {
+/**
+ * A message the operator typed in this session, rendered optimistically as a
+ * bubble. `failed` carries a truthful "couldn't send" note when the backend
+ * rejected the send — the bubble is never dropped, so the operator always sees
+ * what they said.
+ */
+interface UserMessage {
+  id: string;
+  text: string;
+  sentAt: number;
+  failed?: string;
+}
+
+function UserBubble({ message }: { message: UserMessage }) {
+  return (
+    <div class="ws-msg ws-msg-user">
+      <div class="ws-msg-bubble">{message.text}</div>
+      {message.failed && (
+        <div class="ws-msg-error" title={message.failed}>
+          Couldn't send to the agent — {message.failed}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The composer at the bottom of the conversation. Always usable: you can chat at
+ * any time, even before the first agent run. On Enter we hand the typed text to
+ * the parent (which renders the bubble + POSTs the message) and clear the input.
+ */
+function Composer({
+  modelLabel,
+  busy,
+  onSend,
+}: {
+  modelLabel: string;
+  busy: boolean;
+  onSend: (text: string) => void;
+}) {
   const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const live = isLive(workspace.state);
-  const hasSession = Boolean(workspace.sessionName);
-  const canSteer = live && hasSession;
-
-  // The model the workspace was actually launched with, if the backend recorded
-  // one — shown in the chip. Never fabricated: falls back to a generic label.
-  const model =
-    (workspace.metadata && typeof workspace.metadata === 'object'
-      ? (workspace.metadata as Record<string, unknown>).model
-      : undefined) || workspace.runtimeId;
-  const modelLabel = typeof model === 'string' && model ? model : 'agent';
-
-  const reason = !hasSession
-    ? 'No tmux session attached to this workspace yet.'
-    : !live
-      ? `Workspace is ${stateLabel(workspace.state)} — the agent is no longer running.`
-      : '';
-
-  async function send(e: Event) {
+  function submit(e: Event) {
     e.preventDefault();
     const text = value.trim();
-    if (!text || !canSteer) return;
-    setError(null);
-    setBusy(true);
-    try {
-      // The session id the conductor exposes for a workspace is the workspaceId;
-      // POST /sessions/:id/keys forwards keystrokes to the live tmux pane (the
-      // backend appends Enter), so this steers the real running agent.
-      await api.sessionKeys(workspace.workspaceId, text);
-      setValue('');
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setBusy(false);
-    }
+    if (!text) return;
+    onSend(text);
+    setValue('');
   }
 
   return (
-    <form class="ws-cmdbar" onSubmit={send}>
+    <form class="ws-cmdbar" onSubmit={submit}>
       <input
         class="ws-cmdbar-input"
         value={value}
-        disabled={!canSteer || busy}
-        placeholder={
-          canSteer
-            ? 'Steer the agent — type a message and press Enter…'
-            : reason
-        }
+        placeholder="Message the agent — type and press Enter…"
         onInput={(e) => setValue((e.target as HTMLInputElement).value)}
       />
       <div class="ws-cmdbar-row">
@@ -159,14 +169,13 @@ function CommandBar({ workspace }: { workspace: Workspace }) {
         <button
           class="ws-cmdbar-send"
           type="submit"
-          disabled={!canSteer || busy || !value.trim()}
-          title={canSteer ? 'Send to the agent' : reason}
+          disabled={busy || !value.trim()}
+          title="Send to the agent"
           aria-label="Send"
         >
           {busy ? '…' : '↑'}
         </button>
       </div>
-      {error && <span class="ws-cmdbar-error">{error}</span>}
     </form>
   );
 }
@@ -218,6 +227,10 @@ function mergeEvents(polled: RunEvent[] | null, streamed: RunEvent[]): RunEvent[
 
 export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   const [tab, setTab] = useState<CenterTab>('all');
+  // The operator's typed messages this session, oldest-first. Rendered
+  // optimistically so a bubble appears the instant Enter is pressed.
+  const [messages, setMessages] = useState<UserMessage[]>([]);
+  const [sending, setSending] = useState(false);
   const live = isLive(workspace.state);
   const events = usePoll(
     () => api.listEvents(workspace.workspaceId),
@@ -227,6 +240,42 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   const streamed = useLiveStream(workspace.workspaceId, live);
   const merged = mergeEvents(events.data, streamed);
   const counts = threadCounts(merged);
+
+  // The model the workspace was actually launched with, if the backend recorded
+  // one — shown in the composer chip. Never fabricated: falls back to a label.
+  const model =
+    (workspace.metadata && typeof workspace.metadata === 'object'
+      ? (workspace.metadata as Record<string, unknown>).model
+      : undefined) || workspace.runtimeId;
+  const modelLabel = typeof model === 'string' && model ? model : 'agent';
+
+  // Reset the local conversation when switching workspaces — each workspace has
+  // its own thread, and the persisted agent activity carries the real history.
+  const wsId = workspace.workspaceId;
+  const lastWsId = useRef(wsId);
+  if (lastWsId.current !== wsId) {
+    lastWsId.current = wsId;
+    if (messages.length) setMessages([]);
+  }
+
+  async function send(text: string): Promise<void> {
+    // 1. Render the user's bubble immediately (optimistic) — never lost.
+    const msg: UserMessage = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, text, sentAt: Date.now() };
+    setMessages((prev) => [...prev, msg]);
+    setSending(true);
+    try {
+      // 2. POST it to start the next agent run; the reply streams in via events.
+      await api.sendMessage(wsId, text);
+    } catch (err) {
+      // 3. Truthful failure note on the bubble (e.g. route 404s) — keep the bubble.
+      const note = describeError(err);
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, failed: note } : m)));
+    } finally {
+      setSending(false);
+    }
+    // Refresh the agent activity so the run's first events arrive promptly.
+    events.refresh();
+  }
 
   return (
     <section class="ws-center">
@@ -260,16 +309,87 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
         {tab === 'review' ? (
           <WhatChanged workspace={workspace} />
         ) : (
-          <>
-            <div class="ws-center-stream">
-              <EventLog events={merged} error={events.error} loading={events.loading} />
-            </div>
-            <WhatChanged workspace={workspace} />
-          </>
+          <Conversation
+            messages={messages}
+            events={merged}
+            eventsError={events.error}
+            eventsLoading={events.loading}
+            workspace={workspace}
+          />
         )}
       </div>
 
-      <CommandBar workspace={workspace} />
+      <Composer modelLabel={modelLabel} busy={sending} onSend={(t) => void send(t)} />
     </section>
+  );
+}
+
+/**
+ * The interleaved conversation thread: USER bubbles and AGENT activity ordered by
+ * time. The user's messages (local, optimistic) and the agent's RunEvents (real,
+ * streamed + polled) are merged on their timestamps so the thread reads as a true
+ * back-and-forth. The "What changed" review summary anchors the bottom.
+ */
+function Conversation({
+  messages,
+  events,
+  eventsError,
+  eventsLoading,
+  workspace,
+}: {
+  messages: UserMessage[];
+  events: RunEvent[];
+  eventsError: Error | null;
+  eventsLoading: boolean;
+  workspace: Workspace;
+}) {
+  // Split the agent event stream around each user message by time, so a message
+  // sent mid-run appears between the events that preceded and followed it.
+  const segments = useMemo(() => {
+    type Segment = { kind: 'user'; message: UserMessage } | { kind: 'agent'; events: RunEvent[] };
+    const sorted = [...events].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+    const result: Segment[] = [];
+    let cursor = 0;
+    for (const message of messages) {
+      const before: RunEvent[] = [];
+      while (cursor < sorted.length && new Date(sorted[cursor].createdAt).getTime() <= message.sentAt) {
+        before.push(sorted[cursor]);
+        cursor += 1;
+      }
+      if (before.length) result.push({ kind: 'agent', events: before });
+      result.push({ kind: 'user', message });
+    }
+    const rest = sorted.slice(cursor);
+    if (rest.length) result.push({ kind: 'agent', events: rest });
+    return result;
+  }, [messages, events]);
+
+  const empty = messages.length === 0 && events.length === 0;
+
+  return (
+    <div class="ws-conversation">
+      {empty && !eventsLoading && !eventsError && (
+        <div class="ws-conversation-empty">
+          Start the conversation — type a message below and the agent will reply here.
+        </div>
+      )}
+      {segments.length === 0 && (eventsLoading || eventsError) && (
+        <div class="ws-center-stream">
+          <EventLog events={events} error={eventsError} loading={eventsLoading} />
+        </div>
+      )}
+      {segments.map((seg, i) =>
+        seg.kind === 'user' ? (
+          <UserBubble key={seg.message.id} message={seg.message} />
+        ) : (
+          <div class="ws-center-stream" key={`agent-${i}`}>
+            <EventLog events={seg.events} error={null} loading={false} />
+          </div>
+        ),
+      )}
+      <WhatChanged workspace={workspace} />
+    </div>
   );
 }
