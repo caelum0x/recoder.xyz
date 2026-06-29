@@ -94,6 +94,22 @@ function pickFreePort(deps = {}) {
 }
 
 /**
+ * Resolve true if the given TCP port is free to bind on 127.0.0.1.
+ * @param {number} port
+ * @returns {Promise<boolean>}
+ */
+function portIsFree(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', () => resolve(false));
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+/**
  * Pick a free loopback port with bounded retries. The OS-assigned port from a
  * single port-0 bind is occasionally racy (another process can grab it between
  * close() and our spawn), so retry on transient failures. Truthfully rejects if
@@ -516,7 +532,16 @@ class BackendSupervisor {
     this.phase = PHASE.STARTING;
     this.lastError = null;
     try {
-      const port = await this._pickFreePort();
+      // Prefer the port the cockpit defaults to (3100) so the renderer's default
+      // backend URL works with zero re-injection; only fall back to a random free
+      // port if 3100 (or RECODER_BACKEND_PORT) is already taken.
+      const preferred = Number.parseInt(String(process.env.RECODER_BACKEND_PORT || '3100'), 10);
+      let port;
+      if (Number.isInteger(preferred) && preferred > 0 && (await portIsFree(preferred))) {
+        port = preferred;
+      } else {
+        port = await this._pickFreePort();
+      }
       const backendUrl = backendUrlForPort(port);
       const secrets = loadOrCreateSecrets({ secretsPath: this.secretsPath, fs: this._fs });
       const tmuxBin = resolveTmuxBin({
