@@ -1,7 +1,7 @@
 /**
  * Channel adapter registry — the single seam between the connectors gateway and
- * the seven live @recoder/connectors adapter subpaths (./telegram ./slack
- * ./signal ./imessage ./whatsapp ./line ./feishu).
+ * the eight live @recoder/connectors adapter subpaths (./telegram ./slack
+ * ./signal ./imessage ./whatsapp ./line ./feishu ./discord).
  *
  * Each channel is described by a CHANNEL DESCRIPTOR with three jobs:
  *   1. `detect()`  — read the channel's credentials from the env (the existing
@@ -28,6 +28,7 @@ import {
   type ConnectorKind,
   type ConnectorPort,
 } from '@recoder/connectors';
+import { resolveDiscordEventSource } from './discord-event-source.js';
 
 /** Read a channel credential env var (RECODER_CONNECTORS_ / OPENCLAW_ prefixes, then plain). */
 function readEnv(connectorName: string, plainName?: string): string | undefined {
@@ -97,8 +98,7 @@ const SUBPATH_LOADERS: Readonly<Record<ConnectorKind, () => Promise<any>>> = Obj
   whatsapp: () => import('@recoder/connectors/whatsapp'),
   line: () => import('@recoder/connectors/line'),
   feishu: () => import('@recoder/connectors/feishu'),
-  // discord is in CONNECTOR_KINDS but has no @recoder/connectors subpath yet.
-  discord: () => Promise.reject(new Error('discord adapter subpath not published')),
+  discord: () => import('@recoder/connectors/discord'),
 });
 
 async function importSubpath(channel: ConnectorKind): Promise<any> {
@@ -303,7 +303,44 @@ const imessageAdapter: ChannelAdapter = {
   },
 };
 
-/** The seven live channel adapters, keyed by ConnectorKind. */
+// --- discord -----------------------------------------------------------------
+const discordAdapter: ChannelAdapter = {
+  channel: 'discord',
+  // Discord inbound is gateway-WS only: it has no long-poll and no HTTP webhook.
+  // Live inbound needs a gateway-WS event source (the carbon GatewayPlugin
+  // bridge) wired via registerDiscordEventSource. Configured from the bot token,
+  // but inbound dispatch is not live until that source is present.
+  requiresExternal: true,
+  detect(): ChannelDetection {
+    const token = readEnv('DISCORD_BOT_TOKEN', 'DISCORD_BOT_TOKEN');
+    if (!token) {
+      return { configured: false, reason: 'DISCORD_BOT_TOKEN not set' };
+    }
+    return {
+      configured: true,
+      token,
+      accountId: readEnv('DISCORD_ACCOUNT_ID') ?? 'discord',
+      reason: 'configured; live inbound needs a Discord gateway-WS event source (carbon GatewayPlugin)',
+    };
+  },
+  async create(detection: ChannelDetection): Promise<ConnectorPort> {
+    const mod = await importSubpath('discord');
+    const factory = mod.createDiscordConnector ?? mod.default?.createDiscordConnector;
+    if (!factory) throw new Error('discord adapter export missing');
+    // Resolve the host-registered gateway-WS bridge. When absent the adapter is
+    // built WITHOUT an eventSource: send()/probe()/normalize()/react() work over
+    // the real Discord REST wire, while monitor() surfaces a truthful "ingress
+    // not configured" error — never a faked running gateway.
+    const eventSource = resolveDiscordEventSource();
+    const token = readEnv('DISCORD_BOT_TOKEN', 'DISCORD_BOT_TOKEN') ?? detection.token;
+    return factory({
+      ...(token ? { config: { token } } : {}),
+      ...(eventSource ? { eventSource } : {}),
+    }) as ConnectorPort;
+  },
+};
+
+/** The eight live channel adapters, keyed by ConnectorKind. */
 const ADAPTERS: Readonly<Record<string, ChannelAdapter>> = Object.freeze({
   telegram: telegramAdapter,
   slack: slackAdapter,
@@ -312,9 +349,10 @@ const ADAPTERS: Readonly<Record<string, ChannelAdapter>> = Object.freeze({
   signal: signalAdapter,
   whatsapp: whatsappAdapter,
   imessage: imessageAdapter,
+  discord: discordAdapter,
 });
 
-/** The ConnectorKinds this bridge has a real adapter for (the seven subpaths). */
+/** The ConnectorKinds this bridge has a real adapter for (the eight subpaths). */
 export const SUPPORTED_CHANNELS: readonly ConnectorKind[] = Object.freeze([
   'telegram',
   'slack',
@@ -323,6 +361,7 @@ export const SUPPORTED_CHANNELS: readonly ConnectorKind[] = Object.freeze([
   'signal',
   'whatsapp',
   'imessage',
+  'discord',
 ]);
 
 /** Look up the descriptor for a channel, or undefined when unsupported. */
