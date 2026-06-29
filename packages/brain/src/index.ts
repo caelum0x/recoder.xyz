@@ -174,6 +174,7 @@ export type {
   BrainEvent,
   BrainMemory,
   BrainDoc,
+  BrainPassage,
   BrainDocumentFormat,
   BrainRawDocument,
   BrainPreprocessedDocument,
@@ -196,6 +197,7 @@ export type {
   ActivityPort,
   DocumentPreprocessorPort,
   ChunkerPort,
+  VectorStorePort,
   BrainContextCacheStore,
   ClockPort,
   // Deprecated aliases, kept for backward compatibility:

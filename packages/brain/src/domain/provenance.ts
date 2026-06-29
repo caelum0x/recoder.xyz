@@ -1,10 +1,16 @@
-/** The Brain's four fused sources (plus desktop activity). */
+/**
+ * The Brain's fused sources: repo intelligence, semantic recall, external docs,
+ * the task graph, desktop activity, and passage-level RAG retrieval. `passages`
+ * is additive and only ever recorded when the vector-store port is wired, so it
+ * never appears in the degraded set merely by being absent.
+ */
 export type BrainSourceKind =
   | "repo"
   | "memory"
   | "docs"
   | "tasks"
-  | "activity";
+  | "activity"
+  | "passages";
 
 /** Why a source did not contribute (truthful, never fabricated). */
 export type DegradeReason =

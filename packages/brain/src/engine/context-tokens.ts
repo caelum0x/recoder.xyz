@@ -5,7 +5,7 @@ import { estimateTokens } from "./token-estimator";
 /**
  * Estimate the real token cost of an assembled {@link BrainContext} by walking
  * every piece of material a runtime would otherwise re-read: recalled memories,
- * doc snippets, related tasks, desktop-activity rows, and the repo intelligence
+ * doc snippets, RAG passages, related tasks, desktop-activity rows, and the repo intelligence
  * (the heaviest part — its dependency-graph nodes/edges, ownership, impact, and
  * provenance refs). This is the number a cache HIT attributes as "tokens saved",
  * because it is exactly the assembly material that did not have to be recomputed
@@ -25,6 +25,13 @@ export function estimateContextTokens(context: BrainContext): number {
     total += estimateTokens(doc.snippet);
     if (doc.title) {
       total += estimateTokens(doc.title);
+    }
+  }
+
+  for (const passage of context.passages ?? []) {
+    total += estimateTokens(passage.text);
+    if (passage.title) {
+      total += estimateTokens(passage.title);
     }
   }
 

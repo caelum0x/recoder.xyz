@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { ContextPack } from "@recoder/recodergit";
 import { createBrain } from "./index";
 import type { GitRunner } from "./index";
-import type { RepoIntelPort } from "./ports";
+import type { RepoIntelPort, VectorStorePort } from "./ports";
 
 /** A repo-intel fake so the test never touches the filesystem / real indexer. */
 const fakeRepo: RepoIntelPort = {
@@ -576,4 +576,104 @@ test("ingestDocument with no memory port returns the preprocessed text but remem
 
   assert.equal(result.text, "text with no memory wired");
   assert.equal(result.remembered, false, "nothing stored without a memory port");
+});
+
+// ---------------------------------------------------------------------------
+// Passage-level RAG retrieval: the @recoder/rag vector-store port is fused into
+// the assemble, additive + degrade-safe (no entry when unwired).
+// ---------------------------------------------------------------------------
+
+test("assemble fuses RAG passages from the wired vector-store port (with provenance)", async () => {
+  const seen: string[] = [];
+  const vectorStore: VectorStorePort = {
+    async search(query, limit) {
+      seen.push(`passages:${query}:${limit}`);
+      return [
+        {
+          text: "the precise passage about retry backoff",
+          similarity: 0.91,
+          documentKey: "runbook.md",
+          title: "Runbook",
+          metadata: { chunkIndex: 2 },
+        },
+      ];
+    },
+  };
+
+  const brain = createBrain({
+    runGit: fixedGit("head-1"),
+    repo: fakeRepo,
+    vectorStore,
+  });
+
+  const ctx = await brain.assemble({ task: "retry backoff", repoRoot: "/repo", limit: 4 });
+
+  assert.equal(ctx.passages?.length, 1, "passages fused into the context");
+  assert.equal(ctx.passages?.[0]?.documentKey, "runbook.md");
+  assert.equal(ctx.passages?.[0]?.similarity, 0.91);
+  assert.ok(
+    seen.includes("passages:retry backoff:4"),
+    "the vector store was really invoked with the task text + limit",
+  );
+
+  const passagesProv = ctx.provenance!.sources.find((s) => s.source === "passages");
+  assert.equal(passagesProv?.contributed, true);
+  assert.equal(passagesProv?.itemCount, 1);
+});
+
+test("assemble omits passages entirely when no vector-store port is wired (additive)", async () => {
+  const brain = createBrain({ runGit: fixedGit("head-1"), repo: fakeRepo });
+  const ctx = await brain.assemble({ task: "anything", repoRoot: "/repo" });
+
+  assert.equal(ctx.passages, undefined, "no passages field on the context");
+  // The additive contract: an unwired passages source produces NO provenance
+  // entry — it never shows up in the degraded set merely by being absent.
+  assert.ok(
+    !ctx.provenance!.sources.some((s) => s.source === "passages"),
+    "no passages provenance entry when the port is unwired",
+  );
+});
+
+test("a wired vector store that throws degrades to empty passages without failing the read", async () => {
+  const vectorStore: VectorStorePort = {
+    async search() {
+      throw new Error("lance backend unavailable");
+    },
+  };
+  const brain = createBrain({
+    runGit: fixedGit("head-1"),
+    repo: fakeRepo,
+    vectorStore,
+  });
+
+  const ctx = await brain.assemble({ task: "t", repoRoot: "/repo" });
+
+  assert.deepEqual(ctx.passages, [], "degrades to empty passages, read still succeeds");
+  const prov = ctx.provenance!.sources.find((s) => s.source === "passages");
+  assert.equal(prov?.contributed, false);
+  assert.equal(prov?.degradeReason, "unavailable");
+  assert.match(prov?.detail ?? "", /lance backend unavailable/);
+});
+
+test("estimatedTokens counts fused passages so cache-hit savings are truthful", async () => {
+  const withStore: VectorStorePort = {
+    async search() {
+      return [{ text: "a reasonably long passage of retrievable text", similarity: 0.8 }];
+    },
+  };
+  const withPassages = await createBrain({
+    runGit: fixedGit("head-1"),
+    repo: fakeRepo,
+    vectorStore: withStore,
+  }).assemble({ task: "t", repoRoot: "/repo" });
+
+  const withoutPassages = await createBrain({
+    runGit: fixedGit("head-1"),
+    repo: fakeRepo,
+  }).assemble({ task: "t", repoRoot: "/repo" });
+
+  assert.ok(
+    (withPassages.estimatedTokens ?? 0) > (withoutPassages.estimatedTokens ?? 0),
+    "passages contribute to the assembled token cost",
+  );
 });
