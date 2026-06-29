@@ -64,6 +64,31 @@ function asarHasPackage(asarPath, pkgName) {
   }
 }
 
+/** True when the asar contains a file at (or ending with) the given relative path. */
+function asarHasFile(asarPath, relPath) {
+  if (!fs.existsSync(asarPath)) return false;
+  const needle = relPath.replace(/\\/g, '/');
+  let asar;
+  try {
+    asar = require('@electron/asar');
+  } catch {
+    try {
+      asar = require('asar');
+    } catch {
+      // No asar reader — fall back to a substring scan of the archive bytes.
+      const buf = fs.readFileSync(asarPath);
+      return buf.includes(Buffer.from(needle));
+    }
+  }
+  try {
+    const files = asar.listPackage(asarPath);
+    return files.some((f) => f.replace(/\\/g, '/').replace(/^\//, '').endsWith(needle));
+  } catch {
+    const buf = fs.readFileSync(asarPath);
+    return buf.includes(Buffer.from(needle));
+  }
+}
+
 /** Recursively collect file names matching a predicate under a directory. */
 function findFiles(root, predicate) {
   const out = [];
@@ -164,6 +189,25 @@ exports.default = async function afterPack(context) {
     );
   }
 
+  // --- Invariant 3b: the governance daemon ships with the backend (if present). ---
+  // The conductor governance daemon (resource-governor + governance-gate) is
+  // compiled into backend/dist alongside server.js, not as a separate binary.
+  // It exists in the source tree today, so once the backend dist is present we
+  // require it too: a tsc regression that drops it must fail the pack rather than
+  // ship a backend that boots without resource governance.
+  const governorEntry = path.join(backendDir, 'dist', 'conductor', 'resource-governor.js');
+  const gateEntry = path.join(backendDir, 'dist', 'conductor', 'governance-gate.js');
+  const governorPresent = fs.existsSync(governorEntry);
+  const gatePresent = fs.existsSync(gateEntry);
+  if (governorPresent !== gatePresent) {
+    fail(
+      'governance daemon is only partially bundled in the embedded backend dist ' +
+        `(resource-governor.js: ${governorPresent}, governance-gate.js: ${gatePresent}). ` +
+        'Expected both or neither. Check the docker-backend tsc output.',
+    );
+  }
+  const governanceBundled = governorPresent && gatePresent;
+
   // --- Invariant 4: the vendored tmux binary is bundled and executable. ---
   // The conductor substrate drives this binary; without it tmux:false on health.
   // (Only assert for the platform that ships the bundled binary — darwin here.)
@@ -182,11 +226,32 @@ exports.default = async function afterPack(context) {
     }
   }
 
+  // --- Invariant 5: the product icon assets ship inside app.asar. ---
+  // The dock/tray code in main.js loads assets/icon.icns (mac) / icon.png from
+  // the asar at runtime, and electron-builder reads them for the installer icon.
+  // If the assets/**/* glob regressed, the app would fall back to the default
+  // Electron icon. We require the icon for THIS platform to be present in asar.
+  const iconAssetByPlatform = {
+    darwin: 'assets/icon.icns',
+    mas: 'assets/icon.icns',
+    win32: 'assets/icon.png',
+    linux: 'assets/icon.png',
+  };
+  const requiredIconAsset = iconAssetByPlatform[electronPlatformName] || 'assets/icon.png';
+  if (!asarHasFile(asarPath, requiredIconAsset)) {
+    fail(
+      `product icon ${requiredIconAsset} is not bundled in app.asar. The app would ` +
+        'fall back to the default Electron icon. Check the "assets/**/*" entry in ' +
+        'the "files" whitelist and that scripts/generate-icon.js ran in before-build.',
+    );
+  }
+
   // eslint-disable-next-line no-console
   console.log(
     `[after-pack] release-artifact assertions passed for ${electronPlatformName}: ` +
       `node-pty unpacked (${nativeNodes.length} .node binary file(s)), ` +
       'electron-updater bundled, embedded backend (server.js + mint + node_modules) ' +
-      'present, vendored tmux bundled.',
+      `present, governance daemon ${governanceBundled ? 'bundled' : 'absent'}, ` +
+      `vendored tmux bundled, product icon (${requiredIconAsset}) bundled.`,
   );
 };

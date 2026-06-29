@@ -232,8 +232,18 @@ async function startEmbeddedBackend() {
       }
     }
   } else {
-    emitDesktopActivationEvent('desktop_embedded_backend_failed', { reason: result.reason });
-    logRuntimeError('embedded-backend-start-failed', new Error(result.reason || 'unknown'));
+    // Truthful failure surface: log the reason and the clear user-facing
+    // sentence the supervisor computed (never fake-ready). The cockpit/UI can
+    // read backend:status -> userMessage to show real "could not start" copy.
+    const userMessage =
+      (backendSupervisor && typeof backendSupervisor.getUserFacingError === 'function'
+        ? backendSupervisor.getUserFacingError()
+        : null) || result.reason || 'unknown';
+    emitDesktopActivationEvent('desktop_embedded_backend_failed', {
+      reason: result.reason,
+      userMessage,
+    });
+    logRuntimeError('embedded-backend-start-failed', new Error(userMessage));
   }
   return result;
 }

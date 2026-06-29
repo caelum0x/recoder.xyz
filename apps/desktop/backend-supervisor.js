@@ -67,17 +67,63 @@ function pickFreePort(deps = {}) {
   return new Promise((resolve, reject) => {
     const server = createServer();
     server.unref();
-    server.on('error', reject);
+    let settled = false;
+    const onError = (err) => {
+      if (settled) return;
+      settled = true;
+      try { server.close(); } catch { /* already closing */ }
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+    server.on('error', onError);
     server.listen(0, '127.0.0.1', () => {
       const address = server.address();
       if (!address || typeof address === 'string') {
+        if (settled) return;
+        settled = true;
         server.close(() => reject(new Error('Failed to resolve a free port')));
         return;
       }
       const { port } = address;
-      server.close(() => resolve(port));
+      server.close(() => {
+        if (settled) return;
+        settled = true;
+        resolve(port);
+      });
     });
   });
+}
+
+/**
+ * Pick a free loopback port with bounded retries. The OS-assigned port from a
+ * single port-0 bind is occasionally racy (another process can grab it between
+ * close() and our spawn), so retry on transient failures. Truthfully rejects if
+ * no free port can be found after `attempts` tries.
+ * @param {{ pickFreePort?: () => Promise<number>, attempts?: number, sleep?: (ms: number) => Promise<void> }} [deps]
+ * @returns {Promise<number>}
+ */
+async function pickFreePortWithRetry(deps = {}) {
+  const pick = deps.pickFreePort || (() => pickFreePort());
+  const attempts = Math.max(1, deps.attempts ?? 5);
+  const sleep = deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  let lastErr = null;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const port = await pick();
+      if (Number.isInteger(port) && port > 0 && port < 65536) {
+        return port;
+      }
+      lastErr = new Error(`pickFreePort returned an invalid port: ${port}`);
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+    }
+    if (i < attempts - 1) {
+      await sleep(25 * (i + 1));
+    }
+  }
+  throw new Error(
+    `could not acquire a free loopback port after ${attempts} attempts` +
+      (lastErr ? `: ${lastErr.message}` : ''),
+  );
 }
 
 /**
@@ -285,14 +331,43 @@ async function pollHealth(opts) {
 /**
  * Compute the next restart backoff (ms) given how many restarts have happened.
  * Exponential with a cap, so a crash-looping backend does not hammer the host.
+ * An optional `jitterMs` adds bounded randomness to de-correlate restart storms
+ * (e.g. a port-collision loop). The base exponential value is unchanged when no
+ * jitter is requested, so existing behavior/tests are preserved.
  * @param {number} restartCount
- * @param {{ baseMs?: number, maxMs?: number }} [opts]
+ * @param {{ baseMs?: number, maxMs?: number, jitterMs?: number, random?: () => number }} [opts]
  * @returns {number}
  */
 function backoffMs(restartCount, opts = {}) {
   const base = opts.baseMs ?? 1000;
   const max = opts.maxMs ?? 30000;
-  return Math.min(max, base * Math.pow(2, Math.max(0, restartCount - 1)));
+  const exponential = Math.min(max, base * Math.pow(2, Math.max(0, restartCount - 1)));
+  const jitterMax = opts.jitterMs ?? 0;
+  if (jitterMax > 0) {
+    const random = opts.random || Math.random;
+    const jitter = Math.floor(random() * jitterMax);
+    return Math.min(max, exponential + jitter);
+  }
+  return exponential;
+}
+
+/**
+ * Build a clear, user-facing message explaining why the embedded backend could
+ * not boot, plus where to look for detail. Never claims success; always truthful.
+ * @param {{ phase?: string, reason?: string, restartCount?: number, logPath?: string }} status
+ * @returns {string}
+ */
+function describeBootFailure(status = {}) {
+  const reason = status.reason || 'unknown error';
+  const parts = ['The local Recoder backend could not start.'];
+  parts.push(`Reason: ${reason}.`);
+  if (typeof status.restartCount === 'number' && status.restartCount > 0) {
+    parts.push(`It crashed ${status.restartCount} time(s) before giving up.`);
+  }
+  if (status.logPath) {
+    parts.push(`See the log for detail: ${status.logPath}`);
+  }
+  return parts.join(' ');
 }
 
 // ---------------------------------------------------------------------------
@@ -332,7 +407,8 @@ class BackendSupervisor {
     this._spawn = options.spawn || childProcess.spawn;
     this._fetch = options.fetchImpl || globalThis.fetch;
     this._fs = options.fs || nodeFs;
-    this._pickFreePort = options.pickFreePort || (() => pickFreePort());
+    this._pickFreePort = options.pickFreePort
+      || (() => pickFreePortWithRetry({ sleep: options.sleep }));
     this._mintKey = options.mintKey || ((env) => this._mintKeyViaScript(env));
     this._log = options.log || (() => {});
     this._sleep = options.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
@@ -341,6 +417,16 @@ class BackendSupervisor {
     this.healthTimeoutMs = options.healthTimeoutMs ?? 60000;
     this.healthIntervalMs = options.healthIntervalMs ?? 500;
     this.maxRestarts = options.maxRestarts ?? 5;
+    // Backoff jitter de-correlates restart storms (e.g. a port-collision loop).
+    this.restartJitterMs = options.restartJitterMs ?? 250;
+    // Grace period after SIGTERM before escalating to SIGKILL so a hung child
+    // can never wedge app quit. 0/undefined disables escalation (kept for tests).
+    this.killGraceMs = options.killGraceMs ?? 5000;
+    // Crashes older than this window do not count toward maxRestarts, so a
+    // backend that ran healthily for a long time then crashed once is allowed a
+    // fresh restart budget instead of being permanently failed.
+    this.restartWindowMs = options.restartWindowMs ?? 60000;
+    this._lastReadyAt = null;
 
     /** @type {SupervisorPhase} */
     this.phase = PHASE.IDLE;
@@ -362,6 +448,7 @@ class BackendSupervisor {
 
   /** Public, never-lies status snapshot the UI/main.js can read. */
   getStatus() {
+    const failed = this.phase === PHASE.FAILED;
     return {
       phase: this.phase,
       ready: this.phase === PHASE.READY,
@@ -370,6 +457,18 @@ class BackendSupervisor {
       hasApiKey: Boolean(this.apiKey),
       restartCount: this.restartCount,
       error: this.lastError ? String(this.lastError) : null,
+      logPath: this.logPath,
+      // A clear, user-facing sentence only when we actually failed — so the UI
+      // can show real "could not start" copy instead of a generic spinner.
+      // Truthful: null unless we are in a failed phase.
+      userMessage: failed
+        ? describeBootFailure({
+            phase: this.phase,
+            reason: this.lastError ? String(this.lastError) : undefined,
+            restartCount: this.restartCount,
+            logPath: this.logPath,
+          })
+        : null,
     };
   }
 
@@ -481,6 +580,7 @@ class BackendSupervisor {
 
       this.phase = PHASE.READY;
       this.restartCount = 0;
+      this._lastReadyAt = this._now();
       this._appendLog('info', 'backend ready', {
         backendUrl,
         attempts: health.attempts,
@@ -622,6 +722,21 @@ class BackendSupervisor {
     this.lastError = `backend exited (code=${code}, signal=${signal})`;
     this._appendLog('error', this.lastError, { restartCount: this.restartCount });
 
+    // If the backend ran healthily for longer than the restart window before
+    // this crash, forgive the prior crash budget — a long-lived backend that
+    // dies once should be restarted, not declared permanently failed.
+    if (
+      this._lastReadyAt != null &&
+      this.restartWindowMs > 0 &&
+      this._now() - this._lastReadyAt >= this.restartWindowMs &&
+      this.restartCount > 0
+    ) {
+      this._appendLog('info', 'crash after a long healthy run; resetting restart budget', {
+        healthyForMs: this._now() - this._lastReadyAt,
+      });
+      this.restartCount = 0;
+    }
+
     if (this.restartCount >= this.maxRestarts) {
       this.phase = PHASE.FAILED;
       this.lastError = `backend crashed ${this.restartCount} times; giving up`;
@@ -630,7 +745,7 @@ class BackendSupervisor {
     }
 
     this.restartCount += 1;
-    const delay = backoffMs(this.restartCount);
+    const delay = backoffMs(this.restartCount, { jitterMs: this.restartJitterMs });
     this._appendLog('warn', 'scheduling backend restart', { delay, attempt: this.restartCount });
     this._restartTimer = setTimeout(() => {
       if (this._stopping) return;
@@ -646,16 +761,59 @@ class BackendSupervisor {
       clearTimeout(this._restartTimer);
       this._restartTimer = null;
     }
+    if (this._killTimer) {
+      clearTimeout(this._killTimer);
+      this._killTimer = null;
+    }
     const child = this.child;
     this.child = null;
     this._childAlive = false;
-    if (child && typeof child.kill === 'function') {
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        // already gone
+    if (!child || typeof child.kill !== 'function') {
+      return;
+    }
+    // Clean shutdown: ask the backend to exit with SIGTERM first so it can flush
+    // and release tmux/sockets. If it does not exit within the grace period,
+    // escalate to SIGKILL so a hung child can never wedge app quit.
+    try {
+      child.kill('SIGTERM');
+    } catch {
+      // already gone
+      return;
+    }
+    if (this.killGraceMs > 0 && child.killed !== true) {
+      this._killTimer = setTimeout(() => {
+        this._killTimer = null;
+        try {
+          // child.killed flips true once the process actually exits; only
+          // escalate if it is still around.
+          if (child.killed !== true && child.exitCode == null) {
+            child.kill('SIGKILL');
+          }
+        } catch {
+          // already gone
+        }
+      }, this.killGraceMs);
+      if (this._killTimer && typeof this._killTimer.unref === 'function') {
+        this._killTimer.unref();
       }
     }
+  }
+
+  /**
+   * A clear, user-facing failure message when the backend could not boot, or
+   * null when it is healthy / still starting. Truthful — never invents success.
+   * @returns {string | null}
+   */
+  getUserFacingError() {
+    if (this.phase !== PHASE.FAILED) {
+      return null;
+    }
+    return describeBootFailure({
+      phase: this.phase,
+      reason: this.lastError ? String(this.lastError) : undefined,
+      restartCount: this.restartCount,
+      logPath: this.logPath,
+    });
   }
 
   /** Stop the backend and prevent restart. Called on app quit. */
@@ -672,10 +830,12 @@ module.exports = {
   PHASE,
   // Pure helpers exported for tests.
   pickFreePort,
+  pickFreePortWithRetry,
   resolveTmuxBin,
   loadOrCreateSecrets,
   assembleBackendEnv,
   backendUrlForPort,
   pollHealth,
   backoffMs,
+  describeBootFailure,
 };
