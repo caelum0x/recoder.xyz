@@ -87,34 +87,52 @@ test('polar adapter shapes a real checkout request and parses the response', asy
   const sent = captured[0]!;
   assert.equal(sent.method, 'POST');
   assert.equal(sent.headers.authorization, 'Bearer polar_tok');
+  // The load-bearing subject linkage: the recoder subject id is registered as
+  // the Polar customer external_customer_id (so downstream webhooks carry it),
+  // AND mirrored into metadata.recoder_subject as a redundant anchor.
   assert.deepEqual(sent.body, {
     product_id: 'prod_pro',
     success_url: 'https://recoder.xyz/ok',
     customer_email: 'dev@recoder.xyz',
+    external_customer_id: 'user_1',
     metadata: { recoder_subject: 'user_1' },
   });
 });
 
-test('polar adapter resolveEntitlements maps benefit grants and drops revoked', async () => {
+test('polar adapter resolveEntitlements reads the EXTERNAL-id customer state and maps granted benefits', async () => {
   const secrets = createEnvSecretPort({ [ENV_KEYS.POLAR_ACCESS_TOKEN]: 'polar_tok' });
-  const { fetchImpl } = mockFetch((req) => {
-    assert.match(req.url, /\/v1\/customers\/user_1\/benefit-grants/);
+  const { fetchImpl, captured } = mockFetch((req) => {
+    // Keyed off the recoder subject id as the Polar customer EXTERNAL id —
+    // the exact customer a real payment created at checkout.
+    assert.match(req.url, /\/v1\/customers\/external\/user_1\/state/);
     return {
       status: 200,
       json: {
-        items: [
-          { id: 'g1', is_granted: true, granted_at: '2026-06-01T00:00:00Z', benefit: { id: 'b1', type: 'feature_flag' } },
-          { id: 'g2', is_granted: true, revoked_at: '2026-06-02T00:00:00Z', benefit: { id: 'b2', type: 'license_keys' } },
+        granted_benefits: [
+          { id: 'gb1', benefit_id: 'b1', benefit_type: 'feature_flag', granted_at: '2026-06-01T00:00:00Z' },
+          { id: 'gb2', benefit_id: 'b2', benefit_type: 'license_keys', granted_at: '2026-06-02T00:00:00Z' },
         ],
       },
     };
   });
   const adapter = createPolarBillingAdapter({ secrets, planCatalog: catalog, fetchImpl });
   const grants = await adapter.resolveEntitlements({ subjectId: 'user_1', kind: 'user' });
-  assert.equal(grants.length, 1); // revoked dropped
+  assert.equal(captured[0]!.method, 'GET');
+  assert.equal(grants.length, 2);
   assert.equal(grants[0]!.kind, 'feature_flag');
   assert.equal(grants[0]!.key, 'b1');
   assert.equal(grants[0]!.granted, true);
+  assert.equal(grants[1]!.kind, 'license_key');
+});
+
+test('polar adapter resolveEntitlements denies (no grants) when the external customer 404s — not paid yet', async () => {
+  const secrets = createEnvSecretPort({ [ENV_KEYS.POLAR_ACCESS_TOKEN]: 'polar_tok' });
+  // A subject that never paid → Polar has no external customer → 404. This MUST
+  // resolve to "no grants" (the fail-safe deny), NOT an unhandled throw.
+  const { fetchImpl } = mockFetch(() => ({ status: 404, json: { error: 'not found' } }));
+  const adapter = createPolarBillingAdapter({ secrets, planCatalog: catalog, fetchImpl });
+  const grants = await adapter.resolveEntitlements({ subjectId: 'user_never_paid', kind: 'user' });
+  assert.deepEqual(grants, []);
 });
 
 test('polar adapter validateLicenseKey denies on a provider error, throws on missing key', async () => {

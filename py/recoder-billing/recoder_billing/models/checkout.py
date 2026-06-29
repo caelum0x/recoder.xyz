@@ -75,6 +75,13 @@ class Checkout:
     is_business_customer: bool = False
     require_billing_address: bool = False
 
+    # SUBJECT LINKAGE: the opaque external subject id (the recoder userId) this
+    # purchase belongs to. Recorded at create so a confirmed/succeeded checkout
+    # can grant the entitlement back to the SAME subject that opened it — the
+    # durable mirror of Polar's checkout ``external_customer_id``. Kept as a plain
+    # string so the model never couples to the host's identity layer.
+    external_customer_id: str | None = None
+
     # Opaque payment-intent/confirmation reference returned by the processor port.
     payment_intent_id: str | None = None
 
