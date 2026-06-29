@@ -50,7 +50,9 @@ body {
 .brand { display: flex; align-items: center; gap: 8px; }
 .brand-mark {
   width: 14px; height: 14px; border-radius: 3px;
-  background: linear-gradient(135deg, var(--accent), var(--progress));
+  /* --brand-gradient is bound from @recoder/design-tokens at startup; the
+     accent→progress fallback keeps the mark branded if tokens are unavailable. */
+  background: var(--brand-gradient, linear-gradient(135deg, var(--accent), var(--progress)));
 }
 .brand-name { font-weight: 600; }
 .brand-sub { color: var(--text-faint); font-size: 11px; font-family: var(--mono); margin-left: 6px; }

@@ -4,7 +4,13 @@
  */
 import { render } from 'preact';
 import { App } from './App';
+import { applyDesignTokens } from './lib/design-tokens';
 import './styles.css';
+
+// Consume the shared @recoder/design-tokens set in-process: rebind the cockpit's
+// semantic CSS custom properties to the canonical token values before first paint.
+// Degrade-safe — falls back to the styles.css defaults if tokens are unavailable.
+applyDesignTokens(document.documentElement);
 
 const root = document.getElementById('cockpit-root');
 if (root) {

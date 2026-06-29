@@ -48,6 +48,7 @@ async function main() {
     // bundles it in-tree, exactly like the cockpit's own src/.
     alias: {
       '@recoder/conductor-ui': join(root, '..', '..', '..', 'packages', 'conductor-ui', 'src', 'index.ts'),
+      '@recoder/design-tokens': join(root, '..', '..', '..', 'packages', 'design-tokens', 'src', 'index.ts'),
     },
     loader: { '.css': 'css' },
     logLevel: 'info',
