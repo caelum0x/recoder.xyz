@@ -1,9 +1,22 @@
 import { ImageResponse } from "next/og";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // Shared 1200x630 social card used by both opengraph-image and twitter-image.
-// Rendered to a real PNG at build time by Next.js — no binary asset checked in.
+// Rendered to a real PNG at build time by Next.js.
 export const SOCIAL_SIZE = { width: 1200, height: 630 };
 export const SOCIAL_CONTENT_TYPE = "image/png";
+
+// The real Recoder cube logo, embedded as a data URI so the social card shows
+// the brand mark (not a placeholder). Read at build time.
+const LOGO_DATA_URI = (() => {
+  try {
+    const buf = readFileSync(join(process.cwd(), "public/logo.png"));
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    return "";
+  }
+})();
 
 export function renderSocialImage(): ImageResponse {
   return new ImageResponse(
@@ -23,27 +36,20 @@ export function renderSocialImage(): ImageResponse {
       >
         {/* Wordmark */}
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 14,
-              border: "3px solid rgba(255,255,255,0.30)",
-              background: "#0e0e11",
-            }}
-          >
+          {LOGO_DATA_URI ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={LOGO_DATA_URI} width={64} height={64} alt="Recoder" />
+          ) : (
             <div
               style={{
-                width: 18,
-                height: 18,
-                borderRadius: 5,
-                background: "#ededf0",
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                border: "3px solid rgba(255,255,255,0.30)",
+                background: "#0e0e11",
               }}
             />
-          </div>
+          )}
           <div
             style={{
               color: "#ededf0",
