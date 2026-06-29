@@ -82,6 +82,13 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
 
   const prMeta = (workspace.metadata?.pr as { url?: string } | undefined) || undefined;
   const session = workspaceSession(workspace);
+  // Resolve the real tmux binary the conductor reports (GET /health → tmuxBin),
+  // so the right-pane Terminal's local-pty `tmux attach` uses the same pinned /
+  // absolute binary the Sessions view does — not a bare `tmux` that may miss a
+  // pinned build. Optional + degrade-safe: when health is unavailable or omits
+  // it, SessionTerminal falls back to `tmux`.
+  const health = usePoll(() => api.health(), 15_000);
+  const tmuxBin = health.data?.tmuxBin;
 
   async function runAction(name: string, fn: () => Promise<unknown>, note?: string) {
     setActionError(null);
@@ -181,7 +188,7 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
         ) : tab === 'diff' ? (
           <DiffView diff={diff.data} error={diff.error} loading={diff.loading} />
         ) : session ? (
-          <SessionTerminal session={session} />
+          <SessionTerminal session={session} tmuxBin={tmuxBin} />
         ) : (
           <div class="log-empty">No tmux session attached to this workspace.</div>
         )}
