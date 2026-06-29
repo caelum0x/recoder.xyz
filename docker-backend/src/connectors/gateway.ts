@@ -18,6 +18,7 @@ import { createWorkspace, getWorkspace } from '../conductor/workspace-service.js
 import { loadConnectorsConfig, type ChannelConfig, type ConnectorsConfig } from './config.js';
 import { resolveAdapterFactory } from './channel-adapters.js';
 import { hasWebhookSecret, WEBHOOK_INBOUND_CHANNELS } from './webhook-channels.js';
+import { ConnectorAgentDispatcher, type AgentDispatchResult } from './dispatch-runner.js';
 
 const logger = createLogger('connectors:gateway');
 
@@ -88,6 +89,13 @@ export class ConnectorsGateway {
    * `requiresExternal` (config alone cannot take their inbound live).
    */
   private webhookIngressActive = false;
+  /**
+   * The embedded-agent dispatcher (normalize -> gate -> pi-agent runner ->
+   * port.send via the package's real `dispatchInbound`). Built lazily so it sees
+   * the live, configured ports. Degrade-safe: when the embedded runner is not
+   * enabled it returns a truthful no-runner result and sends nothing.
+   */
+  private agentDispatcher?: ConnectorAgentDispatcher;
 
   constructor(config: ConnectorsConfig = loadConnectorsConfig()) {
     this.config = config;
@@ -132,6 +140,26 @@ export class ConnectorsGateway {
   /** Resolved config for a configured channel (or null). */
   getChannelConfig(channel: string): ChannelConfig | null {
     return this.runtimes.find((r) => r.config.channel === channel)?.config ?? null;
+  }
+
+  /**
+   * Lazily build the embedded-agent dispatcher. The gateway itself is the
+   * `PortSource` (it owns the live, configured ports), so the dispatcher delivers
+   * a reply over the SAME real port the inbound arrived on. Built once and reused.
+   */
+  private getAgentDispatcher(): ConnectorAgentDispatcher {
+    if (!this.agentDispatcher) {
+      this.agentDispatcher = new ConnectorAgentDispatcher({
+        ports: this,
+        gating: this.config.gating,
+      });
+    }
+    return this.agentDispatcher;
+  }
+
+  /** True when an embedded reply agent will actually answer in-channel. */
+  get embeddedAgentReady(): boolean {
+    return this.getAgentDispatcher().ready;
   }
 
   /** True when dispatch is configured (an inbound command can launch a workspace). */
@@ -327,6 +355,24 @@ export class ConnectorsGateway {
   }
 
   /**
+   * Run a VERIFIED inbound message straight through the embedded-agent dispatch
+   * (the package's real `dispatchInbound`: normalize -> gate -> pi-agent runner
+   * -> port.send) and return the truthful result. Used by the verified webhook
+   * ingress (and tests) to observe the genuine `DispatchOutcome` — a blocked
+   * message yields a `blocked` outcome and NO send; an unconfigured runner yields
+   * a truthful no-runner result (never a fake delivered). Returns null when the
+   * channel is not a configured runtime (so the caller can report truthfully).
+   */
+  async dispatchEmbeddedAgent(
+    channel: string,
+    message: NormalizedInboundMessage,
+  ): Promise<AgentDispatchResult | null> {
+    const runtime = this.runtimes.find((r) => r.config.channel === channel);
+    if (!runtime) return null;
+    return this.runEmbeddedAgent(message);
+  }
+
+  /**
    * Handle one gated-or-not inbound message: run the trust boundary, and only on
    * a clean pass launch a real workspace and follow its status.
    */
@@ -353,16 +399,52 @@ export class ConnectorsGateway {
     }
 
     if (!command) {
-      // Passed the gate but carried no actionable command — nothing to dispatch.
+      // Passed the gate but carried no Conductor control command. If an embedded
+      // reply agent is configured, answer conversationally via the package's real
+      // dispatchInbound (normalize -> gate -> runner -> send). Otherwise this is a
+      // truthful no-op: nothing actionable, nothing sent.
+      await this.runEmbeddedAgent(message);
       return;
     }
 
     if (!this.config.dispatch) {
+      // A control command arrived but Conductor dispatch is not configured. When
+      // an embedded reply agent IS configured, hand the message to it; otherwise
+      // tell the operator truthfully that dispatch is unconfigured.
+      if (this.embeddedAgentReady) {
+        await this.runEmbeddedAgent(message);
+        return;
+      }
       await this.reply(runtime, message, 'Connectors received your command but dispatch is not configured (set CONNECTORS_REPO_PATH).');
       return;
     }
 
     await this.dispatch(runtime, message, command.prompt);
+  }
+
+  /**
+   * Run one gated message through the embedded-agent dispatch (the package's real
+   * `dispatchInbound`: re-gate -> pi-agent runner -> port.send). The agent
+   * dispatcher is degrade-safe — when no embedded runner is configured it returns
+   * a truthful no-runner result and this method sends nothing (never a fake
+   * reply). A truthful `DispatchOutcome` is logged for auditability.
+   */
+  private async runEmbeddedAgent(message: NormalizedInboundMessage): Promise<AgentDispatchResult | null> {
+    try {
+      const result = await this.getAgentDispatcher().dispatch(message);
+      if (result.kind === 'dispatched') {
+        logger.info(
+          { channel: message.channel, status: result.outcome.status },
+          'connectors embedded-agent dispatch outcome',
+        );
+      } else {
+        logger.debug({ channel: message.channel, kind: result.kind, reason: result.reason }, 'connectors embedded-agent not run');
+      }
+      return result;
+    } catch (err) {
+      logger.warn({ channel: message.channel, err }, 'connectors embedded-agent dispatch threw');
+      return null;
+    }
   }
 
   /**
