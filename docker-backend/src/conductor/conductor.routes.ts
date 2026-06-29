@@ -19,7 +19,9 @@ import {
   listWorkspaceEvents,
   reconcile,
   ADMISSION_REJECTED_PREFIX,
+  type CreateWorkspaceInput,
 } from './workspace-service.js';
+import { normalizeCreateBody } from './create-defaults.js';
 import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
@@ -254,15 +256,24 @@ export function createConductorRouter(): Router {
 
   router.post('/workspaces', async (req: Request, res: Response) => {
     try {
+      // SIMPLE LOCAL CREATE: the embedded desktop cockpit form only sends
+      // `{ repoPath, prompt?, runtimeId?, substrate? }`. Default the missing
+      // canonical identity fields (spaceId/projectId/taskId/createdBy) BEFORE
+      // validation so that minimal body succeeds. Full-payload callers are
+      // untouched — any caller-provided value always wins (normalize is additive).
+      const body = normalizeCreateBody<CreateWorkspaceInput>(req.body ?? {});
       const { spaceId, projectId, taskId, repoPath, runtimeId, substrate, command, prompt, model, createdBy, branch, baseRef, env, metadata } =
-        req.body ?? {};
-      // `runtimeId` is now OPTIONAL: when omitted, the conductor resolves the
-      // task's canonical TaskSpec and lets @recoder/pal DEFAULT the runtime team +
+        body;
+      // After normalization, the only fields that carry REAL caller intent (and so
+      // are never invented) are `repoPath` and one of `command|prompt`. The four
+      // identity fields are guaranteed present by the normalizer when repoPath is.
+      // `runtimeId` is OPTIONAL: when omitted, the conductor resolves the task's
+      // canonical TaskSpec and lets @recoder/pal DEFAULT the runtime team +
       // substrate on the real create path. A caller-provided runtimeId still wins.
-      if (!spaceId || !projectId || !taskId || !repoPath || !createdBy || (!command && !prompt)) {
+      if (!repoPath || (!command && !prompt)) {
         res.status(400).json({
           success: false,
-          error: 'spaceId, projectId, taskId, repoPath, createdBy, and one of (command|prompt) are required (runtimeId optional — pal will default it)',
+          error: 'repoPath and one of (command|prompt) are required (spaceId/projectId/taskId/createdBy default for a simple local create; runtimeId optional — pal will default it)',
         });
         return;
       }
