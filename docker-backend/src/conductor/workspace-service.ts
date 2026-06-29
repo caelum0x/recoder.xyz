@@ -69,6 +69,7 @@ import {
   emitReviewHandoff,
 } from './coordination-integration.js';
 import { admitWorkspace } from './resource-governor.js';
+import { computePalDefaults } from './pal-plan.js';
 
 /** Marker prefixed onto an admission-rejection error so routes can map it to 429. */
 export const ADMISSION_REJECTED_PREFIX = PACKAGE_ADMISSION_REJECTED_PREFIX;
@@ -82,8 +83,15 @@ registerInProcessSubstrate();
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
 
-/** Backend create input is the engine's substrate-agnostic input, kept identical. */
-export type CreateWorkspaceInput = EngineCreateWorkspaceInput;
+/**
+ * Backend create input is the engine's substrate-agnostic input, with `runtimeId`
+ * RELAXED to optional: when the caller omits it, the create path lets @recoder/pal
+ * DEFAULT the runtime team (and substrate) from the task's canonical TaskSpec. The
+ * engine itself still receives a concrete `runtimeId` (pal-defaulted or fallback).
+ */
+export type CreateWorkspaceInput = Omit<EngineCreateWorkspaceInput, 'runtimeId'> & {
+  runtimeId?: string;
+};
 
 /** Reconcile report shape, re-exported identically for callers (string-id buckets). */
 export type ReconcileReport = EngineReconcileReport;
@@ -292,9 +300,84 @@ export async function advanceWorkspace(
 /**
  * Create a workspace: persist the record first (state of record), then provision
  * the isolated worktree + launch the agent session, persisting each transition.
+ *
+ * PAL DEFAULTING (real create path): when the caller did NOT pin a `runtimeId`
+ * and/or `substrate`, the conductor resolves the task's canonical `TaskSpec` and
+ * runs @recoder/pal's planner ONCE to DEFAULT the runtime team + substrate +
+ * tool-grants/skills, and ANNOTATES the workspace record with the resulting plan
+ * (incl. risk per DECISION D1 — annotation only, never a governance input). A
+ * caller-provided `runtimeId`/`substrate` ALWAYS wins (no behavior change when
+ * given). DEGRADE-SAFE: if the task can't be resolved or pal throws/unavailable,
+ * we fall back to the prior default routing (caller runtimeId, else `claude_code`)
+ * and the launch is never blocked.
  */
 export async function createWorkspace(input: CreateWorkspaceInput): Promise<Workspace> {
-  return engine.createWorkspace(input);
+  const effective = await applyPalDefaults(input);
+  return engine.createWorkspace(effective);
+}
+
+/**
+ * Resolve PAL defaults for a create request on the real path. Returns the input
+ * unchanged when the caller pinned BOTH runtimeId and substrate (nothing to
+ * default). Otherwise it resolves the canonical TaskSpec and runs pal to fill ONLY
+ * the unset fields; caller-provided values always win. Best-effort + degrade-safe.
+ */
+async function applyPalDefaults(input: CreateWorkspaceInput): Promise<EngineCreateWorkspaceInput> {
+  const hasRuntime = Boolean(input.runtimeId);
+  const hasSubstrate = Boolean(input.substrate);
+  // The safe fallback runtime when pal can't run (matches the planner's fallback).
+  const fallbackRuntimeId = input.runtimeId || 'claude_code';
+  // Caller pinned everything pal would default → nothing to do (zero pal cost).
+  if (hasRuntime && hasSubstrate) return { ...input, runtimeId: fallbackRuntimeId };
+
+  let task;
+  try {
+    const tasks = await Promise.resolve(repository.listTasks());
+    task = tasks.find((t) => t.taskId === input.taskId);
+  } catch (err) {
+    logger.warn({ taskId: input.taskId, err }, 'pal default skipped: task lookup failed');
+    return { ...input, runtimeId: fallbackRuntimeId };
+  }
+  if (!task) {
+    // No canonical TaskSpec to plan over — keep prior routing (caller runtimeId,
+    // else the safe fallback). Never block the launch.
+    if (!hasRuntime) {
+      logger.warn(
+        { taskId: input.taskId },
+        'pal default skipped: no TaskSpec found and no explicit runtimeId; using safe fallback runtime',
+      );
+    }
+    return { ...input, runtimeId: fallbackRuntimeId };
+  }
+
+  const defaults = computePalDefaults(task);
+  if (!defaults) {
+    logger.warn({ taskId: input.taskId }, 'pal default skipped: planner unavailable; using prior routing');
+    return { ...input, runtimeId: fallbackRuntimeId };
+  }
+
+  logger.info(
+    {
+      taskId: input.taskId,
+      runtimeId: hasRuntime ? input.runtimeId : defaults.runtimeId,
+      substrate: hasSubstrate ? input.substrate : defaults.substrate,
+      risk: defaults.annotation.risk,
+    },
+    'pal defaulted workspace routing (caller-pinned values preserved)',
+  );
+
+  return {
+    ...input,
+    // Caller-provided values WIN; pal only fills what was unset.
+    runtimeId: hasRuntime ? fallbackRuntimeId : defaults.runtimeId,
+    substrate: hasSubstrate ? input.substrate : defaults.substrate,
+    metadata: {
+      ...(input.metadata ?? {}),
+      // Annotation for the cockpit (recommended team + risk). D1: risk is shown,
+      // not routed on. Persisted on the workspace record via the engine.
+      palPlan: defaults.annotation,
+    },
+  };
 }
 
 /**
