@@ -116,24 +116,24 @@ export function App() {
         </div>
         <div class="brand">
           <span class="brand-mark" />
-          <span class="brand-name">Recoder Cockpit</span>
+          <span class="brand-name">Cockpit</span>
           <span class="brand-sub">{config.backendUrl}</span>
         </div>
         <nav class="view-tabs">
           <button class={view === 'board' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('board')}>Board</button>
           <button class={view === 'sessions' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('sessions')}>Sessions</button>
           <button class={view === 'dmux' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('dmux')}>dmux</button>
-          <button class={view === 'connectors' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('connectors')}>Connectors</button>
-          <button class={view === 'substrates' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('substrates')}>Substrates</button>
-          <button class={view === 'events' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('events')}>Live Events</button>
-          <button class={view === 'governance' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('governance')}>Governance</button>
+          <button class={view === 'connectors' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('connectors')}>Channels</button>
+          <button class={view === 'substrates' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('substrates')}>Runners</button>
+          <button class={view === 'events' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('events')}>Events</button>
+          <button class={view === 'governance' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('governance')}>Gates</button>
           <button class={view === 'brain' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('brain')}>Brain</button>
           <button class={view === 'policy' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('policy')}>Policy</button>
           <button class={view === 'memory' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('memory')}>Memory</button>
         </nav>
         <div class="topbar-actions">
           <button class="btn btn-ghost btn-sm" onClick={reconcile} disabled={reconciling}>
-            {reconciling ? 'Reconciling…' : 'Reconcile'}
+            {reconciling ? 'Syncing…' : 'Sync'}
           </button>
           {view === 'board' && (
             <button class="btn btn-primary" onClick={() => setShowCreate(true)}>New workspace</button>
@@ -153,9 +153,8 @@ export function App() {
 
       {view === 'board' && unreachable && (
         <div class="banner banner-error">
-          <strong>Backend unreachable.</strong> Cannot reach the Recoder backend at {config.backendUrl}.
+          <strong>Backend unreachable.</strong> Can't reach the backend at {config.backendUrl}.
           {!configWasInjected() && ' (No shell config injected — using default localhost:3100.)'}
-          {' '}Showing no workspaces until the connection is restored.
         </div>
       )}
       {view === 'board' && board.error && !unreachable && !unauthenticated && (
