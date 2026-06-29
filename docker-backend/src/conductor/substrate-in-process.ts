@@ -32,6 +32,7 @@ import {
   type SubstrateHandle,
   type SubstrateLaunchInput,
 } from './substrate.js';
+import { resolveOssDispatch } from './oss-dispatch.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:in-process');
@@ -181,6 +182,46 @@ const inProcessSubstrate: ConductorSubstrate = {
       task: Promise.resolve(),
     };
     runs.set(input.workspaceId, run);
+
+    // OSS DISPATCH BOUNDARY (@recoder/agent-oss): when this workspace targets an
+    // OSS execution framework (runtimeId === langgraph / crewai / browser-use /
+    // e2b / ...), translate the launch through the agent-oss boundary FIRST so
+    // the OSS surface inherits a canonical, Recoder-owned task mapping + policy
+    // decision. Recoder still owns the run record + RunEvents; the OSS engine is
+    // a replaceable surface. Degrade-safe: any failure logs and falls through to
+    // the proven @recoder/runtime path below — an OSS dispatch error never blocks
+    // the launch.
+    try {
+      const prompt = input.prompt?.trim() || input.command;
+      const oss = resolveOssDispatch({
+        workspaceId: input.workspaceId,
+        runtimeId: surface,
+        repoPath: input.repoPath,
+        branch: input.branch,
+        prompt,
+      });
+      if (oss) {
+        pushOutput(
+          run,
+          `[oss-dispatch] ${oss.profile.displayName} (${oss.profile.adapterId}) — canonical mapping ` +
+            `task=${oss.mapping.taskId} ownsCanonicalState=${oss.profile.ownsCanonicalState}`,
+        );
+        logger.info(
+          {
+            workspaceId: input.workspaceId,
+            ossAdapter: oss.profile.adapterId,
+            provider: oss.profile.provider,
+            taskId: oss.mapping.taskId,
+          },
+          'in-process workspace dispatched through @recoder/agent-oss boundary',
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        { workspaceId: input.workspaceId, surface, err: err instanceof Error ? err.message : String(err) },
+        'oss-dispatch boundary failed; falling back to default in-process runtime path',
+      );
+    }
 
     const taskInput = buildTaskInput(input, surface);
     // Drive the agent in-process. The engine resolves the cwd via process.cwd by

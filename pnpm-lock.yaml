@@ -847,6 +847,9 @@ importers:
       '@recoder/agent-os':
         specifier: workspace:*
         version: link:../packages/agent-os
+      '@recoder/agent-oss':
+        specifier: workspace:*
+        version: link:../packages/agent-oss
       '@recoder/agent-policy':
         specifier: workspace:*
         version: link:../packages/agent-policy
