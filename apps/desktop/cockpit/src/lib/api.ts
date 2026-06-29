@@ -8,6 +8,7 @@
  *   POST /workspaces                      create a workspace
  *   GET  /workspaces/:id                  detail
  *   GET  /workspaces/:id/events           live RunEvent log
+ *   POST /workspaces/:id/message          send a chat message → starts the next agent run
  *   GET  /workspaces/:id/diff             reviewable diff
  *   POST /workspaces/:id/pr               open PR
  *   POST /workspaces/:id/merge            merge
@@ -230,6 +231,17 @@ export const api = {
   createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/workspaces', body),
   listEvents: (id: string) =>
     request<RunEvent[]>('GET', `/workspaces/${encodeURIComponent(id)}/events`),
+  /**
+   * Send a chat message to a workspace. The backend (POST /workspaces/:id/message)
+   * appends the message to the conversation and starts the next agent run with it
+   * as the prompt — turning the cockpit's steer box into a real chat. The user's
+   * message bubble is rendered optimistically by the caller before this resolves,
+   * so a 404 (route not yet deployed) is surfaced truthfully without losing the
+   * bubble. Returns whatever the backend echoes (kept loose: the contract is still
+   * being finalized server-side; we only depend on success vs failure here).
+   */
+  sendMessage: (id: string, text: string) =>
+    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/message`, { text }),
   /**
    * Open a LIVE RunEvent stream for a workspace via the shared
    * `@recoder/conductor-ui` {@link ConductorClient}. The client upgrades to the

@@ -23,7 +23,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { useSmoothText } from '@recoder/shared/animations/preact';
-import { EventLog } from './EventLog';
+import { EventLog, friendlyAgentText } from './EventLog';
 import type { RunEvent } from '../types';
 
 let container: HTMLDivElement | null = null;
@@ -86,6 +86,27 @@ describe('cockpit EventLog -> @recoder/shared/animations/preact wiring', () => {
     expect(converged).toBe('editing README.md');
     // The older line is always rendered static and complete.
     expect(c.textContent).toContain('agent started working');
+  });
+
+  it('maps scary session-lifecycle text to friendly, truthful copy', () => {
+    // A clean exit (status 0) is a finish, not a crash.
+    expect(friendlyAgentText('Pane is dead (status 0)')).toBe('Agent finished');
+    expect(friendlyAgentText('pane is dead (status 0)')).toBe('Agent finished');
+    // A non-zero exit truthfully reads as "stopped", never "finished".
+    expect(friendlyAgentText('Pane is dead (status 1)')).toBe('Agent stopped');
+    expect(friendlyAgentText('Pane is dead (status 137)')).toBe('Agent stopped');
+    // Bare lifecycle markers map to a friendly finish.
+    expect(friendlyAgentText('Pane is dead')).toBe('Agent finished');
+    expect(friendlyAgentText('Agent session ended')).toBe('Agent finished');
+    // Ordinary agent output is left untouched.
+    expect(friendlyAgentText('editing README.md')).toBe('editing README.md');
+  });
+
+  it('renders the friendly mapping in the live log (no scary "Pane is dead")', () => {
+    const events = [ev('a', 'editing README.md'), ev('b', 'Pane is dead (status 0)')];
+    const c = mount(<EventLog events={events} error={null} loading={false} animate={false} />);
+    expect(c.textContent).toContain('Agent finished');
+    expect(c.textContent).not.toContain('Pane is dead');
   });
 
   it('degrades safe: the static fallback renders the newest line in full immediately', () => {
