@@ -16,6 +16,7 @@ import { agentOsContainer } from '../agent-os/service-container';
 import { getWorkspace, advanceWorkspace, listWorkspaces } from './workspace-service.js';
 import { getSubstrate } from './substrate.js';
 import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
+import { runPostRunDelivery } from './post-run-workflow.js';
 import { metrics } from './conductor-metrics.js';
 import { transitionWorkspace, type Workspace } from '@recoder/agent-os';
 
@@ -124,17 +125,33 @@ async function runCompletionCheck(workspace: Workspace): Promise<void> {
   );
 
   try {
-    // Generate the delivery summary + memory candidate.
-    const [summary, candidate] = await Promise.all([
-      generateDeliverySummary(workspace.workspaceId).catch((err) => {
-        logger.warn({ workspaceId: workspace.workspaceId, err }, 'delivery summary generation failed');
-        return null;
-      }),
-      generateMemoryCandidate(workspace.workspaceId).catch((err) => {
-        logger.warn({ workspaceId: workspace.workspaceId, err }, 'memory candidate generation failed');
-        return null;
-      }),
-    ]);
+    // Post-run sequencing is driven by the @recoder/agent-workflows runner: it
+    // compiles verify -> memory into a node graph and executes it in dependency
+    // order (the package owns ordering; the conductor owns the work). Degrade-safe:
+    // if the runner is unavailable or did not drive the graph, fall back to the
+    // proven inline path so a completion is never lost.
+    let summary: Awaited<ReturnType<typeof generateDeliverySummary>> | null = null;
+    let candidate: Awaited<ReturnType<typeof generateMemoryCandidate>> | null = null;
+    let postRunNodeStatuses: { nodeId: string; kind: string; status: string }[] = [];
+
+    const workflowResult = await runPostRunDelivery(workspace.workspaceId);
+    if (workflowResult.ranViaRunner) {
+      summary = workflowResult.summary;
+      candidate = workflowResult.candidate;
+      postRunNodeStatuses = workflowResult.nodeStatuses;
+    } else {
+      // Fallback: prior inline behavior (runner unavailable). Keep both best-effort.
+      [summary, candidate] = await Promise.all([
+        generateDeliverySummary(workspace.workspaceId).catch((err) => {
+          logger.warn({ workspaceId: workspace.workspaceId, err }, 'delivery summary generation failed');
+          return null;
+        }),
+        generateMemoryCandidate(workspace.workspaceId).catch((err) => {
+          logger.warn({ workspaceId: workspace.workspaceId, err }, 'memory candidate generation failed');
+          return null;
+        }),
+      ]);
+    }
 
     // Transition to awaiting_review with the delivery artifacts in metadata.
     const metadata: Record<string, unknown> = {
@@ -148,6 +165,9 @@ async function runCompletionCheck(workspace: Workspace): Promise<void> {
           }
         : undefined,
       memoryCandidate: candidate ? { candidateId: candidate.candidateId, proposedAt: candidate.proposedAt } : undefined,
+      // Audit trail: which post-run graph nodes ran and their status (empty on the
+      // inline fallback path). Additive — does not change the review handoff.
+      postRunWorkflow: postRunNodeStatuses.length > 0 ? { nodes: postRunNodeStatuses } : undefined,
     };
 
     await advanceWorkspace(workspace.workspaceId, 'awaiting_review', undefined, metadata);
