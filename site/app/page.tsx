@@ -26,13 +26,9 @@ function Hero() {
     <section className="relative overflow-hidden">
       <div className="hero-glow pointer-events-none absolute inset-0" />
       <div className="grid-faint pointer-events-none absolute inset-0" />
-      <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-20 md:pt-28">
+      <div className="relative mx-auto max-w-6xl px-6 pb-10 pt-16 md:pt-20">
         <div className="mx-auto max-w-3xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-soft px-3 py-1 text-xs text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            A desktop app for parallel coding agents
-          </span>
-          <h1 className="text-balance mt-6 text-4xl font-semibold leading-[1.05] tracking-tight md:text-6xl">
+          <h1 className="text-balance text-4xl font-semibold leading-[1.05] tracking-tight md:text-6xl">
             Run your coding agents in parallel.
           </h1>
           <p className="text-balance mx-auto mt-5 max-w-2xl text-base text-muted md:text-lg">
