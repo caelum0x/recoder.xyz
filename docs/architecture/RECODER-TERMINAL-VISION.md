@@ -17,6 +17,10 @@ Claude Code, Codex, pi, opencode, and the rest — delivered as a terminal that 
   Code first — users love Claude Code) and **use them natively, inside Recoder**.
 - A **terminal experience** — not a chat clone, not "any other app." It is a real
   terminal that happens to be beautiful and orchestrated.
+- **Shaped like a Cursor window**: an IDE-style Recoder shell where the user opens
+  Claude Code (and every other coding agent / IDE-grade CLI) as embedded panes,
+  and uses Recoder to **run, orchestrate, and manage** them. Cursor-muted design,
+  IDE-familiar layout — the surface people already trust.
 - The native CLI experience is **preserved, never reinterpreted**. We do not
   dumb Claude Code down into a generic message UI. The TUI users love stays the
   TUI users love.
@@ -93,6 +97,10 @@ and adds the layer they don't have on their own:
 4. **Don't change what users love.** The native Claude Code experience is sacred.
 5. **For anyone.** Easy as possible; no big words; backend-heavy, simple front.
 6. **Truthful.** Health, review state, and merge results reflect reality.
+7. **Play psychological.** Use design psychology to make a real terminal *feel*
+   safe and inviting: familiar chat-like framing, gentle cues, calm pacing, plain
+   words. The goal is that a terminal-averse user never feels they are "in a
+   terminal" even though they are. Reduce intimidation, never fidelity.
 
 ## Architecture direction (how we get the real terminal)
 
@@ -106,6 +114,11 @@ mirrors captured pane text over HTTP. To deliver the *real terminal* experience:
   `tmux attach -t <session>`. node-pty provides the controlling TTY — this is why
   the old renderer-side `tmux attach` failed ("not a terminal") and why the PTY
   must live in main.
+- **Why we vendored tmux + dmux**: this is the foundation for the Cursor-like
+  multi-agent window. **tmux** (`c/tmux`) gives persistent, restart-survivable
+  multiplexed sessions — one per agent worktree. **dmux** (`ts/dmux`, wired via
+  the conductor's `dmux-adapter.ts`) is the multi-pane manager that runs and
+  switches between many agents at once. tmux = sessions; dmux = the panes/manager.
 - **Orchestration stays the wrapper**: the board, worktrees, review/merge, and
   agentic messaging surround the terminal; they do not replace it.
 - **Friendly layer is presentation only**: the same session can be shown as a
