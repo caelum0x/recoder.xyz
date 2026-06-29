@@ -22,7 +22,7 @@ thin web console. Self-hostable.
 | Layer | Job | Owned components |
 | --- | --- | --- |
 | **Substrate** | run the real agent CLIs, isolated | `docker-backend/src/conductor` (tmux + worktrees), `daytona-projects` → `@recoder/sandbox-daytona` |
-| **Brain** | shared memory the agents reuse | `@recoder/mem0`, `@recoder/git-nexus`, `@recoder/context7-sdk`, `beads` (work history) |
+| **Brain** | shared memory the agents reuse | `@recoder/mem0`, `@recoder/recodergit`, `@recoder/context7-sdk`, `beads` (work history) |
 | **Coordination** | locks, bus, handoff, dedup | `@recoder/agent-os` (work-locks/state), `@recoder/a2a-js`/`a2a-sdk` (bus), `multica`, `pal-mcp-server` |
 | **Governance** | approval, audit, permissions, replay | `openfang` (routing/approval), `claw-code-parity` (permission rubric), `ops-recorder` (record/replay), `@recoder/agent-policy` |
 | **Interop** | external agents in/out | `@recoder/a2a-*`, `@recoder/agent-mcp`, `pal-mcp-server`, `docker-backend/src/a2a` (terminal registry) |
