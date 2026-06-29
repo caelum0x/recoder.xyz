@@ -5,11 +5,11 @@ import { Nav, Footer } from "@/components/site";
 export const metadata: Metadata = {
   title: "Recoder pricing",
   description:
-    "Recoder is free for solo developers running agents locally. Pro (coming soon) adds cloud sync and a shared brain across machines. Enterprise adds SSO, audit and replay, governance approvals, and self-hosting. You always bring your own agents — Recoder never resells tokens.",
+    "Recoder is a desktop app, free for solo developers running agents locally. Pro and Team (coming soon) add limits, retention, seats, and shared approvals. Enterprise adds SSO, audit and replay, governance, and self-hosting. You always bring your own agents and keys — Recoder never resells tokens.",
 };
 
 /**
- * Subscribe CTA target. The Pro checkout is fulfilled by Polar acting as the
+ * Subscribe CTA target. Paid checkout is fulfilled by Polar acting as the
  * Merchant of Record (Polar is the legal seller). The exact checkout URL is
  * environment-driven so we never hardcode a product/price that isn't live yet.
  * If the link is not configured, we fall back to contacting the founders so we
@@ -32,6 +32,7 @@ interface Tier {
   features: string[];
   cta: { label: string; href: string; external?: boolean };
   featured?: boolean;
+  badge?: string;
   footnote?: string;
 }
 
@@ -40,13 +41,14 @@ const TIERS: Tier[] = [
     name: "Free",
     price: "$0",
     priceNote: "for individuals, forever",
-    blurb: "The local cockpit. Run your own agents as a team on one machine.",
+    blurb:
+      "The local desktop console. Run your own agents in parallel on one machine.",
     features: [
-      "Local cockpit for macOS, Windows, Linux",
-      "Run Claude Code, Codex, opencode, and pi in parallel",
+      "Desktop app for macOS, Windows, Linux",
+      "Run Claude Code, Codex, Cursor, and opencode in parallel",
+      "Isolated git worktree per agent",
+      "Review diffs, run a terminal, merge or open a PR",
       "Shared brain on your own machine",
-      "Work-locks so agents stop editing the same file",
-      "Context reuse across agents, designed to cut repeat token spend",
     ],
     cta: { label: "Download", href: "/download" },
     footnote: "No account required. Your agents, your keys.",
@@ -54,13 +56,13 @@ const TIERS: Tier[] = [
   {
     name: "Pro",
     price: "Coming soon",
-    priceNote: "billing via Polar (Merchant of Record)",
-    blurb: "Cloud sync and a shared brain designed to follow you across machines.",
+    priceNote: "per developer · billed via Polar",
+    blurb: "For solo devs running many agents who want more headroom.",
     features: [
       "Everything in Free",
-      "Cloud-synced shared brain across your machines (in development)",
-      "Higher parallel-agent limits per cockpit",
-      "Persistent repo intel, memory, and run history",
+      "Higher parallel-agent limits per console",
+      "Longer run history and repo-intel retention",
+      "Persistent shared brain across your own machines (in development)",
       "Priority changelog and early builds",
     ],
     cta: {
@@ -69,9 +71,31 @@ const TIERS: Tier[] = [
       external: true,
     },
     featured: true,
+    badge: "Most popular",
     footnote: PRO_CTA_CONFIGURED
       ? "Checkout is handled by Polar, the legal seller of record."
       : "Subscriptions open soon — we'll bill through Polar as Merchant of Record.",
+  },
+  {
+    name: "Team",
+    price: "Coming soon",
+    priceNote: "per seat · billed via Polar",
+    blurb: "For small teams that want shared review and approvals.",
+    features: [
+      "Everything in Pro",
+      "Per-seat management for your team",
+      "Shared approvals on agent merges (in development)",
+      "Cross-machine sync of workspaces and brain (maturing)",
+      "Team-wide run history and retention",
+    ],
+    cta: {
+      label: "Join the waitlist",
+      href: "mailto:founders@recoder.xyz?subject=Recoder%20Team%20waitlist",
+      external: true,
+    },
+    badge: "Coming soon",
+    footnote:
+      "Team sync and shared approvals are still maturing — we'll open seats once they're solid.",
   },
   {
     name: "Enterprise",
@@ -79,8 +103,8 @@ const TIERS: Tier[] = [
     priceNote: "talk to us",
     blurb: "Governed, audited, and self-hostable across your whole org.",
     features: [
-      "Everything in Pro",
-      "SSO and per-seat management",
+      "Everything in Team",
+      "SSO and centralized seat management",
       "Governance approvals + deny-biased policy",
       "Tamper-evident audit chain and replay",
       "Self-host the entire control plane",
@@ -95,24 +119,24 @@ export default function Pricing() {
   return (
     <>
       <Nav />
-      <main className="mx-auto max-w-5xl px-6 py-20">
+      <main className="mx-auto max-w-6xl px-6 py-20">
         <div className="text-center">
           <h1 className="text-balance text-4xl font-semibold tracking-tight md:text-5xl">
-            Free to start. You bring your own agents.
+            Pay for orchestration, never for tokens.
           </h1>
-          <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
-            Recoder is the OS for coding agents. You pay for the coordination
-            layer — never for inference. We don&apos;t proxy models or resell
-            tokens.
+          <p className="text-balance mx-auto mt-4 max-w-2xl text-muted">
+            Recoder is the desktop console for your coding agents. You bring your
+            own agents and keys — we don&apos;t proxy models or resell tokens.
+            You pay for the console, seats, retention, and governance.
           </p>
         </div>
 
-        <div className="mt-14 grid gap-5 md:grid-cols-3">
+        <div className="mt-14 grid gap-5 lg:grid-cols-4 md:grid-cols-2">
           {TIERS.map((t) => (
             <div
               key={t.name}
               className={
-                "flex flex-col rounded-xl border p-7 " +
+                "flex flex-col rounded-xl border p-6 " +
                 (t.featured
                   ? "border-border-strong bg-bg-soft ring-1 ring-accent/30"
                   : "border-border bg-bg")
@@ -120,13 +144,20 @@ export default function Pricing() {
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted">{t.name}</span>
-                {t.featured && (
-                  <span className="rounded-full border border-accent/40 px-2 py-0.5 text-[11px] text-accent">
-                    Most popular
+                {t.badge && (
+                  <span
+                    className={
+                      "rounded-full px-2 py-0.5 text-[11px] " +
+                      (t.featured
+                        ? "border border-accent/40 text-accent"
+                        : "border border-border text-faint")
+                    }
+                  >
+                    {t.badge}
                   </span>
                 )}
               </div>
-              <div className="mt-3 text-3xl font-semibold tracking-tight">
+              <div className="mt-3 text-2xl font-semibold tracking-tight">
                 {t.price}
               </div>
               <div className="mt-1 text-xs text-faint">{t.priceNote}</div>
@@ -178,9 +209,10 @@ export default function Pricing() {
               Polar
             </a>{" "}
             as the Merchant of Record — Polar is the legal seller and handles tax
-            and invoicing. We list plan framing rather than firm prices until the
-            exact Pro price and product are live in Polar, so nothing here is a
-            placeholder dressed up as a real price.
+            and invoicing. We show plan framing rather than firm prices until the
+            exact Pro and Team products are live in Polar, so nothing here is a
+            placeholder dressed up as a real price. Plans marked &ldquo;Coming
+            soon&rdquo; are not purchasable yet.
           </p>
         </section>
       </main>
