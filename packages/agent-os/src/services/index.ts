@@ -11,3 +11,4 @@ export * from './run-history-service';
 export * from './work-lock-service';
 export * from './task-routing-service';
 export * from './work-signal-service';
+export * from './issue-tracker-sync-service';

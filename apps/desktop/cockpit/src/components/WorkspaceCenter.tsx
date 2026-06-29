@@ -10,13 +10,14 @@
  * tmux session AND is still live; otherwise it is disabled with a truthful note
  * explaining why — we never imply we can steer an agent that isn't running.
  */
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import type { RunEvent as ConductorRunEvent } from '@recoder/conductor-ui';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog } from './EventLog';
 import { isLive, stateLabel, stateTone } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
-import type { Workspace } from '../types';
+import type { RunEvent, Workspace } from '../types';
 
 interface WorkspaceCenterProps {
   workspace: Workspace;
@@ -122,6 +123,51 @@ function SteerInput({ workspace }: { workspace: Workspace }) {
   );
 }
 
+/**
+ * Subscribe to the LIVE conductor event stream for a workspace via the shared
+ * `@recoder/conductor-ui` ConductorClient (`api.openStream`). It upgrades to the
+ * conductor WS endpoint when available and falls back to polling captured pane
+ * output, surfacing lower-latency agent activity than the base `listEvents` poll.
+ *
+ * Returns the events streamed since mount (most-recent last). The hook is inert
+ * for non-live workspaces (nothing to stream once the agent has stopped).
+ */
+function useLiveStream(workspaceId: string, live: boolean): RunEvent[] {
+  const [streamed, setStreamed] = useState<RunEvent[]>([]);
+  // Cap retained streamed events so a long-running agent does not grow unbounded.
+  const MAX_STREAMED = 200;
+  const idRef = useRef(workspaceId);
+  idRef.current = workspaceId;
+
+  useEffect(() => {
+    if (!live) {
+      setStreamed([]);
+      return;
+    }
+    setStreamed([]);
+    const handle = api.openStream(workspaceId, (event: ConductorRunEvent) => {
+      // The package RunEvent is shape-compatible with the cockpit RunEvent
+      // (both mirror packages/agent-os event.ts), so this is a true reuse.
+      setStreamed((prev) => {
+        const next = [...prev, event as RunEvent];
+        return next.length > MAX_STREAMED ? next.slice(next.length - MAX_STREAMED) : next;
+      });
+    });
+    return () => handle.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, live]);
+
+  return streamed;
+}
+
+/** Merge polled history with live-streamed events, de-duped by eventId, oldest-first. */
+function mergeEvents(polled: RunEvent[] | null, streamed: RunEvent[]): RunEvent[] {
+  const byId = new Map<string, RunEvent>();
+  for (const ev of polled ?? []) byId.set(ev.eventId, ev);
+  for (const ev of streamed) byId.set(ev.eventId, ev);
+  return [...byId.values()];
+}
+
 export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   const live = isLive(workspace.state);
   const events = usePoll(
@@ -129,6 +175,8 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
     live ? 2000 : 15_000,
     [workspace.workspaceId],
   );
+  const streamed = useLiveStream(workspace.workspaceId, live);
+  const merged = mergeEvents(events.data, streamed);
 
   return (
     <section class="ws-center">
@@ -144,7 +192,7 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
 
       <div class="ws-center-stream">
         <div class="ws-center-stream-label">Agent activity</div>
-        <EventLog events={events.data} error={events.error} loading={events.loading} />
+        <EventLog events={merged} error={events.error} loading={events.loading} />
       </div>
 
       <SteerInput workspace={workspace} />

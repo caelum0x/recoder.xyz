@@ -27,6 +27,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@recoder/agent-os": "workspace:*",
     "@recoder/continuum": "workspace:*",
+    "@recoder/document-preprocessor": "workspace:*",
     "@recoder/recodergit": "workspace:*"
   },
   "devDependencies": {
