@@ -218,6 +218,14 @@ export async function enforceDeliveryApproval(
 
   let check = await checkDeliveryApproval(workspace.taskId, action);
 
+  // A user-initiated SOLO delivery (RECODER_SOLO_MODE on + the human pressed the
+  // button) means the operator holds danger-full-access on their own machine. We
+  // PRE-GRANT that escalation to governance so the Rust kernel does not hard-deny
+  // the workspace-write → danger-full-access escalation a push otherwise requests.
+  // It is computed once here and only ever true in solo mode for an explicit
+  // approve intent — team/cloud is unaffected.
+  const soloDangerFullAccessGranted = isUserInitiatedSoloApproval(intent);
+
   // SOLO MODE: on the single-user desktop, a user-initiated merge/PR click IS the
   // approval. When RECODER_SOLO_MODE is on AND the request carries an explicit
   // approve intent (decidedBy), and no control-plane approval already authorizes
@@ -225,7 +233,7 @@ export async function enforceDeliveryApproval(
   // existing gate finds it. Governance below STILL classifies the tier and seals
   // the audit entry — a hard deny still blocks. This never fires for team/cloud
   // (RECODER_SOLO_MODE off) nor for an autonomous agent with no human click.
-  if (!check.approved && isUserInitiatedSoloApproval(intent)) {
+  if (!check.approved && soloDangerFullAccessGranted) {
     try {
       const recorded = await recordSoloApproval(workspace, action, intent as DeliveryIntent);
       check = { approved: true, approvalId: recorded.approvalId };
@@ -244,7 +252,12 @@ export async function enforceDeliveryApproval(
   // risk gate; governance still classifies the tier, applies the approval risk
   // policy, and seals the decision into the Merkle audit chain. Governance decides;
   // the conductor enforces what it returns.
-  const governance = await decideDelivery(workspace, action, check.approved);
+  const governance = await decideDelivery(
+    workspace,
+    action,
+    check.approved,
+    soloDangerFullAccessGranted,
+  );
 
   // A governance HARD DENY is absolute: no approval record can override a policy
   // veto (e.g. a forbidden-path / critical-tier deny). Block unconditionally.
