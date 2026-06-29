@@ -39,6 +39,7 @@
     "@recoder/agent-memory": "workspace:*",
     "@recoder/agent-policy": "workspace:*",
     "@recoder/agent-workflows": "workspace:*",
+    "@recoder/browser-verification": "workspace:*",
     "@recoder/interop": "workspace:*",
     "@recoder/brain": "workspace:*",
     "@recoder/connectors": "workspace:*",
