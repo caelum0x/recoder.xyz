@@ -3,25 +3,30 @@
  *
  * Composes the live agent event stream (GET /workspaces/:id/events, polled) with
  * a truthful "What changed" summary (read from the backend's persisted delivery
- * summary in workspace.metadata, never fabricated) and a steer input at the
+ * summary in workspace.metadata, never fabricated) and a command bar at the
  * bottom that drives the live tmux session via POST /sessions/:id/keys.
  *
- * The steer input is only enabled when the workspace actually has an attached
- * tmux session AND is still live; otherwise it is disabled with a truthful note
- * explaining why — we never imply we can steer an agent that isn't running.
+ * The thread header shows a truthful tool-call / message count derived from the
+ * real RunEvent stream, the three Conductor tabs (All changes / <task> / Review
+ * branch changes), and a command bar carrying a model chip, "Link issue", and
+ * the send button. The command bar input is only enabled when the workspace
+ * actually has an attached tmux session AND is still live; otherwise it is
+ * disabled with a truthful note — we never imply we can steer a stopped agent.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { RunEvent as ConductorRunEvent } from '@recoder/conductor-ui';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog } from './EventLog';
-import { isLive, stateLabel, stateTone } from '../lib/workspace-state';
+import { isLive, stateLabel, statePill, stateTone } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
 import type { RunEvent, Workspace } from '../types';
 
 interface WorkspaceCenterProps {
   workspace: Workspace;
 }
+
+type CenterTab = 'all' | 'task' | 'review';
 
 function describeError(err: unknown): string {
   if (err instanceof BackendUnreachableError) return `Backend unreachable: ${err.message}`;
@@ -39,6 +44,23 @@ function deliverySummaryText(workspace: Workspace): string | null {
   return typeof stat === 'string' && stat.trim() ? stat.trim() : null;
 }
 
+/**
+ * Truthful tool-call / message counts over the real RunEvent stream. We count
+ * `artifact` events as tool calls (the agent produced a tool result/artifact)
+ * and `log` events as messages — both are real backend event types, never
+ * invented. Returns null counts when there are no events yet.
+ */
+function threadCounts(events: RunEvent[] | null): { tools: number; messages: number } {
+  if (!events) return { tools: 0, messages: 0 };
+  let tools = 0;
+  let messages = 0;
+  for (const ev of events) {
+    if (ev.type === 'artifact') tools += 1;
+    else if (ev.type === 'log') messages += 1;
+  }
+  return { tools, messages };
+}
+
 function WhatChanged({ workspace }: { workspace: Workspace }) {
   const stat = workspaceDiffStat(workspace);
   const summaryText = deliverySummaryText(workspace);
@@ -54,7 +76,7 @@ function WhatChanged({ workspace }: { workspace: Workspace }) {
   return (
     <div class="ws-summary">
       <div class="ws-summary-head">
-        <span class="ws-summary-title">What changed</span>
+        <span class="ws-summary-title">Summary</span>
         {stat && (
           <span class="ws-diffstat">
             <span class="ws-summary-files">{stat.changedFiles} file{stat.changedFiles === 1 ? '' : 's'}</span>
@@ -63,12 +85,13 @@ function WhatChanged({ workspace }: { workspace: Workspace }) {
           </span>
         )}
       </div>
+      <div class="ws-summary-subhead">What changed</div>
       {summaryText && <pre class="ws-summary-stat">{summaryText}</pre>}
     </div>
   );
 }
 
-function SteerInput({ workspace }: { workspace: Workspace }) {
+function CommandBar({ workspace }: { workspace: Workspace }) {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +99,14 @@ function SteerInput({ workspace }: { workspace: Workspace }) {
   const live = isLive(workspace.state);
   const hasSession = Boolean(workspace.sessionName);
   const canSteer = live && hasSession;
+
+  // The model the workspace was actually launched with, if the backend recorded
+  // one — shown in the chip. Never fabricated: falls back to a generic label.
+  const model =
+    (workspace.metadata && typeof workspace.metadata === 'object'
+      ? (workspace.metadata as Record<string, unknown>).model
+      : undefined) || workspace.runtimeId;
+  const modelLabel = typeof model === 'string' && model ? model : 'agent';
 
   const reason = !hasSession
     ? 'No tmux session attached to this workspace yet.'
@@ -103,9 +134,9 @@ function SteerInput({ workspace }: { workspace: Workspace }) {
   }
 
   return (
-    <form class="ws-steer" onSubmit={send}>
+    <form class="ws-cmdbar" onSubmit={send}>
       <input
-        class="ws-steer-input"
+        class="ws-cmdbar-input"
         value={value}
         disabled={!canSteer || busy}
         placeholder={
@@ -115,10 +146,27 @@ function SteerInput({ workspace }: { workspace: Workspace }) {
         }
         onInput={(e) => setValue((e.target as HTMLInputElement).value)}
       />
-      <button class="btn btn-primary btn-sm" type="submit" disabled={!canSteer || busy || !value.trim()}>
-        {busy ? 'Sending…' : 'Send'}
-      </button>
-      {error && <span class="ws-steer-error">{error}</span>}
+      <div class="ws-cmdbar-row">
+        <span class="ws-cmdbar-chip" title="Model this workspace runs">
+          <span class="ws-cmdbar-chip-dot" aria-hidden="true" />
+          {modelLabel}
+        </span>
+        <span class="ws-cmdbar-link" title="Link an issue to this workspace">
+          <span class="ws-cmdbar-link-icon" aria-hidden="true">#</span>
+          Link issue
+        </span>
+        <span class="ws-cmdbar-spacer" />
+        <button
+          class="ws-cmdbar-send"
+          type="submit"
+          disabled={!canSteer || busy || !value.trim()}
+          title={canSteer ? 'Send to the agent' : reason}
+          aria-label="Send"
+        >
+          {busy ? '…' : '↑'}
+        </button>
+      </div>
+      {error && <span class="ws-cmdbar-error">{error}</span>}
     </form>
   );
 }
@@ -169,6 +217,7 @@ function mergeEvents(polled: RunEvent[] | null, streamed: RunEvent[]): RunEvent[
 }
 
 export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
+  const [tab, setTab] = useState<CenterTab>('all');
   const live = isLive(workspace.state);
   const events = usePoll(
     () => api.listEvents(workspace.workspaceId),
@@ -177,25 +226,50 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   );
   const streamed = useLiveStream(workspace.workspaceId, live);
   const merged = mergeEvents(events.data, streamed);
+  const counts = threadCounts(merged);
 
   return (
     <section class="ws-center">
       <div class="ws-center-head">
-        <span class={`badge tone-${stateTone(workspace.state)}`}>{stateLabel(workspace.state)}</span>
         <span class="ws-center-branch" title={workspace.branch}>{workspace.branch}</span>
-        <span class="ws-center-meta">
-          {workspace.runtimeId} · {workspace.substrate} · {live ? 'live (2s)' : 'terminal (15s)'}
+        <span class={`ws-row-pill pill-${stateTone(workspace.state)}`}>{statePill(workspace.state)}</span>
+        <span class="ws-center-counts">
+          {counts.tools} tool call{counts.tools === 1 ? '' : 's'}, {counts.messages} message{counts.messages === 1 ? '' : 's'}
         </span>
+        <span class="ws-center-spacer" />
+        <span class="ws-center-meta">{live ? 'live (2s)' : 'terminal (15s)'}</span>
       </div>
 
-      <WhatChanged workspace={workspace} />
-
-      <div class="ws-center-stream">
-        <div class="ws-center-stream-label">Agent activity</div>
-        <EventLog events={merged} error={events.error} loading={events.loading} />
+      <div class="ws-center-tabs">
+        <button class={tab === 'all' ? 'ws-ctab ws-ctab-active' : 'ws-ctab'} onClick={() => setTab('all')}>
+          All changes
+        </button>
+        <button
+          class={tab === 'task' ? 'ws-ctab ws-ctab-active' : 'ws-ctab'}
+          onClick={() => setTab('task')}
+          title={workspace.taskId}
+        >
+          {workspace.branch}
+        </button>
+        <button class={tab === 'review' ? 'ws-ctab ws-ctab-active' : 'ws-ctab'} onClick={() => setTab('review')}>
+          Review branch changes
+        </button>
       </div>
 
-      <SteerInput workspace={workspace} />
+      <div class="ws-center-scroll">
+        {tab === 'review' ? (
+          <WhatChanged workspace={workspace} />
+        ) : (
+          <>
+            <div class="ws-center-stream">
+              <EventLog events={merged} error={events.error} loading={events.loading} />
+            </div>
+            <WhatChanged workspace={workspace} />
+          </>
+        )}
+      </div>
+
+      <CommandBar workspace={workspace} />
     </section>
   );
 }
