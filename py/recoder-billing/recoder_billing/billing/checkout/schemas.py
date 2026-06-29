@@ -60,6 +60,11 @@ class CheckoutCreate:
     is_business_customer: bool = False
     require_billing_address: bool = False
 
+    # The external subject id (recoder userId) this checkout belongs to. Threaded
+    # onto the :class:`Checkout` so the confirmed-payment → entitlement grant
+    # keys off the SAME subject. Mirrors Polar's checkout ``external_customer_id``.
+    external_customer_id: str | None = None
+
 
 @dataclass(frozen=True)
 class CheckoutConfirm:

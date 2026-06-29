@@ -119,6 +119,9 @@ def _checkout_result(checkout: Any) -> dict[str, Any]:
         "currency": checkout.currency,
         "product_id": str(checkout.product_id),
         "product_price_id": str(checkout.product_price_id),
+        # Surfaced so the host can grant the entitlement back to the SAME subject
+        # that opened the checkout (closes the split subject-linkage on success).
+        "external_customer_id": checkout.external_customer_id,
     }
 
 
@@ -200,6 +203,7 @@ def build_billing_operations(
                 customer_billing_address=_address(payload.get("customer_billing_address")),
                 is_business_customer=payload.get("is_business_customer", False),
                 require_billing_address=payload.get("require_billing_address", False),
+                external_customer_id=payload.get("external_customer_id"),
             )
             result = await checkout_service.create(checkout_repository, product, create)
             return _checkout_result(result)

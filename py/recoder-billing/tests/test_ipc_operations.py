@@ -67,6 +67,36 @@ async def test_checkout_create_operation_prices_and_opens() -> None:
 
 
 @pytest.mark.asyncio
+async def test_checkout_create_threads_external_customer_id_through_the_ipc_seam() -> None:
+    # The recoder subject id supplied over IPC must be recorded on the checkout
+    # AND echoed back on the result, so the host can grant the entitlement to the
+    # SAME subject on payment success (the split subject-linkage fix end-to-end).
+    lookup = InMemoryProductLookup()
+    price = ProductPrice(amount_type=ProductPriceAmountType.fixed, price_amount=2500)
+    product = Product(name="Pro", organization_id=ORG, prices=[price])
+    lookup.add(product)
+
+    repo = InMemoryCheckoutRepository()
+    ports = BillingPorts(checkout_repository=repo, product_lookup=lookup)
+    operations = build_billing_operations(ports)
+
+    result = await operations["checkout.create"](
+        {
+            "product_id": str(product.id),
+            "product_price_id": str(price.id),
+            "customer_email": "b@example.com",
+            "external_customer_id": "recoder_user_99",
+        }
+    )
+    assert result["external_customer_id"] == "recoder_user_99"
+
+    # Recorded durably on the stored checkout (what a grant later keys off).
+    stored = await repo.get(uuid.UUID(result["id"]))
+    assert stored is not None
+    assert stored.external_customer_id == "recoder_user_99"
+
+
+@pytest.mark.asyncio
 async def test_checkout_create_unknown_product_returns_error() -> None:
     ports = BillingPorts(
         checkout_repository=InMemoryCheckoutRepository(),

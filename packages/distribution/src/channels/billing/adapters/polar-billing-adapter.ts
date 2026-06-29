@@ -47,22 +47,22 @@ const PolarCheckoutResponse = z.object({
   client_secret: z.string().optional(),
 });
 
-const PolarBenefitGrant = z.object({
+/**
+ * The subset of `GET /v1/customers/external/{external_id}/state` we consume.
+ * This is the canonical, EXTERNAL-ID-keyed read of a customer's effective
+ * grants: `granted_benefits` is the live, server-side benefit set for the
+ * recoder subject we registered as the Polar customer `external_id` at
+ * checkout. A 404 (no such external customer yet) → no grants → deny.
+ */
+const PolarGrantedBenefit = z.object({
   id: z.string(),
-  granted_at: z.string().nullable().optional(),
-  revoked_at: z.string().nullable().optional(),
-  is_granted: z.boolean().optional(),
   benefit_id: z.string().optional(),
-  benefit: z
-    .object({
-      id: z.string(),
-      type: z.string().optional(),
-    })
-    .optional(),
+  benefit_type: z.string().optional(),
+  granted_at: z.string().nullable().optional(),
 });
 
-const PolarBenefitGrantsList = z.object({
-  items: z.array(PolarBenefitGrant),
+const PolarCustomerState = z.object({
+  granted_benefits: z.array(PolarGrantedBenefit).optional(),
 });
 
 const PolarLicenseKeyValidate = z.object({
@@ -144,10 +144,20 @@ export function createPolarBillingAdapter(opts: PolarBillingAdapterOptions): Bil
   return {
     async startCheckout(intent: CheckoutIntent): Promise<CheckoutResult> {
       // Typed request shaping for POST /v1/checkouts/ per the Polar API.
+      //
+      // SUBJECT LINKAGE (the load-bearing fix): we register the recoder subject
+      // id as the Polar customer `external_customer_id`. Polar then stamps that
+      // external id onto the customer it creates/links for this purchase, so
+      // EVERY downstream order/subscription/benefit_grant webhook carries
+      // `external_customer_id` / `customer.external_id` === the recoder subject.
+      // Without this, the webhook→entitlement mapping has no resolvable subject
+      // and a real payment would never grant an entitlement. We also keep
+      // `recoder_subject` in metadata as a redundant, audit-friendly anchor.
       const { json } = await call('POST', '/v1/checkouts/', {
         product_id: intent.productId,
         success_url: intent.successUrl,
         customer_email: intent.customerEmail,
+        external_customer_id: intent.subjectId,
         metadata: { ...(intent.metadata ?? {}), recoder_subject: intent.subjectId },
       });
       const parsed = PolarCheckoutResponse.parse(json);
@@ -159,21 +169,34 @@ export function createPolarBillingAdapter(opts: PolarBillingAdapterOptions): Bil
     },
 
     async resolveEntitlements(subject: Subject): Promise<Entitlement[]> {
-      // GET /v1/customers/{external_id}/benefit-grants — the customer's grants.
-      // A 404/empty list resolves to "no grants" → the resolver denies.
+      // GET /v1/customers/external/{external_id}/state — the EXTERNAL-ID-keyed
+      // read of the customer's live grants. `subject.subjectId` is the recoder
+      // subject we registered as the Polar customer `external_id` at checkout,
+      // so this resolves the exact customer a real payment created — closing the
+      // split-linkage gap (the old `/v1/customers/{id}/...` path keyed off the
+      // POLAR customer id and would 404 for a recoder subject id).
+      //
+      // A 404 (external customer does not exist yet) → no grants → deny. We
+      // catch it explicitly rather than throwing, so an as-yet-unpaid subject
+      // resolves to "no entitlements" (the fail-safe deny) instead of an error.
       const { json } = await call(
         'GET',
-        `/v1/customers/${encodeURIComponent(subject.subjectId)}/benefit-grants`,
-      );
-      const list = PolarBenefitGrantsList.parse(json ?? { items: [] });
+        `/v1/customers/external/${encodeURIComponent(subject.subjectId)}/state`,
+      ).catch((e) => {
+        if (e instanceof DistributionError && (e.detail as { status?: number } | undefined)?.status === 404) {
+          return { status: 404, json: null };
+        }
+        throw e;
+      });
+      const state = PolarCustomerState.parse(json ?? {});
       const plan: Plan = 'free';
-      return list.items
-        .filter((g) => g.is_granted !== false && !g.revoked_at)
+      return (state.granted_benefits ?? [])
+        .filter((g) => Boolean(g.granted_at) || g.granted_at === undefined)
         .map((g) => {
           const ent: Entitlement = {
             subjectId: subject.subjectId,
-            kind: mapBenefitTypeToKind(g.benefit?.type),
-            key: g.benefit?.id ?? g.benefit_id ?? g.id,
+            kind: mapBenefitTypeToKind(g.benefit_type),
+            key: g.benefit_id ?? g.id,
             plan,
             granted: true,
             ...(g.granted_at ? { grantedAt: g.granted_at } : {}),
@@ -187,7 +210,7 @@ export function createPolarBillingAdapter(opts: PolarBillingAdapterOptions): Bil
       // zero-headroom metered quota rather than faking unlimited.
       const { json } = await call(
         'GET',
-        `/v1/customer-meters/?customer_id=${encodeURIComponent(subject.subjectId)}`,
+        `/v1/customer-meters/?external_customer_id=${encodeURIComponent(subject.subjectId)}`,
       ).catch(() => ({ json: null }));
       const meters = z
         .object({ items: z.array(z.object({ consumed_units: z.number(), credited_units: z.number() })) })
