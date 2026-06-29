@@ -104,6 +104,26 @@ database.json
 credentials.json
 service-account*.json
 
+# --- Re-include SOURCE CODE caught by the broad name globs above. ---
+# Source files are never secrets: real secrets are DATA files (.env/.json/.pem/
+# .key) which stay ignored, and the secret-scan pre-commit hook guards against
+# committed secret VALUES. Without these negations, legitimate source like
+# secrets.routes.ts / token-estimator.ts / cli-token-issuer.ts / session-token.ts
+# is silently dropped from git and fresh-checkout builds break.
+# (dist/, node_modules/, and the vendored clones are DIR-ignored, so these file
+# negations cannot resurrect them.)
+!**/*.ts
+!**/*.tsx
+!**/*.cts
+!**/*.mts
+!**/*.js
+!**/*.jsx
+!**/*.cjs
+!**/*.mjs
+!**/*.py
+!**/*.go
+!**/*.rs
+
 # Exceptions: legitimate source files whose names contain "secret"/"token" but
 # carry no credential material. These must stay in version control or builds
 # break on a fresh checkout. (Broader cleanup tracked in beads.)
