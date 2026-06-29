@@ -30,6 +30,7 @@
     "@recoder/a2a-sdk": "workspace:*",
     "@recoder/agent-events": "workspace:*",
     "@recoder/agent-os": "workspace:*",
+    "@recoder/agent-schemas": "workspace:*",
     "@recoder/agent-instructions": "workspace:*",
     "@recoder/agent-mcp": "workspace:*",
     "@recoder/agent-memory": "workspace:*",
