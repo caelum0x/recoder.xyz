@@ -832,6 +832,9 @@ importers:
       '@recoder/agent-events':
         specifier: workspace:*
         version: link:../packages/agent-events
+      '@recoder/agent-hooks':
+        specifier: workspace:*
+        version: link:../packages/agent-hooks
       '@recoder/agent-instructions':
         specifier: workspace:*
         version: link:../packages/agent-instructions
@@ -853,6 +856,9 @@ importers:
       '@recoder/agent-workflows':
         specifier: workspace:*
         version: link:../packages/agent-workflows
+      '@recoder/beads-adapter':
+        specifier: workspace:*
+        version: link:../packages/beads-adapter
       '@recoder/brain':
         specifier: workspace:*
         version: link:../packages/brain
