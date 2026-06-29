@@ -6,6 +6,7 @@ export type DistributionErrorCode =
   | 'approval_required'
   | 'approval_rejected'
   | 'quota_exceeded'
+  | 'device_limit_exceeded'
   | 'registry_failed'
   | 'tap_push_failed'
   | 'sign_failed'
@@ -55,5 +56,18 @@ export class EntitlementDeniedError extends DistributionError {
   constructor(message: string, detail?: Record<string, unknown>) {
     super('entitlement_denied', message, detail);
     this.name = 'EntitlementDeniedError';
+  }
+}
+
+/**
+ * Raised when registering a device would exceed the per-seat device limit. The
+ * `detail` carries the `limit`, the current `activeCount`, and the active
+ * device ids so a caller can present an explicit revoke/approve choice — the
+ * registration does NOT silently displace an existing device (fail safe).
+ */
+export class DeviceLimitExceededError extends DistributionError {
+  constructor(message: string, detail?: Record<string, unknown>) {
+    super('device_limit_exceeded', message, detail);
+    this.name = 'DeviceLimitExceededError';
   }
 }
