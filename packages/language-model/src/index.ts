@@ -37,6 +37,15 @@ export {
 } from "./fal";
 export * from "./helper";
 export {
+	isTensorZeroGatewayEnabled,
+	resolveTensorZeroRoute,
+	tensorZeroModelName,
+	TENSORZERO_GATEWAY_API_KEY_ENV,
+	TENSORZERO_GATEWAY_URL_ENV,
+	type EnvSource,
+	type TensorZeroRoute,
+} from "./tensorzero-gateway";
+export {
 	background as openaiImageBackground,
 	models as openaiImageModels,
 	moderation as openaiImageModeration,
