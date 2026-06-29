@@ -101,7 +101,7 @@ Memory is a capability the other products consume, not a separable surface. `pac
 
 6. **Resolve capacity for real Daytona workloads (B) — infra/capacity-gated, not code.** Daytona substrate is live but disk-gated (94% APFS / 16GB, 135GB untouchable vcpeer). Concurrent real sandboxes need either disk reclaim/scale-up or hard concurrency caps. Report as environment evidence, never as product success.
 
-7. **Cut the sprawl debt (C).** Per `docs/PACKAGES.md`: isolate the 28-pkg Giselle cluster under `vendor/`, delete `agent-kernel`/`sandbox-providers` facades, pick one `mem0` runtime, fix the stale `ts/gitnexus`→`ts/recodergit` path refs. Low risk, high clarity.
+7. **Cut the sprawl debt (C).** Per `docs/PACKAGES.md`: isolate the 28-pkg Giselle cluster under `vendor/` and pick one `mem0` runtime. (Done: `agent-kernel`/`sandbox-providers`/`database` facades removed in `067b1eb43`; stale `ts/gitnexus`→`ts/recodergit` path refs corrected.) Low risk, high clarity.
 
 8. **Decide gateway/worker fate (A).** `apps/agent-gateway` + `apps/agent-worker` are built but duplicated inline in docker-backend. Either extract the backend to import them (kills drift) or explicitly mark them as reference. Don't leave two parallel paths.
 

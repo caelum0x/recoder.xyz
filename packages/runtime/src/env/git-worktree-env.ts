@@ -31,7 +31,7 @@ export type ResolvedWorktree = {
  * `reuse_branch` and `no_git_write` resolve directly via the cwd-resolver (no new worktree).
  *
  * TODO(wave): `create_worktree_branch` requires creating/reusing a git worktree per run via
- * `@recoder/git-nexus`. That integration is not wired yet, so this resolver returns the
+ * `@recoder/recodergit` (contract) / `ts/recodergit` (impl). That integration is not wired yet, so this resolver returns the
  * policy-bounded cwd with `isWorktree: false` and the requested branch name, and the caller
  * must NOT assume isolation it did not get. This is intentionally explicit rather than
  * silently creating an unmanaged worktree.
