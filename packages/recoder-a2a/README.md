@@ -2,7 +2,10 @@
 
 MCP Server for connecting Claude Code, Codex, and Cursor to the Recoder platform.
 
-Provides 6 tools for agent-to-agent communication, thread management, and sandbox execution.
+This is the publishable Recoder MCP server (the "Recoder for Agents" interop surface).
+It exposes the documented core Agents-in tools — **list / run / inbox / sandbox-exec /
+respond** — plus extended data, search, scratchpad, canvas, and ACI tooling for
+agent-to-agent communication, thread management, and sandbox execution.
 
 ## Quick Start
 
@@ -48,14 +51,30 @@ Visit [https://recoder.xyz/tr/dashboard/api-keys](https://recoder.xyz/tr/dashboa
 
 ## Available Tools
 
+### Core Agents-in surface (list / run / inbox / sandbox-exec / respond)
+
 | Tool | Description |
 |------|-------------|
 | `recoder_list_agents` | List connected A2A agents with health status |
 | `recoder_list_tasks` | View A2A task queue |
-| `recoder_send_task` | Send task to another agent via A2A protocol |
-| `recoder_create_thread` | Create agent thread with Daytona sandbox |
+| `recoder_send_task` | Send (run) a task to another agent via A2A protocol |
+| `recoder_create_thread` | Create (run) an agent thread with a Daytona sandbox |
 | `recoder_get_thread` | Get thread messages including AI responses |
-| `recoder_sandbox_exec` | Execute code in isolated Daytona sandbox |
+| `recoder_sandbox_exec` | Execute code in an isolated Daytona sandbox |
+| `recoder_inbox` | Check inbound tasks assigned to this agent |
+| `recoder_task_respond` | Respond to / complete an inbound task |
+
+### Extended tools
+
+The server also exposes memory (`recoder_remember` / `recoder_recall` /
+`recoder_forget`), search (`recoder_search_code`, `recoder_search`), local
+inference (`recoder_local_llm`), scratchpad, canvas, DuckDB data
+(`recoder_query_data` / `recoder_load_csv` / `recoder_load_json`), task
+streaming (`recoder_stream_task` / `recoder_interrupt_task`), workflow
+(`recoder_workflow_run`), and ACI file/git tools (`recoder_aci_edit`,
+`recoder_aci_create_file`, `recoder_aci_test_fix`, `recoder_aci_git`).
+
+Run `tools/list` against the server for the authoritative, complete schema set.
 
 ## Environment Variables
 
