@@ -171,3 +171,63 @@ test('parseCodeowners + buildOwnershipMap derive real ownership', async () => {
     { pathGlob: 'docs/*', owners: ['@carol'], source: 'codeowners' },
   ]);
 });
+
+test('buildOwnershipMap prefers a real CODEOWNERS file on disk over path heuristics', async () => {
+  // Write a CODEOWNERS file into the fixture and confirm it overrides the fallback.
+  await fs.writeFile(
+    path.join(fixtureRoot, 'CODEOWNERS'),
+    ['# owners', '/src/ @platform-team', 'src/util.ts @leaf-owner'].join('\n'),
+    'utf8',
+  );
+  const map = await buildOwnershipMap(fixtureRoot, ['src/a.ts', 'src/util.ts']);
+  assert.deepEqual(map.entries, [
+    { pathGlob: 'src/', owners: ['@platform-team'], source: 'codeowners' },
+    { pathGlob: 'src/util.ts', owners: ['@leaf-owner'], source: 'codeowners' },
+  ]);
+  assert.ok(
+    map.entries.every((e) => e.source === 'codeowners'),
+    'CODEOWNERS must win — no package-heuristic entries when a CODEOWNERS file exists',
+  );
+});
+
+test('edge weight aggregates multiple distinct specifiers to the same target', async () => {
+  // f.ts imports util via two DIFFERENT specifiers (./util and ./util.ts) — both
+  // resolve to the same file, so the pair's weight must be 2 (real fan-in counting),
+  // while a-> b (single specifier) stays weight 1.
+  await fs.writeFile(
+    path.join(fixtureRoot, 'src', 'f.ts'),
+    ["import { util } from './util';", "import { util as u2 } from './util.ts';", 'export const f = () => util(u2);'].join(
+      '\n',
+    ),
+    'utf8',
+  );
+  const indexer = createRepoIndexer();
+  const graph = await indexer.indexDependencyGraph(fixtureRoot);
+
+  const fToUtil = graph.edges.find((e) => e.from === 'src/f.ts' && e.to === 'src/util.ts');
+  assert.ok(fToUtil, 'expected an f.ts -> util.ts edge');
+  assert.equal(fToUtil.weight, 2, 'two distinct specifiers to the same target must aggregate to weight 2');
+
+  const aToB = graph.edges.find((e) => e.from === 'src/a.ts' && e.to === 'src/b.ts');
+  assert.ok(aToB);
+  assert.equal(aToB.weight, 1, 'a single specifier stays weight 1');
+});
+
+test('impact reachability is transitive across a deeper chain (e -> a -> {b,c} -> util)', async () => {
+  // Add e.ts that imports a.ts, extending the chain. A change to the leaf util.ts
+  // must reach e.ts transitively through a.ts even though e never imports util directly.
+  await fs.writeFile(
+    path.join(fixtureRoot, 'src', 'e.ts'),
+    ["import { a } from './a';", 'export const e = () => a();'].join('\n'),
+    'utf8',
+  );
+  const indexer = createRepoIndexer();
+  const graph = await indexer.indexDependencyGraph(fixtureRoot);
+
+  const impact = computeImpact({ graph, changedPaths: ['src/util.ts'] });
+  assert.deepEqual(impact.impactedFiles, ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/e.ts']);
+
+  // Depth-bounded reachability stops the walk: at depth 1 only direct importers of util.
+  const shallow = computeImpact({ graph, changedPaths: ['src/util.ts'], maxDepth: 1 });
+  assert.deepEqual(shallow.impactedFiles, ['src/b.ts', 'src/c.ts']);
+});
