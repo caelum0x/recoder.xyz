@@ -666,10 +666,40 @@ go/beads/
 go/ziti/
 go/multica/
 py/pal-mcp-server/
-py/ops-recorder/
 ts/oh-my-codex/
 ts/open-agents/
 ts/polar/
+
+# --- py/ops-recorder: SOURCE is owned + committable (2026-06-29) ---
+# Re-include source (*.py, requirements/pyproject, README, .sql migrations,
+# .env.example) while keeping venv/__pycache__/.env/secrets/data ignored.
+# Unlike the other owned-component dirs above, this one's work-signals code
+# (api/ingest + detectors/normalizers/storage) must land in the repo.
+!py/ops-recorder/
+!py/ops-recorder/**/
+!py/ops-recorder/**/*.py
+!py/ops-recorder/**/requirements*.txt
+!py/ops-recorder/**/pyproject.toml
+!py/ops-recorder/**/*.cfg
+!py/ops-recorder/**/*.toml
+!py/ops-recorder/**/*.md
+!py/ops-recorder/**/*.sql
+!py/ops-recorder/**/.env.example
+# Re-ignore the noise (negations above could otherwise pull these back in).
+py/ops-recorder/**/__pycache__/
+py/ops-recorder/**/*.py[cod]
+py/ops-recorder/**/.pytest_cache/
+py/ops-recorder/**/.venv/
+py/ops-recorder/**/venv/
+py/ops-recorder/**/env/
+py/ops-recorder/**/.env
+py/ops-recorder/**/.env.*
+!py/ops-recorder/**/.env.example
+py/ops-recorder/**/.DS_Store
+py/ops-recorder/**/*.egg-info/
+py/ops-recorder/**/data/
+py/ops-recorder/**/*.key
+py/ops-recorder/**/*.pem
 
 # RecoderGit build artifacts + per-repo index (regenerable; built via npm in ts/recodergit)
 ts/recodergit/**/node_modules/
