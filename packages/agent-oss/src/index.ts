@@ -8,6 +8,7 @@ export * from './litellm/litellm-adapter';
 export * from './langgraph';
 export * from './autogen';
 export * from './crewai';
+export * from './openfang/openfang-adapter';
 export * from './mem0/mem0-adapter';
 export * from './sourcegraph/sourcegraph-adapter';
 export * from './opengrok/opengrok-adapter';
