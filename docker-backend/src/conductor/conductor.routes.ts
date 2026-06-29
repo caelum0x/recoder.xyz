@@ -52,6 +52,11 @@ import {
   importReadyBeadsTasks,
   exportTaskToBeads,
 } from './beads-sync.js';
+import {
+  parseWorkSignal,
+  ingestWorkSignal,
+  listWorkSignals,
+} from './work-signals.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -627,6 +632,39 @@ export function createConductorRouter(): Router {
       // let a malformed body crash the request path.
       res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'context ingest failed' });
     }
+  });
+
+  // --- Work signals: thin in-process ingest for stuck/blocked/needs-handoff ---
+  // INTEGRATION-PLAN §d.4: py/ops-recorder stays the richer DETECTOR; this is the
+  // lightweight TS INGEST it posts to. A signal is recorded to canonical agent-os
+  // state (as a `handoff` RunEvent on the task's run) and triggers a coordination
+  // pickup handoff so a stuck workspace can be re-dispatched. Degrade-safe end to
+  // end: coordination unavailable -> recorded only (handoff skipped), never throws.
+
+  // Ingest one work signal. Returns the recorded signal incl. whether it was
+  // persisted to agent-os state and the handoff outcome (emitted/duplicate/skipped).
+  router.post('/work-signals', async (req: Request, res: Response) => {
+    const parsed = parseWorkSignal(req.body);
+    if (!parsed.ok) {
+      res.status(400).json({ success: false, error: parsed.error });
+      return;
+    }
+    try {
+      const signal = await ingestWorkSignal(parsed.value);
+      res.status(201).json({ success: true, data: signal });
+    } catch (err) {
+      // ingestWorkSignal is degrade-safe and should not throw; belt-and-suspenders.
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'work-signal ingest failed' });
+    }
+  });
+
+  // Recently-ingested work signals (newest first), filterable by task/workspace.
+  router.get('/work-signals', (req: Request, res: Response) => {
+    const taskId = typeof req.query?.taskId === 'string' ? req.query.taskId : undefined;
+    const workspaceId = typeof req.query?.workspaceId === 'string' ? req.query.workspaceId : undefined;
+    const limitRaw = Number(req.query?.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined;
+    res.json({ success: true, data: listWorkSignals({ taskId, workspaceId, limit }) });
   });
 
   // WebSocket upgrade for live workspace events (operator console live terminal).

@@ -527,6 +527,103 @@ export async function emitReviewHandoff(input: ReviewHandoffInput): Promise<Revi
   }
 }
 
+export type WorkSignalHandoffResult =
+  | { status: 'emitted'; handoffId: string }
+  | { status: 'duplicate' }
+  | { status: 'skipped'; reason: string };
+
+export type WorkSignalHandoffInput = {
+  /** The workspace whose work is stuck/blocked (the source agent). */
+  workspaceId: string;
+  spaceId: string;
+  taskId: string;
+  /** The run id the signal is about, if known — part of the idempotency key. */
+  runId?: string;
+  /** The kind of work signal driving the handoff (stuck-work / blocked / needs-handoff). */
+  kind: string;
+  /** Optional human-facing prompt for the agent that should pick the work up. */
+  prompt?: string;
+};
+
+/**
+ * Emit a generic `handoff` so a STUCK / BLOCKED / NEEDS-HANDOFF workspace can be
+ * picked up by another agent. Recorded on the real A2A handoff bus via the
+ * engine's `InitiateHandoff` command (intent `handoff` — a plain ownership
+ * transfer, distinct from the `review` handoff). Idempotent via the SAME durable
+ * dedup ledger, keyed on the signal identity (`work-signal:kind:taskId:runId`) so
+ * a repeated identical signal emits exactly one handoff.
+ *
+ * Unlike the review handoff, the work-signal handoff transfers ownership BACK to
+ * the conductor (the control-plane launcher) so a fresh workspace can re-claim the
+ * task once the stuck one is torn down — the conductor is the natural re-dispatch
+ * point, not a fixed reviewer role.
+ *
+ * Degrade-safe: returns `skipped` (never a fake handoff) when coordination is
+ * unavailable, so recording a work signal never fails on this layer.
+ */
+export async function emitWorkSignalHandoff(
+  input: WorkSignalHandoffInput,
+): Promise<WorkSignalHandoffResult> {
+  const eng = getEngine();
+  if (!eng) {
+    return { status: 'skipped', reason: 'coordination-unavailable' };
+  }
+
+  const { workspaceId, spaceId, taskId, runId, kind } = input;
+  // STABLE idempotency key for this work signal. The engine mints a fresh
+  // handoffId per call, so we key on the signal identity in the SAME durable
+  // dedup ledger the review handoff uses — a repeated identical signal dedups.
+  const dedupKey = `work-signal:${kind}:${taskId}:${runId ?? 'no-run'}`;
+  const prompt =
+    input.prompt ??
+    `Workspace ${workspaceId} reported "${kind}" on task ${taskId}` +
+      `${runId ? ` (run ${runId})` : ''}. Pick up the stuck work and re-dispatch.`;
+
+  try {
+    if (await eng.handoffStore.hasDedupKey(dedupKey)) {
+      logger.info(
+        { workspaceId, taskId, runId, kind, dedupKey },
+        'work-signal handoff deduplicated — already emitted for this signal',
+      );
+      return { status: 'duplicate' };
+    }
+
+    const result = await eng.engine.execute({
+      kind: 'InitiateHandoff',
+      intent: 'handoff',
+      fromAgentId: workspaceId,
+      // Ownership returns to the conductor so a fresh workspace can re-claim.
+      targetAgentId: CONDUCTOR_AGENT_ID,
+      prompt,
+      spaceId,
+      sourceTaskId: taskId,
+    });
+
+    if (isOk(result)) {
+      const value = result.value;
+      if (value.kind === 'InitiateHandoff') {
+        await eng.handoffStore.recordDedupKey(dedupKey);
+        const handoffId = value.handoff.handoff.handoffId;
+        logger.info(
+          { workspaceId, taskId, runId, kind, handoffId },
+          'work-signal handoff emitted — stuck workspace is pickup-able',
+        );
+        return { status: 'emitted', handoffId };
+      }
+      return { status: 'skipped', reason: 'unexpected-result' };
+    }
+
+    logger.warn(
+      { workspaceId, taskId, kind, code: result.error.code, message: result.error.message },
+      'work-signal handoff errored — skipping (signal still recorded)',
+    );
+    return { status: 'skipped', reason: `handoff-error:${result.error.code}` };
+  } catch (err) {
+    logger.warn({ workspaceId, taskId, kind, err }, 'work-signal handoff threw — skipping (degraded)');
+    return { status: 'skipped', reason: 'handoff-threw' };
+  }
+}
+
 /** True when the dispatch/handoff engine is degraded (coordination unavailable). */
 export function isDispatchDegraded(): boolean {
   return getEngine() === null;
