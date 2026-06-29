@@ -6,4 +6,6 @@ export * from './cli-token-issuer';
 export * from './cli-token-verifier';
 export * from './device-poll';
 export * from './device-auth-client';
+export * from './fetch-transport';
+export * from './device-sign-in';
 export * from './token-store';
