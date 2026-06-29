@@ -46,7 +46,12 @@ import { planConductorRun, effectiveRuntimeId } from './conductor-planner.js';
 import { agentOsContainer } from '../agent-os/service-container.js';
 import { validateBody } from '../agent-os/middleware/schema-guard.middleware.js';
 import { taskSpecSchema } from '@recoder/agent-schemas';
-import type { TaskSpec } from '@recoder/agent-os';
+import type { Artifact, TaskSpec } from '@recoder/agent-os';
+import {
+  beadsAvailability,
+  importReadyBeadsTasks,
+  exportTaskToBeads,
+} from './beads-sync.js';
 
 export function createConductorRouter(): Router {
   const router = Router();
@@ -532,6 +537,59 @@ export function createConductorRouter(): Router {
   // Worktree disk cleanup: prune stale worktrees + kill orphaned sessions.
   router.post('/cleanup', async (_req: Request, res: Response) => {
     res.json({ success: true, data: await cleanupStaleWorktrees() });
+  });
+
+  // --- Beads issue-tracker sync (subprocess `bd` CLI, degrade-safe) -----------
+  // Promotes the Agent OS IssueTrackerPort seam (BeadsIssueTracker via
+  // @recoder/beads-adapter, driven by IssueTrackerSyncService from @recoder/agent-os)
+  // onto the real product path. `bd` is invoked as a subprocess; when the binary is
+  // absent every route cleanly skips (200 with skipped reason) rather than failing.
+
+  // Truthful availability of the `bd` CLI Conductor would shell to.
+  router.get('/issues/availability', (_req: Request, res: Response) => {
+    res.json({ success: true, data: beadsAvailability() });
+  });
+
+  // Import ready beads issues into the canonical Agent OS task store. The adapter
+  // translates each `bd` issue to a TaskSpec through the port; the resulting specs
+  // are upserted into the live agent-os repository (Recoder owns canonical state).
+  router.post('/issues/import', async (req: Request, res: Response) => {
+    try {
+      const { spaceId, repo, cwd } = req.body ?? {};
+      if (!spaceId) {
+        res.status(400).json({ success: false, error: 'spaceId is required' });
+        return;
+      }
+      const result = await importReadyBeadsTasks({ spaceId, repo }, { cwd });
+      res.json({ success: true, data: result });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'beads import failed' });
+    }
+  });
+
+  // Export one canonical task back to beads through the seam. Resolves the
+  // TaskSpec from the agent-os repository by `taskId` (canonical state of record).
+  router.post('/issues/export', async (req: Request, res: Response) => {
+    try {
+      const { taskId, artifacts, cwd } = req.body ?? {};
+      if (!taskId) {
+        res.status(400).json({ success: false, error: 'taskId is required' });
+        return;
+      }
+      const tasks = await Promise.resolve(agentOsContainer.repository.listTasks());
+      const task = tasks.find((t) => t.taskId === taskId);
+      if (!task) {
+        res.status(404).json({ success: false, error: `task not found: ${taskId}` });
+        return;
+      }
+      const result = await exportTaskToBeads(
+        { task, artifacts: artifacts as Artifact[] | undefined },
+        { cwd },
+      );
+      res.json({ success: true, data: result });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'beads export failed' });
+    }
   });
 
   // WebSocket upgrade for live workspace events (operator console live terminal).
