@@ -165,6 +165,7 @@ import {
   resolveA2ASystemSession,
   resolveInternalServiceSession,
 } from './auth-utils.js';
+import { validateApiKey as validatePlatformApiKey } from './public-api/api-keys.js';
 import { type ContainerCreationEntry, withCreationTimeout, isCreationStale } from './container-creation.js';
 import { bootstrapDaytonaPreview } from './preview';
 // Deployment modules are lazily imported to avoid requiring node-fetch/form-data at startup
@@ -768,11 +769,40 @@ function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Res
   });
 }
 
+// Resolve a platform API key (sk_...) from the `x-api-key` header.
+// This lets first-party clients (e.g. the desktop cockpit) authenticate
+// against authenticateRequest-protected routes — notably /api/conductor/*
+// — using a minted platform key instead of a Better Auth session cookie.
+// Returns the owning user's identity, or null when no/invalid key is present.
+function resolvePlatformApiKeySession(
+  req: express.Request,
+): { userId: string; sessionId: string } | null {
+  const header = req.headers['x-api-key'];
+  const raw = Array.isArray(header) ? header[0] : header;
+  const key = raw?.trim();
+  if (!key || !key.startsWith('sk_')) {
+    return null;
+  }
+  const apiKey = validatePlatformApiKey(key);
+  if (!apiKey) {
+    return null;
+  }
+  return { userId: apiKey.userId, sessionId: `apikey:${apiKey.id}` };
+}
+
 function authenticateRequest(req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) {
   const internalSession = resolveInternalServiceSession(req, INTERNAL_SERVICE_KEY);
   if (internalSession) {
     req.userId = internalSession.userId;
     req.sessionId = internalSession.sessionId;
+    return next();
+  }
+
+  // Platform API key (x-api-key: sk_...) — first-party client auth.
+  const apiKeySession = resolvePlatformApiKeySession(req);
+  if (apiKeySession) {
+    req.userId = apiKeySession.userId;
+    req.sessionId = apiKeySession.sessionId;
     return next();
   }
 
