@@ -20,6 +20,17 @@ export {
   type GateRejectionCode,
 } from "./signed-ingress-gate";
 
+// Connector ingress bridge (seal a normalized connector message -> admit it
+// through the signed-envelope gate into the workspace loop)
+export {
+  sealConnectorIngress,
+  admitConnectorIngress,
+  CONNECTOR_INGRESS_PAYLOAD_TYPE,
+  type ConnectorIngressPayload,
+  type SealConnectorIngressInput,
+  type ConnectorIngressClaim,
+} from "./connector-ingress";
+
 // Real ed25519 verification (the asymmetric path the a2a-sdk leaves open)
 export {
   verifyEd25519Signature,
