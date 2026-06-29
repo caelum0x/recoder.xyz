@@ -189,6 +189,18 @@ Run: `cd docker-backend && npx tsx scripts/e2e-conductor-loop.ts` (exit 0 = PASS
 This is the substrate-swapped drive of the actual fused loop — proof the control
 plane, observe loop, and review handoff actually execute together.
 
+### Embedded-backend boot proof (desktop hosts this conductor)
+
+`apps/desktop/scripts/dev-boot-proof.js` is the companion proof that the desktop
+genuinely **hosts** this conductor: it drives the desktop `BackendSupervisor`,
+boots the embedded `docker-backend` (tmux + the engines host) the same way the
+packaged `.dmg` would, mints a real platform key, and asserts
+`GET /api/conductor/health` returns 200 with the substrate shape
+`{ available, git, tmux, tmuxBin }`. It stops the supervisor cleanly and exits 0
+only on a real 200 — it never fakes readiness. Together with the loop proof above,
+these two scripts show the conductor both **boots inside the product** and
+**runs the loop end-to-end** without a BYOK key.
+
 ### Approval / governance gate proof (headless, FR-5)
 
 `docker-backend/scripts/e2e-conductor-approval.ts` is a runnable, headless proof

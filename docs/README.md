@@ -31,5 +31,15 @@ Reference (kept): `CONDUCTOR-ARCHITECTURE.md`, `RECODER-PRODUCT-ARCHITECTURE.md`
 
 ## Current focus
 **Milestone 1 — self-contained desktop**: the Electron app boots the embedded
-backend (tmux + the engines) so the `.dmg` is a real product, not a shell. Then
-M2 device-flow/auth, M3 cloud + billing, M4 distribution, M5 teams (Envoy/XDR/AMI).
+backend (tmux + the engines) so the `.dmg` is a real product, not a shell.
+**11/15 of the WIRE-UP-BACKLOG are wired**, and two headless proofs (no BYOK key)
+keep that claim truthful:
+- `apps/desktop/scripts/dev-boot-proof.js` — the `BackendSupervisor` boots the
+  embedded `docker-backend` and `GET /api/conductor/health` returns 200 with the
+  substrate shape (proof the embedded backend really boots).
+- `docker-backend/scripts/e2e-conductor-loop.ts` — the real fused conductor loop
+  runs end-to-end (`created → running → awaiting_review`) over a BYOK-free
+  in-process substrate (proof the loop actually executes).
+
+Then M2 device-flow/auth, M3 cloud + billing, M4 distribution, M5 teams
+(Envoy/XDR/AMI).
