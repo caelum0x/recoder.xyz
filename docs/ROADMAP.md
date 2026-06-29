@@ -28,7 +28,7 @@
 
 | | Step | Owner tree | Done-when |
 |---|------|-----------|-----------|
-| 🔄 | **1.1 Self-contained desktop** — Electron spawns + supervises the embedded backend (TMUX_BIN→`c/tmux`, mint key, health-gate), points cockpit at it | apps/desktop | app boots backend, `/api/conductor/health` 200 via the app-spawned host |
+| ✅ | **1.1 Self-contained desktop** — Electron spawns + supervises the embedded backend (TMUX_BIN→`c/tmux`, mint key, health-gate), points cockpit at it | apps/desktop | app boots backend, `/api/conductor/health` 200 via the app-spawned host |
 | ⬜ | **1.2 Bundle for `.dmg`** — electron-builder `extraResources` bundles backend dist + node_modules + `c/tmux` (+ governance daemon) | apps/desktop, deploy | `.dmg` opens on a clean Mac and boots its own backend |
 | ⬜ | **1.3 Real run proof** — open app → add repo → `claude -p` in a tmux worktree → output streams → diff → merge | apps/desktop + conductor | a recorded end-to-end agent run from the packaged app |
 | ⬜ | **1.4 Product icon** — replace the empty dock/tab icon with the real cube `icon.icns` | apps/desktop | dock shows the Recoder mark |
@@ -39,9 +39,9 @@
 
 | | Step | Owner tree | Done-when |
 |---|------|-----------|-----------|
-| ⬜ | **2.1 Device-flow sign-in in the app** | packages/distribution, apps/desktop | app gets a real recoder.xyz session |
+| 🔄 | **2.1 Device-flow sign-in in the app** (client + registry built; needs recoder.xyz endpoints + app wiring) | packages/distribution, apps/desktop | app gets a real recoder.xyz session |
 | 🔒 | **2.2 Auth email login works** (stopgap: disable email-verify; real: Resend domain) | app/ (server), packages/auth | email signup→login works (Google already works) |
-| ⬜ | **2.3 Entitlement gate** — free tier BYOK works; Pro/Team gated | packages/distribution | a gated capability respects the plan |
+| 🔄 | **2.3 Entitlement gate** (+ device limit/revoke built) — free tier BYOK works; Pro/Team gated | packages/distribution | a gated capability respects the plan |
 
 ---
 
@@ -51,7 +51,7 @@
 |---|------|-----------|-----------|
 | 🔒 | **3.1 Deploy the Node backend to prod** (replace/alongside legacy Python) | docker-backend, deploy | `api.recoder.xyz` serves the conductor/agent-os |
 | 🔒 | **3.2 Billing live** (Polar org + keys) | py/recoder-billing, packages/distribution | one real checkout → entitlement |
-| ⬜ | **3.3 Envoy mesh in front of the cloud host** (ext_authz→governance) | packages/network, go/recoder-xds | edge fails closed when governance is down |
+| 🔄 | **3.3 Envoy mesh in front of the cloud host** (ext_authz→governance ext-authz v3 built, fail-closed) | packages/network, go/recoder-xds | edge fails closed when governance is down |
 
 ---
 
@@ -71,8 +71,8 @@
 |---|------|-----------|-----------|
 | ⬜ | **5.1 Remote substrate (Daytona)** — flip a workspace to run off-machine | packages/substrate, agent-sandbox | a Daytona-substrate workspace runs an agent |
 | ⬜ | **5.2 Cross-machine mesh** (Envoy/xDS) | packages/network, go/recoder-xds | two machines share a fleet |
-| ⬜ | **5.3 XDR audit** — Envoy logs → detections → Merkle audit | packages/network/xdr, governance | tamper-evident fleet audit |
-| ⬜ | **5.4 Seats / SSO / AMI self-host** | packages/distribution, deploy/packer | an enterprise can self-host |
+| 🔄 | **5.3 XDR audit** — 7 detections built (Envoy logs → detections → Merkle audit) | packages/network/xdr, governance | tamper-evident fleet audit |
+| 🔄 | **5.4 Seats / SSO / AMI self-host** (AMI image + ext_authz mesh hardened; not yet built on a host) | packages/distribution, deploy/packer | an enterprise can self-host |
 
 ---
 
