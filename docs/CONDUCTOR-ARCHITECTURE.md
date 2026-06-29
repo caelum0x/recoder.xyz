@@ -168,6 +168,27 @@ coding-execution services. Step 6 must integrate with these, not reinvent them:
 2. A2A entry: a handler that turns an inbound A2A code task into `createWorkspace`, and
    exposes workspace RunEvents back over A2A (reuse the a2a event bridge).
 
+### End-to-end loop proof (headless, no BYOK)
+
+`docker-backend/scripts/e2e-conductor-loop.ts` is a runnable, headless proof that
+the **fused** loop executes end-to-end **without a BYOK key**. It drives the REAL
+product engines — `workspace-service.createWorkspace` (the `@recoder/substrate`
+`WorkspaceEngine`), the `@recoder/substrate` run-tailer, and the
+`completion-watcher` post-run workflow — over the in-memory agent-os repository.
+Only the execution substrate is swapped: it registers a BYOK-free **stub
+`in_process` substrate** (a real isolated git worktree + a trivial echo "agent"
+that writes a file and exits 0) in place of the runtime substrate that would need
+a model key. It asserts the real loop:
+
+- `createWorkspace` reaches `running` with a `TaskRun`;
+- the run-tailer emits real RunEvents `started → log → completed` (exitCode 0);
+- the completion-watcher transitions `running → awaiting_review` with a delivery
+  summary (changed files, success), a memory candidate, and a review handoff.
+
+Run: `cd docker-backend && npx tsx scripts/e2e-conductor-loop.ts` (exit 0 = PASS).
+This is the substrate-swapped drive of the actual fused loop — proof the control
+plane, observe loop, and review handoff actually execute together.
+
 ### Known TODO (truthful gaps)
 - ~~RunEvent tailing~~ DONE (run-tailer.ts streams pane → RunEvent log, substrate-routed).
 - ~~mem0 recall in the bundle~~ DONE; ~~candidate on delivery~~ DONE (reviewable
