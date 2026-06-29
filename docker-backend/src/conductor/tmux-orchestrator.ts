@@ -149,6 +149,70 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
   return session;
 }
 
+export interface ContinueSessionInput {
+  /** Stable id (the workspace id) — reuses the same tmux session name. */
+  sessionId: string;
+  /** The EXISTING worktree to run in (the prior run's worktree, changes intact). */
+  worktreePath: string;
+  /** Command for the new run (the next chat message rendered to a CLI invocation). */
+  command: string;
+}
+
+/**
+ * CONTINUE/CHAT: start ANOTHER agent run in the SAME existing worktree (no
+ * `git worktree add` — the prior run's changes are intact). Kills any lingering
+ * session for this id, then launches a fresh detached tmux session running the
+ * new command in the existing worktree. This is how a local chat keeps directing
+ * the same agent: each message is a new run over the accumulated work.
+ */
+export async function continueSession(input: ContinueSessionInput): Promise<ConductorSession> {
+  const avail = await conductorAvailability();
+  if (!avail.available) {
+    throw new Error(`conductor unavailable (${avail.reason})`);
+  }
+  if (!existsSync(input.worktreePath)) {
+    throw new Error(`worktree not found for continue: ${input.worktreePath}`);
+  }
+
+  const tmuxName = tmuxNameFor(input.sessionId);
+  // Drop any prior (terminal) session for this id; KEEP the worktree.
+  try {
+    await exec(TMUX_BIN, ['kill-session', '-t', tmuxName]);
+  } catch {
+    /* already gone */
+  }
+
+  try {
+    await exec(TMUX_BIN, ['set-option', '-g', 'remain-on-exit', 'on']);
+  } catch {
+    const init = `__recoder_init_${Date.now()}`;
+    await exec(TMUX_BIN, ['new-session', '-d', '-s', init, 'true']);
+    await exec(TMUX_BIN, ['set-option', '-g', 'remain-on-exit', 'on']);
+    try { await exec(TMUX_BIN, ['kill-session', '-t', init]); } catch { /* gone */ }
+  }
+
+  await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', input.worktreePath, input.command]);
+  try {
+    await exec(TMUX_BIN, ['set-option', '-t', tmuxName, 'remain-on-exit', 'on']);
+  } catch (err) {
+    logger.warn({ sessionId: input.sessionId, err }, 'per-session remain-on-exit set failed (best effort)');
+  }
+
+  const prior = sessions.get(input.sessionId);
+  const session: ConductorSession = {
+    sessionId: input.sessionId,
+    tmuxName,
+    worktreePath: input.worktreePath,
+    branch: prior?.branch || `recoder/${input.sessionId}`,
+    repoPath: prior?.repoPath || '',
+    command: input.command,
+    createdAt: new Date().toISOString(),
+  };
+  sessions.set(input.sessionId, session);
+  logger.info({ sessionId: input.sessionId, worktreePath: input.worktreePath }, 'conductor session continued (new run, same worktree)');
+  return session;
+}
+
 /** Live tmux session names (recoder-prefixed), queried directly from tmux.
  * Survives restarts: the in-memory map is only a cache; the tmux server is the source. */
 export async function listSessions(): Promise<ConductorSession[]> {

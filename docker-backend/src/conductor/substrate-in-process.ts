@@ -28,6 +28,7 @@ import { createLogger } from '../logger';
 import {
   registerSubstrate,
   type ConductorSubstrate,
+  type ContinueRunInput,
   type SubstrateDiff,
   type SubstrateHandle,
   type SubstrateLaunchInput,
@@ -70,10 +71,13 @@ function pushOutput(run: InProcessRun, line: string): void {
   }
 }
 
-/** Render a minimal-but-real RuntimeTaskInput from the launch input. */
-function buildTaskInput(input: SubstrateLaunchInput, surface: string): RuntimeTaskInput {
+/** Render a minimal-but-real RuntimeTaskInput from the launch/continue input. */
+function buildTaskInput(
+  input: { workspaceId: string; repoPath?: string; prompt?: string; command?: string },
+  surface: string,
+): RuntimeTaskInput {
   const now = new Date().toISOString();
-  const prompt = input.prompt?.trim() || input.command;
+  const prompt = input.prompt?.trim() || input.command || '';
   return {
     task: {
       taskId: `ws_${input.workspaceId}`,
@@ -137,6 +141,53 @@ function runtime(): Runtime {
     sharedRuntime = createRuntime();
   }
   return sharedRuntime;
+}
+
+/**
+ * Drive a fresh in-process agent run in `worktreePath` and register it under
+ * `workspaceId` (replacing any prior finished run state for that id). Shared by
+ * `launch` (first run) and `continueRun` (each subsequent chat message). The
+ * consumer folds the runtime's RunEvents into the run's buffered output +
+ * terminal exit code exactly as the first run does.
+ */
+function startInProcessRun(
+  workspaceId: string,
+  worktreePath: string,
+  surface: string,
+  prompt: string,
+): InProcessRun {
+  const adapter = runtime().adapterFor(surface);
+  const abort = new AbortController();
+  const run: InProcessRun = {
+    workspaceId,
+    worktreePath,
+    output: [],
+    exitCode: undefined,
+    done: false,
+    abort,
+    task: Promise.resolve(),
+  };
+  runs.set(workspaceId, run);
+
+  const taskInput = buildTaskInput({ workspaceId, prompt }, surface);
+  run.task = (async () => {
+    try {
+      for await (const event of adapter.sendTask(taskInput)) {
+        if (abort.signal.aborted) break;
+        consumeEvent(run, event);
+      }
+    } catch (err) {
+      pushOutput(run, `in-process run error: ${err instanceof Error ? err.message : String(err)}`);
+      if (run.exitCode === undefined) run.exitCode = 1;
+      run.done = true;
+    } finally {
+      if (run.exitCode === undefined) {
+        run.exitCode = abort.signal.aborted ? 1 : 0;
+      }
+      run.done = true;
+    }
+  })();
+  return run;
 }
 
 const inProcessSubstrate: ConductorSubstrate = {
@@ -266,6 +317,23 @@ const inProcessSubstrate: ConductorSubstrate = {
     if (!run) return null; // handle entirely gone
     if (!run.done) return undefined; // still running
     return run.exitCode ?? 0;
+  },
+
+  async continueRun(handle: SubstrateHandle, input: ContinueRunInput): Promise<SubstrateHandle> {
+    const surface = input.runtimeId || DEFAULT_SURFACE;
+    const worktreePath = input.worktreePath || handle.worktreePath;
+    if (!worktreePath) throw new Error('in_process continueRun requires an existing worktree');
+    const prompt = input.prompt?.trim() || input.command || '';
+    // Settle any prior run for this id before starting the new one (the prior run
+    // is terminal by the time a continue is requested, but be defensive).
+    const prior = runs.get(handle.ref);
+    if (prior && !prior.done) {
+      prior.abort.abort();
+      await prior.task.catch(() => {});
+    }
+    startInProcessRun(handle.ref, worktreePath, surface, prompt);
+    logger.info({ workspaceId: handle.ref, surface, worktreePath }, 'in-process workspace continued (new run, same worktree)');
+    return { ref: handle.ref, worktreePath, sessionName: handle.ref };
   },
 
   async diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff> {

@@ -34,6 +34,82 @@ async function run(cwd: string, bin: string, args: string[]): Promise<string> {
   return stdout.trim();
 }
 
+/**
+ * Decide whether this workspace's repo can deliver through GitHub (`gh pr merge`)
+ * or must fall back to a LOCAL git merge.
+ *
+ * A LOCAL repo (a plain folder the desktop user pointed at — the common case for
+ * the local chat product) has no `origin` remote, or its `origin` is not a GitHub
+ * URL, or `gh` is not installed/authenticated. In all of those cases there is no
+ * PR to merge server-side; we merge the agent branch into the base branch on disk
+ * instead so the change actually LANDS in the user's folder. When a real GitHub
+ * remote + `gh` are present we keep the proven `gh pr merge` path unchanged.
+ *
+ * Best-effort + truthful: any probe failure is treated as "no GitHub" (fall back
+ * to the always-works local merge) rather than throwing.
+ */
+async function canUseGithubMerge(cwd: string, remote: string): Promise<boolean> {
+  let remoteUrl: string;
+  try {
+    remoteUrl = await run(cwd, 'git', ['remote', 'get-url', remote]);
+  } catch {
+    return false; // no such remote → local repo
+  }
+  if (!/github\.com/i.test(remoteUrl)) return false; // remote exists but isn't GitHub
+  try {
+    // `gh auth status` exits non-zero when gh is missing or not authenticated.
+    await exec('gh', ['auth', 'status'], { cwd, maxBuffer: 1024 * 1024 });
+  } catch {
+    return false; // gh absent / not authenticated → cannot drive a PR merge
+  }
+  return true;
+}
+
+/**
+ * Resolve the repository's PRIMARY working tree (where the base branch lives and
+ * can be checked out) from a workspace worktree path. The agent branch is checked
+ * out in the worktree, so the base-branch merge must run in the main working tree.
+ * `git worktree list --porcelain` lists the main tree first; fall back to the
+ * worktree itself if the list can't be parsed.
+ */
+async function resolveMainWorktree(worktreePath: string): Promise<string> {
+  try {
+    const out = await run(worktreePath, 'git', ['worktree', 'list', '--porcelain']);
+    const first = out
+      .split('\n')
+      .find((line) => line.startsWith('worktree '));
+    if (first) return first.slice('worktree '.length).trim();
+  } catch {
+    /* fall through */
+  }
+  return worktreePath;
+}
+
+/**
+ * Perform a LOCAL merge of the workspace branch into the base branch, on disk, so
+ * the change lands in the user's folder (no GitHub, no `gh`). Runs in the repo's
+ * main working tree: checkout base, merge the agent branch (`--no-ff` by default,
+ * fast-forward when the strategy is `rebase`). Returns the resulting base HEAD.
+ */
+async function localMerge(
+  worktreePath: string,
+  branch: string,
+  base: string,
+  strategy: MergeInput['strategy'],
+): Promise<{ mainRepo: string; base: string }> {
+  const mainRepo = await resolveMainWorktree(worktreePath);
+  // Move the main tree onto the base branch so the merge lands there.
+  await run(mainRepo, 'git', ['checkout', base]);
+  if (strategy === 'rebase') {
+    // Closest local analogue to a rebase/linear merge: fast-forward only.
+    await run(mainRepo, 'git', ['merge', '--ff-only', branch]);
+  } else {
+    // Default ('merge'/'squash'): a real merge commit so the change is explicit.
+    await run(mainRepo, 'git', ['merge', '--no-ff', '-m', `Merge ${branch} into ${base}`, branch]);
+  }
+  return { mainRepo, base };
+}
+
 export interface CreatePrInput {
   title: string;
   body?: string;
@@ -119,32 +195,51 @@ export interface MergeResult {
 }
 
 /**
- * Merge the workspace's PR via `gh pr merge` (server-side merge; no local main
- * checkout). Moves the workspace awaiting_review → merging → merged. Approval/
- * policy MUST be enforced by the caller before this runs.
+ * Merge the workspace's branch into its base. Two paths, chosen truthfully:
+ *
+ *   - GITHUB repo (`origin` is a GitHub URL AND `gh` is authenticated): the proven
+ *     `gh pr merge` server-side merge — no local main checkout. UNCHANGED.
+ *   - LOCAL repo (no remote / non-GitHub remote / `gh` unavailable — the common
+ *     case for the local desktop chat product): a real on-disk `git merge` of the
+ *     agent branch into the base branch in the repo's main working tree, so the
+ *     change LANDS in the user's folder.
+ *
+ * Either way the workspace moves awaiting_review → merging → merged. Approval/
+ * policy MUST be enforced by the caller before this runs (gate below).
  */
 export async function mergeWorkspace(workspaceId: string, input: MergeInput = {}): Promise<MergeResult> {
   const workspace = await requireWorktree(workspaceId);
   const cwd = workspace.worktreePath;
   const strategy = input.strategy || 'squash';
+  const remote = 'origin';
+  const base = workspace.baseRef && workspace.baseRef !== 'HEAD' ? workspace.baseRef : 'main';
 
   // Production rule: a merge is the customer-visible delivery and MUST be
   // approval-gated. If no approval record exists, this throws and surfaces
   // awaiting_approval instead of silently merging.
   await enforceDeliveryApproval(workspace, 'merge', input.intent);
 
+  const useGithub = await canUseGithubMerge(cwd, remote);
+
   await advanceWorkspace(workspaceId, 'merging');
+  let mergeMode: 'github' | 'local' = useGithub ? 'github' : 'local';
   try {
-    const args = ['pr', 'merge', workspace.branch, `--${strategy}`];
-    if (input.deleteBranch) args.push('--delete-branch');
-    await run(cwd, 'gh', args);
+    if (useGithub) {
+      const args = ['pr', 'merge', workspace.branch, `--${strategy}`];
+      if (input.deleteBranch) args.push('--delete-branch');
+      await run(cwd, 'gh', args);
+    } else {
+      // LOCAL merge: land the agent branch onto the base branch on disk.
+      await localMerge(cwd, workspace.branch, base, strategy);
+      logger.info({ workspaceId, branch: workspace.branch, base }, 'workspace merged locally (no GitHub remote)');
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await advanceWorkspace(workspaceId, 'failed', undefined, { mergeError: message });
+    await advanceWorkspace(workspaceId, 'failed', undefined, { mergeError: message, mergeMode });
     throw new Error(`merge failed: ${message}`);
   }
 
-  await advanceWorkspace(workspaceId, 'merged', undefined, { mergedAt: new Date().toISOString() });
+  await advanceWorkspace(workspaceId, 'merged', undefined, { mergedAt: new Date().toISOString(), mergeMode });
   await recordDeliveryMemoryCandidate(workspace).catch((err) =>
     logger.warn({ workspaceId, err }, 'delivery memory candidate skipped (best effort)'),
   );
