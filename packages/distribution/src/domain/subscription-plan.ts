@@ -4,18 +4,24 @@ import { z } from 'zod';
  * Recoder subscription plans. These mirror `RecoderUser.subscription_plan` in
  * packages/recoder-code/.../RecoderAuthService.ts so a CLI token and a billing
  * entitlement speak the same vocabulary.
+ *
+ * `team` is the org/seat-billed tier between `pro` and `enterprise`: it carries
+ * the paid features of `pro` plus collaboration headroom (more devices, usage
+ * metering, priority release channel), but not the bespoke enterprise controls
+ * (e.g. signed desktop builds). It is additive — existing free/pro/enterprise
+ * consumers are unaffected.
  */
-export type Plan = 'free' | 'pro' | 'enterprise';
+export type Plan = 'free' | 'pro' | 'team' | 'enterprise';
 
-export const PlanSchema = z.enum(['free', 'pro', 'enterprise']);
+export const PlanSchema = z.enum(['free', 'pro', 'team', 'enterprise']);
 
-export const PLANS: readonly Plan[] = ['free', 'pro', 'enterprise'] as const;
+export const PLANS: readonly Plan[] = ['free', 'pro', 'team', 'enterprise'] as const;
 
 /**
  * Plan ordering for entitlement gates: a higher rank satisfies any requirement
- * a lower rank would. `enterprise >= pro >= free`.
+ * a lower rank would. `enterprise >= team >= pro >= free`.
  */
-const PLAN_RANK: Record<Plan, number> = { free: 0, pro: 1, enterprise: 2 };
+const PLAN_RANK: Record<Plan, number> = { free: 0, pro: 1, team: 2, enterprise: 3 };
 
 /** True when `have` is at least as privileged as `need`. */
 export function planSatisfies(have: Plan, need: Plan): boolean {
@@ -46,6 +52,15 @@ export const FEATURE_MATRIX: Record<Plan, readonly Feature[]> = {
     'publish_site',
     'custom_domain',
     'usage_metering',
+  ],
+  team: [
+    'cli_basic',
+    'cli_byok',
+    'signed_preview',
+    'publish_site',
+    'custom_domain',
+    'usage_metering',
+    'priority_release_channel',
   ],
   enterprise: [
     'cli_basic',

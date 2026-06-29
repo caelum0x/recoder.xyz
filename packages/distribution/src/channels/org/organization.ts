@@ -42,6 +42,7 @@ export const OrganizationSchema: z.ZodType<Organization> = z.object({
 export const PLAN_DEFAULT_SEAT_LIMIT: Record<Plan, number> = {
   free: 1,
   pro: 5,
+  team: 20,
   enterprise: 50,
 };
 
