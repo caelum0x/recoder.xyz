@@ -12,7 +12,10 @@ Recoder is a cloud IDE that builds web and mobile apps with AI. You can create p
 
 ## Setup
 
-The user must configure their Recoder API key. They can get one at https://recoder.xyz/settings/api-keys.
+The user must configure their Recoder API key as the `RECODER_API_KEY` environment
+variable. Keys start with `sk_` and can be created at https://recoder.xyz/settings/api-keys.
+If the key is missing or has the wrong format, every command fails fast with a clear
+"not configured" error and a non-zero exit code (it does not attempt network calls).
 
 The API base URL defaults to `https://api.recoder.xyz` but can be overridden with the `RECODER_API_URL` environment variable.
 
@@ -38,7 +41,8 @@ node {baseDir}/scripts/recoder-api.mjs prompt --project <project-id> --prompt "A
 
 Optional: `--model <model-id>` to specify the AI model.
 
-Returns: message ID and status.
+Returns: a `taskId` and `status` (`queued`). Prompts run asynchronously — the preview
+URL updates once the AI finishes. The same `taskId` can be used to poll task status.
 
 ### Get Preview URL
 
