@@ -8,7 +8,7 @@
 
 Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it) · ⏭️ skipped (honest: no clean additive seam — reason in row)
 
-**Progress (2026-06-29): 10 of 15 wired in-process on the real product path; 3 skipped with reasons; 2 open.**
+**Progress (2026-06-29): 11 of 15 wired in-process on the real product path; 2 skipped (gateway/worker — engine already fused elsewhere); 2 open (`ops-recorder` gitignored, `recoder-browser-tools` dist now ready to consume). BYOK runtime drivers verified real (FR-1).**
 
 | | Package (built, unused) | Wire into (consumer) | Status |
 |---|--------------------------|----------------------|----------------|
@@ -26,7 +26,7 @@ Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it) �
 | ✅ | **`packages/browser-verification`** | browser-check node in the run loop | **wired** — `browser-check.ts` node verifies preview health on the post-run path |
 | ⬜ | **`packages/recoder-browser-tools`** | the browser-check node | open — source-only ESM + playwright peer; needs a CJS dist before the node can drive Playwright (browser-verification used meanwhile) |
 | ✅ | **`packages/design-tokens`** | `apps/desktop/cockpit` | **wired** — `applyDesignTokens` rebinds cockpit semantic colors at startup |
-| ⏭️ | **`shared/src/animations`** | `apps/desktop/cockpit` | **skipped** — React-coupled hooks; aliasing react→preact/compat breaks cockpit's live poll. Needs a Preact-native hook variant first |
+| ✅ | **`shared/src/animations`** | `apps/desktop/cockpit` | **wired** — added a Preact-native `@recoder/shared/animations/preact` entry (preact/hooks, no compat); cockpit `EventLog` streams live RunEvents via `useSmoothText`. Root-caused the original break: duplicate preact copies → anchored aliases |
 
 ## How to work this list
 - Each wire-up is a small PR: import the package at the named consumer, replace the
