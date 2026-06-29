@@ -71,8 +71,11 @@ The server also exposes memory (`recoder_remember` / `recoder_recall` /
 inference (`recoder_local_llm`), scratchpad, canvas, DuckDB data
 (`recoder_query_data` / `recoder_load_csv` / `recoder_load_json`), task
 streaming (`recoder_stream_task` / `recoder_interrupt_task`), workflow
-(`recoder_workflow_run`), and ACI file/git tools (`recoder_aci_edit`,
-`recoder_aci_create_file`, `recoder_aci_test_fix`, `recoder_aci_git`).
+(`recoder_workflow_run`), ACI file/git tools (`recoder_aci_edit`,
+`recoder_aci_create_file`, `recoder_aci_test_fix`, `recoder_aci_git`), and
+conductor coding-workspace tools (`recoder_workspace_create`,
+`recoder_workspace_diff`, `recoder_workspace_merge` — git worktree provision,
+reviewable diff, and approval-gated merge).
 
 Run `tools/list` against the server for the authoritative, complete schema set.
 
@@ -84,6 +87,7 @@ Run `tools/list` against the server for the authoritative, complete schema set.
 | `RECODER_SESSION_TOKEN` | No | Better Auth session token. Use this when `RECODER_API_TOKEN` is a `pk_xxx:sk_xxx` API key but A2A/WebSocket routes still need Bearer auth |
 | `RECODER_DOCKER_URL` | No | Docker backend URL (default: `https://docker.recoder.xyz`) |
 | `RECODER_API_URL` | No | API URL (default: `https://api.recoder.xyz`) |
+| `RECODER_CONDUCTOR_URL` | No | Conductor base URL for workspace tools (default: `${RECODER_DOCKER_URL}/api/conductor`) |
 | `DAYTONA_API_KEY` | No | Daytona API key for sandbox execution |
 | `RECODER_DAYTONA_URL` | No | Daytona API URL |
 
