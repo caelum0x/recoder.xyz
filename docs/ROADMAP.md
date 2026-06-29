@@ -30,7 +30,7 @@
 |---|------|-----------|-----------|
 | ✅ | **1.1 Self-contained desktop** — Electron spawns + supervises the embedded backend (TMUX_BIN→`c/tmux`, mint key, health-gate), points cockpit at it | apps/desktop | app boots backend, `/api/conductor/health` 200 via the app-spawned host |
 | 🔄 | **1.2 Bundle for `.dmg`** — `extraResources` bundles backend dist+node_modules+`c/tmux`(+daemon); **fixed the never-invoked `afterPack` gate** so assertions actually fail the pack | apps/desktop, deploy | config done + asserted via harness; building the actual `.dmg` on a clean Mac still pending (disk) |
-| 🔄 | **1.3 Real run proof** — **headless e2e proof DONE**: `docker-backend/scripts/e2e-conductor-loop.ts` runs the real WorkspaceEngine+run-tailer+completion-watcher → running→awaiting_review with delivery summary, **no BYOK** (stub substrate) | conductor | loop proven end-to-end; a packaged-app BYOK run still needs a user key |
+| 🔄 | **1.3 Real run proof** — **headless e2e proof DONE + live-verified (2026-06-29)**: `docker-backend/scripts/e2e-conductor-loop.ts` runs the real WorkspaceEngine+run-tailer+completion-watcher → running→awaiting_review with delivery summary, **no BYOK** (stub substrate); the device-flow auth that gates a real run is now verified live (see 2.1) | conductor | loop proven end-to-end; a packaged-app BYOK run still needs a user key |
 | ✅ | **1.4 Product icon** — `scripts/generate-icon.js` derives `icon.icns`/`icon.png` from the cube logo; wired into electron-builder + dock | apps/desktop | icon generated from the brand cube + asserted present-in-asar |
 
 ---
@@ -39,7 +39,7 @@
 
 | | Step | Owner tree | Done-when |
 |---|------|-----------|-----------|
-| 🔄 | **2.1 Device-flow sign-in in the app** (client + registry built; needs recoder.xyz endpoints + app wiring) | packages/distribution, apps/desktop | app gets a real recoder.xyz session |
+| 🔄 | **2.1 Device-flow sign-in in the app** — **device-flow live-verified (2026-06-29)**: `scripts/verify-cli-device-flow-e2e.sh` exercises the full flow against live `recoder.xyz` (request device code → browser-authorize → `/api/auth/cli/token` exchange → validate → refresh). Remaining: wire that session into the desktop app UI. | packages/distribution, apps/desktop | app gets a real recoder.xyz session |
 | 🔒 | **2.2 Auth email login works** (stopgap: disable email-verify; real: Resend domain) | app/ (server), packages/auth | email signup→login works (Google already works) |
 | 🔄 | **2.3 Entitlement gate** (+ device limit/revoke built) — free tier BYOK works; Pro/Team gated | packages/distribution | a gated capability respects the plan |
 
