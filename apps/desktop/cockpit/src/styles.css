@@ -332,7 +332,10 @@ body {
 .ws-msg { display: flex; flex-direction: column; gap: 4px; }
 .ws-msg-user { align-items: flex-end; }
 .ws-msg-bubble {
-  max-width: 78%; background: var(--accent, #3a6df0); color: #ffffff;
+  /* Grey, not blue — a muted neutral surface that matches the Cursor-style
+     theme instead of a vibrant accent bubble. */
+  max-width: 78%; background: var(--bg-elev, #242424); color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 12px 12px 4px 12px; padding: 9px 12px;
   font-size: 13px; line-height: 1.4; white-space: pre-wrap; word-break: break-word;
 }

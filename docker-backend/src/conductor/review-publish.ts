@@ -18,6 +18,7 @@ import { createLogger } from '../logger';
 import { agentOsContainer } from '../agent-os/service-container';
 import { advanceWorkspace, getWorkspace } from './workspace-service.js';
 import { enforceDeliveryApproval, type DeliveryIntent } from './delivery-approval.js';
+import { commitWorktreeChanges } from './commit-worktree.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:publish');
@@ -208,11 +209,24 @@ export interface MergeResult {
  * policy MUST be enforced by the caller before this runs (gate below).
  */
 export async function mergeWorkspace(workspaceId: string, input: MergeInput = {}): Promise<MergeResult> {
-  const workspace = await requireWorktree(workspaceId);
+  let workspace = await requireWorktree(workspaceId);
   const cwd = workspace.worktreePath;
   const strategy = input.strategy || 'squash';
   const remote = 'origin';
   const base = workspace.baseRef && workspace.baseRef !== 'HEAD' ? workspace.baseRef : 'main';
+
+  // RE-MERGEABLE: a workspace that previously FAILED at the delivery (merge) step
+  // can be re-merged once the cause is fixed. `failed -> merging` is illegal, so
+  // first return it to review (the legal `failed -> awaiting_review` transition);
+  // the merge below then proceeds normally. We only do this when the prior failure
+  // was at the merge step (carries `mergeError`) — never resurrect a provisioning
+  // failure that has no worktree work to deliver.
+  if (workspace.state === 'failed' && workspace.metadata?.mergeError) {
+    workspace = (await advanceWorkspace(workspaceId, 'awaiting_review', undefined, {
+      remergeFrom: 'failed',
+    })) as Workspace & { worktreePath: string };
+    logger.info({ workspaceId }, 'workspace restored from failed merge to awaiting_review for re-merge');
+  }
 
   // Production rule: a merge is the customer-visible delivery and MUST be
   // approval-gated. If no approval record exists, this throws and surfaces
@@ -221,8 +235,30 @@ export async function mergeWorkspace(workspaceId: string, input: MergeInput = {}
 
   const useGithub = await canUseGithubMerge(cwd, remote);
 
+  // LAND THE AGENT WORK: the agent only edits files in the worktree (it does not
+  // `git commit`). Commit any pending worktree changes onto the agent branch FIRST
+  // so the branch carries a real commit and the merge below actually delivers the
+  // edits instead of finding "Already up to date". Best-effort: a clean worktree
+  // (agent already committed) is a no-op.
+  try {
+    const committed = await commitWorktreeChanges(
+      cwd,
+      `agent: ${workspace.branch}`,
+    );
+    if (committed) {
+      logger.info({ workspaceId, branch: workspace.branch }, 'committed uncommitted agent worktree changes before merge');
+    }
+  } catch (err) {
+    // Committing the agent's work is part of delivery; if it fails the merge would
+    // deliver nothing. Surface truthfully but keep the workspace re-mergeable by
+    // leaving it in review rather than dropping it to a dead `failed`.
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn({ workspaceId, err }, 'failed to commit agent worktree changes before merge');
+    throw new Error(`merge failed: could not commit agent changes: ${message}`);
+  }
+
   await advanceWorkspace(workspaceId, 'merging');
-  let mergeMode: 'github' | 'local' = useGithub ? 'github' : 'local';
+  const mergeMode: 'github' | 'local' = useGithub ? 'github' : 'local';
   try {
     if (useGithub) {
       const args = ['pr', 'merge', workspace.branch, `--${strategy}`];
@@ -235,7 +271,11 @@ export async function mergeWorkspace(workspaceId: string, input: MergeInput = {}
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await advanceWorkspace(workspaceId, 'failed', undefined, { mergeError: message, mergeMode });
+    // RECOVERABLE merge errors keep the workspace in review (re-mergeable), not
+    // `failed`: the agent's work is committed and intact on its branch, and a
+    // transient cause (e.g. a dirty base tree) can be retried. We record the error
+    // on metadata for the audit trail but transition merging -> awaiting_review.
+    await advanceWorkspace(workspaceId, 'awaiting_review', undefined, { mergeError: message, mergeMode });
     throw new Error(`merge failed: ${message}`);
   }
 

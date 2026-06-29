@@ -312,8 +312,45 @@ export async function advanceWorkspace(
  * and the launch is never blocked.
  */
 export async function createWorkspace(input: CreateWorkspaceInput): Promise<Workspace> {
-  const effective = await applyPalDefaults(input);
+  const withBase = await resolveConcreteBaseRef(input);
+  const effective = await applyPalDefaults(withBase);
   return engine.createWorkspace(effective);
+}
+
+const execFileAsync = promisify(execFile);
+
+/**
+ * Pin the workspace's base to a CONCRETE commit SHA at creation time.
+ *
+ * Callers usually leave `baseRef` as the symbolic `HEAD` (or omit it). The agent
+ * branch forks from that commit, but the agent then commits onto its branch — and
+ * once it does, `HEAD` in the worktree points at the AGENT's commit, so a later
+ * `git diff HEAD` (the review diff) compares the work against itself and reports
+ * ZERO changed files. Resolving the symbolic ref to the actual commit SHA NOW
+ * freezes the base, so the review diff always compares the agent's work against
+ * the commit it forked from — exactly what "Review branch changes" should show.
+ *
+ * Degrade-safe: if the repo path is missing or `git rev-parse` fails, the input
+ * is returned unchanged (the prior `HEAD` behavior), never blocking the create.
+ */
+async function resolveConcreteBaseRef(input: CreateWorkspaceInput): Promise<CreateWorkspaceInput> {
+  const repoPath = (input as { repoPath?: string }).repoPath;
+  if (!repoPath) return input;
+  const requested = (input as { baseRef?: string }).baseRef?.trim();
+  // A 40-char hex SHA is already concrete — leave it alone.
+  if (requested && /^[0-9a-f]{40}$/i.test(requested)) return input;
+  const ref = requested || 'HEAD';
+  try {
+    const { stdout } = await execFileAsync('git', ['-C', repoPath, 'rev-parse', ref], {
+      maxBuffer: 1024 * 1024,
+    });
+    const sha = stdout.trim();
+    if (!/^[0-9a-f]{40}$/i.test(sha)) return input;
+    return { ...input, baseRef: sha };
+  } catch (err) {
+    logger.warn({ repoPath, ref, err }, 'base ref SHA resolution failed; using symbolic ref');
+    return input;
+  }
 }
 
 /**

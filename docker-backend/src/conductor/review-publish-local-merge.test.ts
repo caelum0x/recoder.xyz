@@ -85,4 +85,123 @@ describe('mergeWorkspace local merge (no GitHub remote)', () => {
     expect(fresh?.state).toBe('merged');
     expect((fresh?.metadata as Record<string, unknown>)?.mergeMode).toBe('local');
   });
+
+  it('commits UNCOMMITTED agent worktree edits before merging so they land on base', async () => {
+    // Faithful repro of the live bug: the real agent (`claude -p`) only EDITS files
+    // in the worktree — it does NOT `git commit`. With the old code the agent branch
+    // had no new commit, so `git merge <agentBranch>` found "Already up to date" and
+    // the edits never landed. mergeWorkspace must commit the worktree first.
+    expect(agentOsContainer.repositoryDriver).toBe('memory');
+    process.env.RECODER_SOLO_MODE = '1';
+
+    const root = mkdtempSync(join(tmpdir(), 'recoder-local-merge-uncommitted-'));
+    tmpRoots.push(root);
+    const repo = join(root, 'repo');
+    execFileSync('git', ['init', '-q', '-b', 'main', repo]);
+    git(repo, 'config', 'user.email', 'e2e@recoder.test');
+    git(repo, 'config', 'user.name', 'E2E');
+    git(repo, 'config', 'commit.gpgsign', 'false');
+    writeFileSync(join(repo, 'README.md'), 'base\n');
+    git(repo, 'add', '.');
+    git(repo, 'commit', '-q', '-m', 'base');
+    expect(git(repo, 'remote')).toBe('');
+
+    const branch = `recoder/feat-${randomUUID().slice(0, 8)}`;
+    const worktree = join(root, 'wt');
+    git(repo, 'worktree', 'add', '-b', branch, worktree, 'main');
+    // NOTE: deliberately do NOT set user.name/email on the worktree — the agent
+    // identity must come from mergeWorkspace's per-commit -c flags.
+
+    // The agent edits a file but DOES NOT COMMIT (simulates `claude -p`).
+    const marker = `uncommitted ${randomUUID()}`;
+    writeFileSync(join(worktree, 'AGENT_EDIT.txt'), `${marker}\n`);
+    // Prove it really is uncommitted on the branch.
+    expect(git(worktree, 'status', '--porcelain')).not.toBe('');
+    expect(git(worktree, 'rev-parse', branch)).toBe(git(repo, 'rev-parse', 'main'));
+
+    const now = new Date().toISOString();
+    const ws: Workspace = {
+      workspaceId: `ws_${randomUUID()}`,
+      spaceId: 'space_t',
+      projectId: 'proj_t',
+      taskId: `task_${randomUUID()}`,
+      runtimeId: 'claude_code',
+      substrate: 'tmux_worktree',
+      branch,
+      baseRef: 'main',
+      worktreePath: worktree,
+      state: 'awaiting_review',
+      createdBy: 'desktop-user',
+      createdAt: now,
+      updatedAt: now,
+      metadata: {},
+    };
+    await Promise.resolve(agentOsContainer.repository.upsertWorkspace(ws));
+
+    expect(existsSync(join(repo, 'AGENT_EDIT.txt'))).toBe(false); // not on base yet
+
+    const result = await mergeWorkspace(ws.workspaceId, {
+      intent: { approve: true, decidedBy: 'desktop-user' },
+    });
+    expect(result.merged).toBe(true);
+
+    // The previously-uncommitted edit LANDED on the base branch on disk.
+    expect(existsSync(join(repo, 'AGENT_EDIT.txt'))).toBe(true);
+
+    const fresh = await Promise.resolve(agentOsContainer.repository.getWorkspace(ws.workspaceId));
+    expect(fresh?.state).toBe('merged');
+    expect((fresh?.metadata as Record<string, unknown>)?.mergeMode).toBe('local');
+  });
+
+  it('is re-mergeable after a prior failed merge (failed -> awaiting_review -> merged)', async () => {
+    // A workspace left in `failed` by an earlier merge attempt must be recoverable:
+    // calling mergeWorkspace again restores it to review and lands the work.
+    expect(agentOsContainer.repositoryDriver).toBe('memory');
+    process.env.RECODER_SOLO_MODE = '1';
+
+    const root = mkdtempSync(join(tmpdir(), 'recoder-local-merge-remerge-'));
+    tmpRoots.push(root);
+    const repo = join(root, 'repo');
+    execFileSync('git', ['init', '-q', '-b', 'main', repo]);
+    git(repo, 'config', 'user.email', 'e2e@recoder.test');
+    git(repo, 'config', 'user.name', 'E2E');
+    git(repo, 'config', 'commit.gpgsign', 'false');
+    writeFileSync(join(repo, 'README.md'), 'base\n');
+    git(repo, 'add', '.');
+    git(repo, 'commit', '-q', '-m', 'base');
+
+    const branch = `recoder/feat-${randomUUID().slice(0, 8)}`;
+    const worktree = join(root, 'wt');
+    git(repo, 'worktree', 'add', '-b', branch, worktree, 'main');
+    writeFileSync(join(worktree, 'RECOVER.txt'), `recover ${randomUUID()}\n`); // uncommitted
+
+    const now = new Date().toISOString();
+    const ws: Workspace = {
+      workspaceId: `ws_${randomUUID()}`,
+      spaceId: 'space_t',
+      projectId: 'proj_t',
+      taskId: `task_${randomUUID()}`,
+      runtimeId: 'claude_code',
+      substrate: 'tmux_worktree',
+      branch,
+      baseRef: 'main',
+      worktreePath: worktree,
+      // Simulate a workspace stuck in `failed` from a prior merge-step failure.
+      state: 'failed',
+      createdBy: 'desktop-user',
+      createdAt: now,
+      updatedAt: now,
+      metadata: { mergeError: 'previous attempt: nothing landed', mergeMode: 'local' },
+    };
+    await Promise.resolve(agentOsContainer.repository.upsertWorkspace(ws));
+
+    const result = await mergeWorkspace(ws.workspaceId, {
+      intent: { approve: true, decidedBy: 'desktop-user' },
+    });
+    expect(result.merged).toBe(true);
+    expect(existsSync(join(repo, 'RECOVER.txt'))).toBe(true);
+
+    const fresh = await Promise.resolve(agentOsContainer.repository.getWorkspace(ws.workspaceId));
+    expect(fresh?.state).toBe('merged');
+  });
 });

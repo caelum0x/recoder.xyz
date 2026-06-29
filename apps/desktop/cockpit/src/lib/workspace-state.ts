@@ -82,9 +82,15 @@ export function statePill(state: WorkspaceState, collision = false): string {
   }
 }
 
-/** A diff is reviewable once the agent has produced work (running onward). */
+/**
+ * A diff is reviewable once the agent has produced work (running onward).
+ * `failed` is included because a workspace whose merge failed still has its
+ * worktree with the agent's changes — the user must be able to SEE what the
+ * agent did (and re-merge it). The diff route degrades truthfully when the
+ * worktree is gone (e.g. a launch failure).
+ */
 export function canViewDiff(state: WorkspaceState): boolean {
-  return ['running', 'awaiting_review', 'awaiting_approval', 'changes_requested', 'merging'].includes(
+  return ['running', 'awaiting_review', 'awaiting_approval', 'changes_requested', 'merging', 'failed'].includes(
     state,
   );
 }
@@ -94,9 +100,14 @@ export function canOpenPr(state: WorkspaceState): boolean {
   return ['running', 'awaiting_review', 'changes_requested'].includes(state);
 }
 
-/** Merge is only meaningful once the work is up for review. */
+/**
+ * Merge is meaningful once the work is up for review — and again from `failed`,
+ * where a prior merge attempt failed but the worktree still holds the agent's
+ * work. The backend restores a failed-with-mergeError workspace to review and
+ * re-merges (and rejects truthfully when it is not actually re-mergeable).
+ */
 export function canMerge(state: WorkspaceState): boolean {
-  return state === 'awaiting_review';
+  return state === 'awaiting_review' || state === 'failed';
 }
 
 /** Archive is reachable from terminal-ish states (and the backend cancels first). */

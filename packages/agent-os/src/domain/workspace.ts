@@ -73,9 +73,11 @@ const ALLOWED_TRANSITIONS: Record<WorkspaceState, readonly WorkspaceState[]> = {
   awaiting_approval: ['running', 'failed', 'cancelled'],
   awaiting_review: ['merging', 'changes_requested', 'failed', 'cancelled'],
   changes_requested: ['running', 'failed', 'cancelled'],
-  merging: ['merged', 'failed'],
+  merging: ['merged', 'failed', 'awaiting_review'],
   merged: ['archived'],
-  failed: ['archived'],
+  // `failed` is recoverable, not terminal: a workspace that failed at the delivery
+  // (merge) step can be returned to review and re-merged once the cause is fixed.
+  failed: ['archived', 'awaiting_review'],
   cancelled: ['archived'],
   archived: [],
 };

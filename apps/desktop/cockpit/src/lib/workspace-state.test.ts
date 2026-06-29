@@ -85,10 +85,11 @@ describe('statePill', () => {
 });
 
 describe('action gating', () => {
-  it('canViewDiff only once work exists (running onward)', () => {
+  it('canViewDiff once work exists (running onward) and from failed', () => {
     expect(canViewDiff('running')).toBe(true);
     expect(canViewDiff('awaiting_review')).toBe(true);
     expect(canViewDiff('merging')).toBe(true);
+    expect(canViewDiff('failed')).toBe(true);
     expect(canViewDiff('created')).toBe(false);
     expect(canViewDiff('ready')).toBe(false);
     expect(canViewDiff('merged')).toBe(false);
@@ -102,9 +103,10 @@ describe('action gating', () => {
     expect(canOpenPr('created')).toBe(false);
   });
 
-  it('canMerge only in awaiting_review', () => {
+  it('canMerge in awaiting_review and from failed (re-merge)', () => {
     expect(canMerge('awaiting_review')).toBe(true);
-    for (const state of ALL_STATES.filter((s) => s !== 'awaiting_review')) {
+    expect(canMerge('failed')).toBe(true);
+    for (const state of ALL_STATES.filter((s) => s !== 'awaiting_review' && s !== 'failed')) {
       expect(canMerge(state)).toBe(false);
     }
   });

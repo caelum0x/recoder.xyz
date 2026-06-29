@@ -38,16 +38,32 @@ interface EventLogProps {
  *   - a bare "Agent session ended" (no status) → "Agent finished"
  * Any other text is returned unchanged.
  */
+/**
+ * tmux's remain-on-exit dead-pane banner. tmux prints it INSIDE the pane when a
+ * command exits, e.g. "Pane is dead (status 0, Tue Jun 30 01:23:01 2026)". Note
+ * the status digits are followed by ", <timestamp>" before the closing paren —
+ * the captured pane output is the agent's real text with this banner appended,
+ * so we strip the banner wherever it appears (not only when the whole line is it).
+ */
+const PANE_DEAD_BANNER = /\n*[ \t]*pane is dead\s*\(status\s*(-?\d+)[^)]*\)[ \t]*/gi;
+
 export function friendlyAgentText(raw: string): string {
-  const text = raw.trim();
-  // "Pane is dead (status N)" — N === 0 means a clean finish, otherwise stopped.
-  const paneDead = /pane is dead\s*\(status\s*(-?\d+)\)/i.exec(text);
-  if (paneDead) {
-    return paneDead[1] === '0' ? 'Agent finished' : 'Agent stopped';
+  // Remember the banner's status (if any) before we strip it, so a line that is
+  // ONLY the banner still maps to a truthful finished/stopped message.
+  const statusMatch = /pane is dead\s*\(status\s*(-?\d+)/i.exec(raw);
+  const stripped = raw.replace(PANE_DEAD_BANNER, '').trimEnd();
+  const text = stripped.trim();
+  if (!text) {
+    // The captured output WAS just the banner — map by exit status.
+    if (statusMatch) return statusMatch[1] === '0' ? 'Agent finished' : 'Agent stopped';
+    if (/^agent session ended\b/i.test(raw.trim())) return 'Agent finished';
+    return raw;
   }
-  if (/^pane is dead\b/i.test(text)) return 'Agent finished';
   if (/^agent session ended\b/i.test(text)) return 'Agent finished';
-  return raw;
+  // A bare "Pane is dead" with no status parens (older tmux) → clean finish.
+  if (/^pane is dead\b/i.test(text)) return 'Agent finished';
+  // Return the agent's real output with the scary banner removed.
+  return stripped;
 }
 
 function eventText(ev: RunEvent): string {
