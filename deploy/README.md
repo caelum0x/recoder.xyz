@@ -192,6 +192,22 @@ Two real, valid Envoy bootstraps live here:
   off this fixed config instead of xDS, point the `envoy` service's volume mount at
   this file.
 
+### ext_authz → governance (fail-closed)
+
+Both bootstraps wire an **`envoy.filters.http.ext_authz`** filter on the always-on
+static `:8080` listener, pointing at a dedicated `recoder_ext_authz` cluster
+(`backend:3100`, path `/internal/network/authz`). Envoy delegates every request to
+the backend's ext_authz HTTP contract endpoint, which runs the network authz
+decision through the `@recoder/governance` facade — and that facade delegates to
+the owned **Rust governance daemon** over the shared UDS (`GOVERNANCE_SOCKET`),
+falling back to its pure-TS deny-biased path on any failure. So the edge is
+**governed even on the static fallback path**, not only on the dynamic LDS listener
+delivered by `recoder-xds`.
+
+`failure_mode_allow: false` — if the authz cluster is unreachable, Envoy **denies**.
+The edge is hostile-by-default. This mirrors the cluster name, path, and fail-closed
+posture of the config the backend's `@recoder/network` generator emits.
+
 When the backend's network module exposes `GET /api/network/envoy-config`, you
 can regenerate the static file from the live control plane and reload Envoy:
 
@@ -240,11 +256,24 @@ packer build -only='null.recoder' \
 2. rsyncs the uploaded repo to `/opt/recoder`.
 3. `make substrate-binaries` (degrade-safe).
 4. Builds `docker-backend/dist` if absent; ensures `pi-mono-dist/` exists.
-5. Pre-builds `recoder/docker-backend:selfhost` into the local Docker cache.
-6. Installs + enables `recoder-selfhost.service`.
+5. **Asserts** the required self-host artifacts are staged (compose file, env
+   template, up/down scripts, governance Dockerfile, both Envoy configs, the
+   Postgres init script) — fails the build now, not at boot, if any is missing.
+6. Pre-builds **both** images into the local Docker cache:
+   `recoder/docker-backend:selfhost` (backend + `recoder-xds` reuse this tag) and
+   `recoder/governance-daemon:selfhost`.
+7. **Pre-pulls the pinned third-party images** (`postgres:17`, `redis:7`,
+   `qdrant/qdrant:latest`, `envoyproxy/envoy:v1.31-latest`) so a machine booted in
+   a locked-down VPC with no Docker Hub egress still comes up. A pull miss is
+   non-fatal (logged) so a builder without egress still produces a usable image.
+8. Installs + enables `recoder-selfhost.service`. The unit waits for the Docker
+   daemon to be ready (`ExecStartPre`) and uses `TimeoutStartSec=infinity` so the
+   bring-up's own bounded 600s health wait (and the cold first-boot image build) is
+   never killed mid-flight.
 
-A post-provision step **asserts** the image exists and the service is enabled,
-so a broken image fails the Packer build instead of shipping silently.
+A post-provision step **asserts** both images exist, the compose + Envoy configs
+are staged, and the service is enabled — so a broken image fails the Packer build
+instead of shipping silently.
 
 > On first boot the systemd unit runs `selfhost-up.sh`, which fails fast unless
 > `POSTGRES_PASSWORD` is set in `/opt/recoder/.env.selfhost` (bake it via Packer
@@ -253,6 +282,17 @@ so a broken image fails the Packer build instead of shipping silently.
 ---
 
 ## Validate the artifacts
+
+One command runs every static check (compose `config -q`, `bash -n` on all
+scripts, Envoy YAML parse + ext_authz-wiring assertion, and `packer validate` when
+packer is installed — otherwise skipped and reported). It feeds a **temporary**
+throwaway env-file (never real secrets) so the `${VAR:?}` guards pass in CI:
+
+```bash
+deploy/validate-selfhost.sh
+```
+
+The individual checks it runs (if you prefer to run them by hand):
 
 ```bash
 # Compose is well-formed (incl. recoder-xds + recoder-governance). Needs an

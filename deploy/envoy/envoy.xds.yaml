@@ -90,6 +90,43 @@ static_resources:
                         - name: ":path"
                           string_match:
                             exact: "/healthz"
+                  # ext_authz -> governance. Envoy calls the backend's ext_authz
+                  # HTTP contract endpoint (/internal/network/authz), which runs the
+                  # network authz decision through the governance facade — and that
+                  # facade delegates to the owned Rust governance daemon over the
+                  # shared UDS (GOVERNANCE_SOCKET), falling back to its pure-TS
+                  # deny-biased path on any failure. So the edge is governed even on
+                  # the always-on static fallback path, not just the dynamic LDS one.
+                  #
+                  # FAIL-CLOSED: failure_mode_allow=false means if the authz cluster
+                  # is unreachable, Envoy DENIES (matches the generated config and
+                  # the deny-biased posture). This makes the edge hostile-by-default.
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      transport_api_version: V3
+                      failure_mode_allow: false
+                      http_service:
+                        server_uri:
+                          uri: http://backend:3100
+                          cluster: recoder_ext_authz
+                          timeout: 1.000s
+                        path_prefix: /internal/network/authz
+                        authorization_request:
+                          allowed_headers:
+                            patterns:
+                              - exact: authorization
+                                ignore_case: true
+                              - exact: x-recoder-actor
+                                ignore_case: true
+                              - exact: x-recoder-task
+                                ignore_case: true
+                              - prefix: x-forwarded-
+                        authorization_response:
+                          allowed_upstream_headers:
+                            patterns:
+                              - exact: x-recoder-decision
+                                ignore_case: true
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -137,3 +174,21 @@ static_resources:
           healthy_threshold: 1
           http_health_check:
             path: "/health"
+
+    # ext_authz upstream: the backend's governance-backed ext_authz endpoint.
+    # Same host:port as recoder_backend but kept a SEPARATE cluster so the authz
+    # call path is independent of data-plane routing/health and matches the
+    # cluster name the generated config uses (recoder_ext_authz).
+    - name: recoder_ext_authz
+      type: STRICT_DNS
+      connect_timeout: 1s
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: recoder_ext_authz
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: backend
+                      port_value: 3100
