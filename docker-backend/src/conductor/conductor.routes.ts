@@ -44,6 +44,8 @@ import { bulkCancel, bulkArchive, listByState } from './batch-ops.js';
 import { cleanupStaleWorktrees } from './worktree-cleanup.js';
 import { planConductorRun, effectiveRuntimeId } from './conductor-planner.js';
 import { agentOsContainer } from '../agent-os/service-container.js';
+import { validateBody } from '../agent-os/middleware/schema-guard.middleware.js';
+import { taskSpecSchema } from '@recoder/agent-schemas';
 import type { TaskSpec } from '@recoder/agent-os';
 
 export function createConductorRouter(): Router {
@@ -170,7 +172,10 @@ export function createConductorRouter(): Router {
   // inline `task` body for spaces not yet persisted. This route does NOT launch
   // anything — it returns a recommendation the caller can act on (or override) when
   // calling POST /workspaces. The proven create path is unchanged.
-  router.post('/workspaces/plan', async (req: Request, res: Response) => {
+  // An INLINE `task` (TaskSpec) is guarded at ingress against the canonical
+  // @recoder/agent-schemas TaskSpec shape; a `taskId`-only body (resolved from
+  // the repository below) skips the guard via the `select` returning undefined.
+  router.post('/workspaces/plan', validateBody(taskSpecSchema, { select: (body) => (body as { task?: unknown })?.task }), async (req: Request, res: Response) => {
     try {
       const body = req.body ?? {};
       let task: TaskSpec | undefined = body.task as TaskSpec | undefined;
