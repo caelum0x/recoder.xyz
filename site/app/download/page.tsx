@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Nav, Footer } from "@/components/site";
-import { DownloadNotify } from "@/components/download-notify";
+import { DownloadNotify, DownloadReleases } from "@/components/download-notify";
+import {
+  downloadHref,
+  releasesArePublic,
+  releaseVersionLabel,
+  type PlatformId,
+} from "@/lib/releases";
 
 export const metadata: Metadata = {
   title: "Download Recoder",
   description:
-    "Recoder for macOS, Windows, and Linux. Runs your own Claude Code, Codex, and opencode, coordinated. Get notified the moment builds land.",
+    "Download Recoder for macOS, Windows, and Linux. Runs your own Claude Code, Codex, and opencode, coordinated. Your agents, your keys.",
 };
 
 const GETTING_STARTED: { title: string; body: string }[] = [
@@ -25,6 +31,20 @@ const GETTING_STARTED: { title: string; body: string }[] = [
 ];
 
 export default function Download() {
+  const isLive = releasesArePublic();
+  const versionLabel = releaseVersionLabel();
+  // Resolve real GitHub release hrefs server-side so the client never hardcodes
+  // a URL that could 404 (ROADMAP M4.3). Empty when no public build exists.
+  const platforms: PlatformId[] = ["macos", "windows", "linux"];
+  const hrefs = platforms.reduce<Partial<Record<PlatformId, string>>>(
+    (acc, p) => {
+      const href = downloadHref(p);
+      if (href) acc[p] = href;
+      return acc;
+    },
+    {},
+  );
+
   return (
     <>
       <Nav />
@@ -36,16 +56,31 @@ export default function Download() {
           Local-first. It drives the Claude Code and Codex you already have
           installed. Nothing leaves your machine unless you turn on team mode.
         </p>
-        <p className="text-balance mx-auto mt-4 max-w-lg text-sm text-faint">
-          Desktop builds aren&apos;t public yet. Pick your platform and we&apos;ll
-          email you the moment it ships.
-        </p>
+        {isLive ? (
+          <p className="text-balance mx-auto mt-4 max-w-lg text-sm text-faint">
+            Pick your platform to download the latest build. macOS is signed and
+            notarized; Homebrew users can{" "}
+            <code className="rounded bg-bg-soft px-1.5 py-0.5 text-xs text-muted">
+              brew install --cask recoder
+            </code>
+            .
+          </p>
+        ) : (
+          <p className="text-balance mx-auto mt-4 max-w-lg text-sm text-faint">
+            Desktop builds aren&apos;t public yet. Pick your platform and
+            we&apos;ll email you the moment it ships.
+          </p>
+        )}
 
-        <DownloadNotify />
+        {isLive ? (
+          <DownloadReleases hrefs={hrefs} versionLabel={versionLabel} />
+        ) : (
+          <DownloadNotify />
+        )}
 
         <section className="mx-auto mt-16 max-w-2xl text-left">
           <h2 className="text-center text-lg font-medium">
-            How getting started will work
+            {isLive ? "How getting started works" : "How getting started will work"}
           </h2>
           <ol className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
             {GETTING_STARTED.map((step, i) => (
