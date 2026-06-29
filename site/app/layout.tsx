@@ -42,14 +42,16 @@ export const metadata: Metadata = {
   alternates: { canonical: SITE_URL },
 };
 
+// Structured data describes the organization/product without overstating
+// availability: desktop builds are not public yet, so we do NOT advertise a
+// downloadable SoftwareApplication with an OS list and a $0 offer to crawlers.
 const JSON_LD = {
   "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
+  "@type": "Organization",
   name: "Recoder",
-  applicationCategory: "DeveloperApplication",
-  operatingSystem: "macOS, Windows, Linux",
+  url: SITE_URL,
   description: DESCRIPTION,
-  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  slogan: "The control plane for coding agents.",
 };
 
 export default function RootLayout({

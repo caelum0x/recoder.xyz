@@ -5,7 +5,9 @@
   --color-bg-soft: #0e0e11;
   --color-fg: #ededf0;
   --color-muted: #8a8a94;
-  --color-faint: #56565f;
+  /* AA-compliant on both --color-bg and --color-bg-soft (>= 4.5:1) so faint
+     disclaimer text stays legible for low-vision users. */
+  --color-faint: #7c7c85;
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-strong: rgba(255, 255, 255, 0.14);
   --color-accent: #6e8bff;

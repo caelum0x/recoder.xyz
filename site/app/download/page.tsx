@@ -9,6 +9,21 @@ export const metadata: Metadata = {
     "Recoder for macOS, Windows, and Linux. Runs your own Claude Code, Codex, and opencode, coordinated. Get notified the moment builds land.",
 };
 
+const GETTING_STARTED: { title: string; body: string }[] = [
+  {
+    title: "Install the cockpit",
+    body: "Run the local control plane on your own machine. No account is required to start.",
+  },
+  {
+    title: "Bring your own keys",
+    body: "Point it at the provider keys your agents already use. Recoder orchestrates; it never proxies or resells tokens.",
+  },
+  {
+    title: "Connect your agents",
+    body: "Attach Claude Code, Codex, opencode, and pi over MCP and the A2A bus, then run them as a coordinated team.",
+  },
+];
+
 export default function Download() {
   return (
     <>
@@ -27,6 +42,31 @@ export default function Download() {
         </p>
 
         <DownloadNotify />
+
+        <section className="mx-auto mt-16 max-w-2xl text-left">
+          <h2 className="text-center text-lg font-medium">
+            How getting started will work
+          </h2>
+          <ol className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+            {GETTING_STARTED.map((step, i) => (
+              <li key={step.title} className="bg-bg p-6">
+                <div className="font-mono text-xs text-accent">{i + 1}</div>
+                <h3 className="mt-2 text-sm font-medium">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">
+                  {step.body}
+                </p>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 text-center text-xs text-faint">
+            Bring your own provider keys (BYOK). You pay Recoder for
+            orchestration and control — never for tokens. See{" "}
+            <Link href="/pricing" className="text-muted underline hover:text-fg">
+              pricing
+            </Link>
+            .
+          </p>
+        </section>
 
         <p className="mt-8 text-xs text-faint">
           Follow the{" "}

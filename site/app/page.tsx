@@ -32,9 +32,9 @@ function Hero() {
             Run your coding agents as a team.
           </h1>
           <p className="text-balance mx-auto mt-5 max-w-xl text-base text-muted md:text-lg">
-            Recoder runs your own Claude Code, Codex, and opencode in parallel and
-            gives them one shared brain, so they stop colliding, repeating work,
-            and burning tokens.
+            Recoder runs your own coding agents — Claude Code, Codex, opencode,
+            and pi — in parallel and gives them one shared brain, so they stop
+            colliding, repeating work, and re-paying for the same context.
           </p>
           <div className="mt-8 flex items-center justify-center gap-5">
             <DownloadButton className="px-6 py-3 text-[15px]" />
@@ -56,16 +56,23 @@ function Hero() {
   );
 }
 
-/** CSS mock of the product — the agent board. The UI is the design. */
+/**
+ * Illustrative CSS rendering of the cockpit — NOT a live connected view.
+ * It shows an example coordination flow so the layout reads at a glance. All
+ * values are illustrative; nothing here is wired to a running control plane.
+ */
 function Cockpit() {
   return (
-    <div className="mx-auto mt-16 max-w-5xl">
+    <figure className="mx-auto mt-16 max-w-5xl">
       <div className="overflow-hidden rounded-xl border border-border-strong bg-bg-soft shadow-2xl">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <span className="h-3 w-3 rounded-full bg-faint/50" />
-          <span className="h-3 w-3 rounded-full bg-faint/40" />
-          <span className="h-3 w-3 rounded-full bg-faint/30" />
-          <span className="ml-3 text-xs text-faint">recoder · 3 agents · 1 shared brain</span>
+          <span aria-hidden className="h-3 w-3 rounded-full bg-faint/50" />
+          <span aria-hidden className="h-3 w-3 rounded-full bg-faint/40" />
+          <span aria-hidden className="h-3 w-3 rounded-full bg-faint/30" />
+          <span className="ml-3 text-xs text-muted">recoder · 3 agents · 1 shared brain</span>
+          <span className="ml-auto rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wider text-faint">
+            Illustration
+          </span>
         </div>
         <div className="grid gap-px bg-border md:grid-cols-[1fr_1fr_1fr_0.9fr]">
           <AgentPane
@@ -89,7 +96,10 @@ function Cockpit() {
           <BrainPane />
         </div>
       </div>
-    </div>
+      <figcaption className="mt-3 text-center text-xs text-faint">
+        Illustration of the cockpit — an example coordination flow, not a live view.
+      </figcaption>
+    </figure>
   );
 }
 
@@ -110,12 +120,12 @@ function AgentPane({
         <span className="font-mono text-xs text-fg">{name}</span>
         <span className={`text-[11px] ${tone}`}>{status}</span>
       </div>
-      <div className="mt-3 space-y-1.5">
+      <div aria-hidden className="mt-3 space-y-1.5">
         <div className="h-1.5 w-4/5 rounded bg-white/[0.06]" />
         <div className="h-1.5 w-3/5 rounded bg-white/[0.06]" />
         <div className="h-1.5 w-2/3 rounded bg-white/[0.06]" />
       </div>
-      <p className="mt-3 font-mono text-[11px] leading-relaxed text-faint">{task}</p>
+      <p className="mt-3 break-words font-mono text-[11px] leading-relaxed text-muted">{task}</p>
     </div>
   );
 }
@@ -125,12 +135,12 @@ function BrainPane() {
     <div className="bg-[#0b0b14] p-4">
       <div className="flex items-center justify-between">
         <span className="font-mono text-xs text-accent">shared brain</span>
-        <span className="text-[11px] text-accent/70">live</span>
+        <span className="text-[11px] text-muted">example</span>
       </div>
       <ul className="mt-3 space-y-2 text-[11px] text-muted">
         <li>repo indexed · read once</li>
-        <li>2 work-locks held</li>
-        <li>3 handoffs on the bus</li>
+        <li>work-locks held</li>
+        <li>handoffs on the bus</li>
         <li className="text-emerald-400/80">context reused, not re-paid</li>
       </ul>
     </div>
@@ -165,17 +175,17 @@ interface Pillar {
 const PILLARS: Pillar[] = [
   {
     title: "One shared brain",
-    body: "Every agent reads the repo once and reuses it. No more paying three times for the same context. The brain persists and compounds across runs.",
+    body: "Agents read the repo once and reuse it, instead of re-paying for the same context on every run. The brain is designed to persist and compound across runs.",
     foot: "memory · repo intel · docs · history",
   },
   {
     title: "Real coordination",
-    body: "Work-locks stop two agents editing the same file. A live bus lets them hand off and stay consistent. Semantic checks catch the conflicts git can't see.",
+    body: "Work-locks keep two agents from editing the same file. A live bus lets them hand off and stay consistent. Semantic checks catch the conflicts git can't see.",
     foot: "work-locks · A2A bus · coherence",
   },
   {
-    title: "Built for teams",
-    body: "Approvals, deny-biased policy, a tamper-evident audit chain, and security enforced below the model. Coordinate across machines and orgs. Self-host it.",
+    title: "Built to govern",
+    body: "Approvals, deny-biased policy, a tamper-evident audit chain, and security enforced below the model. Self-host the whole control plane. Team and cross-machine sync are maturing.",
     foot: "governance · audit · self-host",
     link: { href: "/enterprise", label: "See the enterprise moat" },
   },
@@ -222,9 +232,9 @@ function KeysNote() {
           Your agents. Your keys. We never touch your tokens.
         </h2>
         <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
-          Recoder runs the Claude Code and Codex you already pay for. We don&apos;t
-          proxy models or resell tokens. We&apos;re the layer that makes the agents
-          you run work together.
+          Recoder runs the coding agents you already pay for. We don&apos;t proxy
+          models or resell tokens. We&apos;re the layer that makes the agents you
+          run work together.
         </p>
       </div>
     </section>
