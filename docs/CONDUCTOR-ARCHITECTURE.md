@@ -189,6 +189,34 @@ Run: `cd docker-backend && npx tsx scripts/e2e-conductor-loop.ts` (exit 0 = PASS
 This is the substrate-swapped drive of the actual fused loop — proof the control
 plane, observe loop, and review handoff actually execute together.
 
+### Approval / governance gate proof (headless, FR-5)
+
+`docker-backend/scripts/e2e-conductor-approval.ts` is a runnable, headless proof
+that the **approval + governance** gate works (FR-5: a customer-visible delivery
+is approval-gated). It drives the REAL delivery path — `review-publish.mergeWorkspace`
+→ `delivery-approval.enforceDeliveryApproval` → `governance-gate.decideDelivery`
+(the real `@recoder/governance` tier-classifier + approval risk-tier policy +
+deny-biased policy chain + SHA-256 Merkle audit) — over the in-memory agent-os
+**Approval repository** (the state of record), with no BYOK key and no live
+server. It proves both halves of the gate:
+
+- **(a) denied without approval** — for a task with NO approved `Approval`, the
+  real `mergeWorkspace` throws `DeliveryApprovalRequiredError`, transitions the
+  workspace `running → awaiting_approval`, records the gate in metadata, and
+  surfaces the governance verdict (`needs_approval`, tier `high`). The merge
+  never runs (the gate fires before any `git`/`gh` call).
+- **(b) proceeds after a real approval** — a real `Approval` is created via the
+  real `@recoder/agent-os` `ApprovalService` (request → `decide('approved')`) and
+  persisted with `repository.upsertApproval`. The SAME merge then clears the gate
+  (`enforceDeliveryApproval` resolves; the human sign-off satisfies the gate even
+  with auto-approve off) and `mergeWorkspace` advances PAST the gate into
+  `merging`, failing only at the real `gh pr merge` network step — an unrelated,
+  post-gate failure that proves the approval released the delivery.
+
+It also verifies the governance Merkle audit chain (`verifyGovernanceAudit`) so
+every delivery decision is sealed tamper-evidently. Run:
+`cd docker-backend && npx tsx scripts/e2e-conductor-approval.ts` (exit 0 = PASS).
+
 ### Known TODO (truthful gaps)
 - ~~RunEvent tailing~~ DONE (run-tailer.ts streams pane → RunEvent log, substrate-routed).
 - ~~mem0 recall in the bundle~~ DONE; ~~candidate on delivery~~ DONE (reviewable
