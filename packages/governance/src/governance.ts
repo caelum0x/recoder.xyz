@@ -467,20 +467,59 @@ export class Governance implements PolicyEnginePort {
 // ---- helpers ----------------------------------------------------------------
 
 /**
- * Serialize a GovernanceRequest into the daemon's `decide` params. The shape is
- * a flat, JSON-safe projection of the request — the daemon re-derives policy,
- * tier, routing, enforcement, and audit on its side.
+ * The agent-os `PolicyAction` -> the daemon's native snake_case
+ * `GovernanceAction` (recoder-governance-kernel/src/request.rs). The daemon
+ * deserializes `action` against THAT enum, so the dotted agent-os action names
+ * (`file.read`) must be projected to the kernel's wire strings (`file_read`) or
+ * the daemon rejects the payload as `bad_request` and the facade fails closed to
+ * its TS fallback. Keeping this map exhaustive is what makes daemon delegation
+ * actually fire instead of silently degrading.
+ */
+const DAEMON_ACTION: Readonly<Record<string, string>> = {
+  'file.read': 'file_read',
+  'file.write': 'file_write',
+  'command.run': 'command',
+  'tool.call': 'tool_use',
+  'memory.write': 'memory_write',
+  'artifact.publish': 'deploy',
+  'deploy.preview': 'deploy',
+  'branch.push': 'push',
+  'pr.create': 'push',
+};
+
+/** Project the structured target onto the daemon's single `target` string. */
+function daemonTarget(target: GovernanceRequest['target']): string {
+  return target.path ?? target.command ?? target.toolName ?? target.environment ?? '';
+}
+
+/**
+ * Serialize a GovernanceRequest into the daemon's NATIVE `decide` params — the
+ * flat `GovernanceRequest` the Rust kernel deserializes (string actor/task,
+ * snake_case action, string target, snake_case context). This is NOT the
+ * agent-os request shape: sending that verbatim makes the daemon reject the
+ * payload, so the facade would always fall back to TS. Projecting here is what
+ * lets the owned Rust kernel actually decide.
  */
 function toDaemonDecideParams(req: GovernanceRequest): Record<string, unknown> {
+  const workLockPaths = (req.workLocks ?? [])
+    .map((lock) => lock.pathGlob)
+    .filter((glob): glob is string => typeof glob === 'string' && glob.length > 0);
+
   return {
-    requestId: req.requestId,
-    actor: req.actor,
-    task: req.task,
-    action: req.action,
-    target: { ...req.target },
-    workLocks: req.workLocks ? [...req.workLocks] : undefined,
-    context: req.context,
-    now: req.now,
+    actor: req.actor.agentId,
+    // The daemon rejects an empty task; fall back to the request id so a
+    // task-less decision still validates.
+    task: req.task?.taskId ?? req.requestId,
+    action: DAEMON_ACTION[req.action] ?? 'tool_use',
+    target: daemonTarget(req.target),
+    context: {
+      tool_name: req.target.toolName ?? '',
+      tool_input: req.target.command ?? req.context?.bashInput ?? '',
+      depth: req.context?.subagentDepth ?? 0,
+      work_lock_paths: workLockPaths,
+      enforce_work_lock: workLockPaths.length > 0,
+      messages: [],
+    },
   };
 }
 
