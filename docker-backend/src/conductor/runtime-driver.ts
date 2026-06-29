@@ -21,6 +21,7 @@ import {
   type ResolvedRuntimeCommand,
 } from './runtime-commands.js';
 import { getSubstrate, type SubstrateHandle } from './substrate.js';
+import { gateLaunch, captureLaunchArtifact } from './hook-gate.js';
 import { startRunTail, stopRunTail } from './run-tailer.js';
 import {
   conductorAvailability,
@@ -56,6 +57,10 @@ export interface RuntimeLaunchResult {
   sessionName?: string;
   worktreePath?: string;
   error?: string;
+  /** Set true when the in-process hook gate blocked the launch (vs. infra failure). */
+  blockedByPolicy?: boolean;
+  /** Post-launch audit artifact captured by the in-process hook (best-effort). */
+  launchArtifactKey?: string;
 }
 
 /**
@@ -88,6 +93,29 @@ export async function launchRuntime(request: RuntimeLaunchRequest): Promise<Runt
       success: false,
       command: { runtimeId, bin: runtimeAvail.bin, commandLine: '' },
       error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  // 2b. In-process hook gate: secret + path/command policy check on the
+  // agent-controlled prompt + resolved command line BEFORE the agent can write.
+  // Degrade-safe: only a positive `block` decision stops the launch.
+  const gate = gateLaunch({
+    workspaceId: request.workspaceId,
+    taskId: request.taskId,
+    runId: request.runId,
+    commandLine: command.commandLine,
+    prompt: request.prompt,
+    repoPath,
+    branch: request.branch,
+    runtimeId,
+    createdBy: request.createdBy,
+  });
+  if (!gate.allowed) {
+    return {
+      success: false,
+      command,
+      blockedByPolicy: true,
+      error: `blocked by hook policy: ${gate.blockedReason ?? 'policy violation'}`,
     };
   }
 
@@ -130,6 +158,14 @@ export async function launchRuntime(request: RuntimeLaunchRequest): Promise<Runt
     worktreePath: handle.worktreePath,
   });
 
+  // Post-launch: capture an audit artifact for the run trail (best-effort).
+  const launchArtifact = captureLaunchArtifact({
+    taskId: request.taskId,
+    runId: request.runId,
+    commandLine: command.commandLine,
+    changedFiles: handle.worktreePath ? [handle.worktreePath] : undefined,
+  });
+
   logger.info(
     { workspaceId: request.workspaceId, runtimeId, bin: command.bin, sessionName: handle.sessionName },
     'runtime launched',
@@ -141,6 +177,7 @@ export async function launchRuntime(request: RuntimeLaunchRequest): Promise<Runt
     handle,
     sessionName: handle.sessionName ?? handle.ref,
     worktreePath: handle.worktreePath,
+    launchArtifactKey: launchArtifact?.key,
   };
 }
 
