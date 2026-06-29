@@ -6,6 +6,7 @@ export type WorkflowNodeKind =
   | 'condition'
   | 'parallel'
   | 'approval'
+  | 'approval-wait'
   | 'verification'
   | 'memory'
   | 'artifact'
