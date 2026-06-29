@@ -66,9 +66,8 @@ export function Wordmark() {
         width={28}
         height={28}
         priority
-        className="h-7 w-7 rounded-md"
+        className="h-7 w-7"
       />
-      <span className="text-[15px] font-semibold tracking-tight">Recoder</span>
     </Link>
   );
 }
