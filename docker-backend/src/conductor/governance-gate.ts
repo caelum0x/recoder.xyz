@@ -171,6 +171,18 @@ export interface DeliveryGovernanceDecision {
  * auto-approver may legitimately clear the needs_approval gate — governance remains
  * the decider, the approval record is the evidence it consumes.
  *
+ * `soloDangerFullAccessGranted` is true ONLY for a user-initiated solo-mode
+ * delivery (RECODER_SOLO_MODE on + the human pressed the button). On the
+ * single-user desktop the operator holds `danger-full-access` on their own
+ * machine, so the escalation `git:push` would otherwise request is PRE-GRANTED:
+ * the request is built WITHOUT the escalation-forcing tool name, so the Rust
+ * kernel's permission stage no longer hard-denies "tool git:push requires
+ * approval to escalate from workspace-write to danger-full-access". The action
+ * still flows through the kernel's `push` delivery-boundary stage (which yields
+ * needs_approval, not a hard deny) and is still classified, audited (decidedBy =
+ * the user, soloMode), and sealed into the Merkle chain. This NEVER fires in
+ * team/cloud mode (the escalation is still requested → still hard-denied).
+ *
  * Never throws. If governance cannot be constructed/queried, fails CLOSED with a
  * synthetic deny verdict so the conductor blocks rather than auto-delivers.
  */
@@ -178,16 +190,27 @@ export async function decideDelivery(
   workspace: Workspace,
   action: DeliveryAction,
   approvedByControlPlane: boolean,
+  soloDangerFullAccessGranted = false,
 ): Promise<DeliveryGovernanceDecision> {
   try {
     const governance = await getGovernance();
+    // Team/cloud delivery requests the escalation-forcing concrete tool name so
+    // the kernel hard-denies the workspace-write → danger-full-access escalation.
+    // For a USER-INITIATED SOLO delivery the operator already holds
+    // danger-full-access on their own machine, so we PRE-GRANT it by NOT sending
+    // the unknown tool name: the kernel then resolves the action's baseline tool
+    // (`push` → workspace-write, already satisfied) and routes it to the delivery
+    // approval boundary (needs_approval) instead of an escalation hard deny.
+    const target = soloDangerFullAccessGranted
+      ? { environment: 'production' }
+      : {
+          toolName: action === 'pr' ? 'gh:pr-create' : 'git:push',
+          environment: 'production',
+        };
     const request = createGovernanceRequest({
       actor: buildDeliveryActor(workspace),
       action: ACTION_MAP[action],
-      target: {
-        toolName: action === 'pr' ? 'gh:pr-create' : 'git:push',
-        environment: 'production',
-      },
+      target,
       context: {
         // An approved control-plane Approval (or safe-automation bypass) is the
         // human sign-off that lets the governance auto-approver clear the gate.
@@ -197,6 +220,10 @@ export async function decideDelivery(
           taskId: workspace.taskId,
           branch: workspace.branch,
           deliveryAction: action,
+          // Truthful audit detail: this delivery ran with the solo-mode
+          // danger-full-access escalation pre-granted (decidedBy = the user).
+          soloMode: soloDangerFullAccessGranted,
+          dangerFullAccessPreGranted: soloDangerFullAccessGranted,
         },
       },
     });
@@ -210,6 +237,7 @@ export async function decideDelivery(
         effect: verdict.effect,
         tier: verdict.tier,
         approvedByControlPlane,
+        soloDangerFullAccessGranted,
         auditHash: verdict.auditHash,
         degraded: verdict.degraded,
       },
