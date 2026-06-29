@@ -11,6 +11,7 @@ import {
 import { attachJsonlObjectReader } from '../../drivers/shared/jsonl-reader';
 import { serializeJsonLine } from '../../drivers/shared/jsonl-writer';
 import { locateCli } from '../../drivers/shared/cli-locator';
+import { repoEnginePreferenceEnabled } from '../../drivers/shared/repo-engine-locator';
 import { RuntimeAdapterError } from '../../errors/runtime-error';
 import type { RuntimeErrorCode } from '../../errors/error-codes';
 import { CLAUDE_CODE_DESCRIPTOR, CLAUDE_CODE_BINARY } from './claude-descriptor';
@@ -75,6 +76,7 @@ export class ClaudeCodeDriver implements RuntimeDriver {
       override: this.options.cliPathOverride,
       cwd: ctx.cwd,
       pathEnv: ctx.env['PATH'],
+      preferRepoEngine: repoEnginePreferenceEnabled(ctx.env),
     });
     if (!location.found || !location.resolvedPath) {
       yield {

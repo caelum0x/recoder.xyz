@@ -2,6 +2,7 @@ import type { RuntimeHealth } from '@recoder/agent-os';
 import type { DriverProbe } from '../../contracts/runtime-driver';
 import type { DriverProbeContext } from '../../contracts/driver-context';
 import { probeCliVersion } from '../shared/cli-version-probe';
+import { repoEnginePreferenceEnabled } from '../shared/repo-engine-locator';
 import { OPENCODE_BINARY } from './opencode-descriptor';
 
 /**
@@ -18,6 +19,7 @@ export function probeOpenCode(ctx: DriverProbeContext): DriverProbe {
     override: ctx.cliPathOverride,
     cwd: ctx.cwd,
     pathEnv: ctx.env?.['PATH'],
+    preferRepoEngine: repoEnginePreferenceEnabled(ctx.env),
     versionArg: '--version',
   });
 
