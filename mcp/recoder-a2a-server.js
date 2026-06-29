@@ -2,8 +2,9 @@
 /**
  * Recoder A2A MCP Server for Claude Code
  *
- * Provides 8 tools to interact with the Recoder platform. This is the
- * documented Agents-in surface (list / run / inbox / sandbox-exec / respond):
+ * Provides 11 tools to interact with the Recoder platform. This is the
+ * documented Agents-in surface (list / run / inbox / sandbox-exec / respond +
+ * workspace create / diff / merge):
  * - recoder_list_agents: List connected A2A agents          [list]
  * - recoder_list_tasks: View A2A task queue                 [list]
  * - recoder_send_task: Send task to another agent via A2A   [run]
@@ -12,6 +13,9 @@
  * - recoder_sandbox_exec: Execute code in isolated sandbox  [sandbox-exec]
  * - recoder_inbox: Check inbound tasks assigned to this agent [inbox]
  * - recoder_task_respond: Respond to / complete an inbound task [respond]
+ * - recoder_workspace_create: Provision a conductor coding workspace [workspace-create]
+ * - recoder_workspace_diff: Reviewable worktree diff vs base ref     [workspace-diff]
+ * - recoder_workspace_merge: Merge a workspace PR (approval-gated)    [workspace-merge]
  */
 
 const {
@@ -28,6 +32,7 @@ const {
 const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
 const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
 const A2A_URL = process.env.RECODER_A2A_URL || `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:')}/agent-bridge`;
+const CONDUCTOR_URL = process.env.RECODER_CONDUCTOR_URL || `${DOCKER_URL}/api/conductor`;
 const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://localhost:3900/api';
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
 const RAW_AUTH_TOKEN = process.env.RECODER_API_TOKEN || '';
@@ -266,6 +271,49 @@ const TOOLS = [
         status: { type: 'string', enum: ['complete', 'failed'], default: 'complete', description: 'Mark as complete or failed' },
       },
       required: ['task_id', 'result'],
+    },
+  },
+  {
+    name: 'recoder_workspace_create',
+    description: 'Provision a conductor coding workspace (git worktree + agent run) for a task. Returns the workspace id and state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        space_id: { type: 'string', description: 'Owning Agent OS space id' },
+        project_id: { type: 'string', description: 'Project id the workspace belongs to' },
+        task_id: { type: 'string', description: 'Task id this workspace delivers' },
+        repo_path: { type: 'string', description: 'Repo checkout path the conductor worktrees from' },
+        prompt: { type: 'string', description: 'Task/prompt for the workspace agent (or provide command)' },
+        command: { type: 'string', description: 'Raw command to run instead of an agent prompt' },
+        branch: { type: 'string', description: 'Worktree branch name (optional)' },
+        base_ref: { type: 'string', description: 'Base git ref to branch from (optional)' },
+        runtime_id: { type: 'string', description: 'Runtime team id (optional — pal defaults it)' },
+      },
+      required: ['space_id', 'project_id', 'task_id', 'repo_path'],
+    },
+  },
+  {
+    name: 'recoder_workspace_diff',
+    description: 'Get the reviewable diff of a workspace worktree against its base ref (stat + unified patch + untracked files).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspace_id: { type: 'string', description: 'Workspace id to diff' },
+      },
+      required: ['workspace_id'],
+    },
+  },
+  {
+    name: 'recoder_workspace_merge',
+    description: 'Merge a workspace PR. APPROVAL-GATED: the conductor enforces a delivery approval record and surfaces awaiting_approval instead of merging without one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspace_id: { type: 'string', description: 'Workspace id to merge' },
+        strategy: { type: 'string', enum: ['squash', 'merge', 'rebase'], default: 'squash' },
+        delete_branch: { type: 'boolean', description: 'Delete the branch after merge', default: false },
+      },
+      required: ['workspace_id'],
     },
   },
 ];
@@ -587,6 +635,68 @@ async function handleToolCall(name, args) {
       return `Task ${args.task_id} → ${targetState}.\nState: ${transData.data?.state || transData.state}`;
     }
 
+    case 'recoder_workspace_create': {
+      if (!hasPlatformAuth()) {
+        return 'Error: conductor not configured. Set RECODER_SESSION_TOKEN (or RECODER_API_TOKEN) to create a workspace.';
+      }
+      if (!args.prompt && !args.command) {
+        return 'Error: provide one of prompt or command to launch a workspace.';
+      }
+      const body = {
+        spaceId: args.space_id,
+        projectId: args.project_id,
+        taskId: args.task_id,
+        repoPath: args.repo_path,
+        createdBy: AGENT_ID,
+      };
+      if (args.prompt) body.prompt = args.prompt;
+      if (args.command) body.command = args.command;
+      if (args.branch) body.branch = args.branch;
+      if (args.base_ref) body.baseRef = args.base_ref;
+      if (args.runtime_id) body.runtimeId = args.runtime_id;
+      const data = await apiFetch(`${CONDUCTOR_URL}/workspaces`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const ws = data.data || {};
+      return `Workspace: ${ws.id || ws.workspaceId || 'unknown'}\nState: ${ws.state || 'created'}\nBranch: ${ws.branch || '(default)'}\nBase: ${ws.baseRef || '(default)'}`;
+    }
+
+    case 'recoder_workspace_diff': {
+      if (!hasPlatformAuth()) {
+        return 'Error: conductor not configured. Set RECODER_SESSION_TOKEN (or RECODER_API_TOKEN) to diff a workspace.';
+      }
+      const data = await apiFetch(`${CONDUCTOR_URL}/workspaces/${encodeURIComponent(args.workspace_id)}/diff`);
+      const diff = data.data || {};
+      const lines = [
+        `Workspace: ${diff.workspaceId || args.workspace_id}`,
+        `Base: ${diff.baseRef || '?'} | Branch: ${diff.branch || '?'} | Changed files: ${diff.changedFiles ?? '?'}`,
+      ];
+      if (diff.stat) lines.push(`\n── Stat ──\n${diff.stat}`);
+      if (Array.isArray(diff.untracked) && diff.untracked.length) {
+        lines.push(`\n── Untracked (${diff.untracked.length}) ──\n${diff.untracked.join('\n')}`);
+      }
+      if (diff.patch) lines.push(`\n── Patch ──\n${diff.patch.slice(0, 8000)}${diff.patch.length > 8000 ? '\n…(truncated)' : ''}`);
+      return lines.join('\n');
+    }
+
+    case 'recoder_workspace_merge': {
+      if (!hasPlatformAuth()) {
+        return 'Error: conductor not configured. Set RECODER_SESSION_TOKEN (or RECODER_API_TOKEN) to merge a workspace.';
+      }
+      const data = await apiFetch(`${CONDUCTOR_URL}/workspaces/${encodeURIComponent(args.workspace_id)}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategy: args.strategy || 'squash',
+          deleteBranch: args.delete_branch === true,
+        }),
+      });
+      const res = data.data || {};
+      return `Workspace: ${res.workspaceId || args.workspace_id}\nBranch: ${res.branch || '?'}\nMerged: ${res.merged === true ? 'yes' : 'no'}`;
+    }
+
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
@@ -601,7 +711,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '3.1.0' },
+        serverInfo: { name: 'recoder-a2a', version: '3.2.0' },
       });
       break;
     case 'notifications/initialized':
