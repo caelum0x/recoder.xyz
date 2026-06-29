@@ -23,6 +23,18 @@ A self-contained Mac app that runs parallel coding agents on your machine.
   `c/tmux` + `ts/{dmux,opencode,oh-my-codex,recodergit}`.
 - **Install:** `.dmg` (electron-builder) · `brew install --cask recoder`
   (`homebrew-recoder`).
+- **Proof it's a real product (not a shell):** two headless, runnable proofs back
+  the core loop without a BYOK key.
+  - **Embedded-backend boot** — `apps/desktop/scripts/dev-boot-proof.js` drives the
+    desktop `BackendSupervisor`, boots the embedded `docker-backend` (tmux + engines
+    host), mints a real platform key, and asserts `GET /api/conductor/health`
+    returns 200 with the substrate shape `{ available, git, tmux, tmuxBin }`.
+    Exit 0 = PASS; never fakes readiness.
+  - **Headless conductor loop** — `docker-backend/scripts/e2e-conductor-loop.ts`
+    drives the real fused loop (`workspace-service.createWorkspace` → run-tailer →
+    completion-watcher) over a BYOK-free in-process substrate, asserting
+    `created → running → awaiting_review` with real RunEvents and a review handoff.
+    Run `cd docker-backend && npx tsx scripts/e2e-conductor-loop.ts` (exit 0 = PASS).
 - **Plan:** Free (BYOK, local, core loop). Pro adds more parallel agents, retention,
   context reuse.
 
