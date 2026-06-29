@@ -18,6 +18,8 @@ import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
 import { WorkspaceDetail } from './components/WorkspaceDetail';
+import { WorkspaceSidebar } from './components/WorkspaceSidebar';
+import { WorkspaceCenter } from './components/WorkspaceCenter';
 import { SessionsPanel } from './components/SessionsPanel';
 import { DmuxPanel } from './components/DmuxPanel';
 import { ConnectorsPanel } from './components/ConnectorsPanel';
@@ -156,20 +158,39 @@ export function App() {
       )}
 
       {view === 'board' ? (
-        <main class="main">
-          <section class={`board-area ${selected ? 'with-detail' : ''}`}>
+        <main class="main main-3pane">
+          {/* LEFT: workspaces grouped by repo, truthful state + diff stat. */}
+          <WorkspaceSidebar
+            workspaces={workspaces}
+            selectedId={selectedId}
+            loading={board.loading && !board.data}
+            onSelect={setSelectedId}
+            onNewWorkspace={() => setShowCreate(true)}
+          />
+
+          {/* CENTER: when a workspace is selected, its live agent stream +
+              "What changed" summary + steer input sit on top; the lifecycle
+              board (grouped by state) is always present below so the operator
+              keeps the at-a-glance pipeline view. */}
+          <section class="center-pane">
+            {selected && <WorkspaceCenter workspace={selected} />}
             {board.loading && !board.data ? (
               <div class="board-loading">Loading workspaces…</div>
             ) : workspaces.length === 0 && !board.error ? (
-              <div class="board-empty">
-                <p>No workspaces yet.</p>
-                <button class="btn btn-primary" onClick={() => setShowCreate(true)}>Create your first workspace</button>
-              </div>
+              !selected && (
+                <div class="board-empty">
+                  <p>No workspaces yet.</p>
+                  <button class="btn btn-primary" onClick={() => setShowCreate(true)}>Create your first workspace</button>
+                </div>
+              )
             ) : (
-              <Board workspaces={workspaces} selectedId={selectedId} onSelect={setSelectedId} />
+              <div class={`board-area ${selected ? 'board-area-compact' : ''}`}>
+                <Board workspaces={workspaces} selectedId={selectedId} onSelect={setSelectedId} />
+              </div>
             )}
           </section>
 
+          {/* RIGHT: file diffs + terminal + PR/merge status for the selection. */}
           {selected && (
             <WorkspaceDetail
               workspace={selected}
