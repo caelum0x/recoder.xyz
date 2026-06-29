@@ -18,6 +18,7 @@
  */
 export * from './types';
 export * from './ports';
+export * from './overlay';
 export * from './envoy-config';
 export * from './xds-contract';
 export * from './ext-authz';
