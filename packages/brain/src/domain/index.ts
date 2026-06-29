@@ -1,6 +1,7 @@
 /** Brain domain types (data shapes, no IO). */
 export type { BrainMemory } from "./memory.types";
 export type { BrainDoc } from "./docs.types";
+export type { BrainPassage } from "./passage.types";
 export type {
   BrainDocumentFormat,
   BrainRawDocument,

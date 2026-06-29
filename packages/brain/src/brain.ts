@@ -1,7 +1,8 @@
 /**
  * The Brain — one shared memory, assembled once per repo and reused by every
  * agent. git-nexus's context-pack is the assembly core; mem0 recall, context7
- * docs, and the beads task graph are fused into the same read.
+ * docs, the beads task graph, and (when wired) passage-level @recoder/rag
+ * vector-store retrieval are fused into the same read.
  *
  * Repo intelligence now flows through {@link RepoIntelPort}, the seam where the
  * real ts/recodergit knowledge-graph engine is merged in (see brain.md). Recall,
@@ -31,6 +32,7 @@ import type {
   BrainContext,
   BrainEvent,
   BrainMemory,
+  BrainPassage,
   BrainPreprocessedDocument,
   BrainQuery,
   BrainRawDocument,
@@ -46,6 +48,7 @@ import type {
   MemoryPort,
   RepoIntelPort,
   TaskGraphPort,
+  VectorStorePort,
 } from "./ports";
 import { systemClock } from "./ports";
 import { createRepoIntelAuto } from "./repo/recodergit-repo-intel";
@@ -95,6 +98,17 @@ export interface BrainDeps {
    * memory exactly as before.
    */
   chunker?: ChunkerPort;
+  /**
+   * Passage-level semantic retrieval over the brain's ingested document corpus,
+   * bound to the owned @recoder/rag vector store. When wired, each assemble runs
+   * a by-text similarity search and fuses the most relevant passages into
+   * {@link BrainContext.passages}, with truthful provenance under the `passages`
+   * source. Degrade-safe and ADDITIVE: with no store wired, assemble omits
+   * passages entirely (no context field, no provenance entry) — exactly the
+   * prior behavior. A host wires @recoder/rag's `QueryService` here via a thin
+   * adapter mapping each `QueryResult` to a {@link BrainPassage}.
+   */
+  vectorStore?: VectorStorePort;
   /** How git-nexus builds the repo map (defaults to indexing repoRoot). */
   repoMap?: (q: BrainQuery) => CreateContextPackInput;
   /**
@@ -123,6 +137,7 @@ function sourceSetOf(deps: BrainDeps): string[] {
   if (deps.docs) set.push("docs");
   if (deps.tasks) set.push("tasks");
   if (deps.activity) set.push("activity");
+  if (deps.vectorStore) set.push("passages");
   return set;
 }
 
@@ -141,7 +156,8 @@ export class Brain {
 
   /**
    * One read. Repo intelligence + recall + docs + task graph + desktop
-   * activity, fused into a single BrainContext that the whole agent team shares.
+   * activity + (when wired) RAG passages, fused into a single BrainContext that
+   * the whole agent team shares.
    *
    * Assemble-once: the result is content-addressed and cached. The first call for
    * a given (repoRoot, revision, task, source-set) assembles ONCE; every later
@@ -209,7 +225,7 @@ export class Brain {
     // Every source runs behind its port, degrade-safe, recording truthful
     // provenance. A dark source contributes its empty value + a "degraded" entry
     // — it never fails the read, and is never reported as having contributed.
-    const [repoOut, memoryOut, docsOut, tasksOut, activityOut] =
+    const [repoOut, memoryOut, docsOut, tasksOut, activityOut, passagesOut] =
       await Promise.all([
         runSource<ContextPack>({
           source: "repo",
@@ -253,17 +269,22 @@ export class Brain {
           notConfiguredDetail: "task graph port not wired (beads/bd)",
         }),
         this.runActivity(query.task, limit),
+        this.runPassages(query.task, limit),
       ]);
 
     const repo = repoOut.value;
     const activity = activityOut.value;
 
+    // `passages` is additive: it only joins provenance + the context when the
+    // vector-store port is wired. When absent, `passagesOut` is null and the
+    // assembled context is byte-for-byte the prior shape (no field, no entry).
     const provenance = buildProvenance([
       repoOut.provenance,
       memoryOut.provenance,
       docsOut.provenance,
       tasksOut.provenance,
       activityOut.provenance,
+      ...(passagesOut ? [passagesOut.provenance] : []),
     ]);
 
     const context: BrainContext = {
@@ -272,6 +293,7 @@ export class Brain {
       docs: docsOut.value,
       tasks: tasksOut.value,
       activity,
+      ...(passagesOut ? { passages: passagesOut.value } : {}),
       revision,
       provenance,
       assembledAt: this.clock.nowIso(),
@@ -319,6 +341,36 @@ export class Brain {
       countItems: (value) => value.recent.length + (value.profile ? 1 : 0),
       configuredDetail: "continuum activity",
       notConfiguredDetail: "activity port not wired (continuum)",
+    });
+  }
+
+  /**
+   * Run the passage-level RAG retrieval source (vector-store port), degrade-safe.
+   *
+   * Returns `null` when no vector-store port is wired — the additive contract: an
+   * unwired passages source contributes NOTHING to the assembled context, not
+   * even a "degraded" provenance entry, so a brain with no RAG store produces the
+   * exact prior shape. When wired, it runs a by-text similarity search and
+   * records a truthful `passages` provenance entry (a wired store that fails or
+   * is unprovisioned degrades to empty, never failing the read).
+   */
+  private async runPassages(
+    task: string,
+    limit: number,
+  ): Promise<{
+    value: BrainPassage[];
+    provenance: SourceProvenance;
+  } | null> {
+    if (!this.deps.vectorStore) {
+      return null;
+    }
+    return runSource<BrainPassage[]>({
+      source: "passages",
+      run: () => this.deps.vectorStore!.search(task, limit),
+      fallback: [],
+      countItems: (rows) => rows.length,
+      configuredDetail: "rag vector store",
+      notConfiguredDetail: "vector store port not wired (@recoder/rag)",
     });
   }
 
