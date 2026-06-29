@@ -152,6 +152,19 @@ describe('api URL construction', () => {
     expect(lastUrl).toBe(`${BACKEND_URL}/api/conductor/health/full`);
   });
 
+  it('POSTs a chat message to /workspaces/:id/message with the typed text', async () => {
+    let captured: RequestInit | undefined;
+    mockFetch((url, init) => {
+      captured = init;
+      lastUrl = url;
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: {} } });
+    });
+    await api.sendMessage('w1', 'add a greeting');
+    expect(lastUrl).toBe(`${BACKEND_URL}/api/conductor/workspaces/w1/message`);
+    expect(captured?.method).toBe('POST');
+    expect(JSON.parse(captured?.body as string)).toEqual({ text: 'add a greeting' });
+  });
+
   it('encodes workspace ids and uses the detail path', async () => {
     mockFetch(() => makeResponse({ status: 200, ok: true, body: { success: true, data: { workspaceId: 'a/b' } } }));
     await api.getWorkspace('a/b');

@@ -26,10 +26,34 @@ interface EventLogProps {
   animate?: boolean;
 }
 
+/**
+ * Map scary, low-level session-lifecycle text to friendly, truthful copy.
+ *
+ * The conductor substrate surfaces raw tmux/pty messages like
+ * "Pane is dead (status 0)" or "Agent session ended" when the agent process
+ * exits. Those read like crashes to an operator. We translate them to plain
+ * language WITHOUT lying about the outcome:
+ *   - a clean exit (status 0) → "Agent finished"
+ *   - a non-zero exit         → "Agent stopped"
+ *   - a bare "Agent session ended" (no status) → "Agent finished"
+ * Any other text is returned unchanged.
+ */
+export function friendlyAgentText(raw: string): string {
+  const text = raw.trim();
+  // "Pane is dead (status N)" — N === 0 means a clean finish, otherwise stopped.
+  const paneDead = /pane is dead\s*\(status\s*(-?\d+)\)/i.exec(text);
+  if (paneDead) {
+    return paneDead[1] === '0' ? 'Agent finished' : 'Agent stopped';
+  }
+  if (/^pane is dead\b/i.test(text)) return 'Agent finished';
+  if (/^agent session ended\b/i.test(text)) return 'Agent finished';
+  return raw;
+}
+
 function eventText(ev: RunEvent): string {
-  if (ev.message) return ev.message;
+  if (ev.message) return friendlyAgentText(ev.message);
   if (ev.type === 'state_transition' && ev.state) return `→ ${ev.state}`;
-  if (ev.data && typeof ev.data.output === 'string') return ev.data.output;
+  if (ev.data && typeof ev.data.output === 'string') return friendlyAgentText(ev.data.output);
   return ev.type;
 }
 
