@@ -12383,6 +12383,24 @@ if (agentOsContainer.repositoryDriver === 'postgres' && agentOsContainer.pgPool)
     }
   })().catch((err) => logger.warn({ err }, 'Agent OS migration boot step failed (non-fatal)'));
 }
+// Owned Rust governance kernel: when the prebuilt governance daemon binary is
+// present (crates/recoder-governance — target/release|debug, or
+// RECODER_GOVERNANCE_DAEMON), spawn it on boot so conductor delivery decisions
+// route through the real Rust kernel over its UDS. Degrade-safe: when the binary
+// is absent (the default — we never BUILD the crate here) governance stays on the
+// pure-TS deny-biased path. Fire-and-forget; a daemon problem never blocks boot.
+import { ensureGovernanceDaemon } from './conductor/governance-daemon.js';
+void ensureGovernanceDaemon()
+  .then((daemon) => {
+    if (daemon) {
+      logger.info(
+        { socketPath: daemon.socketPath, binPath: daemon.binPath },
+        'governance daemon up — conductor delivery decisions route through the Rust kernel',
+      );
+    }
+  })
+  .catch((err) => logger.warn({ err }, 'governance daemon boot step failed (non-fatal, degrading to pure-TS)'));
+
 // Survivability: on boot AND on a periodic timer, reconcile persisted workspaces
 // against the real tmux + git substrate (fire-and-forget; safe no-op when the
 // substrate is unavailable). Per docs/CONDUCTOR-ARCHITECTURE.md §1: the reconciler

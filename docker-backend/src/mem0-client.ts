@@ -10,7 +10,10 @@
  *  - **OSS (default when self-hostable):** runs locally against the Qdrant the
  *    platform already operates, with an OpenAI-compatible LLM/embedder
  *    (OpenAI, OpenRouter, or local Ollama). No MEM0_API_KEY required.
- *  - **Platform:** managed mem0 via `MEM0_API_KEY` (used if that key is set).
+ *  - **Platform:** managed mem0 via `MEM0_API_KEY` (used if that key is set). The
+ *    base URL is `MEM0_BASE_URL` when set, so the SAME platform client can be
+ *    pointed at a self-hosted `py/mem0` FastAPI server (`/memories`, `/search`,
+ *    …) instead of `https://api.mem0.ai`. Absent → the SaaS default.
  *
  * Fail-safe: if neither mode can be configured, calls report a truthful
  * unavailable status and recall returns empty — it never fabricates memories.
@@ -55,6 +58,16 @@ export interface Mem0MemoryRecord {
 
 const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
 const MEM0_COLLECTION = process.env.MEM0_COLLECTION || 'recoder_mem0';
+
+/**
+ * Optional base URL for the platform mem0 client. When set, the `@recoder/mem0`
+ * `MemoryClient` is pointed here (its `host`) instead of the SaaS default, so the
+ * backend genuinely connects to a self-hosted `py/mem0` server. Trimmed; empty →
+ * undefined (the client falls back to `https://api.mem0.ai`).
+ */
+export function mem0BaseUrl(): string | undefined {
+  return process.env.MEM0_BASE_URL?.trim() || undefined;
+}
 
 export interface ProviderBlock {
   provider: string;
@@ -191,7 +204,13 @@ async function getClient(): Promise<ResolvedClient | null> {
         const mod = await dynamicImport('@recoder/mem0');
         const MemoryClient = mod.default || mod.MemoryClient;
         if (!MemoryClient) throw new Error('MemoryClient export missing');
-        return { mode, client: new MemoryClient({ apiKey: process.env.MEM0_API_KEY }) };
+        const host = mem0BaseUrl();
+        // `host` points the platform client at a self-hosted py/mem0 server when
+        // MEM0_BASE_URL is set; omitted → the client's SaaS default.
+        return {
+          mode,
+          client: new MemoryClient({ apiKey: process.env.MEM0_API_KEY, ...(host ? { host } : {}) }),
+        };
       }
       // OSS mode
       const mod = await dynamicImport('@recoder/mem0/oss');
@@ -276,7 +295,9 @@ export async function mem0Health(): Promise<Mem0Health> {
       embedderProvider: resolveOssEmbedder()?.provider,
     };
   }
-  return { available: true, mode };
+  // Platform mode: report the resolved base URL so an operator can see whether
+  // we're pointed at the SaaS default or a self-hosted py/mem0 server.
+  return { available: true, mode, vectorStore: mem0BaseUrl() ?? 'https://api.mem0.ai' };
 }
 
 export async function mem0Add(
