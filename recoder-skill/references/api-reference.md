@@ -2,7 +2,19 @@
 
 Base URL: `https://api.recoder.xyz/api/v1`
 
-Authentication: `X-API-Key` header with your Recoder API key.
+Authentication: `Authorization: Bearer sk_...` header. API keys start with `sk_`.
+
+All successful responses are wrapped in an envelope:
+
+```json
+{ "success": true, "data": { ... }, "requestId": "...", "timestamp": "..." }
+```
+
+All errors use:
+
+```json
+{ "success": false, "error": { "code": "...", "message": "...", "details": { ... } }, "requestId": "...", "timestamp": "..." }
+```
 
 ---
 
@@ -95,17 +107,19 @@ Send a coding prompt to the AI.
 
 The `model` field is optional. If omitted, the server uses the default model.
 
-**Response (200):**
+**Response (202 Accepted):**
 ```json
 {
   "data": {
-    "messageId": "msg_xyz789",
-    "status": "sent"
+    "taskId": "task_xyz789",
+    "status": "queued"
   }
 }
 ```
 
-Note: The prompt is processed asynchronously. The preview URL will update once the AI finishes making changes.
+Note: Prompts are processed asynchronously and return immediately with a `taskId`.
+Poll `GET /projects/:id/tasks/:taskId` for task status, or open the SSE stream at
+`GET /projects/:id/tasks/:taskId/stream`. The preview URL updates once the AI finishes.
 
 ---
 
@@ -128,28 +142,24 @@ Publish the project to a public URL.
 
 ## Error Responses
 
-All errors follow this format:
+All errors follow the envelope format described above (`success: false` with an
+`error` object). Common error codes:
 
-```json
-{
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable message"
-  }
-}
-```
-
-Common error codes:
-- `UNAUTHORIZED` — Invalid or missing API key
-- `RATE_LIMITED` — Too many requests (includes `retryAfter` in seconds)
-- `MISSING_REQUIRED_FIELD` — A required field is missing from the request
-- `PROJECT_NOT_FOUND` — Project doesn't exist or you don't have access
-- `PROJECT_CREATION_FAILED` — Failed to create the project container
-- `PROJECT_PUBLISH_FAILED` — Failed to publish the project
+- `INVALID_API_KEY` — Invalid, missing, or expired API key (401)
+- `INSUFFICIENT_SCOPE` — Key lacks the required scope, e.g. `projects:write` (403)
+- `IP_NOT_ALLOWED` — Request from a disallowed IP (403)
+- `RATE_LIMIT_EXCEEDED` — Too many requests; `details.retryAfter` is in seconds (429)
+- `MISSING_REQUIRED_FIELD` — A required field is missing or empty (400)
+- `PROJECT_NOT_FOUND` — Project doesn't exist, isn't running, or you don't have access (404)
+- `PROJECT_CREATION_FAILED` — Failed to create the project container (500)
+- `PROJECT_PUBLISH_FAILED` — Failed to publish the project (500)
+- `SERVICE_UNAVAILABLE` — Project service not initialized (503)
 
 ---
 
 ## Rate Limits
 
-- Default: 60 requests per minute per API key
-- Rate limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- Per-key request rate limiting is enforced; limits vary by key tier.
+- On `429 RATE_LIMIT_EXCEEDED`, the response includes a `Retry-After` header (seconds)
+  and `error.details.retryAfter`.
+- Some routes (e.g. `prompt`, task reads, task streams) have additional per-route limits.

@@ -47,41 +47,41 @@ export declare const RecoderAgentIdentitySchema: z.ZodObject<{
     team: z.ZodOptional<z.ZodString>;
     version: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    id?: string;
-    name?: string;
-    platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-    instanceId?: string;
-    team?: string;
-    version?: string;
+    id: string;
+    name: string;
+    platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+    instanceId?: string | undefined;
+    team?: string | undefined;
+    version?: string | undefined;
 }, {
-    id?: string;
-    name?: string;
-    platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-    instanceId?: string;
-    team?: string;
-    version?: string;
+    id: string;
+    name: string;
+    platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+    instanceId?: string | undefined;
+    team?: string | undefined;
+    version?: string | undefined;
 }>;
 /** `{ kind: 'text'; text: string }` — a non-empty text part. */
 export declare const RecoderTextPayloadSchema: z.ZodObject<{
     kind: z.ZodLiteral<"text">;
     text: z.ZodEffects<z.ZodString, string, string>;
 }, "strip", z.ZodTypeAny, {
-    kind?: "text";
-    text?: string;
+    kind: "text";
+    text: string;
 }, {
-    kind?: "text";
-    text?: string;
+    kind: "text";
+    text: string;
 }>;
 /** `{ kind: 'json'; data: Record<string, unknown> }` — a structured JSON part. */
 export declare const RecoderJsonPayloadSchema: z.ZodObject<{
     kind: z.ZodLiteral<"json">;
     data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    kind?: "json";
-    data?: Record<string, unknown>;
+    kind: "json";
+    data: Record<string, unknown>;
 }, {
-    kind?: "json";
-    data?: Record<string, unknown>;
+    kind: "json";
+    data: Record<string, unknown>;
 }>;
 /** `{ kind: 'command'; command: string; args?: string[]; cwd?: string }`. */
 export declare const RecoderCommandPayloadSchema: z.ZodObject<{
@@ -90,15 +90,15 @@ export declare const RecoderCommandPayloadSchema: z.ZodObject<{
     args: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     cwd: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    kind?: "command";
-    command?: string;
-    args?: string[];
-    cwd?: string;
+    kind: "command";
+    command: string;
+    args?: string[] | undefined;
+    cwd?: string | undefined;
 }, {
-    kind?: "command";
-    command?: string;
-    args?: string[];
-    cwd?: string;
+    kind: "command";
+    command: string;
+    args?: string[] | undefined;
+    cwd?: string | undefined;
 }>;
 /**
  * `{ kind: 'artifact'; artifactType; mimeType; content; path? }`.
@@ -113,17 +113,17 @@ export declare const RecoderArtifactPayloadSchema: z.ZodObject<{
     content: z.ZodEffects<z.ZodString, string, string>;
     path: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    path?: string;
-    kind?: "artifact";
-    artifactType?: "patch" | "file" | "plan" | "report";
-    mimeType?: string;
-    content?: string;
+    kind: "artifact";
+    artifactType: "plan" | "patch" | "file" | "report";
+    mimeType: string;
+    content: string;
+    path?: string | undefined;
 }, {
-    path?: string;
-    kind?: "artifact";
-    artifactType?: "patch" | "file" | "plan" | "report";
-    mimeType?: string;
-    content?: string;
+    kind: "artifact";
+    artifactType: "plan" | "patch" | "file" | "report";
+    mimeType: string;
+    content: string;
+    path?: string | undefined;
 }>;
 /**
  * The tightened `RecoderPayload` discriminated union.
@@ -137,35 +137,35 @@ export declare const RecoderPayloadSchema: z.ZodDiscriminatedUnion<"kind", [z.Zo
     kind: z.ZodLiteral<"text">;
     text: z.ZodEffects<z.ZodString, string, string>;
 }, "strip", z.ZodTypeAny, {
-    kind?: "text";
-    text?: string;
+    kind: "text";
+    text: string;
 }, {
-    kind?: "text";
-    text?: string;
+    kind: "text";
+    text: string;
 }>, z.ZodObject<{
     kind: z.ZodLiteral<"json">;
     data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, "strip", z.ZodTypeAny, {
-    kind?: "json";
-    data?: Record<string, unknown>;
+    kind: "json";
+    data: Record<string, unknown>;
 }, {
-    kind?: "json";
-    data?: Record<string, unknown>;
+    kind: "json";
+    data: Record<string, unknown>;
 }>, z.ZodObject<{
     kind: z.ZodLiteral<"command">;
     command: z.ZodEffects<z.ZodString, string, string>;
     args: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     cwd: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    kind?: "command";
-    command?: string;
-    args?: string[];
-    cwd?: string;
+    kind: "command";
+    command: string;
+    args?: string[] | undefined;
+    cwd?: string | undefined;
 }, {
-    kind?: "command";
-    command?: string;
-    args?: string[];
-    cwd?: string;
+    kind: "command";
+    command: string;
+    args?: string[] | undefined;
+    cwd?: string | undefined;
 }>, z.ZodObject<{
     kind: z.ZodLiteral<"artifact">;
     artifactType: z.ZodEnum<["patch", "file", "plan", "report"]>;
@@ -173,17 +173,17 @@ export declare const RecoderPayloadSchema: z.ZodDiscriminatedUnion<"kind", [z.Zo
     content: z.ZodEffects<z.ZodString, string, string>;
     path: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    path?: string;
-    kind?: "artifact";
-    artifactType?: "patch" | "file" | "plan" | "report";
-    mimeType?: string;
-    content?: string;
+    kind: "artifact";
+    artifactType: "plan" | "patch" | "file" | "report";
+    mimeType: string;
+    content: string;
+    path?: string | undefined;
 }, {
-    path?: string;
-    kind?: "artifact";
-    artifactType?: "patch" | "file" | "plan" | "report";
-    mimeType?: string;
-    content?: string;
+    kind: "artifact";
+    artifactType: "plan" | "patch" | "file" | "report";
+    mimeType: string;
+    content: string;
+    path?: string | undefined;
 }>]>;
 /** Inferred type for a single payload part. Structurally equals `RecoderPayload`. */
 export type RecoderPayloadInput = z.infer<typeof RecoderPayloadSchema>;
@@ -192,11 +192,11 @@ export declare const RecoderEnvelopeTraceSchema: z.ZodObject<{
     traceId: z.ZodEffects<z.ZodString, string, string>;
     parentMessageId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    traceId?: string;
-    parentMessageId?: string;
+    traceId: string;
+    parentMessageId?: string | undefined;
 }, {
-    traceId?: string;
-    parentMessageId?: string;
+    traceId: string;
+    parentMessageId?: string | undefined;
 }>;
 /**
  * Canonical Zod schema for `RecoderA2AEnvelope` (non-strict version check).
@@ -219,19 +219,19 @@ export declare const RecoderA2AEnvelopeSchema: z.ZodObject<{
         team: z.ZodOptional<z.ZodString>;
         version: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }>;
     to: z.ZodObject<{
         id: z.ZodEffects<z.ZodString, string, string>;
@@ -241,54 +241,54 @@ export declare const RecoderA2AEnvelopeSchema: z.ZodObject<{
         team: z.ZodOptional<z.ZodString>;
         version: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }>;
     intent: z.ZodEnum<["plan", "execute", "review", "handoff", "status", "sync", "tool_call", "tool_result", "error"]>;
     payload: z.ZodArray<z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
         kind: z.ZodLiteral<"text">;
         text: z.ZodEffects<z.ZodString, string, string>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "text";
-        text?: string;
+        kind: "text";
+        text: string;
     }, {
-        kind?: "text";
-        text?: string;
+        kind: "text";
+        text: string;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"json">;
         data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     }, {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"command">;
         command: z.ZodEffects<z.ZodString, string, string>;
         args: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
         cwd: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     }, {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"artifact">;
         artifactType: z.ZodEnum<["patch", "file", "plan", "report"]>;
@@ -296,121 +296,121 @@ export declare const RecoderA2AEnvelopeSchema: z.ZodObject<{
         content: z.ZodEffects<z.ZodString, string, string>;
         path: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     }, {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     }>]>, "many">;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     trace: z.ZodOptional<z.ZodObject<{
         traceId: z.ZodEffects<z.ZodString, string, string>;
         parentMessageId: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        traceId?: string;
-        parentMessageId?: string;
+        traceId: string;
+        parentMessageId?: string | undefined;
     }, {
-        traceId?: string;
-        parentMessageId?: string;
+        traceId: string;
+        parentMessageId?: string | undefined;
     }>>;
 }, "strip", z.ZodTypeAny, {
-    envelopeVersion?: string;
-    protocolVersion?: string;
-    messageId?: string;
-    threadId?: string;
-    createdAt?: string;
-    from?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    envelopeVersion: string;
+    protocolVersion: string;
+    messageId: string;
+    threadId: string;
+    createdAt: string;
+    from: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    to?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    to: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    intent?: "status" | "plan" | "execute" | "review" | "handoff" | "sync" | "tool_call" | "tool_result" | "error";
-    payload?: ({
-        kind?: "text";
-        text?: string;
+    intent: "plan" | "execute" | "review" | "handoff" | "status" | "sync" | "tool_call" | "tool_result" | "error";
+    payload: ({
+        kind: "text";
+        text: string;
     } | {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     } | {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     } | {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     })[];
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | undefined;
     trace?: {
-        traceId?: string;
-        parentMessageId?: string;
-    };
+        traceId: string;
+        parentMessageId?: string | undefined;
+    } | undefined;
 }, {
-    envelopeVersion?: string;
-    protocolVersion?: string;
-    messageId?: string;
-    threadId?: string;
-    createdAt?: string;
-    from?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    envelopeVersion: string;
+    protocolVersion: string;
+    messageId: string;
+    threadId: string;
+    createdAt: string;
+    from: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    to?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    to: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    intent?: "status" | "plan" | "execute" | "review" | "handoff" | "sync" | "tool_call" | "tool_result" | "error";
-    payload?: ({
-        kind?: "text";
-        text?: string;
+    intent: "plan" | "execute" | "review" | "handoff" | "status" | "sync" | "tool_call" | "tool_result" | "error";
+    payload: ({
+        kind: "text";
+        text: string;
     } | {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     } | {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     } | {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     })[];
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | undefined;
     trace?: {
-        traceId?: string;
-        parentMessageId?: string;
-    };
+        traceId: string;
+        parentMessageId?: string | undefined;
+    } | undefined;
 }>;
 /**
  * Strict variant of {@link RecoderA2AEnvelopeSchema} that additionally pins the
@@ -431,19 +431,19 @@ export declare const RecoderA2AEnvelopeStrictSchema: z.ZodObject<{
         team: z.ZodOptional<z.ZodString>;
         version: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }>;
     to: z.ZodObject<{
         id: z.ZodEffects<z.ZodString, string, string>;
@@ -453,54 +453,54 @@ export declare const RecoderA2AEnvelopeStrictSchema: z.ZodObject<{
         team: z.ZodOptional<z.ZodString>;
         version: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }>;
     intent: z.ZodEnum<["plan", "execute", "review", "handoff", "status", "sync", "tool_call", "tool_result", "error"]>;
     payload: z.ZodArray<z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
         kind: z.ZodLiteral<"text">;
         text: z.ZodEffects<z.ZodString, string, string>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "text";
-        text?: string;
+        kind: "text";
+        text: string;
     }, {
-        kind?: "text";
-        text?: string;
+        kind: "text";
+        text: string;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"json">;
         data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     }, {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"command">;
         command: z.ZodEffects<z.ZodString, string, string>;
         args: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
         cwd: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     }, {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"artifact">;
         artifactType: z.ZodEnum<["patch", "file", "plan", "report"]>;
@@ -508,121 +508,121 @@ export declare const RecoderA2AEnvelopeStrictSchema: z.ZodObject<{
         content: z.ZodEffects<z.ZodString, string, string>;
         path: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     }, {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     }>]>, "many">;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     trace: z.ZodOptional<z.ZodObject<{
         traceId: z.ZodEffects<z.ZodString, string, string>;
         parentMessageId: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        traceId?: string;
-        parentMessageId?: string;
+        traceId: string;
+        parentMessageId?: string | undefined;
     }, {
-        traceId?: string;
-        parentMessageId?: string;
+        traceId: string;
+        parentMessageId?: string | undefined;
     }>>;
 }, "strip", z.ZodTypeAny, {
-    envelopeVersion?: string;
-    protocolVersion?: string;
-    messageId?: string;
-    threadId?: string;
-    createdAt?: string;
-    from?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    envelopeVersion: string;
+    protocolVersion: string;
+    messageId: string;
+    threadId: string;
+    createdAt: string;
+    from: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    to?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    to: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    intent?: "status" | "plan" | "execute" | "review" | "handoff" | "sync" | "tool_call" | "tool_result" | "error";
-    payload?: ({
-        kind?: "text";
-        text?: string;
+    intent: "plan" | "execute" | "review" | "handoff" | "status" | "sync" | "tool_call" | "tool_result" | "error";
+    payload: ({
+        kind: "text";
+        text: string;
     } | {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     } | {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     } | {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     })[];
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | undefined;
     trace?: {
-        traceId?: string;
-        parentMessageId?: string;
-    };
+        traceId: string;
+        parentMessageId?: string | undefined;
+    } | undefined;
 }, {
-    envelopeVersion?: string;
-    protocolVersion?: string;
-    messageId?: string;
-    threadId?: string;
-    createdAt?: string;
-    from?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    envelopeVersion: string;
+    protocolVersion: string;
+    messageId: string;
+    threadId: string;
+    createdAt: string;
+    from: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    to?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    to: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    intent?: "status" | "plan" | "execute" | "review" | "handoff" | "sync" | "tool_call" | "tool_result" | "error";
-    payload?: ({
-        kind?: "text";
-        text?: string;
+    intent: "plan" | "execute" | "review" | "handoff" | "status" | "sync" | "tool_call" | "tool_result" | "error";
+    payload: ({
+        kind: "text";
+        text: string;
     } | {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     } | {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     } | {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     })[];
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | undefined;
     trace?: {
-        traceId?: string;
-        parentMessageId?: string;
-    };
+        traceId: string;
+        parentMessageId?: string | undefined;
+    } | undefined;
 }>;
 /** Inferred type for a validated envelope. Structurally equals `RecoderA2AEnvelope`. */
 export type RecoderA2AEnvelopeInput = z.infer<typeof RecoderA2AEnvelopeSchema>;
@@ -645,19 +645,19 @@ export declare function getRecoderA2AEnvelopeSchema(strictVersion: boolean): z.Z
         team: z.ZodOptional<z.ZodString>;
         version: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }>;
     to: z.ZodObject<{
         id: z.ZodEffects<z.ZodString, string, string>;
@@ -667,54 +667,54 @@ export declare function getRecoderA2AEnvelopeSchema(strictVersion: boolean): z.Z
         team: z.ZodOptional<z.ZodString>;
         version: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }, {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     }>;
     intent: z.ZodEnum<["plan", "execute", "review", "handoff", "status", "sync", "tool_call", "tool_result", "error"]>;
     payload: z.ZodArray<z.ZodDiscriminatedUnion<"kind", [z.ZodObject<{
         kind: z.ZodLiteral<"text">;
         text: z.ZodEffects<z.ZodString, string, string>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "text";
-        text?: string;
+        kind: "text";
+        text: string;
     }, {
-        kind?: "text";
-        text?: string;
+        kind: "text";
+        text: string;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"json">;
         data: z.ZodRecord<z.ZodString, z.ZodUnknown>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     }, {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"command">;
         command: z.ZodEffects<z.ZodString, string, string>;
         args: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
         cwd: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     }, {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     }>, z.ZodObject<{
         kind: z.ZodLiteral<"artifact">;
         artifactType: z.ZodEnum<["patch", "file", "plan", "report"]>;
@@ -722,121 +722,121 @@ export declare function getRecoderA2AEnvelopeSchema(strictVersion: boolean): z.Z
         content: z.ZodEffects<z.ZodString, string, string>;
         path: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     }, {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     }>]>, "many">;
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
     trace: z.ZodOptional<z.ZodObject<{
         traceId: z.ZodEffects<z.ZodString, string, string>;
         parentMessageId: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        traceId?: string;
-        parentMessageId?: string;
+        traceId: string;
+        parentMessageId?: string | undefined;
     }, {
-        traceId?: string;
-        parentMessageId?: string;
+        traceId: string;
+        parentMessageId?: string | undefined;
     }>>;
 }, "strip", z.ZodTypeAny, {
-    envelopeVersion?: string;
-    protocolVersion?: string;
-    messageId?: string;
-    threadId?: string;
-    createdAt?: string;
-    from?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    envelopeVersion: string;
+    protocolVersion: string;
+    messageId: string;
+    threadId: string;
+    createdAt: string;
+    from: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    to?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    to: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    intent?: "status" | "plan" | "execute" | "review" | "handoff" | "sync" | "tool_call" | "tool_result" | "error";
-    payload?: ({
-        kind?: "text";
-        text?: string;
+    intent: "plan" | "execute" | "review" | "handoff" | "status" | "sync" | "tool_call" | "tool_result" | "error";
+    payload: ({
+        kind: "text";
+        text: string;
     } | {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     } | {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     } | {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     })[];
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | undefined;
     trace?: {
-        traceId?: string;
-        parentMessageId?: string;
-    };
+        traceId: string;
+        parentMessageId?: string | undefined;
+    } | undefined;
 }, {
-    envelopeVersion?: string;
-    protocolVersion?: string;
-    messageId?: string;
-    threadId?: string;
-    createdAt?: string;
-    from?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    envelopeVersion: string;
+    protocolVersion: string;
+    messageId: string;
+    threadId: string;
+    createdAt: string;
+    from: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    to?: {
-        id?: string;
-        name?: string;
-        platform?: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
-        instanceId?: string;
-        team?: string;
-        version?: string;
+    to: {
+        id: string;
+        name: string;
+        platform: "recoder" | "cursor" | "windsurf" | "replit" | "codex" | "claude_code" | "recoder_app" | "recoder_pm" | "recoder_agency" | "recoder_backend" | "recoder_desktop" | "custom";
+        instanceId?: string | undefined;
+        team?: string | undefined;
+        version?: string | undefined;
     };
-    intent?: "status" | "plan" | "execute" | "review" | "handoff" | "sync" | "tool_call" | "tool_result" | "error";
-    payload?: ({
-        kind?: "text";
-        text?: string;
+    intent: "plan" | "execute" | "review" | "handoff" | "status" | "sync" | "tool_call" | "tool_result" | "error";
+    payload: ({
+        kind: "text";
+        text: string;
     } | {
-        kind?: "json";
-        data?: Record<string, unknown>;
+        kind: "json";
+        data: Record<string, unknown>;
     } | {
-        kind?: "command";
-        command?: string;
-        args?: string[];
-        cwd?: string;
+        kind: "command";
+        command: string;
+        args?: string[] | undefined;
+        cwd?: string | undefined;
     } | {
-        path?: string;
-        kind?: "artifact";
-        artifactType?: "patch" | "file" | "plan" | "report";
-        mimeType?: string;
-        content?: string;
+        kind: "artifact";
+        artifactType: "plan" | "patch" | "file" | "report";
+        mimeType: string;
+        content: string;
+        path?: string | undefined;
     })[];
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | undefined;
     trace?: {
-        traceId?: string;
-        parentMessageId?: string;
-    };
+        traceId: string;
+        parentMessageId?: string | undefined;
+    } | undefined;
 }>;
 /** Local literal sets exported for the drift guards to compare against. */
 export declare const __PLATFORMS: readonly ["recoder", "cursor", "windsurf", "replit", "codex", "claude_code", "recoder_app", "recoder_pm", "recoder_agency", "recoder_backend", "recoder_desktop", "custom"];
