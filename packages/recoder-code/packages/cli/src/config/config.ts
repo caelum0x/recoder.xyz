@@ -47,6 +47,7 @@ import { modelsCommand } from '../commands/models-cmd.js';
 import { configureCommand } from '../commands/configure.js';
 import { connectCommand } from '../commands/connect-cmd.js';
 import { parallelCommand, parallelFinishCommand } from '../commands/parallel.js';
+import { conductorCommand } from '../commands/conductor.js';
 import { setupMcpCommand } from '../commands/setupMcp.js';
 import {
   topLevelLoginCommand,
@@ -394,6 +395,8 @@ export async function parseArguments(settings: Settings): Promise<CliArgs> {
     // Register parallel mode commands for git worktree-based parallel execution
     .command(parallelCommand)
     .command(parallelFinishCommand)
+    // Register conductor command for the parallel-agent control plane
+    .command(conductorCommand)
     // Register top-level login/logout/whoami commands for API token auth
     .command(topLevelLoginCommand)
     .command(topLevelLogoutCommand)
