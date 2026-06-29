@@ -11,6 +11,17 @@
  * - recoder_get_thread: Get thread messages (including AI responses)
  */
 
+const {
+  resolveCredentials,
+  buildPlatformHeaders: coreBuildPlatformHeaders,
+  buildPythonApiHeaders: coreBuildPythonApiHeaders,
+  hasPythonApiAuth: coreHasPythonApiAuth,
+  hasPlatformAuth: coreHasPlatformAuth,
+  readJsonResponse,
+  extractApiError,
+  buildDaytonaCreateBody,
+} = require('./lib/recoder-mcp-core');
+
 const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
 const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
 const A2A_URL = process.env.RECODER_A2A_URL || `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:')}/agent-bridge`;
@@ -20,30 +31,17 @@ const RAW_AUTH_TOKEN = process.env.RECODER_API_TOKEN || '';
 const AGENT_ID = process.env.RECODER_AGENT_ID || 'claude_code';
 const SESSION_ID = process.env.RECODER_SESSION_ID || `${AGENT_ID}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
-function isRecoderApiKeyPair(value) {
-  if (!value || typeof value !== 'string' || !value.includes(':')) return false;
-  const [publicKey, secretKey] = value.split(':', 2);
-  return publicKey.startsWith('pk_') && secretKey.startsWith('sk_');
-}
+const _creds = resolveCredentials({
+  apiToken: RAW_AUTH_TOKEN,
+  sessionToken: process.env.RECODER_SESSION_TOKEN || '',
+});
+const PYTHON_API_KEY = _creds.pythonApiKey;
+const PLATFORM_TOKEN = _creds.platformToken;
 
-const PYTHON_API_KEY = isRecoderApiKeyPair(RAW_AUTH_TOKEN) ? RAW_AUTH_TOKEN : '';
-const _rawSessionToken = process.env.RECODER_SESSION_TOKEN || (PYTHON_API_KEY ? '' : RAW_AUTH_TOKEN);
-const PLATFORM_TOKEN = (() => {
-  try { return decodeURIComponent(_rawSessionToken); } catch { return _rawSessionToken; }
-})();
-
-function buildPlatformHeaders(extraHeaders = {}) {
-  const headers = { ...extraHeaders };
-  if (PLATFORM_TOKEN) headers.Authorization = `Bearer ${PLATFORM_TOKEN}`;
-  return headers;
-}
-
-function buildPythonApiHeaders(extraHeaders = {}) {
-  const headers = { ...extraHeaders };
-  if (PYTHON_API_KEY) headers['x-api-key'] = PYTHON_API_KEY;
-  else if (PLATFORM_TOKEN) headers.Authorization = `Bearer ${PLATFORM_TOKEN}`;
-  return headers;
-}
+const buildPlatformHeaders = (extra = {}) => coreBuildPlatformHeaders(_creds, extra);
+const buildPythonApiHeaders = (extra = {}) => coreBuildPythonApiHeaders(_creds, extra);
+const hasPythonApiAuth = () => coreHasPythonApiAuth(_creds);
+const hasPlatformAuth = () => coreHasPlatformAuth(_creds);
 
 // ── WebSocket A2A Bridge Connection ──
 
@@ -323,6 +321,9 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_list_tasks': {
+      if (!hasPlatformAuth()) {
+        return 'Error: A2A control plane not configured. Set RECODER_SESSION_TOKEN (or RECODER_API_TOKEN) to list tasks.';
+      }
       const data = await apiFetch(`${DOCKER_URL}/api/a2a/tasks`);
       const tasks = data.data?.tasks || [];
       if (!tasks.length) return 'No tasks in queue.';
@@ -359,38 +360,55 @@ async function handleToolCall(name, args) {
     }
 
     case 'recoder_create_thread': {
+      if (!hasPythonApiAuth()) {
+        return 'Error: Recoder agents API not configured. Set RECODER_API_TOKEN (pk_/sk_ pair) or RECODER_SESSION_TOKEN to create threads.';
+      }
       const authHeaders = buildPythonApiHeaders();
-      const agentId = args.agent_id || '7e91f872-2407-42ac-bfcb-ea69a496e85c';
+      const agentId = args.agent_id || process.env.RECODER_DEFAULT_AGENT_ID || '7e91f872-2407-42ac-bfcb-ea69a496e85c';
 
       const threadRes = await fetch(`${API_URL}/v1/threads`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ agent_id: agentId }),
       });
-      const threadData = await threadRes.json();
-      if (!threadData.thread_id) return `Error: ${JSON.stringify(threadData)}`;
+      const threadParsed = await readJsonResponse(threadRes);
+      if (!threadParsed.ok || !threadParsed.data?.thread_id) {
+        return `Error creating thread (HTTP ${threadParsed.status}): ${extractApiError(threadParsed)}`;
+      }
+      const threadId = threadParsed.data.thread_id;
 
       if (args.prompt) {
         const form = new URLSearchParams();
         form.append('prompt', args.prompt);
-        form.append('thread_id', threadData.thread_id);
+        form.append('thread_id', threadId);
         form.append('agent_id', agentId);
         const startRes = await fetch(`${API_URL}/v1/agent/start`, {
           method: 'POST',
           headers: buildPythonApiHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
           body: form.toString(),
         });
-        const startData = await startRes.json();
-        return `Thread: ${threadData.thread_id}\nStatus: ${startData.status || 'created'}\nRun: ${startData.agent_run_id || 'none'}\nView: https://agents.recoder.xyz/thread/${threadData.thread_id}`;
+        const startParsed = await readJsonResponse(startRes);
+        if (!startParsed.ok) {
+          return `Thread: ${threadId} (created), but agent start failed (HTTP ${startParsed.status}): ${extractApiError(startParsed)}\nView: https://agents.recoder.xyz/thread/${threadId}`;
+        }
+        const startData = startParsed.data || {};
+        return `Thread: ${threadId}\nStatus: ${startData.status || 'created'}\nRun: ${startData.agent_run_id || 'none'}\nView: https://agents.recoder.xyz/thread/${threadId}`;
       }
-      return `Thread: ${threadData.thread_id}\nView: https://agents.recoder.xyz/thread/${threadData.thread_id}`;
+      return `Thread: ${threadId}\nView: https://agents.recoder.xyz/thread/${threadId}`;
     }
 
     case 'recoder_get_thread': {
+      if (!hasPythonApiAuth()) {
+        return 'Error: Recoder agents API not configured. Set RECODER_API_TOKEN (pk_/sk_ pair) or RECODER_SESSION_TOKEN to read threads.';
+      }
       const authHeaders = buildPythonApiHeaders();
-      const res = await fetch(`${API_URL}/v1/threads/${args.thread_id}/messages`, { headers: authHeaders });
-      const messages = await res.json();
-      const msgs = Array.isArray(messages) ? messages : messages.messages || messages.items || [];
+      const res = await fetch(`${API_URL}/v1/threads/${encodeURIComponent(args.thread_id)}/messages`, { headers: authHeaders });
+      const parsed = await readJsonResponse(res);
+      if (!parsed.ok) {
+        return `Error fetching thread (HTTP ${parsed.status}): ${extractApiError(parsed)}`;
+      }
+      const messages = parsed.data;
+      const msgs = Array.isArray(messages) ? messages : messages?.messages || messages?.items || [];
       if (!msgs.length) return 'No messages in this thread yet.';
       return msgs.map(m => {
         const role = m.role || m.type || '?';
@@ -413,7 +431,10 @@ async function handleToolCall(name, args) {
         try {
           createRes = await fetch(createUrl, {
             method: 'POST', headers: dHeaders,
-            body: JSON.stringify({ image: 'daytonaio/sandbox:0.5.0-slim', public: true, auto_stop_interval: 10 }),
+            body: JSON.stringify(buildDaytonaCreateBody({
+              snapshot: process.env.DAYTONA_SNAPSHOT || 'daytonaio/sandbox:0.5.0-slim',
+              autoStopInterval: 10,
+            })),
           });
         } catch (fetchErr) {
           return `Sandbox fetch error: ${fetchErr.message}\nURL: ${createUrl}\nDAYTONA_URL: ${DAYTONA_URL}`;
