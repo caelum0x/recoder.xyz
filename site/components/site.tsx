@@ -8,7 +8,7 @@ import Image from "next/image";
  */
 export const PUBLIC_GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL?.trim();
 
-/** The single primary action on every page. One CTA discipline (Cursor/Conductor). */
+/** The single primary action on every page. One CTA discipline (Cursor). */
 export function DownloadButton({
   className = "",
   label = "Download",
