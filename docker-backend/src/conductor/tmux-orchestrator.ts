@@ -245,12 +245,25 @@ export async function listSessions(): Promise<ConductorSession[]> {
   }
 }
 
+/**
+ * tmux's remain-on-exit dead-pane banner, e.g.
+ * "Pane is dead (status 0, Tue Jun 30 01:23:01 2026)". remain-on-exit is ON (we
+ * need #{pane_dead_status} for exit-code detection), so a finished pane keeps
+ * showing this banner in its captured output. It reads like a crash to a user,
+ * and the real exit code is already surfaced as a friendly terminal event — so
+ * strip the banner from the captured OUTPUT here, at the source, for every
+ * consumer (run-tailer deltas, the terminal view, delivery summaries).
+ */
+const PANE_DEAD_BANNER = /\n*[ \t]*Pane is dead \(status\s*-?\d+[^)]*\)[ \t]*/gi;
+
 /** Capture the agent's current terminal output. Survives restarts: derives the
  * tmux session name deterministically instead of relying on the in-memory map. */
 export async function capturePane(sessionId: string, lines = 200): Promise<string> {
   const tmuxName = tmuxNameFor(sessionId);
   const { stdout } = await exec(TMUX_BIN, ['capture-pane', '-p', '-t', tmuxName, '-S', `-${lines}`]);
-  return stdout;
+  // Remove tmux's dead-pane banner so the agent's real output reads cleanly.
+  const cleaned = stdout.replace(PANE_DEAD_BANNER, '').replace(/[ \t]+\n/g, '\n').trimEnd();
+  return cleaned ? cleaned + '\n' : '';
 }
 
 /** Send input/keys to an agent session (e.g. an approval, an interrupt).

@@ -16,6 +16,7 @@ import { agentOsContainer } from '../agent-os/service-container';
 import { getWorkspace, advanceWorkspace, listWorkspaces } from './workspace-service.js';
 import { getSubstrate } from './substrate.js';
 import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
+import { commitWorktreeChanges } from './commit-worktree.js';
 import { runPostRunDelivery } from './post-run-workflow.js';
 import { metrics } from './conductor-metrics.js';
 import { transitionWorkspace, type Workspace } from '@recoder/agent-os';
@@ -118,6 +119,32 @@ async function runCompletionCheck(workspace: Workspace): Promise<void> {
   metrics.counter('conductor_agent_completions', {
     result: exitCode === 0 ? 'success' : 'failure',
   });
+
+  // Land the agent's work onto its branch NOW that it has finished. The agent
+  // only edits files in the worktree (it never `git commit`s), so without this
+  // the brand-new files are untracked: the review diff lists "No changed files"
+  // and a later merge finds nothing to deliver. Committing here makes the work
+  // visible to the delivery summary below AND mergeable. Best-effort: a clean
+  // worktree is a no-op, and a failure here never blocks the review transition.
+  if (workspace.worktreePath) {
+    try {
+      const committed = await commitWorktreeChanges(
+        workspace.worktreePath,
+        `agent: ${workspace.branch || workspace.taskId}`,
+      );
+      if (committed) {
+        logger.info(
+          { workspaceId: workspace.workspaceId, branch: workspace.branch },
+          'committed agent worktree changes onto its branch at completion',
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        { workspaceId: workspace.workspaceId, err },
+        'commit of agent worktree changes at completion failed (review transition unaffected)',
+      );
+    }
+  }
 
   logger.info(
     { workspaceId: workspace.workspaceId, exitCode, state: workspace.state },
