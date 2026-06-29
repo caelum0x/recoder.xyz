@@ -39,6 +39,7 @@ import type {
 import type {
   ActivityPort,
   BrainContextCacheStore,
+  ChunkerPort,
   ClockPort,
   DocsPort,
   DocumentPreprocessorPort,
@@ -83,6 +84,17 @@ export interface BrainDeps {
    * clean text the brain can ingest into memory via {@link Brain.ingestDocument}.
    */
   preprocessor?: DocumentPreprocessorPort;
+  /**
+   * RAG chunker for document ingest, bound to the owned @recoder/rag chunker.
+   * When wired, {@link Brain.ingestDocument} splits a preprocessed document into
+   * overlapping, size-bounded chunks and remembers EACH chunk so a later recall
+   * surfaces the precise passage. Its signature matches @recoder/rag's
+   * `ChunkerFunction`, so the real engine wires with zero adaptation:
+   * `createBrain({ chunker: { chunk: createDefaultChunker() } })`.
+   * Degrade-safe: with no chunker, ingest stores the whole document as one
+   * memory exactly as before.
+   */
+  chunker?: ChunkerPort;
   /** How git-nexus builds the repo map (defaults to indexing repoRoot). */
   repoMap?: (q: BrainQuery) => CreateContextPackInput;
   /**
@@ -420,6 +432,13 @@ export class Brain {
    * preprocessor wired, nothing is preprocessed and an empty result is returned;
    * with a preprocessor but no memory port, the text is returned but not stored.
    * `remembered` reports whether the text was actually written to memory.
+   *
+   * RAG chunking: when a {@link ChunkerPort} (the owned @recoder/rag chunker) is
+   * wired, the preprocessed text is split into overlapping, size-bounded chunks
+   * and EACH chunk is remembered separately — keyed with its `chunkIndex` /
+   * `chunkCount` — so a later {@link Brain.recall} surfaces the precise passage
+   * rather than one undifferentiated blob. With no chunker wired, the whole
+   * document text is remembered as a single memory exactly as before.
    */
   async ingestDocument(
     doc: BrainRawDocument,
@@ -431,12 +450,49 @@ export class Brain {
     if (!result.text || !this.deps.memory) {
       return { ...result, remembered: false };
     }
-    await this.deps.memory.remember(result.text, {
-      kind: "document",
+
+    const baseMetadata = {
+      kind: "document" as const,
       title: result.title,
       pageCount: result.pageCount,
-    });
+    };
+
+    // RAG path: split into chunks and remember each, so recall is passage-level.
+    const chunks = this.chunkText(result.text);
+    if (chunks.length > 1) {
+      await Promise.all(
+        chunks.map((chunk, index) =>
+          this.deps.memory!.remember(chunk, {
+            ...baseMetadata,
+            chunkIndex: index,
+            chunkCount: chunks.length,
+          }),
+        ),
+      );
+      return { ...result, remembered: true };
+    }
+
+    // No chunker (or a single chunk): one whole-document memory, as before.
+    await this.deps.memory.remember(result.text, baseMetadata);
     return { ...result, remembered: true };
+  }
+
+  /**
+   * Apply the wired RAG chunker to text, degrade-safe. Returns the chunks when a
+   * chunker is wired and produces a non-empty, multi-piece split; otherwise the
+   * single-element `[text]` so the caller falls back to whole-document ingest. A
+   * chunker that throws never fails ingest — it degrades to the whole document.
+   */
+  private chunkText(text: string): string[] {
+    if (!this.deps.chunker) {
+      return [text];
+    }
+    try {
+      const chunks = this.deps.chunker.chunk(text).filter((c) => c.length > 0);
+      return chunks.length > 0 ? chunks : [text];
+    } catch {
+      return [text];
+    }
   }
 
   /** Write an agent's outcome back so the next assemble() is richer. */
