@@ -865,6 +865,9 @@ importers:
       '@recoder/brain':
         specifier: workspace:*
         version: link:../packages/brain
+      '@recoder/browser-verification':
+        specifier: workspace:*
+        version: link:../packages/browser-verification
       '@recoder/connectors':
         specifier: workspace:*
         version: link:../ts/extracted-from-openclaw
