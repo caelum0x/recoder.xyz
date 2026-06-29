@@ -15146,6 +15146,16 @@ import { createPromptsRouter } from './routes/prompts.routes.js';
 import { createSecretsRouter } from './routes/secrets.routes.js';
 import { createPackageManagerRouter } from './routes/package-manager.routes.js';
 import { createNeonRouter } from './routes/neon.routes.js';
+import { createDeployRouter } from './routes/deploy.routes.js';
+import { createTemplatesRouter } from './routes/templates.routes.js';
+import { createCodeGraphRouter } from './routes/code-graph.routes.js';
+import { createLlmRouterRouter } from './routes/llm-router.routes.js';
+import { createZitiRouter } from './routes/ziti.routes.js';
+import { createAgentSkillProfilesRouter } from './routes/agent-skill-profiles.routes.js';
+import { createMem0Router } from './routes/mem0.routes.js';
+import { createContext7Router } from './routes/context7.routes.js';
+import { createE2bRouter } from './routes/e2b.routes.js';
+import { createBrowserVerifyRouter } from './routes/browser-verify.routes.js';
 
 // Initialize sandbox routes — prefer Daytona if configured, fall back to Docker
 import { createDaytonaSandboxDeps } from './daytona-sandbox-deps.js';
@@ -15754,178 +15764,24 @@ app.get('/api/coding-runtime/runtimes', (_req, res) => {
 // Fail-safe: when the SDK or E2B_API_KEY is missing, health reports the reason
 // and exec/run return explicit errors — never fake success.
 
-app.get('/api/e2b/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
-  const { e2bHealth } = await import('./e2b-client.js');
-  sendSuccess(res, await e2bHealth());
-}));
-
-app.post('/api/e2b/exec', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { command, timeoutMs, envs, sandboxId, keepAlive } = req.body ?? {};
-  if (typeof command !== 'string' || !command.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'command (string) is required'));
-  }
-  const { e2bExec } = await import('./e2b-client.js');
-  try {
-    const result = await e2bExec({ command, timeoutMs, envs, sandboxId, keepAlive });
-    sendSuccess(res, result);
-  } catch (err) {
-    sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B exec failed'));
-  }
-}));
-
-app.post('/api/e2b/run', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { code, language, timeoutMs, envs, sandboxId, keepAlive } = req.body ?? {};
-  if (typeof code !== 'string' || !code.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'code (string) is required'));
-  }
-  if (language && !['python', 'node', 'bash'].includes(language)) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'language must be python, node, or bash'));
-  }
-  const { e2bRunCode } = await import('./e2b-client.js');
-  try {
-    const result = await e2bRunCode({ code, language, timeoutMs, envs, sandboxId, keepAlive });
-    sendSuccess(res, result);
-  } catch (err) {
-    sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B run failed'));
-  }
-}));
-
-app.delete('/api/e2b/sandbox/:sandboxId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { sandboxId } = req.params;
-  const { e2bKill } = await import('./e2b-client.js');
-  const killed = await e2bKill(sandboxId);
-  sendSuccess(res, { killed });
-}));
+app.use(createE2bRouter({ authenticateRequest }));
 
 // ── Browser Verification API ────────────────────────────────────────────────
 // Drive a headless browser to verify a preview URL actually renders/behaves.
 // Deterministic checks (Puppeteer) + optional AI checks (Stagehand, fail-safe).
 
-app.get('/api/browser/verify/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
-  const { browserVerifyHealth } = await import('./browser-verify.js');
-  sendSuccess(res, await browserVerifyHealth());
-}));
-
-app.post('/api/browser/verify', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { url, checks, timeoutMs, viewport, settleMs } = req.body ?? {};
-  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
-  }
-  if (checks !== undefined && !Array.isArray(checks)) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'checks must be an array'));
-  }
-  const { browserVerify } = await import('./browser-verify.js');
-  const result = await browserVerify({ url, checks, timeoutMs, viewport, settleMs });
-  sendSuccess(res, result);
-}));
-
-app.post('/api/browser/verify/ai', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { url, instruction, timeoutMs } = req.body ?? {};
-  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'url (http/https) is required'));
-  }
-  if (typeof instruction !== 'string' || !instruction.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'instruction (string) is required'));
-  }
-  const { browserAiVerify } = await import('./browser-verify.js');
-  const result = await browserAiVerify({ url, instruction, timeoutMs });
-  sendSuccess(res, result);
-}));
+app.use(createBrowserVerifyRouter({ authenticateRequest }));
 
 // ── mem0 Intelligent Agent Memory API ───────────────────────────────────────
 // LLM-managed memory (extract/dedupe/update) on top of the raw Qdrant store.
 // Fail-safe: reports availability truthfully; recall returns empty when off.
 
-app.get('/api/memory/mem0/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
-  const { mem0Health } = await import('./mem0-client.js');
-  sendSuccess(res, await mem0Health());
-}));
-
-app.post('/api/memory/mem0/add', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { messages, userId, agentId, runId, metadata } = req.body ?? {};
-  const scopeUserId = userId || req.userId;
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
-  }
-  if (!scopeUserId) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'userId is required'));
-  }
-  const { mem0Add } = await import('./mem0-client.js');
-  const result = await mem0Add(messages, { userId: scopeUserId, agentId, runId, metadata });
-  sendSuccess(res, result);
-}));
-
-app.post('/api/memory/mem0/search', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { query, userId, agentId, runId, limit } = req.body ?? {};
-  const scopeUserId = userId || req.userId;
-  if (typeof query !== 'string' || !query.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
-  }
-  if (!scopeUserId) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'userId is required'));
-  }
-  const { mem0Search } = await import('./mem0-client.js');
-  const result = await mem0Search(query, { userId: scopeUserId, agentId, runId }, typeof limit === 'number' ? limit : 10);
-  sendSuccess(res, result);
-}));
-
-app.get('/api/memory/mem0/all', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const scopeUserId = (req.query.userId as string | undefined) || req.userId;
-  const agentId = req.query.agentId as string | undefined;
-  if (!scopeUserId) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'userId is required'));
-  }
-  const { mem0GetAll } = await import('./mem0-client.js');
-  const result = await mem0GetAll({ userId: scopeUserId, agentId });
-  sendSuccess(res, result);
-}));
-
-app.delete('/api/memory/mem0/:memoryId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { mem0Delete } = await import('./mem0-client.js');
-  const result = await mem0Delete(req.params.memoryId);
-  sendSuccess(res, result);
-}));
+app.use(createMem0Router({ authenticateRequest }));
 
 // ── Context7 Up-to-date Docs API ────────────────────────────────────────────
 // Resolve a library and fetch current docs to inject into coding-agent context.
 
-app.get('/api/context7/health', (_req, res) => {
-  import('./context7-client.js').then(({ context7Health }) => sendSuccess(res, context7Health()));
-});
-
-app.get('/api/context7/resolve', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const library = (req.query.library as string | undefined)?.trim();
-  const query = (req.query.query as string | undefined) ?? '';
-  if (!library) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'library query param is required'));
-  }
-  const { resolveLibrary } = await import('./context7-client.js');
-  sendSuccess(res, await resolveLibrary(library, query));
-}));
-
-app.post('/api/context7/docs', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { libraryId, query } = req.body ?? {};
-  if (typeof libraryId !== 'string' || !libraryId.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'libraryId (string) is required'));
-  }
-  if (typeof query !== 'string' || !query.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
-  }
-  const { getLibraryDocs } = await import('./context7-client.js');
-  sendSuccess(res, await getLibraryDocs(libraryId, query));
-}));
-
-app.post('/api/context7/inject', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { libraryName, query } = req.body ?? {};
-  if (typeof libraryName !== 'string' || !libraryName.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'libraryName (string) is required'));
-  }
-  if (typeof query !== 'string' || !query.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'query (string) is required'));
-  }
-  const { getDocsForQuery } = await import('./context7-client.js');
-  sendSuccess(res, await getDocsForQuery({ libraryName, query }));
-}));
+app.use(createContext7Router({ authenticateRequest }));
 
 // ── Platform Capabilities Aggregator ────────────────────────────────────────
 // Single call reporting the status of every agent capability, so UIs and
@@ -16374,208 +16230,23 @@ app.get('/api/billing/polar/subscriptions', authenticateRequest, asyncHandler(as
 // ── Zero-Trust Network (OpenZiti) API ───────────────────────────────────────
 // Provision zero-trust identities/enrollment for runners. Fail-safe.
 
-app.get('/api/ziti/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
-  const { zitiHealth } = await import('./ziti-client.js');
-  sendSuccess(res, await zitiHealth());
-}));
-
-app.get('/api/ziti/identities', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { listIdentities } = await import('./ziti-client.js');
-  sendSuccess(res, await listIdentities(req.query.filter as string | undefined));
-}));
-
-app.post('/api/ziti/identities', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { name, isAdmin, roleAttributes } = req.body ?? {};
-  if (typeof name !== 'string' || !name.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
-  }
-  const { createIdentity } = await import('./ziti-client.js');
-  const result = await createIdentity({ name: name.trim(), isAdmin, roleAttributes });
-  if (!result.available) return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
-  sendSuccess(res, result);
-}));
-
-app.post('/api/ziti/runners', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { name } = req.body ?? {};
-  if (typeof name !== 'string' || !name.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name (string) is required'));
-  }
-  const { provisionRunnerIdentity } = await import('./ziti-client.js');
-  const result = await provisionRunnerIdentity(name.trim());
-  if (!result.available) return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Ziti unavailable'));
-  sendSuccess(res, result);
-}));
-
-app.delete('/api/ziti/identities/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { deleteIdentity } = await import('./ziti-client.js');
-  sendSuccess(res, await deleteIdentity(req.params.id));
-}));
+app.use(createZitiRouter({ authenticateRequest }));
 
 // ── Agent Skill Profiles API (dynamic, outcome-driven proficiency) ──────────
 // Compound skills: record task outcomes and rank agents by demonstrated ability.
 
-app.post('/api/agent-skills/record', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { agentId, skills, success, durationMs } = req.body ?? {};
-  if (typeof agentId !== 'string' || !agentId.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'agentId (string) is required'));
-  }
-  if (!Array.isArray(skills) || skills.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
-  }
-  if (typeof success !== 'boolean') {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'success (boolean) is required'));
-  }
-  const { recordTaskOutcome } = await import('./agent-skill-profile.js');
-  sendSuccess(res, recordTaskOutcome({ agentId, skills, success, durationMs }));
-}));
-
-app.get('/api/agent-skills', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
-  const { listProfiles } = await import('./agent-skill-profile.js');
-  sendSuccess(res, { profiles: listProfiles() });
-}));
-
-// Registered before /:agentId so "leaderboard" isn't captured as an agentId.
-app.get('/api/agent-skills/leaderboard', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getLeaderboard } = await import('./agent-skill-profile.js');
-  sendSuccess(res, {
-    leaderboard: getLeaderboard({ skill: req.query.skill as string | undefined, limit: Number(req.query.limit) || 20 }),
-  });
-}));
-
-app.get('/api/agent-skills/:agentId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getAgentProfile } = await import('./agent-skill-profile.js');
-  const profile = getAgentProfile(req.params.agentId);
-  if (!profile) return sendError(res, createError(ErrorCode.NOT_FOUND, 'no profile for that agent yet'));
-  sendSuccess(res, profile);
-}));
-
-app.post('/api/agent-skills/rank', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { agentIds, skills } = req.body ?? {};
-  if (!Array.isArray(skills) || skills.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'skills (non-empty array) is required'));
-  }
-  const { rankAgentsForSkills } = await import('./agent-skill-profile.js');
-  sendSuccess(res, { rankings: rankAgentsForSkills(Array.isArray(agentIds) ? agentIds : undefined, skills) });
-}));
+app.use(createAgentSkillProfilesRouter({ authenticateRequest }));
 
 // ── Unified Multi-Model LLM Router API ──────────────────────────────────────
 // One endpoint routes to any provider by `provider/model`, BYOK-aware.
 
-app.get('/api/llm/providers', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
-  const { listProviders, llmRouterHealth } = await import('./llm-router.js');
-  sendSuccess(res, { health: llmRouterHealth(), providers: listProviders() });
-}));
-
-app.post('/api/llm/route', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { prompt, provider } = req.body ?? {};
-  if (typeof prompt !== 'string' || !prompt.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'prompt (string) is required'));
-  }
-  const { recommendModel } = await import('./llm-router.js');
-  sendSuccess(res, recommendModel({ prompt, provider }));
-}));
-
-app.post('/api/llm/chat', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { model, messages, provider, apiKey, temperature, maxTokens, timeoutMs, autoModel } = req.body ?? {};
-  // autoModel: pick a model by prompt complexity when no explicit model given.
-  let resolvedModel = model;
-  if ((!resolvedModel || autoModel === true) && Array.isArray(messages) && messages.length > 0) {
-    const { recommendModel } = await import('./llm-router.js');
-    const lastUser = [...messages].reverse().find((m: { role?: string; content?: string }) => m.role === 'user');
-    const rec = recommendModel({ prompt: String(lastUser?.content ?? ''), provider });
-    resolvedModel = `${rec.provider}/${rec.model}`;
-  }
-  if (typeof resolvedModel !== 'string' || !resolvedModel.trim()) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'model (string) is required (or pass autoModel:true)'));
-  }
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'messages (non-empty array) is required'));
-  }
-  const { chatComplete } = await import('./llm-router.js');
-  const result = await chatComplete({
-    model: resolvedModel,
-    messages,
-    provider,
-    apiKey,
-    userId: req.userId,
-    temperature,
-    maxTokens,
-    timeoutMs,
-  });
-  if (!result.ok) {
-    return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.error ?? 'chat completion failed'));
-  }
-  sendSuccess(res, result);
-}));
+app.use(createLlmRouterRouter({ authenticateRequest }));
 
 // ── Code Intelligence API (code knowledge graph) ────────────────────────────
 // Build a queryable symbol/import graph from project files so agents can
 // navigate a codebase: find symbols, list a file's exports, who-imports, deps.
 
-app.post('/api/code-graph/build', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { files, graphId, maxFiles, maxFileBytes } = req.body ?? {};
-  if (!Array.isArray(files) || files.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'files (non-empty array of {path, content}) is required'));
-  }
-  const { buildCodeGraph, storeGraph } = await import('./code-graph.js');
-  const graph = buildCodeGraph(files, { maxFiles, maxFileBytes });
-  const id = (typeof graphId === 'string' && graphId.trim()) ? graphId.trim() : `graph_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  storeGraph(id, graph);
-  sendSuccess(res, { graphId: id, stats: graph.stats });
-}));
-
-app.get('/api/code-graph/:graphId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getStoredGraph } = await import('./code-graph.js');
-  const graph = getStoredGraph(req.params.graphId);
-  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
-  const full = req.query.full === 'true';
-  sendSuccess(res, full ? graph : { stats: graph.stats });
-}));
-
-app.get('/api/code-graph/:graphId/search', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getStoredGraph, searchSymbols } = await import('./code-graph.js');
-  const graph = getStoredGraph(req.params.graphId);
-  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
-  const q = (req.query.q as string | undefined)?.trim();
-  if (!q) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'q query param is required'));
-  sendSuccess(res, { results: searchSymbols(graph, q, Number(req.query.limit) || 50) });
-}));
-
-app.get('/api/code-graph/:graphId/symbol', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getStoredGraph, findSymbol } = await import('./code-graph.js');
-  const graph = getStoredGraph(req.params.graphId);
-  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
-  const name = (req.query.name as string | undefined)?.trim();
-  if (!name) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name query param is required'));
-  sendSuccess(res, { results: findSymbol(graph, name) });
-}));
-
-app.get('/api/code-graph/:graphId/file-symbols', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getStoredGraph, fileSymbols } = await import('./code-graph.js');
-  const graph = getStoredGraph(req.params.graphId);
-  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
-  const path = (req.query.path as string | undefined)?.trim();
-  if (!path) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query param is required'));
-  sendSuccess(res, { symbols: fileSymbols(graph, path) });
-}));
-
-app.get('/api/code-graph/:graphId/who-imports', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getStoredGraph, whoImports } = await import('./code-graph.js');
-  const graph = getStoredGraph(req.params.graphId);
-  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
-  const path = (req.query.path as string | undefined)?.trim();
-  if (!path) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query param is required'));
-  sendSuccess(res, { importers: whoImports(graph, path) });
-}));
-
-app.get('/api/code-graph/:graphId/dependencies', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { getStoredGraph, dependenciesOf } = await import('./code-graph.js');
-  const graph = getStoredGraph(req.params.graphId);
-  if (!graph) return sendError(res, createError(ErrorCode.NOT_FOUND, 'graph not found or expired — rebuild it'));
-  const path = (req.query.path as string | undefined)?.trim();
-  if (!path) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query param is required'));
-  sendSuccess(res, { dependencies: dependenciesOf(graph, path) });
-}));
+app.use(createCodeGraphRouter({ authenticateRequest }));
 
 // ── Agent Terminal Registry ─────────────────────────────────────────────────
 // Per-terminal discovery so the system knows exactly how many Claude Code,
@@ -16973,173 +16644,10 @@ logger.info('usage, subscription, and invoice endpoints registered');
 
 // ==================== Deployment Routes ====================
 
-// Vercel deployment routes
-app.post('/api/deploy/vercel/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { token } = req.body;
-  if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token required'));
-  const result = await (await getVercelDeploy()).validateToken(token);
-  sendSuccess(res, result);
-}));
-
-app.get('/api/deploy/vercel/projects', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const token = req.headers['x-vercel-token'] as string;
-  const teamId = req.query.teamId as string | undefined;
-  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const projects = await (await getVercelDeploy()).listProjects({ provider: 'vercel', token, teamId });
-  sendSuccess(res, { projects });
-}));
-
-app.post('/api/deploy/vercel', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { token, teamId, config, files } = req.body;
-  if (!token || !config || !files) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
-  const credentials: ProviderCredentials = { provider: 'vercel', token, teamId };
-  const deployment = await (await getVercelDeploy()).deploy(credentials, config, files);
-  sendSuccess(res, { deployment });
-}));
-
-app.get('/api/deploy/vercel/:deploymentId', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const token = req.headers['x-vercel-token'] as string;
-  const teamId = req.query.teamId as string | undefined;
-  const { deploymentId } = req.params;
-  const projectId = req.query.projectId as string || deploymentId;
-  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const deployment = await (await getVercelDeploy()).getDeployment({ provider: 'vercel', token, teamId }, deploymentId, projectId);
-  sendSuccess(res, { deployment });
-}));
-
-app.get('/api/deploy/vercel/:projectId/deployments', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const token = req.headers['x-vercel-token'] as string;
-  const teamId = req.query.teamId as string | undefined;
-  const { projectId } = req.params;
-  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const deployments = await (await getVercelDeploy()).listDeployments({ provider: 'vercel', token, teamId }, { projectId, limit: 20 });
-  sendSuccess(res, { deployments });
-}));
-
-app.post('/api/deploy/vercel/:projectId/rollback', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const token = req.headers['x-vercel-token'] as string;
-  const teamId = req.query.teamId as string | undefined;
-  const { projectId } = req.params;
-  const { deploymentId } = req.body;
-  if (!token || !deploymentId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
-  const deployment = await (await getVercelDeploy()).rollback({ provider: 'vercel', token, teamId }, projectId, deploymentId);
-  sendSuccess(res, { deployment });
-}));
-
-// Netlify deployment routes
-app.post('/api/deploy/netlify/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { token } = req.body;
-  if (!token) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token required'));
-  const result = await (await getNetlifyDeploy()).validateToken(token);
-  sendSuccess(res, result);
-}));
-
-app.get('/api/deploy/netlify/sites', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const token = req.headers['x-netlify-token'] as string;
-  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const sites = await (await getNetlifyDeploy()).listSites({ provider: 'netlify', token });
-  sendSuccess(res, { sites });
-}));
-
-app.post('/api/deploy/netlify', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { token, config, files } = req.body;
-  if (!token || !config || !files) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, config, and files required'));
-  const credentials: ProviderCredentials = { provider: 'netlify', token };
-  const deployment = await (await getNetlifyDeploy()).deploy(credentials, config, files);
-  sendSuccess(res, { deployment });
-}));
-
-app.get('/api/deploy/netlify/:siteId/deployments', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const token = req.headers['x-netlify-token'] as string;
-  const { siteId } = req.params;
-  if (!token) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token required'));
-  const deployments = await (await getNetlifyDeploy()).listDeployments({ provider: 'netlify', token }, siteId, { limit: 20 });
-  sendSuccess(res, { deployments });
-}));
-
-app.post('/api/deploy/netlify/:siteId/rollback', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const token = req.headers['x-netlify-token'] as string;
-  const { siteId } = req.params;
-  const { deploymentId, projectId } = req.body;
-  if (!token || !deploymentId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token and deploymentId required'));
-  const deployment = await (await getNetlifyDeploy()).rollback({ provider: 'netlify', token }, siteId, deploymentId, projectId || siteId);
-  sendSuccess(res, { deployment });
-}));
-
-// Cloudflare Workers deployment routes
-app.post('/api/deploy/cloudflare/validate', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { apiToken, accountId } = req.body;
-  if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
-  const result = await (await getCloudflareDeploy()).validateToken(apiToken, accountId);
-  sendSuccess(res, result);
-}));
-
-app.post('/api/deploy/cloudflare/deploy', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const { apiToken, accountId, projectId, workerName, config, files } = req.body;
-  if (!apiToken || !accountId || !workerName || !files) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token, account ID, worker name, and files are required'));
-  }
-  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
-  const deployConfig: DeploymentConfig = {
-    provider: 'cloudflare',
-    projectName: workerName,
-    projectId: projectId || workerName,
-    providerProjectId: workerName,
-    accountId,
-    ...(config || {}),
-  };
-  const deployment = await (await getCloudflareDeploy()).deploy(credentials, deployConfig, files);
-  sendSuccess(res, { success: true, url: deployment.url, workerId: deployment.id, deployment });
-}));
-
-app.get('/api/deploy/cloudflare/list', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const apiToken = req.query.apiToken as string || req.headers['x-cloudflare-token'] as string;
-  const accountId = req.query.accountId as string;
-  if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'API token and account ID required'));
-  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
-  const workers = await (await getCloudflareDeploy()).listWorkers(credentials);
-  sendSuccess(res, { workers });
-}));
-
-app.get('/api/deploy/cloudflare/:workerName/deployments', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const apiToken = req.headers['x-cloudflare-token'] as string;
-  const accountId = req.query.accountId as string;
-  const { workerName } = req.params;
-  if (!apiToken || !accountId) return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Token and account ID required'));
-  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
-  const deployments = await (await getCloudflareDeploy()).listDeployments(credentials, workerName);
-  sendSuccess(res, { deployments });
-}));
-
-app.post('/api/deploy/cloudflare/:workerName/rollback', asyncHandler(async (req: express.Request, res: express.Response) => {
-  const apiToken = req.headers['x-cloudflare-token'] as string;
-  const accountId = req.query.accountId as string;
-  const { workerName } = req.params;
-  const { versionId, projectId } = req.body;
-  if (!apiToken || !accountId || !versionId) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'Token, account ID, and versionId required'));
-  }
-  const credentials: ProviderCredentials = { provider: 'cloudflare', token: apiToken, accountId };
-  const deployment = await (await getCloudflareDeploy()).rollback(credentials, workerName, versionId, projectId || workerName);
-  sendSuccess(res, { deployment });
-}));
+app.use(createDeployRouter());
 
 // Template routes
-app.get('/api/templates', (_req: express.Request, res: express.Response) => {
-  const templates = templateManager.getAllTemplates();
-  sendSuccess(res, { templates });
-});
-
-app.get('/api/templates/:templateId', (req: express.Request, res: express.Response) => {
-  const template = templateManager.getTemplate(req.params.templateId);
-  if (!template) return sendError(res, createError(ErrorCode.NOT_FOUND, 'Template not found'));
-  sendSuccess(res, { template });
-});
-
-app.get('/api/templates/search/:query', (req: express.Request, res: express.Response) => {
-  const results = templateManager.searchTemplates(req.params.query);
-  sendSuccess(res, { templates: results });
-});
+app.use(createTemplatesRouter());
 
 // Health monitor routes
 app.get('/api/health/containers', asyncHandler(async (_req: express.Request, res: express.Response) => {
