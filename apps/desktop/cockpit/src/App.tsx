@@ -34,6 +34,39 @@ import { SignIn } from './components/SignIn';
 const WORKSPACE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
 
+/**
+ * Plain-English labels for each view. The underlying view ids/routes/state
+ * values never change — only what the user reads. This keeps deep links, the
+ * navigate event, and persisted state stable while the nav speaks plain words.
+ */
+const VIEW_LABELS: Record<CockpitView, string> = {
+  board: 'Board',
+  sessions: 'Runs',
+  connectors: 'Chat',
+  substrates: 'Agents',
+  events: 'Activity',
+  governance: 'Approvals',
+  policy: 'Rules',
+  brain: 'Brain',
+  memory: 'Memory',
+  dmux: 'dmux',
+};
+
+/** Views always shown front-and-center in the top nav. */
+const PRIMARY_VIEWS: readonly CockpitView[] = ['board', 'sessions'];
+
+/** Advanced/technical views tucked into the "More" menu so they're not in your face. */
+const MORE_VIEWS: readonly CockpitView[] = [
+  'dmux',
+  'substrates',
+  'governance',
+  'policy',
+  'brain',
+  'memory',
+  'events',
+  'connectors',
+];
+
 export function App() {
   const config = readConfig();
   // Open on the deep-linked view when a launcher/menu requested one (e.g. the
@@ -42,6 +75,13 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [reconciling, setReconciling] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  // When the user picks an advanced view, jump to it and close the More menu.
+  function goTo(target: CockpitView) {
+    setView(target);
+    setMoreOpen(false);
+  }
 
   const board = usePoll(() => api.listWorkspaces(), WORKSPACE_POLL_MS);
   const health = usePoll(() => api.health(), HEALTH_POLL_MS);
@@ -74,6 +114,7 @@ export function App() {
         target === 'brain'
       ) {
         setView(target);
+        setMoreOpen(false);
       }
     }
     if (typeof window === 'undefined') return;
@@ -120,16 +161,49 @@ export function App() {
           <span class="brand-sub">{config.backendUrl}</span>
         </div>
         <nav class="view-tabs">
-          <button class={view === 'board' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('board')}>Board</button>
-          <button class={view === 'sessions' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('sessions')}>Sessions</button>
-          <button class={view === 'dmux' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('dmux')}>dmux</button>
-          <button class={view === 'connectors' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('connectors')}>Channels</button>
-          <button class={view === 'substrates' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('substrates')}>Runners</button>
-          <button class={view === 'events' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('events')}>Events</button>
-          <button class={view === 'governance' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('governance')}>Gates</button>
-          <button class={view === 'brain' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('brain')}>Brain</button>
-          <button class={view === 'policy' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('policy')}>Policy</button>
-          <button class={view === 'memory' ? 'view-tab view-tab-active' : 'view-tab'} onClick={() => setView('memory')}>Memory</button>
+          {PRIMARY_VIEWS.map((v) => (
+            <button
+              key={v}
+              class={view === v ? 'view-tab view-tab-active' : 'view-tab'}
+              onClick={() => goTo(v)}
+            >
+              {VIEW_LABELS[v]}
+            </button>
+          ))}
+          {/* Everything technical lives behind one calm "More" menu so the nav
+              stays plain. The view ids never change — only where they live. */}
+          <div class="view-more">
+            <button
+              class={
+                MORE_VIEWS.includes(view)
+                  ? 'view-tab view-tab-active view-more-trigger'
+                  : 'view-tab view-more-trigger'
+              }
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              More ▾
+            </button>
+            {moreOpen && (
+              <>
+                {/* Click-away backdrop closes the menu without stealing focus. */}
+                <div class="view-more-backdrop" onClick={() => setMoreOpen(false)} />
+                <div class="view-more-menu" role="menu">
+                  {MORE_VIEWS.map((v) => (
+                    <button
+                      key={v}
+                      role="menuitem"
+                      class={view === v ? 'view-more-item view-more-item-active' : 'view-more-item'}
+                      onClick={() => goTo(v)}
+                    >
+                      {VIEW_LABELS[v]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </nav>
         <div class="topbar-actions">
           <button class="btn btn-ghost btn-sm" onClick={reconcile} disabled={reconciling}>

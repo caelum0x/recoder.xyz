@@ -79,7 +79,7 @@ export function ConnectorsPanel() {
   return (
     <div class="connectors-panel">
       <div class="panel-head">
-        <h2 class="panel-title">Connectors</h2>
+        <h2 class="panel-title">Chat</h2>
         <div class="panel-head-actions">
           {health && (
             <>
