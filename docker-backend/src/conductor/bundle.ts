@@ -23,6 +23,7 @@ import { agentOsContainer } from '../agent-os/service-container';
 import { buildTaskContextPack } from '../git-context.js';
 import { fetchLibraryDocs, isContext7Available } from '../context7.js';
 import { mem0Search } from '../mem0-client.js';
+import { colbertRerank } from './colbert-rerank.js';
 import { createLogger } from '../logger';
 
 const logger = createLogger('conductor:bundle');
@@ -185,9 +186,18 @@ export async function enrichPrompt(input: EnrichPromptInput): Promise<EnrichedPr
     try {
       const recall = await mem0Search(input.prompt, { userId: input.userId }, 5);
       if (recall.available && recall.results.length) {
-        const memories = recall.results.map((r) => `- ${r.memory}`);
-        sections.push(['## Relevant memory (mem0)', ...memories].join('\n'));
+        // ColBERT late-interaction rerank of the recalled memories against the
+        // prompt — a genuine call to the optional py/colbert service when
+        // COLBERT_RERANK_URL is set. Degrade-safe: unset/down → mem0's order.
+        const texts = recall.results.map((r) => r.memory);
+        const reranked = await colbertRerank(input.prompt, texts);
+        const memories = reranked.passages.map((m) => `- ${m}`);
+        const label = reranked.available
+          ? '## Relevant memory (mem0, colbert-reranked)'
+          : '## Relevant memory (mem0)';
+        sections.push([label, ...memories].join('\n'));
         sources.push('mem0');
+        if (reranked.available) sources.push('colbert');
       }
     } catch (err) {
       logger.warn({ userId: input.userId, err }, 'mem0 recall skipped');

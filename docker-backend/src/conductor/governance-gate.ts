@@ -26,11 +26,18 @@
  * the conductor enforces what the verdict returns. The proven launch path and the
  * mounted routes are untouched.
  *
- * Degrade-safe: the Rust governance daemon is DEFERRED on this build, so every
- * verdict uses the pure-TS deny-biased fallback path (verdict.degraded === true).
- * That fallback is real governance — it never produces a silent allow. If building
- * the governance instance itself fails, `decideDelivery` fails CLOSED (returns a
- * synthetic deny verdict) so the conductor still blocks rather than auto-delivers.
+ * Rust kernel seam: when the OWNED governance daemon binary
+ * (crates/recoder-governance) is present — or an externally-managed daemon has
+ * published `GOVERNANCE_SOCKET` — the gate builds its `Governance` with that
+ * `daemonSocketPath`, so every delivery `decide()` goes through the real Rust
+ * kernel over the UDS. When the binary is absent the gate degrades to the pure-TS
+ * deny-biased path (verdict.degraded === true). The daemon is never BUILT here; we
+ * only spawn/connect a prebuilt binary (see governance-daemon.ts).
+ *
+ * Degrade-safe: whether the daemon is up or not, the fallback is real governance —
+ * it never produces a silent allow. If building the governance instance itself
+ * fails, `decideDelivery` fails CLOSED (returns a synthetic deny verdict) so the
+ * conductor still blocks rather than auto-delivers.
  */
 import type { AgentProfile, Workspace } from '@recoder/agent-os';
 import {
@@ -42,6 +49,7 @@ import {
 } from '@recoder/governance';
 import { createLogger } from '../logger';
 import type { DeliveryAction } from './delivery-approval.js';
+import { ensureGovernanceDaemon } from './governance-daemon.js';
 
 const logger = createLogger('conductor:governance-gate');
 
@@ -64,10 +72,30 @@ let governanceSingleton: Promise<Governance> | undefined;
  * every delivery decision is sealed into the Merkle chain. Auto-approve is OFF by
  * default: a delivery only clears the needs_approval gate via a real control-plane
  * Approval record (or an explicit autonomous context), never silently.
+ *
+ * Rust kernel seam: ensure the owned governance daemon (crates/recoder-governance)
+ * is up FIRST. When its prebuilt binary is present, `ensureGovernanceDaemon()`
+ * spawns it and returns the UDS path, which we hand to `Governance.create` as
+ * `daemonSocketPath` so `decide()` delegates to the real Rust kernel (per-call
+ * degrade-safe to the pure-TS path on any daemon fault). When no binary exists the
+ * daemon resolve is `undefined` and we build the daemon-less (pure-TS) Governance —
+ * identical to the prior behavior. The daemon is never built here.
  */
 function getGovernance(): Promise<Governance> {
   if (!governanceSingleton) {
-    governanceSingleton = Governance.create({ auditEnabled: true });
+    governanceSingleton = (async () => {
+      let daemonSocketPath: string | undefined;
+      try {
+        const daemon = await ensureGovernanceDaemon();
+        daemonSocketPath = daemon?.socketPath;
+      } catch (err) {
+        // A daemon-spawn problem must never block governance construction — we
+        // simply build the pure-TS instance and degrade truthfully.
+        logger.warn({ err }, 'governance daemon ensure failed — building pure-TS governance');
+        daemonSocketPath = undefined;
+      }
+      return Governance.create({ auditEnabled: true, daemonSocketPath });
+    })();
   }
   return governanceSingleton;
 }
