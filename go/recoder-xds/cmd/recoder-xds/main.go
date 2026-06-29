@@ -61,7 +61,7 @@ func run() error {
 	}
 
 	ready := newReadiness()
-	healthSrv := startHealthServer(ctx, *healthAddr, ready, logger)
+	healthSrv := startHealthServer(ctx, *healthAddr, ready, cp.Version, logger)
 
 	ready.set(true)
 	logger.Info("recoder-xds ready", slog.String("xds_addr", *xdsAddr))
@@ -103,16 +103,20 @@ func loadConfig(file, url string) (config.NetworkConfig, string, error) {
 	}
 }
 
-func startHealthServer(ctx context.Context, addr string, ready *readiness, logger *slog.Logger) *http.Server {
+func startHealthServer(ctx context.Context, addr string, ready *readiness, version func() uint64, logger *slog.Logger) *http.Server {
 	mux := http.NewServeMux()
+	// /healthz: liveness/readiness. Reports the version of the snapshot the
+	// control plane is actually serving so a probe shows real state, not a bare
+	// "ok". 503 until the first snapshot is installed and ready is set.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		if ready.get() {
+		v := version()
+		if ready.get() && v > 0 {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("ok"))
+			_, _ = fmt.Fprintf(w, "ok serving config v%d", v)
 			return
 		}
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte("not ready"))
+		_, _ = fmt.Fprintf(w, "not ready (config v%d)", v)
 	})
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
