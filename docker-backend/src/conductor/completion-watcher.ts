@@ -133,12 +133,14 @@ async function runCompletionCheck(workspace: Workspace): Promise<void> {
     let summary: Awaited<ReturnType<typeof generateDeliverySummary>> | null = null;
     let candidate: Awaited<ReturnType<typeof generateMemoryCandidate>> | null = null;
     let postRunNodeStatuses: { nodeId: string; kind: string; status: string }[] = [];
+    let browserVerification: Awaited<ReturnType<typeof runPostRunDelivery>>['browserVerification'] = null;
 
     const workflowResult = await runPostRunDelivery(workspace.workspaceId);
     if (workflowResult.ranViaRunner) {
       summary = workflowResult.summary;
       candidate = workflowResult.candidate;
       postRunNodeStatuses = workflowResult.nodeStatuses;
+      browserVerification = workflowResult.browserVerification;
     } else {
       // Fallback: prior inline behavior (runner unavailable). Keep both best-effort.
       [summary, candidate] = await Promise.all([
@@ -165,6 +167,17 @@ async function runCompletionCheck(workspace: Workspace): Promise<void> {
           }
         : undefined,
       memoryCandidate: candidate ? { candidateId: candidate.candidateId, proposedAt: candidate.proposedAt } : undefined,
+      // Browser verification of the agent's preview/web output (only present when
+      // the workspace had a preview URL — skipped otherwise). Surfaces the
+      // preview-health signal on the review handoff per the Agent OS frontend rule.
+      browserVerification: browserVerification
+        ? {
+            previewUrl: browserVerification.previewUrl,
+            status: browserVerification.status,
+            checkedAt: browserVerification.checkedAt,
+            checks: browserVerification.checks.length,
+          }
+        : undefined,
       // Audit trail: which post-run graph nodes ran and their status (empty on the
       // inline fallback path). Additive — does not change the review handoff.
       postRunWorkflow: postRunNodeStatuses.length > 0 ? { nodes: postRunNodeStatuses } : undefined,

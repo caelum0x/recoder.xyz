@@ -26,6 +26,7 @@ import { createLogger } from '../logger.js';
 import {
   AgentOsWorkflowRunner,
   verificationNode,
+  browserCheckNode,
   memoryNode,
   type WorkflowDefinition,
   type WorkflowNode,
@@ -34,6 +35,8 @@ import {
 } from '@recoder/agent-workflows';
 import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
 import type { DeliverySummary, MemoryCandidate } from './delivery-summary.js';
+import { runBrowserCheck } from './browser-check.js';
+import type { BrowserVerificationResult } from '@recoder/browser-verification';
 
 const logger = createLogger('conductor:post-run-workflow');
 
@@ -42,6 +45,11 @@ export interface PostRunWorkflowResult {
   summary: DeliverySummary | null;
   /** The memory candidate the memory node proposed (null if none / failed). */
   candidate: MemoryCandidate | null;
+  /**
+   * The browser verification result the browser-check node produced. Null when the
+   * workspace had no preview URL (skipped) or the check was unavailable.
+   */
+  browserVerification: BrowserVerificationResult | null;
   /** Per-node status from the workflow runner (for audit/metadata). */
   nodeStatuses: { nodeId: string; kind: WorkflowNode['kind']; status: string }[];
   /** Whether the runner drove the sequence (false => caller should fall back). */
@@ -57,15 +65,27 @@ export interface PostRunWorkflowResult {
  */
 function buildPostRunDefinition(workspaceId: string): WorkflowDefinition {
   const verify = verificationNode('post-run-verify', { workspaceId });
+  // Browser-check runs AFTER verify (it only matters once the change is verified)
+  // and BEFORE memory, so the proposed memory candidate can later carry the
+  // preview-health signal. It is degrade-safe: when there is no preview URL the
+  // node returns `skipped`, which does not block its dependents.
+  const browser: WorkflowNode = {
+    ...browserCheckNode('post-run-browser-check', { workspaceId }),
+    dependsOn: [verify.nodeId],
+  };
+  // Memory depends on BOTH verify and browser-check. Depending on verify preserves
+  // the original dependency-skip semantic (verify failure => memory is skipped). A
+  // `skipped` browser-check (no preview) does NOT skip memory — the runner only
+  // cascade-skips on a `failed` dependency.
   const memory: WorkflowNode = {
     ...memoryNode('post-run-memory', { workspaceId }),
-    dependsOn: [verify.nodeId],
+    dependsOn: [verify.nodeId, browser.nodeId],
   };
   return {
     workflowId: `post-run_${workspaceId}`,
     name: 'Conductor post-run delivery',
     version: '1',
-    nodes: [verify, memory],
+    nodes: [verify, browser, memory],
     metadata: { workspaceId, purpose: 'post-run-sequencing' },
   };
 }
@@ -85,6 +105,7 @@ function buildPostRunDefinition(workspaceId: string): WorkflowDefinition {
 export async function runPostRunDelivery(workspaceId: string): Promise<PostRunWorkflowResult> {
   let summary: DeliverySummary | null = null;
   let candidate: MemoryCandidate | null = null;
+  let browserVerification: BrowserVerificationResult | null = null;
 
   try {
     const definition = buildPostRunDefinition(workspaceId);
@@ -111,6 +132,35 @@ export async function runPostRunDelivery(workspaceId: string): Promise<PostRunWo
           } catch (err) {
             logger.warn({ workspaceId, err }, 'post-run verification node failed');
             return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        if (node.kind === 'browser-check') {
+          // Browser-check step: verify the agent's preview/web output is healthy
+          // via @recoder/browser-verification. Degrade-safe — when there is no
+          // preview URL the node reports `skipped` (which does not skip memory).
+          try {
+            const outcome = await runBrowserCheck(workspaceId);
+            if (!outcome.attempted || !outcome.result) {
+              return { status: 'skipped', output: { reason: 'no-preview-url' } };
+            }
+            browserVerification = outcome.result;
+            // The NODE completed (it ran and produced a truthful result) even when
+            // the preview itself is unhealthy — the unhealthy signal lives in
+            // `verificationStatus`, not in the node status, so downstream nodes
+            // (memory) still run and can carry the evidence.
+            return {
+              status: 'completed',
+              output: {
+                previewUrl: outcome.result.previewUrl,
+                verificationStatus: outcome.result.status,
+                checks: outcome.result.checks.length,
+              },
+            };
+          } catch (err) {
+            logger.warn({ workspaceId, err }, 'post-run browser-check node failed');
+            // A browser-check failure must NOT cascade-skip memory: report skipped.
+            return { status: 'skipped', error: err instanceof Error ? err.message : String(err) };
           }
         }
 
@@ -145,10 +195,10 @@ export async function runPostRunDelivery(workspaceId: string): Promise<PostRunWo
       'post-run delivery graph executed via workflow runner',
     );
 
-    return { summary, candidate, nodeStatuses, ranViaRunner: true };
+    return { summary, candidate, browserVerification, nodeStatuses, ranViaRunner: true };
   } catch (err) {
     // Degrade-safe: the runner / package was unavailable or threw unexpectedly.
     logger.warn({ workspaceId, err }, 'post-run workflow runner unavailable — caller will fall back inline');
-    return { summary, candidate, nodeStatuses: [], ranViaRunner: false };
+    return { summary, candidate, browserVerification, nodeStatuses: [], ranViaRunner: false };
   }
 }
