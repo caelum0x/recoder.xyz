@@ -32,16 +32,28 @@ const {
 const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
 const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
 const A2A_URL = process.env.RECODER_A2A_URL || `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:')}/agent-bridge`;
-const CONDUCTOR_URL = process.env.RECODER_CONDUCTOR_URL || `${DOCKER_URL}/api/conductor`;
+// Conductor (coding workspaces) lives on the backend Express server (PORT, default
+// :3100) under /api/conductor. Accept either RECODER_CONDUCTOR_URL or the shorter
+// CONDUCTOR_URL alias; both should point at that mount (e.g.
+// http://localhost:3100/api/conductor). When only a backend base is given via
+// RECODER_BACKEND_URL, derive the conductor mount from it. Falls back to the
+// docker reverse-proxy path for hosted use.
+const BACKEND_URL = process.env.RECODER_BACKEND_URL || '';
+const CONDUCTOR_URL =
+  process.env.RECODER_CONDUCTOR_URL ||
+  process.env.CONDUCTOR_URL ||
+  (BACKEND_URL ? `${BACKEND_URL.replace(/\/+$/, '')}/api/conductor` : `${DOCKER_URL}/api/conductor`);
 const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://localhost:3900/api';
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
 const RAW_AUTH_TOKEN = process.env.RECODER_API_TOKEN || '';
 const AGENT_ID = process.env.RECODER_AGENT_ID || 'claude_code';
 const SESSION_ID = process.env.RECODER_SESSION_ID || `${AGENT_ID}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
+// Bearer/session credential for the control plane + conductor. Accept the
+// documented PLATFORM_TOKEN alias in addition to RECODER_SESSION_TOKEN.
 const _creds = resolveCredentials({
   apiToken: RAW_AUTH_TOKEN,
-  sessionToken: process.env.RECODER_SESSION_TOKEN || '',
+  sessionToken: process.env.RECODER_SESSION_TOKEN || process.env.PLATFORM_TOKEN || '',
 });
 const PYTHON_API_KEY = _creds.pythonApiKey;
 const PLATFORM_TOKEN = _creds.platformToken;
@@ -739,7 +751,9 @@ async function handleMessage(msg) {
 process.on('uncaughtException', (err) => { process.stderr.write(`[recoder-a2a] uncaught: ${err.message}\n`); });
 process.on('unhandledRejection', (err) => { process.stderr.write(`[recoder-a2a] unhandled rejection: ${err}\n`); });
 
-process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v2.5.0\n');
+process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v3.2.0\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
+process.stderr.write(`[recoder-a2a] Conductor: ${CONDUCTOR_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
 if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');
+else process.stderr.write('[recoder-a2a] No platform auth — set PLATFORM_TOKEN/RECODER_SESSION_TOKEN/RECODER_API_TOKEN for conductor + task tools\n');

@@ -35,7 +35,15 @@
 
 const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
 const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
-const CONDUCTOR_URL = process.env.RECODER_CONDUCTOR_URL || `${DOCKER_URL}/api/conductor`;
+// Conductor (coding workspaces) lives on the backend Express server (PORT,
+// default :3100) under /api/conductor. Accept RECODER_CONDUCTOR_URL or the
+// shorter CONDUCTOR_URL alias (e.g. http://localhost:3100/api/conductor), or
+// derive it from RECODER_BACKEND_URL. Falls back to the docker reverse proxy.
+const BACKEND_URL = process.env.RECODER_BACKEND_URL || '';
+const CONDUCTOR_URL =
+  process.env.RECODER_CONDUCTOR_URL ||
+  process.env.CONDUCTOR_URL ||
+  (BACKEND_URL ? `${BACKEND_URL.replace(/\/+$/, '')}/api/conductor` : `${DOCKER_URL}/api/conductor`);
 const A2A_URL = process.env.RECODER_A2A_URL || `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:')}/agent-bridge`;
 const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://localhost:3900/api';
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
@@ -50,7 +58,7 @@ function isRecoderApiKeyPair(value) {
 }
 
 const PYTHON_API_KEY = isRecoderApiKeyPair(RAW_AUTH_TOKEN) ? RAW_AUTH_TOKEN : '';
-const _rawSessionToken = process.env.RECODER_SESSION_TOKEN || (PYTHON_API_KEY ? '' : RAW_AUTH_TOKEN);
+const _rawSessionToken = process.env.RECODER_SESSION_TOKEN || process.env.PLATFORM_TOKEN || (PYTHON_API_KEY ? '' : RAW_AUTH_TOKEN);
 const PLATFORM_TOKEN = (() => {
   try { return decodeURIComponent(_rawSessionToken); } catch { return _rawSessionToken; }
 })();
@@ -1522,5 +1530,7 @@ process.on('unhandledRejection', (err) => { process.stderr.write(`[recoder-a2a] 
 
 process.stderr.write('[recoder-a2a] Recoder A2A MCP Server v3.2.0\n');
 process.stderr.write(`[recoder-a2a] API: ${API_URL} | A2A: ${A2A_URL}\n`);
+process.stderr.write(`[recoder-a2a] Conductor: ${CONDUCTOR_URL}\n`);
 if (DAYTONA_KEY) process.stderr.write('[recoder-a2a] Daytona sandbox enabled\n');
 if (PLATFORM_TOKEN || PYTHON_API_KEY) process.stderr.write('[recoder-a2a] API auth configured\n');
+else process.stderr.write('[recoder-a2a] No platform auth — set PLATFORM_TOKEN/RECODER_SESSION_TOKEN/RECODER_API_TOKEN for conductor + task tools\n');
