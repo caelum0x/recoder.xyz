@@ -149,7 +149,7 @@ function DesktopConsole() {
             <span aria-hidden className="h-3 w-3 rounded-full bg-faint/40" />
             <span aria-hidden className="h-3 w-3 rounded-full bg-faint/30" />
             <span className="ml-3 text-xs text-muted">
-              Recoder — Conductor · 4 workspaces · 3 agents running
+              Recoder · 4 workspaces · 3 agents running
             </span>
             <span className="ml-auto rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wider text-faint">
               Illustration
@@ -383,7 +383,7 @@ const STEPS: Step[] = [
   },
   {
     n: "03",
-    title: "Conduct",
+    title: "Review & merge",
     body: "See who is working in the workspaces sidebar, read the change summary, review the diffs, and merge — or open a PR — when it's ready.",
   },
 ];
@@ -443,8 +443,8 @@ const FEATURES: Feature[] = [
     foot: "bring your own keys · no token resale",
   },
   {
-    title: "Restart-survivable conductor",
-    body: "The conductor keeps a state-of-record on top of tmux and git worktrees, so workspaces survive a restart and reconcile back to a known-good state.",
+    title: "Restart-survivable workspaces",
+    body: "Recoder keeps a state-of-record on top of tmux and git worktrees, so workspaces survive a restart and reconcile back to a known-good state.",
     foot: "tmux · worktrees · state-of-record",
   },
   {
@@ -632,7 +632,7 @@ function FinalCta() {
   return (
     <section className="mx-auto max-w-6xl px-6 py-24 text-center">
       <h2 className="text-balance mx-auto max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
-        Conduct your coding agents.
+        Run your coding agents in parallel.
       </h2>
       <p className="text-balance mx-auto mt-4 max-w-xl text-muted">
         Run them in parallel, watch them work, review the diffs, and merge — all
