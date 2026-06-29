@@ -13,6 +13,7 @@ import {
   isLive,
   lockConflict,
   stateLabel,
+  statePill,
   stateTone,
 } from './workspace-state';
 
@@ -58,6 +59,28 @@ describe('stateLabel', () => {
     expect(stateLabel('awaiting_review')).toBe('awaiting review');
     expect(stateLabel('changes_requested')).toBe('changes requested');
     expect(stateLabel('running')).toBe('running');
+  });
+});
+
+describe('statePill', () => {
+  it('maps lifecycle states to the Conductor desktop copy', () => {
+    expect(statePill('running')).toBe('Running');
+    expect(statePill('awaiting_review')).toBe('Ready to review');
+    expect(statePill('merged')).toBe('Merged');
+    expect(statePill('failed')).toBe('Failed');
+    expect(statePill('ready')).toBe('Ready');
+  });
+
+  it('renders "Merge conflicts" when a write-lock collision is detected', () => {
+    expect(statePill('failed', true)).toBe('Merge conflicts');
+    // The collision flag overrides whatever the raw state would say.
+    expect(statePill('running', true)).toBe('Merge conflicts');
+  });
+
+  it('returns a non-empty pill for every defined state', () => {
+    for (const state of ALL_STATES) {
+      expect(statePill(state).length).toBeGreaterThan(0);
+    }
   });
 });
 

@@ -2,16 +2,18 @@
  * WorkspaceSidebar — the Conductor-style LEFT pane.
  *
  * Renders the live workspace list grouped by repo (groupWorkspacesByRepo over
- * the real GET /workspaces payload). Each row shows a TRUTHFUL state badge
- * (running / setting up / ready / awaiting review / merge-conflict …) and a
- * +N/-N diff stat parsed only from the backend's delivery summary. A
- * "+ New workspace" affordance sits in the header.
+ * the real GET /workspaces payload). Each row carries a colored status dot, the
+ * branch name, a "+N -N" diff badge (parsed only from the backend's delivery
+ * summary), and a truthful state pill (Running / Ready to review / Merge
+ * conflicts / Merged …). Each repo group ends with a "New workspace" affordance
+ * and the rail is footed by "Add repository", matching the reference desktop UI.
  *
  * No mock rows: an empty backend yields an explicit empty state, and a
- * lock-collision failure is surfaced distinctly (the moat working).
+ * lock-collision failure is surfaced distinctly (the moat working) — its pill
+ * reads "Merge conflicts".
  */
 import { groupWorkspacesByRepo } from '../lib/workspace-groups';
-import { lockConflict, stateLabel, stateTone } from '../lib/workspace-state';
+import { lockConflict, statePill, stateTone } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
 import type { Workspace } from '../types';
 
@@ -44,21 +46,24 @@ function WorkspaceRow({
   onSelect: (id: string) => void;
 }) {
   const collision = lockConflict(workspace);
+  const tone = collision ? 'warn' : stateTone(workspace.state);
+  const pill = statePill(workspace.state, Boolean(collision));
   return (
     <button
       class={`ws-row ${selected ? 'ws-row-active' : ''} ${collision ? 'ws-row-collision' : ''}`}
       onClick={() => onSelect(workspace.workspaceId)}
       title={workspace.branch}
     >
-      <span class="ws-row-main">
-        <span class="ws-row-branch">{workspace.branch}</span>
-        <DiffStat workspace={workspace} />
-      </span>
-      <span class="ws-row-meta">
-        <span class={`badge tone-${stateTone(workspace.state)}`}>
-          {collision ? 'merge-conflict' : stateLabel(workspace.state)}
+      <span class={`ws-row-dot dot-${tone}`} aria-hidden="true" />
+      <span class="ws-row-body">
+        <span class="ws-row-main">
+          <span class="ws-row-branch">{workspace.branch}</span>
+          <DiffStat workspace={workspace} />
         </span>
-        <span class="ws-row-runtime">{workspace.runtimeId}</span>
+        <span class="ws-row-meta">
+          <span class={`ws-row-pill pill-${tone}`}>{pill}</span>
+          <span class="ws-row-runtime">{workspace.runtimeId}</span>
+        </span>
       </span>
     </button>
   );
@@ -76,10 +81,10 @@ export function WorkspaceSidebar({
   return (
     <aside class="ws-sidebar">
       <div class="ws-sidebar-head">
-        <span class="ws-sidebar-title">Workspaces</span>
-        <button class="ws-new-btn" onClick={onNewWorkspace} title="Create a new workspace">
-          + New workspace
-        </button>
+        <span class="ws-sidebar-home">
+          <span class="ws-sidebar-home-icon" aria-hidden="true" />
+          Home
+        </span>
       </div>
 
       <div class="ws-sidebar-body">
@@ -95,9 +100,8 @@ export function WorkspaceSidebar({
         ) : (
           groups.map((group) => (
             <div class="ws-group" key={group.projectId}>
-              <div class="ws-group-head">
-                <span class="ws-group-label" title={group.projectId}>{group.label}</span>
-                <span class="ws-group-count">{group.workspaces.length}</span>
+              <div class="ws-group-head" title={group.projectId}>
+                <span class="ws-group-label">{group.label}</span>
               </div>
               <div class="ws-group-rows">
                 {group.workspaces.map((ws) => (
@@ -108,10 +112,21 @@ export function WorkspaceSidebar({
                     onSelect={onSelect}
                   />
                 ))}
+                <button class="ws-new-row" onClick={onNewWorkspace}>
+                  <span class="ws-new-row-plus" aria-hidden="true">+</span>
+                  New workspace
+                </button>
               </div>
             </div>
           ))
         )}
+      </div>
+
+      <div class="ws-sidebar-foot">
+        <button class="ws-add-repo" onClick={onNewWorkspace} title="Add a repository">
+          <span class="ws-add-repo-plus" aria-hidden="true">+</span>
+          Add repository
+        </button>
       </div>
     </aside>
   );

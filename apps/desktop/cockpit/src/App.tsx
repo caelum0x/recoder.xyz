@@ -107,6 +107,13 @@ export function App() {
   return (
     <div class="cockpit">
       <header class="topbar">
+        {/* macOS window chrome — non-interactive traffic lights anchor the
+            frameless Electron window and match the reference desktop UI. */}
+        <div class="window-chrome" aria-hidden="true">
+          <span class="traffic-light traffic-close" />
+          <span class="traffic-light traffic-min" />
+          <span class="traffic-light traffic-max" />
+        </div>
         <div class="brand">
           <span class="brand-mark" />
           <span class="brand-name">Recoder Cockpit</span>
@@ -172,7 +179,7 @@ export function App() {
               "What changed" summary + steer input sit on top; the lifecycle
               board (grouped by state) is always present below so the operator
               keeps the at-a-glance pipeline view. */}
-          <section class="center-pane">
+          <section class={`center-pane ${selected ? 'center-pane-thread' : ''}`}>
             {selected && <WorkspaceCenter workspace={selected} />}
             {board.loading && !board.data ? (
               <div class="board-loading">Loading workspaces…</div>
@@ -184,6 +191,9 @@ export function App() {
                 </div>
               )
             ) : (
+              /* The at-a-glance lifecycle board. When a workspace is selected the
+                 agent thread takes the spotlight above and the board collapses to
+                 a compact strip (the tests still read its cards). */
               <div class={`board-area ${selected ? 'board-area-compact' : ''}`}>
                 <Board workspaces={workspaces} selectedId={selectedId} onSelect={setSelectedId} />
               </div>
