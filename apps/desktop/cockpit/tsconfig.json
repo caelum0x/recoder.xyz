@@ -20,7 +20,8 @@
     "paths": {
       "@recoder/conductor-ui": ["../../../packages/conductor-ui/src/index.ts"],
       "@recoder/conductor-ui/client": ["../../../packages/conductor-ui/src/client.ts"],
-      "@recoder/conductor-ui/types": ["../../../packages/conductor-ui/src/types.ts"]
+      "@recoder/conductor-ui/types": ["../../../packages/conductor-ui/src/types.ts"],
+      "@recoder/design-tokens": ["../../../packages/design-tokens/src/index.ts"]
     }
   },
   "include": ["src", "build.mjs"]
