@@ -23,6 +23,7 @@ export type OssProviderId =
   | 'langgraph'
   | 'autogen'
   | 'crewai'
+  | 'openfang'
   | 'mem0'
   | 'browser_use'
   | 'stagehand'
