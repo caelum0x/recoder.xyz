@@ -8,3 +8,4 @@ export * from "./ingest";
 export * from "./query-service";
 export * from "./reranker";
 export * from "./utils";
+export * from "./vector-store";
