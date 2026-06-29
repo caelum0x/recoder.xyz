@@ -7,6 +7,12 @@
 >
 > Verdicts and states are taken from the directory inventory — they cite the real
 > wiring (importers, refs, build artifacts) found in the repo, not aspiration.
+>
+> **Reclassified 2026-06-29** (owner: "use the stuff"): the `ts/*` engines moved
+> park→**keep-used** (the runtime drivers now prefer them via a `repo_engine` tier),
+> `py/colbert` moved drop→**keep-wired** (the optional RAG reranker), `app/` moved
+> drop→**held** (auth/deploy-sensitive), and `packages/{ui,performance,plugins,cli}`
+> (+ the cli's analytics/security/shared leaves) are confirmed **drop**.
 
 ## Legend
 
@@ -28,8 +34,11 @@
 **Verdict**
 - `keep-core` — load-bearing on the critical path of the desktop/Agent-OS product. Do not touch except to extend.
 - `keep-supporting` — real, useful, off the critical path (CI, optional surfaces, infra libs). Keep.
+- `keep-used` — **owned + customized** tree now actually consumed on a product path (e.g. the `ts/*` engines preferred via the `repo_engine` tier, `py/colbert` wired as the RAG reranker). Was previously mis-filed as park.
+- `keep-wired` — built code wired into the product behind a degrade-safe seam (optional service/CLI/SDK; no-op when absent).
 - `wire-up` — **built-but-unused first-party** code that should be connected into the product (see WIRE-UP backlog).
 - `park-vendor` — vendored clone / fork tree that should move to a labeled `vendor/` area, not deleted (provenance / reference / built-sidecar value).
+- `held` — auth/billing/deploy-sensitive tree left in place pending an approval gate (not dropped, not actively developed).
 - `drop` — genuinely dead. Remove.
 
 ---
@@ -114,17 +123,32 @@
 | `packages/beads-adapter` | owned-first-party | built | Two-way sync between bd issue graph and Agent OS TaskSpecs. | **0 external refs**; built dist. | **wire-up** |
 | `py/ops-recorder` | owned-first-party | built | FastAPI work-signals service: detects stuck GitHub/Linear work, emits handoff prompts. | nothing; gitignored. (Backend `/work-signals` is a separate same-named concept.) | **wire-up** |
 
+### The customized `ts/*` engines (owned, repo-preferred — KEEP-USED)
+
+> Reclassified 2026-06-29 (owner: "use the stuff"). These are **ours** (forked +
+> patched), not provenance-only. The runtime drivers now **prefer the repo-built
+> `ts/*` engines** over whatever is on the global PATH via a new `repo_engine` tier
+> in `packages/runtime/src/drivers/shared/repo-engine-locator.ts` (degrade-safe:
+> falls back to PATH when the build is absent; `RECODER_DISABLE_REPO_ENGINE` opts
+> out). They are the BYOK agent subprocesses the drivers spawn.
+
+| Dir | Kind | State | Role | UsedBy | Verdict |
+|-----|------|-------|------|--------|---------|
+| `ts/oh-my-codex` | owned-fork | live | `@recoder/codex-runtime` — built `omx` CLI; the codex surface's BYOK engine. | `runtime` repo-engine-locator (`codex` → `ts/oh-my-codex/dist/cli/omx.js`); `runtime/drivers/codex/*`. | **keep-used** |
+| `ts/oh-my-openagent` | owned-fork | live | `@recoder/opencode-harness` — `oh-my-opencode` harness bin. | `runtime` repo-engine-locator (`oh-my-opencode`/`recoder-opencode`); `runtime/drivers/opencode/*`. | **keep-used** |
+| `ts/opencode` | owned-fork | live | `@recoder/opencode` — forked opencode CLI (and `runtime/drivers/opencode/*` ACP types). | `runtime` repo-engine-locator (`opencode` → `ts/opencode/.../bin/opencode`). | **keep-used** |
+| `ts/open-agents` | owned-fork | partial | Provenance + source for `runtime/drivers/in-process/*` (the in-process driver). | `runtime/drivers/in-process/*`; not yet in the locator map. | **keep-used** |
+| `ts/recodergit` | owned-fork | live | `@recoder/recodergit-engine` — recodergit code-graph CLI (sibling of `packages/recodergit`). | `runtime` repo-engine-locator (`recodergit` → `ts/recodergit/recodergit/dist/cli/index.js`); docker-backend recodergit-service. | **keep-used** |
+| `ts/dmux` | owned-fork | live | `@recoder/dmux` — tmux orchestrator CLI (also the operator console; see L0). | `runtime` repo-engine-locator (`dmux`); conductor dmux-adapter. | **keep-used** |
+| `ts/polar` | owned-fork | partial | Customized Polar (MoR billing) tree; the owned billing engine is `py/recoder-billing`, this is the TS-side customization kept under `ts/*`. | not in the locator map; kept as an owned `ts/*` customization. | **keep-used** |
+
 ### Engines / runtime forks: provenance-only (PARK)
 
 | Dir | Kind | State | Role | UsedBy | Verdict |
 |-----|------|-------|------|--------|---------|
-| `crates/openfang` | vendored-clone | unused | Source-of-record for the owned governance/runtime port (audit/routing/tool_policy). | provenance comments only; Makefile heavy build target, no consumer. | **park-vendor** |
-| `ts/oh-my-codex` | owned-fork | unused | Provenance origin for `runtime/drivers/codex/*` (code fused/copied). | provenance comments only; not a workspace member. | **park-vendor** |
-| `ts/oh-my-openagent` | owned-fork | unused | Provenance origin for `runtime/drivers/opencode/*`. | provenance comments only. | **park-vendor** |
-| `ts/open-agents` | owned-fork | unused | Provenance origin for `runtime/drivers/in-process/*`. | provenance comments only. | **park-vendor** |
-| `ts/opencode` | owned-fork | unused | Provenance origin for `runtime/drivers/opencode/*` ACP types. | provenance comments only. | **park-vendor** |
-| `crates/lance` | vendored-clone | unused | Intended brain/memory vector-store substrate; never wired. | nothing anywhere. | **park-vendor** |
-| `crates/tensorzero` | vendored-clone | unused | Candidate LLM gateway/eval reference; not adopted. | nothing. | **park-vendor** |
+| `crates/openfang` | vendored-clone | unused | Genuinely never-touched upstream: source-of-record for the owned governance/runtime port (audit/routing/tool_policy). The owned port is `packages/governance` + `crates/recoder-governance`. | provenance comments only; Makefile heavy build target, no consumer. | **park-vendor** |
+| `crates/lance` | vendored-clone | unused | Genuinely never-touched upstream: intended brain/memory vector-store substrate; never wired. | nothing anywhere. | **park-vendor** |
+| `crates/tensorzero` | vendored-clone | unused | Genuinely never-touched upstream: candidate LLM gateway/eval reference; not adopted. | nothing. | **park-vendor** |
 | `crates/claw-code-parity` | vendored-clone | unused | Harness-parity reference for the owned runtime/governance work. | prose mentions only. | **park-vendor** |
 | `go/multica` | vendored-clone | unused | Source ref for coordination claim/dispatch semantics (ported into owned code). | comment cites only. | **park-vendor** |
 | `crates/recoder-governance` is the owned port; clones above are reference only. | | | | | |
@@ -153,8 +177,8 @@
 | `site` | owned-first-party | built | Next.js marketing/download site (Roadmap #4) — `.dmg` + brew + enterprise/self-host funnel. | standalone; download page needs wiring to real GitHub releases. | **keep-supporting** |
 | `recoder-skill` | owned-first-party | built | Installable agent Skill wrapping the Recoder public API so external agents drive build/deploy. | distributed standalone; needs `api.recoder.xyz` live. | **keep-supporting** |
 | `packages/recoder-a2a` | owned-first-party | built | Publishable npx MCP server exposing 8 Recoder A2A tools for external agents. | the LIVE in-repo server is `mcp/recoder-a2a-server.js`; this is the published-npm copy, not the wired one. | **keep-supporting** |
-| `app` | dead | dead | Orphaned 11-file remnant of the former recoder.xyz Next app; `package.json` removed in 1a688bc08 → **cannot build** (Dockerfile still `COPY app/package.json`). | nothing; not a workspace member. | **drop** |
-| `packages/ui` | owned-first-party | unused | Intended shared cross-app React UI (nav/notifications/subscription badge). | nothing — no dep, no import anywhere. | **drop** |
+| `app` | owned-first-party | partial | Slice of the former recoder.xyz Next app. **Held, not dropped**: the server's deploy.yml builds its own `/root/recoder.xyz/app` and it is **auth-sensitive** (recoder.xyz is the auth source of truth), so it is not touched without an approval gate. | server deploy path; not a workspace member here. | **held** |
+| `packages/ui` | owned-first-party | unused | Intended shared cross-app React UI (nav/notifications/subscription badge). Verified **zero dep + zero import**. | nothing. | **drop** |
 | `packages/design-tokens` | owned-first-party | scaffold | Shared design tokens (`tokens.css` + index). | **0 refs**. | **wire-up** |
 
 ### MCP boundary markers (docs-only; the real code lives elsewhere)
@@ -217,14 +241,13 @@
 
 | Dir | Kind | State | Role | UsedBy | Verdict |
 |-----|------|-------|------|--------|---------|
-| `packages/performance` | owned-first-party | unused | Generic Express perf middleware (Redis cache) for the old recoder.xyz web stack. | nothing. | **drop** |
-| `packages/plugins` | owned-first-party | scaffold | Speculative plugin marketplace for the old web-builder; extensibility now handled by agent-mcp/oss-registry. | nothing (stale cli lockfile mention). | **drop** |
-| `py/colbert` | vendored-clone | dead | Would be a retrieval engine under brain; nothing references it. | docs mentions only; zero imports. | **drop** |
-| `packages/analytics` | owned-first-party | partial | Legacy v1 analytics/monitoring for the abandoned CLI/web/VSCode surfaces. | `packages/cli` only (CLI is itself v1). | **keep-supporting** |
-| `packages/security` | owned-fork | partial | Legacy CLI security/compliance; superseded by governance + crates/recoder-governance. | `packages/cli` only. | **park-vendor** |
-| `packages/shared` | owned-fork | built | Legacy `recoder-shared` grab-bag (AI router/cost/oauth) from the old Roo-Code CLI lineage. | legacy CLI cluster (cli/security/plugins/cli-router/web/analytics). | **park-vendor** |
-
-> `packages/cli` itself is the v1 CLI surface anchoring the cluster above; it was not in the inventory but is the consumer keeping analytics/security/shared/plugins alive.
+| `packages/performance` | owned-first-party | unused | Generic Express perf middleware (Redis cache) for the old recoder.xyz web stack. Verified **zero dep + zero import**. | nothing. | **drop** |
+| `packages/plugins` | owned-first-party | scaffold | Speculative plugin marketplace for the old web-builder; extensibility now handled by agent-mcp/oss-registry. Verified **zero dep + zero import**. | nothing (stale cli lockfile mention). | **drop** |
+| `packages/cli` | owned-first-party | dead | Legacy `recoder-cli` (306 TS errors); the conductor commands it carried were **ported into the published `packages/recoder-code` CLI first**, then this was removed. It was the anchor keeping analytics/security/shared/plugins alive. | nothing (post-port). | **drop** |
+| `py/colbert` | vendored-clone | live | ColBERT late-interaction retrieval service, **wired as the optional RAG reranker** for `packages/rag` over HTTP (`COLBERT_RERANK_URL`); degrade-safe no-op (identity order) when the service is absent. Keeps torch/faiss out of the Node runtime. | `packages/rag/src/reranker/colbert-reranker.ts`. | **keep-wired** |
+| `packages/analytics` | owned-first-party | partial | Legacy v1 analytics/monitoring for the abandoned CLI/web/VSCode surfaces; sole consumer (`packages/cli`) is dropped. | (cli, now dropped). | **drop** |
+| `packages/security` | owned-fork | partial | Legacy CLI security/compliance; superseded by governance + crates/recoder-governance; sole consumer (`packages/cli`) is dropped. | (cli, now dropped). | **drop** |
+| `packages/shared` | owned-fork | built | Legacy `recoder-shared` grab-bag (AI router/cost/oauth) from the old Roo-Code CLI lineage; the consuming legacy-CLI cluster is dropped. | (cli cluster, now dropped). | **drop** |
 
 ---
 
@@ -313,19 +336,22 @@ by how much product they unlock for the desktop/Agent-OS spine.
 
 ## PARK / DROP
 
-### PARK — move to a labeled `vendor/` (provenance / reference / built-sidecar; do not delete)
+> **Reclassified 2026-06-29 (owner: "use the stuff").** The `ts/*` engines are no
+> longer parked — they are OURS and now **preferred** by the runtime drivers via the
+> `repo_engine` tier (`ts/opencode`, `ts/oh-my-codex`, `ts/oh-my-openagent`,
+> `ts/open-agents`, `ts/recodergit`, `ts/dmux`, `ts/polar`). See **keep-used** above.
+> `py/colbert` is no longer dropped — it is **wired** as the optional RAG reranker
+> (**keep-wired**).
 
-**Runtime-driver provenance forks** (code already fused into `packages/runtime`,
-keep the trees for provenance + re-port): `ts/oh-my-codex`, `ts/oh-my-openagent`,
-`ts/open-agents`, `ts/opencode`.
+### PARK — move to a labeled `vendor/` (provenance / reference / built-sidecar; do not delete)
 
 **Governance/coordination provenance clones**: `crates/openfang` (ported into
 `packages/governance` + `crates/recoder-governance`), `go/multica` (ported into
 coordination), `crates/claw-code-parity` (harness-parity reference).
 
-**Unadopted candidate clones**: `crates/lance` (intended vector store, never wired),
-`crates/tensorzero` (LLM-gateway candidate), `ts/polar` (raw Polar clone — owned
-engine is `py/recoder-billing`).
+**Genuinely never-touched upstream candidates**: `crates/lance` (intended vector
+store, never wired), `crates/tensorzero` (LLM-gateway candidate), and the
+daytona/sst upstreams — candidates for a labeled `vendor/` area (not yet moved).
 
 **Built-as-sidecar / supervised externals** (keep but quarantine): `docker-backend/vendor/opencode`
 (opencode-service image), `py/pal-mcp-server` (supervised MCP server), `py/mem0`
@@ -346,18 +372,27 @@ anywhere**) and could be dropped outright if the agency surface is confirmed dea
 **Bundled stray**: `packages/recoder-code/packages/mcp-eternos` (unrelated eternos
 MCP server riding inside the gemini-cli fork).
 
-### DROP — genuinely dead, remove
+### HELD — auth/billing/deploy-sensitive, left in place (not dropped)
 
-- **`app`** — orphaned 11-file remnant; `package.json` was removed (1a688bc08) so it
-  **cannot build**, and its Dockerfile still `COPY app/package.json`. The real
-  recoder.xyz auth surface is not present here. Remove and fix the Dockerfile ref.
-- **`packages/ui`** — intended shared UI; **zero deps, zero imports anywhere**.
+- **`app`** — a slice of the legacy recoder.xyz Next app, but the server's
+  `deploy.yml` builds its own `/root/recoder.xyz/app` and it is **auth-sensitive**
+  (recoder.xyz is the auth source of truth), so it is **held** behind an approval
+  gate rather than removed.
+
+### DROP — genuinely dead, remove (verified zero dep + zero import)
+
+- **`packages/ui`** — intended shared UI; zero deps, zero imports anywhere.
 - **`packages/performance`** — generic Express/Redis perf middleware for the dead v1
   web stack; no importer.
 - **`packages/plugins`** — speculative plugin marketplace for the old web-builder;
   extensibility is owned by agent-mcp/oss-registry; no runtime importer.
-- **`py/colbert`** — would-be retrieval engine; **zero code imports**, docs mentions
-  only.
+- **`packages/cli`** — legacy `recoder-cli` (306 TS errors); its conductor commands
+  were **ported into the published `packages/recoder-code` CLI first**, then it was
+  removed. Dropping it also retires its sole-consumer leaves
+  (`packages/analytics`, `packages/security`, `packages/shared`).
+
+> **`py/colbert` is NOT dropped** (reclassified 2026-06-29): it is wired as the
+> optional ColBERT RAG reranker (**keep-wired**, see the table above).
 
 ---
 
