@@ -21,6 +21,13 @@ import { usePoll } from '../lib/usePoll';
 import { EventLog } from './EventLog';
 import { DiffView } from './DiffView';
 import { SessionTerminal } from './SessionTerminal';
+import { RecoderTerminal } from './RecoderTerminal';
+
+/** True when running inside the Recoder desktop shell (preload PTY bridge present). */
+function hasDesktopTerminal(): boolean {
+  const w = window as unknown as { recoderDesktop?: { spawnTerminal?: unknown } };
+  return Boolean(w.recoderDesktop && typeof w.recoderDesktop.spawnTerminal === 'function');
+}
 import { diffFileList, type DiffFile } from '../lib/diff-files';
 import type { ConductorSession, WorkspaceDiff } from '../types';
 import {
@@ -262,7 +269,19 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
               <span class="detail-terminal-tab">Terminal</span>
               <span class="detail-terminal-branch" title={workspace.branch}>{workspace.branch}</span>
             </div>
-            <SessionTerminal session={session} tmuxBin={tmuxBin} />
+            {hasDesktopTerminal() ? (
+              // Real embedded terminal: attach a PTY (Electron main) to THIS
+              // workspace's tmux session via the same pinned tmux binary the
+              // conductor drives — the native CLI experience, in Recoder.
+              <RecoderTerminal
+                command={tmuxBin || 'tmux'}
+                args={['attach', '-t', session.tmuxName]}
+                cwd={session.worktreePath || undefined}
+                env={tmuxBin ? { CONDUCTOR_TMUX_BIN: tmuxBin } : undefined}
+              />
+            ) : (
+              <SessionTerminal session={session} tmuxBin={tmuxBin} />
+            )}
           </div>
         ) : (
           <div class="log-empty">No tmux session attached to this workspace.</div>

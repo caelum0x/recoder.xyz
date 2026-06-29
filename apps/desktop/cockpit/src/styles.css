@@ -949,3 +949,10 @@ body {
 .brain-metric { font-size: 16px; font-weight: 600; color: var(--text); }
 .brain-idle-note { line-height: 1.5; margin: 0; }
 .brain-tiphash { white-space: normal; word-break: break-all; }
+
+/* Recoder Terminal — the real embedded xterm pane (RecoderTerminal.tsx). */
+.rterm { display: flex; flex-direction: column; height: 100%; min-height: 240px; background: #181818; }
+.rterm-host { flex: 1 1 auto; min-height: 0; padding: 6px 8px; }
+.rterm-host .xterm { height: 100%; }
+.rterm-exited { padding: 6px 10px; font-size: 11px; color: var(--text-faint); border-top: 1px solid var(--border); background: var(--bg-elev); }
+.rterm-unsupported { padding: 16px; font-size: 12px; color: var(--text-dim); line-height: 1.5; }

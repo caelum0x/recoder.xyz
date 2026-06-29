@@ -2119,7 +2119,16 @@ ipcMain.handle('terminal:spawn', async (_event, options = {}) => {
     const pty = require('node-pty');
     const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
 
-    const term = pty.spawn(shell, [], {
+    // The Recoder Terminal attaches to a real agent session: when the renderer
+    // passes a `command` (+ optional `args`), run THAT in the PTY (e.g.
+    // `tmux attach -t <session>`, `dmux`, or `claude`). With no command we fall
+    // back to a plain login shell, preserving the original behavior.
+    const file = typeof options.command === 'string' && options.command.trim()
+      ? options.command
+      : shell;
+    const args = Array.isArray(options.args) ? options.args : [];
+
+    const term = pty.spawn(file, args, {
       name: 'xterm-256color',
       cols: options.cols || 80,
       rows: options.rows || 24,
@@ -2148,8 +2157,12 @@ ipcMain.handle('terminal:spawn', async (_event, options = {}) => {
     // node-pty not available - fall back to child_process
     const { spawn } = require('child_process');
     const shell = process.platform === 'win32' ? 'cmd.exe' : process.env.SHELL || '/bin/bash';
+    const file = typeof options.command === 'string' && options.command.trim()
+      ? options.command
+      : shell;
+    const args = Array.isArray(options.args) ? options.args : [];
 
-    const proc = spawn(shell, [], {
+    const proc = spawn(file, args, {
       cwd: options.cwd || process.env.HOME,
       env: { ...process.env, ...options.env, TERM: 'dumb' },
       stdio: ['pipe', 'pipe', 'pipe'],
