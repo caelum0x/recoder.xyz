@@ -195,6 +195,7 @@ export type {
   TaskGraphPort,
   ActivityPort,
   DocumentPreprocessorPort,
+  ChunkerPort,
   BrainContextCacheStore,
   ClockPort,
   // Deprecated aliases, kept for backward compatibility:
