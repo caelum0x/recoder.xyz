@@ -16,10 +16,7 @@ export const CORS_ALLOWED_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
 export const ALLOWED_ORIGINS: readonly string[] = [
   'https://recoder.xyz',
   'https://www.recoder.xyz',
-  'https://agents.recoder.xyz',
   'https://app.recoder.xyz',
-  'https://agency.recoder.xyz',
-  'https://pm.recoder.xyz',
   'https://docker.recoder.xyz',
   ...(process.env.NODE_ENV === 'production'
     ? []

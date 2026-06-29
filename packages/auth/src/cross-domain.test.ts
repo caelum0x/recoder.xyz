@@ -99,8 +99,7 @@ test('getSignOutCookieAttributes omits domain in development', () => {
 
 test('isTrustedOrigin accepts known surface origins', () => {
   assert.equal(isTrustedOrigin('https://recoder.xyz'), true);
-  assert.equal(isTrustedOrigin('https://agency.recoder.xyz'), true);
-  assert.equal(isTrustedOrigin('https://pm.recoder.xyz'), true);
+  assert.equal(isTrustedOrigin('https://studio.recoder.xyz'), true);
   assert.equal(isTrustedOrigin('https://api.recoder.xyz'), true);
 });
 

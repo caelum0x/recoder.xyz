@@ -570,11 +570,10 @@ describe('AgentRegistryService', () => {
       expect(web!.protocol).toBe('rest');
     });
 
-    it('registers recoder-agency with correct platform', () => {
+    it('does not register the deprecated recoder-agency surface', () => {
       service.registerDefaults();
       const agency = service.get('recoder-agency');
-      expect(agency).toBeDefined();
-      expect(agency!.identity.platform).toBe('recoder_agency');
+      expect(agency).toBeUndefined();
     });
 
     it('registers recoder-studio as custom platform', () => {
@@ -584,11 +583,10 @@ describe('AgentRegistryService', () => {
       expect(studio!.identity.platform).toBe('custom');
     });
 
-    it('registers recoder-pm with correct platform', () => {
+    it('does not register the deprecated recoder-pm surface', () => {
       service.registerDefaults();
       const pm = service.get('recoder-pm');
-      expect(pm).toBeDefined();
-      expect(pm!.identity.platform).toBe('recoder_pm');
+      expect(pm).toBeUndefined();
     });
 
     it('registers openclaw as custom platform', () => {
@@ -1086,14 +1084,6 @@ describe('Agent Registry Workflow', () => {
     // recoder-web should be discoverable by platform
     const webAgents = service.discover({ platform: 'recoder_app' });
     expect(webAgents.some(a => a.identity.id === 'recoder-app')).toBe(true);
-
-    // recoder-pm should be discoverable
-    const pmAgents = service.discover({ platform: 'recoder_pm' });
-    expect(pmAgents.some(a => a.identity.id === 'recoder-pm')).toBe(true);
-
-    // recoder-agency should be discoverable
-    const agencyAgents = service.discover({ platform: 'recoder_agency' });
-    expect(agencyAgents.some(a => a.identity.id === 'recoder-agency')).toBe(true);
 
     // custom platform should have recoder-studio and openclaw
     const customAgents = service.discover({ platform: 'custom' });

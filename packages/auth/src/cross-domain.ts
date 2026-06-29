@@ -2,8 +2,8 @@
  * Cross-domain session verification utilities for @recoder/auth.
  *
  * Provides convenient high-level helpers that any frontend surface
- * (app, recoder-frontend, recoder-agency, recoder-studio, recoder-pm)
- * can use to verify Better Auth sessions across the recoder.xyz ecosystem.
+ * (app, recoder-studio) can use to verify Better Auth sessions across
+ * the recoder.xyz ecosystem.
  *
  * All surfaces share the same session cookie (`recoder.session_token`)
  * set on `.recoder.xyz` with the `recoder` prefix, so a user who signs
