@@ -1,34 +1,41 @@
-/* Recoder Cockpit — dark, dense, conductor.build-style board.
-   Refined desktop palette (see docs/image.png): deep near-black canvas with
-   subtly warm neutral surfaces, soft low-contrast borders, and a calm green
-   "ready/merge" accent matching the reference desktop UI. Semantic colors
-   (--good/--bad/--warn/--accent/--progress) are rebound from
+/* Recoder Cockpit — a calm, monochrome code-editor surface (Cursor / VS Code
+   dark). Very dark cool-neutral near-black surfaces, hairline borders, quiet
+   muted typography, and a SINGLE restrained accent (a desaturated blue) used
+   sparingly. No vibrant fills, no glows, no colorful dashboard chrome.
+
+   Semantic accents (--good/--bad/--warn/--accent/--progress) are rebound from
    @recoder/design-tokens at startup; the values here are the degrade-safe
-   fallbacks. */
+   fallbacks. The neutral surface tokens and the muted ready/merge affordance
+   below are cockpit-owned and are NOT touched by the token bridge. */
 :root {
-  /* Layered surfaces: canvas → elevated chrome → card. */
-  --bg: #0c0c0e;
-  --bg-elev: #131316;
-  --bg-card: #17171b;
-  --bg-inset: #0a0a0c;
-  /* Soft, low-contrast hairlines like the reference. */
-  --border: #222227;
-  --border-strong: #313139;
-  /* Text scale: bright primary, muted secondary, faint tertiary. */
-  --text: #ededf1;
-  --text-dim: #9c9ca8;
-  --text-faint: #66666f;
-  /* Semantic accents (rebound from design-tokens at startup). */
-  --accent: #5b8cff;
+  /* Layered neutral near-black surfaces: canvas → elevated chrome → card. */
+  --bg: #181818;
+  --bg-elev: #1e1e1e;
+  --bg-card: #202020;
+  --bg-inset: #1a1a1a;
+  /* Hairline borders — quiet cool-neutral gray. */
+  --border: #2a2a2a;
+  --border-strong: #353535;
+  /* Text scale: light primary, muted secondary, faint tertiary. */
+  --text: #e4e4e4;
+  --text-dim: #8a8a8a;
+  --text-faint: #5c5c5c;
+  /* Semantic accents (rebound from design-tokens at startup). The single
+     restrained accent is a desaturated blue used sparingly for focus + the
+     active nav underline. */
+  --accent: #3b82f6;
   --good: #3fb950;
   --bad: #f85149;
   --warn: #d29922;
-  --active: #5b8cff;
+  --active: #3b82f6;
   --progress: #a371f7;
-  --neutral: #66666f;
-  /* The reference leans on a calm green for ready/merge affordances. */
-  --ready: #2ea043;
-  --ready-soft: rgba(46, 160, 67, 0.14);
+  --neutral: #5c5c5c;
+  /* "ready/merge" affordance — restrained NEUTRAL surface (dark fill + hairline
+     + light text), NOT a vibrant green. Cockpit-owned; not token-bound. */
+  --ready: #2b2b2b;
+  --ready-border: #3a3a3a;
+  --ready-text: #d6d6d6;
+  --ready-soft: rgba(255, 255, 255, 0.03);
   /* macOS traffic-light hues. */
   --tl-close: #ff5f57;
   --tl-min: #febc2e;
@@ -42,8 +49,9 @@
   --radius: 8px;
   --radius-md: 9px;
   --radius-lg: 11px;
-  /* Soft focus ring reused by every text/select control. */
-  --focus-ring: 0 0 0 3px rgba(91, 140, 255, 0.16);
+  /* Soft focus ring reused by every text/select control — quiet desaturated
+     blue at low alpha, no glow. */
+  --focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.22);
 }
 
 * { box-sizing: border-box; }
@@ -98,13 +106,15 @@ body {
 .traffic-max { background: var(--tl-max); }
 
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Monochrome brand mark — a quiet neutral square with a hairline border. The
+   runtime token bridge sets --brand-gradient (an orange→purple gradient); we
+   intentionally do NOT consume it here so the chrome stays calm and editor-like. */
 .brand-mark {
-  width: 16px; height: 16px; border-radius: 4px;
-  /* --brand-gradient is bound from @recoder/design-tokens at startup; the
-     accent→progress fallback keeps the mark branded if tokens are unavailable. */
-  background: var(--brand-gradient, linear-gradient(135deg, var(--accent), var(--progress)));
+  width: 14px; height: 14px; border-radius: 3px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
 }
-.brand-name { font-weight: 600; font-size: 13px; letter-spacing: -0.01em; }
+.brand-name { font-weight: 600; font-size: 13px; letter-spacing: -0.01em; color: var(--text); }
 .brand-sub {
   color: var(--text-faint); font-size: 11px; font-family: var(--mono); margin-left: 6px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
@@ -132,7 +142,7 @@ body {
 .health-sum-item { display: inline-flex; align-items: center; gap: 6px; }
 .health-sum-count { color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
 .health-summary:hover .health-sum-count { color: var(--text-dim); }
-.health-sum-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex-shrink: 0; }
+.health-sum-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex-shrink: 0; opacity: 0.85; }
 .sumdot-good { background: var(--good); }
 .sumdot-warn { background: var(--warn); }
 .sumdot-bad { background: var(--bad); }
@@ -156,7 +166,7 @@ body {
   background: var(--bg-inset); color: var(--text-dim);
   transition: border-color 0.12s, color 0.12s;
 }
-.pill-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--neutral); flex-shrink: 0; }
+.pill-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--neutral); flex-shrink: 0; opacity: 0.85; }
 /* Calm chips: no glow rings, just a quiet tinted dot + muted text. */
 .pill-good { color: var(--text-dim); }
 .pill-good .pill-dot { background: var(--good); }
@@ -230,7 +240,9 @@ body {
 .ws-row:hover { background: var(--bg-card); }
 .ws-row-active { background: var(--bg-card); border-color: var(--border-strong); }
 .ws-row-collision { border-color: rgba(210, 153, 34, 0.45); }
-.ws-row-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--neutral); }
+/* Status dots — desaturated: the semantic hue reads quietly at reduced opacity,
+   so state is legible without shouting. No glow. */
+.ws-row-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--neutral); opacity: 0.85; }
 .dot-active { background: var(--active); }
 .dot-progress { background: var(--progress); }
 .dot-good { background: var(--good); }
@@ -243,17 +255,18 @@ body {
 .ws-row-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ws-row-runtime { font-size: 10px; color: var(--text-faint); font-family: var(--mono); flex-shrink: 0; }
 
-/* State pill — soft tinted chip carrying the human state copy. */
+/* State pill — quiet chip: gray text on a faint neutral hairline. Tone is
+   carried only by a barely-tinted border, never a saturated fill or glow. */
 .ws-row-pill {
   font-size: 10px; line-height: 1.5; padding: 0 7px; border-radius: 999px;
   font-weight: 500; white-space: nowrap;
-  border: 1px solid var(--border-strong); color: var(--text-dim); background: var(--bg-inset);
+  border: 1px solid var(--border); color: var(--text-dim); background: var(--bg-inset);
 }
-.ws-row-pill.pill-active { color: #aac4ff; border-color: rgba(91, 140, 255, 0.4); background: rgba(91, 140, 255, 0.12); }
-.ws-row-pill.pill-progress { color: #c9b0ff; border-color: rgba(163, 113, 247, 0.4); background: rgba(163, 113, 247, 0.12); }
-.ws-row-pill.pill-good { color: #86e29c; border-color: rgba(46, 160, 67, 0.4); background: var(--ready-soft); }
-.ws-row-pill.pill-warn { color: #f0c77a; border-color: rgba(210, 153, 34, 0.4); background: rgba(210, 153, 34, 0.12); }
-.ws-row-pill.pill-bad { color: #ffb4ae; border-color: rgba(248, 81, 73, 0.4); background: rgba(248, 81, 73, 0.12); }
+.ws-row-pill.pill-active { color: var(--text-dim); border-color: rgba(59, 130, 246, 0.28); }
+.ws-row-pill.pill-progress { color: var(--text-dim); border-color: rgba(163, 113, 247, 0.24); }
+.ws-row-pill.pill-good { color: var(--text-dim); border-color: rgba(63, 185, 80, 0.24); }
+.ws-row-pill.pill-warn { color: var(--text-dim); border-color: rgba(210, 153, 34, 0.26); }
+.ws-row-pill.pill-bad { color: var(--text-dim); border-color: rgba(248, 81, 73, 0.26); }
 .ws-row-pill.pill-neutral { color: var(--text-dim); }
 
 /* "New workspace" row + "Add repository" footer. */
@@ -354,11 +367,11 @@ body {
 .ws-cmdbar-send {
   width: 30px; height: 30px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ready); border: 1px solid var(--ready); color: #06210d;
-  border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 700;
-  transition: background 0.12s, opacity 0.12s;
+  background: var(--ready); border: 1px solid var(--ready-border); color: var(--ready-text);
+  border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
 }
-.ws-cmdbar-send:hover:not(:disabled) { background: #3ab552; }
+.ws-cmdbar-send:hover:not(:disabled) { background: #323232; border-color: #444444; }
 .ws-cmdbar-send:disabled { opacity: 0.4; cursor: not-allowed; }
 .ws-cmdbar-error { color: var(--bad); font-size: 11px; }
 
@@ -425,16 +438,16 @@ body {
   display: flex; flex-direction: column;
   overflow: hidden;
 }
-/* Green "PR #NN · Ready to merge" banner with the Merge button. */
+/* "PR #NN · Ready to merge" banner with the Merge button — quiet neutral strip
+   with a single muted-green status dot, not a saturated green block. */
 .detail-pr-banner {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 9px 14px; background: var(--ready-soft); border-bottom: 1px solid rgba(46, 160, 67, 0.35);
+  padding: 9px 14px; background: var(--bg-card); border-bottom: 1px solid var(--border);
 }
-.detail-pr-banner-main { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #86e29c; }
+.detail-pr-banner-main { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: var(--text-dim); }
 .detail-pr-check {
-  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ready); color: #06210d; font-size: 10px; font-weight: 700;
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: var(--good); opacity: 0.7;
 }
 
 .detail-header { display: flex; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
@@ -474,8 +487,8 @@ body {
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 9px; font-weight: 700; font-family: var(--mono);
 }
-.detail-file-modified { background: rgba(210, 153, 34, 0.16); color: var(--warn); }
-.detail-file-added { background: rgba(46, 160, 67, 0.16); color: var(--good); }
+.detail-file-modified { background: var(--bg-inset); border: 1px solid rgba(210, 153, 34, 0.3); color: var(--warn); }
+.detail-file-added { background: var(--bg-inset); border: 1px solid rgba(63, 185, 80, 0.3); color: var(--good); }
 .detail-file-path { flex: 1; min-width: 0; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-file-changes { font-family: var(--mono); font-size: 11px; flex-shrink: 0; }
 .detail-output-log { border-top: 1px solid var(--border); display: flex; flex-direction: column; min-height: 160px; }
@@ -530,14 +543,15 @@ body {
   padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
 }
-.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:hover:not(:disabled) { border-color: var(--border-strong); background: var(--bg-elev); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-sm { padding: 4px 10px; font-size: 11px; }
-/* Primary CTA — calm green ready/merge affordance from the reference. */
+/* Primary CTA — restrained NEUTRAL button (dark surface + hairline + light
+   text), not a vibrant green. Reads like a quiet editor action. */
 .btn-primary {
-  background: var(--ready); border-color: var(--ready); color: #06210d; font-weight: 600;
+  background: var(--ready); border-color: var(--ready-border); color: var(--ready-text); font-weight: 500;
 }
-.btn-primary:hover:not(:disabled) { background: #3ab552; border-color: #3ab552; }
+.btn-primary:hover:not(:disabled) { background: #323232; border-color: #444444; }
 .btn-ghost { background: transparent; }
 .btn-danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
 .icon-btn { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; line-height: 1; }
@@ -602,13 +616,15 @@ body {
   padding: 3px; border-radius: 9px;
 }
 .view-tab {
-  background: transparent; border: 1px solid transparent; color: var(--text-dim);
-  border-radius: 6px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500;
-  transition: color 0.12s, background 0.12s;
+  background: transparent; border: none; color: var(--text-dim);
+  border-radius: 0; padding: 5px 11px; cursor: pointer; font-size: 12px; font-weight: 500;
+  border-bottom: 1.5px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
 }
 .view-tab:hover { color: var(--text); }
+/* Active tab — quiet light text + a faint underline, not a bright filled box. */
 .view-tab-active {
-  background: var(--bg-card); color: var(--text);
+  color: var(--text); border-bottom-color: var(--text-faint);
 }
 
 /* Sessions surface */
@@ -803,7 +819,7 @@ body {
 .memory-row-actions { display: flex; gap: 8px; margin-top: 4px; }
 
 /* Shared additions for the substrate / live-events / governance surfaces. */
-.banner-good { background: rgba(63, 185, 80, 0.12); color: #7ee29a; }
+.banner-good { background: var(--bg-card); color: var(--text-dim); border-left-color: var(--good); }
 .tone-bad { color: var(--bad); }
 .tone-active { color: var(--active); }
 .tone-progress { color: var(--progress); }
