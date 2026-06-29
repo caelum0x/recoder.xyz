@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 type Status = "idle" | "submitting" | "done" | "error";
@@ -33,11 +34,19 @@ export function LeadForm({
 }: LeadFormProps) {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  // Honeypot: a hidden field real users never fill. Bots that auto-fill it are
+  // silently dropped without hitting the API.
+  const [trap, setTrap] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (trap) {
+      // Pretend success to a bot; never touch the API.
+      setStatus("done");
+      return;
+    }
     if (!EMAIL_RE.test(email)) {
       setError("Please enter a valid email address.");
       setStatus("error");
@@ -83,6 +92,19 @@ export function LeadForm({
 
   return (
     <form onSubmit={onSubmit} className={"flex flex-col gap-3 " + className}>
+      {/* Honeypot — visually hidden, off-screen, excluded from tab + a11y tree. */}
+      <div aria-hidden className="absolute left-[-9999px] h-0 w-0 overflow-hidden">
+        <label htmlFor="company-website">Leave this field empty</label>
+        <input
+          id="company-website"
+          name="company-website"
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          value={trap}
+          onChange={(e) => setTrap(e.target.value)}
+        />
+      </div>
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
           type="email"
@@ -118,6 +140,13 @@ export function LeadForm({
           {error}
         </p>
       )}
+      <p className="text-xs leading-relaxed text-faint">
+        By submitting, you agree to our{" "}
+        <Link href="/privacy" className="text-muted underline hover:text-fg">
+          Privacy Policy
+        </Link>
+        . We&apos;ll only email you about this request.
+      </p>
     </form>
   );
 }

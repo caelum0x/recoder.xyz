@@ -5,7 +5,7 @@ import { Nav, Footer } from "@/components/site";
 export const metadata: Metadata = {
   title: "Recoder pricing",
   description:
-    "Recoder is free for solo developers running agents locally. Pro adds cloud sync, a shared brain, and more parallel agents. Enterprise adds SSO, audit and replay, governance approvals, and self-hosting. You always bring your own agents — Recoder never resells tokens.",
+    "Recoder is free for solo developers running agents locally. Pro (coming soon) adds cloud sync and a shared brain across machines. Enterprise adds SSO, audit and replay, governance approvals, and self-hosting. You always bring your own agents — Recoder never resells tokens.",
 };
 
 /**
@@ -43,23 +43,23 @@ const TIERS: Tier[] = [
     blurb: "The local cockpit. Run your own agents as a team on one machine.",
     features: [
       "Local cockpit for macOS, Windows, Linux",
-      "Run Claude Code, Codex, and opencode in parallel",
+      "Run Claude Code, Codex, opencode, and pi in parallel",
       "Shared brain on your own machine",
       "Work-locks so agents stop editing the same file",
-      "Token-saving context reuse across agents",
+      "Context reuse across agents, designed to cut repeat token spend",
     ],
     cta: { label: "Download", href: "/download" },
     footnote: "No account required. Your agents, your keys.",
   },
   {
     name: "Pro",
-    price: "Subscription",
+    price: "Coming soon",
     priceNote: "billing via Polar (Merchant of Record)",
-    blurb: "Cloud sync and a shared brain that follows you across machines.",
+    blurb: "Cloud sync and a shared brain designed to follow you across machines.",
     features: [
       "Everything in Free",
-      "Cloud-synced shared brain across your machines",
-      "More parallel agents per cockpit",
+      "Cloud-synced shared brain across your machines (in development)",
+      "Higher parallel-agent limits per cockpit",
       "Persistent repo intel, memory, and run history",
       "Priority changelog and early builds",
     ],

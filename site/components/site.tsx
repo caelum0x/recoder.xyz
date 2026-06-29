@@ -1,5 +1,12 @@
 import Link from "next/link";
 
+/**
+ * Public GitHub URL, only rendered when explicitly configured. The source repo
+ * is private today, so we never ship a link that lands a public visitor on a
+ * 404. Set NEXT_PUBLIC_GITHUB_URL once the repo (or a public mirror) is open.
+ */
+export const PUBLIC_GITHUB_URL = process.env.NEXT_PUBLIC_GITHUB_URL?.trim();
+
 /** The single primary action on every page. One CTA discipline (Cursor/Conductor). */
 export function DownloadButton({
   className = "",
@@ -94,12 +101,18 @@ export function Nav() {
 }
 
 export function Footer() {
+  const connectLinks = [
+    { href: "mailto:founders@recoder.xyz", label: "Contact" },
+    ...(PUBLIC_GITHUB_URL
+      ? [{ href: PUBLIC_GITHUB_URL, label: "GitHub" }]
+      : []),
+  ];
   return (
     <footer className="border-t border-border">
       <div className="mx-auto grid max-w-6xl gap-8 px-6 py-12 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
         <div>
           <Wordmark />
-          <p className="mt-3 max-w-xs text-sm text-faint">
+          <p className="mt-3 max-w-xs text-sm text-muted">
             The control plane for coding agents. Run your own, coordinated.
           </p>
         </div>
@@ -121,15 +134,10 @@ export function Footer() {
             { href: "/terms", label: "Terms" },
           ]}
         />
-        <FooterCol
-          title="Connect"
-          links={[
-            { href: "https://github.com/caelum0x/recoder.xyz", label: "GitHub" },
-          ]}
-        />
+        <FooterCol title="Connect" links={connectLinks} />
       </div>
       <div className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5 text-xs text-faint">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5 text-xs text-muted">
           <span>© {new Date().getFullYear()} Recoder</span>
           <span>Your agents. Your keys. Coordinated.</span>
         </div>
@@ -151,16 +159,30 @@ function FooterCol({
         {title}
       </div>
       <ul className="space-y-2">
-        {links.map((l) => (
-          <li key={l.href}>
-            <Link
-              href={l.href}
-              className="text-sm text-muted transition-colors hover:text-fg"
-            >
-              {l.label}
-            </Link>
-          </li>
-        ))}
+        {links.map((l) => {
+          const external = l.href.startsWith("http") || l.href.startsWith("mailto:");
+          const cls =
+            "text-sm text-muted transition-colors hover:text-fg";
+          return (
+            <li key={l.href}>
+              {external ? (
+                <a
+                  href={l.href}
+                  className={cls}
+                  {...(l.href.startsWith("http")
+                    ? { target: "_blank", rel: "noreferrer" }
+                    : {})}
+                >
+                  {l.label}
+                </a>
+              ) : (
+                <Link href={l.href} className={cls}>
+                  {l.label}
+                </Link>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
