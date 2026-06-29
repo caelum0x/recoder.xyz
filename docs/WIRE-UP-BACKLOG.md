@@ -6,25 +6,27 @@
 > wire-up dirs of 129). Ordered by leverage. Check a box only when the consumer
 > actually imports + runs it end-to-end.
 
-Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it)
+Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it) · ⏭️ skipped (honest: no clean additive seam — reason in row)
 
-| | Package (built, unused) | Wire into (consumer) | Why it matters |
+**Progress (2026-06-29): 10 of 15 wired in-process on the real product path; 3 skipped with reasons; 2 open.**
+
+| | Package (built, unused) | Wire into (consumer) | Status |
 |---|--------------------------|----------------------|----------------|
-| ⬜ | **`packages/pal`** | `docker-backend` conductor run loop | **highest** — the multi-model/agent tool layer the run loop should call; biggest unused first-party asset |
-| ⬜ | **`apps/agent-gateway`** | fold into / import from `docker-backend` (kill the inline re-impl) | the A2A ingress is re-implemented inline in the backend; one path, not two |
-| ⬜ | **`apps/agent-worker`** | `docker-backend` container (scale-out worker) | the headless runtime worker; backend re-implements it inline |
-| ⬜ | **`packages/agent-workflows`** | `docker-backend` (workflow driver) | declarative multi-step agent workflows — unused |
-| ⬜ | **`packages/agent-hooks`** | `docker-backend` lifecycle (pre/post action hooks) | deterministic policy/artifact hooks around runs |
-| ⬜ | **`packages/agent-schemas`** | `docker-backend` request/response validation | shared schemas not yet enforced at the boundary |
-| ⬜ | **`packages/beads-adapter`** | `agent-os` task store ↔ `bd`/beads | sync canonical tasks with the issue tracker |
-| ⬜ | **`packages/conductor-ui`** | `apps/desktop/cockpit` | the typed conductor client/components — reuse in the cockpit instead of bespoke wiring |
-| ⬜ | **`packages/agent-oss`** | `packages/runtime` dispatch | the OSS-engine dispatch layer |
-| ⬜ | **`py/ops-recorder`** | `/work-signals` ingress (docker-backend) | stuck-work detection → handoff; built, gitignored, unconsumed |
-| ⬜ | **`packages/document-preprocessor`** | `packages/brain` RAG ingest | preprocess docs for the shared brain |
-| ⬜ | **`packages/browser-verification`** | a browser-check node in the run loop | verify an agent's web output (preview health) |
-| ⬜ | **`packages/recoder-browser-tools`** | the browser-check node / agent tools | browser tooling for agents |
-| ⬜ | **`packages/design-tokens`** | `apps/desktop/cockpit` + `site` | one design system across surfaces |
-| ⬜ | **`shared/src/animations`** | `apps/desktop/cockpit` | shared motion in the cockpit |
+| ✅ | **`packages/pal`** | `docker-backend` conductor run loop | **wired** — `pal-plan.ts` fused into `workspace-service.createWorkspace`; defaults runtime+substrate on the real create path; risk annotates (D1) |
+| ⏭️ | **`apps/agent-gateway`** | fold into `docker-backend` | **skipped** — private ESM, unresolvable from CJS backend; backend outbox-drain is richer; engine already fused via `post-run-workflow.ts`. Standalone kept (D2) |
+| ⏭️ | **`apps/agent-worker`** | `docker-backend` (scale-out) | **skipped** — same; worker's drain has no status tracking (would regress). Standalone kept for cloud scale-out |
+| ✅ | **`packages/agent-workflows`** | `docker-backend` (workflow driver) | **wired** — `AgentOsWorkflowRunner` drives the completion-watcher post-run graph (verify→browser-check→memory) |
+| ✅ | **`packages/agent-hooks`** | `docker-backend` lifecycle | **wired** — in-process `hook-gate.ts` gates runtime launches (secret/path) on the run loop |
+| ✅ | **`packages/agent-schemas`** | `docker-backend` ingress validation | **wired** — `validateBody` guard at `/api/conductor` + `/api/agent-os` boundaries |
+| ✅ | **`packages/beads-adapter`** | `agent-os` ↔ `bd` | **wired** — `beads-sync.ts` drives `IssueTrackerSyncService` + `BeadsIssueTracker` (shells to `bd`, degrade-safe) |
+| ✅ | **`packages/conductor-ui`** | `apps/desktop/cockpit` | **wired** — cockpit streams live workspace events via the typed `ConductorClient` |
+| ✅ | **`packages/agent-oss`** | runtime dispatch | **wired** — `oss-dispatch.ts` routes OSS-provider workspaces through the in_process substrate |
+| ⬜ | **`py/ops-recorder`** | `/work-signals` ingress (docker-backend) | open — backend already has a same-named inline concept; needs Python-vs-TS call (INTEGRATION-PLAN §d.4) |
+| ✅ | **`packages/document-preprocessor`** | `packages/brain` RAG ingest | **wired** — `POST /api/conductor/context/ingest` → `brain.ingestDocument` (preprocess→remember) |
+| ✅ | **`packages/browser-verification`** | browser-check node in the run loop | **wired** — `browser-check.ts` node verifies preview health on the post-run path |
+| ⬜ | **`packages/recoder-browser-tools`** | the browser-check node | open — source-only ESM + playwright peer; needs a CJS dist before the node can drive Playwright (browser-verification used meanwhile) |
+| ✅ | **`packages/design-tokens`** | `apps/desktop/cockpit` | **wired** — `applyDesignTokens` rebinds cockpit semantic colors at startup |
+| ⏭️ | **`shared/src/animations`** | `apps/desktop/cockpit` | **skipped** — React-coupled hooks; aliasing react→preact/compat breaks cockpit's live poll. Needs a Preact-native hook variant first |
 
 ## How to work this list
 - Each wire-up is a small PR: import the package at the named consumer, replace the
