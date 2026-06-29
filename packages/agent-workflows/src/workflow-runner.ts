@@ -75,6 +75,8 @@ export type AgentOsWorkflowRunnerPorts = {
   executeTool?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   requestApproval?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   runVerification?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
+  openPullRequest?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
+  runDeploy?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
   executeNode?: (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult>;
 };
 
@@ -220,6 +222,35 @@ export class AgentOsWorkflowRunner {
         throw new Error(`No verification handler configured for workflow node ${node.nodeId}.`);
       }
       return this.ports.runVerification(node, context);
+    }
+
+    // Approval-wait is the explicit human gate in `verify -> approve -> pr -> deploy`.
+    // When a handler is supplied it may resolve the gate; otherwise the node parks the
+    // run in `waiting` until an external `approval_decision` signal arrives. This is
+    // never a hard failure — an unresolved gate is a legitimate paused state.
+    if (node.kind === 'approval-wait') {
+      return this.ports.requestApproval
+        ? this.ports.requestApproval(node, context)
+        : {
+          status: 'waiting',
+          output: {
+            reason: 'Approval-wait node is parked until an approval decision arrives.',
+          },
+        };
+    }
+
+    if (node.kind === 'pull-request') {
+      if (!this.ports.openPullRequest) {
+        throw new Error(`No pull-request handler configured for workflow node ${node.nodeId}.`);
+      }
+      return this.ports.openPullRequest(node, context);
+    }
+
+    if (node.kind === 'deploy') {
+      if (!this.ports.runDeploy) {
+        throw new Error(`No deploy handler configured for workflow node ${node.nodeId}.`);
+      }
+      return this.ports.runDeploy(node, context);
     }
 
     throw new Error(`No handler configured for workflow node kind ${node.kind}.`);
