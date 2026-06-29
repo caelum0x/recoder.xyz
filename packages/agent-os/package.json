@@ -26,6 +26,7 @@
     "test": "node --test --import tsx src/**/*.test.ts"
   },
   "devDependencies": {
+    "@recoder/beads-adapter": "workspace:*",
     "@types/node": "^20.10.0",
     "tsup": "^8.0.0",
     "tsx": "^4.7.0",

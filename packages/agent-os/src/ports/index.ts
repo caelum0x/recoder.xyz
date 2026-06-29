@@ -4,3 +4,4 @@ export * from './event-bus';
 export * from './policy-engine';
 export * from './artifact-store';
 export * from './memory-store';
+export * from './issue-tracker';

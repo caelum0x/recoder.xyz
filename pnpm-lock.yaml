@@ -877,6 +877,9 @@ importers:
       '@recoder/oss-registry':
         specifier: workspace:*
         version: link:../packages/oss-registry
+      '@recoder/pal':
+        specifier: workspace:*
+        version: link:../packages/pal
       '@recoder/pi-coding-agent':
         specifier: workspace:*
         version: link:../packages/pi-coding-agent
@@ -1197,6 +1200,9 @@ importers:
 
   packages/agent-os:
     devDependencies:
+      '@recoder/beads-adapter':
+        specifier: workspace:*
+        version: link:../beads-adapter
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.27
@@ -1700,6 +1706,27 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
+
+  packages/conductor-ui:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.27
+      '@types/react':
+        specifier: 19.2.7
+        version: 19.2.7
+      react:
+        specifier: ^18.3.0
+        version: 18.3.1
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(@swc/core@1.15.7(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.2)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.2
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.27)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@6.0.6))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
 
   packages/context7-sdk:
     devDependencies:
