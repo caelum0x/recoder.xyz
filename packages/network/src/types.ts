@@ -162,7 +162,10 @@ export type XdrRuleId =
   | 'authz_denial_burst'
   | 'repeated_auth_failure'
   | 'denied_egress'
-  | 'anomalous_rate';
+  | 'anomalous_rate'
+  | 'anomalous_principal'
+  | 'unexpected_egress'
+  | 'auth_failure_spike';
 
 /** A detection emitted by an XDR rule over a window of security events. */
 export interface XdrDetection {
