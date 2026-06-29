@@ -212,7 +212,7 @@ export function MemoryCandidatesPanel() {
   return (
     <section class="memory-panel">
       <div class="panel-head">
-        <h2 class="panel-title">Memory Candidates</h2>
+        <h2 class="panel-title">Memory</h2>
         <div class="panel-head-actions">
           <button class="btn btn-ghost btn-sm" onClick={() => candidates.refresh()} disabled={candidates.loading}>
             {candidates.loading ? 'Refreshing…' : 'Refresh'}

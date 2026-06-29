@@ -37,7 +37,7 @@ export function BrainStatsPanel() {
   return (
     <div class="connectors-panel brain-panel">
       <div class="panel-head">
-        <h2 class="panel-title">Shared Brain &amp; Governance</h2>
+        <h2 class="panel-title">Brain</h2>
         <div class="panel-head-actions">
           {data && (
             <>

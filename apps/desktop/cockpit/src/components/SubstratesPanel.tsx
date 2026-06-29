@@ -57,7 +57,7 @@ export function SubstratesPanel() {
   return (
     <div class="connectors-panel substrates-panel">
       <div class="panel-head">
-        <h2 class="panel-title">Substrates &amp; Health</h2>
+        <h2 class="panel-title">Agents</h2>
         <div class="panel-head-actions">
           {subs.data && (
             <span class="pill pill-good" title="Available substrates / total registered">

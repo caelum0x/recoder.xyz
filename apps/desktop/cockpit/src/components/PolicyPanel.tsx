@@ -98,7 +98,7 @@ export function PolicyPanel() {
   return (
     <section class="policy-panel">
       <div class="panel-head">
-        <h2 class="panel-title">Policy</h2>
+        <h2 class="panel-title">Rules</h2>
         <span class="panel-head-sub">
           Live @recoder/agent-policy decision — POST /api/agent-os/policy/evaluate
         </span>

@@ -264,16 +264,24 @@ describe('cockpit create -> events -> diff -> terminate (real UI vs stub conduct
     });
     await flush(50);
 
-    // The dmux surface is a first-class nav tab (not buried inside Sessions).
-    const dmuxTab = Array.from(container.querySelectorAll('.view-tabs .view-tab')).find(
+    // dmux is an advanced surface, so it lives under the "More" menu (the top
+    // nav stays plain). Open the menu and find the dmux item inside it.
+    const moreTrigger = Array.from(container.querySelectorAll('.view-tabs .view-tab')).find(
+      (b) => b.textContent?.startsWith('More'),
+    ) as HTMLButtonElement;
+    expect(moreTrigger, 'a "More" menu trigger is rendered').toBeTruthy();
+    await act(async () => {
+      moreTrigger.click();
+    });
+    const dmuxItem = Array.from(container.querySelectorAll('.view-more-menu .view-more-item')).find(
       (b) => b.textContent === 'dmux',
     ) as HTMLButtonElement;
-    expect(dmuxTab, 'a top-level "dmux" view tab is rendered').toBeTruthy();
+    expect(dmuxItem, 'a "dmux" item is reachable from the More menu').toBeTruthy();
 
     // Clicking it opens the real DmuxPanel, which renders from GET /dmux on the
     // stub (availability + bin + tmux binding).
     await act(async () => {
-      dmuxTab.click();
+      dmuxItem.click();
     });
     await waitForDom(
       () =>
