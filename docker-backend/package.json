@@ -29,6 +29,7 @@
     "@babel/traverse": "^7.29.0",
     "@recoder/a2a-sdk": "workspace:*",
     "@recoder/agent-events": "workspace:*",
+    "@recoder/agent-hooks": "workspace:*",
     "@recoder/agent-os": "workspace:*",
     "@recoder/agent-schemas": "workspace:*",
     "@recoder/agent-instructions": "workspace:*",
