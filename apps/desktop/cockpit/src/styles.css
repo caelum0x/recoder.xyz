@@ -111,16 +111,38 @@ body {
 }
 .topbar-actions { display: flex; gap: 8px; align-items: center; }
 
-/* Health strip — runtimes / substrates / connectors at a glance. Subtly
-   elevated above the canvas so the engine state reads as its own chrome band,
-   matching the reference's status rail. */
+/* Health strip — runtimes / substrates / connectors. Collapsed by default to a
+   single calm summary line so the chrome stays quiet (the operator asked for
+   simple, not busy); the full chip rails expand on demand. Subtly elevated above
+   the canvas so the engine state still reads as its own thin status band. */
 .health-strip {
-  display: flex;
-  gap: 24px;
-  padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
-  flex-wrap: wrap;
+}
+
+/* Collapsed summary — one quiet clickable row: "Runtimes 2/3 · Substrates …". */
+.health-summary {
+  display: flex; align-items: center; gap: 18px;
+  width: 100%; padding: 7px 16px;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-dim); font-size: 11.5px; font-family: inherit;
+  text-align: left;
+}
+.health-summary:hover { color: var(--text); }
+.health-sum-item { display: inline-flex; align-items: center; gap: 6px; }
+.health-sum-count { color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
+.health-summary:hover .health-sum-count { color: var(--text-dim); }
+.health-sum-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex-shrink: 0; }
+.sumdot-good { background: var(--good); }
+.sumdot-warn { background: var(--warn); }
+.sumdot-bad { background: var(--bad); }
+.sumdot-neutral { background: var(--text-faint); }
+.health-sum-chevron { margin-left: auto; color: var(--text-faint); font-size: 10px; }
+
+/* Expanded detail — the original full chip rails, shown only on demand. */
+.health-detail {
+  display: flex; gap: 24px; flex-wrap: wrap;
+  padding: 4px 16px 10px;
 }
 .health-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .health-group-label { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-right: 4px; }
@@ -131,12 +153,13 @@ body {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 2px 9px; border-radius: 999px;
   font-size: 11px; border: 1px solid var(--border);
-  background: var(--bg-card); color: var(--text-dim);
+  background: var(--bg-inset); color: var(--text-dim);
   transition: border-color 0.12s, color 0.12s;
 }
-.pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex-shrink: 0; }
-.pill-good { color: var(--text); border-color: var(--border-strong); }
-.pill-good .pill-dot { background: var(--good); box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.18); }
+.pill-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--neutral); flex-shrink: 0; }
+/* Calm chips: no glow rings, just a quiet tinted dot + muted text. */
+.pill-good { color: var(--text-dim); }
+.pill-good .pill-dot { background: var(--good); }
 .pill-bad { color: var(--text-faint); }
 .pill-bad .pill-dot { background: var(--bad); }
 
@@ -152,7 +175,7 @@ body {
 
 /* Main layout */
 .main { flex: 1; display: flex; min-height: 0; background: var(--bg); }
-.board-area { flex: 1; overflow: auto; padding: 16px; }
+.board-area { flex: 1; overflow: auto; padding: 20px; }
 .board-area.with-detail { max-width: calc(100% - 460px); }
 
 /* 3-pane Conductor-style console: sidebar | center | detail. */
@@ -208,7 +231,7 @@ body {
 .ws-row-active { background: var(--bg-card); border-color: var(--border-strong); }
 .ws-row-collision { border-color: rgba(210, 153, 34, 0.45); }
 .ws-row-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--neutral); }
-.dot-active { background: var(--active); box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.18); }
+.dot-active { background: var(--active); }
 .dot-progress { background: var(--progress); }
 .dot-good { background: var(--good); }
 .dot-warn { background: var(--warn); }
@@ -380,18 +403,19 @@ body {
 .card-branch { font-family: var(--mono); font-size: 12px; word-break: break-all; margin-bottom: 6px; }
 .card-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-faint); }
 
-/* Badges */
+/* Badges — calm: colored text on a soft hairline border (no full-saturation
+   colored outline), so status reads as a quiet label rather than a loud chip. */
 .badge {
   display: inline-block; padding: 1px 8px; border-radius: 999px;
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
 }
 .tone-neutral { color: var(--neutral); }
-.tone-progress { color: var(--progress); border-color: var(--progress); }
-.tone-active { color: var(--active); border-color: var(--active); }
-.tone-warn { color: var(--warn); border-color: var(--warn); }
-.tone-good { color: var(--good); border-color: var(--good); }
-.tone-bad { color: var(--bad); border-color: var(--bad); }
+.tone-progress { color: var(--progress); }
+.tone-active { color: var(--active); }
+.tone-warn { color: var(--warn); }
+.tone-good { color: var(--good); }
+.tone-bad { color: var(--bad); }
 
 /* Detail panel */
 .detail-panel {
@@ -780,10 +804,10 @@ body {
 
 /* Shared additions for the substrate / live-events / governance surfaces. */
 .banner-good { background: rgba(63, 185, 80, 0.12); color: #7ee29a; }
-.tone-bad { color: var(--bad); border-color: var(--bad); }
-.tone-active { color: var(--active); border-color: var(--active); }
-.tone-progress { color: var(--progress); border-color: var(--progress); }
-.tone-neutral { color: var(--text-dim); border-color: var(--border-strong); }
+.tone-bad { color: var(--bad); }
+.tone-active { color: var(--active); }
+.tone-progress { color: var(--progress); }
+.tone-neutral { color: var(--text-dim); }
 .panel-head-note { font-size: 11px; color: var(--text-faint); font-family: var(--mono); }
 
 /* Substrates & Health panel. */
