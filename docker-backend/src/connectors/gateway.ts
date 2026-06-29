@@ -19,6 +19,7 @@ import { loadConnectorsConfig, type ChannelConfig, type ConnectorsConfig } from 
 import { resolveAdapterFactory } from './channel-adapters.js';
 import { hasWebhookSecret, WEBHOOK_INBOUND_CHANNELS } from './webhook-channels.js';
 import { ConnectorAgentDispatcher, type AgentDispatchResult } from './dispatch-runner.js';
+import { admitConnectorMessage } from './connector-ingress-gate.js';
 
 const logger = createLogger('connectors:gateway');
 
@@ -377,6 +378,26 @@ export class ConnectorsGateway {
    * a clean pass launch a real workspace and follow its status.
    */
   private async handleInbound(runtime: ChannelRuntime, message: NormalizedInboundMessage): Promise<void> {
+    // Hostile-by-default signed edge BEFORE the workspace loop: when an ingress
+    // secret is configured, the gateway seals the (channel-verified, gated)
+    // message into a canonical signed envelope and re-admits it through the OWNED
+    // @recoder/interop connector-ingress gate. A rejected envelope is DROPPED here
+    // — it never reaches dispatch/createWorkspace. Degrade-safe: with no secret
+    // the gate is inert and the message proceeds exactly as before.
+    const admission = admitConnectorMessage(message);
+    if (admission.kind === 'rejected') {
+      logger.warn(
+        {
+          channel: runtime.config.channel,
+          stage: admission.stage,
+          code: admission.code,
+          reason: admission.reason,
+        },
+        'connectors message rejected by signed ingress gate',
+      );
+      return;
+    }
+
     const isGroup = message.chatType !== 'direct';
     const command = this.parseCommand(message.text);
 
