@@ -31,6 +31,7 @@
     "@recoder/agent-events": "workspace:*",
     "@recoder/agent-hooks": "workspace:*",
     "@recoder/agent-os": "workspace:*",
+    "@recoder/beads-adapter": "workspace:*",
     "@recoder/agent-schemas": "workspace:*",
     "@recoder/agent-instructions": "workspace:*",
     "@recoder/agent-mcp": "workspace:*",
