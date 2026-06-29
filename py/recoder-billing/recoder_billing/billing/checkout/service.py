@@ -218,6 +218,7 @@ class CheckoutService:
             customer_billing_address=create.customer_billing_address,
             is_business_customer=create.is_business_customer,
             require_billing_address=create.require_billing_address,
+            external_customer_id=create.external_customer_id,
         )
         return await repository.save(checkout)
 

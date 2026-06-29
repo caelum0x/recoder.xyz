@@ -66,18 +66,27 @@ export function isActionableType(type: string): type is PolarWebhookType {
 }
 
 /**
- * Resolve the recoder subject id a webhook refers to. We prefer the
- * `external_customer_id` / customer.external_id (which we set to the recoder
- * subject id at checkout) and fall back to the Polar customer id. Returns null
- * when no subject can be determined (the handler then denies the mapping).
+ * Resolve the recoder subject id a webhook refers to.
+ *
+ * The authoritative anchor is the Polar customer `external_id`, surfaced on the
+ * event as `external_customer_id` / `customer.external_id`. The polar adapter
+ * sets this to the recoder subject id at checkout (`external_customer_id` on
+ * `POST /v1/checkouts/`), so a real order/subscription/benefit_grant webhook
+ * carries it directly — this is the primary path.
+ *
+ * As a redundant, audit-friendly fallback we also accept `metadata.recoder_subject`
+ * (the same value we stamp into checkout metadata). We DELIBERATELY do not fall
+ * back to the bare Polar customer id (`customer_id` / `customer.id`): that is a
+ * Polar-internal id, not a recoder subject, and applying an entitlement change
+ * to it would target an unknown subject. Returns null when no recoder subject
+ * can be determined (the handler then ignores the event — fail safe).
  */
 export function resolveSubjectId(env: PolarWebhookEnvelope): string | null {
   const d = env.data;
+  const metaSubject = d.metadata?.["recoder_subject"];
   return (
     d.external_customer_id ??
     d.customer?.external_id ??
-    d.customer_id ??
-    d.customer?.id ??
-    null
+    (typeof metaSubject === 'string' && metaSubject ? metaSubject : null)
   );
 }

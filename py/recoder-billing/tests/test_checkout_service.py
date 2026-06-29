@@ -75,6 +75,31 @@ class TestCreate:
         with pytest.raises(CheckoutValidationError):
             await CheckoutService().create(repo, product, create)
 
+    async def test_external_customer_id_links_the_recoder_subject(self) -> None:
+        # SUBJECT LINKAGE: the recoder subject set on create must be recorded on
+        # the durable checkout so a confirmed/succeeded payment can grant the
+        # entitlement back to the SAME subject. Regression guard for the split
+        # subject-linkage (checkout subject vs. grant subject must be identical).
+        product = _fixed_product(1500)
+        repo = InMemoryCheckoutRepository()
+        create = CheckoutCreate(
+            product_id=product.id,
+            product_price_id=product.prices[0].id,
+            customer_email="b@example.com",
+            external_customer_id="recoder_user_42",
+        )
+        checkout = await CheckoutService().create(repo, product, create)
+        assert checkout.external_customer_id == "recoder_user_42"
+
+        # The linkage survives confirm + success — the terminal record a grant keys off.
+        processor = _StubProcessor(PaymentIntent(intent_id="pi_1", status="succeeded"))
+        confirmed = await CheckoutService().confirm(
+            repo, processor, checkout.id, CheckoutConfirm()
+        )
+        succeeded = await CheckoutService().handle_success(repo, confirmed.id)
+        assert succeeded.status == CheckoutStatus.succeeded
+        assert succeeded.external_customer_id == "recoder_user_42"
+
     async def test_archived_product_rejected(self) -> None:
         product = _fixed_product()
         product.is_archived = True
