@@ -32,7 +32,8 @@ import { searchService } from './search.js';
 import { fileWatcher } from './file-watcher.js';
 import { sessionStore } from './session-store.js';
 import { containerPool } from './container-pool.js';
-import { mcpManager, PREINSTALLED_SERVERS, NPX_SERVERS } from './mcp-manager.js';
+// mcpManager / PREINSTALLED_SERVERS / NPX_SERVERS are now consumed inside
+// ./routes/mcp.routes.ts after the MCP route extraction.
 import { packageManagerService } from './package-manager.js';
 import { secretsManager } from './secrets-manager.js';
 import { gitOperations } from './git-operations.js';
@@ -126,13 +127,8 @@ import { getMetricsCollector as getMeteringCollector } from './metering/metrics-
 import { getUsageAggregator } from './metering/usage-aggregator.js';
 import { getQuotaEnforcer, EnforcementAction } from './metering/quota-enforcer.js';
 import { MetricType } from './metering/types.js';
-import {
-  createApiKey,
-  listUserApiKeys,
-  deleteApiKey,
-  revokeApiKey,
-  getUsage,
-} from './public-api/api-keys.js';
+// api-key store helpers (createApiKey/listUserApiKeys/deleteApiKey/revokeApiKey/getUsage)
+// are now consumed inside ./routes/api-keys.routes.ts after the route extraction.
 import { healthMonitor, type HealthStatus } from './health-monitor.js';
 import { resourceOptimizer } from './resource-optimizer.js';
 import { getDaytonaClient, isDaytonaConfigured } from './daytona-client.js';
@@ -8023,166 +8019,8 @@ syncManager.on('sync-event', (event) => {
 // /tools are not interpreted as project IDs.
 app.use('/api/mcp', authenticateRequest, createAgentMcpRouter());
 
-// Get available MCP servers (marketplace catalog)
-app.get('/api/mcp/catalog', authenticateRequest, (_req: AuthenticatedRequest, res) => {
-  const preinstalled = Object.entries(PREINSTALLED_SERVERS).map(([id, config]) => ({
-    id,
-    ...config,
-    preinstalled: true,
-    requiresApiKey: false,
-  }));
-
-  const npxServers = Object.entries(NPX_SERVERS).map(([id, config]) => ({
-    id,
-    ...config,
-    preinstalled: false,
-    requiresApiKey: !!config.env && Object.keys(config.env).length > 0,
-    requiredEnvVars: config.env ? Object.keys(config.env) : [],
-  }));
-
-  res.json({ servers: [...preinstalled, ...npxServers] });
-});
-
-// Start an MCP server for a project
-app.post('/api/mcp/:projectId/start', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
-  const { projectId } = req.params;
-  const { serverId, config } = req.body;
-
-  if (!serverId) {
-    return res.status(400).json({ error: 'serverId is required' });
-  }
-
-  // Build server config
-  let serverConfig;
-  if (PREINSTALLED_SERVERS[serverId]) {
-    // Use preinstalled config (instant startup)
-    serverConfig = {
-      id: serverId,
-      ...PREINSTALLED_SERVERS[serverId],
-      env: { ...config?.env },
-    };
-  } else if (NPX_SERVERS[serverId]) {
-    // Use npx server config (requires download on first use)
-    const npxConfig = NPX_SERVERS[serverId];
-    serverConfig = {
-      id: serverId,
-      ...npxConfig,
-      env: { ...npxConfig.env, ...config?.env },
-    };
-  } else if (config) {
-    // Custom server config
-    serverConfig = {
-      id: serverId,
-      name: config.name || serverId,
-      command: config.command,
-      args: config.args || [],
-      env: config.env,
-    };
-  } else {
-    return res.status(400).json({ error: 'Invalid server configuration' });
-  }
-
-  try {
-    const result = await mcpManager.startServer(projectId, serverConfig);
-    if (result.success) {
-      auditLog({
-        userId: req.userId,
-        action: 'mcp_start',
-        projectId,
-        details: { serverId },
-      });
-      res.json({ success: true, tools: result.tools });
-    } else {
-      res.status(500).json({ success: false, error: result.error });
-    }
-  } catch (error: any) {
-    logger.error({ err: error }, 'MCP: error starting server');
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Stop an MCP server
-app.post('/api/mcp/:projectId/stop', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
-  const { projectId } = req.params;
-  const { serverId } = req.body;
-
-  if (!serverId) {
-    return res.status(400).json({ error: 'serverId is required' });
-  }
-
-  try {
-    await mcpManager.stopServer(projectId, serverId);
-    auditLog({
-      userId: req.userId,
-      action: 'mcp_stop',
-      projectId,
-      details: { serverId },
-    });
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Stop all MCP servers for a project
-app.post('/api/mcp/:projectId/stop-all', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
-  const { projectId } = req.params;
-
-  try {
-    await mcpManager.stopAllServers(projectId);
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Get running MCP servers for a project
-app.get('/api/mcp/:projectId/servers', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
-  const { projectId } = req.params;
-
-  try {
-    const servers = mcpManager.getServers(projectId);
-    res.json({ servers });
-  } catch (error: any) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Get all tools from running MCP servers
-app.get('/api/mcp/:projectId/tools', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
-  const { projectId } = req.params;
-
-  try {
-    const tools = mcpManager.getAllTools(projectId);
-    res.json({ tools });
-  } catch (error: any) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Call a tool on an MCP server
-app.post('/api/mcp/:projectId/call', authenticateRequest, verifyProjectOwnership, async (req: AuthenticatedRequest, res) => {
-  const { projectId } = req.params;
-  const { serverId, toolName, args } = req.body;
-
-  if (!serverId || !toolName) {
-    return res.status(400).json({ error: 'serverId and toolName are required' });
-  }
-
-  try {
-    const result = await mcpManager.callTool(projectId, serverId, toolName, args || {});
-    auditLog({
-      userId: req.userId,
-      action: 'mcp_tool_call',
-      projectId,
-      details: { serverId, toolName },
-    });
-    res.json({ success: true, result });
-  } catch (error: any) {
-    logger.error({ err: error }, 'MCP: tool call error');
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  }
-});
+// MCP marketplace catalog + project-scoped server lifecycle/tool routes extracted to ./routes/mcp.routes.ts (behavior-preserving move)
+app.use(createMcpRouter({ authenticateRequest, verifyProjectOwnership, auditLog, logger }));
 
 // ==================== END MCP ====================
 
@@ -12347,6 +12185,9 @@ import { createZitiRouter } from './routes/ziti.routes.js';
 import { createAgentSkillProfilesRouter } from './routes/agent-skill-profiles.routes.js';
 import { createMem0Router } from './routes/mem0.routes.js';
 import { createContext7Router } from './routes/context7.routes.js';
+import { createMcpRouter } from './routes/mcp.routes.js';
+import { createBillingPolarRouter } from './routes/billing-polar.routes.js';
+import { createApiKeysRouter } from './routes/api-keys.routes.js';
 import { createE2bRouter } from './routes/e2b.routes.js';
 import { createBrowserVerifyRouter } from './routes/browser-verify.routes.js';
 import { createSnapshotRouter } from './routes/snapshot.routes.js';
@@ -13402,32 +13243,8 @@ app.post('/api/a2a/presence/:agentId/workload', authenticateRequest, asyncHandle
 // ── Billing (Polar) API ─────────────────────────────────────────────────────
 // Additive, fail-safe billing via Polar. Does not touch existing entitlements.
 
-app.get('/api/billing/polar/health', asyncHandler(async (_req: express.Request, res: express.Response) => {
-  const { polarHealth } = await import('./polar-client.js');
-  sendSuccess(res, await polarHealth());
-}));
-
-app.get('/api/billing/polar/products', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
-  const { listProducts } = await import('./polar-client.js');
-  sendSuccess(res, await listProducts());
-}));
-
-app.post('/api/billing/polar/checkout', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { products, successUrl, customerEmail, metadata } = req.body ?? {};
-  if (!Array.isArray(products) || products.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'products (non-empty array of product IDs) is required'));
-  }
-  const { createCheckout } = await import('./polar-client.js');
-  const result = await createCheckout({ products, successUrl, customerEmail, metadata });
-  if (!result.available) return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, result.reason ?? 'Polar unavailable'));
-  if (result.reason && !result.checkoutUrl) return sendError(res, createError(ErrorCode.VALIDATION_ERROR, result.reason));
-  sendSuccess(res, result);
-}));
-
-app.get('/api/billing/polar/subscriptions', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const { listSubscriptions } = await import('./polar-client.js');
-  sendSuccess(res, await listSubscriptions(req.query.customerId as string | undefined));
-}));
+// Billing (Polar) health/products/checkout/subscriptions routes extracted to ./routes/billing-polar.routes.ts (behavior-preserving move)
+app.use(createBillingPolarRouter({ authenticateRequest }));
 
 // ── Zero-Trust Network (OpenZiti) API ───────────────────────────────────────
 // Provision zero-trust identities/enrollment for runners. Fail-safe.
@@ -13661,98 +13478,8 @@ onWebhookEvent('subscription.canceled', async (data: any) => {
 
 // ==================== API Key Management Endpoints ====================
 
-// GET /api/v1/api-keys - list keys for authenticated user
-app.get('/api/v1/api-keys', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const userId = req.userId;
-  if (!userId || userId === 'anonymous') {
-    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
-  }
-
-  const keys = listUserApiKeys(userId);
-  sendSuccess(res, { keys });
-}));
-
-// POST /api/v1/api-keys - create a new API key
-app.post('/api/v1/api-keys', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const userId = req.userId;
-  if (!userId || userId === 'anonymous') {
-    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
-  }
-
-  const { name, scopes, allowedIps, expiresAt, isTestKey, metadata } = req.body;
-  if (!name || !scopes || !Array.isArray(scopes) || scopes.length === 0) {
-    return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'name and scopes[] are required'));
-  }
-
-  try {
-    const result = createApiKey(userId, { name, scopes, allowedIps, expiresAt, isTestKey, metadata });
-    sendSuccess(res, result);
-  } catch (err: any) {
-    sendError(res, createError(ErrorCode.VALIDATION_ERROR, err.message));
-  }
-}));
-
-// DELETE /api/v1/api-keys/:id - delete an API key
-app.delete('/api/v1/api-keys/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const userId = req.userId;
-  if (!userId || userId === 'anonymous') {
-    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
-  }
-
-  const keyId = req.params.id;
-  const deleted = deleteApiKey(keyId, userId);
-  if (!deleted) {
-    return sendError(res, createError(ErrorCode.NOT_FOUND, 'API key not found or access denied'));
-  }
-
-  sendSuccess(res, { deleted: true, id: keyId });
-}));
-
-// PATCH /api/v1/api-keys/:id - revoke (deactivate) an API key without deleting
-app.patch('/api/v1/api-keys/:id', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const userId = req.userId;
-  if (!userId || userId === 'anonymous') {
-    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
-  }
-
-  const keyId = req.params.id;
-  const revoked = revokeApiKey(keyId, userId);
-  if (!revoked) {
-    return sendError(res, createError(ErrorCode.NOT_FOUND, 'API key not found or access denied'));
-  }
-
-  sendSuccess(res, { revoked: true, id: keyId, status: 'inactive' });
-}));
-
-// GET /api/v1/api-keys/usage - get aggregated usage stats for user's keys
-app.get('/api/v1/api-keys/usage', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-  const userId = req.userId;
-  if (!userId || userId === 'anonymous') {
-    return sendError(res, createError(ErrorCode.AUTH_REQUIRED, 'Authentication required'));
-  }
-
-  const keys = listUserApiKeys(userId);
-  const usageByKey: Record<string, { name: string; keyPrefix: string; usage: ReturnType<typeof getUsage>; totalRequests: number }> = {};
-  let totalRequests = 0;
-
-  for (const key of keys) {
-    const usage = getUsage(key.id);
-    usageByKey[key.id] = {
-      name: key.name,
-      keyPrefix: key.keyPrefix,
-      usage,
-      totalRequests: key.totalRequests,
-    };
-    totalRequests += key.totalRequests;
-  }
-
-  sendSuccess(res, {
-    totalKeys: keys.length,
-    activeKeys: keys.filter(k => k.isActive).length,
-    totalRequests,
-    keys: usageByKey,
-  });
-}));
+// API key management routes (list/create/delete/revoke/usage) extracted to ./routes/api-keys.routes.ts (behavior-preserving move)
+app.use(createApiKeysRouter({ authenticateRequest }));
 
 logger.info('API key management endpoints registered');
 
