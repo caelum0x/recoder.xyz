@@ -1375,7 +1375,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '3.0.0' },
+        serverInfo: { name: 'recoder-a2a', version: '3.1.0' },
       });
       break;
     case 'notifications/initialized':

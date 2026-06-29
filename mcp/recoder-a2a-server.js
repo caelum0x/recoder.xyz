@@ -2,13 +2,16 @@
 /**
  * Recoder A2A MCP Server for Claude Code
  *
- * Provides 6 tools to interact with the Recoder platform:
- * - recoder_list_agents: List connected A2A agents
- * - recoder_list_tasks: View A2A task queue
- * - recoder_send_task: Send task to another agent via A2A
- * - recoder_create_thread: Create agent thread with Daytona sandbox
- * - recoder_sandbox_exec: Execute code in isolated sandbox
+ * Provides 8 tools to interact with the Recoder platform. This is the
+ * documented Agents-in surface (list / run / inbox / sandbox-exec / respond):
+ * - recoder_list_agents: List connected A2A agents          [list]
+ * - recoder_list_tasks: View A2A task queue                 [list]
+ * - recoder_send_task: Send task to another agent via A2A   [run]
+ * - recoder_create_thread: Create agent thread with Daytona sandbox [run]
  * - recoder_get_thread: Get thread messages (including AI responses)
+ * - recoder_sandbox_exec: Execute code in isolated sandbox  [sandbox-exec]
+ * - recoder_inbox: Check inbound tasks assigned to this agent [inbox]
+ * - recoder_task_respond: Respond to / complete an inbound task [respond]
  */
 
 const {
@@ -598,7 +601,7 @@ async function handleMessage(msg) {
       respond(id, {
         protocolVersion: '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'recoder-a2a', version: '2.5.0' },
+        serverInfo: { name: 'recoder-a2a', version: '3.1.0' },
       });
       break;
     case 'notifications/initialized':
