@@ -138,10 +138,55 @@ exports.default = async function afterPack(context) {
     );
   }
 
+  // --- Invariant 3: the embedded backend is bundled and can boot + mint. ---
+  // extraResources places it next to app.asar, under Resources/backend.
+  const backendDir = path.join(resourcesDir, 'backend');
+  const backendServer = path.join(backendDir, 'dist', 'server.js');
+  const backendMint = path.join(backendDir, 'dist', 'conductor', 'mint-conductor-key.js');
+  const backendNodeModules = path.join(backendDir, 'node_modules');
+  if (!fs.existsSync(backendServer)) {
+    fail(
+      `embedded backend server missing (${backendServer}). The packaged app could ` +
+        'not boot its local backend. Check "extraResources" in package.json and the ' +
+        'before-build backend build step.',
+    );
+  }
+  if (!fs.existsSync(backendMint)) {
+    fail(
+      `embedded backend mint entrypoint missing (${backendMint}). The supervisor ` +
+        'could not mint a conductor key. Check src/conductor/mint-conductor-key.ts is compiled.',
+    );
+  }
+  if (!fs.existsSync(backendNodeModules)) {
+    fail(
+      `embedded backend node_modules missing (${backendNodeModules}). The backend ` +
+        'would fail to require its dependencies. Check "extraResources" in package.json.',
+    );
+  }
+
+  // --- Invariant 4: the vendored tmux binary is bundled and executable. ---
+  // The conductor substrate drives this binary; without it tmux:false on health.
+  // (Only assert for the platform that ships the bundled binary — darwin here.)
+  const tmuxBin = path.join(backendDir, 'c', 'tmux', 'tmux');
+  if (electronPlatformName === 'darwin') {
+    if (!fs.existsSync(tmuxBin)) {
+      fail(
+        `vendored tmux binary missing (${tmuxBin}). The conductor substrate would ` +
+          'report tmux:false. Check the c/tmux/tmux extraResources entry.',
+      );
+    }
+    try {
+      fs.accessSync(tmuxBin, fs.constants.X_OK);
+    } catch {
+      fail(`vendored tmux binary is not executable: ${tmuxBin}`);
+    }
+  }
+
   // eslint-disable-next-line no-console
   console.log(
     `[after-pack] release-artifact assertions passed for ${electronPlatformName}: ` +
       `node-pty unpacked (${nativeNodes.length} .node binary file(s)), ` +
-      'electron-updater bundled.',
+      'electron-updater bundled, embedded backend (server.js + mint + node_modules) ' +
+      'present, vendored tmux bundled.',
   );
 };

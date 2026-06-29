@@ -21,9 +21,51 @@ const cockpitBuild = path.join(cockpitDir, 'build.mjs');
 const cockpitNodeModules = path.join(cockpitDir, 'node_modules');
 const cockpitDist = path.join(cockpitDir, 'dist');
 
+// Repo root is two levels up from apps/desktop; the embedded backend lives here.
+const repoRoot = path.resolve(__dirname, '..', '..');
+const backendDir = path.join(repoRoot, 'docker-backend');
+
 function run(cmd) {
   console.log(`[before-build] $ ${cmd}`);
   execSync(cmd, { cwd: cockpitDir, stdio: 'inherit' });
+}
+
+function runIn(cwd, cmd) {
+  console.log(`[before-build] (${path.basename(cwd)}) $ ${cmd}`);
+  execSync(cmd, { cwd, stdio: 'inherit' });
+}
+
+/**
+ * Build the embedded docker-backend dist so extraResources ships a fresh
+ * compiled backend, including dist/conductor/mint-conductor-key.js (the packaged
+ * supervisor runs this to mint the local conductor key). We fail the build if
+ * the two load-bearing entrypoints are missing afterwards, so we never package
+ * a backend that cannot boot or cannot mint a key.
+ */
+function buildEmbeddedBackend() {
+  const serverEntry = path.join(backendDir, 'dist', 'server.js');
+  const mintEntry = path.join(backendDir, 'dist', 'conductor', 'mint-conductor-key.js');
+
+  if (!fs.existsSync(path.join(backendDir, 'node_modules', '.bin', 'tsc'))) {
+    throw new Error(
+      `[before-build] docker-backend devDependencies (tsc) not installed at ${backendDir}. ` +
+        'Install backend deps before packaging the desktop app.',
+    );
+  }
+
+  console.log('[before-build] building embedded docker-backend (tsc)');
+  runIn(backendDir, 'npx tsc');
+
+  if (!fs.existsSync(serverEntry)) {
+    throw new Error(`[before-build] backend build did not produce ${serverEntry}`);
+  }
+  if (!fs.existsSync(mintEntry)) {
+    throw new Error(
+      `[before-build] backend build did not produce ${mintEntry}; the packaged ` +
+        'supervisor could not mint a conductor key. Check src/conductor/mint-conductor-key.ts.',
+    );
+  }
+  console.log('[before-build] embedded backend dist ready (server.js + mint-conductor-key.js)');
 }
 
 function hasPnpm() {
@@ -104,6 +146,7 @@ function assertNativeModuleInputs() {
 
 exports.default = async function beforeBuild() {
   assertNativeModuleInputs();
+  buildEmbeddedBackend();
 
   if (!fs.existsSync(cockpitBuild)) {
     throw new Error(`[before-build] cockpit build script missing at ${cockpitBuild}`);
