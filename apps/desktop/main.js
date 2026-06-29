@@ -1943,17 +1943,27 @@ function createWindow() {
 
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
-    // Use .icns for macOS dock icon - ensures proper styling with rounded corners
-    const iconPath = path.resolve(__dirname, 'assets', 'icon.icns');
-    console.log('🎨 Setting dock icon from:', iconPath);
+    // Dock icon: prefer the 1024px PNG. nativeImage.createFromPath decodes the
+    // PNG reliably and returns a non-empty image, whereas the .icns returns an
+    // empty image on some Electron builds (its ICNS decoder rejects the chunk
+    // layout iconutil emits). The .icns is still shipped for electron-builder /
+    // packaged-app icon, which macOS itself renders. We try PNG first and fall
+    // back to .icns so the runtime dock icon is always the real Recoder cube.
+    const pngPath = path.resolve(__dirname, 'assets', 'icon.png');
+    const icnsPath = path.resolve(__dirname, 'assets', 'icon.icns');
     try {
-      const icon = nativeImage.createFromPath(iconPath);
-      console.log('🎨 Icon loaded, isEmpty:', icon.isEmpty(), 'size:', icon.getSize());
+      let icon = nativeImage.createFromPath(pngPath);
+      let source = pngPath;
+      if (icon.isEmpty()) {
+        icon = nativeImage.createFromPath(icnsPath);
+        source = icnsPath;
+      }
+      console.log('🎨 Dock icon loaded from:', source, 'isEmpty:', icon.isEmpty(), 'size:', icon.getSize());
       if (!icon.isEmpty()) {
         app.dock.setIcon(icon);
         console.log('✅ Dock icon set successfully');
       } else {
-        console.error('❌ Icon is empty');
+        console.error('❌ Dock icon is empty (both icon.png and icon.icns failed to decode)');
       }
     } catch (err) {
       console.error('❌ Error setting dock icon:', err);

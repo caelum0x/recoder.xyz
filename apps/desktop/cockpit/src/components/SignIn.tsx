@@ -52,7 +52,7 @@ export function SignIn({ backendUrl, reason, onAuthenticated }: SignInProps) {
   return (
     <div class="signin-overlay">
       <div class="signin-card">
-        <span class="brand-mark signin-mark" />
+        <img class="brand-mark signin-mark" src="./logo.png" alt="Recoder" width={34} height={34} />
         <h2 class="signin-title">Sign in to Recoder</h2>
         <p class="signin-sub">
           The conductor backend at <code>{backendUrl}</code> rejected the request because

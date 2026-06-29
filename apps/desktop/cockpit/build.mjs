@@ -5,12 +5,20 @@
  * No dev server is needed at runtime: the output is a self-contained static bundle.
  */
 import { build } from 'esbuild';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile, rm, copyFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const dist = join(root, 'dist');
+const publicDir = join(root, 'public');
+
+/**
+ * Static assets copied verbatim into dist/ next to index.html so they resolve at
+ * the same relative origin the renderer loads from (e.g. `./logo.png`). The real
+ * Recoder cube brand mark lives here.
+ */
+const STATIC_ASSETS = ['logo.png'];
 
 const html = `<!DOCTYPE html>
 <html lang="en">
@@ -67,9 +75,22 @@ async function main() {
 
   await writeFile(join(dist, 'index.html'), html, 'utf-8');
 
+  // Copy static brand assets (the real Recoder cube logo) into dist/ so the
+  // renderer's `./logo.png` reference resolves alongside index.html.
+  for (const asset of STATIC_ASSETS) {
+    await copyFile(join(publicDir, asset), join(dist, asset));
+  }
+
   const outputs = Object.keys(result.metafile.outputs);
   // eslint-disable-next-line no-console
-  console.log('[cockpit] built:', ['dist/index.html', ...outputs.map((o) => o.replace(`${root}/`, ''))].join(', '));
+  console.log(
+    '[cockpit] built:',
+    [
+      'dist/index.html',
+      ...outputs.map((o) => o.replace(`${root}/`, '')),
+      ...STATIC_ASSETS.map((a) => `dist/${a}`),
+    ].join(', '),
+  );
 }
 
 main().catch((err) => {

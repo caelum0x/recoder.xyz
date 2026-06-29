@@ -106,13 +106,13 @@ body {
 .traffic-max { background: var(--tl-max); }
 
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-/* Monochrome brand mark — a quiet neutral square with a hairline border. The
-   runtime token bridge sets --brand-gradient (an orange→purple gradient); we
-   intentionally do NOT consume it here so the chrome stays calm and editor-like. */
+/* Brand mark — the real Recoder cube logo (public/logo.png, bundled into dist/
+   by build.mjs and referenced as `./logo.png`). Rendered as an <img>, so it just
+   needs sizing + crisp scaling; no square fill/border. */
 .brand-mark {
-  width: 14px; height: 14px; border-radius: 3px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
+  width: 18px; height: 18px; border-radius: 3px;
+  object-fit: contain; flex-shrink: 0;
+  image-rendering: -webkit-optimize-contrast;
 }
 .brand-name { font-weight: 600; font-size: 13px; letter-spacing: -0.01em; color: var(--text); }
 .brand-sub {

@@ -1,27 +1,24 @@
 /**
  * SessionTerminal — drive ONE interactive tmux agent session.
  *
- * Two real backends, no mock data:
- *  - Electron node-pty bridge (window.recoderDesktop.spawnTerminal/...): a real
- *    local terminal. We `tmux attach` to the conductor session so the operator
- *    types straight into the live agent pane and sees its output streamed over IPC.
- *  - HTTP fallback (truthful): poll GET /sessions/:id/output and send keystrokes
- *    via POST /sessions/:id/keys. Used when the cockpit runs in a plain browser.
+ * The terminal renders over the conductor HTTP path, which works reliably in
+ * both the Electron renderer and a plain browser:
+ *  - GET  /sessions/:id/output  — captured tmux pane content (polled live)
+ *  - POST /sessions/:id/keys    — keystrokes sent to the live pane (tmux send-keys)
  *
- * Which path is active is shown explicitly so the operator is never misled.
+ * A previous build tried to `tmux attach` through a local node-pty bridge, but
+ * the renderer has no controlling TTY, so tmux aborts with
+ * "open terminal failed: not a terminal". That path is intentionally gone: the
+ * HTTP surface drives the SAME live tmux session truthfully, with no fake TTY.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
-import {
-  getDesktopBridge,
-  spawnedTerminalId,
-  type RecoderDesktopBridge,
-} from '../lib/desktop';
 import type { ConductorSession } from '../types';
 
 interface SessionTerminalProps {
   session: ConductorSession;
+  /** Kept for API compatibility with callers; unused on the HTTP path. */
   tmuxBin?: string;
 }
 
@@ -31,130 +28,11 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Local-pty terminal: real tmux attach over the Electron node-pty bridge. */
-function LocalTerminal({
-  bridge,
-  session,
-  tmuxBin,
-}: {
-  bridge: RecoderDesktopBridge;
-  session: ConductorSession;
-  tmuxBin?: string;
-}) {
-  const screenRef = useRef<HTMLDivElement>(null);
-  const idRef = useRef<string | null>(null);
-  const [buffer, setBuffer] = useState('');
-  const [status, setStatus] = useState<'starting' | 'attached' | 'exited' | 'error'>('starting');
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let disposed = false;
-    let offData: (() => void) | null = null;
-    let offExit: (() => void) | null = null;
-
-    async function attach() {
-      try {
-        const tmux = tmuxBin || 'tmux';
-        // Attach the operator's local pty directly to the live conductor tmux session.
-        const result = await bridge.spawnTerminal({
-          shell: '/bin/sh',
-          cwd: session.worktreePath || session.repoPath,
-          cols: 120,
-          rows: 32,
-          env: {},
-        });
-        if (disposed) return;
-        const id = spawnedTerminalId(result);
-        idRef.current = id;
-
-        offData = bridge.onTerminalData((msg) => {
-          if (msg.id !== id) return;
-          setBuffer((prev) => (prev + msg.data).slice(-200_000));
-        });
-        offExit = bridge.onTerminalExit((msg) => {
-          if (msg.id !== id) return;
-          setStatus('exited');
-        });
-
-        // Run the tmux attach inside the freshly spawned shell pty.
-        const cmd = `exec ${tmux} attach -t ${session.tmuxName}\n`;
-        await bridge.terminalWrite(id, cmd);
-        if (!disposed) setStatus('attached');
-      } catch (err) {
-        if (!disposed) {
-          setError(describeError(err));
-          setStatus('error');
-        }
-      }
-    }
-
-    void attach();
-
-    return () => {
-      disposed = true;
-      offData?.();
-      offExit?.();
-      const id = idRef.current;
-      if (id) {
-        // Detach by killing our local pty (does NOT kill the tmux session itself).
-        void bridge.terminalKill(id).catch(() => undefined);
-      }
-    };
-  }, [bridge, session.tmuxName, session.worktreePath, session.repoPath, tmuxBin]);
-
-  useEffect(() => {
-    const el = screenRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [buffer]);
-
-  function onKeyDown(e: KeyboardEvent) {
-    const id = idRef.current;
-    if (!id) return;
-    let data: string | null = null;
-    if (e.key === 'Enter') data = '\r';
-    else if (e.key === 'Backspace') data = '\x7f';
-    else if (e.key === 'Tab') data = '\t';
-    else if (e.key === 'Escape') data = '\x1b';
-    else if (e.key === 'ArrowUp') data = '\x1b[A';
-    else if (e.key === 'ArrowDown') data = '\x1b[B';
-    else if (e.key === 'ArrowRight') data = '\x1b[C';
-    else if (e.key === 'ArrowLeft') data = '\x1b[D';
-    else if (e.ctrlKey && e.key.length === 1) {
-      const code = e.key.toUpperCase().charCodeAt(0) - 64;
-      if (code >= 0 && code < 32) data = String.fromCharCode(code);
-    } else if (e.key.length === 1) data = e.key;
-
-    if (data !== null) {
-      e.preventDefault();
-      void bridge.terminalWrite(id, data).catch(() => undefined);
-    }
-  }
-
-  return (
-    <div class="terminal-shell">
-      <div class="terminal-mode">
-        <span class={`pill ${status === 'attached' ? 'pill-good' : status === 'error' ? 'pill-bad' : ''}`}>
-          <span class="pill-dot" /> local pty · tmux attach {session.tmuxName}
-        </span>
-        <span class="terminal-status">{status}</span>
-      </div>
-      {error && <p class="action-error">{error}</p>}
-      <div
-        class="terminal-screen"
-        ref={screenRef}
-        tabIndex={0}
-        onKeyDown={onKeyDown}
-        role="textbox"
-        aria-label="Live terminal — click and type to drive the agent"
-      >
-        {buffer ? <pre class="terminal-buffer">{buffer}</pre> : <span class="log-empty">Attaching…</span>}
-      </div>
-      <p class="terminal-hint">Click the screen and type to drive the agent. Ctrl+C, arrows, Tab and Enter are forwarded.</p>
-    </div>
-  );
-}
-
-/** HTTP fallback terminal: poll output + send keys via the conductor REST API. */
+/**
+ * HTTP terminal: poll the live tmux pane output and send keys via the conductor
+ * REST API. This is the single, reliable terminal path — no local-pty attach,
+ * so no "not a terminal" failure can occur.
+ */
 function HttpTerminal({ session }: { session: ConductorSession }) {
   const screenRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
@@ -196,9 +74,11 @@ function HttpTerminal({ session }: { session: ConductorSession }) {
     <div class="terminal-shell">
       <div class="terminal-mode">
         <span class="pill">
-          <span class="pill-dot" /> http · /sessions/{session.sessionId.slice(0, 10)}…/output
+          <span class="pill-dot" /> tmux · /sessions/{session.sessionId.slice(0, 10)}…/output
         </span>
-        <span class="terminal-status">{output.loading && !output.data ? 'loading' : output.error ? 'error' : 'polling'}</span>
+        <span class="terminal-status">
+          {output.loading && !output.data ? 'loading' : output.error ? 'error' : 'live'}
+        </span>
       </div>
       <div class="terminal-screen terminal-screen-ro" ref={screenRef}>
         {output.error ? (
@@ -222,14 +102,15 @@ function HttpTerminal({ session }: { session: ConductorSession }) {
       </form>
       {sendError && <p class="action-error">{sendError}</p>}
       <p class="terminal-hint">
-        No local terminal bridge — driving the live tmux session over HTTP via <code>tmux send-keys</code> (Enter is appended server-side).
+        Driving the live tmux pane <code>{session.tmuxName}</code> over HTTP via <code>tmux send-keys</code> (Enter is appended server-side).
       </p>
     </div>
   );
 }
 
-export function SessionTerminal({ session, tmuxBin }: SessionTerminalProps) {
-  const bridge = getDesktopBridge();
-  if (bridge) return <LocalTerminal bridge={bridge} session={session} tmuxBin={tmuxBin} />;
+export function SessionTerminal({ session }: SessionTerminalProps) {
+  // Always use the HTTP path: it reliably mirrors the live tmux pane and accepts
+  // typing in both Electron and the browser. The old local-pty `tmux attach`
+  // path is gone because the renderer has no TTY ("not a terminal").
   return <HttpTerminal session={session} />;
 }
