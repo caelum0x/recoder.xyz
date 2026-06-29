@@ -21,3 +21,10 @@ export function pullRequestNode(nodeId: string, config: PullRequestNodeConfig): 
     },
   };
 }
+
+/**
+ * Alias for {@link pullRequestNode} matching the delivery-pipeline "open-pr"
+ * naming (`verify -> approve -> pr -> deploy`). Produces an identical
+ * `pull-request` node so existing consumers/handlers stay unchanged.
+ */
+export const openPrNode = pullRequestNode;
