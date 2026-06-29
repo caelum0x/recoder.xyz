@@ -15,18 +15,22 @@
  *      the contract package's `createBrowserVerificationPlan` /
  *      `summarizeBrowserVerification` / `createBrowserVerificationSummaryArtifact`.
  *
- * Why not drive a real headless browser here? `@recoder/recoder-browser-tools`
- * (the Playwright-backed driver) is a source-only ESM package with no built `dist`
- * and a `playwright` peer dependency. Importing it into the conductor's CJS `tsc`
- * build would mix module systems and destabilize the build, so it is intentionally
- * NOT imported. The contract package (`@recoder/browser-verification`) ships a
- * proper built dist and is the safe in-process fusion; the reachability probe is a
- * truthful, dependency-light health signal that the preview output is actually
- * serving. A future Playwright-driven node can replace the probe once
- * recoder-browser-tools publishes a CJS-consumable build.
+ * Real headless-browser check (optional, lazy): `@recoder/browser-tools` now ships
+ * a CJS-consumable `dist` (`dist/index.cjs` + an `exports` map) with `playwright` as
+ * an OPTIONAL peer dependency. When a preview URL is present AND both `playwright`
+ * and `@recoder/browser-tools` are resolvable+loadable at runtime, this module will
+ * OPTIONALLY drive a real Chromium page load (lazy `import()`, never a top-level
+ * import) to produce a stronger health signal (the preview actually renders a
+ * document, not just answers a socket). If the browser driver is unavailable, the
+ * launch fails, or no browser binary is installed, it transparently falls back to
+ * the dependency-light Node-`fetch` reachability probe. The Playwright path is
+ * NEVER required: the lazy import keeps the conductor's CJS `tsc` build free of the
+ * heavy ESM/Playwright dependency, and the contract package
+ * (`@recoder/browser-verification`) remains the only built-in fusion.
  *
  * Additive + degrade-safe: this NEVER throws. Any failure (no URL, fetch error,
- * package unavailable) is surfaced as a check status, never as a crash, and never
+ * no playwright, browser launch error, package unavailable) is surfaced as a check
+ * status (or a silent fallback to the fetch probe), never as a crash, and never
  * blocks the workspace's transition to awaiting_review.
  */
 import { createLogger } from '../logger.js';
@@ -107,11 +111,112 @@ async function probePreview(previewUrl: string): Promise<BrowserVerificationChec
   }
 }
 
+/** How long to allow the optional Playwright page load before giving up. */
+const BROWSER_NAV_TIMEOUT_MS = Number(process.env.CONDUCTOR_BROWSER_CHECK_NAV_TIMEOUT_MS) || PROBE_TIMEOUT_MS;
+
+/**
+ * The minimal shape of `@recoder/browser-tools` + `playwright` that the optional
+ * real-page check needs. Kept local + structural so we never take a top-level type
+ * dependency on either optional package.
+ */
+interface LazyBrowserDriver {
+  chromium: {
+    launch(opts?: { headless?: boolean }): Promise<{
+      newPage(): Promise<unknown>;
+      close(): Promise<void>;
+    }>;
+  };
+  navigateTo: (
+    url: string,
+    options: { page: unknown },
+  ) => Promise<{ url: string; title: string }>;
+}
+
+/**
+ * Lazily resolve the optional Playwright-backed browser driver. Uses dynamic
+ * `import()` so neither `playwright` nor `@recoder/browser-tools` is a top-level
+ * import — the conductor build and the common (no-preview / no-playwright) path stay
+ * free of the heavy dependency. Returns `null` (never throws) when either package is
+ * absent or fails to load, so the caller falls back to the fetch probe.
+ *
+ * Exported for tests: the lazy-RBT path is exercised by mocking this seam.
+ */
+export async function loadBrowserDriver(): Promise<LazyBrowserDriver | null> {
+  try {
+    const [playwright, browserTools] = await Promise.all([
+      import('playwright'),
+      import('@recoder/browser-tools'),
+    ]);
+    const chromium = (playwright as { chromium?: LazyBrowserDriver['chromium'] }).chromium;
+    const navigateTo = (browserTools as { navigateTo?: LazyBrowserDriver['navigateTo'] }).navigateTo;
+    if (!chromium || typeof navigateTo !== 'function') return null;
+    return { chromium, navigateTo };
+  } catch {
+    // playwright / @recoder/browser-tools not installed or not loadable.
+    return null;
+  }
+}
+
+/**
+ * Drive a real headless Chromium page load of the preview via `@recoder/browser-tools`
+ * (lazy). Returns a typed check result when the page renders, or `null` when the
+ * driver is unavailable / the launch fails — in which case the caller falls back to
+ * the fetch probe. Never throws. Always closes the browser it opened.
+ */
+async function probePreviewWithBrowser(
+  previewUrl: string,
+): Promise<BrowserVerificationCheckResult | null> {
+  const driver = await loadBrowserDriver();
+  if (!driver) return null;
+
+  let browser: { newPage(): Promise<unknown>; close(): Promise<void> } | undefined;
+  try {
+    browser = await Promise.race([
+      driver.chromium.launch({ headless: true }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('browser launch timed out')), BROWSER_NAV_TIMEOUT_MS),
+      ),
+    ]);
+    const page = await browser.newPage();
+    const nav = await driver.navigateTo(previewUrl, { page });
+    return {
+      tool: 'recoder.browser.open_preview',
+      status: 'passed',
+      target: previewUrl,
+      expected: 'rendered document',
+      actual: nav.title || nav.url || 'rendered',
+      message: `Preview rendered in headless browser (title: ${nav.title || '<untitled>'})`,
+      metadata: { engine: 'playwright', renderedUrl: nav.url, title: nav.title },
+    };
+  } catch (err) {
+    // Launch / navigation failed under the real browser path. Fall back to fetch
+    // (return null) rather than reporting a failure that the lighter probe may pass.
+    const reason = err instanceof Error ? err.message : String(err);
+    logger.info({ previewUrl, reason }, 'browser-tools page check unavailable — falling back to fetch probe');
+    return null;
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {
+        // best-effort cleanup; never let teardown surface as a failure.
+      }
+    }
+  }
+}
+
 /**
  * Run the browser check for a completed workspace. Resolves the preview URL,
  * probes it, and assembles a typed verification result + summary artifact via the
- * `@recoder/browser-verification` contract package. Degrade-safe: returns
- * `attempted: false` when there is no preview URL or the package is unavailable.
+ * `@recoder/browser-verification` contract package.
+ *
+ * Probe selection (degrade-safe, in order):
+ *   1. If `playwright` + `@recoder/browser-tools` load AND a real Chromium page
+ *      load succeeds, use that stronger "preview actually renders" signal.
+ *   2. Otherwise fall back to the dependency-light Node-`fetch` reachability probe.
+ *
+ * Returns `attempted: false` when there is no preview URL or the contract package is
+ * unavailable. Never throws; never blocks the awaiting_review transition.
  */
 export async function runBrowserCheck(workspaceId: string): Promise<BrowserCheckOutcome> {
   try {
@@ -131,7 +236,11 @@ export async function runBrowserCheck(workspaceId: string): Promise<BrowserCheck
       checks: [{ tool: 'recoder.browser.open_preview', target: previewUrl, expected: 'healthy' }],
     });
 
-    const check = await probePreview(previewUrl);
+    // Prefer a real headless-browser render when playwright + @recoder/browser-tools
+    // are available; otherwise fall back to the fetch reachability probe. Both are
+    // degrade-safe and never throw.
+    const browserCheck = await probePreviewWithBrowser(previewUrl);
+    const check = browserCheck ?? (await probePreview(previewUrl));
     const result = summarizeBrowserVerification({ plan, checks: [check] });
     const artifact = createBrowserVerificationSummaryArtifact({ result });
 
