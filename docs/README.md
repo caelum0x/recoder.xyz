@@ -11,6 +11,13 @@ The doc system to follow. Read top to bottom.
 | [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md) | **Built-but-unused → consumer** — the 15 packages to wire into the product (using all the folders *means working this list*). |
 | [`ROADMAP.md`](./ROADMAP.md) | **What to do, when** — milestones M0–M5, each step with owner-tree + a "done-when" that requires running end-to-end. |
 
+**Architecture (the map — `docs/architecture/`):**
+| Doc | What it answers |
+|-----|-----------------|
+| [`architecture/DIAGRAMS.md`](./architecture/DIAGRAMS.md) | **9 mermaid diagrams** — system layers · server internals · desktop · cloud · MCP/agents · **agent-comms via `pal`** (codex↔CC↔pi, CC↔CC) · teams Envoy/xDS/XDR/AMI mesh · brain/RAG · runtime-driver contract. Every node is a real directory. |
+| [`architecture/SURFACE-MAP.md`](./architecture/SURFACE-MAP.md) | **Every component → which surface(s) it powers + how it's wired** (in-process-import / subprocess-cli / http-edge / park / drop), grouped by surface. |
+| [`architecture/INTEGRATION-PLAN.md`](./architecture/INTEGRATION-PLAN.md) | **How we connect it all** — the comms model (`pal` as decision layer + `coordination` as bus), per-surface wiring checklist, the in-process-vs-subprocess-vs-http rule, and open decisions. |
+
 Reference (kept): `CONDUCTOR-ARCHITECTURE.md`, `RECODER-PRODUCT-ARCHITECTURE.md`,
 `PACKAGES.md`, `WORKING-PRODUCT-PLAN.md`.
 
