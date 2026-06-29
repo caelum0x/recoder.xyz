@@ -431,6 +431,12 @@ dist
 .cache/
 public
 
+# Next.js `public/` dirs are SOURCE static assets (logos, favicons, images), not
+# build output — the bare `public` rule above (for Gatsby) wrongly drops them and
+# breaks fresh-checkout builds (e.g. site/public/logo.png). Re-include real ones.
+!site/public/
+!site/public/**
+
 # Vuepress build output
 .vuepress/dist
 
