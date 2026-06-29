@@ -44,6 +44,44 @@ export function stateLabel(state: WorkspaceState): string {
   return state.replace(/_/g, ' ');
 }
 
+/**
+ * The human "state pill" copy the Conductor desktop UI shows on each workspace
+ * row (Running / Ready to review / Merge conflicts / Merged …). Derived purely
+ * from the truthful backend state — no fabrication. A detected write-lock
+ * collision overrides the label to "Merge conflicts" to match the reference.
+ */
+export function statePill(state: WorkspaceState, collision = false): string {
+  if (collision) return 'Merge conflicts';
+  switch (state) {
+    case 'created':
+      return 'Queued';
+    case 'setting_up':
+      return 'Setting up';
+    case 'ready':
+      return 'Ready';
+    case 'running':
+      return 'Running';
+    case 'awaiting_approval':
+      return 'Awaiting approval';
+    case 'awaiting_review':
+      return 'Ready to review';
+    case 'changes_requested':
+      return 'Changes requested';
+    case 'merging':
+      return 'Merging';
+    case 'merged':
+      return 'Merged';
+    case 'failed':
+      return 'Failed';
+    case 'cancelled':
+      return 'Cancelled';
+    case 'archived':
+      return 'Archived';
+    default:
+      return stateLabel(state);
+  }
+}
+
 /** A diff is reviewable once the agent has produced work (running onward). */
 export function canViewDiff(state: WorkspaceState): boolean {
   return ['running', 'awaiting_review', 'awaiting_approval', 'changes_requested', 'merging'].includes(
