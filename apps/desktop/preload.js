@@ -213,4 +213,8 @@ contextBridge.exposeInMainWorld('recoderDesktop', {
 
   /** Re-resolve the cockpit auth token (env -> web session cookie -> API key). */
   resolveToken: () => ipcRenderer.invoke('cockpit:resolveToken'),
+
+  // ============== Embedded backend ==============
+  /** Get the embedded backend supervisor status (truthful: starting/ready/failed). */
+  backendStatus: () => ipcRenderer.invoke('backend:status'),
 });

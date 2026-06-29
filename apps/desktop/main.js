@@ -114,6 +114,130 @@ const isLocal = isLocalhost(normalizedUrl);
 const autoUpdateEnabled = process.env.DESKTOP_AUTO_UPDATE !== 'false';
 const crashWebhookUrl = process.env.DESKTOP_CRASH_WEBHOOK_URL || '';
 const dockerWorkflowApiUrl = process.env.DOCKER_BACKEND_URL || 'http://localhost:3100';
+
+// ============================================================================
+// Embedded backend supervisor
+// ============================================================================
+// Self-contained mode: boot a local docker-backend on a free loopback port so
+// opening the app runs agents on the whole stack (tmux + the engines) with no
+// externally-run backend. Default ON for packaged builds; in dev it is gated on
+// RECODER_EMBEDDED_BACKEND so it does not collide with a manually-run backend.
+const { BackendSupervisor } = require('./backend-supervisor');
+
+function embeddedBackendEnabled() {
+  const raw = String(process.env.RECODER_EMBEDDED_BACKEND || '').trim().toLowerCase();
+  if (['0', 'false', 'no', 'off'].includes(raw)) return false; // explicit opt-out
+  if (['1', 'true', 'yes', 'on'].includes(raw)) return true; // explicit opt-in
+  // Default: on for packaged builds, off in dev (avoid colliding with a
+  // manually-run backend on :3100).
+  return app.isPackaged;
+}
+
+const EMBEDDED_BACKEND_ENABLED = embeddedBackendEnabled();
+
+// The live supervisor instance (created in app.whenReady). When it is READY,
+// its { backendUrl, apiKey } override DOCKER_BACKEND_URL for the cockpit.
+/** @type {BackendSupervisor | null} */
+let backendSupervisor = null;
+
+/**
+ * Resolve the repo root from this module's location. In dev main.js lives at
+ * <repo>/apps/desktop/main.js, so two levels up is the repo root.
+ */
+function resolveRepoRoot() {
+  return path.resolve(__dirname, '..', '..');
+}
+
+/**
+ * The supervised { backendUrl, apiKey } when the embedded backend is READY,
+ * else null. main.js getAuth() / the cockpit config prefer this over the
+ * external DOCKER_BACKEND_URL so the cockpit points at the local backend.
+ * @returns {{ backendUrl: string, apiKey: string | null } | null}
+ */
+function getEmbeddedBackendAuth() {
+  if (!backendSupervisor) return null;
+  return backendSupervisor.getAuth();
+}
+
+/**
+ * The auth handed to the cockpit. When the embedded backend is up it wins
+ * (local backendUrl + minted sk_ key); otherwise we fall back to the existing
+ * external-backend resolver so nothing regresses. Never fabricates readiness.
+ * @returns {{ backendUrl: string, token: string, tokenSource: string }}
+ */
+function getAuth() {
+  const embedded = getEmbeddedBackendAuth();
+  if (embedded) {
+    return {
+      backendUrl: embedded.backendUrl,
+      token: embedded.apiKey || '',
+      tokenSource: embedded.apiKey ? 'embedded-backend-key' : 'embedded-backend',
+    };
+  }
+  return resolveCockpitConfig();
+}
+
+/**
+ * Boot the embedded backend (when enabled) and, once it is READY, re-point the
+ * live cockpit at the supervised { backendUrl, apiKey } via the existing runtime
+ * config injection. Returns the supervisor start result. Failures are surfaced
+ * truthfully (logged + reflected in getStatus()); they never fake readiness.
+ */
+async function startEmbeddedBackend() {
+  if (!EMBEDDED_BACKEND_ENABLED) {
+    return { ok: false, reason: 'embedded-backend-disabled' };
+  }
+  if (backendSupervisor) {
+    return backendSupervisor.getStatus();
+  }
+  try {
+    backendSupervisor = new BackendSupervisor({
+      userDataDir: app.getPath('userData'),
+      repoRoot: resolveRepoRoot(),
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      log: (level, message, extra) => {
+        appendDesktopLog('backend-supervisor.log',
+          `${new Date().toISOString()} [${level}] ${message}${extra ? ` ${JSON.stringify(extra)}` : ''}`);
+      },
+    });
+  } catch (error) {
+    logRuntimeError('embedded-backend-init-failed', error);
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+
+  emitDesktopActivationEvent('desktop_embedded_backend_starting', {});
+  const result = await backendSupervisor.start();
+  if (result.ok) {
+    emitDesktopActivationEvent('desktop_embedded_backend_ready', {
+      backendUrl: result.backendUrl,
+      hasApiKey: Boolean(result.apiKey),
+    });
+    // Re-point any open cockpit at the now-ready local backend (live, no reload
+    // of React state when the page already loaded — uses the runtime override).
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win && typeof win.loadCockpit === 'function') {
+      try {
+        const cfg = resolveCockpitConfig();
+        const runtime = JSON.stringify({
+          backendUrl: cfg.backendUrl,
+          token: cfg.token || undefined,
+          tokenSource: cfg.tokenSource,
+        });
+        win.webContents
+          .executeJavaScript(`window.__RECODER_COCKPIT_RUNTIME__ = ${runtime}; true;`)
+          .catch((error) => logRuntimeError('embedded-backend-runtime-inject-failed', error));
+      } catch (error) {
+        logRuntimeError('embedded-backend-repoint-failed', error);
+      }
+    }
+  } else {
+    emitDesktopActivationEvent('desktop_embedded_backend_failed', { reason: result.reason });
+    logRuntimeError('embedded-backend-start-failed', new Error(result.reason || 'unknown'));
+  }
+  return result;
+}
+
 // Cockpit mode: load the bundled conductor cockpit renderer instead of the web app.
 // Triggered by RECODER_COCKPIT=1 (env) or the "Open Cockpit" menu/tray item.
 const cockpitModeEnabledByEnv = ['1', 'true', 'yes', 'on'].includes(
@@ -409,6 +533,17 @@ async function resolveDesktopSessionTokenFromCookies() {
  * @returns {{ backendUrl: string, token: string, tokenSource: string }}
  */
 function resolveCockpitConfig() {
+  // Prefer the embedded backend when it is READY: its loopback URL + minted
+  // sk_ key make the desktop self-contained. Only used when actually ready, so
+  // the cockpit never points at a not-yet-listening backend.
+  const embedded = getEmbeddedBackendAuth();
+  if (embedded) {
+    return {
+      backendUrl: embedded.backendUrl,
+      token: embedded.apiKey || '',
+      tokenSource: embedded.apiKey ? 'embedded-backend-key' : 'embedded-backend',
+    };
+  }
   const backendUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
   const sessionToken = resolveDesktopSessionTokenDetailed();
   if (sessionToken.value) {
@@ -431,6 +566,15 @@ function resolveCockpitConfig() {
  * @returns {Promise<{ backendUrl: string, token: string, tokenSource: string }>}
  */
 async function resolveCockpitConfigAsync() {
+  // Embedded backend wins when ready (see resolveCockpitConfig).
+  const embedded = getEmbeddedBackendAuth();
+  if (embedded) {
+    return {
+      backendUrl: embedded.backendUrl,
+      token: embedded.apiKey || '',
+      tokenSource: embedded.apiKey ? 'embedded-backend-key' : 'embedded-backend',
+    };
+  }
   const backendUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
   const envSession = resolveDesktopSessionTokenDetailed();
   if (envSession.value) {
@@ -1793,6 +1937,15 @@ app.whenReady().then(() => {
     }
   }
 
+  // Kick off the embedded backend boot (when enabled). Non-blocking: the window
+  // opens immediately and the cockpit is re-pointed at the local backend once it
+  // is READY (see startEmbeddedBackend). A boot failure is surfaced truthfully.
+  if (EMBEDDED_BACKEND_ENABLED) {
+    void startEmbeddedBackend().catch((error) => {
+      logRuntimeError('embedded-backend-launch-error', error);
+    });
+  }
+
   createWindow();
 
   // Handle pending deep link (received before window was ready)
@@ -2075,6 +2228,23 @@ ipcMain.handle('app:version', () => app.getVersion());
 ipcMain.handle('cockpit:resolveToken', async (event) => {
   const cfg = await resolveCockpitConfigAsync();
   return { ok: Boolean(cfg.token), ...cfg };
+});
+
+/**
+ * Report the embedded backend supervisor status truthfully (phase, ready,
+ * backendUrl, restartCount, error). The cockpit/UI can poll this to show real
+ * "starting / ready / failed" state instead of a generic spinner. Returns a
+ * disabled status when the embedded backend is off (e.g. dev with an external
+ * backend on :3100).
+ */
+ipcMain.handle('backend:status', async () => {
+  if (!EMBEDDED_BACKEND_ENABLED) {
+    return { enabled: false, phase: 'idle', ready: false };
+  }
+  if (!backendSupervisor) {
+    return { enabled: true, phase: 'idle', ready: false };
+  }
+  return { enabled: true, ...backendSupervisor.getStatus() };
 });
 
 /**
@@ -2431,4 +2601,8 @@ app.on('will-quit', () => {
     else if (term.destroy) term.destroy();
   }
   terminals.clear();
+  // Stop the embedded backend child so no orphaned server survives app quit.
+  if (backendSupervisor) {
+    void backendSupervisor.stop();
+  }
 });
