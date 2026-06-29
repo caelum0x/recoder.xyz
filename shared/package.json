@@ -12,6 +12,7 @@
     "./tools": "./src/tools/index.ts",
     "./utils": "./src/utils/index.ts",
     "./animations": "./src/animations/index.ts",
+    "./animations/preact": "./src/animations/preact/index.ts",
     "./a2a": {
       "require": "./src/a2a/index.js",
       "import": "./src/a2a/index.ts",
