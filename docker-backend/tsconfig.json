@@ -14,6 +14,7 @@
       "@recoder/connectors/whatsapp": ["./node_modules/@recoder/connectors/dist/whatsapp.d.ts"],
       "@recoder/connectors/line": ["./node_modules/@recoder/connectors/dist/line.d.ts"],
       "@recoder/connectors/feishu": ["./node_modules/@recoder/connectors/dist/feishu.d.ts"],
+      "@recoder/connectors/discord": ["./node_modules/@recoder/connectors/dist/discord.d.ts"],
       "@recoder/stream/public-task-stream": ["../packages/stream/dist/public-task-stream"],
       "@recoder/vault": ["../packages/vault/dist/index"],
       "@recoder/vault/node-crypto": ["../packages/vault/dist/node-crypto"]
