@@ -15,3 +15,4 @@ export * from './beads-server';
 export * from './oss-server';
 export * from './preview-server';
 export * from './logs-server';
+export * from './workspace-server';
