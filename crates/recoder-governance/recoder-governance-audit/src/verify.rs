@@ -336,6 +336,46 @@ mod tests {
     }
 
     #[test]
+    fn severed_link_is_detected_distinctly_from_a_tamper() {
+        // Drop a middle entry, then re-number the tail so `seq == index` still
+        // holds for every entry. Each surviving entry's OWN hash still recomputes
+        // (its content is untouched), and there is NO sequence gap. The only
+        // remaining anomaly is the severed `prev_hash` link at the splice point —
+        // exercising the `entry.prev_hash != prev_hash` branch in isolation,
+        // which the seq-gap and content-tamper tests never reach.
+        let mut entries = build(5).entries().to_vec();
+        entries.remove(2); // chain is now 0,1,3,4 with a hole where 2 was
+        for (index, entry) in entries.iter_mut().enumerate() {
+            entry.seq = index as u64; // re-number so seq == index everywhere
+        }
+
+        let report = verify_integrity(&entries);
+        assert!(report.is_err(), "a severed link must not verify");
+        // The break is at the splice point (old entry 3, now re-numbered to 2):
+        // its stored prev_hash still points at the dropped entry 2's hash, which
+        // no longer matches the running tip (entry 1's hash).
+        assert_eq!(report.broken_seq(), Some(2));
+        let reason = report.reason().unwrap();
+        assert!(reason.contains("broken link"), "got: {reason}");
+        assert!(
+            !reason.contains("tampered content") && !reason.contains("sequence gap"),
+            "a severed link is a distinct anomaly, got: {reason}"
+        );
+    }
+
+    #[test]
+    fn prefix_verification_reports_a_break_inside_the_prefix() {
+        // verify_prefix walks the prefix through the same verifier; a tamper that
+        // lands inside the prefix window must surface as a Broken report (the
+        // existing prefix test only covers the clean path).
+        let mut entries = build(5).entries().to_vec();
+        entries[1].detail = "tampered".to_string();
+        let report = verify_prefix(&entries, 3);
+        assert!(report.is_err());
+        assert_eq!(report.broken_seq(), Some(1));
+    }
+
+    #[test]
     fn prefix_verification() {
         let log = build(5);
         let report = verify_prefix(log.entries(), 2);

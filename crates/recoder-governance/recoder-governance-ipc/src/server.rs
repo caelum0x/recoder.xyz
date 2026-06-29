@@ -134,8 +134,6 @@ async fn handle_connection<G: IpcGovernance + 'static>(
         }
     }
 
-    let verifier_ref: Option<&dyn SignatureVerifier> = verifier.as_deref();
-
     loop {
         let payload = match read_frame(&mut stream).await {
             Ok(p) => p,
@@ -147,7 +145,31 @@ async fn handle_connection<G: IpcGovernance + 'static>(
         };
 
         let response = match serde_json::from_slice::<IpcEnvelope>(&payload) {
-            Ok(envelope) => dispatch(gov.as_ref(), auth.as_ref(), verifier_ref, &envelope),
+            Ok(envelope) => {
+                // `dispatch` is fully SYNCHRONOUS and can BLOCK for up to the
+                // approval wait window (`RequestApproval` parks on a std channel
+                // until the control plane resolves it on another connection).
+                // Running it inline would pin a tokio worker thread for the whole
+                // wait — on a constrained runtime that starves the resolver task
+                // and deadlocks the gate; on the multi-thread runtime it burns a
+                // worker per parked approval. Offload it to the blocking pool so
+                // async workers stay free to accept and service other connections
+                // (including the ResolveApproval that unblocks this very wait).
+                let gov = Arc::clone(&gov);
+                let auth = Arc::clone(&auth);
+                let verifier = verifier.clone();
+                match tokio::task::spawn_blocking(move || {
+                    let verifier_ref: Option<&dyn SignatureVerifier> = verifier.as_deref();
+                    dispatch(gov.as_ref(), auth.as_ref(), verifier_ref, &envelope)
+                })
+                .await
+                {
+                    Ok(resp) => resp,
+                    // The blocking task panicked: fail closed with an error
+                    // response rather than tearing the connection down silently.
+                    Err(_join_err) => IpcResponse::err("unknown", "internal_error"),
+                }
+            }
             Err(e) => {
                 // Unparseable or unknown-method envelope: a hostile/buggy peer.
                 // Reply with an error (id unknown), then continue.

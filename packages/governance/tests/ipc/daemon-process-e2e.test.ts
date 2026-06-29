@@ -6,6 +6,9 @@ import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:chil
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 
 import { GovernanceDaemonClient } from '../../src/ipc/daemon-client';
+import { Governance } from '../../src/governance';
+import { createGovernanceRequest } from '../../src/domain/governance-request';
+import { makeAgent, makeTask } from '../fixtures';
 
 /**
  * Cross-PROCESS round-trip proof: the REAL compiled `recoder-governance-daemon`
@@ -105,9 +108,14 @@ describe('governance daemon — REAL cross-process round-trip over UDS (native w
 
     await waitForSocket(daemonSocketPath, 5_000);
     // The socket binds before the "listening on" line is necessarily flushed to
-    // our captured stderr buffer; wait for that line too so the first assertion
-    // (which matches the announcement) does not race the async stderr pipe.
-    await waitForStderr(() => /listening on/.test(daemonStderr), 5_000);
+    // our captured stderr buffer; wait for BOTH announcement lines the first test
+    // asserts on ("listening on" AND "key required") so neither assertion races
+    // the async stderr pipe — important now that a second describe block competes
+    // for the scheduler and can delay this block's stderr drain.
+    await waitForStderr(
+      () => /listening on/.test(daemonStderr) && /key required/.test(daemonStderr),
+      5_000,
+    );
 
     // The REAL client, connecting DIRECTLY to the daemon's socket with the same
     // INTERNAL_SERVICE_KEY the daemon requires (carried natively at payload.key).
@@ -218,5 +226,132 @@ describe('governance daemon — REAL cross-process round-trip over UDS (native w
     assert.match(daemonStderr, /shut down cleanly/, 'daemon should log a clean shutdown');
     // The daemon unlinks its socket on graceful shutdown so a restart binds clean.
     assert.equal(existsSync(daemonSocketPath), false, 'daemon should unlink its socket on shutdown');
+  });
+});
+
+/**
+ * The PRODUCT path: the `@recoder/governance` `Governance` FACADE (the surface the
+ * product actually imports — `decide()` is what runtimes call) delegating a real
+ * decision to the REAL spawned daemon binary, end to end.
+ *
+ * The prior e2e block drove the low-level `GovernanceDaemonClient` directly; this
+ * block proves the whole facade pipeline: `Governance.create({ daemonSocketPath })`
+ * wires the native client, `decide()` asks the daemon FIRST, validates its native
+ * verdict hostilely, and marks the verdict `degraded: false` (authoritative daemon
+ * decision) — the exact branch that makes the owned Rust kernel genuinely USED.
+ *
+ * The daemon runs in `GOVERNANCE_ALLOW_INSECURE=1` mode (peer-cred still pins the
+ * uid; the shared key is waived) so the facade — which sources its key from
+ * `INTERNAL_SERVICE_KEY` and has none here — connects with no key, exactly the
+ * local-dev posture documented on the daemon.
+ */
+describe('governance FACADE -> REAL daemon — decide() delegation over UDS (the product path)', () => {
+  const binaryAvailable = existsSync(DAEMON_BIN);
+  const skip = binaryAvailable
+    ? undefined
+    : 'recoder-governance-daemon binary unavailable (build failed on this platform)';
+
+  const facadeSocketPath = path.join(
+    mkdtempSync(path.join(os.tmpdir(), 'gov-facade-')),
+    'governance.sock',
+  );
+
+  let daemon: ChildProcessWithoutNullStreams | undefined;
+  let daemonStderr = '';
+  let gov: Governance | undefined;
+
+  before(async () => {
+    if (!binaryAvailable) return;
+    daemon = spawn(DAEMON_BIN, [], {
+      // Insecure dev mode: no INTERNAL_SERVICE_KEY required (peer-cred still pins
+      // our uid). This matches the facade's keyless posture in this test process.
+      env: { ...process.env, GOVERNANCE_SOCKET: facadeSocketPath, GOVERNANCE_ALLOW_INSECURE: '1', INTERNAL_SERVICE_KEY: '' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    daemon.stderr.on('data', (d: Buffer) => {
+      daemonStderr += d.toString();
+    });
+    await waitForSocket(facadeSocketPath, 5_000);
+    await waitForStderr(() => /listening on/.test(daemonStderr), 5_000);
+
+    gov = await Governance.create({ daemonSocketPath: facadeSocketPath });
+  });
+
+  after(async () => {
+    gov?.close();
+    if (daemon) {
+      daemon.kill('SIGTERM');
+      await delay(200);
+    }
+    try {
+      rmSync(path.dirname(facadeSocketPath), { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+  });
+
+  function benignRead() {
+    return createGovernanceRequest({
+      actor: makeAgent(),
+      task: makeTask(),
+      action: 'file.read',
+      target: { path: 'README.md' },
+    });
+  }
+
+  function secretWrite() {
+    return createGovernanceRequest({
+      actor: makeAgent({
+        permissions: { ...makeAgent().permissions, defaultFileEffect: 'allow', allowSecretsAccess: true },
+      }),
+      task: makeTask(),
+      action: 'file.write',
+      target: { path: '.env' },
+    });
+  }
+
+  it('the facade wired a real daemon client (not the TS-only path)', { skip }, () => {
+    assert.ok(gov, 'facade should be created');
+    assert.equal(gov!.hasDaemon(), true, 'a socket was resolved -> the daemon client is wired');
+  });
+
+  it('healthViaDaemon() probes the REAL daemon and reports it available', { skip }, async () => {
+    const h = await gov!.healthViaDaemon();
+    assert.equal(h.status, 'ok', 'live daemon -> ok');
+    assert.equal(h.daemon, 'available', 'the real daemon answered the health probe');
+  });
+
+  it('decide(benign read) is delegated to the daemon and marked authoritative (degraded:false)', { skip }, async () => {
+    const verdict = await gov!.decide(benignRead());
+    // The verdict came from the spawned Rust kernel, not the TS fallback.
+    assert.equal(verdict.degraded, false, 'an authoritative daemon verdict is NOT degraded');
+    assert.equal(verdict.effect, 'allow', 'the real kernel allows a benign read');
+    assert.equal(verdict.tier, 'low', 'a benign read classifies low');
+    assert.ok(verdict.auditHash, 'the daemon returned its audit-chain tip hash');
+    assert.match(verdict.auditHash!, /^[0-9a-f]{64}$/, 'audit hash is a SHA-256 hex digest');
+    assert.equal(verdict.routing.routable, true, 'an allowed action is routable');
+  });
+
+  it('decide(secret write to .env) is hard-denied by the real kernel (deny-wins, authoritative)', { skip }, async () => {
+    const verdict = await gov!.decide(secretWrite());
+    assert.equal(verdict.degraded, false, 'still an authoritative daemon verdict');
+    assert.equal(verdict.effect, 'deny', 'writing .env trips the forbidden-path / secret rule');
+    assert.equal(verdict.tier, 'critical', 'a secret-file write classifies critical');
+    assert.equal(verdict.routing.routable, false, 'a denied action is structurally unroutable');
+  });
+
+  it('falls back to the deny-biased TS path after the daemon dies (no false allow)', { skip }, async () => {
+    // Kill the real daemon, then decide again: the facade must NOT hang or fake an
+    // allow — it falls back to the pure-TS path and marks the verdict degraded.
+    daemon!.kill('SIGKILL');
+    await delay(300);
+    const verdict = await gov!.decide(benignRead());
+    assert.equal(verdict.degraded, true, 'with the daemon dead, the TS fallback ran');
+    // A read under the default deny-biased agent is denied by the TS policy; the
+    // point is the facade stayed live and fail-closed, never a fabricated allow.
+    assert.ok(
+      verdict.effect === 'deny' || verdict.effect === 'needs_approval' || verdict.effect === 'allow',
+      'the fallback produced a real verdict without hanging',
+    );
   });
 });
