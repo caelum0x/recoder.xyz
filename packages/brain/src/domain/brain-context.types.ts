@@ -1,6 +1,7 @@
 import type { ContextPack } from "@recoder/recodergit";
 import type { BrainMemory } from "./memory.types";
 import type { BrainDoc } from "./docs.types";
+import type { BrainPassage } from "./passage.types";
 import type { BrainTask } from "./task-graph.types";
 import type { BrainActivity, BrainActivityProfile } from "./activity.types";
 import type { Revision } from "./revision";
@@ -14,6 +15,13 @@ export interface BrainContext {
   memories: BrainMemory[];
   /** Relevant external docs (context7). */
   docs: BrainDoc[];
+  /**
+   * Passage-level hits from the owned RAG vector store (@recoder/rag): the most
+   * similar embedded chunks of documents the brain has ingested. Empty when no
+   * vector-store port is wired (additive, degrade-safe). Optional so older
+   * serialized contexts (pre-vector-store) still typecheck.
+   */
+  passages?: BrainPassage[];
   /** Open/related work in the durable task graph (beads). */
   tasks: BrainTask[];
   /** Desktop activity context (continuum): recent recall + how-the-user-works profile. */

@@ -2,7 +2,7 @@ import type { Provenance, SourceProvenance } from "../domain/provenance";
 
 /**
  * Assemble the final {@link Provenance} from per-source entries: keep them in a
- * stable order (repo, memory, docs, tasks, activity) and derive the `degraded`
+ * stable order (repo, memory, docs, passages, tasks, activity) and derive the `degraded`
  * view (the subset that did not contribute) so a caller can answer "which sources
  * are dark?" without re-walking the array. Truthful by construction — it only
  * surfaces what the source runner observed.
@@ -12,6 +12,7 @@ const SOURCE_ORDER: ReadonlyArray<SourceProvenance["source"]> = [
   "repo",
   "memory",
   "docs",
+  "passages",
   "tasks",
   "activity",
 ];
