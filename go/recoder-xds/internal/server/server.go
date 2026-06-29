@@ -19,13 +19,15 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/recoder-xyz/recoder-xds/internal/config"
+	"github.com/recoder-xyz/recoder-xds/internal/contract"
 	"github.com/recoder-xyz/recoder-xds/internal/snapshot"
 )
 
 // NodeID is the Envoy node ID this control plane serves snapshots for. With ADS
 // + a single-node mesh, all Envoys share one logical snapshot keyed by this ID.
-// It must match the `node.id` in the Envoy bootstrap.
-const NodeID = "recoder-mesh"
+// It must match the `node.id` in the Envoy bootstrap. Sourced from the
+// cross-language contract so the server, snapshot, and TS bootstrap never drift.
+const NodeID = contract.NodeID
 
 // ControlPlane owns the snapshot cache and the xDS gRPC server. It is safe to
 // call UpdateConfig concurrently with serving; SnapshotCache is goroutine-safe.

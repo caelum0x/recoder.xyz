@@ -1,0 +1,14 @@
+{
+  "nodeId": "recoder-mesh",
+  "listenerName": "recoder_https_listener",
+  "routeConfigName": "recoder_local_route",
+  "virtualHostName": "recoder_backend",
+  "extAuthzClusterName": "recoder_ext_authz",
+  "hcmStatPrefix": "recoder_ingress_http",
+  "rateLimitStatPrefix": "recoder_http_local_rate_limiter",
+  "httpFilterOrder": [
+    "envoy.filters.http.local_ratelimit",
+    "envoy.filters.http.ext_authz",
+    "envoy.filters.http.router"
+  ]
+}
