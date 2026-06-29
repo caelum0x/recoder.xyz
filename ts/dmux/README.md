@@ -10,7 +10,6 @@
 
 <p align="center">
   <a href="https://recoder.xyz"><strong>Recoder</strong></a> &nbsp;&middot;&nbsp;
-  <a href="../../docs/subsystems/substrate.md"><strong>Substrate (§4.3)</strong></a> &nbsp;&middot;&nbsp;
   <a href="../../docker-backend/src/conductor/README.md"><strong>Conductor</strong></a>
 </p>
 
@@ -26,7 +25,7 @@
 
 `@recoder/dmux` is the **optional operator console** for Recoder's Conductor. It is a
 TypeScript + Ink TUI that gives a human operator a grid view over the parallel agent
-panes the Conductor runs. Per `docs/subsystems/substrate.md` §4.3 it is **never on the
+panes the Conductor runs. It is **never on the
 critical path**: if dmux is absent, the Conductor is fully functional via tmux alone.
 
 It is vendored and owned by Recoder under `ts/dmux`, forked from the original
@@ -111,7 +110,6 @@ dmux can use default branch behavior or let you override branch details when cre
 
 ## Documentation
 
-- Recoder substrate: **[docs/subsystems/substrate.md](../../docs/subsystems/substrate.md)** §4.3 (operator console).
 - Conductor: **[docker-backend/src/conductor/README.md](../../docker-backend/src/conductor/README.md)**.
 - Operator-console maintainer guide: **[AGENTS.md](./AGENTS.md)** (config dirs, hooks, agent registry).
 

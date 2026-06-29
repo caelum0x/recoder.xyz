@@ -6,8 +6,6 @@ a model/runtime tier by risk + complexity; enforces permission modes and tool
 access **below the model** (never trusting agent output); and records a
 tamper-evident SHA-256 Merkle audit chain.
 
-> Blueprint: [`docs/subsystems/governance.md`](../../docs/subsystems/governance.md).
-
 ## Status: deny-biased pure-TS fallback (Rust daemon deferred)
 
 The full blueprint specifies an owned **Rust governance daemon** spoken to over a

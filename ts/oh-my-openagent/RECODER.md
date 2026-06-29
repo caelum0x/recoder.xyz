@@ -12,7 +12,6 @@
 
 <p align="center">
   <a href="https://recoder.xyz"><strong>Recoder</strong></a> &nbsp;&middot;&nbsp;
-  <a href="../../docs/subsystems/runtime.md"><strong>Runtime driver contract (§3.5)</strong></a> &nbsp;&middot;&nbsp;
   <a href="../../docker-backend/src/conductor/README.md"><strong>Conductor</strong></a>
 </p>
 
@@ -23,7 +22,7 @@
 `@recoder/opencode-harness` is Recoder's **opencode driver surface**. Recoder is an
 Agent OS control plane that drives multiple coding-agent runtimes (Claude Code, Codex,
 opencode, pi, in-process agents) behind one `RuntimeDriver` contract. This package is
-the **opencode fusion target** named in `docs/subsystems/runtime.md` §3.5 / §6: it is
+the **opencode fusion target**: it is
 the opencode plugin Recoder loads into the user's `opencode` CLI to add tools, hooks,
 and the tmux runtime config the Conductor expects.
 
@@ -98,7 +97,7 @@ then `tsc --emitDeclarationOnly`, then the CLI bundle, then `build:schema`.
 
 ## Where this fits in the runtime contract
 
-Per `docs/subsystems/runtime.md` §3.5/§6, the Recoder `drivers/opencode/*` bridge adapts
+The Recoder `drivers/opencode/*` bridge adapts
 this package's `{plugin-config, create-hooks, create-tools, create-runtime-tmux-config}.ts`
 into `opencode-{plugin-config, hooks-bridge, tools-bridge, tmux-config}.ts`, emitting
 shared `RunEvent` records back to Recoder. This package stays a replaceable execution

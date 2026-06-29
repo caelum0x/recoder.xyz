@@ -12,8 +12,7 @@ delivery engine.
 > delivery **only under a governance approval gate**, and *emits* `RunEvent`
 > records back to Recoder with truthful evidence.
 
-This package is the control-plane–facing TS slice of
-[`docs/subsystems/distribution.md`](../../docs/subsystems/distribution.md). The
+This package is the control-plane–facing TS slice of the distribution subsystem. The
 durable Python billing engine (`py/recoder-billing`, the fused Polar money/
 entitlement authority) is a separate deliverable reached over a typed port.
 
