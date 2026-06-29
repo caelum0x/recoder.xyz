@@ -36,9 +36,13 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     build: (o) => `recoder-code --prompt ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   pi: {
-    // pi is the vendored coding-agent harness (@recoder/pi-*). Runs print mode.
+    // pi is the Recoder-owned coding-agent (@recoder/pi-coding-agent). `--print`
+    // runs it HEADLESSLY (execute the task and exit) instead of opening the
+    // interactive TUI — required so the tmux run ends and the tailer can detect
+    // completion. `-ne` skips extensions for a clean non-interactive run.
     bin: 'pi',
-    build: (o) => `pi ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    build: (o) =>
+      `pi --print ${shellQuote(o.prompt)} -ne${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   gemini_cli: {
     bin: 'gemini',
