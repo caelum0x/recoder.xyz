@@ -847,6 +847,12 @@ importers:
       '@recoder/agent-policy':
         specifier: workspace:*
         version: link:../packages/agent-policy
+      '@recoder/agent-schemas':
+        specifier: workspace:*
+        version: link:../packages/agent-schemas
+      '@recoder/agent-workflows':
+        specifier: workspace:*
+        version: link:../packages/agent-workflows
       '@recoder/brain':
         specifier: workspace:*
         version: link:../packages/brain
@@ -1422,6 +1428,9 @@ importers:
       '@recoder/continuum':
         specifier: workspace:*
         version: link:../continuum
+      '@recoder/document-preprocessor':
+        specifier: workspace:*
+        version: link:../document-preprocessor
       '@recoder/recodergit':
         specifier: workspace:*
         version: link:../recodergit

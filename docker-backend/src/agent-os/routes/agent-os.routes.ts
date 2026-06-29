@@ -1,6 +1,18 @@
 import { Router } from 'express';
+import {
+  agentProfileSchema,
+  approvalSchema,
+  artifactSchema,
+  instructionBundleSchema,
+  memoryCandidateSchema,
+  runEventSchema,
+  taskSpecSchema,
+  workLockSchema,
+  workSignalSchema,
+} from '@recoder/agent-schemas';
 import { AgentOsController } from '../controllers/agent-os.controller';
 import { agentOsContainer } from '../service-container';
+import { validateBody } from '../middleware/schema-guard.middleware';
 import { createCodeGraphUserRouter } from './code-graph-user.routes';
 import { createPolicyEvaluateRouter } from './policy-evaluate.routes';
 import { createMemoryCandidateRouter } from './memory-candidate.routes';
@@ -42,13 +54,13 @@ export function createAgentOsRouter(): Router {
   router.get('/health', controller.health);
   router.get('/summary', controller.summary);
   router.get('/agents', controller.agents);
-  router.post('/agents', controller.upsertAgent);
+  router.post('/agents', validateBody(agentProfileSchema), controller.upsertAgent);
   router.post('/agents/reconcile', controller.reconcileAgent);
   router.get('/spaces', controller.spaces);
   router.post('/spaces', controller.upsertSpace);
   router.post('/spaces/:spaceId/repositories/github', controller.connectGitHubRepository);
   router.get('/tasks', controller.tasks);
-  router.post('/tasks', controller.upsertTask);
+  router.post('/tasks', validateBody(taskSpecSchema), controller.upsertTask);
   router.post('/tasks/route', controller.routeTask);
   router.get('/tasks/:taskId/history', controller.taskHistory);
   router.get('/tasks/:taskId/context-pack', controller.taskContextPack);
@@ -60,11 +72,11 @@ export function createAgentOsRouter(): Router {
   router.post('/runs/:runId/handoff', controller.handoffRun);
   router.post('/runs/:runId/verification-results', controller.createVerificationResult);
   router.get('/approvals', controller.approvals);
-  router.post('/approvals', controller.upsertApproval);
+  router.post('/approvals', validateBody(approvalSchema), controller.upsertApproval);
   router.post('/approvals/:approvalId/approve', controller.approve);
   router.post('/approvals/:approvalId/reject', controller.reject);
   router.get('/artifacts', controller.artifacts);
-  router.post('/artifacts', controller.upsertArtifact);
+  router.post('/artifacts', validateBody(artifactSchema), controller.upsertArtifact);
   router.get('/runtime-evidence', controller.runtimeEvidence);
   router.post('/runtime-evidence', controller.createRuntimeEvidence);
   router.post('/artifacts/pull-request', controller.createPullRequestArtifact);
@@ -77,25 +89,25 @@ export function createAgentOsRouter(): Router {
   router.post('/github/delivery-links/:linkId/reviews', controller.syncGitHubReviews);
   router.post('/github/delivery-links/:linkId/issue', controller.linkGitHubIssue);
   router.get('/work-signals', controller.workSignals);
-  router.post('/work-signals', controller.upsertWorkSignal);
+  router.post('/work-signals', validateBody(workSignalSchema), controller.upsertWorkSignal);
   router.patch('/work-signals/:signalId/status', controller.resolveWorkSignal);
   router.get('/memory', controller.memory);
   router.get('/memory/search', controller.memorySearch);
-  router.post('/memory/candidates', controller.upsertMemoryCandidate);
+  router.post('/memory/candidates', validateBody(memoryCandidateSchema), controller.upsertMemoryCandidate);
   router.post('/memory/candidates/:candidateId/review', controller.reviewMemoryCandidate);
   router.post('/memory/items', controller.upsertMemoryItem);
   router.get('/instructions', controller.instructions);
-  router.post('/instructions', controller.upsertInstructionBundle);
+  router.post('/instructions', validateBody(instructionBundleSchema), controller.upsertInstructionBundle);
   router.post('/instructions/compile', controller.compileInstructionBundle);
   router.get('/policies', controller.policies);
   router.post('/policies', controller.upsertPolicy);
   router.post('/policies/decisions', controller.upsertPolicyDecision);
   router.get('/work-locks', controller.workLocks);
-  router.post('/work-locks', controller.upsertWorkLock);
+  router.post('/work-locks', validateBody(workLockSchema), controller.upsertWorkLock);
   router.post('/work-locks/acquire', controller.acquireWorkLock);
   router.delete('/work-locks/:lockId', controller.releaseWorkLock);
   router.get('/events', controller.events);
-  router.post('/events', controller.appendEvent);
+  router.post('/events', validateBody(runEventSchema), controller.appendEvent);
   router.get('/outbox', controller.outbox);
   router.get('/oss', controller.oss);
   router.get('/oss/components/:componentId', controller.ossComponent);
