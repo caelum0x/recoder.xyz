@@ -59,8 +59,10 @@ function makeContext(overrides: Partial<DriverContext> = {}): DriverContext {
     input,
     policy: input.policy,
     cwd: '/tmp/nonexistent-recoder-cwd',
-    // Empty PATH guarantees the CLI is not found -> fail-safe path, fully offline.
-    env: { PATH: '' },
+    // Empty PATH + repo-engine preference disabled guarantees the CLI is not found
+    // -> fail-safe path, fully offline. (The repo-built ts/* codex engine would
+    // otherwise be preferred over PATH and resolve a real binary.)
+    env: { PATH: '', RECODER_DISABLE_REPO_ENGINE: '1' },
     signal: controller.signal,
     now: () => 0,
     emit: () => {},
@@ -95,7 +97,10 @@ test('the descriptor declares the codex surface and json mode', () => {
 
 test('probe reports unavailable truthfully when the CLI is absent', async () => {
   const driver = new CodexDriver();
-  const probe = await driver.probe({ surface: 'codex', env: { PATH: '' } });
+  const probe = await driver.probe({
+    surface: 'codex',
+    env: { PATH: '', RECODER_DISABLE_REPO_ENGINE: '1' },
+  });
   assert.equal(probe.available, false);
   assert.ok(probe.unavailableReason);
   assert.equal(probe.health.status, 'offline');

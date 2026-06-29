@@ -110,8 +110,13 @@ test('fail-safe: missing CLI yields done(ok:false, cli_not_found) — never fake
     cliPathOverride: path.resolve(__dirname, 'does-not-exist-opencode'),
   });
   const policy = makePolicy();
-  // Empty PATH so no real opencode is discovered.
-  const ctx = makeContext(policy, { PATH: '' }, new AbortController().signal);
+  // Empty PATH + repo-engine preference disabled so NO opencode is discovered
+  // (the repo-built ts/* opencode engine would otherwise be preferred).
+  const ctx = makeContext(
+    policy,
+    { PATH: '', RECODER_DISABLE_REPO_ENGINE: '1' },
+    new AbortController().signal,
+  );
 
   const frames = await collect(driver.run(ctx));
   assert.equal(frames.length, 1);
