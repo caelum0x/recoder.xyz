@@ -25,6 +25,7 @@ import { spawnInvocation, killProcess, type SpawnedProcess } from '../shared/pro
 import { attachJsonlObjectReader } from '../shared/jsonl-reader';
 import { serializeJsonLine } from '../shared/jsonl-writer';
 import { locateCli } from '../shared/cli-locator';
+import { repoEnginePreferenceEnabled } from '../shared/repo-engine-locator';
 import { codexDescriptor, CODEX_BINARY } from './codex-descriptor';
 import { probeCodex } from './codex-health';
 import { buildCodexArgs } from './codex-args';
@@ -163,6 +164,7 @@ export class CodexDriver implements RuntimeDriver {
       override: this.options.cliPathOverride,
       cwd: ctx.cwd,
       pathEnv: ctx.env['PATH'],
+      preferRepoEngine: repoEnginePreferenceEnabled(ctx.env),
     });
     if (!location.found || !location.resolvedPath) {
       yield {

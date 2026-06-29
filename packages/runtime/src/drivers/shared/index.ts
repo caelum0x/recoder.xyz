@@ -8,6 +8,7 @@ export * from './arg-builder';
 export * from './cwd-resolver';
 export * from './prompt-writer';
 export * from './cli-locator';
+export * from './repo-engine-locator';
 export * from './cli-version-probe';
 export * from './frame-debouncer';
 export * from './tool-call-tracker';

@@ -16,6 +16,7 @@ import { waitForChildProcess } from '../shared/wait-for-exit';
 import { attachJsonlObjectReader } from '../shared/jsonl-reader';
 import { attachAnsiTextReader } from '../shared/ansi-text-reader';
 import { locateCli } from '../shared/cli-locator';
+import { repoEnginePreferenceEnabled } from '../shared/repo-engine-locator';
 import { runtimeError, errorCodeOf } from '../../errors/runtime-error';
 
 export type OpenCodeDriverOptions = {
@@ -64,6 +65,7 @@ export class OpenCodeDriver implements RuntimeDriver {
       override: this.options.cliPathOverride,
       cwd: ctx.cwd,
       pathEnv: ctx.env['PATH'],
+      preferRepoEngine: repoEnginePreferenceEnabled(ctx.env),
     });
 
     if (!location.found || !location.resolvedPath) {
