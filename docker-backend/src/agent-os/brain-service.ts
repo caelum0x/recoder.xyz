@@ -18,11 +18,14 @@ import {
   createBrain,
   createContext7Docs,
   createContinuumActivity,
+  createDocumentPreprocessor,
   createMem0Memory,
   createRepoIntelAuto,
   runCacheDoctor,
   type Brain,
   type BrainContext,
+  type BrainPreprocessedDocument,
+  type BrainRawDocument,
   type CacheReport,
 } from '@recoder/brain';
 
@@ -34,6 +37,19 @@ export interface BrainAssembleInput {
   repoRoot: string;
   focusFiles?: string[];
   limit?: number;
+}
+
+/**
+ * Result of a {@link BrainService.ingestDocument} call. Mirrors the brain's own
+ * return shape (preprocessed title/text/pageCount + whether it was remembered)
+ * and adds `enabled` so the control plane can REPORT truthfully when the brain
+ * gate is OFF — distinct from a fabricated zero-text success.
+ */
+export interface BrainIngestResult extends BrainPreprocessedDocument {
+  /** True when RECODER_BRAIN_ENABLED is truthy (the ingest actually ran). */
+  readonly enabled: boolean;
+  /** True when the preprocessed text was written to the brain's memory port. */
+  readonly remembered: boolean;
 }
 
 export interface BrainServiceLogger {
@@ -86,6 +102,11 @@ function defaultBrainFactory(): Brain {
     memory: createMem0Memory(),
     docs: createContext7Docs(),
     tasks: createBeadsTasks(),
+    // Owned @recoder/document-preprocessor fusion seam for RAG/context ingest.
+    // Degrade-safe: extracts text/markdown with zero extra IO; PDFs degrade to
+    // empty text unless a pdfium wasm loader is provided (not wired here), so the
+    // factory stays fail-safe and the flag-off path remains a pure no-op.
+    preprocessor: createDocumentPreprocessor(),
   });
 }
 
@@ -157,6 +178,48 @@ export class BrainService {
     } catch (error: unknown) {
       this.logger.error('[brain-service] cacheReport failed (degrading to null)', error);
       return { enabled: true, report: null };
+    }
+  }
+
+  /**
+   * RAG/context ingest on the product path: preprocess a raw document
+   * (text/markdown/PDF) via the owned @recoder/document-preprocessor and
+   * remember the clean text through the brain's memory port, so a later
+   * assemble()/recall() can surface it.
+   *
+   * Degrade-safe and truthful:
+   * - Flag OFF -> { enabled: false, remembered: false, text: '', pageCount: 0 }
+   *   (no brain/adapters constructed; honest "did not run", not a fake success).
+   * - Flag ON  -> delegates to Brain.ingestDocument(); with no preprocessor the
+   *   brain returns empty text, with no memory port the text is returned but not
+   *   stored (remembered=false). Either way nothing is fabricated.
+   * - On any error -> degrades to a not-remembered result (logged); never throws
+   *   into the request path and never blocks the caller.
+   */
+  async ingestDocument(doc: BrainRawDocument): Promise<BrainIngestResult> {
+    if (!this.isEnabled()) {
+      return {
+        enabled: false,
+        title: doc.title,
+        text: '',
+        pageCount: 0,
+        remembered: false,
+      };
+    }
+
+    try {
+      const brain = this.getBrain();
+      const result = await brain.ingestDocument(doc);
+      return { enabled: true, ...result };
+    } catch (error: unknown) {
+      this.logger.error('[brain-service] ingestDocument failed (degrading to not-remembered)', error);
+      return {
+        enabled: true,
+        title: doc.title,
+        text: '',
+        pageCount: 0,
+        remembered: false,
+      };
     }
   }
 

@@ -592,13 +592,54 @@ export function createConductorRouter(): Router {
     }
   });
 
-  // WebSocket upgrade for live workspace events (operator console live terminal).
-  // The express-ws middleware injects the `ws` property onto the router; if the
-  // server doesn't have express-ws enabled, this route is simply not matched.
-  (router as any).ws('/workspaces/:workspaceId/stream', (ws: any, req: { params: { workspaceId: string } }) => {
-    const cleanup = attachWorkspaceStream(ws, req.params.workspaceId);
-    ws.on('close', cleanup);
+  // RAG/context ingest on the product path: hand a raw doc to the shared,
+  // flag-gated Brain (agentOsContainer.brain), which preprocesses it through the
+  // owned @recoder/document-preprocessor and remembers the clean text via mem0 so
+  // a later assemble()/recall() (e.g. the conductor instruction bundle) can surface
+  // it. In-process; degrade-safe end to end: brain disabled -> { enabled:false };
+  // no preprocessor/memory -> empty/not-remembered. Never blocks, never throws.
+  router.post('/context/ingest', async (req: Request, res: Response) => {
+    try {
+      const { title, content, base64, format } = req.body ?? {};
+      if (typeof title !== 'string' || !title.trim()) {
+        res.status(400).json({ success: false, error: 'title is required' });
+        return;
+      }
+      let data: Uint8Array;
+      if (typeof base64 === 'string' && base64.length > 0) {
+        data = new Uint8Array(Buffer.from(base64, 'base64'));
+      } else if (typeof content === 'string') {
+        data = new Uint8Array(Buffer.from(content, 'utf8'));
+      } else {
+        res.status(400).json({ success: false, error: 'content (utf8 text) or base64 (bytes) is required' });
+        return;
+      }
+      const allowed = new Set(['text', 'markdown', 'pdf']);
+      const docFormat = allowed.has(format) ? format : 'text';
+      const result = await agentOsContainer.brain.ingestDocument({
+        title,
+        data,
+        format: docFormat as 'text' | 'markdown' | 'pdf',
+      });
+      res.json({ success: true, data: result });
+    } catch (err) {
+      // Belt-and-suspenders: BrainService already degrades fail-safe, but never
+      // let a malformed body crash the request path.
+      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'context ingest failed' });
+    }
   });
+
+  // WebSocket upgrade for live workspace events (operator console live terminal).
+  // The express-ws middleware injects the `ws` method onto the router; if the
+  // server doesn't have express-ws enabled (e.g. an isolated unit test building
+  // the router directly), `.ws` is absent — skip registering rather than throw,
+  // so the rest of the router (the REST product surface) still mounts.
+  if (typeof (router as unknown as { ws?: unknown }).ws === 'function') {
+    (router as any).ws('/workspaces/:workspaceId/stream', (ws: any, req: { params: { workspaceId: string } }) => {
+      const cleanup = attachWorkspaceStream(ws, req.params.workspaceId);
+      ws.on('close', cleanup);
+    });
+  }
 
   return router;
 }
