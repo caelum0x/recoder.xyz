@@ -38,9 +38,19 @@ Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it) �
 - **#1 `pal` → the run loop is the headline**: it's the largest first-party package
   the shipping product doesn't touch.
 
-## Not on this list (handled elsewhere)
-- **Park** (43 dirs): vendored forks/clones (`ts/oh-my-*`, `openfang`, `lance`,
-  `tensorzero`, `polar`, the Giselle/agency subtree) → move under a labeled
-  `vendor/` area; see DIRECTORY-MAP §park.
-- **Drop** (5 dirs): `app/` slice (can't build), `packages/{ui,performance,plugins}`,
-  `py/colbert` — zero-import / non-building; see DIRECTORY-MAP §drop.
+## Park / drop — reclassified 2026-06-29 (per owner: "use the stuff")
+The earlier park/drop call was too aggressive. Corrected:
+- **`ts/*` are OURS (customized), NOT park** → keep + used. The runtime drivers now
+  **prefer the repo-built `ts/*` engines** (`ts/opencode`, `ts/oh-my-codex`,
+  `ts/oh-my-openagent`, `ts/dmux`, `ts/recodergit`) over global PATH via a new
+  `repo_engine` tier in the cli-locator. They are the BYOK agent subprocesses.
+- **`py/colbert` is functionality, NOT drop** → **wired** as the optional ColBERT
+  late-interaction **reranker** for `packages/rag` (`COLBERT_RERANK_URL`, degrade-safe).
+- **Dropped (removed):** `packages/{ui,performance,plugins}` — verified zero dep + zero
+  import. `packages/cli` (legacy `recoder-cli`, 306 errors) — **removed**; its conductor
+  commands were ported into the real published `packages/recoder-code` CLI first.
+- **Held:** `app/` — a slice, but deploy.yml builds the server's own
+  `/root/recoder.xyz/app` and it's auth-sensitive, so not touched.
+- **Still park** (genuine never-touched upstreams): `crates/tensorzero`, `crates/lance`,
+  `crates/openfang`, `go/ziti`, the daytona/sst upstreams — candidates for a labeled
+  `vendor/` area (not yet moved).
