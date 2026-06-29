@@ -19,5 +19,6 @@
 export * from './types';
 export * from './ports';
 export * from './envoy-config';
+export * from './xds-contract';
 export * from './ext-authz';
 export * from './xdr';

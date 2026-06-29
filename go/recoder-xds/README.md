@@ -77,7 +77,13 @@ The same `SVC_*`, `ENVOY_*`, `NETWORK_*` env vars used by the TS
 
 ## Point Envoy at it
 
-Minimal Envoy bootstrap to consume this control plane over ADS:
+The TypeScript `@recoder/network` package emits this consuming bootstrap for you
+via `generateXdsBootstrap(config)` (see
+`packages/network/src/xds-contract.ts`). Its `node.id`, listener/route/vhost
+names, and the `xds_cluster` endpoint are pinned to the same cross-language
+contract this control plane serves (`internal/contract/contract.json`), and a
+test on each side asserts they stay byte-identical. The YAML below is the
+hand-written equivalent of that emitted bootstrap:
 
 ```yaml
 node:
