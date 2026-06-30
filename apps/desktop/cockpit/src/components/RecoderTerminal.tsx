@@ -219,8 +219,11 @@ export function RecoderTerminal({
   if (unsupported) {
     return (
       <div class="rterm-unsupported">
-        The live terminal runs in the Recoder desktop app. Open this workspace in
-        Recoder Desktop to use the embedded terminal.
+        <span class="rterm-notice-title">Terminal lives in the desktop app</span>
+        <span class="rterm-notice-body">
+          Open this workspace in Recoder Desktop to use the built-in terminal.
+          Everything still works here in the friendly view.
+        </span>
       </div>
     );
   }
@@ -228,8 +231,11 @@ export function RecoderTerminal({
   if (ptyUnavailable) {
     return (
       <div class="rterm-unsupported">
-        A real terminal isn’t available in this build, so the live PTY can’t
-        attach. Showing the read-only session output instead.
+        <span class="rterm-notice-title">No terminal in this build</span>
+        <span class="rterm-notice-body">
+          We’ll show you the agent’s output instead — nothing’s broken, just no
+          live terminal here.
+        </span>
       </div>
     );
   }
