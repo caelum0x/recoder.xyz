@@ -4,6 +4,7 @@
  * Talks to the Recoder control-plane surfaces on docker-backend:
  *   - GET  /api/conductor/workspaces                      list workspaces + run state
  *   - GET  /api/conductor/workspaces/:id/events           RunEvents for a workspace
+ *   - GET  /api/agent-os/runs                             canonical Agent OS runs
  *   - GET  /api/agent-os/approvals                        all approvals
  *   - POST /api/agent-os/approvals/:id/approve            decide -> approved
  *   - POST /api/agent-os/approvals/:id/reject             decide -> rejected
@@ -23,6 +24,7 @@ import { getSessionUserIdentity } from '@/lib/auth/session-token';
 import { log } from '@/lib/logger';
 import {
   parseApproval,
+  parseRun,
   parseRunEvent,
   parseRunId,
   parseWorkspace,
@@ -31,6 +33,7 @@ import {
 } from './parsers';
 import type {
   AgentOsApproval,
+  AgentOsRun,
   ApprovalDecisionResult,
   ConductorRunEvent,
   ConductorWorkspace,
@@ -120,6 +123,17 @@ export async function fetchWorkspaceEvents(workspaceId: string): Promise<Conduct
   return items
     .map(parseRunEvent)
     .filter((e): e is ConductorRunEvent => e !== null);
+}
+
+/**
+ * List canonical Agent OS runs (the state-of-record TaskRun lifecycle). This is
+ * the truth the conductor workspaces are a substrate projection of. Used by the
+ * mobile "Runs" monitor tab.
+ */
+export async function fetchRuns(): Promise<AgentOsRun[]> {
+  const data = unwrapEnvelope(await getJson('/api/agent-os/runs'));
+  const items = Array.isArray(data) ? data : [];
+  return items.map(parseRun).filter((r): r is AgentOsRun => r !== null);
 }
 
 /** List all Agent OS approvals (pending + decided). */

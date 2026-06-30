@@ -8,14 +8,17 @@
  */
 
 import {
+  TASK_RUN_STATES,
   WORKSPACE_STATES,
   type AgentOsApproval,
+  type AgentOsRun,
   type ApprovalRequiredAt,
   type ApprovalStatus,
   type ApprovalTarget,
   type ConductorRunEvent,
   type ConductorWorkspace,
   type RunEventType,
+  type TaskRunState,
   type WorkspaceState,
   type WorkspaceSubstrate,
 } from './types';
@@ -82,6 +85,35 @@ export function parseWorkspace(raw: unknown): ConductorWorkspace | null {
     createdAt: str(r.createdAt) ?? new Date().toISOString(),
     updatedAt: str(r.updatedAt) ?? str(r.createdAt) ?? new Date().toISOString(),
     archivedAt: str(r.archivedAt),
+    metadata: record(r.metadata) ?? undefined,
+  };
+}
+
+/**
+ * Parse a canonical Agent OS TaskRun (GET /api/agent-os/runs). Drops items
+ * missing a runId or carrying an unknown state rather than throwing, so a
+ * partial control-plane payload still renders in the monitor.
+ */
+export function parseRun(raw: unknown): AgentOsRun | null {
+  const r = record(raw);
+  if (!r) return null;
+
+  const runId = str(r.runId);
+  const state = str(r.state);
+  if (!runId || !state || !TASK_RUN_STATES.has(state as TaskRunState)) {
+    return null;
+  }
+
+  return {
+    runId,
+    taskId: str(r.taskId) ?? '',
+    spaceId: str(r.spaceId) ?? '',
+    state: state as TaskRunState,
+    assigneeAgentId: str(r.assigneeAgentId),
+    instructionBundleId: str(r.instructionBundleId),
+    startedAt: str(r.startedAt),
+    updatedAt: str(r.updatedAt) ?? str(r.startedAt) ?? new Date().toISOString(),
+    completedAt: str(r.completedAt),
     metadata: record(r.metadata) ?? undefined,
   };
 }

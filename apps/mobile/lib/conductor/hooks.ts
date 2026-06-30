@@ -16,12 +16,14 @@ import { log } from '@/lib/logger';
 import {
   approveApproval,
   fetchApprovals,
+  fetchRuns,
   fetchWorkspaceEvents,
   fetchWorkspaces,
   rejectApproval,
 } from './api';
 import type {
   AgentOsApproval,
+  AgentOsRun,
   ApprovalDecisionResult,
   ConductorRunEvent,
   ConductorWorkspace,
@@ -34,6 +36,7 @@ import type {
 export const conductorKeys = {
   all: ['conductor'] as const,
   workspaces: () => [...conductorKeys.all, 'workspaces'] as const,
+  runs: () => [...conductorKeys.all, 'runs'] as const,
   events: (workspaceId: string) =>
     [...conductorKeys.all, 'events', workspaceId] as const,
   approvals: () => [...conductorKeys.all, 'approvals'] as const,
@@ -59,6 +62,24 @@ export function useWorkspaces(
     queryFn: fetchWorkspaces,
     staleTime: 15 * 1000,
     refetchInterval: 20 * 1000,
+    retry: (failureCount, error) => (isNonRetryable(error) ? false : failureCount < 2),
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
+    ...options,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Runs (canonical Agent OS TaskRun)
+// ---------------------------------------------------------------------------
+
+export function useRuns(
+  options?: Omit<UseQueryOptions<AgentOsRun[], Error>, 'queryKey' | 'queryFn'>,
+) {
+  return useQuery({
+    queryKey: conductorKeys.runs(),
+    queryFn: fetchRuns,
+    staleTime: 10 * 1000,
+    refetchInterval: 15 * 1000,
     retry: (failureCount, error) => (isNonRetryable(error) ? false : failureCount < 2),
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
     ...options,
@@ -119,6 +140,7 @@ export function useDecideApproval(decision: 'approve' | 'reject') {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: conductorKeys.approvals() });
       queryClient.invalidateQueries({ queryKey: conductorKeys.workspaces() });
+      queryClient.invalidateQueries({ queryKey: conductorKeys.runs() });
     },
     onError: (error) => {
       log.error(`[Conductor] approval ${decision} failed:`, error);

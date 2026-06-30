@@ -2,7 +2,9 @@
  * Conductor Monitor + Approve Screen.
  *
  * Mobile is a READ-ONLY monitor + approve surface for the Recoder agent control
- * plane (not an authoring surface). Two tabs:
+ * plane (not an authoring surface). Three tabs:
+ *   - Runs:       list canonical Agent OS runs (state-of-record TaskRun lifecycle)
+ *                 with active/approval-waiting runs surfaced first.
  *   - Workspaces: list parallel agent workspaces + run state, tap to view RunEvents.
  *   - Approvals:  review pending approvals and approve/reject them via the
  *                 canonical Agent OS approvals API.
@@ -14,17 +16,18 @@ import React, { useState, useCallback } from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
-import { ArrowLeft, LayoutGrid, ShieldQuestion } from 'lucide-react-native';
+import { ArrowLeft, Activity, LayoutGrid, ShieldQuestion } from 'lucide-react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  RunsListView,
   WorkspaceListView,
   WorkspaceDetailView,
   ApprovalsListView,
 } from '@/components/conductor';
 import type { ConductorWorkspace } from '@/lib/conductor/types';
 
-type ConductorTab = 'workspaces' | 'approvals';
+type ConductorTab = 'runs' | 'workspaces' | 'approvals';
 
 function TabButton({
   active,
@@ -64,7 +67,7 @@ export default function ConductorScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [tab, setTab] = useState<ConductorTab>('workspaces');
+  const [tab, setTab] = useState<ConductorTab>('runs');
   const [selectedWorkspace, setSelectedWorkspace] = useState<ConductorWorkspace | null>(null);
 
   const handleWorkspacePress = useCallback((workspace: ConductorWorkspace) => {
@@ -100,6 +103,12 @@ export default function ConductorScreen() {
 
             <View className="mx-4 mb-3 flex-row gap-1 rounded-xl bg-muted p-1">
               <TabButton
+                active={tab === 'runs'}
+                label="Runs"
+                icon={Activity}
+                onPress={() => setTab('runs')}
+              />
+              <TabButton
                 active={tab === 'workspaces'}
                 label="Workspaces"
                 icon={LayoutGrid}
@@ -113,7 +122,9 @@ export default function ConductorScreen() {
               />
             </View>
 
-            {tab === 'workspaces' ? (
+            {tab === 'runs' ? (
+              <RunsListView />
+            ) : tab === 'workspaces' ? (
               <WorkspaceListView onWorkspacePress={handleWorkspacePress} />
             ) : (
               <ApprovalsListView />
