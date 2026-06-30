@@ -35,7 +35,7 @@ const logger = createLogger('distribution-auth-port');
  * safe — entitlement absence never inflates the plan).
  */
 function planFromEntitlements(grants: readonly Entitlement[]): Plan {
-  const rank: Record<Plan, number> = { free: 0, pro: 1, enterprise: 2 };
+  const rank: Record<Plan, number> = { free: 0, pro: 1, team: 2, enterprise: 3 };
   let best: Plan = 'free';
   for (const g of grants) {
     if (!g.granted) continue;
