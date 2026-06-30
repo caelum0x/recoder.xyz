@@ -2,11 +2,11 @@
  * createSubstrateRegistry — the composition root for the registry (design §4.9).
  *
  * Builds a fresh SubstrateRegistry and registers every substrate the caller
- * supplies. This stage moves the FOUNDATION; the concrete local (tmux_worktree)
- * and remote (daytona) substrate impls land in a later move (see substrate.md
- * §12 steps 3–4). Until then the caller passes the substrates it has wired —
- * the factory NEVER invents a stub substrate, so an unregistered substrate id
- * fails truthfully via SubstrateNotRegisteredError.
+ * supplies. The remote (daytona) substrate ships here as `createDaytonaSubstrate`
+ * (wired over an injected DaytonaClientPort); the concrete local (tmux_worktree)
+ * impl is the remaining move (see substrate.md §12). The caller passes the
+ * substrates it has wired — the factory NEVER invents a stub substrate, so an
+ * unregistered substrate id fails truthfully via SubstrateNotRegisteredError.
  */
 import type { ConductorSubstrate } from '../contract/index.js';
 import { SubstrateRegistry } from '../registry/index.js';

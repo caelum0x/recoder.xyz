@@ -106,6 +106,8 @@ export function readConfig(): CockpitConfig {
     token: resolveToken(),
     defaults: injected?.defaults,
     login: injected?.login,
+    deviceLogin: injected?.deviceLogin,
+    onDeviceLoginPrompt: injected?.onDeviceLoginPrompt,
     resolveToken: injected?.resolveToken,
   };
 }
@@ -120,6 +122,24 @@ export function hasDesktopLogin(): boolean {
   return typeof readConfig().login === 'function';
 }
 
+/** True when the desktop shell exposes the RFC 8628 device-flow login bridge. */
+export function hasDesktopDeviceLogin(): boolean {
+  return typeof readConfig().deviceLogin === 'function';
+}
+
+/**
+ * Subscribe to the device-flow prompt (user_code + verification URI) the shell
+ * emits while a device login is in progress. Returns an unsubscribe function, or
+ * a no-op when the bridge is unavailable (standalone browser).
+ */
+export function onDeviceLoginPrompt(
+  callback: (prompt: import('../types').DeviceLoginPrompt) => void,
+): () => void {
+  const { onDeviceLoginPrompt: subscribe } = readConfig();
+  if (typeof subscribe !== 'function') return () => {};
+  return subscribe(callback);
+}
+
 /**
  * Drive the desktop app's REAL recoder.xyz auth flow. Resolves to the auth
  * result; on success the fresh token is stored in-memory so readConfig().token
@@ -132,6 +152,25 @@ export async function runDesktopLogin(): Promise<CockpitAuthResult> {
     return { ok: false, reason: 'no-desktop-login' };
   }
   const result = await login();
+  if (result.ok && result.token) {
+    runtimeToken = result.token;
+  }
+  return result;
+}
+
+/**
+ * Drive the desktop app's RFC 8628 device-flow sign-in. Opens the browser to
+ * recoder.xyz, polls for approval, and on success stores the fresh token
+ * in-memory so readConfig().token returns it for subsequent /api/conductor
+ * calls. Returns a not-ok result when the bridge is unavailable or sign-in does
+ * not complete — never fabricates a token.
+ */
+export async function runDesktopDeviceLogin(): Promise<CockpitAuthResult> {
+  const { deviceLogin } = readConfig();
+  if (typeof deviceLogin !== 'function') {
+    return { ok: false, reason: 'no-desktop-device-login' };
+  }
+  const result = await deviceLogin();
   if (result.ok && result.token) {
     runtimeToken = result.token;
   }

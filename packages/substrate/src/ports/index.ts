@@ -47,3 +47,9 @@ export type {
   DeliveryEvidence,
   MemoryCandidateRef,
 } from './memory.port.js';
+export type {
+  DaytonaClientPort,
+  DaytonaExecResult,
+  DaytonaExecOptions,
+  DaytonaSandboxRef,
+} from './daytona-client.port.js';

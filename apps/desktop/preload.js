@@ -36,6 +36,16 @@ const { contextBridge, ipcRenderer } = require('electron');
       defaults: config.defaults && typeof config.defaults === 'object' ? config.defaults : undefined,
       // Trigger the real web auth flow; resolves to { ok, token, tokenSource }.
       login: () => ipcRenderer.invoke('cockpit:login'),
+      // Trigger the RFC 8628 device-flow sign-in (opens browser to recoder.xyz,
+      // polls for approval); resolves to { ok, token, tokenSource }.
+      deviceLogin: () => ipcRenderer.invoke('cockpit:deviceLogin'),
+      // Subscribe to the device-flow prompt (user_code + verification URI) so the
+      // sign-in panel can show the code. Returns an unsubscribe function.
+      onDeviceLoginPrompt: (callback) => {
+        const handler = (_event, prompt) => callback(prompt);
+        ipcRenderer.on('cockpit:deviceLoginPrompt', handler);
+        return () => ipcRenderer.removeListener('cockpit:deviceLoginPrompt', handler);
+      },
       // Re-resolve the token without showing UI (env -> web session cookie -> API key).
       resolveToken: () => ipcRenderer.invoke('cockpit:resolveToken'),
     });
@@ -210,6 +220,16 @@ contextBridge.exposeInMainWorld('recoderDesktop', {
   // ============== Cockpit auth ==============
   /** Run the existing recoder.xyz web auth flow; resolves to { ok, token, tokenSource }. */
   login: () => ipcRenderer.invoke('cockpit:login'),
+
+  /** Run the RFC 8628 device-flow sign-in; resolves to { ok, token, tokenSource }. */
+  deviceLogin: () => ipcRenderer.invoke('cockpit:deviceLogin'),
+
+  /** Subscribe to the device-flow prompt (user_code + verification URI). Returns an unsubscribe fn. */
+  onDeviceLoginPrompt: (callback) => {
+    const handler = (_event, prompt) => callback(prompt);
+    ipcRenderer.on('cockpit:deviceLoginPrompt', handler);
+    return () => ipcRenderer.removeListener('cockpit:deviceLoginPrompt', handler);
+  },
 
   /** Re-resolve the cockpit auth token (env -> web session cookie -> API key). */
   resolveToken: () => ipcRenderer.invoke('cockpit:resolveToken'),

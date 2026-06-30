@@ -8,9 +8,10 @@
  *
  * Stage status: FOUNDATION + self-contained modules are shipped here —
  * contract, types, errors, ports, registry, command (the real 8 headless CLI
- * lines), exec primitives, and the factory composition root. The riskier impl
- * moves (local/tmux, remote/daytona, engine, reconcile, observe, review,
- * publish) land in later steps per substrate.md §12 and are NOT stubbed.
+ * lines), exec primitives, observe, review, reconcile, the engine, the factory
+ * composition root, and the remote/daytona substrate (over the injected Daytona
+ * client port). The local/tmux substrate impl is the remaining move and is NOT
+ * stubbed.
  */
 
 // === Contract — the seam everyone codes to ===
@@ -91,8 +92,13 @@ export {
   SubstrateRegistry,
   defaultRegistry,
   selectSubstrate,
+  resolveSubstrate,
 } from './registry/index.js';
-export type { SubstrateSelectable } from './registry/index.js';
+export type {
+  SubstrateSelectable,
+  ResolveSubstrateOptions,
+  ResolvedSubstrate,
+} from './registry/index.js';
 
 // === Review — reviewable-diff mechanism (pure parsing of git output) ===
 export {
@@ -155,6 +161,10 @@ export type {
   SubstrateScanPort,
   SubstrateRegistryPort,
   EngineSubstrate,
+  DaytonaClientPort,
+  DaytonaExecResult,
+  DaytonaExecOptions,
+  DaytonaSandboxRef,
 } from './ports/index.js';
 
 // === Engine — the orchestration brain (persisted Workspace lifecycle) ===
@@ -167,6 +177,10 @@ export type {
 
 // === Reconcile — restart survivability (join records × live substrate) ===
 export { reconcile } from './reconcile/index.js';
+
+// === Remote — off-machine substrate (Daytona) over the injected client port ===
+export { createDaytonaSubstrate } from './remote/index.js';
+export type { CreateDaytonaSubstrateDeps } from './remote/index.js';
 
 // === Factory — the composition root (ports → registry) ===
 export {
