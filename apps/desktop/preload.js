@@ -33,6 +33,22 @@ const { contextBridge, ipcRenderer } = require('electron');
     contextBridge.exposeInMainWorld('__RECODER_COCKPIT__', {
       backendUrl: String(config.backendUrl),
       token: typeof config.token === 'string' && config.token ? config.token : undefined,
+      // Signed-in identity (email/plan), present ONLY when the main process
+      // captured it from the server — never fabricated. Omitted otherwise so the
+      // cockpit shows a generic "Signed in" state instead of a fake email.
+      identity:
+        config.identity && typeof config.identity === 'object'
+          ? {
+              email:
+                typeof config.identity.email === 'string' && config.identity.email
+                  ? config.identity.email
+                  : undefined,
+              plan:
+                typeof config.identity.plan === 'string' && config.identity.plan
+                  ? config.identity.plan
+                  : undefined,
+            }
+          : undefined,
       defaults: config.defaults && typeof config.defaults === 'object' ? config.defaults : undefined,
       // Trigger the real web auth flow; resolves to { ok, token, tokenSource }.
       login: () => ipcRenderer.invoke('cockpit:login'),
@@ -46,8 +62,15 @@ const { contextBridge, ipcRenderer } = require('electron');
         ipcRenderer.on('cockpit:deviceLoginPrompt', handler);
         return () => ipcRenderer.removeListener('cockpit:deviceLoginPrompt', handler);
       },
-      // Re-resolve the token without showing UI (env -> web session cookie -> API key).
+      // Re-resolve the token without showing UI (env -> web session cookie ->
+      // device token (with silent refresh on expiry) -> API key).
       resolveToken: () => ipcRenderer.invoke('cockpit:resolveToken'),
+      // Transparently refresh an expired device token via the stored refresh
+      // token; resolves to { ok, token, ... } or a not-ok (stay signed-out) result.
+      refreshToken: () => ipcRenderer.invoke('cockpit:refreshToken'),
+      // Clear the stored device token (access + refresh). Best-effort; always
+      // returns the app to signed-out. Resolves to { ok: true }.
+      signOut: () => ipcRenderer.invoke('cockpit:signOut'),
     });
   } catch {
     // If config is missing/malformed the renderer falls back to its localhost default.
@@ -231,8 +254,14 @@ contextBridge.exposeInMainWorld('recoderDesktop', {
     return () => ipcRenderer.removeListener('cockpit:deviceLoginPrompt', handler);
   },
 
-  /** Re-resolve the cockpit auth token (env -> web session cookie -> API key). */
+  /** Re-resolve the cockpit auth token (env -> web session cookie -> device token (silent refresh) -> API key). */
   resolveToken: () => ipcRenderer.invoke('cockpit:resolveToken'),
+
+  /** Transparently refresh an expired device token; resolves to { ok, token, ... } or not-ok. */
+  refreshToken: () => ipcRenderer.invoke('cockpit:refreshToken'),
+
+  /** Sign out: clear the stored device token (access + refresh). Best-effort; always returns signed-out. */
+  signOut: () => ipcRenderer.invoke('cockpit:signOut'),
 
   // ============== Embedded backend ==============
   /** Get the embedded backend supervisor status (truthful: starting/ready/failed). */

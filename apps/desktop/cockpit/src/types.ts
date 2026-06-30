@@ -486,13 +486,25 @@ export interface ApiEnvelope<T> {
   error?: string;
 }
 
-/** Result of the desktop login / token-resolve IPC bridge. */
+/**
+ * The signed-in user's display identity, surfaced in the cockpit header. Present
+ * ONLY when the main process actually captured it from the server — never
+ * fabricated. When absent, the cockpit shows a generic "Signed in" state.
+ */
+export interface CockpitIdentity {
+  email?: string;
+  plan?: string;
+}
+
+/** Result of the desktop login / token-resolve / refresh IPC bridge. */
 export interface CockpitAuthResult {
   ok: boolean;
   token?: string;
   tokenSource?: string;
   backendUrl?: string;
   reason?: string;
+  /** Display identity, present only when the server returned it. */
+  identity?: CockpitIdentity;
 }
 
 /**
@@ -515,6 +527,11 @@ export interface DeviceLoginPrompt {
 export interface CockpitConfig {
   backendUrl: string;
   token?: string;
+  /**
+   * Signed-in identity (email/plan), present only when the shell captured it
+   * from the server. Undefined when unknown — the header then shows "Signed in".
+   */
+  identity?: CockpitIdentity;
   /** Optional defaults to pre-fill the new-workspace form. */
   defaults?: {
     spaceId?: string;
@@ -537,6 +554,18 @@ export interface CockpitConfig {
    * while a device login is in progress. Returns an unsubscribe function.
    */
   onDeviceLoginPrompt?: (callback: (prompt: DeviceLoginPrompt) => void) => () => void;
-  /** Re-resolve the session token without UI (env -> web session cookie -> API key). */
+  /** Re-resolve the session token without UI (env -> web session cookie -> device token -> API key). */
   resolveToken?: () => Promise<CockpitAuthResult>;
+  /**
+   * Transparently refresh an expired device token via the stored refresh token.
+   * Present only inside the Electron shell. Resolves to a not-ok result (stay
+   * signed-out) when refresh is unavailable or fails — never fabricates a token.
+   */
+  refreshToken?: () => Promise<CockpitAuthResult>;
+  /**
+   * Sign out: clear the stored device token (access + refresh) in the main
+   * process. Best-effort — always returns the app to signed-out. Present only
+   * inside the Electron shell. Resolves to { ok: true }.
+   */
+  signOut?: () => Promise<{ ok: boolean }>;
 }

@@ -690,7 +690,10 @@ function deviceTokenStorePath() {
  * API-key cache uses). We store ONLY what recoder.xyz actually returns — never
  * fabricated profile/quota fields — plus a conservative local expiry so a stale
  * token is re-authed rather than trusted forever.
- * @param {{ accessToken: string, refreshToken?: string, expiresInSeconds: number }} token
+ * Identity is persisted ONLY when the server actually returns it (email/plan) —
+ * we never fabricate it. When absent, the field is omitted so a later read can
+ * truthfully report "signed in" without a name.
+ * @param {{ accessToken: string, refreshToken?: string, expiresInSeconds: number, identity?: { email?: string, plan?: string } }} token
  */
 function writeDeviceToken(token) {
   const storePath = deviceTokenStorePath();
@@ -699,10 +702,13 @@ function writeDeviceToken(token) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
   const expiresAt = new Date(Date.now() + token.expiresInSeconds * 1000).toISOString();
+  const identity = normalizeDeviceIdentity(token.identity);
   const record = {
     access_token: token.accessToken,
     refresh_token: token.refreshToken || '',
     expires_at: expiresAt,
+    // Only present when the server actually returned identity — never faked.
+    ...(identity ? { identity } : {}),
   };
   const jsonStr = JSON.stringify(record);
   try {
@@ -716,6 +722,81 @@ function writeDeviceToken(token) {
     console.warn('[safeStorage] device-token encryption unavailable, falling back to plaintext:', err.message);
   }
   fs.writeFileSync(storePath, jsonStr, { encoding: 'utf-8', mode: 0o600 });
+}
+
+/**
+ * Sanitize a server-returned identity into the small, display-only shape the
+ * cockpit header reads. Returns undefined when nothing usable is present, so the
+ * store never carries a fabricated email/plan.
+ * @param {unknown} identity
+ * @returns {{ email?: string, plan?: string } | undefined}
+ */
+function normalizeDeviceIdentity(identity) {
+  if (!identity || typeof identity !== 'object') return undefined;
+  const src = /** @type {Record<string, unknown>} */ (identity);
+  const email = typeof src.email === 'string' ? src.email.trim() : '';
+  const plan = typeof src.plan === 'string' ? src.plan.trim() : '';
+  if (!email && !plan) return undefined;
+  return {
+    ...(email ? { email } : {}),
+    ...(plan ? { plan } : {}),
+  };
+}
+
+/**
+ * Best-effort delete of the encrypted device-token store. Sign-out must always
+ * succeed from the user's perspective: a missing file or an unlink error still
+ * leaves the app signed-out (the resolver treats absent/corrupt as "no token"),
+ * so we swallow errors and report done. Never throws.
+ * @returns {{ ok: boolean }}
+ */
+function clearDeviceToken() {
+  try {
+    fs.rmSync(deviceTokenStorePath(), { force: true });
+  } catch (err) {
+    // force:true already ignores ENOENT; any other error (e.g. perms) is logged
+    // but does not block sign-out — the token is no longer trusted in-session.
+    logRuntimeError('device-token-clear-failed', err);
+  }
+  return { ok: true };
+}
+
+/**
+ * Decrypt + parse the device-token store, returning the raw record or null.
+ * Shared by the token resolver and the identity reader so both see the same
+ * envelope/plaintext handling. Never throws.
+ * @returns {Record<string, unknown> | null}
+ */
+function readDeviceTokenRecord() {
+  const storePath = deviceTokenStorePath();
+  try {
+    if (!fs.existsSync(storePath)) return null;
+    const raw = fs.readFileSync(storePath, 'utf-8');
+    const envelope = JSON.parse(raw);
+    if (
+      envelope &&
+      envelope._encrypted &&
+      typeof envelope._data === 'string' &&
+      safeStorage.isEncryptionAvailable()
+    ) {
+      return JSON.parse(safeStorage.decryptString(Buffer.from(envelope._data, 'base64')));
+    }
+    return envelope;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the signed-in identity (email/plan) the server returned at sign-in, if
+ * any. Returns null when no token is stored or no identity was captured — the
+ * cockpit then shows a generic "Signed in" rather than a fabricated email.
+ * @returns {{ email?: string, plan?: string } | null}
+ */
+function resolveDesktopIdentity() {
+  const parsed = readDeviceTokenRecord();
+  const identity = normalizeDeviceIdentity(parsed && parsed.identity);
+  return identity || null;
 }
 
 /**
@@ -849,11 +930,19 @@ async function startCockpitDeviceLogin(hooks = {}) {
     const expiresInSeconds = typeof result.token.expiresIn === 'number' && result.token.expiresIn > 0
       ? result.token.expiresIn
       : config.accessTokenTtlSeconds;
+    // The typed device-token response carries no profile (email/plan); the
+    // device endpoint returns only the OAuth token fields. We therefore capture
+    // identity only if a future server response includes it (normalizeDeviceIdentity
+    // drops anything absent) — never fabricated here.
+    const identity = normalizeDeviceIdentity(
+      /** @type {{ identity?: unknown }} */ (result.token).identity,
+    );
     try {
       writeDeviceToken({
         accessToken,
         refreshToken: result.token.refreshToken,
         expiresInSeconds,
+        identity,
       });
     } catch (e) {
       // Persistence failure must not fabricate success, but the in-session token
@@ -862,7 +951,13 @@ async function startCockpitDeviceLogin(hooks = {}) {
     }
 
     emitDesktopActivationEvent('desktop_device_login_succeeded', { tokenSource: 'device-token' });
-    return { ok: true, token: accessToken, tokenSource: 'device-token', backendUrl };
+    return {
+      ok: true,
+      token: accessToken,
+      tokenSource: 'device-token',
+      backendUrl,
+      ...(identity ? { identity } : {}),
+    };
   } catch (error) {
     // Only thrown when authorization cannot even start (transport/HTTP/malformed).
     logRuntimeError('device-login-failed', error);
@@ -874,6 +969,101 @@ async function startCockpitDeviceLogin(hooks = {}) {
       backendUrl,
       reason: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+/**
+ * Attempt a transparent refresh of an expired device token using the stored
+ * refresh_token, WITHOUT re-prompting the user. This posts an RFC 6749
+ * `refresh_token` grant to the SAME deployed token endpoint the device flow
+ * polls, through the same path/JSON-rewriting transport.
+ *
+ * Documented limit: the deployed recoder.xyz device endpoint currently issues
+ * device-code grants only and does not yet implement a refresh_token grant, and
+ * the distribution device-auth client exposes no transport-based refresh client.
+ * So this is a best-effort, forward-compatible path: if the server accepts the
+ * grant we mint a fresh access token and persist it; on ANY failure (no refresh
+ * token, endpoint unsupported, transport/HTTP error, malformed body) we DELETE
+ * the stale store and report not-ok so the cockpit falls back to signed-out.
+ * It NEVER fabricates a session.
+ *
+ * @returns {Promise<{ ok: boolean, token: string, tokenSource: string, reason?: string, identity?: { email?: string, plan?: string } }>}
+ */
+async function attemptDeviceTokenRefresh() {
+  const record = readDeviceTokenRecord();
+  const refreshToken =
+    record && typeof record.refresh_token === 'string' ? record.refresh_token.trim() : '';
+  if (!refreshToken) {
+    // No refresh token persisted → cannot refresh. Stay signed-out (do not clear;
+    // a still-valid access token, if any, is handled by the sync resolver).
+    return { ok: false, token: '', tokenSource: 'none', reason: 'no-refresh-token' };
+  }
+
+  const dist = loadDeviceFlow();
+  if (!dist) {
+    return { ok: false, token: '', tokenSource: 'none', reason: 'device-flow-unavailable' };
+  }
+
+  let config;
+  try {
+    config = dist.buildDeviceFlowConfig({ recoderBaseUrl: normalizedUrl });
+  } catch (error) {
+    logRuntimeError('device-token-refresh-config-failed', error);
+    return { ok: false, token: '', tokenSource: 'none', reason: 'config-failed' };
+  }
+
+  const transport = createRecoderDeviceTransport(dist);
+  const url = new URL(config.tokenPath, config.recoderBaseUrl).toString();
+
+  try {
+    const res = await transport.post({
+      url,
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: config.clientId,
+      }).toString(),
+    });
+
+    const body = res && typeof res.body === 'object' && res.body ? res.body : {};
+    const accessToken =
+      typeof body.access_token === 'string' ? body.access_token.trim() : '';
+    if (res.status < 200 || res.status >= 300 || !accessToken) {
+      // Endpoint unsupported / refused / malformed → drop the stale token.
+      clearDeviceToken();
+      return { ok: false, token: '', tokenSource: 'none', reason: `refresh-rejected (HTTP ${res.status})` };
+    }
+
+    const expiresInSeconds =
+      typeof body.expires_in === 'number' && body.expires_in > 0
+        ? body.expires_in
+        : config.accessTokenTtlSeconds;
+    const nextRefresh =
+      typeof body.refresh_token === 'string' && body.refresh_token.trim()
+        ? body.refresh_token.trim()
+        : refreshToken; // reuse the existing one if the server didn't rotate it
+    // Preserve any previously captured identity (the refresh response carries none).
+    const identity = resolveDesktopIdentity() || undefined;
+
+    try {
+      writeDeviceToken({ accessToken, refreshToken: nextRefresh, expiresInSeconds, identity });
+    } catch (e) {
+      logRuntimeError('device-token-refresh-persist-failed', e);
+    }
+    emitDesktopActivationEvent('desktop_device_token_refreshed', {});
+    return {
+      ok: true,
+      token: accessToken,
+      tokenSource: 'device-token',
+      ...(identity ? { identity } : {}),
+    };
+  } catch (error) {
+    // Transport/HTTP failure — clear the stale store and stay signed-out.
+    logRuntimeError('device-token-refresh-failed', error);
+    clearDeviceToken();
+    return { ok: false, token: '', tokenSource: 'none', reason: 'refresh-failed' };
   }
 }
 
@@ -910,7 +1100,12 @@ function resolveCockpitConfig() {
   // already authenticated when a valid token exists.
   const deviceToken = resolveDesktopDeviceTokenDetailed();
   if (deviceToken.value) {
-    return { backendUrl, token: deviceToken.value, tokenSource: 'device-token' };
+    return {
+      backendUrl,
+      token: deviceToken.value,
+      tokenSource: 'device-token',
+      ...(resolveDesktopIdentity() ? { identity: resolveDesktopIdentity() } : {}),
+    };
   }
   const apiKey = resolveDesktopRecoderApiKeyDetailed();
   if (apiKey.value) {
@@ -949,7 +1144,13 @@ async function resolveCockpitConfigAsync() {
   }
   const deviceToken = resolveDesktopDeviceTokenDetailed();
   if (deviceToken.value) {
-    return { backendUrl, token: deviceToken.value, tokenSource: 'device-token' };
+    const identity = resolveDesktopIdentity();
+    return {
+      backendUrl,
+      token: deviceToken.value,
+      tokenSource: 'device-token',
+      ...(identity ? { identity } : {}),
+    };
   }
   const apiKey = resolveDesktopRecoderApiKeyDetailed();
   if (apiKey.value) {
@@ -2695,10 +2896,47 @@ ipcMain.handle('app:version', () => app.getVersion());
 // from /api/conductor. They reuse the EXISTING recoder.xyz web auth flow — no
 // new auth scheme, no fabricated token.
 
-/** Re-resolve the cockpit auth token (env -> web session cookie -> API key). */
+/**
+ * Re-resolve the cockpit auth token (env -> web session cookie -> device token ->
+ * API key). When nothing resolves but a refresh_token is on disk (the device
+ * token expired), transparently attempt a refresh before reporting signed-out —
+ * so a 401-triggered re-resolve can recover silently. Never fabricates a token.
+ */
 ipcMain.handle('cockpit:resolveToken', async (event) => {
   const cfg = await resolveCockpitConfigAsync();
-  return { ok: Boolean(cfg.token), ...cfg };
+  if (cfg.token) {
+    return { ok: true, ...cfg };
+  }
+  // No live token. If an expired device token left a refresh_token, try to mint
+  // a fresh one without prompting; on failure this stays signed-out.
+  const refreshed = await attemptDeviceTokenRefresh();
+  if (refreshed.ok && refreshed.token) {
+    return { ok: true, backendUrl: cfg.backendUrl, ...refreshed };
+  }
+  return { ok: false, ...cfg };
+});
+
+/**
+ * Sign out: clear the encrypted device-token store (access + refresh) in the
+ * main process. Fail-safe — clearing is best-effort and always returns the app
+ * to a signed-out state. The renderer must also drop its in-memory token.
+ */
+ipcMain.handle('cockpit:signOut', async () => {
+  const result = clearDeviceToken();
+  emitDesktopActivationEvent('desktop_sign_out', {});
+  return result;
+});
+
+/**
+ * Explicitly attempt a transparent device-token refresh (used when a conductor
+ * call returns 401 and the cockpit wants to recover before showing SignIn).
+ * Returns the fresh token on success, or a not-ok result that the cockpit treats
+ * as "stay signed-out". Never fabricates a session.
+ */
+ipcMain.handle('cockpit:refreshToken', async () => {
+  const backendUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
+  const refreshed = await attemptDeviceTokenRefresh();
+  return { backendUrl, ...refreshed };
 });
 
 /**
