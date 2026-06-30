@@ -290,37 +290,32 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
           <DiffView diff={diff.data} error={diff.error} loading={diff.loading} />
         ) : session ? (
           <div class="detail-terminal">
-            {/* Surface toggle: the friendly conversation ("Chat") vs the full
-                real terminal ("Terminal"). One engine, two skins over the SAME
-                tmux session / RunEvents. Defaults to Chat for approachability. */}
+            {/* Surface affordance: the friendly conversation is the calm DEFAULT;
+                the full real terminal is revealed ON DEMAND behind a single
+                gentle "Show terminal" / "Hide terminal" toggle (collapsed by
+                default — the "not scary" vision principle). One engine, two skins
+                over the SAME tmux session / RunEvents — never a second source of
+                truth. Flipping it mounts/unmounts the real xterm so its PTY is
+                spawned only when shown and killed when hidden. */}
             <div class="detail-terminal-head">
-              <button
-                type="button"
-                class={
-                  surfaceMode === 'chat'
-                    ? 'detail-terminal-tab detail-terminal-tab-btn detail-terminal-tab-active'
-                    : 'detail-terminal-tab detail-terminal-tab-btn'
-                }
-                onClick={() => setSurfaceMode('chat')}
-                aria-pressed={surfaceMode === 'chat'}
-                title="Friendly conversation view of this workspace"
-              >
-                Chat
-              </button>
-              <button
-                type="button"
-                class={
-                  surfaceMode === 'terminal'
-                    ? 'detail-terminal-tab detail-terminal-tab-btn detail-terminal-tab-active'
-                    : 'detail-terminal-tab detail-terminal-tab-btn'
-                }
-                onClick={() => setSurfaceMode('terminal')}
-                aria-pressed={surfaceMode === 'terminal'}
-                title="Full real terminal for this workspace tmux session"
-              >
-                Terminal
-              </button>
+              <span class="detail-terminal-skin" aria-hidden="true">
+                {surfaceMode === 'chat' ? 'Chat' : 'Terminal'}
+              </span>
               <span class="detail-terminal-branch" title={workspace.branch}>{workspace.branch}</span>
+              <span class="detail-terminal-spacer" />
+              <button
+                type="button"
+                class="detail-terminal-toggle"
+                onClick={() => setSurfaceMode((m) => (m === 'chat' ? 'terminal' : 'chat'))}
+                aria-pressed={surfaceMode === 'terminal'}
+                title={
+                  surfaceMode === 'chat'
+                    ? 'Reveal the full real terminal for this workspace'
+                    : 'Collapse back to the friendly conversation'
+                }
+              >
+                {surfaceMode === 'chat' ? 'Show terminal' : 'Hide terminal'}
+              </button>
             </div>
             {surfaceMode === 'chat' ? (
               // Friendly skin: the SAME conductor session shown as a calm, chat-

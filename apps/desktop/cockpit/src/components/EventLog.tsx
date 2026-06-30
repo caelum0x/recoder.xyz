@@ -11,7 +11,7 @@
  */
 import { useEffect, useRef } from 'preact/hooks';
 import { useSmoothText } from '@recoder/shared/animations/preact';
-import type { RunEvent } from '../types';
+import type { RunEvent, RunEventType } from '../types';
 
 interface EventLogProps {
   events: RunEvent[] | null;
@@ -66,11 +66,80 @@ export function friendlyAgentText(raw: string): string {
   return stripped;
 }
 
+/**
+ * The plain-language run-state vocabulary.
+ *
+ * Every RunEventType maps to a calm, short, human label — never the raw wire
+ * word ("state_transition", "needs_input", "approval_requested") which reads
+ * like machine internals to a terminal-averse operator. This is the lifecycle
+ * twin of `friendlyAgentText` (which softens captured tmux/pty output): together
+ * they guarantee no scary low-level vocabulary ever reaches the friendly skin.
+ *
+ * Truthful, not euphemistic: a `failed` event reads "Stopped", never "Done".
+ */
+const EVENT_KIND_LABEL: Record<RunEventType, string> = {
+  started: 'Working…',
+  state_transition: 'Update',
+  log: 'Working…',
+  artifact: 'Saved work',
+  needs_input: 'Waiting for you',
+  verified: 'Reviewing',
+  approval_requested: 'Waiting for you',
+  handoff: 'Handing off',
+  failed: 'Stopped',
+  completed: 'Done',
+};
+
+/** A calm one-word/short label for a RunEvent's kind. Never the raw wire word. */
+export function friendlyEventKind(type: string): string {
+  return EVENT_KIND_LABEL[type as RunEventType] ?? 'Update';
+}
+
+/**
+ * Map a raw backend workspace/run state token (e.g. "awaiting_approval",
+ * "running") to the same calm vocabulary. Used when a `state_transition` event
+ * carries a raw `state` so the friendly skin shows "Waiting for you" instead of
+ * "→ awaiting_approval". Exported so the friendly conversation status and the
+ * log share ONE source of plain-language copy.
+ */
+export function friendlyRunState(state: string): string {
+  switch (state) {
+    case 'created':
+    case 'setting_up':
+      return 'Setting up…';
+    case 'ready':
+      return 'Ready';
+    case 'running':
+      return 'Working…';
+    case 'awaiting_approval':
+    case 'awaiting_review':
+    case 'changes_requested':
+      return 'Waiting for you';
+    case 'merging':
+      return 'Merging…';
+    case 'merged':
+      return 'Done';
+    case 'failed':
+    case 'cancelled':
+      return 'Stopped';
+    case 'archived':
+      return 'Archived';
+    case 'thinking':
+      return 'Thinking…';
+    default:
+      // Last-resort: humanize the token (underscores → spaces) so even an
+      // unknown future state never shows raw snake_case wire wording.
+      return state.replace(/_/g, ' ');
+  }
+}
+
 function eventText(ev: RunEvent): string {
   if (ev.message) return friendlyAgentText(ev.message);
-  if (ev.type === 'state_transition' && ev.state) return `→ ${ev.state}`;
+  // A lifecycle transition: show the calm run-state label, never "→ raw_state".
+  if (ev.type === 'state_transition' && ev.state) return friendlyRunState(ev.state);
   if (ev.data && typeof ev.data.output === 'string') return friendlyAgentText(ev.data.output);
-  return ev.type;
+  // No message/output — fall back to the friendly kind, never the raw wire type.
+  return friendlyEventKind(ev.type);
 }
 
 /** True when the host can drive an animation-frame loop. */
@@ -122,7 +191,7 @@ export function EventLog({ events, error, loading, animate }: EventLogProps) {
         return (
           <div class={`log-line log-${ev.type}`} key={ev.eventId}>
             <span class="log-time">{new Date(ev.createdAt).toLocaleTimeString()}</span>
-            <span class="log-kind">{ev.type}</span>
+            <span class="log-kind">{friendlyEventKind(ev.type)}</span>
             {isNewest ? (
               <LiveLine text={msg} animate={shouldAnimate} />
             ) : (

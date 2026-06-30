@@ -23,8 +23,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { useSmoothText } from '@recoder/shared/animations/preact';
-import { EventLog, friendlyAgentText } from './EventLog';
-import type { RunEvent } from '../types';
+import { EventLog, friendlyAgentText, friendlyEventKind, friendlyRunState } from './EventLog';
+import type { RunEvent, RunEventType } from '../types';
 
 let container: HTMLDivElement | null = null;
 
@@ -107,6 +107,57 @@ describe('cockpit EventLog -> @recoder/shared/animations/preact wiring', () => {
     const c = mount(<EventLog events={events} error={null} loading={false} animate={false} />);
     expect(c.textContent).toContain('Agent finished');
     expect(c.textContent).not.toContain('Pane is dead');
+  });
+
+  it('maps EVERY RunEvent type to a calm label — never the raw wire word', () => {
+    // The complete plain-language run-state vocabulary (vision principle 1):
+    // every event kind reads as a short, human, non-scary label.
+    const expected: Record<RunEventType, string> = {
+      started: 'Working…',
+      state_transition: 'Update',
+      log: 'Working…',
+      artifact: 'Saved work',
+      needs_input: 'Waiting for you',
+      verified: 'Reviewing',
+      approval_requested: 'Waiting for you',
+      handoff: 'Handing off',
+      failed: 'Stopped',
+      completed: 'Done',
+    };
+    for (const [type, label] of Object.entries(expected)) {
+      expect(friendlyEventKind(type)).toBe(label);
+      // The raw snake_case wire word is never surfaced as the label.
+      if (type.includes('_')) expect(friendlyEventKind(type)).not.toContain('_');
+    }
+    // An unknown future type degrades to a calm word, never a crash/raw token.
+    expect(friendlyEventKind('some_future_kind')).toBe('Update');
+  });
+
+  it('maps raw workspace/run states to the calm vocabulary (no snake_case leaks)', () => {
+    expect(friendlyRunState('running')).toBe('Working…');
+    expect(friendlyRunState('awaiting_approval')).toBe('Waiting for you');
+    expect(friendlyRunState('awaiting_review')).toBe('Waiting for you');
+    expect(friendlyRunState('merged')).toBe('Done');
+    expect(friendlyRunState('failed')).toBe('Stopped');
+    expect(friendlyRunState('cancelled')).toBe('Stopped');
+    expect(friendlyRunState('thinking')).toBe('Thinking…');
+    // Unknown token: humanized, never raw snake_case.
+    expect(friendlyRunState('some_new_state')).toBe('some new state');
+  });
+
+  it('shows the friendly state-transition label in the log, not "→ raw_state"', () => {
+    const transition: RunEvent = {
+      eventId: 't1',
+      type: 'state_transition',
+      state: 'awaiting_approval',
+      createdAt: new Date('2026-06-29T00:00:00Z').toISOString(),
+    } as RunEvent;
+    const c = mount(<EventLog events={[transition]} error={null} loading={false} animate={false} />);
+    expect(c.textContent).toContain('Waiting for you');
+    expect(c.textContent).not.toContain('awaiting_approval');
+    expect(c.textContent).not.toContain('→');
+    // The kind chip is the calm word too, never the raw "state_transition".
+    expect(c.textContent).not.toContain('state_transition');
   });
 
   it('degrades safe: the static fallback renders the newest line in full immediately', () => {

@@ -175,6 +175,8 @@ describe('ConversationView is the friendly skin', () => {
     const c = mount(workspace({ state: 'merged' }));
     await flush(20);
 
-    expect(c.querySelector('.conv-status-label')?.textContent).toBe('Merged');
+    // Canonical calm vocabulary: a merged workspace reads "Done", never a scary
+    // or machine-y word (and never raw state internals).
+    expect(c.querySelector('.conv-status-label')?.textContent).toBe('Done');
   });
 });

@@ -22,6 +22,7 @@ import { useRef, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog, friendlyAgentText } from './EventLog';
+import type { RunEventType } from '../types';
 import { isLive } from '../lib/workspace-state';
 import { mergeEvents, useLiveStream } from '../lib/event-stream';
 import type { RunEvent, Workspace, WorkspaceState } from '../types';
@@ -36,12 +37,20 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+type StatusTone = 'live' | 'wait' | 'done' | 'bad';
+interface FriendlyStatus {
+  label: string;
+  tone: StatusTone;
+}
+
 /**
  * A plain-language status for the friendly view, derived from the REAL workspace
  * state. We never surface tmux/pty internals here — just calm copy an operator
- * who never wants to see a terminal can trust.
+ * who never wants to see a terminal can trust. Every state maps to a short,
+ * human, one-line label drawn from the canonical "not scary" vocabulary
+ * ("Working…", "Thinking…", "Waiting for you", "Reviewing", "Done", "Stopped").
  */
-function friendlyStatus(state: WorkspaceState): { label: string; tone: 'live' | 'wait' | 'done' | 'bad' } {
+function friendlyStatus(state: WorkspaceState): FriendlyStatus {
   switch (state) {
     case 'created':
     case 'setting_up':
@@ -51,24 +60,61 @@ function friendlyStatus(state: WorkspaceState): { label: string; tone: 'live' | 
     case 'running':
       return { label: 'Working…', tone: 'live' };
     case 'awaiting_approval':
-      return { label: 'Waiting for approval', tone: 'wait' };
+      return { label: 'Waiting for you', tone: 'wait' };
     case 'awaiting_review':
-      return { label: 'Ready for review', tone: 'wait' };
+      return { label: 'Reviewing', tone: 'wait' };
     case 'changes_requested':
-      return { label: 'Changes requested', tone: 'wait' };
+      return { label: 'Waiting for you', tone: 'wait' };
     case 'merging':
       return { label: 'Merging…', tone: 'live' };
     case 'merged':
-      return { label: 'Merged', tone: 'done' };
+      return { label: 'Done', tone: 'done' };
     case 'failed':
-      return { label: 'Agent stopped', tone: 'bad' };
+      return { label: 'Stopped', tone: 'bad' };
     case 'cancelled':
-      return { label: 'Cancelled', tone: 'bad' };
+      return { label: 'Stopped', tone: 'bad' };
     case 'archived':
       return { label: 'Archived', tone: 'done' };
     default:
       return { label: 'Idle', tone: 'wait' };
   }
+}
+
+/**
+ * Refine the state-derived status with the freshest live RunEvent so the calm
+ * label tracks what the agent is actually doing moment-to-moment — still only
+ * plain-language words, never raw event types. While the workspace is broadly
+ * `running` the event tells us the finer feeling:
+ *   - waiting on the operator   → "Waiting for you"
+ *   - a fresh start, no output yet → "Thinking…"
+ *   - a verification pass        → "Reviewing"
+ * For non-live states the truthful state label always wins (a `log` event must
+ * never make a merged/stopped workspace look like it is "Working…").
+ */
+function refineStatusFromEvents(base: FriendlyStatus, latestType: RunEventType | null): FriendlyStatus {
+  if (!latestType) return base;
+  // Only refine while the workspace is genuinely in-flight.
+  if (base.tone !== 'live') return base;
+  switch (latestType) {
+    case 'needs_input':
+    case 'approval_requested':
+      return { label: 'Waiting for you', tone: 'wait' };
+    case 'started':
+      return { label: 'Thinking…', tone: 'live' };
+    case 'verified':
+      return { label: 'Reviewing', tone: 'live' };
+    default:
+      return base;
+  }
+}
+
+/** The freshest event's type (for status refinement), or null when none. */
+function latestEventType(events: RunEvent[]): RunEventType | null {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const t = events[i]?.type;
+    if (t) return t;
+  }
+  return null;
 }
 
 /**
@@ -175,7 +221,7 @@ export function ConversationView({ workspace }: ConversationViewProps) {
     if (showOutput) setShowOutput(false);
   }
 
-  const status = friendlyStatus(workspace.state);
+  const status = refineStatusFromEvents(friendlyStatus(workspace.state), latestEventType(merged));
   const latest = latestLine(merged);
 
   async function send(text: string): Promise<void> {
