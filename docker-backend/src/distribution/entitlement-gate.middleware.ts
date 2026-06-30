@@ -28,6 +28,7 @@ const logger = createLogger('distribution-gate');
 export const PARALLEL_WORKSPACE_LIMIT: Record<Plan, number> = {
   free: 1,
   pro: 5,
+  team: 10,
   enterprise: 0,
 };
 

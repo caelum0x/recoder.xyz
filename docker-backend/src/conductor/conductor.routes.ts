@@ -27,21 +27,31 @@ import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
 import { continueWorkspace } from './continue-workspace.js';
-import { DeliveryApprovalRequiredError, type DeliveryIntent } from './delivery-approval.js';
+import {
+  DeliveryApprovalRequiredError,
+  type DeliveryIntent,
+} from './delivery-approval.js';
 import {
   dmuxAvailability,
   launchDmuxConsole,
   dmuxAttachCommand,
   dmuxVisibleSessions,
 } from './dmux-adapter.js';
-import { executeWorkflow, type WorkflowPattern, type WorkflowStep } from './workflow-runner.js';
+import {
+  executeWorkflow,
+  type WorkflowPattern,
+  type WorkflowStep,
+} from './workflow-runner.js';
 import { conductorHealth } from './conductor-health.js';
 import { resourceSnapshot } from './resource-governor.js';
 import { steerRuntime, runtimeStatus } from './runtime-driver.js';
 import type { SubstrateHandle } from './substrate.js';
 import { isTerminalWorkspaceState, type Workspace } from '@recoder/agent-os';
 import { attachWorkspaceStream } from './live-events.js';
-import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
+import {
+  generateDeliverySummary,
+  generateMemoryCandidate,
+} from './delivery-summary.js';
 import { metrics } from './conductor-metrics.js';
 import { bulkCancel, bulkArchive, listByState } from './batch-ops.js';
 import { cleanupStaleWorktrees } from './worktree-cleanup.js';
@@ -87,7 +97,10 @@ function buildDeliveryIntent(req: Request): DeliveryIntent {
       : typeof body.createdBy === 'string' && body.createdBy.trim()
         ? body.createdBy.trim()
         : undefined;
-  const reason = typeof body.intentReason === 'string' && body.intentReason.trim() ? body.intentReason.trim() : undefined;
+  const reason =
+    typeof body.intentReason === 'string' && body.intentReason.trim()
+      ? body.intentReason.trim()
+      : undefined;
   return { approve, decidedBy, reason };
 }
 
@@ -106,55 +119,97 @@ export function createConductorRouter(): Router {
     try {
       const { sessionId, repoPath, command, branch, baseRef } = req.body ?? {};
       if (!sessionId || !repoPath || !command) {
-        res.status(400).json({ success: false, error: 'sessionId, repoPath, and command are required' });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: 'sessionId, repoPath, and command are required',
+          });
         return;
       }
-      const session = await startSession({ sessionId, repoPath, command, branch, baseRef });
+      const session = await startSession({
+        sessionId,
+        repoPath,
+        command,
+        branch,
+        baseRef,
+      });
       res.status(201).json({ success: true, data: session });
     } catch (err) {
-      res.status(409).json({ success: false, error: err instanceof Error ? err.message : 'start failed' });
+      res
+        .status(409)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'start failed',
+        });
     }
   });
 
-  router.get('/sessions/:sessionId/output', async (req: Request, res: Response) => {
-    try {
-      const lines = Number(req.query?.lines ?? '200') || 200;
-      res.json({ success: true, data: { output: await capturePane(req.params.sessionId, lines) } });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'capture failed';
-      res.status(msg.includes('not found') ? 404 : 500).json({ success: false, error: msg });
-    }
-  });
-
-  router.post('/sessions/:sessionId/keys', async (req: Request, res: Response) => {
-    try {
-      const keys = String(req.body?.keys ?? '');
-      if (!keys) {
-        res.status(400).json({ success: false, error: 'keys is required' });
-        return;
+  router.get(
+    '/sessions/:sessionId/output',
+    async (req: Request, res: Response) => {
+      try {
+        const lines = Number(req.query?.lines ?? '200') || 200;
+        res.json({
+          success: true,
+          data: { output: await capturePane(req.params.sessionId, lines) },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'capture failed';
+        res
+          .status(msg.includes('not found') ? 404 : 500)
+          .json({ success: false, error: msg });
       }
-      await sendKeys(req.params.sessionId, keys);
-      res.json({ success: true });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'send failed';
-      res.status(msg.includes('not found') ? 404 : 500).json({ success: false, error: msg });
     }
-  });
+  );
+
+  router.post(
+    '/sessions/:sessionId/keys',
+    async (req: Request, res: Response) => {
+      try {
+        const keys = String(req.body?.keys ?? '');
+        if (!keys) {
+          res.status(400).json({ success: false, error: 'keys is required' });
+          return;
+        }
+        await sendKeys(req.params.sessionId, keys);
+        res.json({ success: true });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'send failed';
+        res
+          .status(msg.includes('not found') ? 404 : 500)
+          .json({ success: false, error: msg });
+      }
+    }
+  );
 
   router.delete('/sessions/:sessionId', async (req: Request, res: Response) => {
-    await killSession(req.params.sessionId, { removeWorktree: req.query?.keepWorktree !== 'true' });
+    await killSession(req.params.sessionId, {
+      removeWorktree: req.query?.keepWorktree !== 'true',
+    });
     res.json({ success: true });
   });
 
   // True exit code of a completed session's pane (distinguishes success from crash).
-  router.get('/sessions/:sessionId/exit-code', async (req: Request, res: Response) => {
-    try {
-      const code = await paneExitCode(`recoder-${req.params.sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}`);
-      res.json({ success: true, data: { exitCode: code } });
-    } catch (err) {
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'exit-code check failed' });
+  router.get(
+    '/sessions/:sessionId/exit-code',
+    async (req: Request, res: Response) => {
+      try {
+        const code = await paneExitCode(
+          `recoder-${req.params.sessionId.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+        );
+        res.json({ success: true, data: { exitCode: code } });
+      } catch (err) {
+        res
+          .status(500)
+          .json({
+            success: false,
+            error:
+              err instanceof Error ? err.message : 'exit-code check failed',
+          });
+      }
     }
-  });
+  );
 
   // Which installed agent CLIs Conductor can actually launch (truthful availability).
   router.get('/runtimes', async (_req: Request, res: Response) => {
@@ -164,7 +219,10 @@ export function createConductorRouter(): Router {
   // Registered execution substrates + their availability (tmux_worktree, daytona…).
   router.get('/substrates', async (_req: Request, res: Response) => {
     const data = await Promise.all(
-      listSubstrates().map(async (id) => ({ id, ...(await getSubstrate(id).available()) })),
+      listSubstrates().map(async id => ({
+        id,
+        ...(await getSubstrate(id).available()),
+      }))
     );
     res.json({ success: true, data });
   });
@@ -189,16 +247,29 @@ export function createConductorRouter(): Router {
       }
       const availability = await dmuxAvailability();
       if (!availability.available) {
-        res.status(409).json({ success: false, error: availability.reason ?? 'dmux unavailable' });
+        res
+          .status(409)
+          .json({
+            success: false,
+            error: availability.reason ?? 'dmux unavailable',
+          });
         return;
       }
       const result = launchDmuxConsole({ repoPath, extraArgs });
       res.status(201).json({
         success: true,
-        data: { ...result, attachHint: `Run in your terminal: ${dmuxAttachCommand(repoPath)}` },
+        data: {
+          ...result,
+          attachHint: `Run in your terminal: ${dmuxAttachCommand(repoPath)}`,
+        },
       });
     } catch (err) {
-      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'dmux launch failed' });
+      res
+        .status(400)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'dmux launch failed',
+        });
     }
   });
 
@@ -218,41 +289,60 @@ export function createConductorRouter(): Router {
   // An INLINE `task` (TaskSpec) is guarded at ingress against the canonical
   // @recoder/agent-schemas TaskSpec shape; a `taskId`-only body (resolved from
   // the repository below) skips the guard via the `select` returning undefined.
-  router.post('/workspaces/plan', validateBody(taskSpecSchema, { select: (body) => (body as { task?: unknown })?.task }), async (req: Request, res: Response) => {
-    try {
-      const body = req.body ?? {};
-      let task: TaskSpec | undefined = body.task as TaskSpec | undefined;
+  router.post(
+    '/workspaces/plan',
+    validateBody(taskSpecSchema, {
+      select: body => (body as { task?: unknown })?.task,
+    }),
+    async (req: Request, res: Response) => {
+      try {
+        const body = req.body ?? {};
+        let task: TaskSpec | undefined = body.task as TaskSpec | undefined;
 
-      if (!task && body.taskId) {
-        const tasks = await Promise.resolve(agentOsContainer.repository.listTasks());
-        task = tasks.find((t) => t.taskId === body.taskId);
-        if (!task) {
-          res.status(404).json({ success: false, error: `task not found: ${body.taskId}` });
+        if (!task && body.taskId) {
+          const tasks = await Promise.resolve(
+            agentOsContainer.repository.listTasks()
+          );
+          task = tasks.find(t => t.taskId === body.taskId);
+          if (!task) {
+            res
+              .status(404)
+              .json({
+                success: false,
+                error: `task not found: ${body.taskId}`,
+              });
+            return;
+          }
+        }
+
+        if (!task || !task.taskId) {
+          res.status(400).json({
+            success: false,
+            error:
+              'a persisted `taskId` or an inline `task` (TaskSpec) is required',
+          });
           return;
         }
-      }
 
-      if (!task || !task.taskId) {
-        res.status(400).json({
-          success: false,
-          error: 'a persisted `taskId` or an inline `task` (TaskSpec) is required',
+        const plan = planConductorRun(task);
+        res.json({
+          success: true,
+          data: {
+            ...plan,
+            // The runtime the caller should actually launch given Conductor support.
+            effectiveRuntimeId: effectiveRuntimeId(plan),
+          },
         });
-        return;
+      } catch (err) {
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: err instanceof Error ? err.message : 'plan failed',
+          });
       }
-
-      const plan = planConductorRun(task);
-      res.json({
-        success: true,
-        data: {
-          ...plan,
-          // The runtime the caller should actually launch given Conductor support.
-          effectiveRuntimeId: effectiveRuntimeId(plan),
-        },
-      });
-    } catch (err) {
-      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'plan failed' });
     }
-  });
+  );
 
   router.post('/workspaces', async (req: Request, res: Response) => {
     try {
@@ -262,8 +352,22 @@ export function createConductorRouter(): Router {
       // validation so that minimal body succeeds. Full-payload callers are
       // untouched — any caller-provided value always wins (normalize is additive).
       const body = normalizeCreateBody<CreateWorkspaceInput>(req.body ?? {});
-      const { spaceId, projectId, taskId, repoPath, runtimeId, substrate, command, prompt, model, createdBy, branch, baseRef, env, metadata } =
-        body;
+      const {
+        spaceId,
+        projectId,
+        taskId,
+        repoPath,
+        runtimeId,
+        substrate,
+        command,
+        prompt,
+        model,
+        createdBy,
+        branch,
+        baseRef,
+        env,
+        metadata,
+      } = body;
       // After normalization, the only fields that carry REAL caller intent (and so
       // are never invented) are `repoPath` and one of `command|prompt`. The four
       // identity fields are guaranteed present by the normalizer when repoPath is.
@@ -273,10 +377,16 @@ export function createConductorRouter(): Router {
       if (!repoPath || (!command && !prompt)) {
         res.status(400).json({
           success: false,
-          error: 'repoPath and one of (command|prompt) are required (spaceId/projectId/taskId/createdBy default for a simple local create; runtimeId optional — pal will default it)',
+          error:
+            'repoPath and one of (command|prompt) are required (spaceId/projectId/taskId/createdBy default for a simple local create; runtimeId optional — pal will default it)',
         });
         return;
       }
+      // The VERIFIED launching user (set by `authenticateRequest` upstream of this
+      // router). Threaded ONLY as the entitlement subject for the remote-substrate
+      // gate inside `createWorkspace`; it is distinct from the free-text `createdBy`
+      // and is never forwarded to the engine. Absent ⇒ solo/internal create path.
+      const userId = (req as Request & { userId?: string }).userId;
       const workspace = await createWorkspace({
         spaceId,
         projectId,
@@ -292,150 +402,224 @@ export function createConductorRouter(): Router {
         baseRef,
         env,
         metadata,
+        userId,
       });
       // Resource-governor rejection maps to 429 (over budget, retry later);
       // any other failed launch (lock conflict, provisioning error) stays 409.
       if (workspace.state === 'failed') {
-        const reason = typeof workspace.metadata?.error === 'string' ? workspace.metadata.error : '';
+        const reason =
+          typeof workspace.metadata?.error === 'string'
+            ? workspace.metadata.error
+            : '';
         const status = reason.startsWith(ADMISSION_REJECTED_PREFIX) ? 429 : 409;
-        res.status(status).json({ success: false, error: reason || 'workspace launch failed', data: workspace });
+        res
+          .status(status)
+          .json({
+            success: false,
+            error: reason || 'workspace launch failed',
+            data: workspace,
+          });
         return;
       }
       res.status(201).json({ success: true, data: workspace });
     } catch (err) {
-      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'create failed' });
+      res
+        .status(400)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'create failed',
+        });
     }
   });
 
-  router.get('/workspaces/:workspaceId', async (req: Request, res: Response) => {
-    const workspace = await getWorkspace(req.params.workspaceId);
-    if (!workspace) {
-      res.status(404).json({ success: false, error: 'workspace not found' });
-      return;
+  router.get(
+    '/workspaces/:workspaceId',
+    async (req: Request, res: Response) => {
+      const workspace = await getWorkspace(req.params.workspaceId);
+      if (!workspace) {
+        res.status(404).json({ success: false, error: 'workspace not found' });
+        return;
+      }
+      res.json({ success: true, data: workspace });
     }
-    res.json({ success: true, data: workspace });
-  });
+  );
 
   // Streamed RunEvents for the workspace's run (live terminal + lifecycle log).
-  router.get('/workspaces/:workspaceId/events', async (req: Request, res: Response) => {
-    res.json({ success: true, data: await listWorkspaceEvents(req.params.workspaceId) });
-  });
+  router.get(
+    '/workspaces/:workspaceId/events',
+    async (req: Request, res: Response) => {
+      res.json({
+        success: true,
+        data: await listWorkspaceEvents(req.params.workspaceId),
+      });
+    }
+  );
 
   // Reviewable diff of the workspace's worktree against its base ref.
-  router.get('/workspaces/:workspaceId/diff', async (req: Request, res: Response) => {
-    try {
-      res.json({ success: true, data: await workspaceDiff(req.params.workspaceId) });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'diff failed';
-      res.status(msg.includes('not found') ? 404 : 500).json({ success: false, error: msg });
+  router.get(
+    '/workspaces/:workspaceId/diff',
+    async (req: Request, res: Response) => {
+      try {
+        res.json({
+          success: true,
+          data: await workspaceDiff(req.params.workspaceId),
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'diff failed';
+        res
+          .status(msg.includes('not found') ? 404 : 500)
+          .json({ success: false, error: msg });
+      }
     }
-  });
+  );
 
   // Open a PR for the workspace branch. Approval-gated: when no approval record
   // exists the workspace is moved to awaiting_approval and a 409 is returned (the
   // branch is not pushed and no PR is opened).
-  router.post('/workspaces/:workspaceId/pr', async (req: Request, res: Response) => {
-    try {
-      const { title, body, base, draft, remote } = req.body ?? {};
-      const intent = buildDeliveryIntent(req);
-      res.status(201).json({
-        success: true,
-        data: await createWorkspacePr(req.params.workspaceId, { title, body, base, draft, remote, intent }),
-      });
-    } catch (err) {
-      if (err instanceof DeliveryApprovalRequiredError) {
-        res.status(409).json({
-          success: false,
-          error: err.message,
-          data: {
-            state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned,
-            // Surface the @recoder/governance verdict so the cockpit can show the risk tier
-            // + Merkle audit hash (truthful: nulls when governance is degraded/unavailable).
-            governance: {
-              tier: err.governanceTier ?? null,
-              effect: err.governanceEffect ?? null,
-              auditHash: err.governanceAuditHash ?? null,
-              hardDeny: err.governanceHardDeny,
-              degraded: err.governanceDegraded ?? false,
-            },
-          },
+  router.post(
+    '/workspaces/:workspaceId/pr',
+    async (req: Request, res: Response) => {
+      try {
+        const { title, body, base, draft, remote } = req.body ?? {};
+        const intent = buildDeliveryIntent(req);
+        res.status(201).json({
+          success: true,
+          data: await createWorkspacePr(req.params.workspaceId, {
+            title,
+            body,
+            base,
+            draft,
+            remote,
+            intent,
+          }),
         });
-        return;
+      } catch (err) {
+        if (err instanceof DeliveryApprovalRequiredError) {
+          res.status(409).json({
+            success: false,
+            error: err.message,
+            data: {
+              state: err.state,
+              action: err.action,
+              approvalId: err.approvalId,
+              transitioned: err.transitioned,
+              // Surface the @recoder/governance verdict so the cockpit can show the risk tier
+              // + Merkle audit hash (truthful: nulls when governance is degraded/unavailable).
+              governance: {
+                tier: err.governanceTier ?? null,
+                effect: err.governanceEffect ?? null,
+                auditHash: err.governanceAuditHash ?? null,
+                hardDeny: err.governanceHardDeny,
+                degraded: err.governanceDegraded ?? false,
+              },
+            },
+          });
+          return;
+        }
+        const msg = err instanceof Error ? err.message : 'pr failed';
+        res
+          .status(msg.includes('not found') ? 404 : 400)
+          .json({ success: false, error: msg });
       }
-      const msg = err instanceof Error ? err.message : 'pr failed';
-      res.status(msg.includes('not found') ? 404 : 400).json({ success: false, error: msg });
     }
-  });
+  );
 
   // Merge the workspace PR. Approval-gated: a merge is a customer-visible delivery
   // and requires an approval record. Absent one, the workspace is moved to
   // awaiting_approval and a 409 is returned instead of silently merging.
-  router.post('/workspaces/:workspaceId/merge', async (req: Request, res: Response) => {
-    try {
-      const { strategy, deleteBranch } = req.body ?? {};
-      // A merge POST is a user-initiated delivery: in solo mode (single-user
-      // desktop) this click IS the approval, so carry an explicit approve intent.
-      // Ignored for team/cloud (RECODER_SOLO_MODE off): the standard gate applies.
-      const intent = buildDeliveryIntent(req);
-      res.json({
-        success: true,
-        data: await mergeWorkspace(req.params.workspaceId, { strategy, deleteBranch, intent }),
-      });
-    } catch (err) {
-      if (err instanceof DeliveryApprovalRequiredError) {
-        res.status(409).json({
-          success: false,
-          error: err.message,
-          data: {
-            state: err.state, action: err.action, approvalId: err.approvalId, transitioned: err.transitioned,
-            // Surface the @recoder/governance verdict so the cockpit can show the risk tier
-            // + Merkle audit hash (truthful: nulls when governance is degraded/unavailable).
-            governance: {
-              tier: err.governanceTier ?? null,
-              effect: err.governanceEffect ?? null,
-              auditHash: err.governanceAuditHash ?? null,
-              hardDeny: err.governanceHardDeny,
-              degraded: err.governanceDegraded ?? false,
-            },
-          },
+  router.post(
+    '/workspaces/:workspaceId/merge',
+    async (req: Request, res: Response) => {
+      try {
+        const { strategy, deleteBranch } = req.body ?? {};
+        // A merge POST is a user-initiated delivery: in solo mode (single-user
+        // desktop) this click IS the approval, so carry an explicit approve intent.
+        // Ignored for team/cloud (RECODER_SOLO_MODE off): the standard gate applies.
+        const intent = buildDeliveryIntent(req);
+        res.json({
+          success: true,
+          data: await mergeWorkspace(req.params.workspaceId, {
+            strategy,
+            deleteBranch,
+            intent,
+          }),
         });
-        return;
+      } catch (err) {
+        if (err instanceof DeliveryApprovalRequiredError) {
+          res.status(409).json({
+            success: false,
+            error: err.message,
+            data: {
+              state: err.state,
+              action: err.action,
+              approvalId: err.approvalId,
+              transitioned: err.transitioned,
+              // Surface the @recoder/governance verdict so the cockpit can show the risk tier
+              // + Merkle audit hash (truthful: nulls when governance is degraded/unavailable).
+              governance: {
+                tier: err.governanceTier ?? null,
+                effect: err.governanceEffect ?? null,
+                auditHash: err.governanceAuditHash ?? null,
+                hardDeny: err.governanceHardDeny,
+                degraded: err.governanceDegraded ?? false,
+              },
+            },
+          });
+          return;
+        }
+        const msg = err instanceof Error ? err.message : 'merge failed';
+        res
+          .status(msg.includes('not found') ? 404 : 400)
+          .json({ success: false, error: msg });
       }
-      const msg = err instanceof Error ? err.message : 'merge failed';
-      res.status(msg.includes('not found') ? 404 : 400).json({ success: false, error: msg });
     }
-  });
+  );
 
   // CONTINUE / CHAT: send a NEW message to an existing workspace, starting another
   // agent run in the SAME worktree (the agent sees the prior changes). Each user
   // message is a new run — this is how the local chat keeps directing the agent.
   // Degrade-safe: a missing worktree, a running agent, a terminal state, or a
   // substrate without in-place relaunch returns a clear 4xx instead of guessing.
-  router.post('/workspaces/:workspaceId/message', async (req: Request, res: Response) => {
-    try {
-      const { text, model, createdBy } = req.body ?? {};
-      if (typeof text !== 'string' || !text.trim()) {
-        res.status(400).json({ success: false, error: 'text is required' });
-        return;
+  router.post(
+    '/workspaces/:workspaceId/message',
+    async (req: Request, res: Response) => {
+      try {
+        const { text, model, createdBy } = req.body ?? {};
+        if (typeof text !== 'string' || !text.trim()) {
+          res.status(400).json({ success: false, error: 'text is required' });
+          return;
+        }
+        const result = await continueWorkspace(req.params.workspaceId, {
+          text,
+          model,
+          createdBy,
+        });
+        res.status(201).json({ success: true, data: result });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'message failed';
+        const status = msg.includes('not found') ? 404 : 400;
+        res.status(status).json({ success: false, error: msg });
       }
-      const result = await continueWorkspace(req.params.workspaceId, { text, model, createdBy });
-      res.status(201).json({ success: true, data: result });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'message failed';
-      const status = msg.includes('not found') ? 404 : 400;
-      res.status(status).json({ success: false, error: msg });
     }
-  });
+  );
 
   // Archive a finished workspace: stop session, remove worktree, mark archived.
-  router.post('/workspaces/:workspaceId/archive', async (req: Request, res: Response) => {
-    try {
-      res.json({ success: true, data: await archiveWorkspace(req.params.workspaceId) });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'archive failed';
-      res.status(msg.includes('not found') ? 404 : 500).json({ success: false, error: msg });
+  router.post(
+    '/workspaces/:workspaceId/archive',
+    async (req: Request, res: Response) => {
+      try {
+        res.json({
+          success: true,
+          data: await archiveWorkspace(req.params.workspaceId),
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'archive failed';
+        res
+          .status(msg.includes('not found') ? 404 : 500)
+          .json({ success: false, error: msg });
+      }
     }
-  });
+  );
 
   // Reconcile persisted workspaces against the real tmux + git substrate.
   router.post('/reconcile', async (_req: Request, res: Response) => {
@@ -465,27 +649,66 @@ export function createConductorRouter(): Router {
   // Each step is isolated in its own worktree; admission is resource-governed.
   router.post('/workflows', async (req: Request, res: Response) => {
     try {
-      const { spaceId, projectId, taskId, repoPath, createdBy, pattern, steps, baseRef, env, limits } =
-        req.body ?? {};
-      if (!spaceId || !projectId || !taskId || !repoPath || !createdBy || !pattern || !Array.isArray(steps)) {
+      const {
+        spaceId,
+        projectId,
+        taskId,
+        repoPath,
+        createdBy,
+        pattern,
+        steps,
+        baseRef,
+        env,
+        limits,
+      } = req.body ?? {};
+      if (
+        !spaceId ||
+        !projectId ||
+        !taskId ||
+        !repoPath ||
+        !createdBy ||
+        !pattern ||
+        !Array.isArray(steps)
+      ) {
         res.status(400).json({
           success: false,
-          error: 'spaceId, projectId, taskId, repoPath, createdBy, pattern, and steps[] are required',
+          error:
+            'spaceId, projectId, taskId, repoPath, createdBy, pattern, and steps[] are required',
         });
         return;
       }
-      const validPatterns: WorkflowPattern[] = ['direct', 'fan_out', 'pipeline', 'competitive'];
+      const validPatterns: WorkflowPattern[] = [
+        'direct',
+        'fan_out',
+        'pipeline',
+        'competitive',
+      ];
       if (!validPatterns.includes(pattern)) {
-        res.status(400).json({ success: false, error: `pattern must be one of: ${validPatterns.join(', ')}` });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: `pattern must be one of: ${validPatterns.join(', ')}`,
+          });
         return;
       }
       if (steps.length === 0) {
-        res.status(400).json({ success: false, error: 'steps[] must contain at least one step' });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: 'steps[] must contain at least one step',
+          });
         return;
       }
       for (const step of steps as WorkflowStep[]) {
         if (!step?.runtimeId || !step?.prompt) {
-          res.status(400).json({ success: false, error: 'each step requires runtimeId and prompt' });
+          res
+            .status(400)
+            .json({
+              success: false,
+              error: 'each step requires runtimeId and prompt',
+            });
           return;
         }
       }
@@ -503,100 +726,178 @@ export function createConductorRouter(): Router {
       });
       // Resource rejection (over budget) is a 429, not a 5xx or generic 4xx.
       if (result.state === 'rejected') {
-        res.status(429).json({ success: false, error: result.reason ?? 'resource limit reached', data: result });
+        res
+          .status(429)
+          .json({
+            success: false,
+            error: result.reason ?? 'resource limit reached',
+            data: result,
+          });
         return;
       }
-      res.status(result.state === 'failed' ? 502 : 201).json({ success: true, data: result });
+      res
+        .status(result.state === 'failed' ? 502 : 201)
+        .json({ success: true, data: result });
     } catch (err) {
-      res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'workflow failed' });
+      res
+        .status(400)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'workflow failed',
+        });
     }
   });
 
   // Live status of a running workspace's agent (alive + exit code + recent output),
   // resolved through the workspace's own substrate handle.
-  router.get('/workspaces/:workspaceId/status', async (req: Request, res: Response) => {
-    try {
-      const workspace = await getWorkspace(req.params.workspaceId);
-      if (!workspace) {
-        res.status(404).json({ success: false, error: 'workspace not found' });
-        return;
-      }
-      const handle = workspaceHandle(workspace);
-      if (!handle) {
+  router.get(
+    '/workspaces/:workspaceId/status',
+    async (req: Request, res: Response) => {
+      try {
+        const workspace = await getWorkspace(req.params.workspaceId);
+        if (!workspace) {
+          res
+            .status(404)
+            .json({ success: false, error: 'workspace not found' });
+          return;
+        }
+        const handle = workspaceHandle(workspace);
+        if (!handle) {
+          res.json({
+            success: true,
+            data: {
+              alive: false,
+              exitCode: null,
+              recentOutput: null,
+              state: workspace.state,
+              reason: 'no live substrate handle',
+            },
+          });
+          return;
+        }
+        const status = await runtimeStatus(workspace.substrate, handle);
         res.json({
           success: true,
-          data: { alive: false, exitCode: null, recentOutput: null, state: workspace.state, reason: 'no live substrate handle' },
+          data: { ...status, state: workspace.state },
         });
-        return;
+      } catch (err) {
+        res
+          .status(500)
+          .json({
+            success: false,
+            error: err instanceof Error ? err.message : 'status failed',
+          });
       }
-      const status = await runtimeStatus(workspace.substrate, handle);
-      res.json({ success: true, data: { ...status, state: workspace.state } });
-    } catch (err) {
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'status failed' });
     }
-  });
+  );
 
   // Steer a running workspace's agent: send keys/input (approval, interrupt,
   // instruction). Only interactive substrates (tmux) support steering.
-  router.post('/workspaces/:workspaceId/steer', async (req: Request, res: Response) => {
-    try {
-      const keys = String(req.body?.keys ?? '');
-      if (!keys) {
-        res.status(400).json({ success: false, error: 'keys is required' });
-        return;
+  router.post(
+    '/workspaces/:workspaceId/steer',
+    async (req: Request, res: Response) => {
+      try {
+        const keys = String(req.body?.keys ?? '');
+        if (!keys) {
+          res.status(400).json({ success: false, error: 'keys is required' });
+          return;
+        }
+        const workspace = await getWorkspace(req.params.workspaceId);
+        if (!workspace) {
+          res
+            .status(404)
+            .json({ success: false, error: 'workspace not found' });
+          return;
+        }
+        if (isTerminalWorkspaceState(workspace.state)) {
+          res
+            .status(409)
+            .json({
+              success: false,
+              error: `workspace is ${workspace.state} (cannot steer a terminal workspace)`,
+            });
+          return;
+        }
+        const handle = workspaceHandle(workspace);
+        if (!handle) {
+          res
+            .status(409)
+            .json({
+              success: false,
+              error: 'workspace has no live substrate handle to steer',
+            });
+          return;
+        }
+        await steerRuntime(workspace.substrate, handle, keys);
+        res.json({ success: true });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'steer failed';
+        res
+          .status(msg.includes('not supported') ? 400 : 500)
+          .json({ success: false, error: msg });
       }
-      const workspace = await getWorkspace(req.params.workspaceId);
-      if (!workspace) {
-        res.status(404).json({ success: false, error: 'workspace not found' });
-        return;
-      }
-      if (isTerminalWorkspaceState(workspace.state)) {
-        res.status(409).json({ success: false, error: `workspace is ${workspace.state} (cannot steer a terminal workspace)` });
-        return;
-      }
-      const handle = workspaceHandle(workspace);
-      if (!handle) {
-        res.status(409).json({ success: false, error: 'workspace has no live substrate handle to steer' });
-        return;
-      }
-      await steerRuntime(workspace.substrate, handle, keys);
-      res.json({ success: true });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'steer failed';
-      res.status(msg.includes('not supported') ? 400 : 500).json({ success: false, error: msg });
     }
-  });
+  );
 
   // Delivery summary for a completed workspace (diff + logs + exit code).
-  router.get('/workspaces/:workspaceId/delivery', async (req: Request, res: Response) => {
-    try {
-      res.json({ success: true, data: await generateDeliverySummary(req.params.workspaceId) });
-    } catch (err) {
-      res.status(404).json({ success: false, error: err instanceof Error ? err.message : 'delivery summary failed' });
+  router.get(
+    '/workspaces/:workspaceId/delivery',
+    async (req: Request, res: Response) => {
+      try {
+        res.json({
+          success: true,
+          data: await generateDeliverySummary(req.params.workspaceId),
+        });
+      } catch (err) {
+        res
+          .status(404)
+          .json({
+            success: false,
+            error:
+              err instanceof Error ? err.message : 'delivery summary failed',
+          });
+      }
     }
-  });
+  );
 
   // Memory candidate proposed by a completed workspace (review-gated, not durable).
-  router.get('/workspaces/:workspaceId/memory-candidate', async (req: Request, res: Response) => {
-    try {
-      const candidate = await generateMemoryCandidate(req.params.workspaceId);
-      if (!candidate) {
-        res.status(204).end();
-        return;
+  router.get(
+    '/workspaces/:workspaceId/memory-candidate',
+    async (req: Request, res: Response) => {
+      try {
+        const candidate = await generateMemoryCandidate(req.params.workspaceId);
+        if (!candidate) {
+          res.status(204).end();
+          return;
+        }
+        res.json({ success: true, data: candidate });
+      } catch (err) {
+        res
+          .status(404)
+          .json({
+            success: false,
+            error:
+              err instanceof Error ? err.message : 'memory candidate failed',
+          });
       }
-      res.json({ success: true, data: candidate });
-    } catch (err) {
-      res.status(404).json({ success: false, error: err instanceof Error ? err.message : 'memory candidate failed' });
     }
-  });
+  );
 
   // Batch: cancel all non-terminal workspaces (filter by projectId/createdBy).
   router.post('/batch/cancel', async (req: Request, res: Response) => {
     try {
       const { projectId, createdBy } = req.body ?? {};
-      res.json({ success: true, data: await bulkCancel({ projectId, createdBy }) });
+      res.json({
+        success: true,
+        data: await bulkCancel({ projectId, createdBy }),
+      });
     } catch (err) {
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'batch cancel failed' });
+      res
+        .status(500)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'batch cancel failed',
+        });
     }
   });
 
@@ -604,9 +905,17 @@ export function createConductorRouter(): Router {
   router.post('/batch/archive', async (req: Request, res: Response) => {
     try {
       const { projectId, states } = req.body ?? {};
-      res.json({ success: true, data: await bulkArchive({ projectId, states }) });
+      res.json({
+        success: true,
+        data: await bulkArchive({ projectId, states }),
+      });
     } catch (err) {
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'batch archive failed' });
+      res
+        .status(500)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'batch archive failed',
+        });
     }
   });
 
@@ -639,7 +948,12 @@ export function createConductorRouter(): Router {
       const result = await importReadyBeadsTasks({ spaceId, repo }, { cwd });
       res.json({ success: true, data: result });
     } catch (err) {
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'beads import failed' });
+      res
+        .status(500)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'beads import failed',
+        });
     }
   });
 
@@ -652,19 +966,28 @@ export function createConductorRouter(): Router {
         res.status(400).json({ success: false, error: 'taskId is required' });
         return;
       }
-      const tasks = await Promise.resolve(agentOsContainer.repository.listTasks());
-      const task = tasks.find((t) => t.taskId === taskId);
+      const tasks = await Promise.resolve(
+        agentOsContainer.repository.listTasks()
+      );
+      const task = tasks.find(t => t.taskId === taskId);
       if (!task) {
-        res.status(404).json({ success: false, error: `task not found: ${taskId}` });
+        res
+          .status(404)
+          .json({ success: false, error: `task not found: ${taskId}` });
         return;
       }
       const result = await exportTaskToBeads(
         { task, artifacts: artifacts as Artifact[] | undefined },
-        { cwd },
+        { cwd }
       );
       res.json({ success: true, data: result });
     } catch (err) {
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'beads export failed' });
+      res
+        .status(500)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'beads export failed',
+        });
     }
   });
 
@@ -687,7 +1010,12 @@ export function createConductorRouter(): Router {
       } else if (typeof content === 'string') {
         data = new Uint8Array(Buffer.from(content, 'utf8'));
       } else {
-        res.status(400).json({ success: false, error: 'content (utf8 text) or base64 (bytes) is required' });
+        res
+          .status(400)
+          .json({
+            success: false,
+            error: 'content (utf8 text) or base64 (bytes) is required',
+          });
         return;
       }
       const allowed = new Set(['text', 'markdown', 'pdf']);
@@ -701,7 +1029,12 @@ export function createConductorRouter(): Router {
     } catch (err) {
       // Belt-and-suspenders: BrainService already degrades fail-safe, but never
       // let a malformed body crash the request path.
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'context ingest failed' });
+      res
+        .status(500)
+        .json({
+          success: false,
+          error: err instanceof Error ? err.message : 'context ingest failed',
+        });
     }
   });
 
@@ -725,17 +1058,31 @@ export function createConductorRouter(): Router {
       res.status(201).json({ success: true, data: signal });
     } catch (err) {
       // ingestWorkSignal is degrade-safe and should not throw; belt-and-suspenders.
-      res.status(500).json({ success: false, error: err instanceof Error ? err.message : 'work-signal ingest failed' });
+      res
+        .status(500)
+        .json({
+          success: false,
+          error:
+            err instanceof Error ? err.message : 'work-signal ingest failed',
+        });
     }
   });
 
   // Recently-ingested work signals (newest first), filterable by task/workspace.
   router.get('/work-signals', (req: Request, res: Response) => {
-    const taskId = typeof req.query?.taskId === 'string' ? req.query.taskId : undefined;
-    const workspaceId = typeof req.query?.workspaceId === 'string' ? req.query.workspaceId : undefined;
+    const taskId =
+      typeof req.query?.taskId === 'string' ? req.query.taskId : undefined;
+    const workspaceId =
+      typeof req.query?.workspaceId === 'string'
+        ? req.query.workspaceId
+        : undefined;
     const limitRaw = Number(req.query?.limit);
-    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined;
-    res.json({ success: true, data: listWorkSignals({ taskId, workspaceId, limit }) });
+    const limit =
+      Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined;
+    res.json({
+      success: true,
+      data: listWorkSignals({ taskId, workspaceId, limit }),
+    });
   });
 
   // WebSocket upgrade for live workspace events (operator console live terminal).
@@ -744,10 +1091,13 @@ export function createConductorRouter(): Router {
   // the router directly), `.ws` is absent — skip registering rather than throw,
   // so the rest of the router (the REST product surface) still mounts.
   if (typeof (router as unknown as { ws?: unknown }).ws === 'function') {
-    (router as any).ws('/workspaces/:workspaceId/stream', (ws: any, req: { params: { workspaceId: string } }) => {
-      const cleanup = attachWorkspaceStream(ws, req.params.workspaceId);
-      ws.on('close', cleanup);
-    });
+    (router as any).ws(
+      '/workspaces/:workspaceId/stream',
+      (ws: any, req: { params: { workspaceId: string } }) => {
+        const cleanup = attachWorkspaceStream(ws, req.params.workspaceId);
+        ws.on('close', cleanup);
+      }
+    );
   }
 
   return router;
