@@ -69,6 +69,76 @@ export interface ConductorWorkspace {
 }
 
 // ---------------------------------------------------------------------------
+// Runs (Agent OS canonical TaskRun)
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical Agent OS TaskRun state machine, mirrored from
+ * @recoder/agent-os domain (packages/agent-os/src/domain/task-spec.ts).
+ * This is the state-of-record lifecycle every runtime adapter advances; the
+ * Conductor workspace above is a substrate projection, the run is the truth.
+ */
+export type TaskRunState =
+  | 'created'
+  | 'compiled'
+  | 'routed'
+  | 'claimed'
+  | 'running'
+  | 'needs_input'
+  | 'verifying'
+  | 'waiting_for_approval'
+  | 'approved'
+  | 'delivered'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'rejected';
+
+export const TASK_RUN_STATES: ReadonlySet<TaskRunState> = new Set([
+  'created',
+  'compiled',
+  'routed',
+  'claimed',
+  'running',
+  'needs_input',
+  'verifying',
+  'waiting_for_approval',
+  'approved',
+  'delivered',
+  'completed',
+  'failed',
+  'cancelled',
+  'rejected',
+]);
+
+/** Terminal run states — a run in one of these is finished, not active. */
+export const TERMINAL_TASK_RUN_STATES: ReadonlySet<TaskRunState> = new Set([
+  'completed',
+  'failed',
+  'cancelled',
+  'rejected',
+]);
+
+/** Run states that are awaiting a human decision (highlighted in the monitor). */
+export const APPROVAL_WAITING_RUN_STATES: ReadonlySet<TaskRunState> = new Set([
+  'waiting_for_approval',
+  'needs_input',
+]);
+
+export interface AgentOsRun {
+  runId: string;
+  taskId: string;
+  spaceId: string;
+  state: TaskRunState;
+  assigneeAgentId?: string;
+  instructionBundleId?: string;
+  startedAt?: string;
+  updatedAt: string;
+  completedAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
 // RunEvents
 // ---------------------------------------------------------------------------
 

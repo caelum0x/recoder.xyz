@@ -10,6 +10,7 @@ export * from './types';
 export {
   fetchWorkspaces,
   fetchWorkspaceEvents,
+  fetchRuns,
   fetchApprovals,
   approveApproval,
   rejectApproval,
@@ -17,6 +18,7 @@ export {
 export {
   conductorKeys,
   useWorkspaces,
+  useRuns,
   useWorkspaceEvents,
   useApprovals,
   useDecideApproval,
