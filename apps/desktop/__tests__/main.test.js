@@ -464,3 +464,158 @@ describe('Deep link protocol', () => {
     expect(mainSrc).toContain('setAsDefaultProtocolClient');
   });
 });
+
+// ---------------------------------------------------------------------------
+// 11. Embedded terminal — TMUX_BIN resolution + env hardening
+// ---------------------------------------------------------------------------
+// These mirror the pure logic of resolveTmuxBin / buildPtyEnv in main.js so the
+// PTY attaches with the SAME pinned tmux the conductor used, and the renderer
+// cannot inject arbitrary env into the spawned process.
+
+describe('Embedded terminal — tmux binary resolution', () => {
+  // Mirror of resolveTmuxBin(rendererEnv) for an existing renderer-supplied bin.
+  function resolveTmuxBin(rendererEnv, existsSync, envOverride) {
+    const fromRenderer = rendererEnv && rendererEnv.CONDUCTOR_TMUX_BIN;
+    if (typeof fromRenderer === 'string' && fromRenderer.trim() && existsSync(fromRenderer)) {
+      return fromRenderer;
+    }
+    return envOverride || 'tmux';
+  }
+
+  it('prefers an existing renderer-supplied CONDUCTOR_TMUX_BIN', () => {
+    const bin = '/opt/recoder/c/tmux/tmux';
+    const resolved = resolveTmuxBin({ CONDUCTOR_TMUX_BIN: bin }, (p) => p === bin, undefined);
+    expect(resolved).toBe(bin);
+  });
+
+  it('ignores a renderer bin that does not exist on disk', () => {
+    const resolved = resolveTmuxBin(
+      { CONDUCTOR_TMUX_BIN: '/nope/tmux' },
+      () => false,
+      '/env/override/tmux',
+    );
+    expect(resolved).toBe('/env/override/tmux');
+  });
+
+  it('falls back to bare tmux when nothing resolves', () => {
+    expect(resolveTmuxBin(undefined, () => false, undefined)).toBe('tmux');
+  });
+
+  it('main.js actually resolves tmux in-process (does not trust bare command)', () => {
+    const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf-8');
+    expect(mainSrc).toContain('function resolveTmuxBin');
+    expect(mainSrc).toContain('resolveVendoredTmux');
+    expect(mainSrc).toContain("path.join(dir, 'c', 'tmux', 'tmux.c')");
+    // When the renderer asks for bare/empty tmux, main substitutes the binary.
+    expect(mainSrc).toContain('wantsTmux');
+  });
+
+  it('main.js surfaces ptyUnavailable instead of a fake TERM=dumb pipe', () => {
+    const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf-8');
+    expect(mainSrc).toContain('ptyUnavailable: true');
+    // The old silent child_process TERM=dumb fallback must be gone.
+    expect(mainSrc).not.toContain("TERM: 'dumb'");
+  });
+});
+
+describe('Embedded terminal — env hardening (renderer allowlist)', () => {
+  const RENDERER_ENV_ALLOWLIST = new Set([
+    'CONDUCTOR_TMUX_BIN',
+    'CONDUCTOR_WORKTREE_ROOT',
+    'TERM',
+    'TERM_PROGRAM',
+    'COLORTERM',
+    'LANG',
+    'LC_ALL',
+  ]);
+
+  function buildPtyEnv(baseEnv, rendererEnv, tmuxBin) {
+    const env = { ...baseEnv };
+    if (rendererEnv && typeof rendererEnv === 'object') {
+      for (const key of Object.keys(rendererEnv)) {
+        if (RENDERER_ENV_ALLOWLIST.has(key) && typeof rendererEnv[key] === 'string') {
+          env[key] = rendererEnv[key];
+        }
+      }
+    }
+    env.CONDUCTOR_TMUX_BIN = tmuxBin;
+    return env;
+  }
+
+  it('forwards only allowlisted renderer env keys', () => {
+    const env = buildPtyEnv(
+      { PATH: '/usr/bin', SECRET: 'keep' },
+      { TERM: 'xterm-256color', EVIL: 'rm -rf', PATH: '/tmp/evil' },
+      '/c/tmux/tmux',
+    );
+    expect(env.TERM).toBe('xterm-256color');
+    expect(env.EVIL).toBeUndefined();
+    // Renderer cannot overwrite a non-allowlisted base var like PATH.
+    expect(env.PATH).toBe('/usr/bin');
+    expect(env.SECRET).toBe('keep');
+  });
+
+  it('always pins the resolved tmux bin into the env', () => {
+    const env = buildPtyEnv({}, { CONDUCTOR_TMUX_BIN: '/ignored' }, '/resolved/tmux');
+    expect(env.CONDUCTOR_TMUX_BIN).toBe('/resolved/tmux');
+  });
+
+  it('main.js cleans up PTYs on window close / quit', () => {
+    const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf-8');
+    expect(mainSrc).toContain('function killAllTerminals');
+    expect(mainSrc).toContain("app.on('before-quit', killAllTerminals)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Embedded terminal — IPC channel contract parity (main ⇄ preload)
+// ---------------------------------------------------------------------------
+// A real PTY only works if every terminal:* channel the preload bridges invoke
+// is actually registered (ipcMain.handle) or broadcast (webContents.send) by the
+// main process — a single typo'd channel name silently breaks the terminal. We
+// assert both sides agree on the exact channel names by scanning the source.
+
+describe('Embedded terminal — IPC channel contract (no main/preload mismatch)', () => {
+  const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf-8');
+  const preloadSrc = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf-8');
+
+  // Channels the renderer invokes (request/response) — must be ipcMain.handle'd.
+  const INVOKE_CHANNELS = ['terminal:spawn', 'terminal:write', 'terminal:resize', 'terminal:kill'];
+  // Channels the main process pushes (PTY output / exit) — must be subscribed in preload.
+  const EVENT_CHANNELS = ['terminal:data', 'terminal:exit'];
+
+  it.each(INVOKE_CHANNELS)('main.js registers an ipcMain.handle for %s', (channel) => {
+    expect(mainSrc).toContain(`ipcMain.handle('${channel}'`);
+  });
+
+  it.each(INVOKE_CHANNELS)('preload.js invokes %s (matches the main handler)', (channel) => {
+    expect(preloadSrc).toContain(`ipcRenderer.invoke('${channel}'`);
+  });
+
+  it.each(EVENT_CHANNELS)('main.js broadcasts %s to the renderer', (channel) => {
+    // broadcastTerminal(channel, …) is called with the literal event channel.
+    expect(mainSrc).toContain(`broadcastTerminal('${channel}'`);
+  });
+
+  it.each(EVENT_CHANNELS)('preload.js subscribes to %s (matches the main broadcast)', (channel) => {
+    expect(preloadSrc).toContain(`ipcRenderer.on('${channel}'`);
+  });
+
+  it('preload exposes both terminal bridges over the SAME channels (no drift)', () => {
+    // Legacy recoderDesktop bridge + focused recoderTerminal bridge.
+    expect(preloadSrc).toContain("exposeInMainWorld('recoderDesktop'");
+    expect(preloadSrc).toContain("exposeInMainWorld('recoderTerminal'");
+    // The renderer must never see no-real-TTY as success: the spawn handler
+    // returns the truthful ptyUnavailable flag, and preload passes it through.
+    expect(mainSrc).toContain('ptyUnavailable: true');
+  });
+
+  it('no renderer-side node-pty: pty.spawn lives only in the MAIN process', () => {
+    // The PTY MUST be owned by main.js (a renderer cannot own a controlling TTY).
+    expect(mainSrc).toContain("require('node-pty')");
+    expect(mainSrc).toContain('pty.spawn(');
+    // preload is a contextIsolation boundary — it must not load node-pty.
+    expect(preloadSrc).not.toContain("require('node-pty')");
+    expect(preloadSrc).not.toContain('pty.spawn');
+  });
+});

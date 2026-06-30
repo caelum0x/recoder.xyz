@@ -65,6 +65,28 @@ const ACTION_MAP: Record<DeliveryAction, 'pr.create' | 'branch.push'> = {
   merge: 'branch.push',
 };
 
+/** The risk levels the pal planner annotates a run with (pal-plan.ts / @recoder/pal). */
+const PAL_RISK_LEVELS = new Set(['low', 'medium', 'high', 'critical']);
+
+/**
+ * Extract the pal planner's risk annotation from the workspace record — a HINT,
+ * never an authority (DECISION D1, pal-plan.ts: pal risk ANNOTATES the run, it is
+ * not a governance input). The conductor's workspace-service persists the pal
+ * annotation under `metadata.palPlan` (see workspace-service.ts), so the gate
+ * reads `metadata.palPlan.risk` if present and well-formed. Governance's own
+ * tier-classifier + policy chain remain the sole authority on the verdict; this
+ * value only rides along in the audit metadata so the trail shows what pal thought
+ * vs. what governance decided. Returns undefined when no (valid) annotation exists
+ * — the gate then simply omits the hint and governance decides unaided.
+ */
+function readPalRiskHint(workspace: Workspace): string | undefined {
+  const palPlan = workspace.metadata?.palPlan;
+  if (!palPlan || typeof palPlan !== 'object') return undefined;
+  const risk = (palPlan as { risk?: unknown }).risk;
+  if (typeof risk !== 'string') return undefined;
+  return PAL_RISK_LEVELS.has(risk) ? risk : undefined;
+}
+
 let governanceSingleton: Promise<Governance> | undefined;
 
 /**
@@ -207,6 +229,11 @@ export async function decideDelivery(
           toolName: action === 'pr' ? 'gh:pr-create' : 'git:push',
           environment: 'production',
         };
+    // Pal's risk annotation is consumed as a HINT only (DECISION D1): it rides in
+    // the audit metadata so the trail records what pal thought, but it does NOT
+    // drive the verdict — governance's tier-classifier + policy chain are the
+    // authority. Omitted entirely when no valid annotation exists.
+    const palRiskHint = readPalRiskHint(workspace);
     const request = createGovernanceRequest({
       actor: buildDeliveryActor(workspace),
       action: ACTION_MAP[action],
@@ -224,6 +251,9 @@ export async function decideDelivery(
           // danger-full-access escalation pre-granted (decidedBy = the user).
           soloMode: soloDangerFullAccessGranted,
           dangerFullAccessPreGranted: soloDangerFullAccessGranted,
+          // Pal's risk assessment — a HINT for the audit trail, never authority.
+          // Only present when the pal planner annotated this workspace.
+          ...(palRiskHint ? { palRiskHint } : {}),
         },
       },
     });
@@ -235,7 +265,10 @@ export async function decideDelivery(
         workspaceId: workspace.workspaceId,
         action,
         effect: verdict.effect,
+        // Authoritative tier (governance) vs. pal's advisory hint — logged side by
+        // side to make it visible that pal informs but does not decide.
         tier: verdict.tier,
+        palRiskHint,
         approvedByControlPlane,
         soloDangerFullAccessGranted,
         auditHash: verdict.auditHash,

@@ -20,14 +20,17 @@
  */
 import { execFileSync } from 'node:child_process';
 import {
+  BEADS_TRACKER_ID,
   BeadsIssueTracker,
   createBeadsClient,
+  syncTaskSpecToBeads,
   type BeadsClient,
   type BeadsCommandRunner,
 } from '@recoder/beads-adapter';
 import {
   IssueTrackerSyncService,
   type Artifact,
+  type TaskIntent,
   type TaskSpec,
 } from '@recoder/agent-os';
 import { createLogger } from '../logger.js';
@@ -82,13 +85,50 @@ export type BeadsSyncDeps = {
 
 /**
  * Construct the Agent OS IssueTrackerSyncService over the REAL BeadsIssueTracker
- * adapter. Agent OS depends only on the IssueTrackerPort; the concrete beads
- * adapter is injected here. The CLI transport shells to `bd` in `cwd`.
+ * adapter, returning both the service (the port seam Agent OS depends on) and the
+ * concrete BeadsClient so callers that need to make a CREATE decision the narrow
+ * port can't express (create-then-update for Agent-OS-native tasks) can drive the
+ * same `bd` transport. Agent OS still only ever sees the IssueTrackerPort; the
+ * client is the local escape hatch, not new canonical state.
  */
-function buildSyncService(deps: BeadsSyncDeps = {}): IssueTrackerSyncService {
+function buildSyncService(deps: BeadsSyncDeps = {}): {
+  service: IssueTrackerSyncService;
+  client: BeadsClient;
+} {
   const client = deps.client ?? createBeadsClient(beadsCliRunner(deps.cwd));
   const tracker = new BeadsIssueTracker({ client });
-  return new IssueTrackerSyncService(tracker);
+  return { service: new IssueTrackerSyncService(tracker), client };
+}
+
+/**
+ * Inverse of the adapter's issue-type → intent map: pick the bd `-t <type>` for a
+ * canonical TaskSpec so a freshly CREATED bd issue lands with a sensible native
+ * type. Unknown/custom intents fall back to `task` (beads' generic work type).
+ */
+const INTENT_TO_BEADS_TYPE: Partial<Record<TaskIntent, string>> = {
+  bugfix: 'bug',
+  feature_delivery: 'feature',
+  platform_hardening: 'task',
+  refactor: 'task',
+  code_review: 'review',
+  test_generation: 'test',
+  verification: 'test',
+  documentation: 'docs',
+  research: 'research',
+  migration: 'task',
+};
+
+function beadsTypeForIntent(intent: TaskIntent): string {
+  return INTENT_TO_BEADS_TYPE[intent] ?? 'task';
+}
+
+/**
+ * Derive a bd priority (lower = more urgent in beads) from the canonical task's
+ * approval posture. Tasks gated on approval are treated as higher priority so they
+ * surface in `bd ready`; everything else gets the default middle priority.
+ */
+function beadsPriorityForTask(task: TaskSpec): number {
+  return task.approvalRequired.length > 0 ? 1 : 2;
 }
 
 /**
@@ -133,7 +173,7 @@ export async function importReadyBeadsTasks(
   }
 
   try {
-    const service = buildSyncService(deps);
+    const { service } = buildSyncService(deps);
     const tasks = await service.importReadyTasks({ spaceId: input.spaceId, repo: input.repo });
     const repository = resolveRepository(deps);
     const taskIds: string[] = [];
@@ -158,11 +198,24 @@ export type ExportResult = {
 };
 
 /**
- * Push a single canonical TaskSpec (plus optional artifacts) back to beads
- * through the IssueTrackerPort seam.
+ * Push a single canonical TaskSpec (plus optional artifacts) back to beads as a
+ * genuine CREATE-OR-UPDATE — the half of two-way sync the narrow IssueTrackerPort
+ * cannot express on its own.
+ *
+ * The port's `exportTask` only ever runs `bd update <task.taskId>`, which lands an
+ * issue's metadata description but fails for any Agent-OS-native task whose
+ * `taskId` is not already a `bd` issue id. So before delegating we probe with the
+ * engine's `client.show(taskId)`:
+ *
+ *  - issue exists  → drive it through the real IssueTrackerSyncService seam
+ *                    (update path), preserving the existing contract.
+ *  - issue missing → `client.create(...)` a real `bd` issue first, capture the
+ *                    bd-assigned id, then `syncTaskSpecToBeads` the full metadata
+ *                    onto it. `externalId` reports the id beads actually assigned
+ *                    so the caller can round-trip back to canonical state.
  *
  * Degrade-safe: returns `{ exported: false, skipped }` when `bd` is unavailable
- * or the CLI throws; never crashes the caller.
+ * or the CLI throws; never crashes the caller and never blocks a launch.
  */
 export async function exportTaskToBeads(
   input: { task: TaskSpec; artifacts?: Artifact[] },
@@ -177,10 +230,43 @@ export async function exportTaskToBeads(
   }
 
   try {
-    const service = buildSyncService(deps);
-    const result = await service.exportTask({ task: input.task, artifacts: input.artifacts });
-    logger.info({ taskId: input.task.taskId, externalId: result.ref.externalId }, 'beads export complete');
-    return { exported: true, externalId: result.ref.externalId, tracker: result.ref.tracker };
+    const { service, client } = buildSyncService(deps);
+
+    // Does a bd issue already exist under the canonical taskId? `show` is read-only
+    // and tolerates absence (the engine returns null when the id is unknown).
+    const existing = client.show(input.task.taskId);
+
+    if (existing) {
+      // Existing issue → go through the real Agent OS port seam (drives bd update).
+      const result = await service.exportTask({ task: input.task, artifacts: input.artifacts });
+      logger.info(
+        { taskId: input.task.taskId, externalId: result.ref.externalId, mode: 'update' },
+        'beads export complete',
+      );
+      return { exported: true, externalId: result.ref.externalId, tracker: result.ref.tracker };
+    }
+
+    // Agent-OS-native task with no bd issue yet → genuinely CREATE one, then push
+    // the full canonical metadata onto the freshly created issue via the engine's
+    // own description writer so create and update share one source of truth.
+    const created = client.create({
+      title: input.task.title,
+      description: input.task.goal,
+      type: beadsTypeForIntent(input.task.intent),
+      priority: beadsPriorityForTask(input.task),
+    });
+
+    syncTaskSpecToBeads({
+      client,
+      task: { ...input.task, taskId: created.id },
+      artifacts: input.artifacts,
+    });
+
+    logger.info(
+      { taskId: input.task.taskId, externalId: created.id, mode: 'create' },
+      'beads export complete',
+    );
+    return { exported: true, externalId: created.id, tracker: BEADS_TRACKER_ID };
   } catch (err) {
     const reason = err instanceof Error ? err.message : 'beads export failed';
     logger.warn({ reason }, 'beads export failed — degrading to skip');

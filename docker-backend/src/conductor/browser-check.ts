@@ -15,17 +15,28 @@
  *      the contract package's `createBrowserVerificationPlan` /
  *      `summarizeBrowserVerification` / `createBrowserVerificationSummaryArtifact`.
  *
- * Real headless-browser check (optional, lazy): `@recoder/browser-tools` now ships
- * a CJS-consumable `dist` (`dist/index.cjs` + an `exports` map) with `playwright` as
- * an OPTIONAL peer dependency. When a preview URL is present AND both `playwright`
- * and `@recoder/browser-tools` are resolvable+loadable at runtime, this module will
- * OPTIONALLY drive a real Chromium page load (lazy `import()`, never a top-level
- * import) to produce a stronger health signal (the preview actually renders a
- * document, not just answers a socket). If the browser driver is unavailable, the
- * launch fails, or no browser binary is installed, it transparently falls back to
- * the dependency-light Node-`fetch` reachability probe. The Playwright path is
- * NEVER required: the lazy import keeps the conductor's CJS `tsc` build free of the
- * heavy ESM/Playwright dependency, and the contract package
+ * Real headless-browser check (optional, lazy): `@recoder/browser-tools` ships a
+ * CJS-consumable `dist` (`dist/index.cjs` + an `exports` map) with `playwright` as an
+ * OPTIONAL peer dependency. When a preview URL is present AND both `playwright` and
+ * `@recoder/browser-tools` are resolvable+loadable at runtime, this module drives a
+ * real Chromium page load (lazy `import()`, never a top-level import) and flows the
+ * engine's RICHER preview-health capability — not just "did it answer a socket":
+ *
+ *   - render assert (`recoder.browser.open_preview`): the preview produced a real
+ *     document (via the engine's `navigateTo`, yielding the rendered URL + title);
+ *   - console / page-error capture (`recoder.browser.console_errors`): listeners are
+ *     attached BEFORE navigation, so any `console.error` / uncaught `pageerror` during
+ *     load is surfaced as a truthful failed check;
+ *   - screenshot evidence (`recoder.browser.screenshot`): a PNG of the loaded preview
+ *     captured and embedded (base64, size-capped) as a `screenshot` artifact.
+ *
+ * If the browser driver is unavailable, the launch fails, or no browser binary is
+ * installed, it transparently falls back to the dependency-light Node-`fetch`
+ * reachability probe. Each richer signal is independently degrade-safe: a page that
+ * cannot emit console events or take a screenshot downgrades that one check to
+ * `skipped` (never crashes, never a false failure). The Playwright path is NEVER
+ * required: the lazy import keeps the conductor's CJS `tsc` build free of the heavy
+ * ESM/Playwright dependency, and the contract package
  * (`@recoder/browser-verification`) remains the only built-in fusion.
  *
  * Additive + degrade-safe: this NEVER throws. Any failure (no URL, fetch error,
@@ -43,6 +54,7 @@ import {
   type BrowserVerificationArtifact,
 } from '@recoder/browser-verification';
 import { getWorkspace } from './workspace-service.js';
+import { randomUUID } from 'node:crypto';
 
 const logger = createLogger('conductor:browser-check');
 
@@ -115,6 +127,25 @@ async function probePreview(previewUrl: string): Promise<BrowserVerificationChec
 const BROWSER_NAV_TIMEOUT_MS = Number(process.env.CONDUCTOR_BROWSER_CHECK_NAV_TIMEOUT_MS) || PROBE_TIMEOUT_MS;
 
 /**
+ * The minimal Playwright `Page` surface the deeper checks OPTIONALLY use. Every
+ * member is optional + probed with `typeof` before use so a degraded page (e.g. the
+ * `{}` produced by a fake driver, or an older browser-tools build) still drives the
+ * core navigate/title signal — the richer console/screenshot checks simply downgrade
+ * to `skipped` rather than crash. Structural, so we never type-depend on `playwright`.
+ */
+interface LazyBrowserPage {
+  /** Playwright event emitter — used to collect `console` + `pageerror` events. */
+  on?: (event: string, handler: (payload: unknown) => void) => void;
+  /** Detach a previously-attached listener (best-effort teardown). */
+  off?: (event: string, handler: (payload: unknown) => void) => void;
+  /** Capture a screenshot; we request a base64 buffer for artifact embedding. */
+  screenshot?: (opts?: {
+    fullPage?: boolean;
+    type?: 'png' | 'jpeg';
+  }) => Promise<Buffer | Uint8Array>;
+}
+
+/**
  * The minimal shape of `@recoder/browser-tools` + `playwright` that the optional
  * real-page check needs. Kept local + structural so we never take a top-level type
  * dependency on either optional package.
@@ -122,7 +153,7 @@ const BROWSER_NAV_TIMEOUT_MS = Number(process.env.CONDUCTOR_BROWSER_CHECK_NAV_TI
 interface LazyBrowserDriver {
   chromium: {
     launch(opts?: { headless?: boolean }): Promise<{
-      newPage(): Promise<unknown>;
+      newPage(): Promise<LazyBrowserPage>;
       close(): Promise<void>;
     }>;
   };
@@ -131,6 +162,9 @@ interface LazyBrowserDriver {
     options: { page: unknown },
   ) => Promise<{ url: string; title: string }>;
 }
+
+/** Cap on screenshot bytes we embed as base64 in an artifact (keep artifacts small). */
+const SCREENSHOT_MAX_BYTES = Number(process.env.CONDUCTOR_BROWSER_CHECK_SCREENSHOT_MAX_BYTES) || 2_000_000;
 
 /**
  * Lazily resolve the optional Playwright-backed browser driver. Uses dynamic
@@ -157,19 +191,184 @@ export async function loadBrowserDriver(): Promise<LazyBrowserDriver | null> {
   }
 }
 
+/** A captured browser console / page error, normalized to a single line. */
+interface CapturedConsoleError {
+  source: 'console' | 'pageerror';
+  text: string;
+}
+
+/**
+ * Attach `console` + `pageerror` listeners to a Playwright page, returning the
+ * collected-errors array plus a teardown that detaches the listeners. Degrade-safe:
+ * if the page is a degraded fake (no `.on`), this is a no-op returning an empty
+ * collector — the console check then reports `skipped`, not `failed`.
+ */
+function attachConsoleErrorCollector(page: LazyBrowserPage): {
+  errors: CapturedConsoleError[];
+  supported: boolean;
+  detach: () => void;
+} {
+  const errors: CapturedConsoleError[] = [];
+  if (typeof page.on !== 'function') {
+    return { errors, supported: false, detach: () => {} };
+  }
+
+  const onConsole = (msg: unknown): void => {
+    // Playwright ConsoleMessage exposes `.type()` + `.text()`; guard structurally.
+    const m = msg as { type?: () => string; text?: () => string };
+    try {
+      if (typeof m.type === 'function' && m.type() === 'error') {
+        errors.push({ source: 'console', text: typeof m.text === 'function' ? m.text() : 'error' });
+      }
+    } catch {
+      // a misbehaving message object must never break the check.
+    }
+  };
+  const onPageError = (err: unknown): void => {
+    const reason = err instanceof Error ? err.message : String(err);
+    errors.push({ source: 'pageerror', text: reason });
+  };
+
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+
+  return {
+    errors,
+    supported: true,
+    detach: () => {
+      try {
+        page.off?.('console', onConsole);
+        page.off?.('pageerror', onPageError);
+      } catch {
+        // best-effort detach.
+      }
+    },
+  };
+}
+
+/** Build the console-errors check from a (possibly unsupported) collector. */
+function buildConsoleErrorCheck(
+  previewUrl: string,
+  collector: { errors: CapturedConsoleError[]; supported: boolean },
+): BrowserVerificationCheckResult {
+  if (!collector.supported) {
+    return {
+      tool: 'recoder.browser.console_errors',
+      status: 'skipped',
+      target: previewUrl,
+      expected: 'no console errors',
+      message: 'Console capture unsupported by this browser driver — skipped',
+    };
+  }
+  const count = collector.errors.length;
+  const samples = collector.errors.slice(0, 5).map((e) => `[${e.source}] ${e.text}`);
+  return {
+    tool: 'recoder.browser.console_errors',
+    status: count === 0 ? 'passed' : 'failed',
+    target: previewUrl,
+    expected: 'no console errors',
+    actual: String(count),
+    message:
+      count === 0
+        ? 'No console / page errors during preview load'
+        : `Preview emitted ${count} console/page error(s): ${samples.join(' | ')}`,
+    metadata: { errorCount: count, samples },
+  };
+}
+
+/**
+ * Capture a screenshot of the loaded preview and return a `screenshot` check plus the
+ * embedded artifact. Degrade-safe: a page without `.screenshot()` (degraded fake /
+ * older driver) yields a `skipped` check and no artifact. Never throws.
+ */
+async function captureScreenshotArtifact(
+  taskId: string,
+  previewUrl: string,
+  page: LazyBrowserPage,
+): Promise<{ check: BrowserVerificationCheckResult; artifact: BrowserVerificationArtifact | null }> {
+  if (typeof page.screenshot !== 'function') {
+    return {
+      check: {
+        tool: 'recoder.browser.screenshot',
+        status: 'skipped',
+        target: previewUrl,
+        message: 'Screenshot unsupported by this browser driver — skipped',
+      },
+      artifact: null,
+    };
+  }
+  try {
+    const raw = await page.screenshot({ fullPage: false, type: 'png' });
+    const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+    const tooLarge = buffer.byteLength > SCREENSHOT_MAX_BYTES;
+    const artifactId = `browser_screenshot_${taskId}_${randomUUID()}`;
+    const artifact: BrowserVerificationArtifact = {
+      artifactId,
+      taskId,
+      kind: 'screenshot',
+      summary: `Preview screenshot (${buffer.byteLength} bytes) for ${previewUrl}`,
+      createdAt: new Date().toISOString(),
+      // Embed inline only when small enough; otherwise record dimensions/size only.
+      pathOrUrl: tooLarge ? undefined : `data:image/png;base64,${buffer.toString('base64')}`,
+      metadata: {
+        engine: 'playwright',
+        byteLength: buffer.byteLength,
+        embedded: !tooLarge,
+        previewUrl,
+      },
+    };
+    return {
+      check: {
+        tool: 'recoder.browser.screenshot',
+        status: 'passed',
+        target: previewUrl,
+        actual: `${buffer.byteLength} bytes`,
+        message: `Captured preview screenshot (${buffer.byteLength} bytes)`,
+        artifactIds: [artifactId],
+        metadata: { engine: 'playwright', byteLength: buffer.byteLength, embedded: !tooLarge },
+      },
+      artifact,
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    return {
+      check: {
+        tool: 'recoder.browser.screenshot',
+        status: 'skipped',
+        target: previewUrl,
+        message: `Screenshot capture failed — skipped: ${reason}`,
+        metadata: { error: reason },
+      },
+      artifact: null,
+    };
+  }
+}
+
+/** Result of the real-browser probe: an ordered set of checks + any artifacts. */
+interface BrowserProbeOutcome {
+  checks: BrowserVerificationCheckResult[];
+  artifacts: BrowserVerificationArtifact[];
+}
+
 /**
  * Drive a real headless Chromium page load of the preview via `@recoder/browser-tools`
- * (lazy). Returns a typed check result when the page renders, or `null` when the
- * driver is unavailable / the launch fails — in which case the caller falls back to
- * the fetch probe. Never throws. Always closes the browser it opened.
+ * (lazy) and flow the engine's RICHER capability: not just "did it render", but
+ * genuine preview-health verification — render assert (`open_preview`), console/page
+ * error capture (`console_errors`), and a screenshot artifact (`screenshot`). Returns
+ * the collected checks + artifacts, or `null` when the driver is unavailable / the
+ * launch fails — in which case the caller falls back to the fetch probe. Never throws.
+ * Always closes the browser it opened. Each deeper signal is independently
+ * degrade-safe: if a capability is missing on the page, that check downgrades to
+ * `skipped` rather than failing or crashing.
  */
 async function probePreviewWithBrowser(
   previewUrl: string,
-): Promise<BrowserVerificationCheckResult | null> {
+  taskId: string,
+): Promise<BrowserProbeOutcome | null> {
   const driver = await loadBrowserDriver();
   if (!driver) return null;
 
-  let browser: { newPage(): Promise<unknown>; close(): Promise<void> } | undefined;
+  let browser: { newPage(): Promise<LazyBrowserPage>; close(): Promise<void> } | undefined;
   try {
     browser = await Promise.race([
       driver.chromium.launch({ headless: true }),
@@ -178,8 +377,20 @@ async function probePreviewWithBrowser(
       ),
     ]);
     const page = await browser.newPage();
-    const nav = await driver.navigateTo(previewUrl, { page });
-    return {
+
+    // Attach console/page-error capture BEFORE navigation so errors emitted during
+    // load are observed. Degrade-safe when the page can't emit.
+    const consoleCollector = attachConsoleErrorCollector(page);
+
+    let nav: { url: string; title: string };
+    try {
+      nav = await driver.navigateTo(previewUrl, { page });
+    } finally {
+      consoleCollector.detach();
+    }
+
+    // 1) Render assert — the preview produced a real document.
+    const renderCheck: BrowserVerificationCheckResult = {
       tool: 'recoder.browser.open_preview',
       status: 'passed',
       target: previewUrl,
@@ -187,6 +398,21 @@ async function probePreviewWithBrowser(
       actual: nav.title || nav.url || 'rendered',
       message: `Preview rendered in headless browser (title: ${nav.title || '<untitled>'})`,
       metadata: { engine: 'playwright', renderedUrl: nav.url, title: nav.title },
+    };
+
+    // 2) Console / page-error assert.
+    const consoleCheck = buildConsoleErrorCheck(previewUrl, consoleCollector);
+
+    // 3) Screenshot evidence artifact.
+    const { check: screenshotCheck, artifact: screenshotArtifact } = await captureScreenshotArtifact(
+      taskId,
+      previewUrl,
+      page,
+    );
+
+    return {
+      checks: [renderCheck, consoleCheck, screenshotCheck],
+      artifacts: screenshotArtifact ? [screenshotArtifact] : [],
     };
   } catch (err) {
     // Launch / navigation failed under the real browser path. Fall back to fetch
@@ -212,7 +438,8 @@ async function probePreviewWithBrowser(
  *
  * Probe selection (degrade-safe, in order):
  *   1. If `playwright` + `@recoder/browser-tools` load AND a real Chromium page
- *      load succeeds, use that stronger "preview actually renders" signal.
+ *      load succeeds, use the richer signal set: render assert + console/page-error
+ *      capture + screenshot artifact.
  *   2. Otherwise fall back to the dependency-light Node-`fetch` reachability probe.
  *
  * Returns `attempted: false` when there is no preview URL or the contract package is
@@ -238,10 +465,13 @@ export async function runBrowserCheck(workspaceId: string): Promise<BrowserCheck
 
     // Prefer a real headless-browser render when playwright + @recoder/browser-tools
     // are available; otherwise fall back to the fetch reachability probe. Both are
-    // degrade-safe and never throw.
-    const browserCheck = await probePreviewWithBrowser(previewUrl);
-    const check = browserCheck ?? (await probePreview(previewUrl));
-    const result = summarizeBrowserVerification({ plan, checks: [check] });
+    // degrade-safe and never throw. The browser path flows the engine's richer
+    // capability (render assert + console errors + screenshot artifact); the fetch
+    // path is the dependency-light reachability signal.
+    const browserOutcome = await probePreviewWithBrowser(previewUrl, workspace.taskId);
+    const checks = browserOutcome?.checks ?? [await probePreview(previewUrl)];
+    const probeArtifacts = browserOutcome?.artifacts ?? [];
+    const result = summarizeBrowserVerification({ plan, checks, artifacts: probeArtifacts });
     const artifact = createBrowserVerificationSummaryArtifact({ result });
 
     logger.info(

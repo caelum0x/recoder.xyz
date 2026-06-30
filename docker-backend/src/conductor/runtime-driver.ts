@@ -13,6 +13,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { randomBytes } from 'node:crypto';
 import { createLogger } from '../logger.js';
 import {
   resolveRuntimeCommand,
@@ -130,6 +131,53 @@ export async function launchRuntime(request: RuntimeLaunchRequest): Promise<Runt
     };
   }
 
+  // Inject the outer-agent identity env into the launched CLI process so its
+  // child pal MCP server (stdio child) inherits these and can emit correlated
+  // RunEvents back to the control plane. MCP stdio children inherit the parent
+  // CLI env, so setting them here at launch is sufficient — we never write
+  // secrets into .mcp.json or config.toml. When any of these are unset the PAL
+  // emitter is a deliberate no-op. Built immutably (spread, no mutation) so the
+  // caller-provided request.env is preserved and not modified in place.
+  const internalServiceKey = process.env.INTERNAL_SERVICE_KEY ?? '';
+  const localBackendBase = `http://127.0.0.1:${process.env.PORT ?? '3100'}`;
+  const internalUrl = process.env.RECODER_INTERNAL_URL ?? localBackendBase;
+  // Point the launched agent's A2A MCP server at THIS LOCAL backend's bridge so it
+  // registers locally (and other local agents can see it) instead of defaulting to
+  // the production bridge. MCP stdio children inherit the parent CLI env, so setting
+  // these here is sufficient — no .mcp.json edit needed. Respect any explicit
+  // operator override (RECODER_DOCKER_URL / RECODER_A2A_URL) so a cloud-targeted
+  // backend can still steer spawned agents at a remote bridge.
+  const localDockerUrl = process.env.RECODER_DOCKER_URL ?? localBackendBase;
+  const localBridgeUrl =
+    process.env.RECODER_A2A_URL ??
+    `${localDockerUrl.replace('https:', 'wss:').replace('http:', 'ws:').replace(/\/+$/, '')}/agent-bridge`;
+  // Mint (once per process) a local A2A bridge token so the spawned agent can
+  // AUTHENTICATE to THIS backend's /agent-bridge WS — resolveA2ASystemSession
+  // (auth-utils.ts) matches RECODER_A2A_BRIDGE_TOKEN. Without a token the bridge
+  // closes the connection (1008 'Authentication required') and the agent shows
+  // "disconnected" despite the correct local URL. The agent's MCP client appends
+  // it as ?token= via PLATFORM_TOKEN. An operator-set A2A token (shared-secret /
+  // bridge / worker) is reused as-is; cloud behavior is unchanged.
+  let a2aBridgeToken =
+    process.env.RECODER_A2A_SHARED_SECRET?.trim() ||
+    process.env.RECODER_A2A_BRIDGE_TOKEN?.trim() ||
+    process.env.RECODER_A2A_WORKER_TOKEN?.trim() ||
+    '';
+  if (!a2aBridgeToken) {
+    a2aBridgeToken = `a2a-local-${randomBytes(24).toString('hex')}`;
+    process.env.RECODER_A2A_BRIDGE_TOKEN = a2aBridgeToken;
+  }
+  const launchEnv: Record<string, string> = {
+    ...(request.env ?? {}),
+    RECODER_RUN_ID: request.runId,
+    RECODER_TASK_ID: request.taskId,
+    RECODER_INTERNAL_URL: internalUrl,
+    INTERNAL_SERVICE_KEY: internalServiceKey,
+    RECODER_DOCKER_URL: localDockerUrl,
+    RECODER_A2A_URL: localBridgeUrl,
+    PLATFORM_TOKEN: a2aBridgeToken,
+  };
+
   let handle: SubstrateHandle;
   try {
     handle = await substrate.launch({
@@ -138,7 +186,7 @@ export async function launchRuntime(request: RuntimeLaunchRequest): Promise<Runt
       repoPath,
       branch: request.branch,
       baseRef: request.baseRef,
-      env: request.env,
+      env: launchEnv,
     });
   } catch (err) {
     return {

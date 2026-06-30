@@ -15,13 +15,14 @@
  * Every action button is enabled only when the backend state machine allows it
  * (workspace-state helpers). Errors from the backend are shown, never hidden.
  */
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog } from './EventLog';
 import { DiffView } from './DiffView';
 import { SessionTerminal } from './SessionTerminal';
 import { RecoderTerminal } from './RecoderTerminal';
+import { ConversationView } from './ConversationView';
 
 /** True when running inside the Recoder desktop shell (preload PTY bridge present). */
 function hasDesktopTerminal(): boolean {
@@ -48,6 +49,15 @@ interface WorkspaceDetailProps {
 }
 
 type Tab = 'output' | 'diff' | 'terminal';
+
+/**
+ * Within the Terminal tab, the SAME conductor session is shown either as a
+ * friendly, chat-like conversation ('chat') or the full real xterm terminal
+ * ('terminal'). One engine, two skins — never a second source of truth. Defaults
+ * to 'chat' for approachability (the "not scary" vision principle); power users
+ * flip to the full terminal. Persisted per-workspace in this UI state.
+ */
+type SurfaceMode = 'chat' | 'terminal';
 
 function describeError(err: unknown): string {
   if (err instanceof BackendUnreachableError) return `Backend unreachable: ${err.message}`;
@@ -123,6 +133,22 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNote, setActionNote] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // When the embedded PTY reports it has no real TTY (node-pty missing in this
+  // build), fall back to the truthful HTTP /sessions surface instead of a dead
+  // terminal. Gated per-workspace so switching workspaces re-evaluates.
+  const [ptyUnavailable, setPtyUnavailable] = useState(false);
+  // The Terminal-tab surface skin: friendly conversation vs the full real
+  // terminal. Defaults to 'chat' so terminal-averse operators land on the calm
+  // surface; persisted per-workspace (reset below when the workspace changes).
+  const [surfaceMode, setSurfaceMode] = useState<SurfaceMode>('chat');
+
+  // Re-evaluate per workspace: a fresh workspace may have a live tmux session
+  // even if a prior one's PTY was unavailable, and each workspace starts on the
+  // approachable chat skin rather than inheriting a prior terminal flip.
+  useEffect(() => {
+    setPtyUnavailable(false);
+    setSurfaceMode('chat');
+  }, [workspace.workspaceId]);
 
   const live = isLive(workspace.state);
   const events = usePoll(
@@ -264,20 +290,58 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
           <DiffView diff={diff.data} error={diff.error} loading={diff.loading} />
         ) : session ? (
           <div class="detail-terminal">
+            {/* Surface toggle: the friendly conversation ("Chat") vs the full
+                real terminal ("Terminal"). One engine, two skins over the SAME
+                tmux session / RunEvents. Defaults to Chat for approachability. */}
             <div class="detail-terminal-head">
-              <span class="detail-terminal-tab detail-terminal-tab-active">Run</span>
-              <span class="detail-terminal-tab">Terminal</span>
+              <button
+                type="button"
+                class={
+                  surfaceMode === 'chat'
+                    ? 'detail-terminal-tab detail-terminal-tab-btn detail-terminal-tab-active'
+                    : 'detail-terminal-tab detail-terminal-tab-btn'
+                }
+                onClick={() => setSurfaceMode('chat')}
+                aria-pressed={surfaceMode === 'chat'}
+                title="Friendly conversation view of this workspace"
+              >
+                Chat
+              </button>
+              <button
+                type="button"
+                class={
+                  surfaceMode === 'terminal'
+                    ? 'detail-terminal-tab detail-terminal-tab-btn detail-terminal-tab-active'
+                    : 'detail-terminal-tab detail-terminal-tab-btn'
+                }
+                onClick={() => setSurfaceMode('terminal')}
+                aria-pressed={surfaceMode === 'terminal'}
+                title="Full real terminal for this workspace tmux session"
+              >
+                Terminal
+              </button>
               <span class="detail-terminal-branch" title={workspace.branch}>{workspace.branch}</span>
             </div>
-            {hasDesktopTerminal() ? (
+            {surfaceMode === 'chat' ? (
+              // Friendly skin: the SAME conductor session shown as a calm, chat-
+              // like conversation. Reads the same RunEvent stream the terminal
+              // observes — never a second source of truth, never a fake TTY.
+              <ConversationView workspace={workspace} />
+            ) : hasDesktopTerminal() && !ptyUnavailable ? (
               // Real embedded terminal: attach a PTY (Electron main) to THIS
               // workspace's tmux session via the same pinned tmux binary the
-              // conductor drives — the native CLI experience, in Recoder.
+              // conductor drives — the native CLI experience, in Recoder. Mounted
+              // ONLY in terminal mode so its cleanup (PTY kill) runs when the
+              // operator flips back to Chat — never hidden with a live PTY. If the
+              // main process reports no real PTY, onPtyUnavailable flips us to the
+              // HTTP /sessions surface so we never show a dead terminal.
               <RecoderTerminal
                 command={tmuxBin || 'tmux'}
                 args={['attach', '-t', session.tmuxName]}
                 cwd={session.worktreePath || undefined}
                 env={tmuxBin ? { CONDUCTOR_TMUX_BIN: tmuxBin } : undefined}
+                sessionLabel={workspace.branch}
+                onPtyUnavailable={() => setPtyUnavailable(true)}
               />
             ) : (
               <SessionTerminal session={session} tmuxBin={tmuxBin} />

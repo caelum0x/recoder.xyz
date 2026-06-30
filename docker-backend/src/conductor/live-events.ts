@@ -25,14 +25,35 @@ export interface WorkspaceEventStreamHandlers {
 export interface WorkspaceEventStreamOptions extends WorkspaceEventStreamHandlers {
   intervalMs?: number;
   maxMs?: number;
+  /**
+   * When true, the first poll REPLAYS the run-so-far: every event already
+   * persisted for the workspace is emitted before live tailing begins. This is
+   * what a cockpit/xterm/board needs — a client attaching to a run that is
+   * already in flight (or just finished) must render the existing RunEvents, not
+   * wait for the next new one. `attachWorkspaceStream` (the cockpit socket path)
+   * opts in. Defaults to false (baseline-only: live tail of just newly-appended
+   * events) so a bare `WorkspaceEventStream` stays a low-noise lifecycle watcher.
+   */
+  replayBacklog?: boolean;
 }
 
 export class WorkspaceEventStream {
   private readonly workspaceId: string;
   private readonly intervalMs: number;
   private readonly maxMs: number;
+  private readonly replayBacklog: boolean;
   private readonly handlers: WorkspaceEventStreamHandlers;
-  private lastSeenEventId: string | undefined;
+  /**
+   * Stable delta cursor. The repository is append-only (in-memory push order /
+   * PG `order by created_at asc`, filtered by runId preserving order), so the
+   * count of already-emitted events is a robust head position — unlike keying on
+   * a single last-seen id, this never silently drops a batch of events appended
+   * between two polls, and it advances monotonically. Seen ids are also tracked
+   * as a belt-and-suspenders guard against any out-of-order/duplicate read.
+   */
+  private emittedCount = 0;
+  private readonly seenEventIds = new Set<string>();
+  private firstTick = true;
   private startedAt = 0;
   private stopped = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -41,6 +62,7 @@ export class WorkspaceEventStream {
     this.workspaceId = workspaceId;
     this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
     this.maxMs = options.maxMs ?? DEFAULT_MAX_MS;
+    this.replayBacklog = options.replayBacklog ?? false;
     this.handlers = { onEvent: options.onEvent, onError: options.onError, onComplete: options.onComplete };
   }
 
@@ -73,14 +95,27 @@ export class WorkspaceEventStream {
       return;
     }
 
-    let newest = this.lastSeenEventId;
-    for (const event of events) {
-      if (this.lastSeenEventId === undefined) { newest = event.eventId; continue; }
-      if (event.eventId === this.lastSeenEventId) { newest = event.eventId; continue; }
-      newest = event.eventId;
+    // First tick with replay disabled: baseline silently to the current head so
+    // only events appended AFTER attach are delivered (live-only watcher mode).
+    if (this.firstTick && !this.replayBacklog) {
+      this.firstTick = false;
+      this.emittedCount = events.length;
+      for (const e of events) this.seenEventIds.add(e.eventId);
+      if (!this.stopped) this.timer = setTimeout(() => void this.tick(), this.intervalMs);
+      return;
+    }
+    this.firstTick = false;
+
+    // Emit every event past the head cursor (the run-so-far on the first replay
+    // poll, then each newly-appended event on subsequent polls). The seen-id set
+    // guards against re-emitting an event if a read ever returns out of order.
+    for (let i = this.emittedCount; i < events.length; i += 1) {
+      const event = events[i];
+      if (this.seenEventIds.has(event.eventId)) continue;
+      this.seenEventIds.add(event.eventId);
       try { this.handlers.onEvent?.(event); } catch { /* */ }
     }
-    this.lastSeenEventId = newest;
+    if (events.length > this.emittedCount) this.emittedCount = events.length;
 
     if (!this.stopped) this.timer = setTimeout(() => void this.tick(), this.intervalMs);
   }
@@ -92,7 +127,11 @@ export function attachWorkspaceStream(ws: WebSocket, workspaceId: string): () =>
     try { ws.send(JSON.stringify(payload)); } catch { /* */ }
   };
 
+  // The cockpit board/xterm attaches to render the run. Replay the run-so-far on
+  // connect (default) so a client joining a live or just-finished run sees the
+  // existing RunEvents immediately, then receives each new one as it is appended.
   const stream = new WorkspaceEventStream(workspaceId, {
+    replayBacklog: true,
     onEvent: (event) => send({ type: 'event', event }),
     onError: (err) => send({ type: 'error', message: err.message }),
     onComplete: () => send({ type: 'complete' }),

@@ -305,7 +305,23 @@ async function launchStep(
     return { launchResult };
   }
 
-  // Persist the run + transition to running.
+  // The agent is now live in its worktree. From here the workspace MUST become a
+  // watchable `running` record that carries its `sessionName`: the completion
+  // watcher's entry gate is exactly `if (!workspace.sessionName) return;`, and it
+  // is the watcher that — once the agent exits — fires the engine-driven post-run
+  // DAG (verify -> browser-check -> memory) via runPostRunDelivery. If we left the
+  // workspace in `setting_up` with no sessionName (e.g. a persistence hiccup on the
+  // transition below), a real running agent would be orphaned: its post-run graph
+  // could NEVER fire. So the `running` transition (which carries sessionName) is the
+  // critical write and is done FIRST; the run record is auxiliary bookkeeping and a
+  // failure there must not stop the workspace from becoming watchable.
+  workspace = await repository().upsertWorkspace(
+    transitionWorkspace({ ...workspace, worktreePath: launchResult.worktreePath, sessionName: launchResult.sessionName, runId }, 'running'),
+  );
+
+  // Persist the run record (auxiliary). Degrade-safe: the workspace is already a
+  // watchable `running` record above, so a run-record write failure here must not
+  // orphan a live agent or block its post-run DAG — log and continue.
   const run: TaskRun = {
     runId,
     taskId: req.taskId,
@@ -315,11 +331,14 @@ async function launchStep(
     updatedAt: now,
     metadata: { workspaceId, runtimeId: step.runtimeId, workflowId, stepIndex: index, scope: step.scope },
   };
-  await repository().upsertRun(run);
-
-  workspace = await repository().upsertWorkspace(
-    transitionWorkspace({ ...workspace, worktreePath: launchResult.worktreePath, sessionName: launchResult.sessionName, runId }, 'running'),
-  );
+  try {
+    await repository().upsertRun(run);
+  } catch (err) {
+    logger.warn(
+      { workspaceId, runId, err },
+      'run-record persistence failed; workspace is still watchable so post-run delivery is unaffected',
+    );
+  }
 
   logger.info({ workspaceId, runId, runtimeId: step.runtimeId, workflowId, index }, 'workflow step launched');
 

@@ -29,9 +29,32 @@ const {
   buildDaytonaCreateBody,
 } = require('./lib/recoder-mcp-core');
 
-const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'https://docker.recoder.xyz';
-const API_URL = process.env.RECODER_API_URL || 'https://api.recoder.xyz';
-const A2A_URL = process.env.RECODER_A2A_URL || `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:')}/agent-bridge`;
+// Bridge/control-plane URL resolution is LOCAL-FIRST. A desktop-spawned agent
+// should register against the LOCAL backend's A2A bridge by default, not prod.
+// Resolution priority for the docker/bridge base:
+//   1. explicit env (RECODER_DOCKER_URL / RECODER_BRIDGE_URL)
+//   2. local default derived from the local backend port (RECODER_BACKEND_PORT
+//      or PORT, falling back to 3100 — the Express backend's default port)
+//   3. only the cloud URL when explicitly opted in (RECODER_USE_CLOUD=true)
+// The production URL is never the silent default; it is reachable only by
+// configuring it explicitly, so behavior is preserved for cloud deployments.
+const LOCAL_BACKEND_PORT = process.env.RECODER_BACKEND_PORT || process.env.PORT || '3100';
+const LOCAL_BACKEND_URL = `http://127.0.0.1:${LOCAL_BACKEND_PORT}`;
+const CLOUD_DOCKER_URL = 'https://docker.recoder.xyz';
+const DOCKER_URL =
+  process.env.RECODER_DOCKER_URL ||
+  process.env.RECODER_BRIDGE_URL ||
+  (process.env.RECODER_USE_CLOUD === 'true' ? CLOUD_DOCKER_URL : LOCAL_BACKEND_URL);
+const API_URL =
+  process.env.RECODER_API_URL ||
+  (process.env.RECODER_USE_CLOUD === 'true' ? 'https://api.recoder.xyz' : LOCAL_BACKEND_URL);
+// The WS bridge lives at <docker base>/agent-bridge. Honor RECODER_BRIDGE_URL as a
+// direct bridge override (it may already be a ws:// URL or a base) before deriving.
+const A2A_URL =
+  process.env.RECODER_A2A_URL ||
+  (process.env.RECODER_BRIDGE_URL && /\/agent-bridge\/?$/.test(process.env.RECODER_BRIDGE_URL)
+    ? process.env.RECODER_BRIDGE_URL.replace('https:', 'wss:').replace('http:', 'ws:')
+    : `${DOCKER_URL.replace('https:', 'wss:').replace('http:', 'ws:').replace(/\/+$/, '')}/agent-bridge`);
 // Conductor (coding workspaces) lives on the backend Express server (PORT, default
 // :3100) under /api/conductor. Accept either RECODER_CONDUCTOR_URL or the shorter
 // CONDUCTOR_URL alias; both should point at that mount (e.g.

@@ -517,9 +517,53 @@ body {
 }
 .detail-terminal-tab { font-size: 11px; color: var(--text-faint); padding-bottom: 2px; border-bottom: 2px solid transparent; }
 .detail-terminal-tab-active { color: var(--text); border-bottom-color: var(--accent); }
+/* The Chat | Terminal surface toggle — buttons styled as the existing flat tabs
+   (transparent button reset, accent underline on the active skin). */
+.detail-terminal-tab-btn {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; font: inherit; font-size: 11px; padding: 0 0 2px;
+  transition: color 0.12s, border-color 0.12s;
+}
+.detail-terminal-tab-btn:hover { color: var(--text-dim); }
 .detail-terminal-branch {
   margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
+}
+
+/* Friendly ConversationView — the calm "not scary" skin of the surface toggle.
+   Muted, Cursor-style, reusing the existing neutral tokens (no vibrant noise). */
+.conv { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.conv-scroll {
+  flex: 1; min-height: 0; overflow: auto; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.conv-status {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 11px 14px;
+}
+.conv-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--neutral); }
+.conv-status-live { background: var(--progress); }
+.conv-status-wait { background: var(--warn); }
+.conv-status-done { background: var(--good); }
+.conv-status-bad { background: var(--bad); }
+.conv-status-label { font-size: 13px; font-weight: 600; color: var(--text); flex-shrink: 0; }
+.conv-status-latest {
+  font-size: 12px; color: var(--text-dim); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.conv-output { display: flex; flex-direction: column; gap: 6px; }
+.conv-output-toggle {
+  align-self: flex-start; background: none; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 11px; color: var(--text-faint); padding: 2px 0;
+  transition: color 0.12s;
+}
+.conv-output-toggle:hover { color: var(--text-dim); }
+.conv-output-chevron { font-size: 9px; color: var(--text-faint); }
+.conv-output-body {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+  min-height: 140px; max-height: 320px; overflow: auto;
 }
 
 /* Event log */

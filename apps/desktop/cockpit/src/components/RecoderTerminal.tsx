@@ -20,6 +20,18 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
+/** Result of spawning a PTY in the main process. */
+interface SpawnResult {
+  id: string;
+  success: boolean;
+  /**
+   * True when the main process could NOT create a real TTY (node-pty missing or
+   * spawn failed). The renderer must NOT pretend it has a terminal — it surfaces
+   * a truthful notice and the caller can fall back to the HTTP /sessions surface.
+   */
+  ptyUnavailable?: boolean;
+}
+
 /** The preload bridge shape we use (a subset of window.recoderDesktop). */
 interface DesktopTerminalBridge {
   spawnTerminal: (options: {
@@ -29,7 +41,7 @@ interface DesktopTerminalBridge {
     cols?: number;
     rows?: number;
     env?: Record<string, string>;
-  }) => Promise<{ id: string; success: boolean }>;
+  }) => Promise<SpawnResult>;
   terminalWrite: (id: string, data: string) => Promise<boolean>;
   terminalResize: (id: string, cols: number, rows: number) => Promise<boolean>;
   terminalKill: (id: string) => Promise<boolean>;
@@ -53,6 +65,14 @@ export interface RecoderTerminalProps {
   cwd?: string;
   /** Extra env for the PTY (e.g. pinning the vendored tmux bin). */
   env?: Record<string, string>;
+  /**
+   * Called when the main process reports it has no real PTY (node-pty missing).
+   * The host can then fall back to the truthful HTTP /sessions surface instead
+   * of showing an embedded terminal that can never attach.
+   */
+  onPtyUnavailable?: () => void;
+  /** Friendly label for the running session (e.g. the branch), for the exit notice. */
+  sessionLabel?: string;
 }
 
 /**
@@ -77,9 +97,19 @@ const RECODER_TERM_THEME = {
   brightWhite: '#ffffff',
 };
 
-export function RecoderTerminal({ command, args, cwd, env }: RecoderTerminalProps) {
+export function RecoderTerminal({
+  command,
+  args,
+  cwd,
+  env,
+  onPtyUnavailable,
+  sessionLabel,
+}: RecoderTerminalProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [unsupported, setUnsupported] = useState(false);
+  // True when the main process has no real PTY (node-pty missing) — distinct
+  // from `unsupported` (no Electron bridge at all). We tell the truth either way.
+  const [ptyUnavailable, setPtyUnavailable] = useState(false);
   const [exited, setExited] = useState<number | null>(null);
 
   useEffect(() => {
@@ -90,6 +120,11 @@ export function RecoderTerminal({ command, args, cwd, env }: RecoderTerminalProp
     }
     const host = hostRef.current;
     if (!host) return;
+
+    // Fresh attach: clear any prior exit / unavailable notice from a previous
+    // session so we never show a stale "ended" message over a live terminal.
+    setExited(null);
+    setPtyUnavailable(false);
 
     const term = new Terminal({
       cursorBlink: true,
@@ -143,9 +178,19 @@ export function RecoderTerminal({ command, args, cwd, env }: RecoderTerminalProp
           if (res?.id) void bridge.terminalKill(res.id);
           return;
         }
-        ptyId = res?.id ?? null;
+        // No real TTY in the main process — do NOT pretend we have a terminal.
+        // Surface it truthfully and let the host fall back to the HTTP surface.
+        if (!res || res.success === false || res.ptyUnavailable) {
+          setPtyUnavailable(true);
+          onPtyUnavailable?.();
+          return;
+        }
+        ptyId = res.id ?? null;
       })
-      .catch(() => setUnsupported(true));
+      .catch(() => {
+        setPtyUnavailable(true);
+        onPtyUnavailable?.();
+      });
 
     // Keep the PTY sized to the rendered terminal.
     const resize = () => {
@@ -180,11 +225,23 @@ export function RecoderTerminal({ command, args, cwd, env }: RecoderTerminalProp
     );
   }
 
+  if (ptyUnavailable) {
+    return (
+      <div class="rterm-unsupported">
+        A real terminal isn’t available in this build, so the live PTY can’t
+        attach. Showing the read-only session output instead.
+      </div>
+    );
+  }
+
   return (
     <div class="rterm">
       <div class="rterm-host" ref={hostRef} />
       {exited !== null && (
-        <div class="rterm-exited">Session ended{exited ? ` (code ${exited})` : ''}.</div>
+        // Friendly, never the raw tmux "Pane is dead" copy (vision principle).
+        <div class="rterm-exited">
+          {sessionLabel ? `${sessionLabel} — agent session ended.` : 'Agent session ended.'}
+        </div>
       )}
     </div>
   );

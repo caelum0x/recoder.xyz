@@ -13,7 +13,11 @@ export {
   planConductorRun,
   effectiveRuntimeId,
   computePalDefaults,
+  palToolRules,
+  palGovernanceAnnotation,
   type ConductorPlan,
   type PalDefaults,
   type PalPlanAnnotation,
+  type PalToolRule,
+  type PalGovernanceAnnotation,
 } from './pal-plan.js';
