@@ -19,9 +19,23 @@
  *      ANNOTATING the record with the plan (incl. risk). A caller-provided
  *      `runtimeId`/`substrate` ALWAYS wins (no behavior change when given).
  *
+ *   3. `palToolRules` — the per-run permission contribution. The plan's GRANTED
+ *      MCP tools (`PALPlan.mcpTools`) are translated into the EXACT agent-mcp
+ *      tool-rule shape (`AgentProfile.permissions.toolRules`) the per-run
+ *      permission stage (`canCallMcpTool`) consults. The run loop applies these
+ *      onto the launched actor profile, so the plan's grants actually GOVERN which
+ *      tools the run may call — HIGH-risk grants (scored by agent-mcp's own
+ *      `estimateMcpToolRisk`) stay allowed but require approval. This is the real
+ *      flow of `toolGrants` into the run, not a decorative annotation.
+ *
+ *   4. `palGovernanceAnnotation` — the D1 risk evidence for the governance gate:
+ *      pal's risk tier + the granted-tool risk breakdown, surfaced as DESCRIPTIVE
+ *      evidence the gate (and cockpit) can show.
+ *
  * DECISION D1: `PALPlan.risk` ANNOTATES the run only (persisted on the workspace
- * record so the cockpit can show it); it MUST NOT drive governance routing —
- * governance keeps its own independent decision.
+ * record, and exposed to governance as descriptive evidence via
+ * `palGovernanceAnnotation`); it MUST NOT drive governance routing — governance
+ * keeps its own independent decision.
  *
  * DEGRADE-SAFE: every entry point that touches pal is wrapped so a missing/throwing
  * planner falls back to the prior default routing and NEVER blocks a launch.
@@ -37,8 +51,17 @@
  * than silently coerced, and the caller is told the fallback that WILL run.
  */
 import { planTask, type PALPlan } from '@recoder/pal';
-import type { TaskSpec, WorkspaceSubstrate } from '@recoder/agent-os';
+import { estimateMcpToolRisk } from '@recoder/agent-mcp';
+import type { AgentPermissionPolicy, TaskSpec, WorkspaceSubstrate } from '@recoder/agent-os';
 import { isConductorRuntimeId, type ConductorRuntimeId } from './runtime-commands.js';
+
+/**
+ * A per-run agent-mcp tool rule, in the EXACT shape the agent-mcp permission stage
+ * (`canCallMcpTool`) consults via `AgentProfile.permissions.toolRules`. This is the
+ * concrete contract the run loop applies onto the launched actor profile so the
+ * PALPlan's `mcpTools` grants actually GOVERN which tools the run may call.
+ */
+export type PalToolRule = AgentPermissionPolicy['toolRules'][number];
 
 /**
  * pal's runtime ids overlap the Conductor's almost exactly; `browser_agent` is the
@@ -69,6 +92,81 @@ function mapSubstrate(choice: PALPlan['sandbox']): WorkspaceSubstrate {
   return 'tmux_worktree';
 }
 
+/**
+ * Translate the PALPlan's GRANTED MCP tools into the per-run agent-mcp permission
+ * rules the run loop applies onto the launched actor profile.
+ *
+ * This is the REAL flow of `toolGrants` into the per-run permission set: the
+ * agent-mcp permission stage (`canCallMcpTool`) decides each tool call against
+ * `actor.permissions.toolRules`. By emitting one `allow` rule per pal-granted tool
+ * we make the plan's grants the operative allowlist for the run. Each granted tool
+ * is risk-scored with agent-mcp's own `estimateMcpToolRisk`; HIGH-risk grants (e.g.
+ * `*.deploy`, anything matching the secret/billing/push/merge family) are allowed
+ * but marked `requiresApproval` so a sensitive grant still funnels through approval
+ * rather than running unchecked. Skills are NOT tools — they are carried on the
+ * annotation for the runtime to load, not turned into permission rules.
+ *
+ * Pure + total: never throws, returns `[]` for an empty/garbage grant list so an
+ * empty result simply means "no plan-derived grants" (the run keeps its base
+ * profile) — it never blocks a launch.
+ */
+export function palToolRules(mcpTools: readonly string[]): PalToolRule[] {
+  if (!Array.isArray(mcpTools)) return [];
+  const seen = new Set<string>();
+  const rules: PalToolRule[] = [];
+  for (const toolName of mcpTools) {
+    if (typeof toolName !== 'string' || toolName.length === 0 || seen.has(toolName)) continue;
+    seen.add(toolName);
+    const risk = estimateMcpToolRisk(toolName);
+    rules.push({
+      toolName,
+      effect: 'allow',
+      reason: `Granted by @recoder/pal plan (mcp risk: ${risk}).`,
+      // High-risk grants stay allowed but must clear approval before the call runs.
+      ...(risk === 'high' ? { requiresApproval: true } : {}),
+    });
+  }
+  return rules;
+}
+
+/**
+ * DECISION D1 governance annotation: the risk tier + the granted-tool risk
+ * breakdown, surfaced to the governance gate as DESCRIPTIVE evidence only. It is
+ * NOT a routing input — governance keeps its own independent decision; this lets
+ * the gate (and the cockpit) SHOW pal's risk read and the highest-risk grant
+ * without coupling the governance decision to the planner.
+ */
+export type PalGovernanceAnnotation = {
+  /** pal's task risk tier (annotation only — never a governance routing input). */
+  risk: PALPlan['risk'];
+  /** The highest agent-mcp tool-risk among the granted tools ('low' when none). */
+  highestToolRisk: 'low' | 'medium' | 'high';
+  /** The granted tools that scored HIGH risk (e.g. deploy/secret/push family). */
+  highRiskTools: string[];
+};
+
+const TOOL_RISK_ORDER = { low: 0, medium: 1, high: 2 } as const;
+
+/**
+ * Derive the D1 governance annotation from the granted tools + plan risk. Pure +
+ * total: degrades to `{ risk, highestToolRisk: 'low', highRiskTools: [] }` for an
+ * empty grant list. Descriptive only (D1) — it annotates, it does not route.
+ */
+export function palGovernanceAnnotation(
+  risk: PALPlan['risk'],
+  mcpTools: readonly string[],
+): PalGovernanceAnnotation {
+  const tools = Array.isArray(mcpTools) ? mcpTools.filter((t): t is string => typeof t === 'string' && t.length > 0) : [];
+  let highest: 'low' | 'medium' | 'high' = 'low';
+  const highRiskTools: string[] = [];
+  for (const toolName of tools) {
+    const toolRisk = estimateMcpToolRisk(toolName);
+    if (TOOL_RISK_ORDER[toolRisk] > TOOL_RISK_ORDER[highest]) highest = toolRisk;
+    if (toolRisk === 'high' && !highRiskTools.includes(toolName)) highRiskTools.push(toolName);
+  }
+  return { risk, highestToolRisk: highest, highRiskTools };
+}
+
 /** A Conductor-vocabulary recommendation derived from a pal `PALPlan`. */
 export type ConductorPlan = {
   taskId: string;
@@ -86,8 +184,16 @@ export type ConductorPlan = {
   browserVerification: boolean;
   skills: string[];
   mcpTools: string[];
+  /**
+   * The plan's granted tools translated into agent-mcp permission rules — the
+   * per-run allowlist the run loop applies onto the launched actor profile so
+   * `canCallMcpTool` enforces the plan's grants (HIGH-risk grants require approval).
+   */
+  toolRules: PalToolRule[];
   approvalGateIds: string[];
   risk: PALPlan['risk'];
+  /** D1 governance annotation (risk + granted-tool risk breakdown) — descriptive only. */
+  governance: PalGovernanceAnnotation;
   /** The raw pal plan, unmodified, for callers that want the source-of-truth fields. */
   pal: PALPlan;
 };
@@ -115,8 +221,10 @@ export function planConductorRun(task: TaskSpec, now?: string): ConductorPlan {
     browserVerification: pal.browserVerification,
     skills: pal.skills,
     mcpTools: pal.mcpTools,
+    toolRules: palToolRules(pal.mcpTools),
     approvalGateIds: pal.approvalGateIds,
     risk: pal.risk,
+    governance: palGovernanceAnnotation(pal.risk, pal.mcpTools),
     pal,
   };
 }
@@ -145,9 +253,18 @@ export type PalPlanAnnotation = {
   browserVerification: boolean;
   skills: string[];
   mcpTools: string[];
+  /**
+   * The per-run agent-mcp tool rules derived from the plan's grants. Persisted on
+   * the workspace record so the run loop can apply them onto the launched actor's
+   * `permissions.toolRules` (the agent-mcp permission stage enforces them) — this
+   * is how the plan's `toolGrants` actually govern the run, not just decorate it.
+   */
+  toolRules: PalToolRule[];
   approvalGateIds: string[];
   /** D1: annotation-only risk tier — NOT a governance input. */
   risk: PALPlan['risk'];
+  /** D1 governance annotation (risk + granted-tool risk breakdown) — descriptive only. */
+  governance: PalGovernanceAnnotation;
   generatedAt: string;
 };
 
@@ -187,8 +304,10 @@ export function computePalDefaults(task: TaskSpec, now?: string): PalDefaults | 
         browserVerification: plan.browserVerification,
         skills: plan.skills,
         mcpTools: plan.mcpTools,
+        toolRules: plan.toolRules,
         approvalGateIds: plan.approvalGateIds,
         risk: plan.risk,
+        governance: plan.governance,
         generatedAt: plan.pal.generatedAt,
       },
     };

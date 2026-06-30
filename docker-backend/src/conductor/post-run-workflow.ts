@@ -21,6 +21,24 @@
  * delivery summary / memory candidate it already produced are returned so no
  * outcome is lost. See docs/agent-os/02-task-lifecycle.md (running -> verifying ->
  * waiting_for_review).
+ *
+ * RUNTIME HANDOFF (the @recoder/coordination "handoff bus" seam) — the post-run
+ * graph is also where the conductor decides whether the FINISHED run must hand the
+ * task to a DIFFERENT runtime in the team chain. When the workspace was planned by
+ * @recoder/pal, its persisted `metadata.palPlan` annotation names the recommended
+ * NEXT runtime (`reviewerRuntimeId` — e.g. codex -> claude -> pi, or a CC -> CC
+ * second pass). On completion this module reads that annotation and, when a next
+ * runtime is named, emits a coordination handoff that NAMES that runtime via the
+ * real engine path (`emitReviewHandoff` -> `InitiateHandoff` -> `HandoffBus.publish`).
+ * That is what actually fires the codex->claude->pi / CC->CC chain instead of it
+ * living only as an advisory annotation on the record.
+ *
+ * The handoff is degrade-safe and idempotent: it shares the same durable dedup
+ * ledger as the rest of the coordination layer (keyed on the run + named runtime),
+ * never throws, and is skipped entirely when coordination is unavailable, when no
+ * pal plan / next runtime was named, or when the named next runtime is the SAME as
+ * the runtime that just ran with nothing further to chain. It never blocks the
+ * post-run sequence or the awaiting_review transition.
  */
 import { createLogger } from '../logger.js';
 import {
@@ -37,6 +55,9 @@ import { generateDeliverySummary, generateMemoryCandidate } from './delivery-sum
 import type { DeliverySummary, MemoryCandidate } from './delivery-summary.js';
 import { runBrowserCheck } from './browser-check.js';
 import type { BrowserVerificationResult } from '@recoder/browser-verification';
+import { getWorkspace } from './workspace-service.js';
+import { emitReviewHandoff } from './coordination-integration.js';
+import type { Workspace } from '@recoder/agent-os';
 
 const logger = createLogger('conductor:post-run-workflow');
 
@@ -54,7 +75,28 @@ export interface PostRunWorkflowResult {
   nodeStatuses: { nodeId: string; kind: WorkflowNode['kind']; status: string }[];
   /** Whether the runner drove the sequence (false => caller should fall back). */
   ranViaRunner: boolean;
+  /**
+   * The runtime-chain handoff outcome (the @recoder/coordination "handoff bus"
+   * seam). Present (non-null) only when the PALPlan annotation named a NEXT runtime
+   * and a handoff was attempted; otherwise null (no pal plan / no next runtime /
+   * coordination unavailable). Additive — purely informational for audit/metadata.
+   */
+  runtimeHandoff: RuntimeHandoffOutcome | null;
 }
+
+/** The outcome of the PALPlan-driven runtime-chain handoff. */
+export type RuntimeHandoffOutcome = {
+  /** The runtime the finished run was on (the source of the chain). */
+  fromRuntimeId: string;
+  /** The PALPlan-named next runtime the task is being handed to. */
+  toRuntimeId: string;
+  /** Whether the handoff actually fired on the coordination handoff bus. */
+  status: 'emitted' | 'duplicate' | 'skipped';
+  /** The coordination handoff id when one was emitted. */
+  handoffId?: string;
+  /** Why a handoff was skipped (no next runtime, same runtime, coordination down, ...). */
+  reason?: string;
+};
 
 /**
  * Build the post-run delivery graph for a finished workspace.
@@ -88,6 +130,124 @@ function buildPostRunDefinition(workspaceId: string): WorkflowDefinition {
     nodes: [verify, browser, memory],
     metadata: { workspaceId, purpose: 'post-run-sequencing' },
   };
+}
+
+/**
+ * The PALPlan annotation persisted on a workspace record. Only the field this seam
+ * reads is typed (the planner writes more, but the runtime-chain handoff cares only
+ * about the named next runtime). Structural + optional so a record without a plan,
+ * or a plan that named no reviewer, simply yields `undefined`.
+ */
+type PalPlanAnnotationShape = {
+  reviewerRuntimeId?: string | null;
+};
+
+/**
+ * Read the PALPlan-named NEXT runtime from a workspace record, if any.
+ *
+ * The planner persists its recommendation under `metadata.palPlan` at create time
+ * (see workspace-service `applyPalDefaults`). The next runtime in the team chain is
+ * `reviewerRuntimeId` (codex -> claude -> pi, or a CC -> CC second pass). Returns
+ * `null` when there is no annotation or no named reviewer runtime. Pure + total.
+ */
+function readNextRuntimeId(workspace: Workspace): string | null {
+  const metadata = workspace.metadata;
+  if (!metadata || typeof metadata !== 'object') return null;
+  const palPlan = (metadata as Record<string, unknown>).palPlan;
+  if (!palPlan || typeof palPlan !== 'object') return null;
+  const reviewer = (palPlan as PalPlanAnnotationShape).reviewerRuntimeId;
+  return typeof reviewer === 'string' && reviewer.length > 0 ? reviewer : null;
+}
+
+/**
+ * Fire the PALPlan-driven runtime-chain handoff on the @recoder/coordination
+ * handoff bus.
+ *
+ * THIS is the seam the founder cares about: an advisory `metadata.palPlan` that
+ * NAMES a next runtime is not a handoff until something actually publishes it. When
+ * the finished run's plan named a next runtime (`reviewerRuntimeId`), this emits a
+ * coordination handoff to that runtime through the REAL engine path
+ * (`emitReviewHandoff` -> engine `InitiateHandoff` -> `HandoffBus.publish`), so the
+ * codex->claude->pi / CC->CC chain genuinely fires instead of being a record field.
+ *
+ * The handoff carries the named next runtime in BOTH the prompt and the dedup key
+ * (`runId#runtime`), so:
+ *   - the reviewer/next agent that binds to the handoff knows which runtime is
+ *     expected (it is named explicitly in the prompt), and
+ *   - the dedup key is DISTINCT from the generic awaiting_review handoff
+ *     (`review:taskId:runId`) — these are two different transfers, so naming the
+ *     runtime in the run-id slot keeps them from colliding in the shared ledger
+ *     while remaining idempotent across repeated post-run passes.
+ *
+ * Degrade-safe + idempotent + never throws. Returns a truthful `skipped` (never a
+ * fake handoff) when: there is no workspace record, no pal plan, no next runtime,
+ * the next runtime equals the runtime that just ran with nothing to chain, or the
+ * coordination layer is unavailable (`emitReviewHandoff` itself returns `skipped`).
+ */
+async function emitPalRuntimeHandoff(
+  workspaceId: string,
+  summary: DeliverySummary | null,
+): Promise<RuntimeHandoffOutcome | null> {
+  let workspace: Workspace | undefined;
+  try {
+    workspace = (await getWorkspace(workspaceId)) ?? undefined;
+  } catch (err) {
+    logger.warn({ workspaceId, err }, 'runtime handoff: workspace lookup failed (skipped)');
+    return null;
+  }
+  if (!workspace) return null;
+
+  const toRuntimeId = readNextRuntimeId(workspace);
+  if (!toRuntimeId) {
+    // No pal plan, or the plan named no next runtime — nothing to chain. Not an
+    // error: most runs are single-runtime. Return null (no attempt recorded).
+    return null;
+  }
+
+  const fromRuntimeId = summary?.runtimeId ?? workspace.runtimeId;
+
+  // Same runtime with nothing to chain forward. We still allow a genuine CC -> CC
+  // second pass, but only when the plan explicitly named the SAME runtime as the
+  // reviewer (a real second-pass intent). When the named runtime simply mirrors the
+  // primary and there is no distinct reviewer step, skip truthfully. Here the plan
+  // DID name `reviewerRuntimeId` distinctly, so a same-runtime value IS an explicit
+  // CC -> CC pass and is allowed through.
+  const runId = workspace.runId ?? summary?.runId;
+  // Encode the named next runtime in the run-id slot so the coordination dedup key
+  // (`review:taskId:<runId#runtime>`) is unique per (run, target runtime) and never
+  // collides with the generic awaiting_review handoff for the same run.
+  const handoffRunId = `${runId ?? 'no-run'}#${toRuntimeId}`;
+  const prompt =
+    `Continue task ${workspace.taskId} on the planned next runtime "${toRuntimeId}" ` +
+    `(handed off from "${fromRuntimeId}", workspace ${workspaceId}). ` +
+    `The prior run finished — pick up the work as the next runtime in the planned chain.`;
+
+  try {
+    const result = await emitReviewHandoff({
+      workspaceId,
+      spaceId: workspace.spaceId,
+      taskId: workspace.taskId,
+      runId: handoffRunId,
+      prompt,
+    });
+
+    if (result.status === 'emitted') {
+      logger.info(
+        { workspaceId, taskId: workspace.taskId, fromRuntimeId, toRuntimeId, handoffId: result.handoffId },
+        'runtime-chain handoff emitted on coordination handoff bus (PALPlan next runtime)',
+      );
+      return { fromRuntimeId, toRuntimeId, status: 'emitted', handoffId: result.handoffId };
+    }
+    if (result.status === 'duplicate') {
+      return { fromRuntimeId, toRuntimeId, status: 'duplicate' };
+    }
+    return { fromRuntimeId, toRuntimeId, status: 'skipped', reason: result.reason };
+  } catch (err) {
+    // emitReviewHandoff is already degrade-safe, but never let a surprise from the
+    // coordination layer escape into the post-run path.
+    logger.warn({ workspaceId, toRuntimeId, err }, 'runtime-chain handoff threw (skipped, post-run unaffected)');
+    return { fromRuntimeId, toRuntimeId, status: 'skipped', reason: 'handoff-threw' };
+  }
 }
 
 /**
@@ -195,10 +355,20 @@ export async function runPostRunDelivery(workspaceId: string): Promise<PostRunWo
       'post-run delivery graph executed via workflow runner',
     );
 
-    return { summary, candidate, browserVerification, nodeStatuses, ranViaRunner: true };
+    // RUNTIME-CHAIN HANDOFF: now that delivery is captured, fire the PALPlan-named
+    // next-runtime handoff on the coordination handoff bus. Degrade-safe + never
+    // throws; null when no next runtime was planned. Runs AFTER the graph so the
+    // delivery summary (used for the from-runtime + run id) is available.
+    const runtimeHandoff = await emitPalRuntimeHandoff(workspaceId, summary);
+
+    return { summary, candidate, browserVerification, nodeStatuses, ranViaRunner: true, runtimeHandoff };
   } catch (err) {
-    // Degrade-safe: the runner / package was unavailable or threw unexpectedly.
+    // Degrade-safe: the runner / package was unavailable or threw unexpectedly. The
+    // runtime-chain handoff still fires from whatever summary was captured (it has
+    // its own try/catch and never throws), so a runner failure does not drop the
+    // planned codex->claude->pi / CC->CC chain.
     logger.warn({ workspaceId, err }, 'post-run workflow runner unavailable — caller will fall back inline');
-    return { summary, candidate, browserVerification, nodeStatuses: [], ranViaRunner: false };
+    const runtimeHandoff = await emitPalRuntimeHandoff(workspaceId, summary).catch(() => null);
+    return { summary, candidate, browserVerification, nodeStatuses: [], ranViaRunner: false, runtimeHandoff };
   }
 }

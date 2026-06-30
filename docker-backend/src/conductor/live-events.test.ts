@@ -199,7 +199,7 @@ describe('attachWorkspaceStream socket framing', () => {
     }
   }
 
-  it('shapes new events as {type:"event", event} frames and forwards them over the socket', async () => {
+  it('replays the run-so-far on connect, then forwards each new event as a {type:"event", event} frame', async () => {
     vi.useFakeTimers();
     listMock
       .mockResolvedValueOnce([evt('s1')])
@@ -209,14 +209,16 @@ describe('attachWorkspaceStream socket framing', () => {
     const ws = new FakeSocket();
     const cleanup = attachWorkspaceStream(ws as never, 'ws_live');
 
-    await vi.advanceTimersByTimeAsync(2000); // baseline
-    await vi.advanceTimersByTimeAsync(2000); // emit s2 as an event frame
+    // The cockpit socket replays backlog on connect: the first poll delivers the
+    // run-so-far (s1) so a board attaching mid-run renders the existing events,
+    await vi.advanceTimersByTimeAsync(2000);
+    // then the next poll delivers the newly-appended terminal event (s2).
+    await vi.advanceTimersByTimeAsync(2000);
 
     const frames = ws.sent as Array<{ type: string; event?: RunEvent }>;
     const eventFrames = frames.filter((f) => f.type === 'event');
-    expect(eventFrames).toHaveLength(1);
-    expect(eventFrames[0].event?.eventId).toBe('s2');
-    expect(eventFrames[0].event?.message).toBe('all done');
+    expect(eventFrames.map((f) => f.event?.eventId)).toEqual(['s1', 's2']);
+    expect(eventFrames[1].event?.message).toBe('all done');
 
     cleanup();
   });

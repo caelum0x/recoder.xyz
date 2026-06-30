@@ -13,14 +13,29 @@
 export interface SpawnTerminalOptions {
   /** Shell/command to run. Defaults to the user's login shell in the main process. */
   shell?: string;
+  /** Command to run in the pty (e.g. the resolved tmux binary). */
+  command?: string;
+  /** Arguments for the command (e.g. ['attach', '-t', '<session>']). */
+  args?: string[];
   /** Working directory for the spawned pty. */
   cwd?: string;
   /** Initial column count. */
   cols?: number;
   /** Initial row count. */
   rows?: number;
-  /** Extra environment variables merged into the pty environment. */
+  /** Extra environment variables merged into the pty environment (allowlisted in main). */
   env?: Record<string, string>;
+}
+
+/**
+ * Result of spawning a pty. `ptyUnavailable` is true when the main process has
+ * no real TTY (node-pty failed to load/spawn) — callers must NOT show an
+ * embedded terminal then; fall back to the HTTP /sessions surface truthfully.
+ */
+export interface SpawnTerminalResult {
+  id: string;
+  success: boolean;
+  ptyUnavailable?: boolean;
 }
 
 export interface TerminalDataMessage {
@@ -48,7 +63,9 @@ export interface RecoderDesktopBridge {
   openFolder: () => Promise<string | null>;
   /** Native file picker. Resolves to { path, content }, or null if cancelled. */
   openFile: () => Promise<OpenFileResult | null>;
-  spawnTerminal: (options?: SpawnTerminalOptions) => Promise<{ id: string } | string>;
+  spawnTerminal: (
+    options?: SpawnTerminalOptions,
+  ) => Promise<SpawnTerminalResult | { id: string } | string>;
   terminalWrite: (id: string, data: string) => Promise<unknown>;
   terminalResize: (id: string, cols: number, rows: number) => Promise<unknown>;
   terminalKill: (id: string) => Promise<unknown>;
@@ -56,9 +73,25 @@ export interface RecoderDesktopBridge {
   onTerminalExit: (cb: (msg: TerminalExitMessage) => void) => () => void;
 }
 
+/**
+ * The focused, session-oriented terminal bridge (window.recoderTerminal). A
+ * minimal surface over the same terminal:* IPC channels, shaped around a single
+ * embedded terminal: open() spawns and tracks the pty; write/resize/close act on
+ * it. Mirrors what preload.js exposes — invents nothing.
+ */
+export interface RecoderTerminalBridge {
+  open: (options: SpawnTerminalOptions) => Promise<SpawnTerminalResult>;
+  write: (data: string, id?: string) => Promise<unknown>;
+  resize: (cols: number, rows: number, id?: string) => Promise<unknown>;
+  close: (id?: string) => Promise<unknown>;
+  onData: (cb: (msg: TerminalDataMessage) => void) => () => void;
+  onExit: (cb: (msg: TerminalExitMessage) => void) => () => void;
+}
+
 declare global {
   interface Window {
     recoderDesktop?: RecoderDesktopBridge;
+    recoderTerminal?: RecoderTerminalBridge;
   }
 }
 

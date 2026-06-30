@@ -49,6 +49,11 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
       command: input.command,
       branch: input.branch,
       baseRef: input.baseRef,
+      // Forward the conductor-built launch env (RECODER_A2A_URL/RECODER_DOCKER_URL,
+      // INTERNAL_SERVICE_KEY, run/task ids) so the agent + its MCP children register
+      // against the LOCAL bridge. Previously dropped here, which left agents
+      // defaulting to the production bridge ("disconnected").
+      env: input.env,
     });
     // ref = the orchestrator's session id (workspaceId, used by capturePane/killSession);
     // sessionName = the tmux session name (used for direct `tmux has-session`).
@@ -65,6 +70,9 @@ const tmuxWorktreeSubstrate: ConductorSubstrate = {
       sessionId: input.workspaceId,
       worktreePath,
       command: input.command,
+      // Forward the relaunch env so continued runs also register against the LOCAL
+      // bridge (parity with launch()).
+      env: input.env,
     });
     return { ref: input.workspaceId, worktreePath: session.worktreePath, sessionName: session.tmuxName };
   },

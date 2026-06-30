@@ -18,10 +18,22 @@
  * prior `@recoder/runtime` path runs unchanged. If the agent-oss boundary throws
  * or the package is unavailable, the caller logs and falls back to prior
  * behavior — an OSS dispatch failure NEVER blocks a launch.
+ *
+ * REAL EXECUTION SURFACE (the capability that must flow end-to-end): most OSS
+ * profiles agent-oss publishes today are mapping-only — they translate the task
+ * but do not own a runnable engine. ONE profile, `openfang`, is a genuine
+ * execution surface: `OpenFangAdapter.run()` spawns the `openfang` CLI as a
+ * subprocess and streams real `RunEvent`s (and degrades safely to a single honest
+ * `failed` event when the binary is absent). For that profile `resolveOssDispatch`
+ * attaches a lazy `run()` starter on the result so the substrate run loop can
+ * drive the engine's actual RunEvents — instead of only logging a translation.
+ * Mapping-only profiles return `run: undefined` and keep prior behavior.
  */
 import {
   assertAdapterCanHandle,
   mapTaskForOssRuntime,
+  OpenFangAdapter,
+  type OssAdapter,
   type OssAdapterProfile,
   type OssAdapterRunInput,
   type OssTaskMapping,
@@ -34,13 +46,14 @@ import {
   langGraphAdapterProfile,
   liteLlmAdapterProfile,
   mem0AdapterProfile,
+  openFangAdapterProfile,
   openGrokAdapterProfile,
   openZitiAdapterProfile,
   playwrightAdapterProfile,
   sourcegraphAdapterProfile,
   stagehandAdapterProfile,
 } from '@recoder/agent-oss';
-import type { TaskSpec } from '@recoder/agent-os';
+import type { RunEvent, TaskSpec } from '@recoder/agent-os';
 import type { RuntimePolicy } from '@recoder/agent-runtimes';
 
 /**
@@ -58,12 +71,24 @@ const OSS_PROFILES: readonly OssAdapterProfile[] = [
   langGraphAdapterProfile,
   liteLlmAdapterProfile,
   mem0AdapterProfile,
+  openFangAdapterProfile,
   openGrokAdapterProfile,
   openZitiAdapterProfile,
   playwrightAdapterProfile,
   sourcegraphAdapterProfile,
   stagehandAdapterProfile,
 ];
+
+/**
+ * Factory for the runnable OSS adapters — the profiles agent-oss can actually
+ * EXECUTE (not just translate). Each factory returns a fresh `OssAdapter` with a
+ * real `run()` async iterable. Keyed by normalized adapterId so a resolved
+ * profile can be promoted to a live engine. Today only `openfang` is runnable;
+ * mapping-only profiles are absent here and stay translate-only.
+ */
+const RUNNABLE_OSS_ADAPTERS: Readonly<Record<string, () => OssAdapter>> = {
+  openfang: () => new OpenFangAdapter(),
+};
 
 /** Normalize a runtime/provider id for tolerant matching (`browser-use` ~ `browser_use`). */
 function normalize(id: string): string {
@@ -94,9 +119,33 @@ export type OssDispatchLaunch = {
   prompt: string;
 };
 
+/**
+ * A live engine run started through agent-oss. `events` is the engine's real
+ * `RunEvent` async iterable (e.g. OpenFang subprocess stdout/stderr → RunEvents);
+ * `cancel` terminates the in-flight engine. Degrade-safe by construction: the
+ * underlying adapter yields an honest `failed` RunEvent (never throws) when its
+ * engine binary is unavailable, so the caller can always drain `events`.
+ */
+export type OssEngineRun = {
+  events: AsyncIterable<RunEvent>;
+  cancel: () => Promise<void>;
+};
+
 export type OssDispatchResult = {
   profile: OssAdapterProfile;
   mapping: OssTaskMapping;
+  /**
+   * Present ONLY when the resolved profile is a genuine execution surface
+   * (`openfang` today). Calling it instantiates the engine adapter and returns
+   * its live `RunEvent` stream so the substrate run loop can drive the engine's
+   * real output. `undefined` for mapping-only profiles — the caller then keeps
+   * the prior translate-and-log behavior with no execution change.
+   *
+   * Lazy + non-throwing: `run()` only starts the engine when invoked, and any
+   * instantiation failure is folded into a single honest `failed` RunEvent so an
+   * engine fault NEVER blocks the launch.
+   */
+  run?: () => OssEngineRun;
 };
 
 /**
@@ -138,6 +187,77 @@ function buildPolicy(): RuntimePolicy {
 }
 
 /**
+ * Build the lazy engine-run starter for a runnable OSS profile, or `undefined`
+ * when the profile is mapping-only. The starter is the seam where the engine's
+ * REAL execution capability flows into the product run loop: invoking it
+ * instantiates the adapter and returns its live `RunEvent` async iterable.
+ *
+ * Fully degrade-safe:
+ * - A profile with no registered factory (every provider except `openfang`
+ *   today) gets `undefined` — translate-only, prior behavior preserved.
+ * - If the factory itself throws (engine package shape changed, ctor fault), we
+ *   fold the failure into a single honest `failed` RunEvent instead of throwing,
+ *   so draining `events` never blocks the launch.
+ * - The adapter's own `run()` already degrades to a `failed` event when its
+ *   binary is absent, so the live path is safe end to end.
+ */
+function buildEngineRun(
+  profile: OssAdapterProfile,
+  task: TaskSpec,
+  runInput: OssAdapterRunInput,
+): (() => OssEngineRun) | undefined {
+  const factory = RUNNABLE_OSS_ADAPTERS[normalize(profile.adapterId)];
+  if (!factory) return undefined;
+
+  return () => {
+    let adapter: OssAdapter;
+    try {
+      adapter = factory();
+    } catch (err) {
+      // Engine could not be constructed — surface one honest failed event rather
+      // than throwing into the caller's run loop.
+      const reason = err instanceof Error ? err.message : String(err);
+      return {
+        events: (async function* degraded(): AsyncIterable<RunEvent> {
+          yield {
+            eventId: `oss_${task.taskId}_${Date.now()}`,
+            taskId: task.taskId,
+            agentId: profile.adapterId,
+            createdAt: new Date().toISOString(),
+            type: 'failed',
+            state: 'failed',
+            message: `OSS engine ${profile.adapterId} could not start: ${reason}`,
+            data: { degraded: true },
+          };
+        })(),
+        cancel: async () => {},
+      };
+    }
+
+    return {
+      // The adapter's run() is the engine's real capability: for openfang it
+      // spawns the CLI and streams subprocess output as RunEvents. assertAdapter
+      // CanHandle inside run() guards intent support; `custom` is supported.
+      events: adapter.run ? adapter.run(runInput) : emptyEventStream(),
+      cancel: async () => {
+        if (adapter.cancel) {
+          try {
+            await adapter.cancel(profile.adapterId);
+          } catch {
+            // Best-effort cancel; never throw out of teardown.
+          }
+        }
+      },
+    };
+  };
+}
+
+/** Empty RunEvent stream for a runnable profile whose adapter omits `run()`. */
+async function* emptyEventStream(): AsyncIterable<RunEvent> {
+  // intentionally yields nothing
+}
+
+/**
  * If `runtimeId` targets an OSS framework, run the launch through the
  * `@recoder/agent-oss` boundary and return the canonical mapping. Returns `null`
  * for non-OSS runtimes (the default in-process path) so the caller leaves proven
@@ -146,6 +266,10 @@ function buildPolicy(): RuntimePolicy {
  * The boundary is the only place OSS task translation happens; it asserts the
  * adapter can handle the task intent and never lets the OSS surface own Recoder
  * state (the mapping carries only refs back into canonical state).
+ *
+ * For a genuine execution surface (`openfang`), the result also carries a lazy
+ * `run()` starter so the substrate can drive the engine's REAL RunEvents — the
+ * engine's capability flows through, not just its task translation.
  */
 export function resolveOssDispatch(input: OssDispatchLaunch): OssDispatchResult | null {
   const profile = resolveOssProfile(input.runtimeId);
@@ -179,5 +303,10 @@ export function resolveOssDispatch(input: OssDispatchLaunch): OssDispatchResult 
   assertAdapterCanHandle(profile, task);
   const mapping = mapTaskForOssRuntime(profile, runInput);
 
-  return { profile, mapping };
+  // Promote a runnable profile (openfang) to a live engine starter so the
+  // caller can stream the engine's real RunEvents. `undefined` for mapping-only
+  // profiles keeps the prior translate-and-log behavior unchanged.
+  const run = buildEngineRun(profile, task, runInput);
+
+  return { profile, mapping, run };
 }

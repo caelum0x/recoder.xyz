@@ -19,8 +19,22 @@ const {
   buildDaytonaCreateBody,
 } = require('./lib/recoder-mcp-core');
 
-const DOCKER_URL = process.env.RECODER_DOCKER_URL || 'http://127.0.0.1:3002';
-const API_URL = process.env.RECODER_API_URL || 'http://127.0.0.1:3001';
+// LOCAL-FIRST resolution (mirrors recoder-a2a-server.js): a desktop-spawned
+// Codex agent should hit the LOCAL backend by default. Resolve the backend base
+// from explicit env (RECODER_DOCKER_URL / RECODER_BRIDGE_URL), else a local
+// default derived from the backend port (RECODER_BACKEND_PORT or PORT, default
+// 3100 — the Express backend's real port, not the legacy 3001/3002 guesses), and
+// only use the cloud URL when RECODER_USE_CLOUD=true. Cloud still works when set
+// explicitly; local is simply the new default.
+const LOCAL_BACKEND_PORT = process.env.RECODER_BACKEND_PORT || process.env.PORT || '3100';
+const LOCAL_BACKEND_URL = `http://127.0.0.1:${LOCAL_BACKEND_PORT}`;
+const DOCKER_URL =
+  process.env.RECODER_DOCKER_URL ||
+  process.env.RECODER_BRIDGE_URL ||
+  (process.env.RECODER_USE_CLOUD === 'true' ? 'https://docker.recoder.xyz' : LOCAL_BACKEND_URL);
+const API_URL =
+  process.env.RECODER_API_URL ||
+  (process.env.RECODER_USE_CLOUD === 'true' ? 'https://api.recoder.xyz' : LOCAL_BACKEND_URL);
 const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || '';
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
 const API_TOKEN = process.env.RECODER_API_TOKEN || '';

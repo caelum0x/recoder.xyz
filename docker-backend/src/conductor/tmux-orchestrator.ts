@@ -48,6 +48,13 @@ export interface StartSessionInput {
   baseRef?: string;
   /** Command the agent runs inside the worktree (e.g. the pi runtime invocation). */
   command: string;
+  /**
+   * Extra environment for the launched agent process. Merged over the conductor's
+   * own process.env when spawning the tmux session, so the agent (and its MCP
+   * stdio children, which inherit this env) see e.g. RECODER_A2A_URL pointing at
+   * the LOCAL backend bridge. Omitted -> the session inherits process.env as-is.
+   */
+  env?: Record<string, string>;
 }
 
 const sessions = new Map<string, ConductorSession>();
@@ -120,8 +127,26 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
     try { await exec(TMUX_BIN, ['kill-session', '-t', init]); } catch { /* gone */ }
   }
 
-  // Detached tmux session running the agent inside the worktree.
-  await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command]);
+  // Detached tmux session running the agent inside the worktree. Pass the merged
+  // env on the exec so the launched agent (and the MCP stdio children it spawns,
+  // which inherit this env) see the injected vars — e.g. RECODER_A2A_URL pointing
+  // at the LOCAL backend bridge. tmux only forwards env to a NEW server it spawns;
+  // when an existing server already runs, also push the vars via `setenv -g` so
+  // the new pane picks them up regardless of when the server was started.
+  const sessionEnv = input.env ? { ...process.env, ...input.env } : undefined;
+  if (input.env) {
+    for (const [key, value] of Object.entries(input.env)) {
+      try {
+        await exec(TMUX_BIN, ['set-environment', '-g', key, value]);
+      } catch {
+        // No running server yet / unsupported — the env passed on the exec below
+        // (which boots the server) still covers the fresh-server case.
+      }
+    }
+  }
+  await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command], {
+    ...(sessionEnv ? { env: sessionEnv } : {}),
+  });
 
   // Set remain-on-exit PER-SESSION immediately after creation. The global option
   // above primes any tmux server we had to bootstrap, but a per-session option is
@@ -156,6 +181,8 @@ export interface ContinueSessionInput {
   worktreePath: string;
   /** Command for the new run (the next chat message rendered to a CLI invocation). */
   command: string;
+  /** Extra environment for the relaunched agent (see StartSessionInput.env). */
+  env?: Record<string, string>;
 }
 
 /**
@@ -191,7 +218,22 @@ export async function continueSession(input: ContinueSessionInput): Promise<Cond
     try { await exec(TMUX_BIN, ['kill-session', '-t', init]); } catch { /* gone */ }
   }
 
-  await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', input.worktreePath, input.command]);
+  // Merge the relaunch env (same local-bridge injection as startSession) onto the
+  // spawned pane: push globals for an already-running server + pass env on the exec
+  // that may boot a fresh server.
+  const continueEnv = input.env ? { ...process.env, ...input.env } : undefined;
+  if (input.env) {
+    for (const [key, value] of Object.entries(input.env)) {
+      try {
+        await exec(TMUX_BIN, ['set-environment', '-g', key, value]);
+      } catch {
+        /* no running server yet / unsupported — exec env below covers cold start */
+      }
+    }
+  }
+  await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', input.worktreePath, input.command], {
+    ...(continueEnv ? { env: continueEnv } : {}),
+  });
   try {
     await exec(TMUX_BIN, ['set-option', '-t', tmuxName, 'remain-on-exit', 'on']);
   } catch (err) {

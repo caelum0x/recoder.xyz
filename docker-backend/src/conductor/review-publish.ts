@@ -87,10 +87,36 @@ async function resolveMainWorktree(worktreePath: string): Promise<string> {
 }
 
 /**
+ * Best-effort cleanup of a half-completed merge in the main working tree.
+ *
+ * A failing `git merge` (conflict, or a `--ff-only` rejected after touching the
+ * index) can leave the main tree mid-merge: MERGE_HEAD present, conflict markers
+ * on disk, unmerged index entries. Left that way the on-disk state is UNTRUTHFUL
+ * (the workspace reports awaiting_review but the user's folder is conflicted) and
+ * the next re-merge attempt's `git checkout base` aborts on the unmerged paths —
+ * a recoverable failure becomes permanently stuck. We `git merge --abort` (which
+ * is a no-op when no merge is in progress, e.g. an `--ff-only` that never started
+ * one) to restore the base branch to its pre-merge HEAD. Swallowed: cleanup is a
+ * safety net for the truthful error already being surfaced to the caller.
+ */
+async function abortInProgressMerge(mainRepo: string): Promise<void> {
+  try {
+    await run(mainRepo, 'git', ['merge', '--abort']);
+  } catch {
+    /* no merge in progress, or repo can't abort — nothing more we can do safely */
+  }
+}
+
+/**
  * Perform a LOCAL merge of the workspace branch into the base branch, on disk, so
  * the change lands in the user's folder (no GitHub, no `gh`). Runs in the repo's
  * main working tree: checkout base, merge the agent branch (`--no-ff` by default,
  * fast-forward when the strategy is `rebase`). Returns the resulting base HEAD.
+ *
+ * On ANY merge failure (conflict, rejected fast-forward) we abort the in-progress
+ * merge before re-throwing, so the main working tree is left CLEAN on the base
+ * branch — never a half-merged, conflicted folder. That keeps the surfaced error
+ * truthful (the change did NOT land) and the workspace genuinely re-mergeable.
  */
 async function localMerge(
   worktreePath: string,
@@ -101,12 +127,19 @@ async function localMerge(
   const mainRepo = await resolveMainWorktree(worktreePath);
   // Move the main tree onto the base branch so the merge lands there.
   await run(mainRepo, 'git', ['checkout', base]);
-  if (strategy === 'rebase') {
-    // Closest local analogue to a rebase/linear merge: fast-forward only.
-    await run(mainRepo, 'git', ['merge', '--ff-only', branch]);
-  } else {
-    // Default ('merge'/'squash'): a real merge commit so the change is explicit.
-    await run(mainRepo, 'git', ['merge', '--no-ff', '-m', `Merge ${branch} into ${base}`, branch]);
+  try {
+    if (strategy === 'rebase') {
+      // Closest local analogue to a rebase/linear merge: fast-forward only.
+      await run(mainRepo, 'git', ['merge', '--ff-only', branch]);
+    } else {
+      // Default ('merge'/'squash'): a real merge commit so the change is explicit.
+      await run(mainRepo, 'git', ['merge', '--no-ff', '-m', `Merge ${branch} into ${base}`, branch]);
+    }
+  } catch (err) {
+    // Leave NO half-merged tree behind: restore the base branch so the next
+    // re-merge can run, then re-throw the real cause to the truthful caller path.
+    await abortInProgressMerge(mainRepo);
+    throw err;
   }
   return { mainRepo, base };
 }

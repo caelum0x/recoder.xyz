@@ -148,6 +148,79 @@ function resolveRepoRoot() {
   return path.resolve(__dirname, '..', '..');
 }
 
+// ============================================================================
+// TMUX_BIN resolution (mirrors docker-backend/src/conductor/tmux-path.ts)
+// ============================================================================
+// The embedded PTY must attach with the SAME tmux binary the conductor used to
+// create the session. We resolve it here in the main process instead of trusting
+// whatever bare `tmux` the renderer happens to pass, so `tmux attach` finds the
+// pinned/vendored build. Resolution order matches the backend resolver exactly:
+//   1. CONDUCTOR_TMUX_BIN env override (absolute path to a pinned binary).
+//   2. RECODER_TMUX_BUILD_PATH if it exists.
+//   3. The vendored binary built from c/tmux, walking up from this module and
+//      also checking the resolved repo root + packaged resourcesPath.
+//   4. Bare 'tmux' on PATH (last resort — never assumed present).
+
+/**
+ * Walk up from a start dir (≤10 levels) looking for the c/tmux source marker;
+ * if found and the built `c/tmux/tmux` binary exists, return its absolute path.
+ * @param {string} startDir
+ * @returns {string | undefined}
+ */
+function findVendoredTmuxFrom(startDir) {
+  let dir = startDir;
+  for (let i = 0; i < 10; i++) {
+    if (fs.existsSync(path.join(dir, 'c', 'tmux', 'tmux.c'))) {
+      const built = path.join(dir, 'c', 'tmux', 'tmux');
+      if (fs.existsSync(built)) return built;
+      break;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+/**
+ * Resolve the vendored tmux binary for the main process. In dev it is found by
+ * walking up from this module or the repo root; in a packaged build the repo
+ * walk fails, so we also check `<resourcesPath>/c/tmux/tmux`.
+ * @returns {string | undefined}
+ */
+function resolveVendoredTmux() {
+  const envPath = process.env.RECODER_TMUX_BUILD_PATH;
+  if (envPath && fs.existsSync(envPath)) return envPath;
+
+  // Dev / source checkout: walk up from this module and from the repo root.
+  const fromModule = findVendoredTmuxFrom(__dirname);
+  if (fromModule) return fromModule;
+  const fromRepo = findVendoredTmuxFrom(resolveRepoRoot());
+  if (fromRepo) return fromRepo;
+
+  // Packaged: the vendored binary ships under resourcesPath.
+  if (process.resourcesPath) {
+    const packaged = path.join(process.resourcesPath, 'c', 'tmux', 'tmux');
+    if (fs.existsSync(packaged)) return packaged;
+  }
+  return undefined;
+}
+
+/**
+ * The tmux binary the embedded PTY should use. Prefer an explicit, existing,
+ * renderer-supplied override (CONDUCTOR_TMUX_BIN from the backend /health), then
+ * our own env/vendored resolution, then bare 'tmux'. Never fabricates a path.
+ * @param {Record<string, string> | undefined} rendererEnv
+ * @returns {string}
+ */
+function resolveTmuxBin(rendererEnv) {
+  const fromRenderer = rendererEnv && rendererEnv.CONDUCTOR_TMUX_BIN;
+  if (typeof fromRenderer === 'string' && fromRenderer.trim() && fs.existsSync(fromRenderer)) {
+    return fromRenderer;
+  }
+  return process.env.CONDUCTOR_TMUX_BIN || resolveVendoredTmux() || 'tmux';
+}
+
 /**
  * The supervised { backendUrl, apiKey } when the embedded backend is READY,
  * else null. main.js getAuth() / the cockpit config prefer this over the
@@ -2106,123 +2179,176 @@ ipcMain.handle('fs:stat', async (_event, filePath) => {
 });
 
 // ============================================================================
-// IPC Handlers - Terminal (using node-pty when available)
+// IPC Handlers - Terminal (REAL PTY via node-pty in the MAIN process)
 // ============================================================================
+// The PTY MUST live here (not the renderer) — a renderer cannot own a
+// controlling TTY, which is why renderer-side `tmux attach` failed with
+// "open terminal failed: not a terminal". We spawn node-pty running the pinned
+// tmux binary, stream pty.onData → terminal:data, accept terminal:write/resize/
+// kill, and surface a TRUTHFUL signal when a real PTY is unavailable instead of
+// silently degrading to a TERM=dumb pipe that makes tmux attach die.
 
 const terminals = new Map();
+
+// Env keys we forward from the renderer into the PTY. The renderer is
+// untrusted (per .claude/rules/security.md), so we allowlist rather than
+// spreading arbitrary renderer-supplied env into the spawned process. These
+// are the only vars the Recoder terminal path needs.
+const RENDERER_ENV_ALLOWLIST = new Set([
+  'CONDUCTOR_TMUX_BIN',
+  'CONDUCTOR_WORKTREE_ROOT',
+  'TERM',
+  'TERM_PROGRAM',
+  'COLORTERM',
+  'LANG',
+  'LC_ALL',
+]);
+
+/**
+ * Build the PTY env: the main process env as the base, plus only the
+ * allowlisted keys the renderer asked for. Never lets the renderer overwrite
+ * arbitrary process env (PATH, secrets, etc.).
+ * @param {Record<string, string> | undefined} rendererEnv
+ * @param {string} tmuxBin
+ * @returns {Record<string, string>}
+ */
+function buildPtyEnv(rendererEnv, tmuxBin) {
+  const env = { ...process.env };
+  if (rendererEnv && typeof rendererEnv === 'object') {
+    for (const key of Object.keys(rendererEnv)) {
+      if (RENDERER_ENV_ALLOWLIST.has(key) && typeof rendererEnv[key] === 'string') {
+        env[key] = rendererEnv[key];
+      }
+    }
+  }
+  // Pin the resolved tmux so any tmux the PTY (re)spawns uses the same binary.
+  env.CONDUCTOR_TMUX_BIN = tmuxBin;
+  return env;
+}
+
+/** Send a terminal event to every open window (renderer filters by id). */
+function broadcastTerminal(channel, payload) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload);
+  }
+}
 
 ipcMain.handle('terminal:spawn', async (_event, options = {}) => {
   const id = `term-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
 
-  try {
-    // Try to use node-pty for native terminal
-    const pty = require('node-pty');
-    const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
+  // Resolve the tmux binary in-process. When the renderer asks to run `tmux`
+  // (bare or absent command), substitute the pinned/vendored binary so attach
+  // targets the SAME tmux the conductor created the session with.
+  const tmuxBin = resolveTmuxBin(options.env);
+  const wantsTmux =
+    typeof options.command !== 'string' ||
+    !options.command.trim() ||
+    options.command.trim() === 'tmux';
 
+  let pty;
+  try {
+    pty = require('node-pty');
+  } catch {
+    pty = null;
+  }
+
+  if (!pty) {
+    // No real PTY available (node-pty not built for this Electron ABI). Do NOT
+    // fake a TTY — a TERM=dumb pipe would make `tmux attach` die with a scary
+    // error and the renderer would never know it wasn't real. Tell the truth so
+    // the renderer can fall back to the HTTP /sessions surface instead.
+    appendDesktopLog('terminal.log',
+      `${new Date().toISOString()} pty-unavailable id=${id} (node-pty failed to load)`);
+    return { id, success: false, ptyUnavailable: true };
+  }
+
+  try {
     // The Recoder Terminal attaches to a real agent session: when the renderer
     // passes a `command` (+ optional `args`), run THAT in the PTY (e.g.
-    // `tmux attach -t <session>`, `dmux`, or `claude`). With no command we fall
-    // back to a plain login shell, preserving the original behavior.
-    const file = typeof options.command === 'string' && options.command.trim()
-      ? options.command
-      : shell;
+    // `tmux attach -t <session>`, `dmux`, or `claude`). With no command — or a
+    // bare `tmux` — we run the resolved tmux binary; otherwise a login shell.
+    const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
+    const file = wantsTmux
+      ? tmuxBin
+      : (typeof options.command === 'string' && options.command.trim() ? options.command : shell);
+    const hasCommand = wantsTmux || (typeof options.command === 'string' && options.command.trim());
     const args = Array.isArray(options.args) ? options.args : [];
 
-    const term = pty.spawn(file, args, {
+    const term = pty.spawn(file, hasCommand ? args : [], {
       name: 'xterm-256color',
       cols: options.cols || 80,
       rows: options.rows || 24,
       cwd: options.cwd || process.env.HOME,
-      env: { ...process.env, ...options.env },
+      env: buildPtyEnv(options.env, tmuxBin),
     });
 
     term.onData((data) => {
-      const mainWindow = BrowserWindow.getAllWindows()[0];
-      if (mainWindow) {
-        mainWindow.webContents.send('terminal:data', { id, data });
-      }
+      broadcastTerminal('terminal:data', { id, data });
     });
 
     term.onExit(({ exitCode }) => {
-      const mainWindow = BrowserWindow.getAllWindows()[0];
-      if (mainWindow) {
-        mainWindow.webContents.send('terminal:exit', { id, exitCode });
-      }
+      // Friendly: the renderer turns this into "Agent session ended", never the
+      // raw tmux "Pane is dead" copy (RECODER-TERMINAL-VISION principle).
+      broadcastTerminal('terminal:exit', { id, exitCode });
       terminals.delete(id);
     });
 
     terminals.set(id, term);
     return { id, success: true };
-  } catch {
-    // node-pty not available - fall back to child_process
-    const { spawn } = require('child_process');
-    const shell = process.platform === 'win32' ? 'cmd.exe' : process.env.SHELL || '/bin/bash';
-    const file = typeof options.command === 'string' && options.command.trim()
-      ? options.command
-      : shell;
-    const args = Array.isArray(options.args) ? options.args : [];
-
-    const proc = spawn(file, args, {
-      cwd: options.cwd || process.env.HOME,
-      env: { ...process.env, ...options.env, TERM: 'dumb' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    proc.stdout.on('data', (data) => {
-      const mainWindow = BrowserWindow.getAllWindows()[0];
-      if (mainWindow) {
-        mainWindow.webContents.send('terminal:data', { id, data: data.toString() });
-      }
-    });
-
-    proc.stderr.on('data', (data) => {
-      const mainWindow = BrowserWindow.getAllWindows()[0];
-      if (mainWindow) {
-        mainWindow.webContents.send('terminal:data', { id, data: data.toString() });
-      }
-    });
-
-    proc.on('exit', (exitCode) => {
-      const mainWindow = BrowserWindow.getAllWindows()[0];
-      if (mainWindow) {
-        mainWindow.webContents.send('terminal:exit', { id, exitCode });
-      }
-      terminals.delete(id);
-    });
-
-    terminals.set(id, proc);
-    return { id, success: true, fallback: true };
+  } catch (error) {
+    // node-pty present but spawn failed (e.g. binary missing). Surface truthfully
+    // rather than degrading to a fake pipe.
+    appendDesktopLog('terminal.log',
+      `${new Date().toISOString()} spawn-failed id=${id} ${error && error.message ? error.message : error}`);
+    return { id, success: false, ptyUnavailable: true };
   }
 });
 
 ipcMain.handle('terminal:write', async (_event, { id, data }) => {
   const term = terminals.get(id);
-  if (!term) return false;
-  if (term.write) {
-    term.write(data); // node-pty
-  } else if (term.stdin) {
-    term.stdin.write(data); // child_process
-  }
+  if (!term || typeof term.write !== 'function') return false;
+  term.write(data);
   return true;
 });
 
 ipcMain.handle('terminal:resize', async (_event, { id, cols, rows }) => {
   const term = terminals.get(id);
-  if (term && term.resize) {
-    term.resize(cols, rows); // node-pty only
-  }
+  if (!term || typeof term.resize !== 'function') return false;
+  // node-pty rejects non-finite / non-positive geometry — clamp before resizing.
+  const c = Math.max(1, Math.floor(Number(cols) || 0));
+  const r = Math.max(1, Math.floor(Number(rows) || 0));
+  if (!Number.isFinite(c) || !Number.isFinite(r)) return false;
+  term.resize(c, r);
   return true;
 });
 
 ipcMain.handle('terminal:kill', async (_event, id) => {
   const term = terminals.get(id);
   if (term) {
-    if (term.kill) term.kill();
-    else if (term.destroy) term.destroy();
+    try {
+      if (typeof term.kill === 'function') term.kill();
+    } catch {
+      /* pty already gone */
+    }
     terminals.delete(id);
   }
   return true;
 });
+
+/** Kill every tracked PTY (window closed / app quit) so no orphan tmux clients leak. */
+function killAllTerminals() {
+  for (const [id, term] of terminals) {
+    try {
+      if (term && typeof term.kill === 'function') term.kill();
+    } catch {
+      /* already gone */
+    }
+    terminals.delete(id);
+  }
+}
+
+app.on('window-all-closed', killAllTerminals);
+app.on('before-quit', killAllTerminals);
 
 // ============================================================================
 // IPC Handlers - Clipboard

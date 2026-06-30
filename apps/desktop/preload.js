@@ -218,3 +218,60 @@ contextBridge.exposeInMainWorld('recoderDesktop', {
   /** Get the embedded backend supervisor status (truthful: starting/ready/failed). */
   backendStatus: () => ipcRenderer.invoke('backend:status'),
 });
+
+// ============================================================================
+// recoderTerminal — focused, session-oriented PTY bridge (RECODER-TERMINAL-VISION)
+// ============================================================================
+// A minimal, typed surface over the same terminal:* IPC channels as
+// recoderDesktop, but shaped around a single embedded terminal instance:
+// open() spawns the PTY and resolves its id; write/resize/close act on the
+// most-recently-opened PTY (or an explicit id); onData/onExit subscribe and
+// return an unsubscribe. contextIsolation-safe — no node, no remote, no
+// ipcRenderer leaked into the renderer.
+(() => {
+  /** @type {string | null} The id of the PTY this bridge instance owns. */
+  let currentId = null;
+
+  contextBridge.exposeInMainWorld('recoderTerminal', {
+    /**
+     * Open a PTY for a session. Pass the tmux session command/args (e.g.
+     * { command: tmuxBin, args: ['attach','-t', name], cwd, env, cols, rows }).
+     * Resolves to { id, success, ptyUnavailable? } — ptyUnavailable is true when
+     * no real TTY could be created (node-pty missing), so the caller can fall
+     * back truthfully instead of attaching a fake terminal.
+     */
+    open: async (options) => {
+      const res = await ipcRenderer.invoke('terminal:spawn', options || {});
+      if (res && res.success && res.id) currentId = res.id;
+      return res;
+    },
+
+    /** Write input to the open PTY (or an explicit id). */
+    write: (data, id) => ipcRenderer.invoke('terminal:write', { id: id || currentId, data }),
+
+    /** Resize the open PTY (or an explicit id) to cols×rows. */
+    resize: (cols, rows, id) =>
+      ipcRenderer.invoke('terminal:resize', { id: id || currentId, cols, rows }),
+
+    /** Close/kill the open PTY (or an explicit id). */
+    close: (id) => {
+      const target = id || currentId;
+      if (target === currentId) currentId = null;
+      return ipcRenderer.invoke('terminal:kill', target);
+    },
+
+    /** Subscribe to PTY output. Returns an unsubscribe function. */
+    onData: (callback) => {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('terminal:data', handler);
+      return () => ipcRenderer.removeListener('terminal:data', handler);
+    },
+
+    /** Subscribe to PTY exit. Returns an unsubscribe function. */
+    onExit: (callback) => {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('terminal:exit', handler);
+      return () => ipcRenderer.removeListener('terminal:exit', handler);
+    },
+  });
+})();

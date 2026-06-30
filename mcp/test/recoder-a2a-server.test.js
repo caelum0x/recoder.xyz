@@ -63,6 +63,68 @@ async function handshake(env) {
   return s;
 }
 
+// Capture the server's startup banner (written to stderr) which reports the
+// resolved API + A2A bridge URLs. Returns once the banner line is seen so the
+// URL-resolution assertions don't depend on the WS connection succeeding.
+function resolvedUrls(env) {
+  return new Promise((resolve, reject) => {
+    // Avoid inheriting the test harness's own RECODER_* env (e.g. real tokens in
+    // .mcp.json are not in process.env, but PORT/RECODER_USE_CLOUD could be) so
+    // each case observes exactly the env it sets. Strip RECODER_/PORT keys first.
+    const baseEnv = { ...process.env };
+    for (const k of Object.keys(baseEnv)) {
+      if (k.startsWith('RECODER_') || k === 'PORT') delete baseEnv[k];
+    }
+    const child = spawn(process.execPath, [SERVER], {
+      env: { ...baseEnv, ...env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let err = '';
+    const t = setTimeout(() => { child.kill(); reject(new Error('timeout waiting for banner')); }, 8000);
+    child.stderr.on('data', (chunk) => {
+      err += chunk.toString();
+      const m = err.match(/\[recoder-a2a\] API: (\S+) \| A2A: (\S+)/);
+      if (m) {
+        clearTimeout(t);
+        child.kill();
+        resolve({ apiUrl: m[1], a2aUrl: m[2] });
+      }
+    });
+    child.on('error', (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
+test('URL resolution: defaults to LOCAL loopback bridge when no env is set', async () => {
+  const { apiUrl, a2aUrl } = await resolvedUrls({});
+  assert.equal(apiUrl, 'http://127.0.0.1:3100', `default API should be local loopback, got ${apiUrl}`);
+  assert.equal(a2aUrl, 'ws://127.0.0.1:3100/agent-bridge', `default bridge should be local ws, got ${a2aUrl}`);
+  assert.doesNotMatch(a2aUrl, /recoder\.xyz/, 'default bridge must NOT point at prod');
+});
+
+test('URL resolution: RECODER_BACKEND_PORT overrides the local port', async () => {
+  const { apiUrl, a2aUrl } = await resolvedUrls({ RECODER_BACKEND_PORT: '4321' });
+  assert.equal(apiUrl, 'http://127.0.0.1:4321');
+  assert.equal(a2aUrl, 'ws://127.0.0.1:4321/agent-bridge');
+});
+
+test('URL resolution: RECODER_USE_CLOUD=true opts into the prod bridge (cloud not broken)', async () => {
+  const { apiUrl, a2aUrl } = await resolvedUrls({ RECODER_USE_CLOUD: 'true' });
+  assert.equal(apiUrl, 'https://api.recoder.xyz');
+  assert.equal(a2aUrl, 'wss://docker.recoder.xyz/agent-bridge');
+});
+
+test('URL resolution: explicit RECODER_A2A_URL takes precedence over the local default', async () => {
+  const { a2aUrl } = await resolvedUrls({ RECODER_A2A_URL: 'wss://bridge.example.com/agent-bridge' });
+  assert.equal(a2aUrl, 'wss://bridge.example.com/agent-bridge');
+});
+
+test('URL resolution: RECODER_DOCKER_URL derives the bridge from the explicit base', async () => {
+  const { apiUrl, a2aUrl } = await resolvedUrls({ RECODER_DOCKER_URL: 'http://10.0.0.5:9000' });
+  // API_URL is independent of DOCKER_URL and falls back to local when not set.
+  assert.equal(apiUrl, 'http://127.0.0.1:3100');
+  assert.equal(a2aUrl, 'ws://10.0.0.5:9000/agent-bridge');
+});
+
 function textOf(resp) {
   return resp.result?.content?.map((c) => c.text).join('\n') || '';
 }
