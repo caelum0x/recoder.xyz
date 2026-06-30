@@ -5,3 +5,5 @@ export { SubstrateRegistry } from './registry.js';
 export { defaultRegistry } from './default-registry.js';
 export { selectSubstrate } from './select.js';
 export type { SubstrateSelectable } from './select.js';
+export { resolveSubstrate } from './resolve-substrate.js';
+export type { ResolveSubstrateOptions, ResolvedSubstrate } from './resolve-substrate.js';

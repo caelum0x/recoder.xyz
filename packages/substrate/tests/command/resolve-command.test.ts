@@ -16,7 +16,7 @@ const EXPECTED: Record<string, string> = {
   codex: "codex exec 'fix the bug'",
   opencode: "opencode run 'fix the bug'",
   recoder_code: "recoder-code --prompt 'fix the bug'",
-  pi: "pi 'fix the bug'",
+  pi: "pi --print 'fix the bug' -ne",
   gemini_cli: "gemini --prompt 'fix the bug'",
   qwen_code: "qwen --prompt 'fix the bug'",
   crush: "crush -p 'fix the bug'",

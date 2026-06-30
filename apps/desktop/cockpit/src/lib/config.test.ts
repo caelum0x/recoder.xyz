@@ -5,8 +5,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   configWasInjected,
+  hasDesktopDeviceLogin,
   hasDesktopLogin,
+  onDeviceLoginPrompt,
   readConfig,
+  runDesktopDeviceLogin,
   runDesktopLogin,
   setRuntimeToken,
 } from './config';
@@ -131,5 +134,84 @@ describe('runDesktopLogin', () => {
     expect(result.ok).toBe(false);
     // Unchanged: still the preload token, not a fabricated one.
     expect(readConfig().token).toBe('preload-token');
+  });
+});
+
+describe('hasDesktopDeviceLogin', () => {
+  it('is false without a deviceLogin bridge', () => {
+    setWindow({ __RECODER_COCKPIT__: { backendUrl: 'http://x' } });
+    expect(hasDesktopDeviceLogin()).toBe(false);
+  });
+
+  it('is true when deviceLogin is a function', () => {
+    setWindow({
+      __RECODER_COCKPIT__: { backendUrl: 'http://x', deviceLogin: async () => ({ ok: true }) },
+    });
+    expect(hasDesktopDeviceLogin()).toBe(true);
+  });
+});
+
+describe('runDesktopDeviceLogin', () => {
+  it('returns no-desktop-device-login when the bridge is absent and never fakes a token', async () => {
+    const result = await runDesktopDeviceLogin();
+    expect(result).toEqual({ ok: false, reason: 'no-desktop-device-login' });
+    expect(readConfig().token).toBeUndefined();
+  });
+
+  it('stores the issued token in-memory on a successful device login', async () => {
+    setWindow({
+      __RECODER_COCKPIT__: {
+        backendUrl: 'http://x',
+        deviceLogin: async () => ({ ok: true, token: 'device-issued-token', tokenSource: 'device-token' }),
+      },
+    });
+    const result = await runDesktopDeviceLogin();
+    expect(result.ok).toBe(true);
+    expect(readConfig().token).toBe('device-issued-token');
+  });
+
+  it('does not store a token when device login is denied/expired (stays signed-out)', async () => {
+    setWindow({
+      __RECODER_COCKPIT__: {
+        backendUrl: 'http://x',
+        deviceLogin: async () => ({ ok: false, reason: 'sign-in was denied' }),
+      },
+    });
+    const result = await runDesktopDeviceLogin();
+    expect(result.ok).toBe(false);
+    expect(readConfig().token).toBeUndefined();
+  });
+});
+
+describe('onDeviceLoginPrompt', () => {
+  it('returns a no-op unsubscribe when the bridge is absent', () => {
+    const unsubscribe = onDeviceLoginPrompt(() => {});
+    expect(typeof unsubscribe).toBe('function');
+    expect(() => unsubscribe()).not.toThrow();
+  });
+
+  it('forwards the prompt from the shell bridge to the subscriber', () => {
+    let registered: ((prompt: unknown) => void) | null = null;
+    const unsubscribe = () => {};
+    setWindow({
+      __RECODER_COCKPIT__: {
+        backendUrl: 'http://x',
+        onDeviceLoginPrompt: (cb: (prompt: unknown) => void) => {
+          registered = cb;
+          return unsubscribe;
+        },
+      },
+    });
+    const seen: unknown[] = [];
+    const off = onDeviceLoginPrompt((prompt) => seen.push(prompt));
+    expect(off).toBe(unsubscribe);
+    expect(registered).not.toBeNull();
+    const prompt = {
+      userCode: 'WXYZ-1234',
+      verificationUri: 'https://recoder.xyz/auth/cli',
+      expiresIn: 900,
+    };
+    registered!(prompt);
+    expect(seen).toEqual([prompt]);
   });
 });

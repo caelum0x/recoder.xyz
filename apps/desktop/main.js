@@ -604,6 +604,279 @@ async function resolveDesktopSessionTokenFromCookies() {
   return { value: '', source: 'none' };
 }
 
+// ============================================================================
+// Device-flow sign-in (RFC 8628) — reuses @recoder/distribution's CLIENT.
+// ============================================================================
+// recoder.xyz is the auth source of truth. We do NOT mint or fabricate tokens:
+// the distribution device-flow client POSTs to recoder.xyz, the user approves in
+// their browser, and only a real token response from recoder.xyz completes the
+// flow. The issued token is stored encrypted in the MAIN process (never the
+// renderer) and fed into the same cockpit token precedence as session/API-key.
+//
+// Fail-safe: when distribution is unavailable, the device-authorization request
+// fails, or the grant is denied/expired, sign-in returns not-ok and the cockpit
+// stays signed-out — it never assumes a session.
+
+/** Lazily load the distribution device-flow exports (CJS build). Null when unavailable. */
+let deviceFlowModuleCache;
+function loadDeviceFlow() {
+  if (deviceFlowModuleCache !== undefined) return deviceFlowModuleCache;
+  try {
+    const dist = require('@recoder/distribution');
+    if (
+      typeof dist.signInWithDeviceFlow !== 'function'
+      || typeof dist.buildDeviceFlowConfig !== 'function'
+      || typeof dist.createFetchTransport !== 'function'
+    ) {
+      deviceFlowModuleCache = null;
+    } else {
+      deviceFlowModuleCache = dist;
+    }
+  } catch (error) {
+    logRuntimeError('device-flow-module-load-failed', error);
+    deviceFlowModuleCache = null;
+  }
+  return deviceFlowModuleCache;
+}
+
+/**
+ * The distribution device-flow CLIENT hardcodes the RFC path
+ * `/api/auth/cli/device-authorization` and posts form-urlencoded bodies, but the
+ * deployed recoder.xyz backend mounts the device-authorization route at
+ * `/api/auth/cli/device` and parses JSON (express.json only). This adapter wraps
+ * createFetchTransport so requests reach the real endpoints WITHOUT modifying the
+ * distribution client or the server: it rewrites the device-authorization path
+ * and re-encodes the form body the client built into the JSON the server reads.
+ * Truthful: it only translates the request shape; responses pass through
+ * unchanged, so a denial/expiry/transport error still fails safe.
+ */
+function createRecoderDeviceTransport(distModule) {
+  const inner = distModule.createFetchTransport({ timeoutMs: 15000 });
+  const DEVICE_AUTHZ_SUFFIX = '/api/auth/cli/device-authorization';
+  const DEVICE_SUFFIX = '/api/auth/cli/device';
+  return {
+    async post(request) {
+      let url = request.url;
+      let body = request.body;
+      let headers = request.headers;
+      // Re-encode the form-urlencoded body the client built into JSON for the
+      // server's express.json() parser. Applies to BOTH the device and token
+      // endpoints (both read req.body.* as parsed JSON).
+      const contentType = (headers && (headers['content-type'] || headers['Content-Type'])) || '';
+      if (typeof body === 'string' && contentType.includes('application/x-www-form-urlencoded')) {
+        const params = new URLSearchParams(body);
+        const json = {};
+        for (const [k, v] of params.entries()) json[k] = v;
+        body = JSON.stringify(json);
+        headers = { ...headers, 'content-type': 'application/json' };
+        delete headers['Content-Type'];
+      }
+      // Map the RFC device-authorization path onto the deployed route name.
+      if (url.endsWith(DEVICE_AUTHZ_SUFFIX)) {
+        url = url.slice(0, -DEVICE_AUTHZ_SUFFIX.length) + DEVICE_SUFFIX;
+      }
+      return inner.post({ ...request, url, body, headers });
+    },
+  };
+}
+
+/** Encrypted on-disk store for the device-flow token (main process only). */
+function deviceTokenStorePath() {
+  return path.join(os.homedir(), '.openclaw', 'credentials', 'recoder-device-token.json');
+}
+
+/**
+ * Persist the device-flow token encrypted with safeStorage (same envelope the
+ * API-key cache uses). We store ONLY what recoder.xyz actually returns — never
+ * fabricated profile/quota fields — plus a conservative local expiry so a stale
+ * token is re-authed rather than trusted forever.
+ * @param {{ accessToken: string, refreshToken?: string, expiresInSeconds: number }} token
+ */
+function writeDeviceToken(token) {
+  const storePath = deviceTokenStorePath();
+  const dir = path.dirname(storePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  const expiresAt = new Date(Date.now() + token.expiresInSeconds * 1000).toISOString();
+  const record = {
+    access_token: token.accessToken,
+    refresh_token: token.refreshToken || '',
+    expires_at: expiresAt,
+  };
+  const jsonStr = JSON.stringify(record);
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(jsonStr);
+      const envelope = JSON.stringify({ _encrypted: true, _data: encrypted.toString('base64') });
+      fs.writeFileSync(storePath, envelope, { encoding: 'utf-8', mode: 0o600 });
+      return;
+    }
+  } catch (err) {
+    console.warn('[safeStorage] device-token encryption unavailable, falling back to plaintext:', err.message);
+  }
+  fs.writeFileSync(storePath, jsonStr, { encoding: 'utf-8', mode: 0o600 });
+}
+
+/**
+ * Read the stored device-flow token. Returns the access token only when it is
+ * present AND not past its local expiry — an expired/corrupt store reads as "no
+ * token" (fail-safe → stay signed-out, never trust a stale token).
+ * @returns {{ value: string, source: 'device-token' | 'none' }}
+ */
+function resolveDesktopDeviceTokenDetailed() {
+  const storePath = deviceTokenStorePath();
+  try {
+    if (!fs.existsSync(storePath)) {
+      return { value: '', source: 'none' };
+    }
+    const raw = fs.readFileSync(storePath, 'utf-8');
+    let parsed;
+    try {
+      const envelope = JSON.parse(raw);
+      if (envelope && envelope._encrypted && typeof envelope._data === 'string' && safeStorage.isEncryptionAvailable()) {
+        parsed = JSON.parse(safeStorage.decryptString(Buffer.from(envelope._data, 'base64')));
+      } else {
+        parsed = envelope;
+      }
+    } catch {
+      return { value: '', source: 'none' };
+    }
+    const accessToken = parsed && typeof parsed.access_token === 'string' ? parsed.access_token.trim() : '';
+    if (!accessToken) {
+      return { value: '', source: 'none' };
+    }
+    if (typeof parsed.expires_at === 'string' && parsed.expires_at) {
+      if (Date.now() >= new Date(parsed.expires_at).getTime()) {
+        return { value: '', source: 'none' }; // expired — fail safe
+      }
+    }
+    return { value: accessToken, source: 'device-token' };
+  } catch {
+    return { value: '', source: 'none' };
+  }
+}
+
+/**
+ * Run the full RFC 8628 device-flow sign-in against recoder.xyz. Opens the user's
+ * browser to the verification URI, surfaces the user_code to the cockpit via
+ * `onPrompt`, polls to a truthful terminal state, and on success persists the
+ * issued token encrypted in the main process. Returns a cockpit-shaped auth
+ * result; on any non-success path the token is empty (stay signed-out).
+ * @param {{ onPrompt?: (prompt: object) => void }} hooks
+ * @returns {Promise<{ ok: boolean, token: string, tokenSource: string, backendUrl: string, reason?: string }>}
+ */
+async function startCockpitDeviceLogin(hooks = {}) {
+  const backendUrl = dockerWorkflowApiUrl.replace(/\/+$/, '');
+  // Idempotent: a still-valid stored device token (or env/cookie/api-key) wins.
+  const existing = await resolveCockpitConfigAsync();
+  if (existing.token) {
+    return { ok: true, ...existing };
+  }
+
+  const dist = loadDeviceFlow();
+  if (!dist) {
+    return {
+      ok: false,
+      token: '',
+      tokenSource: 'none',
+      backendUrl,
+      reason: 'device-flow unavailable (@recoder/distribution not loaded)',
+    };
+  }
+
+  emitDesktopActivationEvent('desktop_device_login_started', { backendUrl });
+
+  let config;
+  try {
+    config = dist.buildDeviceFlowConfig({ recoderBaseUrl: normalizedUrl });
+  } catch (error) {
+    logRuntimeError('device-login-config-failed', error);
+    return {
+      ok: false,
+      token: '',
+      tokenSource: 'none',
+      backendUrl,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const transport = createRecoderDeviceTransport(dist);
+
+  try {
+    const result = await dist.signInWithDeviceFlow(config, transport, {
+      sleep: (seconds) => sleepMs(Math.max(0, seconds) * 1000),
+      onPrompt: async (prompt) => {
+        // Surface the code + URI to the cockpit first (so the user can read/copy
+        // it), then open the system browser to the verification URI.
+        try {
+          if (typeof hooks.onPrompt === 'function') {
+            hooks.onPrompt({
+              userCode: prompt.userCode,
+              verificationUri: prompt.verificationUri,
+              verificationUriComplete: prompt.verificationUriComplete,
+              expiresIn: prompt.expiresIn,
+            });
+          }
+        } catch (e) {
+          logRuntimeError('device-login-prompt-hook-failed', e);
+        }
+        const openUrl = prompt.verificationUriComplete || prompt.verificationUri;
+        try {
+          await shell.openExternal(openUrl);
+        } catch (e) {
+          logRuntimeError('device-login-open-browser-failed', e);
+        }
+      },
+    });
+
+    if (result.status !== 'success') {
+      emitDesktopActivationEvent('desktop_device_login_failed', { status: result.status });
+      return {
+        ok: false,
+        token: '',
+        tokenSource: 'none',
+        backendUrl,
+        reason: result.status === 'denied'
+          ? (result.description || 'sign-in was denied')
+          : (result.description || 'device grant expired before approval'),
+      };
+    }
+
+    const accessToken = result.token.accessToken;
+    // The server returns expires_at (not RFC expires_in) which the typed client
+    // drops; persist a conservative TTL from config so a stale token re-auths.
+    const expiresInSeconds = typeof result.token.expiresIn === 'number' && result.token.expiresIn > 0
+      ? result.token.expiresIn
+      : config.accessTokenTtlSeconds;
+    try {
+      writeDeviceToken({
+        accessToken,
+        refreshToken: result.token.refreshToken,
+        expiresInSeconds,
+      });
+    } catch (e) {
+      // Persistence failure must not fabricate success, but the in-session token
+      // is still valid; log and continue with the live token.
+      logRuntimeError('device-login-persist-failed', e);
+    }
+
+    emitDesktopActivationEvent('desktop_device_login_succeeded', { tokenSource: 'device-token' });
+    return { ok: true, token: accessToken, tokenSource: 'device-token', backendUrl };
+  } catch (error) {
+    // Only thrown when authorization cannot even start (transport/HTTP/malformed).
+    logRuntimeError('device-login-failed', error);
+    emitDesktopActivationEvent('desktop_device_login_error', {});
+    return {
+      ok: false,
+      token: '',
+      tokenSource: 'none',
+      backendUrl,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * Build the config object injected into the cockpit renderer as
  * window.__RECODER_COCKPIT__. The renderer sends `Authorization: Bearer <token>`
@@ -631,6 +904,13 @@ function resolveCockpitConfig() {
   const sessionToken = resolveDesktopSessionTokenDetailed();
   if (sessionToken.value) {
     return { backendUrl, token: sessionToken.value, tokenSource: 'session-token' };
+  }
+  // A device-flow token stored on a previous launch unlocks the cockpit with no
+  // UI. Read synchronously here (no cookie I/O) so the initial preload config is
+  // already authenticated when a valid token exists.
+  const deviceToken = resolveDesktopDeviceTokenDetailed();
+  if (deviceToken.value) {
+    return { backendUrl, token: deviceToken.value, tokenSource: 'device-token' };
   }
   const apiKey = resolveDesktopRecoderApiKeyDetailed();
   if (apiKey.value) {
@@ -666,6 +946,10 @@ async function resolveCockpitConfigAsync() {
   const cookieSession = await resolveDesktopSessionTokenFromCookies();
   if (cookieSession.value) {
     return { backendUrl, token: cookieSession.value, tokenSource: 'session-cookie' };
+  }
+  const deviceToken = resolveDesktopDeviceTokenDetailed();
+  if (deviceToken.value) {
+    return { backendUrl, token: deviceToken.value, tokenSource: 'device-token' };
   }
   const apiKey = resolveDesktopRecoderApiKeyDetailed();
   if (apiKey.value) {
@@ -1766,6 +2050,21 @@ function createWindow() {
   // Expose for the IPC bridge (cockpit "Sign in" button).
   mainWindow.startCockpitLogin = startCockpitLogin;
 
+  /**
+   * Drive the device-flow (RFC 8628) sign-in for the cockpit. Streams the
+   * user_code + verification URI to THIS window's renderer via a
+   * `cockpit:deviceLoginPrompt` event so the SignIn panel can show the code,
+   * then resolves with the real token (or a truthful not-ok result).
+   */
+  mainWindow.startCockpitDeviceLogin = () =>
+    startCockpitDeviceLogin({
+      onPrompt: (prompt) => {
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('cockpit:deviceLoginPrompt', prompt);
+        }
+      },
+    });
+
   // Load the actual surface after the loading screen is shown
   setTimeout(() => {
     if (cockpitModeEnabledByEnv) {
@@ -2436,6 +2735,33 @@ ipcMain.handle('cockpit:login', async (event) => {
     return await win.startCockpitLogin();
   } catch (error) {
     logRuntimeError('cockpit-login-failed', error);
+    return {
+      ok: false,
+      token: '',
+      tokenSource: 'none',
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+/**
+ * Run the device-flow (RFC 8628) sign-in and hand back the resolved token.
+ * Delegates to mainWindow.startCockpitDeviceLogin, which opens the system
+ * browser to recoder.xyz's device-authorize page, emits the user_code to the
+ * renderer (cockpit:deviceLoginPrompt), polls for approval, and persists the
+ * issued token encrypted in the main process. Never fabricates a session.
+ */
+ipcMain.handle('cockpit:deviceLogin', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+    || BrowserWindow.getAllWindows()[0]
+    || null;
+  if (!win || typeof win.startCockpitDeviceLogin !== 'function') {
+    return { ok: false, token: '', tokenSource: 'none', reason: 'no-window' };
+  }
+  try {
+    return await win.startCockpitDeviceLogin();
+  } catch (error) {
+    logRuntimeError('cockpit-device-login-failed', error);
     return {
       ok: false,
       token: '',

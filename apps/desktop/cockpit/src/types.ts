@@ -495,6 +495,22 @@ export interface CockpitAuthResult {
   reason?: string;
 }
 
+/**
+ * The RFC 8628 device-flow prompt the shell streams to the renderer so the
+ * sign-in panel can show the user where to go and which code to enter. Mirrors
+ * `DeviceSignInPrompt` in @recoder/distribution — the renderer only displays it.
+ */
+export interface DeviceLoginPrompt {
+  /** The short code the user types on the verification page. */
+  userCode: string;
+  /** The recoder.xyz page the user opens to approve the device. */
+  verificationUri: string;
+  /** Same URI with the code pre-filled, when the server provides it. */
+  verificationUriComplete?: string;
+  /** Seconds until the grant expires (the truthful timeout). */
+  expiresIn: number;
+}
+
 /** Config the Electron shell injects on window.__RECODER_COCKPIT__. */
 export interface CockpitConfig {
   backendUrl: string;
@@ -511,6 +527,16 @@ export interface CockpitConfig {
    * only inside the Electron shell; undefined when opened standalone in a browser.
    */
   login?: () => Promise<CockpitAuthResult>;
+  /**
+   * Drive the RFC 8628 device-flow sign-in (opens the browser to recoder.xyz,
+   * polls for approval). Present only inside the Electron shell.
+   */
+  deviceLogin?: () => Promise<CockpitAuthResult>;
+  /**
+   * Subscribe to the device-flow prompt (user_code + verification URI) emitted
+   * while a device login is in progress. Returns an unsubscribe function.
+   */
+  onDeviceLoginPrompt?: (callback: (prompt: DeviceLoginPrompt) => void) => () => void;
   /** Re-resolve the session token without UI (env -> web session cookie -> API key). */
   resolveToken?: () => Promise<CockpitAuthResult>;
 }

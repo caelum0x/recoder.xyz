@@ -2,6 +2,7 @@ export * from './plan-catalog';
 export * from './plan-capabilities';
 export * from './entitlement-resolver';
 export * from './entitlement-decision';
+export * from './capability-gate';
 export * from './entitlement-cache';
 export * from './quota-service';
 export * from './quota-enforcer';

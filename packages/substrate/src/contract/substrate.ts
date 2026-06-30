@@ -33,6 +33,15 @@ export interface ConductorSubstrate {
   capture(handle: SubstrateHandle, lines?: number): Promise<string | null>;
   /** Whether the agent process/session is still alive. */
   alive(handle: SubstrateHandle): Promise<boolean>;
+  /**
+   * Exit code of the finished agent, when the substrate can observe it.
+   *   - a number → the process exit code (0 = success, >0 = failure).
+   *   - `undefined` → still running, or unknown on a transient/unreachable probe
+   *     (NEVER a fabricated 0). `null` mirrors a signal-terminated process.
+   * Optional: substrates that cannot surface an exit code (e.g. a tmux pane with
+   * no sentinel) simply omit it; callers must treat absence as "unknown".
+   */
+  exitCode?(handle: SubstrateHandle): Promise<number | null | undefined>;
   /** Reviewable diff of the work against `baseRef`. */
   diff(handle: SubstrateHandle, baseRef: string): Promise<SubstrateDiff>;
   /** Stop the agent and (optionally) remove its isolation. */
