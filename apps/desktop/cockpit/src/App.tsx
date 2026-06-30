@@ -11,6 +11,9 @@ import {
   readConfig,
   configWasInjected,
   readInitialView,
+  hasDesktopSignOut,
+  runDesktopSignOut,
+  runDesktopRefresh,
   COCKPIT_NAVIGATE_EVENT,
   type CockpitView,
 } from './lib/config';
@@ -76,6 +79,14 @@ export function App() {
   const [showCreate, setShowCreate] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  // True once we have observed a working authenticated session this run. Used to
+  // frame a later 401 as "your session expired" rather than a cold sign-in.
+  const [wasAuthed, setWasAuthed] = useState(false);
+  // Silent-refresh bookkeeping: we attempt ONE transparent device-token refresh
+  // the first time we hit a 401, before surfacing the SignIn panel.
+  const [refreshAttempted, setRefreshAttempted] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // When the user picks an advanced view, jump to it and close the More menu.
   function goTo(target: CockpitView) {
@@ -127,10 +138,62 @@ export function App() {
   // Show the real sign-in panel, distinct from "backend unreachable".
   const unauthenticated = board.error instanceof UnauthorizedError;
 
+  // Track that we have a working authenticated session so a later 401 reads as
+  // "session expired" instead of a first-time sign-in.
+  useEffect(() => {
+    if (board.data && !board.error) setWasAuthed(true);
+  }, [board.data, board.error]);
+
+  // On the FIRST 401 this run, attempt one transparent device-token refresh
+  // (stored refresh token → fresh access token) before showing SignIn. On
+  // success we re-poll silently; on failure we fall through to the SignIn panel.
+  // Never fabricates a session — runDesktopRefresh returns not-ok on any failure.
+  useEffect(() => {
+    if (!unauthenticated || refreshAttempted || refreshing) return;
+    let cancelled = false;
+    setRefreshing(true);
+    runDesktopRefresh()
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok && result.token) {
+          board.refresh();
+          health.refresh();
+        }
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setRefreshAttempted(true);
+        setRefreshing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [unauthenticated, refreshAttempted, refreshing]);
+
+  // The SignIn panel shows only after a refresh attempt has resolved (so a
+  // recoverable session refreshes silently with no UI flash).
+  const showSignIn = unauthenticated && refreshAttempted && !refreshing;
+
   function onAuthenticated() {
     // Re-resolve config picks up the fresh token; force every poll to refetch.
+    setRefreshAttempted(false);
     board.refresh();
     health.refresh();
+  }
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      // Best-effort clear of the stored token + in-memory session; always returns
+      // the cockpit to a signed-out state (the next poll 401s into SignIn).
+      await runDesktopSignOut();
+      setWasAuthed(false);
+      setRefreshAttempted(true); // don't auto-refresh right after an explicit sign-out
+      board.refresh();
+      health.refresh();
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   async function reconcile() {
@@ -212,15 +275,36 @@ export function App() {
           {view === 'board' && (
             <button class="btn btn-primary" onClick={() => setShowCreate(true)}>New workspace</button>
           )}
+          {/* Signed-in identity + sign-out. Shown only inside the desktop shell
+              (where the sign-out bridge exists) and only once authenticated. The
+              identity is calm + muted; when no email/plan was captured we show a
+              generic "Signed in" rather than a fabricated address. */}
+          {hasDesktopSignOut() && !unauthenticated && wasAuthed && (
+            <div class="account">
+              <span class="account-id" title={config.identity?.email || 'Signed in'}>
+                {config.identity?.email || 'Signed in'}
+                {config.identity?.plan && <span class="account-plan">{config.identity.plan}</span>}
+              </span>
+              <button
+                class="btn btn-ghost btn-sm"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                title="Sign out of Recoder"
+              >
+                {signingOut ? 'Signing out…' : 'Sign out'}
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       <HealthStrip />
 
-      {unauthenticated && (
+      {showSignIn && (
         <SignIn
           backendUrl={config.backendUrl}
           reason={board.error?.message}
+          expired={wasAuthed}
           onAuthenticated={onAuthenticated}
         />
       )}

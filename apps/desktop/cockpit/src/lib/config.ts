@@ -20,21 +20,22 @@
  * Both feed `readConfig().token` so subsequent /api/conductor calls use the real
  * session — without inventing a new auth scheme or faking a token.
  */
-import type { CockpitAuthResult, CockpitConfig } from '../types';
+import type { CockpitAuthResult, CockpitConfig, CockpitIdentity } from '../types';
 
 declare global {
   interface Window {
     __RECODER_COCKPIT__?: CockpitConfig;
     /**
      * Runtime overrides injected by the main process. `token`/`backendUrl` are
-     * set after a fresh login; `view` is an optional initial-view deep link set
-     * by a menu/launcher action (e.g. "Open dmux Console") so the cockpit opens
-     * directly on that surface.
+     * set after a fresh login; `identity` is the freshly-captured display
+     * identity (if any); `view` is an optional initial-view deep link set by a
+     * menu/launcher action (e.g. "Open dmux Console").
      */
     __RECODER_COCKPIT_RUNTIME__?: {
       backendUrl?: string;
       token?: string;
       tokenSource?: string;
+      identity?: CockpitIdentity;
       view?: string;
     };
   }
@@ -88,6 +89,14 @@ const DEFAULT_BACKEND_URL = 'http://localhost:3100';
 /** Token set at runtime by a successful login() (kept in-memory for this session). */
 let runtimeToken: string | undefined;
 
+/**
+ * Identity set at runtime by a successful login()/refresh (in-memory for this
+ * session). `null` means "explicitly cleared" (signed out / no identity), which
+ * suppresses the preload-injected identity so a stale email never lingers after
+ * sign-out. `undefined` means "not yet set" → fall through to injected config.
+ */
+let runtimeIdentity: CockpitIdentity | null | undefined;
+
 /** Read the highest-priority token: runtime login > main-process runtime > preload config. */
 function resolveToken(): string | undefined {
   if (runtimeToken) return runtimeToken;
@@ -98,17 +107,35 @@ function resolveToken(): string | undefined {
   return injected?.token;
 }
 
+/**
+ * Read the highest-priority identity: in-memory runtime (login/refresh) >
+ * main-process runtime injection > preload config. Returns undefined when no
+ * identity is known (the header then shows a generic "Signed in"). A runtime
+ * value of `null` (sign-out) deliberately reports undefined.
+ */
+function resolveIdentity(): CockpitIdentity | undefined {
+  if (runtimeIdentity !== undefined) return runtimeIdentity || undefined;
+  const injectedRuntime =
+    typeof window !== 'undefined' ? window.__RECODER_COCKPIT_RUNTIME__ : undefined;
+  if (injectedRuntime?.identity) return injectedRuntime.identity;
+  const injected = typeof window !== 'undefined' ? window.__RECODER_COCKPIT__ : undefined;
+  return injected?.identity;
+}
+
 export function readConfig(): CockpitConfig {
   const injected = typeof window !== 'undefined' ? window.__RECODER_COCKPIT__ : undefined;
   const backendUrl = (injected?.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
   return {
     backendUrl,
     token: resolveToken(),
+    identity: resolveIdentity(),
     defaults: injected?.defaults,
     login: injected?.login,
     deviceLogin: injected?.deviceLogin,
     onDeviceLoginPrompt: injected?.onDeviceLoginPrompt,
     resolveToken: injected?.resolveToken,
+    refreshToken: injected?.refreshToken,
+    signOut: injected?.signOut,
   };
 }
 
@@ -125,6 +152,16 @@ export function hasDesktopLogin(): boolean {
 /** True when the desktop shell exposes the RFC 8628 device-flow login bridge. */
 export function hasDesktopDeviceLogin(): boolean {
   return typeof readConfig().deviceLogin === 'function';
+}
+
+/** True when the desktop shell exposes the sign-out bridge. */
+export function hasDesktopSignOut(): boolean {
+  return typeof readConfig().signOut === 'function';
+}
+
+/** The signed-in display identity (email/plan), or null when unknown. */
+export function readIdentity(): CockpitIdentity | null {
+  return resolveIdentity() || null;
 }
 
 /**
@@ -154,6 +191,7 @@ export async function runDesktopLogin(): Promise<CockpitAuthResult> {
   const result = await login();
   if (result.ok && result.token) {
     runtimeToken = result.token;
+    if (result.identity) runtimeIdentity = result.identity;
   }
   return result;
 }
@@ -173,11 +211,65 @@ export async function runDesktopDeviceLogin(): Promise<CockpitAuthResult> {
   const result = await deviceLogin();
   if (result.ok && result.token) {
     runtimeToken = result.token;
+    if (result.identity) runtimeIdentity = result.identity;
   }
   return result;
+}
+
+/**
+ * Transparently refresh an expired device token via the desktop bridge. On
+ * success the fresh token (and identity, if any) is stored in-memory so
+ * readConfig() returns it for subsequent /api/conductor calls. Returns a not-ok
+ * result when the bridge is unavailable or refresh fails — never fakes a token.
+ */
+export async function runDesktopRefresh(): Promise<CockpitAuthResult> {
+  const { refreshToken } = readConfig();
+  if (typeof refreshToken !== 'function') {
+    return { ok: false, reason: 'no-desktop-refresh' };
+  }
+  const result = await refreshToken();
+  if (result.ok && result.token) {
+    runtimeToken = result.token;
+    if (result.identity) runtimeIdentity = result.identity;
+  }
+  return result;
+}
+
+/**
+ * Sign out of the desktop app: clear the stored device token in the main
+ * process AND the in-memory runtime token/identity, returning the cockpit to a
+ * signed-out state. Fail-safe — even if the bridge is unavailable or the clear
+ * errors, the in-memory token is dropped so the cockpit immediately re-gates on
+ * auth. Always resolves; never throws.
+ */
+export async function runDesktopSignOut(): Promise<{ ok: boolean }> {
+  const { signOut } = readConfig();
+  // Drop the in-memory session FIRST so the UI gates on auth regardless of what
+  // the bridge does. setRuntimeToken(undefined) clears the token; identity is
+  // pinned to null so the injected identity is also suppressed post-sign-out.
+  setRuntimeToken(undefined);
+  runtimeIdentity = null;
+  if (typeof signOut !== 'function') {
+    return { ok: true };
+  }
+  try {
+    return await signOut();
+  } catch {
+    // Best-effort: the in-memory token is already gone, so we are signed out.
+    return { ok: true };
+  }
 }
 
 /** Test/escape hatch: set the in-memory runtime token directly. */
 export function setRuntimeToken(token: string | undefined): void {
   runtimeToken = token && token.trim() ? token.trim() : undefined;
+}
+
+/**
+ * Test/escape hatch: set the in-memory runtime identity directly.
+ * `null` suppresses the injected identity (signed-out); `undefined` falls back
+ * to the injected config identity.
+ */
+export function setRuntimeIdentity(identity: CockpitIdentity | null | undefined): void {
+  runtimeIdentity = identity;
 }
