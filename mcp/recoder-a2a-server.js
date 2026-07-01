@@ -354,6 +354,22 @@ const TOOLS = [
     },
   },
   {
+    name: 'recoder_workspace_events',
+    description:
+      'Read the RunEvents of a conductor workspace (lifecycle + agent output) — watch progress after create. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspace_id: { type: 'string', description: 'Workspace id whose events to read' },
+        limit: {
+          type: 'number',
+          description: 'Max most-recent events to return (default 40, max 200)',
+        },
+      },
+      required: ['workspace_id'],
+    },
+  },
+  {
     name: 'recoder_workspace_merge',
     description: 'Merge a workspace PR. APPROVAL-GATED: the conductor enforces a delivery approval record and surfaces awaiting_approval instead of merging without one.',
     inputSchema: {
@@ -766,6 +782,27 @@ async function handleToolCall(name, args) {
           `• ${ws.workspaceId || ws.id || '?'} [${ws.state || '?'}] ${ws.runtimeId || ''}${ws.branch ? ` (${ws.branch})` : ''}`,
       );
       return `Conductor workspaces (${list.length}):\n${lines.join('\n')}`;
+    }
+
+    case 'recoder_workspace_events': {
+      if (!hasPlatformAuth()) {
+        return 'Error: conductor not configured. Set RECODER_SESSION_TOKEN (or RECODER_API_TOKEN) to read workspace events.';
+      }
+      const data = await apiFetch(
+        `${CONDUCTOR_URL}/workspaces/${encodeURIComponent(args.workspace_id)}/events`,
+      );
+      const events = Array.isArray(data.data) ? data.data : [];
+      if (!events.length) return `No events yet for workspace ${args.workspace_id}.`;
+      const limit = Math.max(1, Math.min(Number(args.limit) || 40, 200));
+      const recent = events.slice(-limit);
+      const lines = recent.map((e) => {
+        const t = e.timestamp || e.at || '';
+        const type = e.type || e.kind || 'event';
+        const msg =
+          e.message || e.text || e.summary || (e.data ? JSON.stringify(e.data).slice(0, 200) : '');
+        return `[${t}] ${type}${msg ? ` — ${msg}` : ''}`;
+      });
+      return `Events for ${args.workspace_id} (${recent.length}/${events.length}):\n${lines.join('\n')}`;
     }
 
     default:
