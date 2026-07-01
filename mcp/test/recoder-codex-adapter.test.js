@@ -93,6 +93,24 @@ test('recoder_list_agents: GET /api/a2a/agents with bearer auth', async () => {
   }
 });
 
+test('recoder_workspace_status: GET /api/conductor/workspaces with bearer auth', async () => {
+  const backend = await startBackend();
+  try {
+    const resp = await callAdapter(
+      { RECODER_DOCKER_URL: backend.base, RECODER_API_TOKEN: 'sess-token-xyz' },
+      { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'recoder_workspace_status', arguments: {} } },
+    );
+    assert.equal(resp.id, 7);
+    assert.equal(backend.received.length, 1);
+    const r = backend.received[0];
+    assert.equal(r.method, 'GET');
+    assert.equal(r.url, '/api/conductor/workspaces');
+    assert.equal(r.authorization, 'Bearer sess-token-xyz');
+  } finally {
+    backend.server.close();
+  }
+});
+
 test('recoder_send_task: POST /api/a2a/tasks with task body + bearer auth', async () => {
   const backend = await startBackend();
   try {
