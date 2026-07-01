@@ -138,11 +138,23 @@ test('initialize + tools/list exposes the recoder tool set', async () => {
       'recoder_list_agents', 'recoder_list_tasks', 'recoder_send_task',
       'recoder_create_thread', 'recoder_get_thread', 'recoder_sandbox_exec',
       'recoder_inbox', 'recoder_task_respond',
-      // Conductor coding-workspace surface (create / diff / merge).
-      'recoder_workspace_create', 'recoder_workspace_diff', 'recoder_workspace_merge',
+      // Conductor coding-workspace surface (create / observe / diff / merge).
+      'recoder_workspace_create', 'recoder_workspace_status', 'recoder_workspace_events',
+      'recoder_workspace_diff', 'recoder_workspace_merge',
     ]) {
       assert.ok(names.includes(expected), `missing tool ${expected}`);
     }
+  } finally {
+    s.close();
+  }
+});
+
+test('recoder_workspace_status without auth returns a truthful not-configured message', async () => {
+  const s = await handshake({ RECODER_A2A_URL: 'ws://127.0.0.1:1/none' });
+  try {
+    const resp = await s.request(6, 'tools/call', { name: 'recoder_workspace_status', arguments: {} });
+    const text = resp.result?.content?.[0]?.text ?? JSON.stringify(resp);
+    assert.match(text, /not configured/i, 'expected a truthful not-configured message');
   } finally {
     s.close();
   }
