@@ -22,7 +22,6 @@ import {
   isCapabilityGated,
   capabilityUnlockLabel,
   parallelAgentUsageLabel,
-  atParallelAgentLimit,
 } from './lib/plan-state';
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
@@ -110,12 +109,12 @@ export function App() {
   const tmuxBin = health.data?.tmuxBin;
   const workspaces = board.data || [];
   // Agents actively holding a run slot (provisioning / running / merging) — drives
-  // a calm "N of M agents" indicator vs the plan's parallel limit. Presentation-only:
-  // it NEVER blocks creating a workspace (the server enforces the real cap).
+  // a calm live "N agents" indicator. PRODUCT DECISION (docs/PLAN-MODEL.md · PRD
+  // FR-2): local desktop agents are UNLIMITED on every tier (your Mac, your keys),
+  // so this is a status count, never a cap and never a block.
   const activeAgents = workspaces.filter(
     (w) => w.state === 'setting_up' || w.state === 'running' || w.state === 'merging',
   ).length;
-  const agentsAtLimit = atParallelAgentLimit(activeAgents, config.identity?.plan);
 
   const selected = useMemo(
     () => workspaces.find((w) => w.workspaceId === selectedId) || null,
@@ -310,14 +309,8 @@ export function App() {
               creating a workspace (surfaced only; the server enforces the real cap). */}
           {view === 'board' && (
             <span
-              class={agentsAtLimit ? 'plan-hint plan-hint-live' : 'plan-hint'}
-              title={
-                agentsAtLimit
-                  ? planLabel(config.identity?.plan) === 'Free'
-                    ? 'Running your plan limit — upgrade to run more agents at once.'
-                    : "You're at your plan's parallel-agent limit."
-                  : 'Agents running now vs your plan limit'
-              }
+              class="plan-hint"
+              title="Agents running locally now — local runs are unlimited (BYOK)."
             >
               {parallelAgentUsageLabel(activeAgents, config.identity?.plan)} agents
             </span>
