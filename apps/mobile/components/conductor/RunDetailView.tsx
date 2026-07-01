@@ -14,8 +14,14 @@ import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { ArrowLeft, Bot } from 'lucide-react-native';
 import { RunStateBadge } from './RunStateBadge';
+import { ApprovalCard } from './ApprovalCard';
 import { relativeTime } from './relative-time';
-import type { AgentOsRun } from '@/lib/conductor/types';
+import { useApprovals } from '@/lib/conductor/hooks';
+import {
+  APPROVAL_WAITING_RUN_STATES,
+  PENDING_APPROVAL_STATUSES,
+  type AgentOsRun,
+} from '@/lib/conductor/types';
 
 interface RunDetailViewProps {
   run: AgentOsRun;
@@ -35,6 +41,19 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 
 export function RunDetailView({ run, onBack }: RunDetailViewProps) {
   const title = run.taskId || `Run ${run.runId.slice(0, 8)}`;
+
+  // When the run is waiting on a decision, surface the matching pending approval
+  // inline (approve/reject right here) instead of sending the user to another tab.
+  // Only fetch approvals when relevant; match by runId, falling back to taskId.
+  const awaitsApproval = APPROVAL_WAITING_RUN_STATES.has(run.state);
+  const approvalsQuery = useApprovals({ enabled: awaitsApproval });
+  const pendingApproval = awaitsApproval
+    ? (approvalsQuery.data ?? []).find(
+        (a) =>
+          PENDING_APPROVAL_STATUSES.has(a.status) &&
+          (a.runId === run.runId || a.taskId === run.taskId),
+      )
+    : undefined;
 
   return (
     <View className="flex-1">
@@ -74,9 +93,18 @@ export function RunDetailView({ run, onBack }: RunDetailViewProps) {
         {run.completedAt ? (
           <MetaRow label="Completed" value={relativeTime(run.completedAt) || run.completedAt} />
         ) : null}
-        <Text className="mb-8 mt-4 text-xs text-muted-foreground">
-          Live logs stream on the Workspaces tab. Approvals are decided on the Approvals tab.
-        </Text>
+        {pendingApproval ? (
+          <View className="mb-8 mt-4 gap-2">
+            <Text className="text-xs font-roobert-medium uppercase text-muted-foreground">
+              Awaiting your decision
+            </Text>
+            <ApprovalCard approval={pendingApproval} />
+          </View>
+        ) : (
+          <Text className="mb-8 mt-4 text-xs text-muted-foreground">
+            Live logs stream on the Workspaces tab. Approvals are decided on the Approvals tab.
+          </Text>
+        )}
       </ScrollView>
     </View>
   );
