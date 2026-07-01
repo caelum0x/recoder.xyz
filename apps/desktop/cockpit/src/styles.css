@@ -135,6 +135,17 @@ body {
   border-radius: var(--radius-sm); padding: 1px 5px;
 }
 
+/* Capability gate hint — a subtle, non-nagging note near a control the current
+   plan gates (e.g. "Remote substrate · Pro+"). Faint text on a hairline border,
+   never a saturated warning or a modal. Presentation-only. */
+.plan-hint {
+  display: inline-flex; align-items: center;
+  font-size: 10px; letter-spacing: 0.02em;
+  color: var(--text-faint); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 2px 7px;
+  white-space: nowrap; cursor: default; user-select: none;
+}
+
 /* Health strip — runtimes / substrates / connectors. Collapsed by default to a
    single calm summary line so the chrome stays quiet (the operator asked for
    simple, not busy); the full chip rails expand on demand. Subtly elevated above

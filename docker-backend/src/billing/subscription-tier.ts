@@ -14,6 +14,10 @@ export function resolveUserTier(userId: string): SubscriptionTier {
   return resolveTierFromProductId({
     productId: active.productId,
     proProductId: process.env.POLAR_PRO_PRODUCT_ID,
+    // Optional: only maps to TEAM when a team product id is configured AND the
+    // active subscription's product matches it. Absent env -> no team match
+    // (degrade-safe, never inflates an existing pro/enterprise subscriber).
+    teamProductId: process.env.POLAR_TEAM_PRODUCT_ID,
     enterpriseProductId: process.env.POLAR_ENTERPRISE_PRODUCT_ID,
   });
 }
@@ -21,14 +25,23 @@ export function resolveUserTier(userId: string): SubscriptionTier {
 export function resolveTierFromProductId(args: {
   productId?: string | null;
   proProductId?: string | null;
+  teamProductId?: string | null;
   enterpriseProductId?: string | null;
 }): SubscriptionTier {
   const productId = args.productId ?? '';
   const proProductId = args.proProductId ?? '';
+  const teamProductId = args.teamProductId ?? '';
   const enterpriseProductId = args.enterpriseProductId ?? '';
 
   if (productId && enterpriseProductId && productId === enterpriseProductId) {
     return SubscriptionTier.ENTERPRISE;
+  }
+  // TEAM is opt-in: only an exact match against a configured team product id
+  // yields TEAM. It is checked before the PRO fallback so a real team product
+  // is never silently downgraded to PRO, but an unknown product still never
+  // inflates to TEAM.
+  if (productId && teamProductId && productId === teamProductId) {
+    return SubscriptionTier.TEAM;
   }
   if (productId && proProductId && productId === proProductId) {
     return SubscriptionTier.PRO;
