@@ -308,6 +308,53 @@ export async function browserExecute(
   try {
     const { page, consoleLogs } = session;
 
+    // =========================================================================
+    // SECURITY -- TRUST BOUNDARY (hardened after root compromise)
+    //
+    // `script` is CALLER-SUPPLIED JavaScript that is evaluated via
+    // `new Function(code)` inside the page context below. This is an
+    // intentional capability (arbitrary in-page JS execution) that cannot be
+    // removed without breaking the feature, so callers of browserExecute() MUST
+    // be treated as TRUSTED. The guards below are defense-in-depth only -- they
+    // reject the most obviously dangerous payloads and cap the input size; they
+    // are NOT a sandbox. Do NOT rely on them as the sole control: enforce
+    // authn/authz, work-locks, and approval gates at the call site. The Function
+    // constructor runs in the page's (not Node's) scope and has no access to the
+    // enclosing closure, but it still has full access to the page DOM, cookies,
+    // local/session storage, and any network the page can reach.
+    // =========================================================================
+    if (typeof script !== 'string') {
+      return { success: false, error: 'Execute failed: script must be a string' };
+    }
+
+    const MAX_SCRIPT_LENGTH = 100_000; // 100 KB guard against abusive payloads
+    if (script.length === 0) {
+      return { success: false, error: 'Execute failed: script must not be empty' };
+    }
+    if (script.length > MAX_SCRIPT_LENGTH) {
+      return {
+        success: false,
+        error: `Execute failed: script exceeds maximum length of ${MAX_SCRIPT_LENGTH} characters`,
+      };
+    }
+
+    // Reject obviously dangerous patterns. This is a coarse blocklist, not a
+    // parser -- it stops casual misuse and known exfiltration/escape primitives.
+    const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+      { pattern: /\bimport\s*\(/, label: 'dynamic import()' },
+      { pattern: /\brequire\s*\(/, label: 'require()' },
+      { pattern: /\bprocess\b/, label: 'process access' },
+      { pattern: /\bglobalThis\b/, label: 'globalThis access' },
+      { pattern: /\b(eval|Function)\s*\(/, label: 'nested eval/Function' },
+      { pattern: /\bnew\s+Function\b/, label: 'nested Function constructor' },
+      { pattern: /\bdebugger\b/, label: 'debugger statement' },
+    ];
+    for (const { pattern, label } of FORBIDDEN_PATTERNS) {
+      if (pattern.test(script)) {
+        return { success: false, error: `Execute failed: forbidden pattern (${label})` };
+      }
+    }
+
     const result = await page.evaluate((code: string) => {
       try {
         // Use Function constructor instead of eval - no access to enclosing scope
