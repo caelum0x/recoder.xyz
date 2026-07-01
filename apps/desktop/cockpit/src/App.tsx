@@ -17,7 +17,13 @@ import {
   COCKPIT_NAVIGATE_EVENT,
   type CockpitView,
 } from './lib/config';
-import { planLabel, isCapabilityGated, capabilityUnlockLabel } from './lib/plan-state';
+import {
+  planLabel,
+  isCapabilityGated,
+  capabilityUnlockLabel,
+  parallelAgentUsageLabel,
+  atParallelAgentLimit,
+} from './lib/plan-state';
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
@@ -103,6 +109,13 @@ export function App() {
   const health = usePoll(() => api.health(), HEALTH_POLL_MS);
   const tmuxBin = health.data?.tmuxBin;
   const workspaces = board.data || [];
+  // Agents actively holding a run slot (provisioning / running / merging) — drives
+  // a calm "N of M agents" indicator vs the plan's parallel limit. Presentation-only:
+  // it NEVER blocks creating a workspace (the server enforces the real cap).
+  const activeAgents = workspaces.filter(
+    (w) => w.state === 'setting_up' || w.state === 'running' || w.state === 'merging',
+  ).length;
+  const agentsAtLimit = atParallelAgentLimit(activeAgents, config.identity?.plan);
 
   const selected = useMemo(
     () => workspaces.find((w) => w.workspaceId === selectedId) || null,
@@ -290,6 +303,23 @@ export function App() {
               title={`Remote substrate is available on ${capabilityUnlockLabel('remote_substrate')} and above.`}
             >
               Remote substrate · {capabilityUnlockLabel('remote_substrate')}+
+            </span>
+          )}
+          {/* Calm "N of M agents" indicator vs the plan's parallel limit. At the
+              limit it reads a touch stronger and hints an upgrade — but never blocks
+              creating a workspace (surfaced only; the server enforces the real cap). */}
+          {view === 'board' && (
+            <span
+              class={agentsAtLimit ? 'plan-hint plan-hint-live' : 'plan-hint'}
+              title={
+                agentsAtLimit
+                  ? planLabel(config.identity?.plan) === 'Free'
+                    ? 'Running your plan limit — upgrade to run more agents at once.'
+                    : "You're at your plan's parallel-agent limit."
+                  : 'Agents running now vs your plan limit'
+              }
+            >
+              {parallelAgentUsageLabel(activeAgents, config.identity?.plan)} agents
             </span>
           )}
           {/* Signed-in identity + sign-out. Shown only inside the desktop shell
