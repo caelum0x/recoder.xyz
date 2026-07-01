@@ -339,6 +339,21 @@ const TOOLS = [
     },
   },
   {
+    name: 'recoder_workspace_status',
+    description:
+      'Observe conductor coding workspaces: list them all with their run state (queued/running/awaiting_review/merged…), or report one by id. Read-only — completes create→observe→diff→merge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspace_id: {
+          type: 'string',
+          description: 'Optional: report a single workspace by id; omit to list all.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'recoder_workspace_merge',
     description: 'Merge a workspace PR. APPROVAL-GATED: the conductor enforces a delivery approval record and surfaces awaiting_approval instead of merging without one.',
     inputSchema: {
@@ -730,6 +745,27 @@ async function handleToolCall(name, args) {
       });
       const res = data.data || {};
       return `Workspace: ${res.workspaceId || args.workspace_id}\nBranch: ${res.branch || '?'}\nMerged: ${res.merged === true ? 'yes' : 'no'}`;
+    }
+
+    case 'recoder_workspace_status': {
+      if (!hasPlatformAuth()) {
+        return 'Error: conductor not configured. Set RECODER_SESSION_TOKEN (or RECODER_API_TOKEN) to view workspaces.';
+      }
+      // Read the conductor board (GET /workspaces). With workspace_id, report that
+      // one; otherwise list them all. Uses only the list endpoint (degrade-safe).
+      const data = await apiFetch(`${CONDUCTOR_URL}/workspaces`);
+      const list = Array.isArray(data.data) ? data.data : [];
+      if (args.workspace_id) {
+        const ws = list.find((w) => (w.workspaceId || w.id) === args.workspace_id);
+        if (!ws) return `Workspace ${args.workspace_id} not found.`;
+        return `Workspace: ${ws.workspaceId || ws.id}\nState: ${ws.state || '?'}\nRuntime: ${ws.runtimeId || '?'} | Substrate: ${ws.substrate || '?'}\nBranch: ${ws.branch || '(default)'} | Base: ${ws.baseRef || '(default)'}`;
+      }
+      if (!list.length) return 'No conductor workspaces.';
+      const lines = list.map(
+        (ws) =>
+          `• ${ws.workspaceId || ws.id || '?'} [${ws.state || '?'}] ${ws.runtimeId || ''}${ws.branch ? ` (${ws.branch})` : ''}`,
+      );
+      return `Conductor workspaces (${list.length}):\n${lines.join('\n')}`;
     }
 
     default:
