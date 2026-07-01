@@ -91,3 +91,49 @@ export function isCapabilityGated(
 export function capabilityUnlockLabel(capability: PlanCapability): string {
   return TIER_LABEL[CAPABILITY_MIN_TIER[capability]];
 }
+
+/**
+ * How many agents a tier may run in parallel. Mirrors the deny-safe floor in
+ * plan-capabilities.ts (free 1, pro 3, team 10, enterprise unlimited). This is
+ * PRESENTATION-ONLY — the server enforces the durable cap; here it drives a calm
+ * "N of M" indicator and a subtle, NON-BLOCKING upgrade hint. Enterprise is
+ * unlimited (Infinity). Unknown/absent plan resolves to the free floor (1).
+ */
+const PARALLEL_AGENT_LIMIT: Record<PlanTier, number> = {
+  free: 1,
+  pro: 3,
+  team: 10,
+  enterprise: Number.POSITIVE_INFINITY,
+};
+
+/** The parallel-agent limit for a raw plan string (Infinity = unlimited). */
+export function parallelAgentLimit(plan: string | null | undefined): number {
+  return PARALLEL_AGENT_LIMIT[resolvePlanTier(plan)];
+}
+
+/**
+ * A short usage label for the running-agent indicator: "N of M", or just "N"
+ * when the plan is unlimited. `active` is clamped to >= 0.
+ */
+export function parallelAgentUsageLabel(
+  active: number,
+  plan: string | null | undefined,
+): string {
+  const n = Math.max(0, Math.floor(active) || 0);
+  const limit = parallelAgentLimit(plan);
+  return Number.isFinite(limit) ? `${n} of ${limit}` : `${n}`;
+}
+
+/**
+ * True when the active count is at or over the plan's parallel limit — a cue to
+ * show the gentle upgrade hint. NEVER used to block creation (surfaced only).
+ * Always false for an unlimited (enterprise) plan.
+ */
+export function atParallelAgentLimit(
+  active: number,
+  plan: string | null | undefined,
+): boolean {
+  const limit = parallelAgentLimit(plan);
+  if (!Number.isFinite(limit)) return false;
+  return Math.max(0, Math.floor(active) || 0) >= limit;
+}

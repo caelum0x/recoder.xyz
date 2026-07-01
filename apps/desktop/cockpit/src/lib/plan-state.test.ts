@@ -14,6 +14,9 @@ import {
   tierSatisfies,
   isCapabilityGated,
   capabilityUnlockLabel,
+  parallelAgentLimit,
+  parallelAgentUsageLabel,
+  atParallelAgentLimit,
   type PlanTier,
 } from './plan-state';
 
@@ -107,5 +110,56 @@ describe('capabilityUnlockLabel', () => {
     expect(capabilityUnlockLabel('remote_substrate')).toBe('Pro');
     expect(capabilityUnlockLabel('team_seats')).toBe('Team');
     expect(capabilityUnlockLabel('parallel_agents')).toBe('Free');
+  });
+});
+
+describe('parallelAgentLimit', () => {
+  it('mirrors the deny-safe floor per tier', () => {
+    expect(parallelAgentLimit('free')).toBe(1);
+    expect(parallelAgentLimit('pro')).toBe(3);
+    expect(parallelAgentLimit('team')).toBe(10);
+    expect(parallelAgentLimit('enterprise')).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('defaults to the free floor (1) when the plan is absent/unknown', () => {
+    expect(parallelAgentLimit(undefined)).toBe(1);
+    expect(parallelAgentLimit('')).toBe(1);
+    expect(parallelAgentLimit('platinum')).toBe(1);
+  });
+});
+
+describe('parallelAgentUsageLabel', () => {
+  it('renders "N of M" for a finite plan limit', () => {
+    expect(parallelAgentUsageLabel(0, 'free')).toBe('0 of 1');
+    expect(parallelAgentUsageLabel(2, 'pro')).toBe('2 of 3');
+    expect(parallelAgentUsageLabel(5, 'team')).toBe('5 of 10');
+  });
+
+  it('renders just "N" for an unlimited (enterprise) plan', () => {
+    expect(parallelAgentUsageLabel(7, 'enterprise')).toBe('7');
+  });
+
+  it('clamps a negative/garbage active count to 0', () => {
+    expect(parallelAgentUsageLabel(-3, 'free')).toBe('0 of 1');
+    expect(parallelAgentUsageLabel(Number.NaN, 'free')).toBe('0 of 1');
+  });
+});
+
+describe('atParallelAgentLimit', () => {
+  it('is true at or over the plan limit, false below', () => {
+    expect(atParallelAgentLimit(0, 'free')).toBe(false);
+    expect(atParallelAgentLimit(1, 'free')).toBe(true);
+    expect(atParallelAgentLimit(2, 'free')).toBe(true);
+    expect(atParallelAgentLimit(2, 'pro')).toBe(false);
+    expect(atParallelAgentLimit(3, 'pro')).toBe(true);
+  });
+
+  it('is never at-limit for an unlimited (enterprise) plan', () => {
+    expect(atParallelAgentLimit(9999, 'enterprise')).toBe(false);
+  });
+
+  it('treats an absent plan as the free floor (fail-safe)', () => {
+    expect(atParallelAgentLimit(1, undefined)).toBe(true);
+    expect(atParallelAgentLimit(0, undefined)).toBe(false);
   });
 });

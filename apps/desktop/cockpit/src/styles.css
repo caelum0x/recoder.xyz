@@ -145,6 +145,11 @@ body {
   border-radius: var(--radius-sm); padding: 2px 7px;
   white-space: nowrap; cursor: default; user-select: none;
 }
+/* At the plan's parallel-agent limit: a touch stronger, still calm — a cue, not
+   an alarm. Uses the dim (not warning) palette so it never reads as "scary". */
+.plan-hint-live {
+  color: var(--text-dim); border-color: var(--border-strong);
+}
 
 /* Health strip — runtimes / substrates / connectors. Collapsed by default to a
    single calm summary line so the chrome stays quiet (the operator asked for
