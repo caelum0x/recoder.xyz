@@ -13,6 +13,7 @@ import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { readConfig } from '../lib/config';
 import { chooseFolder, hasFolderPicker } from '../lib/desktop';
+import { isCapabilityGated, capabilityUnlockLabel } from '../lib/plan-state';
 import type { CreateWorkspaceBody, WorkspaceSubstrate } from '../types';
 
 interface NewWorkspaceFormProps {
@@ -26,6 +27,9 @@ function genTaskId(): string {
 
 export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) {
   const defaults = readConfig().defaults || {};
+  // The signed-in plan — used only to hint (never block) when a chosen remote
+  // substrate will be downgraded to local by the server-side entitlement gate.
+  const plan = readConfig().identity?.plan;
   const runtimes = usePoll(() => api.runtimes(), 15_000);
   const substrates = usePoll(() => api.substrates(), 30_000);
 
@@ -205,6 +209,15 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
             )}
             {!substrates.error && availableSubstrates.length === 0 && substrates.data && (
               <span class="field-hint">No substrates report available — the backend will reject the launch.</span>
+            )}
+            {/* Calm, non-blocking hint: remote (Daytona) needs the paid remote_substrate
+                capability. On a gating plan the server runs it locally instead — tell the
+                operator up front so the downgrade isn't a surprise. Presentation-only. */}
+            {substrate === 'daytona' && isCapabilityGated(plan, 'remote_substrate') && (
+              <span class="field-hint">
+                Remote (Daytona) runs on {capabilityUnlockLabel('remote_substrate')}+ — on your
+                plan this will run locally.
+              </span>
             )}
           </label>
         </div>
