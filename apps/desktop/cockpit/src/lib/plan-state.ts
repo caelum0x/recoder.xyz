@@ -93,22 +93,32 @@ export function capabilityUnlockLabel(capability: PlanCapability): string {
 }
 
 /**
- * How many agents a tier may run in parallel. Mirrors the deny-safe floor in
- * plan-capabilities.ts (free 1, pro 3, team 10, enterprise unlimited). This is
- * PRESENTATION-ONLY — the server enforces the durable cap; here it drives a calm
- * "N of M" indicator and a subtle, NON-BLOCKING upgrade hint. Enterprise is
- * unlimited (Infinity). Unknown/absent plan resolves to the free floor (1).
+ * PRODUCT DECISION (docs/PLAN-MODEL.md · PRD FR-2): LOCAL desktop agents are
+ * UNLIMITED on every tier — it's your Mac and your keys (BYOK); Recoder never caps
+ * local concurrency. Hosted/remote concurrency IS metered, but server-side in the
+ * entitlement gate, not here. So the cockpit shows a live COUNT of running agents,
+ * never a local cap. Kept as a function so callers stay stable if the desktop ever
+ * gains a genuine local limit.
  */
-const PARALLEL_AGENT_LIMIT: Record<PlanTier, number> = {
+export function parallelAgentLimit(_plan: string | null | undefined): number {
+  return Number.POSITIVE_INFINITY;
+}
+
+/**
+ * How many org SEATS a plan grants (mirrors distribution's `seatsForPlan`): Free
+ * and Pro are single-seat individual plans, Team is a real pool, Enterprise is
+ * unlimited. Seats meter org membership, NOT parallel agents. Unknown/absent plan
+ * resolves to a single seat (fail safe: never over-grant).
+ */
+const SEAT_LIMIT: Record<PlanTier, number> = {
   free: 1,
-  pro: 3,
-  team: 10,
+  pro: 1,
+  team: 25,
   enterprise: Number.POSITIVE_INFINITY,
 };
 
-/** The parallel-agent limit for a raw plan string (Infinity = unlimited). */
-export function parallelAgentLimit(plan: string | null | undefined): number {
-  return PARALLEL_AGENT_LIMIT[resolvePlanTier(plan)];
+export function seatLimit(plan: string | null | undefined): number {
+  return SEAT_LIMIT[resolvePlanTier(plan)];
 }
 
 /**

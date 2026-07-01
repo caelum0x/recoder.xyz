@@ -117,6 +117,33 @@ export function planAllowsFeature(plan: Plan, feature: Feature): boolean {
 }
 
 /**
+ * How many usable org SEATS a plan tier grants (the team-seats concept).
+ *
+ * Product decision (docs/PLAN-MODEL.md, PRD FR-7 + site plans): Free and Pro are
+ * INDIVIDUAL plans → exactly one seat (the owner). Team is seat-billed with a real
+ * pool (`team_seats` capability); Enterprise is unlimited. Note this is orthogonal
+ * to how many agents run in parallel — LOCAL parallel agents are unlimited on every
+ * tier (PRD FR-2, BYOK on your own Mac); seats meter org membership, not concurrency.
+ * Unknown plans fall back to a single seat (fail safe: never over-grant seats).
+ */
+export function seatsForPlan(plan: Plan): number {
+  const pooled = capabilityLimitForPlan(plan, 'team_seats');
+  return pooled > 0 ? pooled : 1;
+}
+
+/**
+ * Whether a team may add one more seat given the seats already occupied. Deny-safe:
+ * a negative/garbage count clamps to 0; an unlimited (Enterprise) pool always
+ * allows; otherwise adding is permitted only while occupied < the tier's seat pool.
+ */
+export function canAddSeat(occupiedSeats: number, plan: Plan): boolean {
+  const limit = seatsForPlan(plan);
+  if (!Number.isFinite(limit)) return true; // enterprise / unlimited pool
+  const occupied = Math.max(0, Math.floor(occupiedSeats) || 0);
+  return occupied < limit;
+}
+
+/**
  * The effective per-seat device limit to enforce: an explicit host override
  * wins (a negotiated/admin-set ceiling), otherwise the plan tier's default.
  * `0` means unlimited. This is the single seam a caller threads into the device
