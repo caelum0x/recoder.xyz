@@ -18,6 +18,14 @@ export interface DeliveryPipelineDeps {
   /** Resolve the actor's authoritative plan (from recoder.xyz/billing). */
   readonly resolveActorPlan: (req: DeliveryRequest) => Promise<Plan>;
   readonly now?: () => Date;
+  /**
+   * Optional observer for a failed run-event emit. The event bus is a
+   * best-effort fire-back to Recoder's outbox — it is NOT the source of record
+   * (the receipt is). If it throws, the pipeline still returns the truthful
+   * receipt and hands the emit error here so the caller can log/alert without
+   * losing the delivery outcome.
+   */
+  readonly onEmitError?: (error: unknown, receipt: DeliveryReceipt) => void;
 }
 
 /** Tracks idempotency so a retried delivery never double-publishes. */
@@ -59,21 +67,29 @@ export async function runDeliveryPipeline(
 
   const emit = async (receipt: DeliveryReceipt): Promise<DeliveryReceipt> => {
     if (deps.events) {
-      await deps.events.emit({
-        eventId: `dist-${req.requestId}`,
-        taskId: req.taskId,
-        type: receipt.status === 'completed' ? 'completed' : 'failed',
-        createdAt: receipt.completedAt,
-        message: `delivery ${receipt.status} on channel ${receipt.channel}`,
-        data: {
-          channel: receipt.channel,
-          status: receipt.status,
-          url: receipt.url,
-          sha256: receipt.sha256,
-          approvalRef: receipt.approvalRef,
-          code: receipt.errorCode,
-        },
-      });
+      // Best-effort fire-back. The receipt is the source of record; a failing
+      // outbox must never crash the host or turn a truthful completed/failed
+      // delivery into a thrown error. Swallow, hand to the observer, return
+      // the receipt unchanged.
+      try {
+        await deps.events.emit({
+          eventId: `dist-${req.requestId}`,
+          taskId: req.taskId,
+          type: receipt.status === 'completed' ? 'completed' : 'failed',
+          createdAt: receipt.completedAt,
+          message: `delivery ${receipt.status} on channel ${receipt.channel}`,
+          data: {
+            channel: receipt.channel,
+            status: receipt.status,
+            url: receipt.url,
+            sha256: receipt.sha256,
+            approvalRef: receipt.approvalRef,
+            code: receipt.errorCode,
+          },
+        });
+      } catch (emitError) {
+        deps.onEmitError?.(emitError, receipt);
+      }
     }
     return receipt;
   };

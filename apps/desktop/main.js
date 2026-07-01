@@ -2807,7 +2807,19 @@ ipcMain.handle('terminal:spawn', async (_event, options = {}) => {
 ipcMain.handle('terminal:write', async (_event, { id, data }) => {
   const term = terminals.get(id);
   if (!term || typeof term.write !== 'function') return false;
-  term.write(data);
+  // The PTY can die asynchronously (agent session ends, tmux exits, broken
+  // pipe) between the renderer's keystroke and this write. node-pty writes to
+  // the underlying stream synchronously, so writing to a closed pty throws
+  // (EPIPE / ERR_STREAM_DESTROYED). Guard it — a dead pty is a false write, not
+  // a crash of the host process. Mirrors the try/catch in terminal:kill.
+  try {
+    term.write(data);
+  } catch (error) {
+    appendDesktopLog('terminal.log',
+      `${new Date().toISOString()} write-failed id=${id} ${error && error.message ? error.message : error}`);
+    terminals.delete(id);
+    return false;
+  }
   return true;
 });
 

@@ -1,6 +1,9 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { markOutboxFailed } from '@recoder/agent-events';
+import { runEventSchema } from '@recoder/agent-schemas';
 import { agentOsContainer } from '../service-container';
+import { AgentOsController } from '../controllers/agent-os.controller';
+import { validateBody } from '../middleware/schema-guard.middleware';
 import { drainAgentOsOutbox } from '../outbox-drain.service';
 import { createNatsOutboxPublisher } from '../nats-outbox-publisher';
 import { createCodeGraphRouter } from './code-graph.routes';
@@ -19,6 +22,21 @@ export function createInternalAgentOsRouter(): Router {
   const router = Router();
   router.use(requireInternalServiceKey);
 
+  // Non-cookie RunEvent ingress for the Python PAL process. Mirrors the
+  // authenticated POST /api/agent-os/events wiring (validateBody(runEventSchema)
+  // + the same controller.appendEvent) but is gated by the INTERNAL_SERVICE_KEY
+  // guard applied above instead of a session cookie, so the launched CLI's child
+  // pal MCP server can append handoff/completed/failed events using the env-injected
+  // RECODER_INTERNAL_URL + INTERNAL_SERVICE_KEY. Reuses the existing controller and
+  // repository code; no new persistence path.
+  const controller = new AgentOsController(
+    agentOsContainer.repository,
+    agentOsContainer.workLocks,
+    agentOsContainer.repositoryDriver,
+  );
+
+  router.post('/events', validateBody(runEventSchema), controller.appendEvent);
+
   router.post('/outbox/drain', async (req, res) => {
     const limit = readPositiveInteger(req.body?.limit, 100);
     const now = typeof req.body?.now === 'string' ? req.body.now : new Date().toISOString();
@@ -26,25 +44,36 @@ export function createInternalAgentOsRouter(): Router {
     const failureReason = typeof req.body?.error === 'string' ? req.body.error : 'outbox drain failed by request';
 
     if (markAsFailed) {
-      const pending = (await agentOsContainer.repository.listOutbox())
-        .filter((record) => record.status === 'pending')
-        .slice(0, limit);
+      try {
+        const pending = (await agentOsContainer.repository.listOutbox())
+          .filter((record) => record.status === 'pending')
+          .slice(0, limit);
 
-      const records = await Promise.all(pending.map(async (record) => {
-        const updated = markOutboxFailed(record, failureReason, now);
-        return await agentOsContainer.repository.upsertOutbox(updated);
-      }));
+        const records = await Promise.all(pending.map(async (record) => {
+          const updated = markOutboxFailed(record, failureReason, now);
+          return await agentOsContainer.repository.upsertOutbox(updated);
+        }));
 
-      res.json({
-        success: true,
-        data: {
-          status: 'marked_failed',
-          operation: 'outbox.drain',
-          processed: records.length,
-          remainingPending: (await agentOsContainer.repository.listOutbox()).filter((record) => record.status === 'pending').length,
-          records,
-        },
-      });
+        res.json({
+          success: true,
+          data: {
+            status: 'marked_failed',
+            operation: 'outbox.drain',
+            processed: records.length,
+            remainingPending: (await agentOsContainer.repository.listOutbox()).filter((record) => record.status === 'pending').length,
+            records,
+          },
+        });
+      } catch (error) {
+        // Repository I/O (e.g. Postgres) can throw here. Mirror the drain branch
+        // below and return a truthful 503 instead of leaving the internal caller's
+        // request hanging on an unhandled rejection (there is no global Express
+        // error middleware to catch it).
+        res.status(503).json({
+          success: false,
+          error: error instanceof Error ? error.message : 'outbox mark-failed unavailable',
+        });
+      }
       return;
     }
 

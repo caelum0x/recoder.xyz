@@ -43,12 +43,33 @@ const DEFAULT_BASE_URL = "https://context7.com/api";
 const SEARCH_PATH = "v2/libs/search";
 const CONTEXT_PATH = "v2/context";
 
-/** Default fetch seam: delegate to the platform global fetch. */
-function defaultFetch(
+/**
+ * Default request timeout (ms) for the real fetch seam. Bounded so a hung or
+ * unresponsive context7 endpoint can never block a Brain lookup forever — on
+ * timeout the fetch aborts (throws), and `lookup`'s fail-safe catch degrades to
+ * [] exactly as for any other network failure.
+ */
+const DEFAULT_TIMEOUT_MS = 4000;
+
+/**
+ * Default fetch seam: delegate to the platform global fetch, guarded by an
+ * AbortController timeout so a server that accepts the connection but never
+ * replies degrades instead of stalling the lookup.
+ */
+async function defaultFetch(
   url: string,
   init?: { method?: string; headers?: Record<string, string> },
 ): Promise<FetchResponse> {
-  return fetch(url, init) as unknown as Promise<FetchResponse>;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  try {
+    return (await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    })) as unknown as FetchResponse;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** A context7 search result row (untrusted external shape). */

@@ -91,7 +91,13 @@ function request(channel: DeliveryRequest['channel'], over: Partial<DeliveryRequ
   };
 }
 
-function engineWith(billing: BillingPort, approvals: ApprovalPort, plan: Plan, publishers: ChannelPublisher[]) {
+function engineWith(
+  billing: BillingPort,
+  approvals: ApprovalPort,
+  plan: Plan,
+  publishers: ChannelPublisher[],
+  extra: Partial<Parameters<typeof createDistributionEngine>[0]> = {},
+) {
   const registry = createChannelRegistry();
   for (const p of publishers) registry.register(p);
   return createDistributionEngine({
@@ -99,6 +105,7 @@ function engineWith(billing: BillingPort, approvals: ApprovalPort, plan: Plan, p
     resolver: createEntitlementResolver(billing),
     approvals,
     resolveActorPlan: async () => plan,
+    ...extra,
   });
 }
 
@@ -175,6 +182,47 @@ test('idempotency: a retried delivery returns the prior receipt, never double-pu
   const second = await engine.deliver(req);
   assert.equal(second.requestId, first.requestId);
   assert.equal(pub.published, false);
+});
+
+test('a throwing event bus never crashes a completed delivery (best-effort fire-back)', async () => {
+  const pub = publisherFor('download'); // download: no approval required
+  const approvals = approvalStub('approved');
+  const seen: unknown[] = [];
+  const engine = engineWith(billingStub(true), approvals, 'pro', [pub], {
+    events: {
+      emit: async () => {
+        throw new Error('outbox unreachable');
+      },
+    },
+    onEmitError: (err) => seen.push(err),
+  });
+
+  // The outbox is down, but publish succeeded → the caller must still get the
+  // truthful completed receipt, not a thrown error.
+  const receipt = await engine.deliver(request('download'));
+  assert.equal(receipt.status, 'completed');
+  assert.equal(pub.published, true);
+  assert.equal(seen.length, 1, 'emit error handed to onEmitError, not thrown');
+  assert.ok(seen[0] instanceof Error);
+});
+
+test('a throwing event bus never crashes a failed-receipt path either', async () => {
+  const pub = publisherFor('web_site', false); // verify unhealthy → failed receipt
+  const approvals = approvalStub('approved');
+  const seen: unknown[] = [];
+  const engine = engineWith(billingStub(true), approvals, 'pro', [pub], {
+    events: {
+      emit: async () => {
+        throw new Error('outbox unreachable');
+      },
+    },
+    onEmitError: (err) => seen.push(err),
+  });
+
+  const receipt = await engine.deliver(request('web_site', { approvalRef: 'appr_pre' }));
+  assert.equal(receipt.status, 'failed');
+  assert.equal(receipt.errorCode, 'preview_unhealthy');
+  assert.equal(seen.length, 1, 'truthful failed receipt survives a down outbox');
 });
 
 test('unknown channel fails safe (no publisher → failed, never pretend success)', async () => {

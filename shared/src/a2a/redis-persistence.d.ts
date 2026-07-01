@@ -8,20 +8,33 @@ export interface RedisKvClient {
     connect?(): Promise<unknown>;
     quit?(): Promise<unknown>;
 }
+/**
+ * Called when a best-effort write-through to Redis fails. The local cache
+ * remains authoritative, so the failure is non-fatal; this hook exists so
+ * callers can surface truthful health (metrics/logging) instead of silently
+ * dropping the durability failure.
+ */
+export type RedisWriteThroughErrorHandler = (input: {
+    key: string;
+    error: unknown;
+}) => void;
 export declare class RedisBackedPersistenceAdapter implements A2APersistenceAdapter {
     private readonly redis;
     private readonly keyPrefix;
     private readonly cache;
-    constructor(redis: RedisKvClient, keyPrefix?: string);
+    private readonly onWriteThroughError;
+    constructor(redis: RedisKvClient, keyPrefix?: string, onWriteThroughError?: RedisWriteThroughErrorHandler);
     static fromClient(input: {
         redis: RedisKvClient;
         keyPrefix?: string;
         preloadKeys?: readonly string[];
+        onWriteThroughError?: RedisWriteThroughErrorHandler;
     }): Promise<RedisBackedPersistenceAdapter>;
     static fromUrl(input: {
         url: string;
         keyPrefix?: string;
         preloadKeys?: readonly string[];
+        onWriteThroughError?: RedisWriteThroughErrorHandler;
     }): Promise<RedisBackedPersistenceAdapter>;
     read(key: string): string | null;
     write(key: string, value: string): void;

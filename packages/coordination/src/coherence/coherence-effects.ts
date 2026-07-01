@@ -59,12 +59,46 @@ export async function applyCoherenceEffect(
   }
 }
 
-/** Apply a batch of effects in order. */
+/** A single effect that failed to apply, paired with the thrown error. */
+export type CoherenceEffectFailure = {
+  effect: Effect;
+  error: unknown;
+};
+
+/** Outcome of applying a batch: how many effects ran vs. which ones failed. */
+export type CoherenceEffectsOutcome = {
+  /** Effects that applied without throwing. */
+  applied: number;
+  /** Effects that threw, with the offending effect and its error. */
+  failures: CoherenceEffectFailure[];
+};
+
+/**
+ * Apply a batch of effects best-effort.
+ *
+ * The coherence effects are INDEPENDENT heals (release lock A, mark agent B
+ * offline, emit escalation signal C). Unlike the engine's transactional
+ * `effect-runner` — which propagates so a transaction can roll back — this
+ * standalone applier runs on the background reconcile tick where there is no
+ * transaction to unwind. A transient port error on one heal must NOT abort the
+ * remaining heals or crash the tick (fail-safe per design §2.4). We therefore
+ * attempt every effect, isolate per-effect failures, and RETURN them so the
+ * caller can surface a truthful outcome (log/metrics) instead of silently
+ * losing the rest of the pass.
+ */
 export async function applyCoherenceEffects(
   effects: readonly Effect[],
   ports: CoherenceEffectPorts,
-): Promise<void> {
+): Promise<CoherenceEffectsOutcome> {
+  let applied = 0;
+  const failures: CoherenceEffectFailure[] = [];
   for (const effect of effects) {
-    await applyCoherenceEffect(effect, ports);
+    try {
+      await applyCoherenceEffect(effect, ports);
+      applied += 1;
+    } catch (error: unknown) {
+      failures.push({ effect, error });
+    }
   }
+  return { applied, failures };
 }

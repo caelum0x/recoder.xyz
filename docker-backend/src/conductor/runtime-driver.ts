@@ -260,7 +260,20 @@ export async function runtimeStatus(
   ]);
   let exitCode: number | null | undefined;
   if (!alive && sub.exitCode) {
-    exitCode = await sub.exitCode(handle);
+    // Degrade-safe: reading the exit code is a best-effort probe (a sandbox/tmux
+    // read can transiently fail or a future substrate may throw). A throw here
+    // must NOT sink the whole status call — the caller still needs the truthful
+    // `alive` + recent-output signal we already resolved. Fall back to `null`
+    // (unknown exit code), mirroring the completion-watcher's completion path.
+    try {
+      exitCode = await sub.exitCode(handle);
+    } catch (err) {
+      logger.warn(
+        { ref: handle.ref, substrate, err },
+        'substrate exit-code probe failed; reporting exitCode=null (unknown)',
+      );
+      exitCode = null;
+    }
   }
   return { alive, exitCode, recentOutput };
 }
