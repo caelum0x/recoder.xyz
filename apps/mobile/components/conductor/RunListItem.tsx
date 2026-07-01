@@ -7,7 +7,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { View } from 'react-native';
+import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import { Bot, Hash } from 'lucide-react-native';
@@ -17,16 +17,18 @@ import type { AgentOsRun } from '@/lib/conductor/types';
 
 interface RunListItemProps {
   run: AgentOsRun;
+  /** When provided, the row becomes tappable (opens the run detail). */
+  onPress?: () => void;
 }
 
-export function RunListItem({ run }: RunListItemProps) {
+export function RunListItem({ run, onPress }: RunListItemProps) {
   const title = run.taskId || `Run ${run.runId.slice(0, 8)}`;
   const timeAgo = useMemo(
     () => relativeTime(run.updatedAt),
     [run.updatedAt],
   );
 
-  return (
+  const body = (
     <View className="rounded-xl border border-border bg-card p-3.5">
       <View className="flex-row items-start justify-between gap-2">
         <View className="flex-1 gap-1">
@@ -52,5 +54,12 @@ export function RunListItem({ run }: RunListItemProps) {
         {timeAgo ? <Text className="text-xs text-muted-foreground">{timeAgo}</Text> : null}
       </View>
     </View>
+  );
+
+  if (!onPress) return body;
+  return (
+    <Pressable onPress={onPress} className="active:opacity-70">
+      {body}
+    </Pressable>
   );
 }

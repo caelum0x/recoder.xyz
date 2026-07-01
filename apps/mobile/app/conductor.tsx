@@ -21,11 +21,12 @@ import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   RunsListView,
+  RunDetailView,
   WorkspaceListView,
   WorkspaceDetailView,
   ApprovalsListView,
 } from '@/components/conductor';
-import type { ConductorWorkspace } from '@/lib/conductor/types';
+import type { ConductorWorkspace, AgentOsRun } from '@/lib/conductor/types';
 
 type ConductorTab = 'runs' | 'workspaces' | 'approvals';
 
@@ -69,6 +70,7 @@ export default function ConductorScreen() {
 
   const [tab, setTab] = useState<ConductorTab>('runs');
   const [selectedWorkspace, setSelectedWorkspace] = useState<ConductorWorkspace | null>(null);
+  const [selectedRun, setSelectedRun] = useState<AgentOsRun | null>(null);
 
   const handleWorkspacePress = useCallback((workspace: ConductorWorkspace) => {
     setSelectedWorkspace(workspace);
@@ -78,7 +80,16 @@ export default function ConductorScreen() {
     setSelectedWorkspace(null);
   }, []);
 
+  const handleRunPress = useCallback((run: AgentOsRun) => {
+    setSelectedRun(run);
+  }, []);
+
+  const handleRunBack = useCallback(() => {
+    setSelectedRun(null);
+  }, []);
+
   const showDetail = tab === 'workspaces' && selectedWorkspace;
+  const showRunDetail = tab === 'runs' && selectedRun;
 
   return (
     <>
@@ -86,6 +97,8 @@ export default function ConductorScreen() {
       <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
         {showDetail ? (
           <WorkspaceDetailView workspace={selectedWorkspace} onBack={handleDetailBack} />
+        ) : showRunDetail ? (
+          <RunDetailView run={selectedRun} onBack={handleRunBack} />
         ) : (
           <>
             <View className="flex-row items-center gap-3 px-4 pb-2 pt-2">
@@ -123,7 +136,7 @@ export default function ConductorScreen() {
             </View>
 
             {tab === 'runs' ? (
-              <RunsListView />
+              <RunsListView onRunPress={handleRunPress} />
             ) : tab === 'workspaces' ? (
               <WorkspaceListView onWorkspacePress={handleWorkspacePress} />
             ) : (
