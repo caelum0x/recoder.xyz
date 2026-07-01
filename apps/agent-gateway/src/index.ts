@@ -22,6 +22,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const sessions = new AgentSessionRegistry();
   const mcp = createDefaultMcpRegistry();
   const port = Number(process.env['AGENT_GATEWAY_PORT'] ?? 4317);
+  // Bind loopback by default; opt into a public bind explicitly via AGENT_GATEWAY_HOST.
+  const host = process.env['AGENT_GATEWAY_HOST'] ?? '127.0.0.1';
 
   app.get('/api/agent-os/sessions', (_req, res) => {
     res.json({ success: true, data: sessions.list() });
@@ -31,7 +33,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     res.json({ success: true, data: mcp.list() });
   });
 
-  app.listen(port, () => {
-    console.log(`agent-gateway listening on :${port}`);
+  app.listen(port, host, () => {
+    console.log(`agent-gateway listening on ${host}:${port}`);
   });
 }

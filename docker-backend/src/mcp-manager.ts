@@ -32,6 +32,47 @@ interface MCPServerInstance {
   buffer: string;
 }
 
+// A JSON-RPC 2.0 message as we actually consume it from server stdout.
+// Kept intentionally loose (result/params/error are passed through) but the
+// routing-relevant fields (id, method, error) are shape-checked at runtime.
+interface JsonRpcMessage {
+  jsonrpc?: unknown;
+  id?: string | number;
+  method?: unknown;
+  params?: unknown;
+  result?: unknown;
+  error?: unknown;
+}
+
+/**
+ * SECURITY: MCP server stdout is untrusted subprocess output. Reject anything
+ * that is not a plain JSON object whose routing fields have the expected
+ * primitive types, so malformed/hostile payloads cannot drive the dispatch
+ * logic below. This does not constrain `result`/`params`, which are forwarded
+ * verbatim to callers exactly as before.
+ */
+function isValidJsonRpcMessage(value: unknown): value is JsonRpcMessage {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const msg = value as Record<string, unknown>;
+  // `id`, when present, must be a JSON-RPC primitive id (string or number).
+  if ('id' in msg && msg.id !== undefined) {
+    if (typeof msg.id !== 'string' && typeof msg.id !== 'number') {
+      return false;
+    }
+  }
+  // `method`, when present, must be a string.
+  if ('method' in msg && msg.method !== undefined && typeof msg.method !== 'string') {
+    return false;
+  }
+  // A message must be routable as a response (has id) or a notification (has method).
+  if (msg.id === undefined && typeof msg.method !== 'string') {
+    return false;
+  }
+  return true;
+}
+
 // Idle timeout - kill servers after 5 minutes of inactivity
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -334,7 +375,18 @@ class MCPManager extends EventEmitter {
       if (!line.trim()) continue;
 
       try {
-        const message = JSON.parse(line);
+        // SECURITY: This data comes from arbitrary subprocess stdout (a spawned
+        // MCP server, possibly an npx-fetched package — see NPX_SERVERS below).
+        // It is fully untrusted. Validate shape before acting on any field so
+        // malformed/hostile JSON is rejected rather than processed.
+        const parsed: unknown = JSON.parse(line);
+
+        if (!isValidJsonRpcMessage(parsed)) {
+          // Drop messages that don't look like JSON-RPC (logging noise, junk,
+          // or hostile payloads). Same effect as the prior non-JSON branch.
+          continue;
+        }
+        const message = parsed;
 
         // Handle response
         if (message.id !== undefined) {
@@ -342,7 +394,13 @@ class MCPManager extends EventEmitter {
           if (pending) {
             instance.pendingRequests.delete(String(message.id));
             if (message.error) {
-              pending.reject(new Error(message.error.message || 'MCP error'));
+              const errMsg =
+                typeof message.error === 'object' &&
+                message.error !== null &&
+                typeof (message.error as { message?: unknown }).message === 'string'
+                  ? (message.error as { message: string }).message
+                  : 'MCP error';
+              pending.reject(new Error(errMsg));
             } else {
               pending.resolve(message.result);
             }
@@ -350,7 +408,7 @@ class MCPManager extends EventEmitter {
         }
 
         // Handle notifications
-        if (message.method && !message.id) {
+        if (typeof message.method === 'string' && message.id === undefined) {
           this.emit('notification', {
             projectId,
             serverId,
@@ -423,7 +481,15 @@ export const PREINSTALLED_SERVERS: Record<string, Omit<MCPServerConfig, 'id'>> =
   },
 };
 
-// Servers that need npx (not pre-installed, for custom or API-key required servers)
+// SECURITY / SUPPLY-CHAIN RISK: these entries spawn `npx -y <package>`, which
+// downloads and executes an npm package at runtime inside the user container.
+// `-y` auto-confirms install, and arbitrary `command`/`args` can also be passed
+// to startServer() from elsewhere, so this is an arbitrary-code-execution and
+// supply-chain surface (a compromised/typo-squatted package runs with the
+// container's privileges). Do NOT remove this without a replacement: instead
+// pin versions/integrity, restrict to an allowlist, and run in a locked-down
+// sandbox. Untrusted stdout from these processes is shape-checked in
+// processBuffer() via isValidJsonRpcMessage().
 export const NPX_SERVERS: Record<string, Omit<MCPServerConfig, 'id'>> = {
   github: {
     name: 'GitHub',

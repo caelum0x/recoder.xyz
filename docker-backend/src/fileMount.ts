@@ -2,10 +2,12 @@ import Docker from 'dockerode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createReadStream } from 'fs';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
+// Use execFile (argument array, no shell) to prevent command injection via
+// attacker-controlled file/dir paths. See CVE-class: command-injection.
+const execFileAsync = promisify(execFile);
 const docker = new Docker();
 
 export interface MountedFile {
@@ -36,7 +38,7 @@ export async function mountFiles(
         
         // Create tar archive of single file
         const tarPath = `/tmp/mount-${Date.now()}.tar`;
-        await execAsync(`tar -cf ${tarPath} -C "${path.dirname(filePath)}" "${fileName}"`);
+        await execFileAsync('tar', ['-cf', tarPath, '-C', path.dirname(filePath), fileName]);
         
         // Upload to container
         await container.putArchive(createReadStream(tarPath), { path: '/workspace' });
@@ -68,7 +70,7 @@ export async function mountDirectory(
   
   // Create tar archive of directory
   const tarPath = `/tmp/mount-dir-${Date.now()}.tar`;
-  await execAsync(`tar -cf ${tarPath} -C "${path.dirname(dirPath)}" "${dirName}"`);
+  await execFileAsync('tar', ['-cf', tarPath, '-C', path.dirname(dirPath), dirName]);
   
   // Upload to container
   await container.putArchive(createReadStream(tarPath), { path: '/workspace' });

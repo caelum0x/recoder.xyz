@@ -25,7 +25,10 @@ export type A2ARouterOptions = {
 function unwrapPayload<T>(body: unknown, options: A2ARouterOptions): T {
   const verification = verifyGatewaySignedEnvelope<T>(body, {
     secret: options.signingSecret ?? process.env['RECODER_A2A_SHARED_SECRET'],
-    requireSignature: options.requireSignedEnvelope ?? process.env['RECODER_A2A_REQUIRE_SIGNATURE'] === 'true',
+    // Fail-safe default: REQUIRE a signed envelope unless an operator explicitly
+    // opts out with RECODER_A2A_REQUIRE_SIGNATURE='false'. Previously this defaulted
+    // to OFF, so unsigned requests could create/execute tasks (auth bypass).
+    requireSignature: options.requireSignedEnvelope ?? process.env['RECODER_A2A_REQUIRE_SIGNATURE'] !== 'false',
   });
   if (!verification.ok) {
     const error = new Error(verification.error);

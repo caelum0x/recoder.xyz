@@ -19,6 +19,34 @@ import {
 import type { DataContent, ModelMessage } from "ai";
 import { type ApiMediaContentType, Langfuse, LangfuseMedia } from "langfuse";
 
+// SSRF guard: refuse to fetch non-http(s) URLs or any host that resolves to a
+// loopback / link-local / private / cloud-metadata address. Message content
+// (file/image URLs) can be attacker-influenced, so this fetch must not be used
+// to reach internal services. NOTE: this is a literal-host check; a hardened
+// deployment should also resolve DNS and re-check the IP to defeat rebinding.
+function assertFetchableUrl(url: URL): void {
+	if (url.protocol !== "https:" && url.protocol !== "http:") {
+		throw new Error(`Refusing to fetch non-http(s) URL: ${url.protocol}`);
+	}
+	const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+	const blocked =
+		host === "localhost" ||
+		host.endsWith(".local") ||
+		host === "169.254.169.254" ||
+		host === "metadata.google.internal" ||
+		host === "0.0.0.0" ||
+		host === "::1" ||
+		/^127\./.test(host) ||
+		/^10\./.test(host) ||
+		/^192\.168\./.test(host) ||
+		/^169\.254\./.test(host) ||
+		/^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+		/^(fe80:|fc|fd)/.test(host);
+	if (blocked) {
+		throw new Error(`Refusing to fetch private/internal address: ${host}`);
+	}
+}
+
 async function toBuffer(data: DataContent | URL) {
 	if (typeof data === "string") {
 		return Buffer.from(data);
@@ -27,6 +55,7 @@ async function toBuffer(data: DataContent | URL) {
 		return data;
 	}
 	if (data instanceof URL) {
+		assertFetchableUrl(data);
 		const response = await fetch(data);
 		const arrayBuffer = await response.arrayBuffer();
 		return Buffer.from(arrayBuffer);

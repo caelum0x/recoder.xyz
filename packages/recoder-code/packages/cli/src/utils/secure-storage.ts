@@ -3,7 +3,7 @@
  * Uses macOS Keychain on macOS, encrypted file on other platforms
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -43,15 +43,17 @@ export class SecureKeyStorage {
   static async set(provider: string, apiKey: string): Promise<void> {
     if (isMacOS()) {
       try {
-        // Try to delete existing first
+        // Try to delete existing first.
+        // execFileSync (argument array, no shell) prevents command injection
+        // via attacker-controlled provider/apiKey.
         try {
-          execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE}" -a "${provider}" 2>/dev/null`);
+          execFileSync('security', ['delete-generic-password', '-s', KEYCHAIN_SERVICE, '-a', provider], { stdio: 'ignore' });
         } catch {
           // Ignore if doesn't exist
         }
-        
+
         // Add new key
-        execSync(`security add-generic-password -s "${KEYCHAIN_SERVICE}" -a "${provider}" -w "${apiKey}"`);
+        execFileSync('security', ['add-generic-password', '-s', KEYCHAIN_SERVICE, '-a', provider, '-w', apiKey]);
       } catch (err) {
         throw new Error(`Failed to store key in keychain: ${err}`);
       }
@@ -69,8 +71,9 @@ export class SecureKeyStorage {
   static async get(provider: string): Promise<string | null> {
     if (isMacOS()) {
       try {
-        const result = execSync(
-          `security find-generic-password -s "${KEYCHAIN_SERVICE}" -a "${provider}" -w`,
+        const result = execFileSync(
+          'security',
+          ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', provider, '-w'],
           { encoding: 'utf-8' }
         );
         return result.trim();
@@ -89,7 +92,7 @@ export class SecureKeyStorage {
   static async delete(provider: string): Promise<void> {
     if (isMacOS()) {
       try {
-        execSync(`security delete-generic-password -s "${KEYCHAIN_SERVICE}" -a "${provider}"`);
+        execFileSync('security', ['delete-generic-password', '-s', KEYCHAIN_SERVICE, '-a', provider], { stdio: 'ignore' });
       } catch {
         // Ignore if doesn't exist
       }
