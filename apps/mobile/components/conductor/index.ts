@@ -12,6 +12,7 @@ export { WorkspaceDetailView } from './WorkspaceDetailView';
 export { RunStateBadge } from './RunStateBadge';
 export { RunListItem } from './RunListItem';
 export { RunsListView } from './RunsListView';
+export { RunDetailView } from './RunDetailView';
 export { RunEventLog } from './RunEventLog';
 export { ApprovalCard } from './ApprovalCard';
 export { ApprovalsListView } from './ApprovalsListView';

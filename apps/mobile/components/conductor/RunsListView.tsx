@@ -30,7 +30,12 @@ function SectionHeader({ label }: { label: string }) {
   );
 }
 
-export function RunsListView() {
+interface RunsListViewProps {
+  /** When provided, each run row is tappable and opens the run detail. */
+  onRunPress?: (run: AgentOsRun) => void;
+}
+
+export function RunsListView({ onRunPress }: RunsListViewProps = {}) {
   const { colorScheme } = useColorScheme();
   const { data, isLoading, error, refetch, isRefetching } = useRuns();
 
@@ -124,7 +129,11 @@ export function RunsListView() {
         <>
           <SectionHeader label={`Active (${active.length})`} />
           {active.map((run) => (
-            <RunListItem key={run.runId} run={run} />
+            <RunListItem
+              key={run.runId}
+              run={run}
+              onPress={onRunPress ? () => onRunPress(run) : undefined}
+            />
           ))}
         </>
       ) : null}
@@ -133,7 +142,11 @@ export function RunsListView() {
         <>
           <SectionHeader label="Recently finished" />
           {finished.map((run) => (
-            <RunListItem key={run.runId} run={run} />
+            <RunListItem
+              key={run.runId}
+              run={run}
+              onPress={onRunPress ? () => onRunPress(run) : undefined}
+            />
           ))}
         </>
       ) : null}
