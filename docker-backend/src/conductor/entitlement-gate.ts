@@ -34,6 +34,7 @@
  */
 import {
   decideCapability,
+  capabilityLimitForPlan,
   type CapabilityDecision,
   type Plan,
   type Subject,
@@ -66,6 +67,14 @@ export interface SubstrateEntitlementInput {
   readonly userId?: string;
   /** The substrate the conductor proposes (caller-pinned or pal-defaulted). */
   readonly requestedSubstrate?: WorkspaceSubstrate;
+  /**
+   * How many REMOTE (hosted) runs this subject already has active. Optional — when
+   * provided, the gate enforces the plan's hosted-concurrency ceiling
+   * (`parallel_agents`, per docs/PLAN-MODEL.md Decision 1: local is unlimited, hosted
+   * is metered). When omitted, concurrency is not enforced (degrade-safe: the caller
+   * simply doesn't cap). Local runs are never counted or capped here.
+   */
+  readonly activeRemoteCount?: number;
 }
 
 export interface SubstrateEntitlementResult {
@@ -151,6 +160,23 @@ export async function decideSubstrateEntitlement(
     );
 
     if (decision.allowed) {
+      // Hosted-concurrency cap (docs/PLAN-MODEL.md Decision 1): a paid tier gets N
+      // concurrent REMOTE runs. If the caller reported how many remote runs are
+      // already active and we're at the plan ceiling, downgrade THIS one to local —
+      // never block the launch. Unlimited (enterprise) or an unreported count skips.
+      const hostedLimit = capabilityLimitForPlan(plan, 'parallel_agents');
+      if (
+        typeof input.activeRemoteCount === 'number' &&
+        Number.isFinite(hostedLimit) &&
+        input.activeRemoteCount >= hostedLimit
+      ) {
+        const reason = `plan '${plan}' allows ${hostedLimit} concurrent remote run(s); ${input.activeRemoteCount} already active — using local '${LOCAL_SUBSTRATE}'`;
+        logger.info(
+          { userId: input.userId, plan, hostedLimit, active: input.activeRemoteCount },
+          'hosted concurrency limit reached; downgrading to local tmux'
+        );
+        return { substrate: LOCAL_SUBSTRATE, plan, downgraded: true, decision, reason };
+      }
       return { substrate: REMOTE_SUBSTRATE, plan, downgraded: false, decision };
     }
 
