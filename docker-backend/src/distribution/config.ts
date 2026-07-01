@@ -47,9 +47,16 @@ export function loadDistributionRuntimeConfig(
 
   const planCatalog: PlanCatalogEntry[] = [];
   const proProduct = env.POLAR_PRO_PRODUCT_ID;
+  const teamProduct = env.POLAR_TEAM_PRODUCT_ID;
   const enterpriseProduct = env.POLAR_ENTERPRISE_PRODUCT_ID;
   if (proProduct) {
     planCatalog.push({ plan: 'pro', polarProductId: proProduct, displayName: 'Recoder Pro' });
+  }
+  // Team is optional: only registered for checkout/entitlement lookup when a
+  // team product id is configured. Absent env -> no team catalog entry (the
+  // module still boots and free/pro/enterprise are unaffected).
+  if (teamProduct) {
+    planCatalog.push({ plan: 'team', polarProductId: teamProduct, displayName: 'Recoder Team' });
   }
   if (enterpriseProduct) {
     planCatalog.push({

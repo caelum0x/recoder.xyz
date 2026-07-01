@@ -17,6 +17,7 @@ import {
   COCKPIT_NAVIGATE_EVENT,
   type CockpitView,
 } from './lib/config';
+import { planLabel, isCapabilityGated, capabilityUnlockLabel } from './lib/plan-state';
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
@@ -72,6 +73,10 @@ const MORE_VIEWS: readonly CockpitView[] = [
 
 export function App() {
   const config = readConfig();
+  // Whether the current plan gates the remote substrate (Pro+). Drives a subtle,
+  // non-nagging hint near the create control — never a hard block (the server
+  // still enforces the real entitlement). Defaults to gated when plan is absent.
+  const remoteSubstrateGated = isCapabilityGated(config.identity?.plan, 'remote_substrate');
   // Open on the deep-linked view when a launcher/menu requested one (e.g. the
   // desktop "Open dmux Console" item), otherwise default to the board.
   const [view, setView] = useState<CockpitView>(() => readInitialView() || 'board');
@@ -275,6 +280,18 @@ export function App() {
           {view === 'board' && (
             <button class="btn btn-primary" onClick={() => setShowCreate(true)}>New workspace</button>
           )}
+          {/* Subtle, non-nagging capability hint: remote substrate is Pro+. When
+              the current plan gates it, show a quiet inline note near the create
+              control — not a modal, not a block. Presentation-only; the server
+              still enforces the real entitlement. */}
+          {view === 'board' && remoteSubstrateGated && (
+            <span
+              class="plan-hint"
+              title={`Remote substrate is available on ${capabilityUnlockLabel('remote_substrate')} and above.`}
+            >
+              Remote substrate · {capabilityUnlockLabel('remote_substrate')}+
+            </span>
+          )}
           {/* Signed-in identity + sign-out. Shown only inside the desktop shell
               (where the sign-out bridge exists) and only once authenticated. The
               identity is calm + muted; when no email/plan was captured we show a
@@ -283,7 +300,12 @@ export function App() {
             <div class="account">
               <span class="account-id" title={config.identity?.email || 'Signed in'}>
                 {config.identity?.email || 'Signed in'}
-                {config.identity?.plan && <span class="account-plan">{config.identity.plan}</span>}
+                {/* Always show the resolved plan tier as a calm, muted badge.
+                    Defaults to "Free" when identity carries no plan — never
+                    inflates to a paid tier the server did not grant. */}
+                <span class="account-plan" title="Your Recoder plan">
+                  {planLabel(config.identity?.plan)}
+                </span>
               </span>
               <button
                 class="btn btn-ghost btn-sm"

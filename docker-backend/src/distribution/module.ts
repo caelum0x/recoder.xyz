@@ -48,6 +48,7 @@ import {
   createPersistentWebhookDedupeStore,
 } from './stores.js';
 import { resolveUserTier } from '../billing/subscription-tier.js';
+import { SubscriptionTier } from '../resources/types.js';
 import { createLogger } from './log.js';
 
 const logger = createLogger('distribution-module');
@@ -85,14 +86,33 @@ export interface BuildDistributionModuleOptions {
 }
 
 /**
+ * Explicit, lossless map from docker-backend's `SubscriptionTier` to the
+ * distribution `Plan`. Every tier — including `team` — has an exact `Plan`
+ * counterpart, so no value is dropped. An unrecognized tier falls back to
+ * `'free'` (fail-safe: deny-by-default, never inflate).
+ */
+export const TIER_TO_PLAN: Record<SubscriptionTier, Plan> = {
+  [SubscriptionTier.FREE]: 'free',
+  [SubscriptionTier.PRO]: 'pro',
+  [SubscriptionTier.TEAM]: 'team',
+  [SubscriptionTier.ENTERPRISE]: 'enterprise',
+};
+
+/**
+ * Pure tier -> Plan mapping. Exported for tests. Unknown tiers fail safe to
+ * `'free'` (never inflate).
+ */
+export function planForTier(tier: SubscriptionTier): Plan {
+  return TIER_TO_PLAN[tier] ?? 'free';
+}
+
+/**
  * Map docker-backend's live subscription tier (`resolveUserTier`, fed by the
  * existing Polar webhook state) to the distribution `Plan`. This keeps plan
  * resolution on the real, already-maintained subscription source.
  */
 function livePlanResolver(userId: string): Plan {
-  const tier = resolveUserTier(userId);
-  // SubscriptionTier values are exactly 'free' | 'pro' | 'enterprise'.
-  return tier as Plan;
+  return planForTier(resolveUserTier(userId));
 }
 
 /**
