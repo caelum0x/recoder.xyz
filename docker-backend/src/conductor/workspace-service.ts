@@ -373,9 +373,27 @@ async function applyEntitlementGate(
     };
   void _stripped;
 
+  // Count active REMOTE runs to enforce the hosted-concurrency cap — only relevant
+  // when a remote substrate is requested (skip the list otherwise). Active = holding
+  // a run slot. Degrade-safe: if we can't count, we simply don't cap.
+  let activeRemoteCount: number | undefined;
+  if (engineInput.substrate === 'daytona') {
+    try {
+      const all = await engine.listWorkspaces();
+      activeRemoteCount = all.filter(
+        (w) =>
+          w.substrate === 'daytona' &&
+          (w.state === 'setting_up' || w.state === 'running' || w.state === 'merging')
+      ).length;
+    } catch {
+      activeRemoteCount = undefined;
+    }
+  }
+
   const result = await decideSubstrateEntitlement({
     userId,
     requestedSubstrate: engineInput.substrate,
+    activeRemoteCount,
   });
 
   // No change to substrate and nothing to annotate → preserve input exactly.

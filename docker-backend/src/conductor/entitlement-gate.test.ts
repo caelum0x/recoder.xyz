@@ -89,6 +89,52 @@ describe('decideSubstrateEntitlement — remote substrate enforcement', () => {
     expect(r.decision?.allowed).toBe(true);
   });
 
+  // Hosted-concurrency cap (docs/PLAN-MODEL.md Decision 1): local unlimited, hosted metered.
+  it('caps hosted concurrency: pro daytona downgrades at the plan ceiling (3 active)', async () => {
+    currentPlan = 'pro';
+    const r = await decideSubstrateEntitlement({
+      userId: 'u_pro',
+      requestedSubstrate: 'daytona',
+      activeRemoteCount: 3,
+    });
+    expect(r.substrate).toBe('tmux_worktree');
+    expect(r.downgraded).toBe(true);
+    expect(r.reason).toMatch(/concurrent remote/i);
+    expect(r.decision?.allowed).toBe(true); // capability allowed; only concurrency downgraded
+  });
+
+  it('allows hosted concurrency below the plan ceiling (pro, 2 active)', async () => {
+    currentPlan = 'pro';
+    const r = await decideSubstrateEntitlement({
+      userId: 'u_pro',
+      requestedSubstrate: 'daytona',
+      activeRemoteCount: 2,
+    });
+    expect(r.substrate).toBe('daytona');
+    expect(r.downgraded).toBe(false);
+  });
+
+  it('does not enforce concurrency when the active count is not provided', async () => {
+    currentPlan = 'pro';
+    const r = await decideSubstrateEntitlement({
+      userId: 'u_pro',
+      requestedSubstrate: 'daytona',
+    });
+    expect(r.substrate).toBe('daytona');
+    expect(r.downgraded).toBe(false);
+  });
+
+  it('never caps an unlimited (enterprise) plan regardless of active count', async () => {
+    currentPlan = 'enterprise';
+    const r = await decideSubstrateEntitlement({
+      userId: 'u_ent',
+      requestedSubstrate: 'daytona',
+      activeRemoteCount: 9999,
+    });
+    expect(r.substrate).toBe('daytona');
+    expect(r.downgraded).toBe(false);
+  });
+
   it('honors daytona for a team plan', async () => {
     currentPlan = 'team';
     const r = await decideSubstrateEntitlement({
