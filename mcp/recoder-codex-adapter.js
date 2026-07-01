@@ -139,6 +139,8 @@ async function handleMessage(msg) {
         { name: 'recoder_send_task', description: 'Send task to agent', params: ['target_agent', 'task'] },
         { name: 'recoder_create_thread', description: 'Create AI agent thread', params: ['prompt'] },
         { name: 'recoder_sandbox_run', description: 'Run command in sandbox', params: ['command'] },
+        { name: 'recoder_workspace_status', description: 'List conductor coding workspaces + run state (or one by id)', params: [] },
+        { name: 'recoder_workspace_events', description: 'Read a conductor workspace RunEvents (watch progress)', params: ['workspace_id'] },
       ],
     });
     return;
@@ -236,6 +238,24 @@ async function handleMessage(msg) {
             // Always attempt cleanup, even if exec failed.
             await fetch(`${daytonaApiUrl}/sandbox/${sandbox.id}`, { method: 'DELETE', headers: daytonaHeaders }).catch(() => {});
           }
+          break;
+        }
+        case 'recoder_workspace_status': {
+          const url = `${DOCKER_URL}/api/conductor/workspaces`;
+          result = await fetchJson(url, {
+            headers: recoderHeaders(DOCKER_URL, { method: 'GET', url }),
+          });
+          break;
+        }
+        case 'recoder_workspace_events': {
+          if (!args.workspace_id || typeof args.workspace_id !== 'string') {
+            respondError(id, -32602, 'recoder_workspace_events requires a "workspace_id" string argument');
+            return;
+          }
+          const url = `${DOCKER_URL}/api/conductor/workspaces/${encodeURIComponent(args.workspace_id)}/events`;
+          result = await fetchJson(url, {
+            headers: recoderHeaders(DOCKER_URL, { method: 'GET', url }),
+          });
           break;
         }
         default:
