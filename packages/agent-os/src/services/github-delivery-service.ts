@@ -192,8 +192,18 @@ function deriveStatus(link: GitHubDeliveryLink): GitHubDeliveryLinkStatus {
   if (link.reviews.some((review) => review.state === 'changes_requested')) {
     return 'review_required';
   }
-  if (link.pullRequestArtifactId && link.previewArtifactIds.length > 0 && link.checks.every((check) => check.state === 'success' || check.state === 'skipped' || check.state === 'neutral')) {
+  if (
+    link.pullRequestArtifactId &&
+    link.previewArtifactIds.length > 0 &&
+    link.checks.length > 0 &&
+    link.checks.every((check) => check.state === 'success' || check.state === 'skipped' || check.state === 'neutral')
+  ) {
     return 'ready_for_approval';
+  }
+  if (link.pullRequestArtifactId && link.previewArtifactIds.length > 0 && link.checks.length === 0) {
+    // PR + preview exist but no CI checks have reported yet. Do not imply
+    // readiness without check evidence — surface that checks are still pending.
+    return 'checks_pending';
   }
   if (link.pullRequestArtifactId) {
     return 'pr_open';

@@ -79,7 +79,11 @@ export {
 } from './reconciler';
 
 // Impure shell + scheduling
-export { Reconciler, type ReconcilerDeps } from './reconciler-service';
+export {
+  Reconciler,
+  CoherenceEffectApplyError,
+  type ReconcilerDeps,
+} from './reconciler-service';
 export {
   createIntervalScheduler,
   type ReconcileTrigger,
@@ -90,4 +94,6 @@ export {
   applyCoherenceEffect,
   applyCoherenceEffects,
   type CoherenceEffectPorts,
+  type CoherenceEffectFailure,
+  type CoherenceEffectsOutcome,
 } from './coherence-effects';

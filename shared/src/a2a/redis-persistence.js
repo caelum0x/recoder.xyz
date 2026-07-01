@@ -41,12 +41,21 @@ class RedisBackedPersistenceAdapter {
     redis;
     keyPrefix;
     cache = new Map();
-    constructor(redis, keyPrefix = 'a2a:persist:') {
+    onWriteThroughError;
+    constructor(redis, keyPrefix = 'a2a:persist:', onWriteThroughError) {
         this.redis = redis;
         this.keyPrefix = keyPrefix;
+        this.onWriteThroughError =
+            onWriteThroughError ??
+                (({ key, error }) => {
+                    // Degrade safely: durability of the write-through is best-effort and the
+                    // in-memory cache remains the source for synchronous reads. Never let a
+                    // rejected Redis promise become an unhandled rejection that can crash the host.
+                    console.warn(`[a2a] redis write-through failed for key "${key}"; local cache retained`, error);
+                });
     }
     static async fromClient(input) {
-        const adapter = new RedisBackedPersistenceAdapter(input.redis, input.keyPrefix ?? 'a2a:persist:');
+        const adapter = new RedisBackedPersistenceAdapter(input.redis, input.keyPrefix ?? 'a2a:persist:', input.onWriteThroughError);
         const preload = input.preloadKeys ?? persistent_services_1.DEFAULT_A2A_PERSISTENCE_KEYS;
         for (const key of preload) {
             const raw = await input.redis.get(adapter.prefixed(key));
@@ -64,6 +73,7 @@ class RedisBackedPersistenceAdapter {
             redis: client,
             keyPrefix: input.keyPrefix,
             preloadKeys: input.preloadKeys,
+            onWriteThroughError: input.onWriteThroughError,
         });
     }
     read(key) {
@@ -72,7 +82,17 @@ class RedisBackedPersistenceAdapter {
     write(key, value) {
         this.cache.set(key, value);
         // Best-effort write-through; local cache remains source for sync reads.
-        void this.redis.set(this.prefixed(key), value);
+        // A rejected promise (or a synchronous throw from the client) here must be
+        // caught so a transient Redis failure degrades safely instead of surfacing
+        // as an unhandled rejection that can crash the host process.
+        try {
+            Promise.resolve(this.redis.set(this.prefixed(key), value)).catch((error) => {
+                this.onWriteThroughError({ key, error });
+            });
+        }
+        catch (error) {
+            this.onWriteThroughError({ key, error });
+        }
     }
     async flush(keys = persistent_services_1.DEFAULT_A2A_PERSISTENCE_KEYS) {
         for (const key of keys) {

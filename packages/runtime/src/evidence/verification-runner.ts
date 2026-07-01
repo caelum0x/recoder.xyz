@@ -11,8 +11,15 @@ export type VerificationCommandResult = {
 };
 
 export type VerificationRunResult = {
-  /** True only when every command exited 0. Empty plans are `passed: true` (nothing to run). */
+  /**
+   * True only when EVERY planned command ran and exited 0. Empty plans are `passed: true`
+   * (nothing to run). If the run was aborted before all planned commands completed, `passed`
+   * is `false` — we have no evidence the un-run commands would have passed, and this module
+   * must never imply success without evidence.
+   */
   passed: boolean;
+  /** True when the abort signal fired before every planned command was executed. */
+  aborted: boolean;
   results: VerificationCommandResult[];
 };
 
@@ -34,9 +41,13 @@ export async function runVerification(input: {
 }): Promise<VerificationRunResult> {
   const commands = input.plan.commands ?? [];
   const results: VerificationCommandResult[] = [];
+  let aborted = false;
 
   for (const command of commands) {
-    if (input.signal?.aborted) break;
+    if (input.signal?.aborted) {
+      aborted = true;
+      break;
+    }
     const exec = await input.env.exec({
       command: 'bash',
       args: ['-c', command],
@@ -66,8 +77,12 @@ export async function runVerification(input: {
     });
   }
 
-  const passed = results.every((r) => r.passed);
-  return { passed, results };
+  // Truthful gate: success requires that the run was NOT aborted AND every planned command
+  // ran and passed. If we broke out early, un-run commands have no evidence, so `passed` is
+  // false regardless of how the completed commands fared.
+  const ranAllPlanned = !aborted && results.length === commands.length;
+  const passed = ranAllPlanned && results.every((r) => r.passed);
+  return { passed, aborted, results };
 }
 
 function composeOutput(stdout: string, stderr: string): string {

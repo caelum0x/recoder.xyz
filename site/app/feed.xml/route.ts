@@ -15,13 +15,27 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/** Converts an ISO calendar date (YYYY-MM-DD) to an RFC-822 pubDate. */
-function toRfc822(date: string): string {
+/**
+ * Converts an ISO calendar date (YYYY-MM-DD) to an RFC-822 pubDate.
+ *
+ * Changelog entries are hand-edited, so a malformed date is a realistic input.
+ * A bad date would make `new Date(...)` return an Invalid Date whose
+ * `.toUTCString()` is the literal "Invalid Date" — that silently emits an
+ * invalid RSS feed that readers reject. Instead we fall back to a valid RFC-822
+ * timestamp (`fallback`, the feed build time) so the feed stays parseable and
+ * the failure is visible in logs rather than as broken output.
+ */
+function toRfc822(date: string, fallback: string): string {
   // Treat the calendar date as midnight UTC for a stable, deterministic feed.
-  return new Date(`${date}T00:00:00Z`).toUTCString();
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    console.error(`Invalid changelog date in RSS feed: ${JSON.stringify(date)}`);
+    return fallback;
+  }
+  return parsed.toUTCString();
 }
 
-function renderItem(entry: ChangelogEntry): string {
+function renderItem(entry: ChangelogEntry, fallbackDate: string): string {
   const link = `${SITE_URL}/changelog#${encodeURIComponent(entry.version)}`;
   const body = entry.items.map((i) => `• ${i}`).join("\n");
   return [
@@ -29,7 +43,7 @@ function renderItem(entry: ChangelogEntry): string {
     `      <title>${escapeXml(`${entry.version} — ${entry.title}`)}</title>`,
     `      <link>${escapeXml(link)}</link>`,
     `      <guid isPermaLink="true">${escapeXml(link)}</guid>`,
-    `      <pubDate>${toRfc822(entry.date)}</pubDate>`,
+    `      <pubDate>${toRfc822(entry.date, fallbackDate)}</pubDate>`,
     `      <description>${escapeXml(body)}</description>`,
     "    </item>",
   ].join("\n");
@@ -37,8 +51,11 @@ function renderItem(entry: ChangelogEntry): string {
 
 export function GET(): Response {
   const entries = getChangelog();
+  // A guaranteed-valid RFC-822 timestamp used as the fallback whenever a
+  // hand-edited changelog date fails to parse, so the feed never emits garbage.
+  const now = new Date().toUTCString();
   const lastBuildDate =
-    entries.length > 0 ? toRfc822(entries[0].date) : new Date().toUTCString();
+    entries.length > 0 ? toRfc822(entries[0].date, now) : now;
 
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -50,7 +67,7 @@ export function GET(): Response {
     "    <language>en</language>",
     `    <lastBuildDate>${lastBuildDate}</lastBuildDate>`,
     `    <atom:link href="${SITE_URL}/feed.xml" rel="self" type="application/rss+xml" />`,
-    entries.map(renderItem).join("\n"),
+    entries.map((entry) => renderItem(entry, now)).join("\n"),
     "  </channel>",
     "</rss>",
   ].join("\n");

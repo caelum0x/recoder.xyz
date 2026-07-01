@@ -19,6 +19,7 @@ import type { CoordinationConfig } from '../config/coordination-config';
 import type { IdGeneratorPort } from '../ports';
 import {
   applyCoherenceEffects,
+  type CoherenceEffectFailure,
   type CoherenceEffectPorts,
 } from './coherence-effects';
 import { reconcile, type ReconcileResult } from './reconciler';
@@ -32,6 +33,17 @@ export type ReconcilerDeps = {
   config: CoordinationConfig;
   /** Spaces to reconcile each tick; undefined → adapter-decided scope. */
   spaceIds?: () => string[] | undefined;
+  /**
+   * Observe heals that failed to apply this tick. The coherence effects are
+   * independent (release lock A, mark agent B offline, emit signal C), so a
+   * transient port error on one must not abort the rest or crash the tick — all
+   * effects are attempted, then the failures are reported here. When this hook
+   * is provided the tick completes normally (returning its `ReconcileResult`)
+   * and failures are surfaced through the hook; when it is absent, an aggregated
+   * error is thrown AFTER every effect has been attempted so the failure is
+   * never silently swallowed. Either way the scheduler stays fail-safe.
+   */
+  onEffectFailures?: (failures: readonly CoherenceEffectFailure[]) => void;
 };
 
 export class Reconciler implements ReconcileTrigger {
@@ -48,7 +60,32 @@ export class Reconciler implements ReconcileTrigger {
       source: 'coherence.reconciler',
     });
 
-    await applyCoherenceEffects(result.effects, this.deps.effects);
+    const outcome = await applyCoherenceEffects(result.effects, this.deps.effects);
+    if (outcome.failures.length > 0) {
+      if (this.deps.onEffectFailures) {
+        this.deps.onEffectFailures(outcome.failures);
+      } else {
+        throw new CoherenceEffectApplyError(outcome.failures, outcome.applied);
+      }
+    }
     return result;
+  }
+}
+
+/**
+ * Raised by `Reconciler.tick()` when one or more heals failed to apply and no
+ * `onEffectFailures` hook was supplied. It is thrown ONLY after every effect has
+ * been attempted, so it reports a partial-heal truthfully (how many applied,
+ * which ones failed) rather than masking the aborted remainder of the pass.
+ */
+export class CoherenceEffectApplyError extends Error {
+  constructor(
+    readonly failures: readonly CoherenceEffectFailure[],
+    readonly applied: number,
+  ) {
+    super(
+      `Coherence reconcile applied ${applied} effect(s) but ${failures.length} failed to apply`,
+    );
+    this.name = 'CoherenceEffectApplyError';
   }
 }

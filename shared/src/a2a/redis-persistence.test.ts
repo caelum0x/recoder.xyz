@@ -40,6 +40,55 @@ describe('RedisBackedPersistenceAdapter', () => {
     expect(redis.store.get('a2a:persist:another-key')).toBe('value-2');
   });
 
+  it('degrades safely when write-through to redis rejects', async () => {
+    const failingRedis: RedisKvClient = {
+      async get() {
+        return null;
+      },
+      async set() {
+        throw new Error('redis unavailable');
+      },
+    };
+    const errors: Array<{ key: string; error: unknown }> = [];
+    const adapter = await RedisBackedPersistenceAdapter.fromClient({
+      redis: failingRedis,
+      onWriteThroughError: (input) => errors.push(input),
+    });
+
+    // Must not throw and must not produce an unhandled rejection.
+    expect(() => adapter.write('k1', 'v1')).not.toThrow();
+    // Local cache stays authoritative.
+    expect(adapter.read('k1')).toBe('v1');
+
+    // Allow the rejected write-through microtask to settle.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(errors).toHaveLength(1);
+    expect(errors[0].key).toBe('k1');
+    expect(errors[0].error).toBeInstanceOf(Error);
+  });
+
+  it('degrades safely when the client throws synchronously', async () => {
+    const throwingRedis: RedisKvClient = {
+      async get() {
+        return null;
+      },
+      set() {
+        throw new Error('sync boom');
+      },
+    };
+    const errors: Array<{ key: string; error: unknown }> = [];
+    const adapter = await RedisBackedPersistenceAdapter.fromClient({
+      redis: throwingRedis,
+      onWriteThroughError: (input) => errors.push(input),
+    });
+
+    expect(() => adapter.write('k2', 'v2')).not.toThrow();
+    expect(adapter.read('k2')).toBe('v2');
+    expect(errors).toHaveLength(1);
+    expect(errors[0].key).toBe('k2');
+  });
+
   it('flushes cached keys explicitly', async () => {
     const redis = new MockRedisClient();
     const adapter = await RedisBackedPersistenceAdapter.fromClient({ redis });

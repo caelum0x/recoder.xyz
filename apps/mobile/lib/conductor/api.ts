@@ -72,7 +72,16 @@ async function getJson(path: string): Promise<unknown> {
     throw new Error(`HTTP ${res.status}`);
   }
 
-  return res.json();
+  // A 200 can still carry a non-JSON body (e.g. a Cloudflare/nginx challenge or
+  // interstitial HTML page in front of the control plane). Guard the parse so
+  // the caller degrades to the "control plane unreachable" state instead of
+  // surfacing an opaque JSON SyntaxError as a fake failure.
+  try {
+    return await res.json();
+  } catch {
+    log.error('[Conductor] GET non-JSON body:', path);
+    throw new Error('Control plane returned a non-JSON response');
+  }
 }
 
 async function postJson(path: string, body: Record<string, unknown>): Promise<unknown> {

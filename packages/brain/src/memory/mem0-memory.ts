@@ -51,15 +51,34 @@ export interface Mem0MemoryOptions {
 
 const DEFAULT_USER_ID = "recoder";
 
-/** Default transport: fetch the mem0 server and normalize the response. */
+/**
+ * Default request timeout (ms) for the real fetch transport. Bounded so a hung
+ * or unresponsive mem0 server can never block a Brain recall/remember forever —
+ * on timeout the fetch aborts (throws), and the adapter's fail-safe catch
+ * degrades recall to [] / remember to a no-op, exactly as for any other failure.
+ */
+const DEFAULT_TIMEOUT_MS = 4000;
+
+/**
+ * Default transport: fetch the mem0 server and normalize the response. Guards
+ * the request with an AbortController timeout so a server that accepts the
+ * connection but never replies degrades instead of stalling the caller.
+ */
 async function defaultTransport(request: Mem0Request): Promise<Mem0Response> {
-  const response = await fetch(request.url, {
-    method: request.method,
-    headers: { ...request.headers },
-    body: request.body,
-  });
-  const text = await response.text();
-  return { ok: response.ok, status: response.status, text };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  try {
+    const response = await fetch(request.url, {
+      method: request.method,
+      headers: { ...request.headers },
+      body: request.body,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    return { ok: response.ok, status: response.status, text };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Strip a single trailing slash so `${base}/search` never double-slashes. */
