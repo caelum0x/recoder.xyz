@@ -10,6 +10,9 @@ describe('extractBearerToken', () => {
     expect(extractBearerToken('')).toBe('');
     expect(extractBearerToken('Basic xyz')).toBe('');
   });
+  it('preserves the original case of the token (tokens are case-sensitive)', () => {
+    expect(extractBearerToken('Bearer MyToken123ABC')).toBe('MyToken123ABC');
+  });
 });
 
 describe('verifyBridgeBearer', () => {
