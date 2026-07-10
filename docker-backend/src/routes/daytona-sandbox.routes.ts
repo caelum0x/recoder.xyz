@@ -26,6 +26,31 @@ interface AuthenticatedRequest extends express.Request {
   sessionId?: string;
 }
 
+export type OwnershipResult = { ok: true } | { ok: false; status: number; error: string };
+
+/**
+ * Verify the caller owns the sandbox by comparing the `userId` label stamped at
+ * creation. Fail-closed: no caller userId, missing label, or mismatch => deny.
+ */
+export async function assertSandboxOwnership(
+  client: { getSandbox: (id: string) => Promise<{ labels?: Record<string, string> }> },
+  sandboxId: string,
+  userId: string | undefined,
+): Promise<OwnershipResult> {
+  if (!userId) return { ok: false, status: 401, error: 'Unauthorized' };
+  let ownerId: string | undefined;
+  try {
+    const sandbox = await client.getSandbox(sandboxId);
+    ownerId = sandbox.labels?.userId;
+  } catch {
+    return { ok: false, status: 404, error: 'Sandbox not found' };
+  }
+  if (ownerId !== userId) {
+    return { ok: false, status: 403, error: 'You do not have access to this sandbox' };
+  }
+  return { ok: true };
+}
+
 type AuthMiddleware = (
   req: AuthenticatedRequest,
   res: express.Response,
@@ -85,6 +110,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
 
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
+    }
+
     try {
       const sandbox = await getDaytonaClient().getSandbox(req.params.sandboxId);
       sendSuccess(res, { sandbox });
@@ -97,6 +130,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
   router.post('/api/daytona/sandbox/:sandboxId/start', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
     if (!isDaytonaConfigured()) {
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+    }
+
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
     }
 
     try {
@@ -113,6 +154,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
 
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
+    }
+
     try {
       await getDaytonaClient().stopSandbox(req.params.sandboxId);
       sendSuccess(res, { stopped: true, sandboxId: req.params.sandboxId });
@@ -127,6 +176,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
 
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
+    }
+
     try {
       await getDaytonaClient().deleteSandbox(req.params.sandboxId);
       sendSuccess(res, { deleted: true, sandboxId: req.params.sandboxId });
@@ -139,6 +196,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
   router.post('/api/daytona/sandbox/:sandboxId/exec', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
     if (!isDaytonaConfigured()) {
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+    }
+
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
     }
 
     const { command, cwd, timeoutSecs } = req.body;
@@ -158,6 +223,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
   router.post('/api/daytona/sandbox/:sandboxId/files/write', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
     if (!isDaytonaConfigured()) {
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+    }
+
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
     }
 
     const { path: filePath, content } = req.body;
@@ -189,6 +262,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
 
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
+    }
+
     const filePath = req.query.path as string;
     if (!filePath) {
       return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'path query parameter is required'));
@@ -206,6 +287,14 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
   router.get('/api/daytona/sandbox/:sandboxId/preview', authenticateRequest, async (req: AuthenticatedRequest, res: express.Response) => {
     if (!isDaytonaConfigured()) {
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
+    }
+
+    const owns = await assertSandboxOwnership(getDaytonaClient(), req.params.sandboxId, req.userId);
+    if (!owns.ok) {
+      return sendError(res, createError(
+        owns.status === 403 ? ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED : ErrorCode.VALIDATION_ERROR,
+        owns.error,
+      ));
     }
 
     const port = parseInt(req.query.port as string, 10);
