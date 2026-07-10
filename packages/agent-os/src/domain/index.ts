@@ -1,5 +1,6 @@
 export * from './agent-profile';
 export * from './task-spec';
+export * from './tenant-context';
 export * from './task-run';
 export * from './instruction-bundle';
 export * from './github-delivery-link';
