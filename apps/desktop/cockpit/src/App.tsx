@@ -3,8 +3,14 @@
  * selection + the new-workspace modal, and renders the health strip. When the
  * backend is unreachable it shows a truthful "backend unreachable" banner and
  * never fabricates workspaces.
+ *
+ * Navigation is driven by the panel registry (src/panels/registry.ts). Each
+ * non-board panel is lazy-loaded on first activation via registry entry `load()`.
+ * The board view retains its special 3-pane layout — it is registered in the
+ * registry for metadata/health purposes but rendered inline here.
  */
 import { useEffect, useMemo, useState } from 'preact/hooks';
+import type { ComponentType } from 'preact';
 import { api, BackendUnreachableError, UnauthorizedError } from './lib/api';
 import { usePoll } from './lib/usePoll';
 import {
@@ -23,6 +29,9 @@ import {
   capabilityUnlockLabel,
   parallelAgentUsageLabel,
 } from './lib/plan-state';
+// Board-view and sessions-view components remain eagerly imported — they are
+// always needed at startup (board is the default view) or receive shell-level
+// props (sessions needs tmuxBin from the health poll).
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
@@ -30,6 +39,12 @@ import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
 import { WorkspaceCenter } from './components/WorkspaceCenter';
 import { SessionsPanel } from './components/SessionsPanel';
+import { SignIn } from './components/SignIn';
+// Panel components eagerly imported for registration into the panel cache.
+// These allow PanelLoader to render instantly (no async import step) for all
+// panels that are already bundled at startup. When a panel is split into its
+// own async chunk, remove its import here and the load() in the registry will
+// take over transparently — no other code needs to change.
 import { DmuxPanel } from './components/DmuxPanel';
 import { ConnectorsPanel } from './components/ConnectorsPanel';
 import { PolicyPanel } from './components/PolicyPanel';
@@ -38,43 +53,115 @@ import { SubstratesPanel } from './components/SubstratesPanel';
 import { LiveEventsView } from './components/LiveEventsView';
 import { GovernancePanel } from './components/GovernancePanel';
 import { BrainStatsPanel } from './components/BrainStatsPanel';
-import { SignIn } from './components/SignIn';
+// Registry drives the nav and lazy-loads all non-board panels.
+import {
+  PANEL_REGISTRY,
+  PRIMARY_PANEL_IDS,
+  MORE_PANEL_IDS,
+  getPanelById,
+  type PanelComponent,
+} from './panels/registry';
 
 const WORKSPACE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
 
 /**
- * Plain-English labels for each view. The underlying view ids/routes/state
- * values never change — only what the user reads. This keeps deep links, the
- * navigate event, and persisted state stable while the nav speaks plain words.
+ * Derive the nav label for a given view id from the registry.
+ * Falls back to the id itself when not found (should not happen in practice).
  */
-const VIEW_LABELS: Record<CockpitView, string> = {
-  board: 'Board',
-  sessions: 'Runs',
-  connectors: 'Chat',
-  substrates: 'Agents',
-  events: 'Activity',
-  governance: 'Approvals',
-  policy: 'Rules',
-  brain: 'Brain',
-  memory: 'Memory',
-  dmux: 'dmux',
-};
+function viewLabel(id: string): string {
+  return getPanelById(id)?.title ?? id;
+}
 
-/** Views always shown front-and-center in the top nav. */
-const PRIMARY_VIEWS: readonly CockpitView[] = ['board', 'sessions'];
+/**
+ * Cache of panel components keyed by panel id.
+ *
+ * This lives outside the component so a given component is resolved at most
+ * once per cockpit session, regardless of how many times the user switches views.
+ *
+ * Pre-seeded with every panel component that is eagerly bundled with App.tsx
+ * so that PanelLoader renders them instantly (no async import step). When a
+ * panel is split into its own async chunk, remove its entry here and the
+ * registry's load() will populate the cache on first activation.
+ */
+const panelCache = new Map<string, PanelComponent>([
+  ['dmux', DmuxPanel as unknown as PanelComponent],
+  ['connectors', ConnectorsPanel as unknown as PanelComponent],
+  ['policy', PolicyPanel as unknown as PanelComponent],
+  ['memory', MemoryCandidatesPanel as unknown as PanelComponent],
+  ['substrates', SubstratesPanel as unknown as PanelComponent],
+  ['events', LiveEventsView as unknown as PanelComponent],
+  ['governance', GovernancePanel as unknown as PanelComponent],
+  ['brain', BrainStatsPanel as unknown as PanelComponent],
+]);
 
-/** Advanced/technical views tucked into the "More" menu so they're not in your face. */
-const MORE_VIEWS: readonly CockpitView[] = [
-  'dmux',
-  'substrates',
-  'governance',
-  'policy',
-  'brain',
-  'memory',
-  'events',
-  'connectors',
-];
+/**
+ * PanelLoader — renders a panel by id using the registry's load() function.
+ *
+ * On first render it triggers the dynamic import, stores the resolved component
+ * in the module-level cache, and renders a loading fallback until ready. On
+ * subsequent renders the cached component is used immediately (no re-import).
+ * This is a simple dynamic-import-with-state pattern that matches what the
+ * codebase already uses — no Preact lazy() or Suspense required.
+ */
+function PanelLoader({ panelId }: { panelId: string }) {
+  const [Component, setComponent] = useState<PanelComponent | null>(
+    () => panelCache.get(panelId) ?? null,
+  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (panelCache.has(panelId)) {
+      setComponent(panelCache.get(panelId) as PanelComponent);
+      return;
+    }
+    const entry = getPanelById(panelId);
+    if (!entry) {
+      setLoadError(`Unknown panel: ${panelId}`);
+      return;
+    }
+    let cancelled = false;
+    entry
+      .load()
+      .then((C: PanelComponent) => {
+        if (cancelled) return;
+        panelCache.set(panelId, C);
+        setComponent(C);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [panelId]);
+
+  if (loadError) {
+    return (
+      <div class="banner banner-error">
+        <strong>Panel failed to load:</strong> {loadError}
+      </div>
+    );
+  }
+  if (!Component) {
+    return <div class="board-loading">Loading…</div>;
+  }
+  // Cast to satisfy Preact's JSX — the registry contract guarantees it renders
+  // without required props (all existing panels take no external props).
+  const C = Component as ComponentType<object>;
+  return <C />;
+}
+
+// Derive PRIMARY_VIEWS and MORE_VIEWS from the registry so the nav is
+// automatically up-to-date whenever entries are added. These are typed as
+// readonly string[] (not CockpitView[]) because new panels may be added before
+// a CockpitView union update — the nav still works.
+const PRIMARY_VIEWS: readonly string[] = PRIMARY_PANEL_IDS;
+const MORE_VIEWS: readonly string[] = MORE_PANEL_IDS;
+
+// Build the set of all registered view ids for the navigate-event guard.
+const ALL_VIEW_IDS: ReadonlySet<string> = new Set(PANEL_REGISTRY.map((p) => p.id));
 
 export function App() {
   const config = readConfig();
@@ -125,23 +212,14 @@ export function App() {
   // menu/launcher action fires — e.g. "Open dmux Console" dispatches this event
   // with detail.view = 'dmux'. This is how the dmux surface is reachable from a
   // single menu click even when the cockpit is already open.
+  // The guard now uses ALL_VIEW_IDS from the registry so new panels are
+  // automatically navigable without touching this handler.
   useEffect(() => {
     function onNavigate(e: Event) {
       const detail = (e as CustomEvent<{ view?: string }>).detail;
       const target = detail?.view;
-      if (
-        target === 'board' ||
-        target === 'sessions' ||
-        target === 'dmux' ||
-        target === 'connectors' ||
-        target === 'policy' ||
-        target === 'memory' ||
-        target === 'substrates' ||
-        target === 'events' ||
-        target === 'governance' ||
-        target === 'brain'
-      ) {
-        setView(target);
+      if (typeof target === 'string' && ALL_VIEW_IDS.has(target)) {
+        setView(target as CockpitView);
         setMoreOpen(false);
       }
     }
@@ -241,13 +319,14 @@ export function App() {
           <span class="brand-sub">{config.backendUrl}</span>
         </div>
         <nav class="view-tabs">
+          {/* Primary tabs driven by the panel registry. */}
           {PRIMARY_VIEWS.map((v) => (
             <button
               key={v}
               class={view === v ? 'view-tab view-tab-active' : 'view-tab'}
-              onClick={() => goTo(v)}
+              onClick={() => goTo(v as CockpitView)}
             >
-              {VIEW_LABELS[v]}
+              {viewLabel(v)}
             </button>
           ))}
           {/* Everything technical lives behind one calm "More" menu so the nav
@@ -275,9 +354,9 @@ export function App() {
                       key={v}
                       role="menuitem"
                       class={view === v ? 'view-more-item view-more-item-active' : 'view-more-item'}
-                      onClick={() => goTo(v)}
+                      onClick={() => goTo(v as CockpitView)}
                     >
-                      {VIEW_LABELS[v]}
+                      {viewLabel(v)}
                     </button>
                   ))}
                 </div>
@@ -412,40 +491,17 @@ export function App() {
           )}
         </main>
       ) : view === 'sessions' ? (
+        /* sessions is rendered inline because it receives the shell-level
+           tmuxBin hint from the health poll. All other panels are lazy-loaded
+           via PanelLoader which reads their component from the registry. */
         <main class="main">
           <SessionsPanel tmuxBin={tmuxBin} />
         </main>
-      ) : view === 'dmux' ? (
-        <main class="main">
-          <DmuxPanel />
-        </main>
-      ) : view === 'connectors' ? (
-        <main class="main">
-          <ConnectorsPanel />
-        </main>
-      ) : view === 'substrates' ? (
-        <main class="main">
-          <SubstratesPanel />
-        </main>
-      ) : view === 'events' ? (
-        <main class="main">
-          <LiveEventsView />
-        </main>
-      ) : view === 'governance' ? (
-        <main class="main">
-          <GovernancePanel />
-        </main>
-      ) : view === 'brain' ? (
-        <main class="main">
-          <BrainStatsPanel />
-        </main>
-      ) : view === 'policy' ? (
-        <main class="main">
-          <PolicyPanel />
-        </main>
       ) : (
+        /* All remaining panels are lazy-loaded on first activation. The registry
+           drives which component is rendered — no ternary chain needed. */
         <main class="main">
-          <MemoryCandidatesPanel />
+          <PanelLoader panelId={view} />
         </main>
       )}
 
