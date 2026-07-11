@@ -25,7 +25,7 @@ import {
 import { getWorkspaceService, resetWorkspaceService } from './a2a/workspace.service';
 import { getAgentRegistryService, resetAgentRegistryService } from './a2a/agent-registry.service';
 import { getTaskLifecycleService } from './a2a/task-lifecycle.service';
-import { extractBearerToken as extractBearerTokenString, verifyBridgeBearer } from './a2a/bridge-auth.js';
+import { verifyBridgeBearer } from './a2a/bridge-auth.js';
 
 const router = Router();
 
@@ -895,10 +895,6 @@ function verifyAdminToken(req: Request): { ok: true; scope: string | null } | { 
   return { ok: true, scope };
 }
 
-function verifyBridgeToken(req: Request): { ok: true } | { ok: false; status: number; error: string } {
-  const bearerToken = extractBearerTokenString(String(req.header('authorization') || ''));
-  return verifyBridgeBearer(bearerToken, process.env.RECODER_A2A_BRIDGE_TOKEN);
-}
 
 function asBool(value: unknown, fallback: boolean): boolean {
   if (typeof value === 'boolean') return value;
@@ -2833,12 +2829,11 @@ async function verifyBridgeTokenForRequest(
   | { ok: true; scope: string | null; session: BridgeSession | null }
   | { ok: false; status: number; error: string }
 > {
-  const basic = verifyBridgeToken(req);
-  if (!basic.ok) return basic;
-
   const bearerToken = extractBearerToken(req);
+  if (!bearerToken) return { ok: false, status: 401, error: 'Unauthorized bridge token' };
+
   const staticToken = process.env.RECODER_A2A_BRIDGE_TOKEN || '';
-  if (staticToken && bearerToken === staticToken) {
+  if (staticToken && verifyBridgeBearer(bearerToken, staticToken).ok) {
     const staticScope = String(process.env.RECODER_A2A_BRIDGE_TOKEN_SCOPE || '').trim() || null;
     return { ok: true, scope: staticScope, session: null };
   }

@@ -91,13 +91,16 @@ export function createDaytonaSandboxRouter(deps: DaytonaSandboxRouterDeps): Rout
   }));
 
   // GET /api/daytona/sandbox - List Daytona sandboxes
-  router.get('/api/daytona/sandbox', authenticateRequest, asyncHandler(async (_req: AuthenticatedRequest, res: express.Response) => {
+  router.get('/api/daytona/sandbox', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
     if (!isDaytonaConfigured()) {
       return sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, 'Daytona integration not configured'));
     }
 
     try {
-      const sandboxes = await getDaytonaClient().listSandboxes();
+      const allSandboxes = await getDaytonaClient().listSandboxes();
+      const sandboxes = allSandboxes.filter(
+        (s: any) => s.labels && s.labels.userId === req.userId,
+      );
       sendSuccess(res, { sandboxes, total: sandboxes.length });
     } catch (err: any) {
       sendError(res, createError(ErrorCode.INTERNAL_ERROR, `Failed to list Daytona sandboxes: ${err.message}`));
