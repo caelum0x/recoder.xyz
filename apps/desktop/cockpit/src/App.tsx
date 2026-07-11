@@ -458,6 +458,7 @@ export function App() {
             loading={board.loading && !board.data}
             onSelect={setSelectedId}
             onNewWorkspace={() => setShowCreate(true)}
+            waits={waits}
           />
 
           {/* CENTER: when a workspace is selected, its live agent stream +
