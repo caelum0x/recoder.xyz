@@ -31,8 +31,15 @@ const STATUS_BY_STATE: Record<WorkspaceState, HerdStatus> = {
   failed: 'failed',
 };
 
-export function herdStatus(state: WorkspaceState): HerdStatus {
-  return STATUS_BY_STATE[state] ?? 'working';
+export function herdStatus(
+  state: WorkspaceState,
+  opts?: { waiting?: boolean },
+): HerdStatus {
+  const base = STATUS_BY_STATE[state] ?? 'working';
+  // An agent blocked on an interactive prompt needs the operator NOW — but only
+  // while it is actually working; review/terminal states keep their triage.
+  if (opts?.waiting && base === 'working') return 'needs_you';
+  return base;
 }
 
 /** The human label for a workspace: its GOAL (metadata.prompt), else the branch. */

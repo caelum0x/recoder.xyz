@@ -21,6 +21,7 @@ import type { LoggerPort } from '../ports/logger.port.js';
 import type { RunEventSink } from './event-sink.port.js';
 import { TailRegistry, type TailHandle } from './tail-registry.js';
 import { computeDelta, MAX_DELTA_CHARS } from './delta.js';
+import { detectInputWait } from './input-wait.js';
 
 /** Default poll interval — promoted from the backend tailer (3s). */
 export const DEFAULT_INTERVAL_MS = 3000;
@@ -92,6 +93,9 @@ export function startRunTail(input: RunTailInput, deps: RunTailerDeps): TailHand
   const maxDeltaChars = input.maxDeltaChars ?? MAX_DELTA_CHARS;
   const startedAtMs = clock.nowMs();
   let lastCapture = '';
+  // The prompt the agent is currently blocked on (deduped: needs_input is
+  // emitted once on ENTERING a wait, again only for a different prompt).
+  let lastWaitPrompt: string | null = null;
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -148,6 +152,16 @@ export function startRunTail(input: RunTailInput, deps: RunTailerDeps): TailHand
       if (delta) {
         await appendEvent('log', delta, { source: 'tmux' });
       }
+    }
+    // Blocked-on-input triage: when the pane tail is a recognized interactive
+    // prompt, surface it as a needs_input event (once per distinct prompt) so
+    // the board/herd can show "waiting on you" instead of an eternal "working".
+    if (pane !== null) {
+      const waitPrompt = detectInputWait(pane);
+      if (waitPrompt && waitPrompt !== lastWaitPrompt) {
+        await appendEvent('needs_input', waitPrompt, { source: 'input-wait' });
+      }
+      lastWaitPrompt = waitPrompt;
     }
 
     const alive = await substrate.alive(subHandle);
