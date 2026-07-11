@@ -340,3 +340,39 @@ export async function governanceAuditEntries(): Promise<readonly unknown[]> {
     return [];
   }
 }
+
+/**
+ * Seal an arbitrary control-plane audit entry into the SAME Merkle chain the
+ * delivery gate uses (daemon-first, falls back to the local chain — never
+ * silently dropped). Used by the conductor mutation-audit path so EVERY
+ * mutation (not just deliveries) is tamper-evidently recorded and surfaced by
+ * GET /governance/audit. Degrade-safe: a governance-unavailable failure is
+ * swallowed (returns undefined) rather than blocking the mutation.
+ */
+export async function recordGovernanceAudit(input: {
+  timestamp: string;
+  actor: string;
+  action:
+    | 'policy.evaluated'
+    | 'decision.made'
+    | 'enforcement.checked'
+    | 'tool.invoked'
+    | 'approval.requested'
+    | 'approval.resolved'
+    | 'route.selected'
+    | 'auth.attempt'
+    | 'config.reloaded'
+    | 'work_signal.observed'
+    | 'custom';
+  detail: string;
+  outcome: 'allow' | 'deny' | 'needs_approval' | 'success' | 'failure' | 'info';
+  runId?: string;
+  metadata?: Record<string, unknown>;
+}): Promise<string | undefined> {
+  try {
+    const governance = await getGovernance();
+    return await governance.recordAuditViaDaemon(input);
+  } catch {
+    return undefined;
+  }
+}

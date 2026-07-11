@@ -62,6 +62,7 @@ import {
   stampOwner,
   scopeBatchFilter,
 } from './workspace-access.js';
+import { auditConductorMutation } from './conductor-audit.js';
 import { bulkCancel, bulkArchive, listByState } from './batch-ops.js';
 import { cleanupStaleWorktrees } from './worktree-cleanup.js';
 import { planConductorRun, effectiveRuntimeId } from './conductor-planner.js';
@@ -429,6 +430,12 @@ export function createConductorRouter(): Router {
             ? workspace.metadata.error
             : '';
         const status = reason.startsWith(ADMISSION_REJECTED_PREFIX) ? 429 : 409;
+        void auditConductorMutation(req, {
+          action: 'workspace.create',
+          targetId: workspace.workspaceId,
+          outcome: 'error',
+          metadata: { reason: reason || 'launch failed' },
+        });
         res
           .status(status)
           .json({
@@ -438,6 +445,12 @@ export function createConductorRouter(): Router {
           });
         return;
       }
+      void auditConductorMutation(req, {
+        action: 'workspace.create',
+        targetId: workspace.workspaceId,
+        outcome: 'allowed',
+        runId: workspace.runId,
+      });
       res.status(201).json({ success: true, data: workspace });
     } catch (err) {
       res
@@ -500,19 +513,28 @@ export function createConductorRouter(): Router {
         if (!(await requireWorkspaceAccess(req, res, req.params.workspaceId))) return;
         const { title, body, base, draft, remote } = req.body ?? {};
         const intent = buildDeliveryIntent(req);
-        res.status(201).json({
-          success: true,
-          data: await createWorkspacePr(req.params.workspaceId, {
-            title,
-            body,
-            base,
-            draft,
-            remote,
-            intent,
-          }),
+        const prResult = await createWorkspacePr(req.params.workspaceId, {
+          title,
+          body,
+          base,
+          draft,
+          remote,
+          intent,
         });
+        void auditConductorMutation(req, {
+          action: 'workspace.pr',
+          targetId: req.params.workspaceId,
+          outcome: 'allowed',
+        });
+        res.status(201).json({ success: true, data: prResult });
       } catch (err) {
         if (err instanceof DeliveryApprovalRequiredError) {
+          void auditConductorMutation(req, {
+            action: 'workspace.pr',
+            targetId: req.params.workspaceId,
+            outcome: 'denied',
+            metadata: { reason: 'awaiting_approval' },
+          });
           res.status(409).json({
             success: false,
             error: err.message,
@@ -555,16 +577,25 @@ export function createConductorRouter(): Router {
         // desktop) this click IS the approval, so carry an explicit approve intent.
         // Ignored for team/cloud (RECODER_SOLO_MODE off): the standard gate applies.
         const intent = buildDeliveryIntent(req);
-        res.json({
-          success: true,
-          data: await mergeWorkspace(req.params.workspaceId, {
-            strategy,
-            deleteBranch,
-            intent,
-          }),
+        const mergeResult = await mergeWorkspace(req.params.workspaceId, {
+          strategy,
+          deleteBranch,
+          intent,
         });
+        void auditConductorMutation(req, {
+          action: 'workspace.merge',
+          targetId: req.params.workspaceId,
+          outcome: 'allowed',
+        });
+        res.json({ success: true, data: mergeResult });
       } catch (err) {
         if (err instanceof DeliveryApprovalRequiredError) {
+          void auditConductorMutation(req, {
+            action: 'workspace.merge',
+            targetId: req.params.workspaceId,
+            outcome: 'denied',
+            metadata: { reason: 'awaiting_approval' },
+          });
           res.status(409).json({
             success: false,
             error: err.message,
@@ -614,6 +645,11 @@ export function createConductorRouter(): Router {
           model,
           createdBy,
         });
+        void auditConductorMutation(req, {
+          action: 'workspace.message',
+          targetId: req.params.workspaceId,
+          outcome: 'allowed',
+        });
         res.status(201).json({ success: true, data: result });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'message failed';
@@ -629,10 +665,13 @@ export function createConductorRouter(): Router {
     async (req: Request, res: Response) => {
       try {
         if (!(await requireWorkspaceAccess(req, res, req.params.workspaceId))) return;
-        res.json({
-          success: true,
-          data: await archiveWorkspace(req.params.workspaceId),
+        const archiveResult = await archiveWorkspace(req.params.workspaceId);
+        void auditConductorMutation(req, {
+          action: 'workspace.archive',
+          targetId: req.params.workspaceId,
+          outcome: 'allowed',
         });
+        res.json({ success: true, data: archiveResult });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'archive failed';
         res
@@ -862,6 +901,11 @@ export function createConductorRouter(): Router {
           return;
         }
         await steerRuntime(workspace.substrate, handle, keys);
+        void auditConductorMutation(req, {
+          action: 'workspace.steer',
+          targetId: req.params.workspaceId,
+          outcome: 'allowed',
+        });
         res.json({ success: true });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'steer failed';
