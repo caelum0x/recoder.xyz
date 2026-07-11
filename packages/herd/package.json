@@ -1,0 +1,37 @@
+{
+  "name": "@recoder/herd",
+  "version": "0.1.0",
+  "description": "Recoder's agent herd view in your terminal — every conductor workspace at a glance (needs-you / working / done), attach to any live agent session, detach and walk away. A thin terminal surface over the Recoder conductor API; canonical state stays in the control plane.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "recoder-herd": "./dist/cli.js"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format cjs,esm --dts --clean",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "node --test --import tsx 'tests/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@recoder/agent-os": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}
