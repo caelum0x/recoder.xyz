@@ -23,8 +23,10 @@ const logger = createLogger('e2b-client');
 type E2BModule = typeof import('e2b');
 
 let cachedModule: Promise<E2BModule | null> | null = null;
+let injectedModule: E2BModule | null | undefined;
 
 async function loadE2B(): Promise<E2BModule | null> {
+  if (injectedModule !== undefined) return injectedModule;
   if (!cachedModule) {
     cachedModule = import('e2b')
       .then((mod) => mod)
@@ -34,6 +36,49 @@ async function loadE2B(): Promise<E2BModule | null> {
       });
   }
   return cachedModule;
+}
+
+/** Test-only: inject a fake E2B module (pass undefined to restore the real one). */
+export function __setE2BModuleForTest(mod: E2BModule | null | undefined): void {
+  injectedModule = mod;
+}
+
+/** Sandbox metadata key stamping the owning Recoder user (the ownership anchor). */
+export const OWNER_METADATA_KEY = 'recoderOwnerId';
+
+/** Thrown when a caller tries to act on a sandbox they do not own (IDOR guard). */
+export class E2bOwnershipError extends Error {
+  constructor(sandboxId: string) {
+    super(`forbidden: E2B sandbox ${sandboxId} belongs to another user`);
+    this.name = 'E2bOwnershipError';
+  }
+}
+
+/**
+ * Assert the caller owns the sandbox before connecting to a caller-supplied id.
+ * Fail-closed: a sandbox whose owner metadata is absent or does not match the
+ * caller is refused. Skipped only when no caller identity is available
+ * (internal/unauthenticated back-compat) — those paths carry their own trust.
+ */
+async function assertSandboxOwnership(
+  Sandbox: E2BModule['Sandbox'],
+  sandboxId: string,
+  userId: string | undefined,
+): Promise<void> {
+  if (!userId) return; // no verifiable identity to enforce against
+  let owner: string | undefined;
+  try {
+    const listed = (await (Sandbox as { list: () => Promise<Array<{ sandboxId: string; metadata?: Record<string, string> }>> }).list()) ?? [];
+    const match = listed.find((s) => s.sandboxId === sandboxId);
+    owner = match?.metadata?.[OWNER_METADATA_KEY];
+  } catch (err) {
+    // If we cannot verify ownership, fail closed rather than risk an IDOR.
+    logger.warn({ err, sandboxId }, 'E2B ownership check could not list sandboxes; refusing');
+    throw new E2bOwnershipError(sandboxId);
+  }
+  if (owner !== userId) {
+    throw new E2bOwnershipError(sandboxId);
+  }
 }
 
 export function isE2BConfigured(): boolean {
@@ -67,6 +112,8 @@ export interface E2BExecParams {
   sandboxId?: string;
   /** Keep a freshly created sandbox alive after the command (default: false). */
   keepAlive?: boolean;
+  /** The verified caller: stamped as the owner at create, checked on connect. */
+  userId?: string;
 }
 
 export interface E2BRunCodeParams {
@@ -76,6 +123,8 @@ export interface E2BRunCodeParams {
   envs?: Record<string, string>;
   sandboxId?: string;
   keepAlive?: boolean;
+  /** The verified caller: stamped as the owner at create, checked on connect. */
+  userId?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -114,7 +163,7 @@ function extractExitError(err: unknown): { stdout: string; stderr: string; exitC
 }
 
 async function withSandbox<T>(
-  params: { sandboxId?: string; keepAlive?: boolean; timeoutMs?: number },
+  params: { sandboxId?: string; keepAlive?: boolean; timeoutMs?: number; userId?: string },
   fn: (sandbox: import('e2b').Sandbox) => Promise<T>,
 ): Promise<{ value: T; sandboxId: string; killed: boolean }> {
   const mod = await loadE2B();
@@ -133,9 +182,13 @@ async function withSandbox<T>(
   let created = false;
 
   if (params.sandboxId) {
+    // IDOR guard: a caller-supplied sandboxId must be owned by the caller.
+    await assertSandboxOwnership(Sandbox, params.sandboxId, params.userId);
     sandbox = await Sandbox.connect(params.sandboxId, { apiKey });
   } else {
-    sandbox = await Sandbox.create({ apiKey, timeoutMs });
+    // Stamp the owner at create so later exec/run/kill can be ownership-checked.
+    const metadata = params.userId ? { [OWNER_METADATA_KEY]: params.userId } : undefined;
+    sandbox = await Sandbox.create({ apiKey, timeoutMs, ...(metadata ? { metadata } : {}) });
     created = true;
   }
 
@@ -203,9 +256,12 @@ export async function e2bRunCode(params: E2BRunCodeParams): Promise<E2BExecResul
   };
 }
 
-export async function e2bKill(sandboxId: string): Promise<boolean> {
+export async function e2bKill(sandboxId: string, userId?: string): Promise<boolean> {
   const mod = await loadE2B();
   if (!mod || !isE2BConfigured()) return false;
+  // IDOR guard: only the owner may kill a caller-supplied sandbox. An ownership
+  // failure propagates (the route maps it to 403); other errors are swallowed.
+  await assertSandboxOwnership(mod.Sandbox, sandboxId, userId);
   try {
     const sandbox = await mod.Sandbox.connect(sandboxId, { apiKey: process.env.E2B_API_KEY });
     await sandbox.kill();

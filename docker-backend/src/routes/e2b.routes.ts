@@ -49,11 +49,14 @@ export function createE2bRouter(deps: E2bRouterDeps): Router {
     if (typeof command !== 'string' || !command.trim()) {
       return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'command (string) is required'));
     }
-    const { e2bExec } = await import('../e2b-client.js');
+    const { e2bExec, E2bOwnershipError } = await import('../e2b-client.js');
     try {
-      const result = await e2bExec({ command, timeoutMs, envs, sandboxId, keepAlive });
+      const result = await e2bExec({ command, timeoutMs, envs, sandboxId, keepAlive, userId: req.userId });
       sendSuccess(res, result);
     } catch (err) {
+      if (err instanceof E2bOwnershipError) {
+        return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, err.message));
+      }
       sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B exec failed'));
     }
   }));
@@ -66,20 +69,30 @@ export function createE2bRouter(deps: E2bRouterDeps): Router {
     if (language && !['python', 'node', 'bash'].includes(language)) {
       return sendError(res, createError(ErrorCode.VALIDATION_ERROR, 'language must be python, node, or bash'));
     }
-    const { e2bRunCode } = await import('../e2b-client.js');
+    const { e2bRunCode, E2bOwnershipError } = await import('../e2b-client.js');
     try {
-      const result = await e2bRunCode({ code, language, timeoutMs, envs, sandboxId, keepAlive });
+      const result = await e2bRunCode({ code, language, timeoutMs, envs, sandboxId, keepAlive, userId: req.userId });
       sendSuccess(res, result);
     } catch (err) {
+      if (err instanceof E2bOwnershipError) {
+        return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, err.message));
+      }
       sendError(res, createError(ErrorCode.SERVICE_UNAVAILABLE, err instanceof Error ? err.message : 'E2B run failed'));
     }
   }));
 
   router.delete('/api/e2b/sandbox/:sandboxId', authenticateRequest, asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
     const { sandboxId } = req.params;
-    const { e2bKill } = await import('../e2b-client.js');
-    const killed = await e2bKill(sandboxId);
-    sendSuccess(res, { killed });
+    const { e2bKill, E2bOwnershipError } = await import('../e2b-client.js');
+    try {
+      const killed = await e2bKill(sandboxId, req.userId);
+      sendSuccess(res, { killed });
+    } catch (err) {
+      if (err instanceof E2bOwnershipError) {
+        return sendError(res, createError(ErrorCode.AUTHZ_PROJECT_ACCESS_DENIED, err.message));
+      }
+      throw err;
+    }
   }));
 
   return router;
