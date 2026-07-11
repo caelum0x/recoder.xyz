@@ -29,7 +29,7 @@ Full composition, onion/cake style: each layer is a *complete* composition of it
         └─────────────────────────────────────────────────────────┘
 ```
 
-**Composition status:** L0 ✅ real · L1 ✅ mostly fused (11/15 packages + governance-TS) · L2 ✅ (docker-backend; server.ts monolith is the debt) · **L3 ✅ ALL SEAMS FUSED (governance, colbert, browser-use, mem0, ops-recorder, openfang, tensorzero, lance, ziti, multica) — degrade-safe; native binaries (openfang/tensorzero/lance/ziti/multica) activate when built** · L4 🔄 thin (cockpit needs the panel composition) · L5 ⬜ (signing done in P0d runbook; packaging pending).
+**Composition status:** L0 ✅ real · L1 ✅ mostly fused (11/15 packages + governance-TS) · L2 ✅ (docker-backend; server.ts monolith is the debt) · L4 🔄 16 cockpit panels live (all fused capabilities surfaced, degrade-safe) · **L3 ✅ ALL SEAMS FUSED (governance, colbert, browser-use, mem0, ops-recorder, openfang, tensorzero, lance, ziti, multica) — degrade-safe; native binaries (openfang/tensorzero/lance/ziti/multica) activate when built** · L4 🔄 thin (cockpit needs the panel composition) · L5 ⬜ (signing done in P0d runbook; packaging pending).
 
 Build order from here: **finish L3 (fuse the remaining polyglot authorities) → compose L4 (surface every fused capability as cockpit panels) → L5 (package the whole cake).**
 
