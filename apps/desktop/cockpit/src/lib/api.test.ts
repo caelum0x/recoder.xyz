@@ -116,6 +116,44 @@ describe('api request classification', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.data).toBeUndefined();
   });
+
+  // Structured-error unwrapping: the backend may send { code, message, timestamp }
+  // instead of a plain string. The message must be extracted, not rendered as
+  // "[object Object]".
+  it('extracts .message from a structured error object (never "[object Object]")', async () => {
+    mockFetch(() =>
+      makeResponse({
+        status: 500,
+        ok: false,
+        body: { success: false, error: { code: 'INTERNAL_ERROR', message: 'database unavailable', timestamp: '2026-07-11T00:00:00Z' } },
+      }),
+    );
+    const err = await api.listWorkspaces().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toBe('database unavailable');
+    expect(err.message).not.toBe('[object Object]');
+  });
+
+  it('extracts .message from a structured 401 error object', async () => {
+    mockFetch(() =>
+      makeResponse({
+        status: 401,
+        ok: false,
+        body: { success: false, error: { code: 'UNAUTHORIZED', message: 'token expired', timestamp: '2026-07-11T00:00:00Z' } },
+      }),
+    );
+    const err = await api.listWorkspaces().catch((e) => e);
+    expect(err).toBeInstanceOf(UnauthorizedError);
+    expect(err.message).toBe('token expired');
+    expect(err.message).not.toBe('[object Object]');
+  });
+
+  it('falls back to the status-based message when error field is absent', async () => {
+    mockFetch(() => makeResponse({ status: 503, ok: false, body: { success: false } }));
+    const err = await api.listWorkspaces().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.message).toContain('503');
+  });
 });
 
 describe('api envelope unwrap', () => {

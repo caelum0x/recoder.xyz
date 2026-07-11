@@ -169,9 +169,22 @@ async function requestAt<T>(base: string, method: string, path: string, body?: u
   }
 
   if (!res.ok || (envelope && envelope.success === false)) {
+    // Unwrap the error field safely: the backend may send a plain string OR a
+    // structured object { code, message, timestamp }. Using the object directly
+    // as a string would produce "[object Object]" in the UI.
+    const rawError = envelope && (envelope.error as unknown);
     const message =
-      (envelope && envelope.error) ||
-      `${method} ${path} failed with status ${res.status}`;
+      typeof rawError === 'string'
+        ? rawError
+        : rawError !== null &&
+            rawError !== undefined &&
+            typeof rawError === 'object' &&
+            'message' in rawError &&
+            typeof (rawError as { message?: unknown }).message === 'string'
+          ? (rawError as { message: string }).message
+          : rawError !== null && rawError !== undefined
+            ? String(rawError)
+            : `${method} ${path} failed with status ${res.status}`;
     // Preserve any structured `data` the backend attached to the rejection (e.g.
     // the delivery gate's awaiting_approval verdict on a 409). It is genuinely
     // part of a failed envelope, so it rides on the thrown error, not the value.
