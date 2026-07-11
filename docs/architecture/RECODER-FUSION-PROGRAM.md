@@ -88,3 +88,17 @@ Once fused into the backend, each capability gets a lazy-loaded cockpit panel vi
 ## Honest scope note
 
 This is a multi-session engineering program spanning ~6 languages and millions of LOC. It proceeds wave by wave, each wave a set of small, tested, end-to-end-verified fusions. Progress is tracked by flipping rows here and in `WIRE-UP-BACKLOG.md` / `DIRECTORY-MAP.md`. No wave is "done" until its consumer runs the fused code end-to-end.
+
+## Wave E — NAPI/FFI deep-linking (Rust crates INTO the Node binary) — owner decision 2026-07-11
+
+Deeper than supervised-subprocess: each Rust crate gets a `#[napi]` cdylib binding crate + facade rewired native-first (loads the `.node`, degrade-safe fallback to the existing subprocess/loopback path).
+
+| Crate | Binding | Facade native-first | `.node` compiled | Tests |
+|---|---|---|---|---|
+| `recoder-governance` | ✅ `recoder-governance-napi` | ✅ `packages/governance` | ✅ **BUILT** — kernel linked in-process; `decide()` returns a verdict natively (socket = fallback) | 160/160 (69ac2debb) |
+| `lance` | ✅ `crates/lance/npm-bindings` | ✅ `packages/rag` | ✅ **BUILT** | 106 rag + 9 + 7 cargo (570a5076e) |
+| `tensorzero` | ✅ gateway-napi (sync surface only) | ✅ `tensorzero-client.ts` | ⏸ deferred (~4–6 GB) | 27 (64a68c1d9) |
+| `openfang` | ✅ openfang-napi ⚠️ gitignored subtree | ✅ `oss-dispatch.ts` | ⏸ deferred (~7–9 GB) | 30 (446dbe79a) |
+| `claw-code-parity` | ✅ claw-code-parity-napi | ✅ `a2a-openclaw-adapter.ts` | ⏸ deferred (~7.5–8.5 GB) | 10 (0e1d938) |
+
+**Open items:** (1) reclaim disk (currently ~3.7 GB) then `cargo build --release` the 3 deferred `.node`s; (2) add a `.gitignore` exception so `openfang-napi`/`claw-code-parity-napi` binding crates commit to the root repo; (3) wire `napi build` into `electron-builder` `asarUnpack` per-arch for the signed bundle (L5).
