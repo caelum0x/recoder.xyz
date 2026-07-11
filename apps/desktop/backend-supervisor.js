@@ -249,6 +249,13 @@ function assembleBackendEnv(opts) {
     // Governance still classifies risk + seals the Merkle audit; a hard deny still
     // blocks. Team/cloud surfaces leave this unset and keep the full approval gate.
     RECODER_SOLO_MODE: '1',
+    // Disk floor for workspace admission. The default 5GB is a server-oriented
+    // guard against heavy builds ENOSPC-ing a shared box. The embedded desktop
+    // creates lightweight git worktrees for one local user who manages their own
+    // disk, so a 2GB floor is appropriate — still a real safety margin, but it
+    // does not block a worktree create on a laptop with a few GB free. An
+    // operator can override via CONDUCTOR_MIN_FREE_DISK_GB in their env.
+    CONDUCTOR_MIN_FREE_DISK_GB: opts.baseEnv.CONDUCTOR_MIN_FREE_DISK_GB || '2',
     // tmux-path.ts resolves CONDUCTOR_TMUX_BIN (authoritative) first, then
     // RECODER_TMUX_BUILD_PATH. Set both plus TMUX_BIN for forward-compat.
     CONDUCTOR_TMUX_BIN: opts.tmuxBin,
