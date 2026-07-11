@@ -966,10 +966,14 @@ export function createConductorRouter(): Router {
       const { projectId, createdBy } = req.body ?? {};
       // Scope to the verified caller under strict auth: a client cannot
       // batch-cancel across users by supplying (or omitting) a filter.
-      res.json({
-        success: true,
-        data: await bulkCancel(scopeBatchFilter(req, { projectId, createdBy })),
+      const cancelResult = await bulkCancel(scopeBatchFilter(req, { projectId, createdBy }));
+      void auditConductorMutation(req, {
+        action: 'workspace.batch_cancel',
+        targetId: `${cancelResult.processed} workspace(s)`,
+        outcome: 'allowed',
+        metadata: { total: cancelResult.total, errors: cancelResult.errors.length },
       });
+      res.json({ success: true, data: cancelResult });
     } catch (err) {
       res
         .status(500)
@@ -988,10 +992,14 @@ export function createConductorRouter(): Router {
         projectId,
         states,
       };
-      res.json({
-        success: true,
-        data: await bulkArchive(scopeBatchFilter(req, archiveFilter)),
+      const batchArchiveResult = await bulkArchive(scopeBatchFilter(req, archiveFilter));
+      void auditConductorMutation(req, {
+        action: 'workspace.batch_archive',
+        targetId: `${batchArchiveResult.processed} workspace(s)`,
+        outcome: 'allowed',
+        metadata: { total: batchArchiveResult.total, errors: batchArchiveResult.errors.length },
       });
+      res.json({ success: true, data: batchArchiveResult });
     } catch (err) {
       res
         .status(500)
