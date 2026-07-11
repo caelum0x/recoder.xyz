@@ -24,7 +24,7 @@ import { useMemo, useRef, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog } from './EventLog';
-import { isLive, statePill, stateTone } from '../lib/workspace-state';
+import { isLive, statePill, stateTone, messageDisabledReason } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
 import { mergeEvents, useLiveStream } from '../lib/event-stream';
 import type { RunEvent, Workspace } from '../types';
@@ -125,20 +125,26 @@ function UserBubble({ message }: { message: UserMessage }) {
 }
 
 /**
- * The composer at the bottom of the conversation. Always usable: you can chat at
- * any time, even before the first agent run. On Enter we hand the typed text to
- * the parent (which renders the bubble + POSTs the message) and clear the input.
+ * The composer at the bottom of the conversation. Usable only when the backend
+ * can actually start the next run (canMessage — awaiting_review /
+ * changes_requested / awaiting_approval). For a running, provisioning, or
+ * terminal (archived/merged/closed) workspace we show a truthful disabled
+ * reason instead of an input that the backend would 400 — the exact bug an
+ * archived workspace hit ("workspace has no worktree to continue").
  */
 function Composer({
   modelLabel,
   busy,
   onSend,
+  state,
 }: {
   modelLabel: string;
   busy: boolean;
   onSend: (text: string) => void;
+  state: Workspace['state'];
 }) {
   const [value, setValue] = useState('');
+  const disabledReason = messageDisabledReason(state);
 
   function submit(e: Event) {
     e.preventDefault();
@@ -146,6 +152,14 @@ function Composer({
     if (!text) return;
     onSend(text);
     setValue('');
+  }
+
+  if (disabledReason) {
+    return (
+      <div class="ws-cmdbar ws-cmdbar-disabled">
+        <span class="ws-cmdbar-disabled-note">{disabledReason}</span>
+      </div>
+    );
   }
 
   return (
@@ -274,7 +288,12 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
         )}
       </div>
 
-      <Composer modelLabel={modelLabel} busy={sending} onSend={(t) => void send(t)} />
+      <Composer
+        modelLabel={modelLabel}
+        busy={sending}
+        onSend={(t) => void send(t)}
+        state={workspace.state}
+      />
     </section>
   );
 }

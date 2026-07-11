@@ -119,6 +119,33 @@ export function isLive(state: WorkspaceState): boolean {
   return !['merged', 'failed', 'cancelled', 'archived'].includes(state);
 }
 
+/** Terminal states — the workspace is closed and cannot be continued. */
+export function isTerminal(state: WorkspaceState): boolean {
+  return ['merged', 'cancelled', 'archived'].includes(state);
+}
+
+/**
+ * Whether the operator can send a message that starts the next agent run.
+ * Mirrors the backend's continue-workspace CONTINUABLE_STATES exactly
+ * (awaiting_review / changes_requested / awaiting_approval): a running agent
+ * rejects a second run, and terminal/provisioning states have no idle run to
+ * continue. Keeping this in lockstep prevents the composer from inviting a
+ * message the backend will 400.
+ */
+export function canMessage(state: WorkspaceState): boolean {
+  return ['awaiting_review', 'changes_requested', 'awaiting_approval'].includes(state);
+}
+
+/** A short, truthful reason the composer is disabled for a non-continuable state. */
+export function messageDisabledReason(state: WorkspaceState): string | null {
+  if (canMessage(state)) return null;
+  if (state === 'running') return 'The agent is running — wait for it to finish or steer it in the terminal.';
+  if (state === 'merging') return 'The workspace is merging.';
+  if (isTerminal(state)) return 'This workspace is closed — start a new workspace to continue.';
+  if (state === 'failed') return 'This workspace failed — start a new workspace to continue.';
+  return 'Provisioning — you can message the agent once it is ready.';
+}
+
 /** One conflicting lock the workspace's launch contended with. */
 export interface LockConflict {
   lockId?: string;

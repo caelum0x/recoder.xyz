@@ -154,7 +154,8 @@ describe('ConversationView is the friendly skin', () => {
       return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
     });
 
-    const c = mount(workspace());
+    // awaiting_review is a continuable state — the composer is enabled here.
+    const c = mount(workspace({ state: 'awaiting_review' }));
     await flush(20);
 
     await sendMessage(c, 'Tidy the imports');

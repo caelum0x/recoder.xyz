@@ -10,6 +10,9 @@ import {
   canMerge,
   canOpenPr,
   canViewDiff,
+  canMessage,
+  messageDisabledReason,
+  isTerminal,
   isLive,
   lockConflict,
   stateLabel,
@@ -231,5 +234,35 @@ describe('lockConflict', () => {
     };
     const result = lockConflict(ws);
     expect(result?.conflicts).toEqual([]);
+  });
+});
+
+describe('canMessage / messageDisabledReason (composer gating)', () => {
+  it('allows messaging only from continuable states (matches backend)', () => {
+    expect(canMessage('awaiting_review')).toBe(true);
+    expect(canMessage('changes_requested')).toBe(true);
+    expect(canMessage('awaiting_approval')).toBe(true);
+    expect(canMessage('running')).toBe(false);
+    expect(canMessage('archived')).toBe(false);
+    expect(canMessage('merged')).toBe(false);
+    expect(canMessage('failed')).toBe(false);
+  });
+
+  it('gives no disabled reason for continuable states', () => {
+    expect(messageDisabledReason('awaiting_review')).toBeNull();
+    expect(messageDisabledReason('changes_requested')).toBeNull();
+  });
+
+  it('explains why archived/terminal workspaces cannot be messaged', () => {
+    expect(messageDisabledReason('archived')).toMatch(/closed/i);
+    expect(messageDisabledReason('merged')).toMatch(/closed/i);
+    expect(messageDisabledReason('running')).toMatch(/running/i);
+  });
+
+  it('isTerminal marks closed workspaces', () => {
+    expect(isTerminal('archived')).toBe(true);
+    expect(isTerminal('merged')).toBe(true);
+    expect(isTerminal('cancelled')).toBe(true);
+    expect(isTerminal('awaiting_review')).toBe(false);
   });
 });
