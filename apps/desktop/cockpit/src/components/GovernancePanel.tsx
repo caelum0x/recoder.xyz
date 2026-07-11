@@ -23,9 +23,75 @@ import {
   deliveryGateReason,
 } from '../lib/conductor-health-state';
 import { canMerge, canOpenPr, stateLabel, stateTone } from '../lib/workspace-state';
-import type { DeliveryGateDetail, Workspace } from '../types';
+import type { DeliveryGateDetail, GovernanceAuditEntry, Workspace } from '../types';
 
 const WORKSPACES_POLL_MS = 5000;
+const AUDIT_POLL_MS = 10_000;
+
+function shortHash(hash: string): string {
+  return hash.length > 12 ? `${hash.slice(0, 12)}…` : hash;
+}
+
+function outcomeTone(outcome: string): string {
+  if (outcome === 'deny' || outcome === 'failure') return 'bad';
+  if (outcome === 'needs_approval') return 'warn';
+  if (outcome === 'allow' || outcome === 'success') return 'good';
+  return 'neutral';
+}
+
+/**
+ * The tamper-evident Merkle audit trail (GET /governance/audit). The header
+ * badge reflects the GENUINE full-chain verification: green only when the
+ * backend re-hashed the chain and it held; a broken/unavailable chain is shown
+ * truthfully — never a fabricated green.
+ */
+function AuditTrail() {
+  const audit = usePoll(() => api.governanceAudit(50), AUDIT_POLL_MS);
+
+  return (
+    <div class="audit-trail">
+      <div class="audit-trail-head">
+        <h3 class="audit-trail-title">Audit trail</h3>
+        {audit.data ? (
+          audit.data.verified.ok ? (
+            <span class="badge tone-good" title={audit.data.verified.tipHash}>
+              chain verified · {audit.data.verified.entries} entries · tip {shortHash(audit.data.verified.tipHash || '')}
+            </span>
+          ) : audit.data.verified.entries > 0 ? (
+            <span class="badge tone-bad">
+              CHAIN BROKEN{audit.data.verified.brokenAtSeq !== undefined ? ` at seq ${audit.data.verified.brokenAtSeq}` : ''}
+            </span>
+          ) : (
+            <span class="badge tone-neutral">no decisions sealed yet</span>
+          )
+        ) : audit.error ? (
+          <span class="badge tone-bad">audit unavailable</span>
+        ) : (
+          <span class="badge tone-neutral">loading…</span>
+        )}
+      </div>
+      {audit.error ? (
+        <div class="banner banner-warn">
+          <strong>Audit trail unavailable:</strong> {audit.error.message}
+        </div>
+      ) : audit.data && audit.data.entries.length > 0 ? (
+        <div class="audit-entries">
+          {audit.data.entries.map((e: GovernanceAuditEntry) => (
+            <div class="audit-entry" key={e.hash}>
+              <span class="audit-entry-seq">#{e.seq}</span>
+              <span class={`badge tone-${outcomeTone(e.outcome)}`}>{e.outcome}</span>
+              <span class="audit-entry-action">{e.action}</span>
+              <span class="audit-entry-detail" title={e.detail}>{e.detail}</span>
+              <span class="audit-entry-hash" title={`hash ${e.hash} · prev ${e.prevHash}`}>
+                {shortHash(e.hash)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type Attempt =
   | { kind: 'idle' }
@@ -208,6 +274,8 @@ export function GovernancePanel() {
           )}
         </section>
       </div>
+
+      <AuditTrail />
     </div>
   );
 }

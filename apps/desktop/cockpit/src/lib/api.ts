@@ -54,6 +54,7 @@ import type {
   GatewayInferenceBody,
   GatewayInferenceResult,
   GatewayStatus,
+  GovernanceAudit,
   McpHostSummary,
   McpServer,
   McpToolCheckResult,
@@ -286,6 +287,12 @@ export const api = {
     ),
   /** Unified conductor health: substrate + runtimes + resources + tails + workspaces. */
   healthFull: () => request<ConductorHealth>('GET', '/health/full'),
+  /**
+   * Tamper-evident governance audit trail: sealed Merkle-chain entries
+   * (newest-first) + a genuine full-chain verification result.
+   */
+  governanceAudit: (limit = 100) =>
+    request<GovernanceAudit>('GET', `/governance/audit?limit=${limit}`),
   listWorkspaces: () => request<Workspace[]>('GET', '/workspaces'),
   getWorkspace: (id: string) => request<Workspace>('GET', `/workspaces/${encodeURIComponent(id)}`),
   createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/workspaces', body),

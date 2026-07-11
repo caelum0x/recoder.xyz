@@ -167,6 +167,28 @@ export interface DeliveryGateDetail {
   transitioned?: boolean;
 }
 
+/**
+ * GET /governance/audit — one sealed link in the SHA-256 Merkle audit chain
+ * (mirrors @recoder/governance AuditEntry).
+ */
+export interface GovernanceAuditEntry {
+  seq: number;
+  timestamp: string;
+  actor: string;
+  action: string;
+  detail: string;
+  outcome: string;
+  runId?: string;
+  prevHash: string;
+  hash: string;
+}
+
+/** GET /governance/audit response: genuine chain verification + entries (newest-first). */
+export interface GovernanceAudit {
+  verified: { ok: boolean; tipHash?: string; brokenAtSeq?: number; entries: number };
+  entries: GovernanceAuditEntry[];
+}
+
 /** POST /workspaces request body (conductor.routes.ts handler). */
 export interface CreateWorkspaceBody {
   spaceId: string;
