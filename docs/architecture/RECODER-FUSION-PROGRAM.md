@@ -29,7 +29,7 @@ Full composition, onion/cake style: each layer is a *complete* composition of it
         └─────────────────────────────────────────────────────────┘
 ```
 
-**Composition status:** L0 ✅ real · L1 ✅ mostly fused (11/15 packages + governance-TS) · L2 ✅ (docker-backend; server.ts monolith is the debt) · **L3 🔄 in progress (governance daemon ✅ DONE, colbert ✅; openfang/tensorzero/lance/ziti/multica/mem0/browser-use/ops-recorder pending)** · L4 🔄 thin (cockpit needs the panel composition) · L5 ⬜ (signing done in P0d runbook; packaging pending).
+**Composition status:** L0 ✅ real · L1 ✅ mostly fused (11/15 packages + governance-TS) · L2 ✅ (docker-backend; server.ts monolith is the debt) · **L3 🔄 in progress (governance daemon ✅, colbert ✅, browser-use ✅; openfang/tensorzero/lance/ziti/multica/mem0/ops-recorder pending)** · L4 🔄 thin (cockpit needs the panel composition) · L5 ⬜ (signing done in P0d runbook; packaging pending).
 
 Build order from here: **finish L3 (fuse the remaining polyglot authorities) → compose L4 (surface every fused capability as cockpit panels) → L5 (package the whole cake).**
 
@@ -70,7 +70,7 @@ Rust builds are heavy and the box is disk-constrained (per memory) — build out
 |---|---|---|---|
 | `go/ziti` | subprocess/loopback | zero-trust mesh; `ziti-client.ts` + `routes/ziti.routes.ts` already exist — compile the controller, wire enrollment | Backend routes exist; needs the compiled binary |
 | `go/multica` | subprocess/loopback | managed-agents/squads assignment behind docker-backend | Inspect interface; squad assignment |
-| `py/browser-use` | subprocess/MCP (`--mcp`) | MCP server via `mcp-manager.ts` → browser automation | LLM-driven web automation |
+| `py/browser-use` | subprocess/MCP | ✅ **DONE** — `PYTHON_SERVERS` registry entry `browser-use` (`python -m browser_use.mcp`), gated `BROWSER_USE_ENABLED`, surfaced via `/api/mcp`, policy-gated, 15 tests. Python env + `playwright install` deferred (container build). |
 | `py/mem0` | subprocess/loopback | durable memory backing `packages/brain` (dedupe vs `packages/mem0` TS — pick one runtime, per docs) | Resolve the dual-runtime duplication as part of fusion |
 | `go/recoder-xds` | subprocess/loopback | Envoy xDS control plane (enterprise mesh) | Later; diagnostics surface |
 
