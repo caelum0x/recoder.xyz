@@ -18,6 +18,8 @@ import {
   parseDaemonAuditHash,
 } from './ipc/daemon-verdict';
 import { DaemonUnavailableError } from './errors';
+import { tryLoadNapiModule, type NapiGovernanceKernelInstance } from './napi/napi-loader';
+import { NapiUnavailableError, parseNapiDecideResult, parseNapiEnforceResult } from './napi/napi-verdict';
 import { allowed, denied } from './domain/enforcement-result';
 import { GovernancePolicyEngine } from './policy/policy-port';
 import { RoutingService, DEFAULT_ROUTING_CATALOG, type RoutingCatalog } from './routing/router';
@@ -70,6 +72,14 @@ export class Governance implements PolicyEnginePort {
      * the only path (default — no behavior change).
      */
     private readonly daemon?: GovernanceDaemonClient,
+    /**
+     * The in-process NAPI kernel instance, present when the native addon
+     * (`recoder-governance-napi.node`) is available for this arch/platform.
+     * When present, decide/enforceTool try the NAPI path FIRST (sync,
+     * in-process), then fall back to the UDS daemon, then to the pure-TS
+     * deny-biased path. When absent, no behavior change from the prior release.
+     */
+    private readonly napiKernel?: NapiGovernanceKernelInstance,
   ) {}
 
   /** Build a Governance instance from a (validated) config. */
@@ -96,6 +106,20 @@ export class Governance implements PolicyEnginePort {
     const socketPath = resolveDaemonSocketPath(config);
     const daemon = socketPath ? new GovernanceDaemonClient({ socketPath }) : undefined;
 
+    // NAPI in-process kernel: try to load the native addon. If it is absent for
+    // this arch/platform, `napiModule` is undefined and the existing fallback
+    // path (daemon -> pure-TS) is unchanged — no behavior regression.
+    let napiKernel: NapiGovernanceKernelInstance | undefined;
+    const napiModule = tryLoadNapiModule();
+    if (napiModule) {
+      try {
+        napiKernel = new napiModule.NapiGovernanceKernel();
+      } catch {
+        // Construction failure — treat the addon as absent (degrade-safe).
+        napiKernel = undefined;
+      }
+    }
+
     return new Governance(
       config,
       policyEngine,
@@ -106,6 +130,7 @@ export class Governance implements PolicyEnginePort {
       tierPolicy,
       autoApprover,
       daemon,
+      napiKernel,
     );
   }
 
@@ -119,21 +144,132 @@ export class Governance implements PolicyEnginePort {
   // ---- the fused verdict ----------------------------------------------------
 
   /**
-   * The full fused decision pipeline. When a daemon is configured it is asked
-   * FIRST; on `DaemonUnavailable` (no socket, transport/validation failure, or a
-   * daemon-reported error) it falls back to the pure-TS deny-biased path. The
-   * fallback NEVER fabricates an allow — it re-runs the conservative TS pipeline.
+   * The full fused decision pipeline.
+   *
+   * Priority order (highest first):
+   *   1. NAPI in-process native kernel (`recoder-governance-napi.node`) — sync,
+   *      in-process, zero-IPC overhead. Preferred when the addon is present.
+   *   2. UDS daemon (`GovernanceDaemonClient`) — OPT-IN via socket config.
+   *   3. Pure-TS deny-biased fallback — always available; never silent-allows.
+   *
+   * Each step falls through to the next on `NapiUnavailableError` or
+   * `DaemonUnavailableError`. Any other error is re-thrown immediately (fail-
+   * closed: a programming error must not silently produce an allow verdict).
    */
   async decide(req: GovernanceRequest): Promise<GovernanceVerdict> {
+    // 1. NAPI in-process native kernel (fastest path — no IPC, no socket).
+    if (this.napiKernel) {
+      try {
+        return this.decideViaNapi(req);
+      } catch (err) {
+        if (!(err instanceof NapiUnavailableError)) throw err;
+        // Native path unavailable — fall through to the daemon.
+      }
+    }
+    // 2. UDS daemon (optional — only when a socket path was resolved at create).
     if (this.daemon) {
       try {
         return await this.decideViaDaemon(req);
       } catch (err) {
         if (!(err instanceof DaemonUnavailableError)) throw err;
-        // Fall through to the pure-TS deny-biased path (fail closed).
+        // Daemon unavailable — fall through to the pure-TS deny-biased path.
       }
     }
+    // 3. Pure-TS deny-biased fallback (always available).
     return this.decideViaTs(req);
+  }
+
+  /**
+   * Delegate the decision to the in-process NAPI kernel.
+   *
+   * The kernel's `effect`, `tier`, `reason`, and `auditHash` are authoritative.
+   * The TS facade builds the full `GovernanceVerdict` envelope around them
+   * (same pattern as `decideViaDaemon`) so downstream consumers get a complete
+   * structured verdict regardless of which backend answered.
+   *
+   * Throws `NapiUnavailableError` on any shape violation — the facade falls
+   * through to the daemon then the pure-TS path (fail closed: no silent allow).
+   */
+  private decideViaNapi(req: GovernanceRequest): GovernanceVerdict {
+    const now = req.now ?? new Date().toISOString();
+
+    // Map the TS action to the Rust kernel's snake_case wire format.
+    const rustAction = DAEMON_ACTION[req.action] ?? 'tool_use';
+    // The Rust kernel rejects an empty target. Use the action name as a
+    // synthetic target when the TS request has no concrete target string.
+    const rawTarget = daemonTarget(req.target);
+    const target = rawTarget.length > 0 ? rawTarget : rustAction;
+    const actor = req.actor.agentId;
+    const task = req.task?.taskId ?? req.requestId;
+
+    // Build a minimal GovernanceContext for the kernel.
+    // The Rust kernel uses `starts_with` (prefix) matching for work locks, not
+    // glob matching. Strip common glob suffixes (`**`, `*`) so that `src/**`
+    // becomes `src/` and correctly covers `src/components/x.ts`.
+    const workLockPaths = (req.workLocks ?? [])
+      .map((lock) => lock.pathGlob)
+      .filter((g): g is string => typeof g === 'string' && g.length > 0)
+      .map((glob) => glob.replace(/\*+$/, '').replace(/\/+$/, '/'));
+
+    const contextObj = {
+      tool_name: req.target.toolName ?? '',
+      tool_input: req.target.command ?? req.context?.bashInput ?? '',
+      depth: req.context?.subagentDepth ?? 0,
+      work_lock_paths: workLockPaths,
+      enforce_work_lock: workLockPaths.length > 0,
+      messages: [],
+    };
+
+    let rawJson: string;
+    try {
+      rawJson = this.napiKernel!.decide(
+        actor,
+        task,
+        rustAction,
+        target,
+        JSON.stringify(contextObj),
+      );
+    } catch (err) {
+      throw new NapiUnavailableError(
+        `governance-napi: decide() threw: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    const d = parseNapiDecideResult(rawJson);
+
+    // The local policy decision is still computed for the verdict envelope so
+    // downstream consumers get a structured policy view; the kernel's effect is
+    // authoritative and overrides it.
+    const policy = this.policyEngine.evaluate(toEvaluationRequest(req));
+    const routing = this.routing.route(req, d.effect);
+
+    // Mirror the native kernel's decision into the TS InMemoryAuditStore so
+    // that gov.auditEntries() / gov.verifyAudit() are always coherent
+    // regardless of which backend ran. The native kernel maintains its own
+    // authoritative chain; this is a shadow record for TS-side observability.
+    const tsAuditHash = this.recordVerdictAudit(
+      req,
+      d.effect,
+      d.tier,
+      d.reason,
+      now,
+    );
+
+    const verdict: GovernanceVerdict = {
+      verdictId: `gov_verdict_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      requestId: req.requestId,
+      effect: d.effect,
+      tier: d.tier,
+      reason: d.reason,
+      policy,
+      routing,
+      // Prefer the native kernel's auditHash (authoritative); fall back to the
+      // TS shadow hash when the native kernel didn't return one.
+      auditHash: d.auditHash ?? tsAuditHash,
+      degraded: false, // authoritative native-kernel decision
+      createdAt: now,
+    };
+    return verdict;
   }
 
   /**
@@ -248,9 +384,15 @@ export class Governance implements PolicyEnginePort {
   }
 
   /**
-   * Enforce a single tool invocation directly (runtime adapter seam). When a
-   * daemon is configured it is asked FIRST; on DaemonUnavailable it falls back
-   * to the pure-TS deny-biased enforcer. The fallback never fabricates an allow.
+   * Enforce a single tool invocation directly (runtime adapter seam).
+   *
+   * Priority order:
+   *   1. NAPI in-process native kernel (when addon is present).
+   *   2. UDS daemon (when socket is configured).
+   *   3. Pure-TS deny-biased enforcer (always available).
+   *
+   * No path fabricates an allow on error — each falls through on its own
+   * "unavailable" error type, re-throwing everything else (fail closed).
    */
   async enforceTool(
     toolName: string,
@@ -258,6 +400,27 @@ export class Governance implements PolicyEnginePort {
     ctx: EnforcementContext,
     kind: 'bash' | 'file_write' | 'generic' = 'generic',
   ): Promise<EnforcementResult> {
+    // 1. NAPI in-process path.
+    if (this.napiKernel) {
+      try {
+        const rawJson = this.napiKernel.enforceTool(toolName, input);
+        const d = parseNapiEnforceResult(rawJson);
+        if (d.outcome === 'allowed') {
+          return allowed(false);
+        }
+        return denied({
+          tool: toolName,
+          activeMode: resolveModeWithOverride(ctx.actor, ctx.modeOverride),
+          requiredMode: 'workspace_write',
+          reason: d.reason,
+          degraded: false,
+        });
+      } catch (err) {
+        if (!(err instanceof NapiUnavailableError)) throw err;
+        // Fall through to the daemon.
+      }
+    }
+    // 2. UDS daemon path.
     if (this.daemon) {
       try {
         const raw = await this.daemon.enforceTool(toDaemonEnforceParams(toolName, input, ctx, kind));
@@ -277,6 +440,7 @@ export class Governance implements PolicyEnginePort {
         // Fall through to the pure-TS deny-biased enforcer (fail closed).
       }
     }
+    // 3. Pure-TS deny-biased enforcer.
     return this.enforcer.enforceTool(toolName, input, ctx, kind);
   }
 
@@ -369,42 +533,79 @@ export class Governance implements PolicyEnginePort {
   }
 
   /**
-   * Truthful synchronous health: reports the local pure-TS fallback view. When
-   * no daemon is configured this is the whole story (degraded). When a daemon IS
-   * configured, use `healthViaDaemon()` for a live probe; this sync view stays
-   * conservative ('degraded'/'unavailable') until that probe succeeds, never
-   * claiming the daemon is up without evidence.
+   * Truthful synchronous health.
+   *
+   * When the NAPI kernel is loaded, status is 'ok' and the native field
+   * reflects that. When no native addon and no daemon is configured, the
+   * conservative degraded view is returned. Use `healthViaDaemon()` for a live
+   * daemon probe; this sync view never claims the daemon is up without evidence.
    */
-  health(): { status: 'degraded'; daemon: 'unavailable'; fallback: 'pure-ts-deny-biased'; auditOk: boolean } {
+  health(): {
+    status: 'ok' | 'degraded';
+    native: 'available' | 'unavailable';
+    daemon: 'available' | 'unavailable';
+    fallback: 'pure-ts-deny-biased';
+    auditOk: boolean;
+  } {
+    const auditOk = this.verifyAudit().ok;
+    const nativeAvailable = this.napiKernel !== undefined;
     return {
-      status: 'degraded',
-      daemon: 'unavailable',
+      status: nativeAvailable ? 'ok' : 'degraded',
+      native: nativeAvailable ? 'available' : 'unavailable',
+      daemon: 'unavailable', // conservative sync view; use healthViaDaemon() for live probe
       fallback: 'pure-ts-deny-biased',
-      auditOk: this.verifyAudit().ok,
+      auditOk,
     };
   }
 
+  /** Whether the native NAPI kernel is loaded in-process. */
+  hasNapiKernel(): boolean {
+    return this.napiKernel !== undefined;
+  }
+
   /**
-   * Live daemon health probe. Returns the daemon's reported status when it
-   * answers; on DaemonUnavailable returns the conservative degraded view. Never
-   * claims 'up' without a real round-trip — fail closed to 'degraded'.
+   * Live health probe. Returns native=available immediately when the NAPI
+   * kernel is loaded (no I/O needed). When a daemon is configured it is probed
+   * live; on DaemonUnavailable the conservative degraded view is returned.
+   * Never claims 'up' without real evidence — fail closed to 'degraded'.
    */
   async healthViaDaemon(): Promise<{
     status: 'ok' | 'degraded';
+    native: 'available' | 'unavailable';
     daemon: 'available' | 'unavailable';
     fallback: 'pure-ts-deny-biased';
     auditOk: boolean;
   }> {
     const auditOk = this.verifyAudit().ok;
+    const nativeAvailable = this.napiKernel !== undefined;
+
     if (!this.daemon) {
-      return { status: 'degraded', daemon: 'unavailable', fallback: 'pure-ts-deny-biased', auditOk };
+      return {
+        status: nativeAvailable ? 'ok' : 'degraded',
+        native: nativeAvailable ? 'available' : 'unavailable',
+        daemon: 'unavailable',
+        fallback: 'pure-ts-deny-biased',
+        auditOk,
+      };
     }
     try {
       await this.daemon.health();
-      return { status: 'ok', daemon: 'available', fallback: 'pure-ts-deny-biased', auditOk };
+      return {
+        status: 'ok',
+        native: nativeAvailable ? 'available' : 'unavailable',
+        daemon: 'available',
+        fallback: 'pure-ts-deny-biased',
+        auditOk,
+      };
     } catch (err) {
       if (!(err instanceof DaemonUnavailableError)) throw err;
-      return { status: 'degraded', daemon: 'unavailable', fallback: 'pure-ts-deny-biased', auditOk };
+      return {
+        status: nativeAvailable ? 'ok' : 'degraded',
+        native: nativeAvailable ? 'available' : 'unavailable',
+        daemon: 'unavailable',
+        fallback: 'pure-ts-deny-biased',
+        auditOk,
+      };
     }
   }
 

@@ -1,0 +1,24 @@
+[package]
+name = "recoder-governance-napi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "NAPI bindings — exposes the Recoder governance Rust kernel as a native Node.js addon (.node), replacing subprocess/loopback fusion with a direct in-process call. Degrade-safe: the TS facade falls back to the UDS daemon then the pure-TS path when this module is absent."
+
+[lib]
+# The cdylib produces the .node binary; rlib is also kept so cargo test works.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+recoder-governance-kernel = { path = "../recoder-governance-kernel" }
+recoder-governance-types = { path = "../recoder-governance-types" }
+recoder-governance-approval = { path = "../recoder-governance-approval" }
+napi = { workspace = true }
+napi-derive = { workspace = true }
+serde_json = { workspace = true }
+serde = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"
