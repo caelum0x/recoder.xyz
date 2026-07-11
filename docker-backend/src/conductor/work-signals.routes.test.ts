@@ -215,4 +215,91 @@ describe('work-signals ingest (POST/GET /api/conductor/work-signals)', () => {
     await runStack(router, '/work-signals', 'get', makeReq({}, { taskId: 'task_deg' }), listRes);
     expect((listState.jsonData?.data as unknown[]).length).toBe(1);
   });
+
+  // ── FUSION SEAM §d.4 — fused ops-recorder shape ────────────────────────────
+
+  it('accepts the fused ops-recorder shape and maps it to a valid signal (reportedBy=py/ops-recorder)', async () => {
+    // The fused body carries both the mandatory WorkSignalInput fields and the
+    // richer ops-recorder WorkSignalIngest fields. The ingress must accept it,
+    // fold the ops-recorder fields into detail+reportedBy, and return 201.
+    const router = createConductorRouter();
+    const { res, state } = makeRes();
+    await runStack(
+      router,
+      '/work-signals',
+      'post',
+      makeReq({
+        // WorkSignalInput mandatory fields
+        workspaceId: 'ws_fused',
+        spaceId: 'space_fused',
+        taskId: 'task_fused',
+        kind: 'blocked',
+        // ops-recorder WorkSignalIngest fields (FUSION SEAM)
+        source: 'github',
+        item_type: 'pull_request',
+        title: 'Add retry to payment webhook',
+        source_url: 'https://github.com/org/repo/pull/42',
+        detected_reason: 'Failing CI for 3 days',
+        priority: 'high',
+        assignee: 'alice',
+        why_it_matters: 'Blocks the release',
+      }),
+      res,
+    );
+
+    expect(state.statusCode).toBe(201);
+    expect(state.jsonData?.success).toBe(true);
+    const signal = state.jsonData?.data;
+    expect(signal?.kind).toBe('blocked');
+    expect(signal?.taskId).toBe('task_fused');
+    // The fused ops-recorder fields must be folded into detail + reportedBy.
+    expect(signal?.reportedBy).toBe('py/ops-recorder');
+    expect(signal?.detail).toContain('github/pull_request');
+    expect(signal?.detail).toContain('Add retry to payment webhook');
+    expect(signal?.detail).toContain('Failing CI for 3 days');
+    expect(signal?.detail).toContain('high');
+    expect(signal?.detail).toContain('alice');
+    expect(signal?.detail).toContain('Blocks the release');
+  });
+
+  it('is degrade-safe when OPS_RECORDER_URL is set but the service is down: inline path still succeeds', async () => {
+    // Set OPS_RECORDER_URL so the forward path is triggered, but stub fetch to
+    // simulate the Python service being down. The inline ingest must still succeed
+    // (201 + recorded:true) — the forward failure is non-blocking.
+    const originalUrl = process.env.OPS_RECORDER_URL;
+    process.env.OPS_RECORDER_URL = 'http://127.0.0.1:19999'; // unreachable port
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('ECONNREFUSED'); }));
+
+    try {
+      const router = createConductorRouter();
+      const { res, state } = makeRes();
+      await runStack(
+        router,
+        '/work-signals',
+        'post',
+        makeReq({
+          workspaceId: 'ws_fwd_deg',
+          spaceId: 'space_fwd_deg',
+          taskId: 'task_fwd_deg',
+          kind: 'stuck-work',
+          detail: 'waiting on a credential',
+        }),
+        res,
+      );
+
+      // The inline path must still succeed even though the ops-recorder forward failed.
+      expect(state.statusCode).toBe(201);
+      expect(state.jsonData?.success).toBe(true);
+      expect(state.jsonData?.data?.recorded).toBe(true);
+      // The forward result is present and indicates failure (not a fake success).
+      const fwd = state.jsonData?.data?.opsRecorderForward;
+      expect(fwd).toBeDefined();
+      expect(fwd?.forwarded).toBe(false);
+      expect(fwd?.reason).toMatch(/ECONNREFUSED/);
+    } finally {
+      if (originalUrl === undefined) delete process.env.OPS_RECORDER_URL;
+      else process.env.OPS_RECORDER_URL = originalUrl;
+      vi.unstubAllGlobals();
+    }
+  });
 });
