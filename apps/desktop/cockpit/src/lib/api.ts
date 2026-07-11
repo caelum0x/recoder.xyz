@@ -60,6 +60,8 @@ import type {
   McpToolEntry,
   MemoryCandidate,
   MergeResult,
+  OpenfangAgentCard,
+  OpenfangHealth,
   PolicyDecision,
   PolicyEvaluateBody,
   ProposeMemoryCandidateBody,
@@ -200,6 +202,11 @@ function mcpRequest<T>(method: string, path: string, body?: unknown): Promise<T>
 /** Gateway (TensorZero) request: every call hits `${backendUrl}/api/gateway/...`. */
 function gatewayRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/gateway', method, path, body);
+}
+
+/** OpenFang agent request: every call hits `${backendUrl}/api/agents/openfang/...`. */
+function openfangRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/agents/openfang', method, path, body);
 }
 
 /**
@@ -382,4 +389,20 @@ export const api = {
    */
   gatewayInference: (body: GatewayInferenceBody) =>
     gatewayRequest<GatewayInferenceResult>('POST', '/inference', body),
+
+  // --- OpenFang agent surface (mounted at /api/agents/openfang) ---
+
+  /**
+   * GET /api/agents/openfang/health — truthful daemon health snapshot.
+   * Returns 503 when the openfang binary is absent; callers must handle both cases.
+   * NOTE: This route is not under /api/conductor, so it uses openfangRequest.
+   */
+  openfangHealth: () => openfangRequest<OpenfangHealth>('GET', '/health'),
+
+  /**
+   * GET /api/agents/openfang — agent card + current runtime status.
+   * Always returns 200; the `status` field reflects daemon availability.
+   * Read-only — respects the A2A boundary (Recoder owns task/approval/memory state).
+   */
+  openfangAgent: () => openfangRequest<OpenfangAgentCard>('GET', '/'),
 };
