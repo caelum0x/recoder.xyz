@@ -160,7 +160,7 @@ describe('POST /workspaces accepts a minimal cockpit-form body (integration)', (
     expect(persisted!.createdBy).toBe('desktop-user');
   });
 
-  it('still rejects a body that omits BOTH command and prompt', async () => {
+  it('accepts a body that omits BOTH command and prompt (empty-start; no longer 400)', async () => {
     const app = express();
     app.use(express.json());
     app.use('/api/conductor', createConductorRouter());
@@ -168,9 +168,15 @@ describe('POST /workspaces accepts a minimal cockpit-form body (integration)', (
     const res = await request(app, 'POST', '/api/conductor/workspaces', {
       repoPath: '/tmp/create-defaults-form-test',
     });
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error).toContain('command|prompt');
+    // The empty-start default provisions a no-op instead of rejecting; the form
+    // promises "start empty and chat once it's running". It is no longer a 400
+    // validation failure (it proceeds into the engine — which may then 201, or
+    // 409/429 on provisioning/admission depending on the environment, but never
+    // the old "command|prompt required" rejection).
+    expect(res.status).not.toBe(400);
+    if (res.body?.error) {
+      expect(res.body.error).not.toContain('command|prompt');
+    }
   });
 
   it('still rejects a body that omits repoPath', async () => {
