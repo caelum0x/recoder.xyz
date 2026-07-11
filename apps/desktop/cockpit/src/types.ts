@@ -479,6 +479,111 @@ export interface ReviewMemoryResult {
   memory?: MemoryItem;
 }
 
+/**
+ * MCP control-plane types — mirror the real /api/mcp endpoint shapes.
+ *
+ * Source of truth:
+ *  - docker-backend/src/agent-os/routes/mcp-control.routes.ts (createAgentMcpRouter)
+ *  - packages/agent-mcp/src/registry.ts (McpServerRegistration, McpServerKind)
+ *  - packages/agent-mcp/src/policy/audit.ts (McpToolAuditEvent, McpToolCall)
+ *
+ * Mounted at /api/mcp (NOT /api/conductor or /api/agent-os).
+ */
+
+export type McpServerKind =
+  | 'github'
+  | 'repo'
+  | 'tasks'
+  | 'runs'
+  | 'workspace'
+  | 'artifacts'
+  | 'approvals'
+  | 'browser'
+  | 'memory'
+  | 'deploy'
+  | 'billing'
+  | 'preview'
+  | 'logs'
+  | 'git_nexus'
+  | 'recoder_code_graph'
+  | 'beads'
+  | 'oss'
+  | 'custom';
+
+/** GET /api/mcp/servers — a registered MCP server entry. */
+export interface McpServer {
+  serverId: string;
+  kind: McpServerKind;
+  displayName: string;
+  transport: 'stdio' | 'http' | 'sse' | 'custom';
+  endpoint?: string;
+  enabled: boolean;
+  toolNames: string[];
+  metadata?: Record<string, unknown>;
+}
+
+/** GET /api/mcp/tools — a flat tool entry across all servers. */
+export interface McpToolEntry {
+  serverId: string;
+  kind: McpServerKind;
+  toolName: string;
+  enabled: boolean;
+}
+
+export type McpToolCallStatus =
+  | 'requested'
+  | 'denied'
+  | 'needs_approval'
+  | 'approved'
+  | 'completed'
+  | 'failed';
+
+/** A single MCP tool call record. */
+export interface McpToolCall {
+  callId: string;
+  serverId: string;
+  toolName: string;
+  actorAgentId: string;
+  taskId?: string;
+  args: Record<string, unknown>;
+  requestedAt: string;
+  completedAt?: string;
+  status: McpToolCallStatus;
+}
+
+/** An MCP tool audit event (from /tools/:serverId/:toolName/check). */
+export interface McpToolAuditEvent {
+  eventId: string;
+  call: McpToolCall;
+  decision: {
+    allowed: boolean;
+    requiresApproval?: boolean;
+    reason?: string;
+  };
+  policyDecision?: PolicyDecision;
+  error?: string;
+}
+
+/**
+ * GET /api/mcp/ — top-level summary.
+ */
+export interface McpHostSummary {
+  service: string;
+  servers: number;
+  tools: number;
+}
+
+/**
+ * POST /api/mcp/tools/:serverId/:toolName/check — full check result.
+ */
+export interface McpToolCheckResult {
+  allowed: boolean;
+  requiresApproval: boolean;
+  reason?: string;
+  policyDecision?: PolicyDecision;
+  auditEvent: McpToolAuditEvent;
+}
+
 /** The standard backend envelope: { success, data?, error? }. */
 export interface ApiEnvelope<T> {
   success: boolean;

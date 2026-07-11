@@ -178,6 +178,17 @@ export const PANEL_REGISTRY: readonly PanelEntry[] = [
       return m.ConnectorsPanel as unknown as PanelComponent;
     },
   },
+  {
+    id: 'mcp',
+    title: 'MCP Tools',
+    capability: 'mcp-server-registry',
+    healthKey: null,
+    primary: false,
+    load: async () => {
+      const m = await import('../components/McpToolsPanel');
+      return m.McpToolsPanel as unknown as PanelComponent;
+    },
+  },
 ];
 
 /** Look up a panel entry by its stable id. Returns undefined when not found. */

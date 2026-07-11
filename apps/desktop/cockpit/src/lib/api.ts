@@ -50,6 +50,10 @@ import type {
   DmuxLaunchBody,
   DmuxLaunchResult,
   DmuxStatus,
+  McpHostSummary,
+  McpServer,
+  McpToolCheckResult,
+  McpToolEntry,
   MemoryCandidate,
   MergeResult,
   PolicyDecision,
@@ -184,6 +188,11 @@ function agentOsRequest<T>(method: string, path: string, body?: unknown): Promis
   return requestAt<T>('/api/agent-os', method, path, body);
 }
 
+/** MCP control-plane request: every call hits `${backendUrl}/api/mcp/...`. */
+function mcpRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/mcp', method, path, body);
+}
+
 /**
  * Build the shared, typed {@link ConductorClient} from `@recoder/conductor-ui`,
  * configured for the cockpit's runtime.
@@ -308,6 +317,37 @@ export const api = {
     agentOsRequest<ReviewMemoryResult>(
       'POST',
       `/memory/lifecycle/candidates/${encodeURIComponent(candidateId)}/review`,
+      body,
+    ),
+
+  // --- MCP control plane (mounted at /api/mcp, NOT /api/conductor or /api/agent-os) ---
+
+  /** GET /api/mcp/ — top-level MCP host summary (server count, tool count). */
+  mcpSummary: () => mcpRequest<McpHostSummary>('GET', '/'),
+
+  /** GET /api/mcp/servers — all registered MCP servers (name, kind, tools, enabled). */
+  mcpServers: () => mcpRequest<McpServer[]>('GET', '/servers'),
+
+  /** GET /api/mcp/tools — flat list of all tools across registered servers. */
+  mcpTools: () => mcpRequest<McpToolEntry[]>('GET', '/tools'),
+
+  /**
+   * POST /api/mcp/tools/:serverId/:toolName/check — policy gate check.
+   * Requires a real actor AgentProfile; returns the decision + audit event.
+   * Does NOT execute the tool.
+   */
+  mcpCheckTool: (
+    serverId: string,
+    toolName: string,
+    body: {
+      actor: Record<string, unknown>;
+      task?: Record<string, unknown>;
+      args?: Record<string, unknown>;
+    },
+  ) =>
+    mcpRequest<McpToolCheckResult>(
+      'POST',
+      `/tools/${encodeURIComponent(serverId)}/${encodeURIComponent(toolName)}/check`,
       body,
     ),
 };
