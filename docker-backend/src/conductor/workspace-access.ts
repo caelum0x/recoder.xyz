@@ -22,6 +22,7 @@ import type { Workspace } from '@recoder/agent-os';
 import { isStrictAuthMode } from '../auth-utils.js';
 import { isSoloMode } from './solo-mode.js';
 import { getWorkspace } from './workspace-service.js';
+import { auditConductorMutation } from './conductor-audit.js';
 
 /** The verified caller identity attached by authenticateRequest, if any. */
 export function callerId(req: Request): string | undefined {
@@ -51,6 +52,12 @@ export function requireAuthenticatedMutation(
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next();
   if (isSoloMode()) return next();
   if (isMigrationFallback(req)) {
+    void auditConductorMutation(req, {
+      action: conductorActionFromPath(req),
+      targetId: (req.params as { workspaceId?: string })?.workspaceId ?? '(none)',
+      outcome: 'denied',
+      metadata: { reason: 'anonymous-migration-mode' },
+    });
     res.status(401).json({
       success: false,
       error:
@@ -92,6 +99,14 @@ export async function requireWorkspaceAccess(
     return null;
   }
   if (!canAccessWorkspace(callerId(req), workspace)) {
+    // Seal the denied cross-user attempt into the audit trail — an IDOR probe
+    // must be visible, not silent. Best-effort; never blocks the 403.
+    void auditConductorMutation(req, {
+      action: conductorActionFromPath(req),
+      targetId: workspaceId,
+      outcome: 'denied',
+      metadata: { reason: 'ownership', ownerId: workspace.createdBy },
+    });
     res.status(403).json({
       success: false,
       error: 'forbidden: this workspace belongs to another user',
@@ -99,6 +114,20 @@ export async function requireWorkspaceAccess(
     return null;
   }
   return workspace;
+}
+
+/**
+ * Derive the conductor action from the request path (`/workspaces/:id/<verb>`
+ * → `workspace.<verb>`) for audit labeling. Falls back to `workspace.access`.
+ */
+export function conductorActionFromPath(req: Request): string {
+  const path = typeof req.path === 'string' ? req.path : '';
+  const segments = path.split('/').filter(Boolean);
+  const verb = segments[segments.length - 1];
+  if (verb && verb !== 'workspaces' && !verb.startsWith('ws_')) {
+    return `workspace.${verb}`;
+  }
+  return 'workspace.access';
 }
 
 /**
