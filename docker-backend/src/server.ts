@@ -374,6 +374,12 @@ function startupInfo(component: string, message: string, details?: Record<string
 interface AuthenticatedRequest extends express.Request {
   userId?: string;
   sessionId?: string;
+  /**
+   * True when the identity came from the migration-mode fallback (no/invalid
+   * credential accepted because STRICT_AUTH is off), NOT a verified session/
+   * key. Sensitive surfaces (e.g. mutating conductor routes) reject these.
+   */
+  authMigrationFallback?: boolean;
 }
 
 const DEBUG_AUTH_LOGS = process.env.NODE_ENV !== 'production' && process.env.DEBUG_AUTH_LOGS === 'true';
@@ -841,6 +847,7 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
       });
       req.userId = anonymousIdentity.userId;
       req.sessionId = anonymousIdentity.sessionId;
+      req.authMigrationFallback = true;
       return next();
     }
 
@@ -864,6 +871,7 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
         });
         req.userId = anonymousIdentity.userId;
         req.sessionId = anonymousIdentity.sessionId;
+        req.authMigrationFallback = true;
         return next();
       }
       return res.status(401).json({ error: 'Invalid or expired session' });
@@ -887,6 +895,7 @@ function authenticateRequest(req: AuthenticatedRequest, res: express.Response, n
       });
       req.userId = anonymousIdentity.userId;
       req.sessionId = anonymousIdentity.sessionId;
+      req.authMigrationFallback = true;
       return next();
     }
     return res.status(500).json({ error: 'Authentication service error' });

@@ -12,6 +12,7 @@ import {
   canAccessWorkspace,
   stampOwner,
   scopeBatchFilter,
+  requireAuthenticatedMutation,
 } from './workspace-access';
 import { createConductorRouter } from './conductor.routes';
 import { agentOsContainer } from '../agent-os/service-container';
@@ -83,6 +84,72 @@ describe("scopeBatchFilter (batch ops act only on the caller's workspaces)", () 
     strictEnv();
     vi.stubEnv('RECODER_SOLO_MODE', '1');
     expect(scopeBatchFilter(req('u'), {})).toEqual({});
+  });
+});
+
+describe('requireAuthenticatedMutation (migration-mode fallback rejected on writes)', () => {
+  function guardReq(method: string, fallback: boolean): Request {
+    return {
+      method,
+      userId: fallback ? 'anonymous' : 'user-a',
+      authMigrationFallback: fallback,
+      body: {},
+      params: {},
+      query: {},
+      headers: {},
+    } as unknown as Request;
+  }
+  function guardRes() {
+    const state = { statusCode: 200, jsonData: null as any };
+    const res: any = {
+      status(c: number) { state.statusCode = c; return res; },
+      json(d: any) { state.jsonData = d; return res; },
+    };
+    return { res, state };
+  }
+
+  it('rejects an anonymous fallback POST under strict auth (401)', () => {
+    strictEnv();
+    const { res, state } = guardRes();
+    let nextCalled = false;
+    requireAuthenticatedMutation(guardReq('POST', true), res, () => { nextCalled = true; });
+    expect(nextCalled).toBe(false);
+    expect(state.statusCode).toBe(401);
+  });
+
+  it('rejects an anonymous fallback POST even in migration mode (STRICT_AUTH off)', () => {
+    vi.stubEnv('STRICT_AUTH', 'false');
+    vi.stubEnv('RECODER_SOLO_MODE', '');
+    const { res, state } = guardRes();
+    let nextCalled = false;
+    requireAuthenticatedMutation(guardReq('POST', true), res, () => { nextCalled = true; });
+    expect(nextCalled).toBe(false);
+    expect(state.statusCode).toBe(401);
+  });
+
+  it('allows GET reads regardless of identity', () => {
+    vi.stubEnv('STRICT_AUTH', 'false');
+    const { res } = guardRes();
+    let nextCalled = false;
+    requireAuthenticatedMutation(guardReq('GET', true), res, () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+  });
+
+  it('allows a credentialed POST (no fallback flag)', () => {
+    strictEnv();
+    const { res } = guardRes();
+    let nextCalled = false;
+    requireAuthenticatedMutation(guardReq('POST', false), res, () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+  });
+
+  it('allows the single-user solo desktop even for anonymous', () => {
+    vi.stubEnv('STRICT_AUTH', 'false');
+    vi.stubEnv('RECODER_SOLO_MODE', '1');
+    const { res } = guardRes();
+    let nextCalled = false;
+    requireAuthenticatedMutation(guardReq('POST', true), res, () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
   });
 });
 

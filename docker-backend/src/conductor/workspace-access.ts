@@ -29,6 +29,38 @@ export function callerId(req: Request): string | undefined {
   return typeof id === 'string' && id ? id : undefined;
 }
 
+/** True when the identity came from the migration-mode fallback, not a credential. */
+function isMigrationFallback(req: Request): boolean {
+  return Boolean((req as Request & { authMigrationFallback?: boolean }).authMigrationFallback);
+}
+
+/**
+ * Router-level guard for MUTATING conductor routes: reject an unauthenticated
+ * (migration-mode fallback) caller even when the backend globally runs with
+ * STRICT_AUTH off. A mutation that provisions worktrees, steers agents, or
+ * delivers code must never run for an anonymous identity. GET/HEAD/OPTIONS and
+ * the single-user solo desktop are exempt; a genuine credential (session, sk_
+ * key, internal key) always passes.
+ */
+export function requireAuthenticatedMutation(
+  req: Request,
+  res: Response,
+  next: (err?: unknown) => void,
+): void {
+  const method = req.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next();
+  if (isSoloMode()) return next();
+  if (isMigrationFallback(req)) {
+    res.status(401).json({
+      success: false,
+      error:
+        'authentication required for conductor mutations (anonymous/migration-mode identities cannot create, deliver, or steer workspaces)',
+    });
+    return;
+  }
+  next();
+}
+
 function isInternal(userId: string | undefined): boolean {
   return Boolean(userId?.startsWith('internal:'));
 }
