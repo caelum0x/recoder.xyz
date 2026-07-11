@@ -25,7 +25,8 @@
     "build:mac:ci-signed": "electron-builder --mac",
     "build:mac:unsigned": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build:linux": "electron-builder --linux",
+    "napi:build": "node scripts/napi-build.js"
   },
   "dependencies": {
     "@recoder/distribution": "workspace:*",
@@ -105,6 +106,14 @@
       {
         "from": "../../c/tmux/tmux",
         "to": "backend/c/tmux/tmux"
+      },
+      {
+        "from": "../../crates/recoder-governance/target/release/recoder-governance-napi.node",
+        "to": "native/recoder-governance-napi.node"
+      },
+      {
+        "from": "../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
+        "to": "native/lance_npm_bindings.node"
       }
     ],
     "asar": true,

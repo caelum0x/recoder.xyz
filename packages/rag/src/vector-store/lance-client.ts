@@ -175,20 +175,73 @@ function nativeAddonToModule(addon: NativeLanceAddon): LanceModule {
 /**
  * Candidate paths for the native addon `.node` file.
  *
- * Priority:
- *  1. Release artifact produced by `cargo build --release -p lance-npm-bindings`
- *     inside the monorepo workspace.
- *  2. A co-located `.node` file next to the compiled JS (production deploy layout).
+ * Resolution priority (highest first):
+ *  1. `RECODER_NATIVE_DIR` env var — explicit override for CI / custom layouts.
+ *  2. `process.resourcesPath` — Electron packaged app: addons land under
+ *     Resources/native/ via extraResources in the electron-builder config.
+ *  3. Monorepo dev path, derived at runtime from `__dirname` so it is not
+ *     tied to a hardcoded developer home directory.
+ *  4. Co-located `.node` next to the compiled JS (production deploy layout).
  *
  * The list is short and deterministic. Any path that fails `require()` is silently
  * skipped — the overall loader never throws (degrade-safe contract).
  */
-const NATIVE_ADDON_CANDIDATES: readonly string[] = [
-	// 1. Monorepo release build path (macOS/Linux: .node; Windows: .dll renamed .node)
-	"/Users/arhansubasi/recoder.xyz/crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
-	// 2. Co-located next to the compiled JS output (production deploy artifact)
-	"lance-npm-bindings.node",
-];
+function buildLanceCandidatePaths(): readonly string[] {
+	const candidates: string[] = [];
+
+	// 1. Explicit override: RECODER_NATIVE_DIR env var (CI / custom layouts).
+	const nativeDir = process.env.RECODER_NATIVE_DIR;
+	if (nativeDir && nativeDir.trim()) {
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const nodePath = require('path') as typeof import('path');
+			candidates.push(nodePath.join(nativeDir.trim(), 'lance_npm_bindings.node'));
+		} catch {
+			// path module unavailable — skip
+		}
+	}
+
+	// 2. Electron packaged app: process.resourcesPath/native/ (set by electron-builder
+	//    extraResources, lands the .node files in Resources/native/).
+	const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+	if (resourcesPath && typeof resourcesPath === 'string') {
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const nodePath = require('path') as typeof import('path');
+			candidates.push(nodePath.join(resourcesPath, 'native', 'lance_npm_bindings.node'));
+		} catch {
+			// path module unavailable — skip
+		}
+	}
+
+	// 3. Monorepo dev path, derived from __dirname so it works across developer machines.
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
+		const nodePath = require('path') as typeof import('path');
+		// CJS __dirname: packages/rag/src/vector-store → up 5 → workspace root
+		if (typeof __dirname !== 'undefined') {
+			const workspaceRoot = nodePath.resolve(__dirname, '..', '..', '..', '..', '..');
+			candidates.push(
+				nodePath.join(
+					workspaceRoot,
+					'crates',
+					'lance',
+					'npm-bindings',
+					'target',
+					'release',
+					'lance_npm_bindings.node',
+				),
+			);
+		}
+	} catch {
+		// __dirname or path not available — fall through
+	}
+
+	// 4. Co-located next to the compiled JS output (production deploy artifact).
+	candidates.push('lance-npm-bindings.node');
+
+	return candidates;
+}
 
 let _nativeCacheResult: NativeLanceAddon | null | undefined = undefined;
 
@@ -203,7 +256,11 @@ let _nativeCacheResult: NativeLanceAddon | null | undefined = undefined;
 function tryLoadNativeAddon(): NativeLanceAddon | null {
 	if (_nativeCacheResult !== undefined) return _nativeCacheResult;
 
-	for (const candidate of NATIVE_ADDON_CANDIDATES) {
+	// Build candidate list at call time so RECODER_NATIVE_DIR / process.resourcesPath
+	// are resolved after any process-env or Electron bootstrap has set them.
+	const candidates = buildLanceCandidatePaths();
+
+	for (const candidate of candidates) {
 		try {
 			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			const mod = require(candidate) as unknown;

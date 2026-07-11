@@ -246,12 +246,46 @@ exports.default = async function afterPack(context) {
     );
   }
 
+  // --- Invariant 6 (soft): NAPI native addons land in Resources/native/. ---
+  // The governance and lance .node files ship via extraResources → native/.
+  // Their loaders are degrade-safe (fall back to subprocess/loopback when
+  // absent), so we WARN rather than FAIL here — the packaged app works without
+  // them. A hard failure would block packaging on disk-constrained CI hosts that
+  // cannot build the Rust crates. This warning makes a silent regression visible
+  // in the build log so the next full build can catch it.
+  const nativeDir = path.join(resourcesDir, 'native');
+  const governanceNapiNode = path.join(nativeDir, 'recoder-governance-napi.node');
+  const lanceNapiNode = path.join(nativeDir, 'lance_npm_bindings.node');
+  const governanceNapiPresent = fs.existsSync(governanceNapiNode);
+  const lanceNapiPresent = fs.existsSync(lanceNapiNode);
+
+  if (!governanceNapiPresent) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[after-pack] WARNING: NAPI governance addon NOT found at ${governanceNapiNode}. ` +
+        'The packaged app will degrade to the TS fallback path for governance decisions. ' +
+        'Build crates/recoder-governance/recoder-governance-napi with `cargo build --release` ' +
+        'before packaging to include the native addon.',
+    );
+  }
+  if (!lanceNapiPresent) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[after-pack] WARNING: NAPI lance addon NOT found at ${lanceNapiNode}. ` +
+        'The packaged app will degrade to the @lancedb/lancedb SDK or in-memory fallback. ' +
+        'Build crates/lance/npm-bindings with `cargo build --release` before packaging ' +
+        'to include the native lance addon.',
+    );
+  }
+
   // eslint-disable-next-line no-console
   console.log(
     `[after-pack] release-artifact assertions passed for ${electronPlatformName}: ` +
       `node-pty unpacked (${nativeNodes.length} .node binary file(s)), ` +
       'electron-updater bundled, embedded backend (server.js + mint + node_modules) ' +
       `present, governance daemon ${governanceBundled ? 'bundled' : 'absent'}, ` +
-      `vendored tmux bundled, product icon (${requiredIconAsset}) bundled.`,
+      `vendored tmux bundled, product icon (${requiredIconAsset}) bundled. ` +
+      `NAPI addons: governance=${governanceNapiPresent ? 'present' : 'MISSING (degraded)'}, ` +
+      `lance=${lanceNapiPresent ? 'present' : 'MISSING (degraded)'}.`,
   );
 };
