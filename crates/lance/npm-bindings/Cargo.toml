@@ -1,0 +1,30 @@
+# Standalone workspace so this crate is not pulled into the main lance workspace
+# (which has incompatible clippy rules and a 2-3GB dependency surface).
+[workspace]
+resolver = "2"
+
+[package]
+name = "lance-npm-bindings"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Recoder <eng@recoder.xyz>"]
+repository = "https://github.com/recoder-xyz/recoder.xyz"
+description = "NAPI bindings — exposes lance vector-store ops (connect/upsert/search/delete) as a native Node.js addon (.node), replacing subprocess/loopback fusion with a direct in-process call. Degrade-safe: the TS facade falls back to @lancedb/lancedb SDK or in-memory when this module is absent."
+
+[lib]
+# cdylib: the .node binary; rlib: keeps cargo test working.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+napi = { version = "3", features = ["napi8"] }
+napi-derive = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+opt-level = "s"
+lto = false
