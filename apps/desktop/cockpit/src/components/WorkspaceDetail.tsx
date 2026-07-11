@@ -23,6 +23,11 @@ import { DiffView } from './DiffView';
 import { SessionTerminal } from './SessionTerminal';
 import { RecoderTerminal } from './RecoderTerminal';
 import { ConversationView } from './ConversationView';
+import {
+  deliveryGateFromError,
+  deliveryGateReason,
+} from '../lib/conductor-health-state';
+import type { DeliveryGateDetail } from '../types';
 
 /** True when running inside the Recoder desktop shell (preload PTY bridge present). */
 function hasDesktopTerminal(): boolean {
@@ -46,6 +51,69 @@ interface WorkspaceDetailProps {
   workspace: Workspace;
   onClose: () => void;
   onChanged: () => void;
+}
+
+/**
+ * The outcome of a PR/merge/archive action in this detail panel.
+ * `gated` carries the structured delivery-gate verdict when the backend's
+ * 409 approval gate fires — shown inline so the operator sees why their
+ * action was blocked right where they triggered it, without having to
+ * navigate to the separate Governance panel.
+ */
+type ActionOutcome =
+  | { kind: 'idle' }
+  | { kind: 'ok'; note: string }
+  | { kind: 'gated'; action: 'pr' | 'merge'; detail: DeliveryGateDetail; reason: string }
+  | { kind: 'error'; message: string };
+
+/**
+ * Inline gate verdict rendered when a PR/merge is blocked by the conductor's
+ * delivery approval gate. Shows the truthful backend 409 data — the gate
+ * action tier, the pending approval ID (if any), and whether the workspace
+ * was transitioned to awaiting_approval — without fabricating any fields.
+ */
+function InlineGateVerdict({
+  action,
+  detail,
+  reason,
+}: {
+  action: 'pr' | 'merge';
+  detail: DeliveryGateDetail;
+  reason: string;
+}) {
+  return (
+    <div class="detail-gate-verdict">
+      <div class="detail-gate-head">
+        <span class="badge tone-warn">awaiting approval</span>
+        <span class="detail-gate-action">
+          {action === 'pr' ? 'Open PR' : 'Merge'} blocked by delivery gate
+        </span>
+      </div>
+      <dl class="detail-gate-grid">
+        <div>
+          <dt class="meta-k">Action tier</dt>
+          <dd class="meta-v">{detail.action}</dd>
+        </div>
+        <div>
+          <dt class="meta-k">Approval record</dt>
+          <dd class="meta-v">{detail.approvalId || 'none — an approving Approval is required'}</dd>
+        </div>
+        {detail.transitioned !== undefined && (
+          <div>
+            <dt class="meta-k">Workspace transitioned</dt>
+            <dd class="meta-v">
+              {detail.transitioned ? 'yes → awaiting_approval' : 'no (already in that state)'}
+            </dd>
+          </div>
+        )}
+      </dl>
+      <p class="detail-gate-reason">{reason}</p>
+      <p class="detail-gate-hint">
+        This action was NOT performed. Create an approving Approval record (at the required tier)
+        and try again — or view the Approvals panel for full governance detail.
+      </p>
+    </div>
+  );
 }
 
 type Tab = 'output' | 'diff' | 'terminal';
@@ -130,8 +198,7 @@ function FileList({
 
 export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDetailProps) {
   const [tab, setTab] = useState<Tab>('output');
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionNote, setActionNote] = useState<string | null>(null);
+  const [actionOutcome, setActionOutcome] = useState<ActionOutcome>({ kind: 'idle' });
   const [busy, setBusy] = useState<string | null>(null);
   // When the embedded PTY reports it has no real TTY (node-pty missing in this
   // build), fall back to the truthful HTTP /sessions surface instead of a dead
@@ -178,16 +245,35 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
   const health = usePoll(() => api.health(), 15_000);
   const tmuxBin = health.data?.tmuxBin;
 
-  async function runAction(name: string, fn: () => Promise<unknown>, note?: string) {
-    setActionError(null);
-    setActionNote(null);
+  async function runAction(
+    name: string,
+    fn: () => Promise<unknown>,
+    note: string,
+    gatedAction?: 'pr' | 'merge',
+  ) {
+    setActionOutcome({ kind: 'idle' });
     setBusy(name);
     try {
       await fn();
-      if (note) setActionNote(note);
+      setActionOutcome({ kind: 'ok', note });
       onChanged();
     } catch (err) {
-      setActionError(describeError(err));
+      // When a PR/merge is blocked by the delivery gate (409 awaiting_approval),
+      // show the structured gate verdict inline — right where the operator
+      // triggered the action — so they see exactly what's blocking without
+      // having to navigate to the Governance panel.
+      const gate = gatedAction ? deliveryGateFromError(err) : null;
+      if (gate) {
+        setActionOutcome({
+          kind: 'gated',
+          action: gatedAction as 'pr' | 'merge',
+          detail: gate,
+          reason: deliveryGateReason(err),
+        });
+        onChanged(); // refresh workspace state — backend may have transitioned to awaiting_approval
+      } else {
+        setActionOutcome({ kind: 'error', message: describeError(err) });
+      }
     } finally {
       setBusy(null);
     }
@@ -195,11 +281,16 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
 
   function openPr() {
     const title = `Conductor: ${workspace.branch}`;
-    void runAction('pr', () => api.openPr(workspace.workspaceId, { title }), 'PR opened.');
+    void runAction('pr', () => api.openPr(workspace.workspaceId, { title }), 'PR opened.', 'pr');
   }
 
   function merge() {
-    void runAction('merge', () => api.merge(workspace.workspaceId, { strategy: 'squash' }), 'Merged.');
+    void runAction(
+      'merge',
+      () => api.merge(workspace.workspaceId, { strategy: 'squash' }),
+      'Merged.',
+      'merge',
+    );
   }
 
   function archive() {
@@ -254,8 +345,19 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
       {prMeta?.url && (
         <a class="pr-link" href={prMeta.url} target="_blank" rel="noreferrer">PR: {prMeta.url}</a>
       )}
-      {actionNote && <p class="action-note">{actionNote}</p>}
-      {actionError && <p class="action-error">{actionError}</p>}
+      {actionOutcome.kind === 'ok' && (
+        <p class="action-note">{actionOutcome.note}</p>
+      )}
+      {actionOutcome.kind === 'gated' && (
+        <InlineGateVerdict
+          action={actionOutcome.action}
+          detail={actionOutcome.detail}
+          reason={actionOutcome.reason}
+        />
+      )}
+      {actionOutcome.kind === 'error' && (
+        <p class="action-error">{actionOutcome.message}</p>
+      )}
 
       <div class="detail-tabs">
         <button class={tab === 'output' ? 'tab tab-active' : 'tab'} onClick={() => setTab('output')}>Changes</button>

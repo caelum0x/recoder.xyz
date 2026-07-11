@@ -1,26 +1,30 @@
 // @vitest-environment jsdom
 /**
- * WorkspaceDetail — the Chat <-> Terminal surface affordance, the "not scary"
- * reveal of the real embedded terminal (docs/architecture/RECODER-TERMINAL-VISION.md).
+ * WorkspaceDetail — two behavior contracts:
+ *
+ * A. INLINE GATE VERDICT (delivery-gate polish, the high-value cockpit improvement):
+ *
+ *    When the operator clicks "Open PR" or "Merge" and the conductor's delivery
+ *    gate fires a 409 (awaiting_approval), WorkspaceDetail renders a structured
+ *    inline gate verdict — action tier, approval ID, transition state, reason —
+ *    right where the action was triggered. The operator no longer sees a cryptic
+ *    error string; they see exactly what's blocking and what to do next.
+ *
+ *    Tests:
+ *      1. 409 merge → InlineGateVerdict with correct action/tier/reason
+ *      2. 409 PR → InlineGateVerdict for 'pr' action
+ *      3. Non-409 error (500) → plain action-error (not the gate card)
+ *      4. Successful merge (200) → action-note 'Merged.' (no gate card)
+ *
+ * B. CHAT <-> TERMINAL SURFACE AFFORDANCE ("not scary" terminal, W4):
+ *
+ *    The Terminal tab defaults to the calm Chat skin; "Show terminal" reveals
+ *    the real embedded PTY on demand; "no real PTY" degrades to HTTP surface.
  *
  * Drives the production <WorkspaceDetail/> Preact tree in a real jsdom DOM with
  * only the runtime seams doubled — `fetch`/`window` (api + config) and the
  * desktop PTY bridge (`window.recoderDesktop`), exactly like WorkspaceCenter.test.tsx.
- * These are W4's missing tests; they prove the vision contract:
- *
- *  1. FRIENDLY DEFAULT: the Terminal tab lands on the calm Chat skin and offers a
- *     single gentle "Show terminal" affordance — the real xterm is collapsed by
- *     default, and no scary tmux/pty wording is on screen.
- *  2. REAL-ENGINE-ON-FLIP: clicking "Show terminal" mounts the genuine
- *     RecoderTerminal, which actually calls the desktop bridge's spawnTerminal
- *     (one engine — never a fake TTY) with the workspace's tmux attach command.
- *  3. PTY-UNAVAILABLE FALLBACK: when the main process reports no real PTY, the
- *     embedded xterm (which genuinely tried to spawn) is replaced by the truthful
- *     HTTP /sessions surface — never a dead terminal, never raw node-pty/PTY/
- *     "Pane is dead" jargon.
- *
- * Nothing in the cockpit is stubbed: the real tab state, the real surface toggle,
- * the real RecoderTerminal spawn pipeline, and the real api client all run.
+ * Nothing in the cockpit is stubbed.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'preact';
@@ -278,5 +282,172 @@ describe('WorkspaceDetail Chat <-> Terminal affordance', () => {
     expect(c.querySelector('.rterm')).toBeNull();
     expect(c.querySelector('.terminal-shell')).toBeTruthy();
     assertNoScaryWording(c);
+  });
+});
+
+/**
+ * Delivery-gate polish: inline gate verdict in WorkspaceDetail.
+ *
+ * When the operator clicks "Open PR" or "Merge" and the conductor gate fires a
+ * 409 awaiting_approval, WorkspaceDetail renders a structured InlineGateVerdict
+ * card right where the action was triggered — action tier, approval ID,
+ * transition state, and reason — instead of a cryptic error string. For any
+ * other failure (5xx, network, etc.) the plain .action-error is shown.
+ *
+ * All four tests drive the REAL WorkspaceDetail + REAL api client. Only `fetch`
+ * (the network seam) is doubled.
+ */
+describe('WorkspaceDetail inline gate verdict', () => {
+  /** A reviewable workspace (awaiting_review allows Merge). */
+  function reviewWs(overrides: Partial<Workspace> = {}): Workspace {
+    return {
+      workspaceId: 'ws-gate',
+      spaceId: 'default',
+      projectId: 'default',
+      taskId: 'task_gate',
+      runtimeId: 'claude',
+      substrate: 'tmux_worktree',
+      branch: 'feature/gate-test',
+      baseRef: 'main',
+      state: 'awaiting_review',
+      createdBy: 'op',
+      createdAt: new Date('2026-07-01T00:00:00Z').toISOString(),
+      updatedAt: new Date('2026-07-01T00:00:00Z').toISOString(),
+      ...overrides,
+    };
+  }
+
+  function mount(ws: Workspace): HTMLDivElement {
+    const c = document.createElement('div');
+    document.body.appendChild(c);
+    container = c;
+    act(() => {
+      render(<WorkspaceDetail workspace={ws} onClose={() => undefined} onChanged={() => undefined} />, c);
+    });
+    return c;
+  }
+
+  /**
+   * Build a 409 delivery-gate response: the conductor's DeliveryApprovalRequiredError
+   * serialises to { success:false, error:<reason>, data:{ state, action, approvalId, transitioned } }.
+   */
+  function gate409(action: string, approvalId?: string): Response {
+    return makeResponse({
+      status: 409,
+      ok: false,
+      body: {
+        success: false,
+        error: `Delivery blocked: no approving Approval for action '${action}'`,
+        data: { state: 'awaiting_approval', action, approvalId, transitioned: true },
+      },
+    });
+  }
+
+  it('shows the structured gate verdict when merge is blocked (409 awaiting_approval)', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/merge')) return gate409('merge');
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    const c = mount(reviewWs());
+    await flush(20);
+
+    // Click the Merge action button.
+    clickButtonByText(c, 'Merge');
+    await flush(20);
+
+    // The gate verdict card is rendered — not a plain error string.
+    const verdict = c.querySelector('.detail-gate-verdict');
+    expect(verdict).toBeTruthy();
+
+    // It shows the gate blocked the merge.
+    expect(verdict?.textContent).toContain('Merge');
+    expect(verdict?.textContent).toContain('blocked by delivery gate');
+
+    // The action tier row is visible.
+    expect(verdict?.textContent).toContain('Action tier');
+    expect(verdict?.textContent).toContain('merge');
+
+    // The reason from the backend error message is shown.
+    expect(verdict?.textContent).toContain("Delivery blocked");
+
+    // The "what to do" hint is present.
+    expect(verdict?.textContent).toContain('approving Approval');
+
+    // The plain action-error element is NOT shown (this is not a raw error).
+    expect(c.querySelector('.action-error')).toBeNull();
+  });
+
+  it('shows the gate verdict for a blocked PR action with an approval ID', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/pr')) return gate409('pr.create', 'appr_abc123');
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    // 'running' state allows PR.
+    const c = mount(reviewWs({ state: 'running' }));
+    await flush(20);
+
+    clickButtonByText(c, 'Open PR');
+    await flush(20);
+
+    const verdict = c.querySelector('.detail-gate-verdict');
+    expect(verdict).toBeTruthy();
+
+    // Shows PR-specific copy.
+    expect(verdict?.textContent).toContain('Open PR');
+    expect(verdict?.textContent).toContain('blocked by delivery gate');
+
+    // The approval ID from the backend response is surfaced.
+    expect(verdict?.textContent).toContain('appr_abc123');
+  });
+
+  it('shows plain action-error (not the gate card) for a non-409 backend failure', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/merge')) {
+        return makeResponse({
+          status: 500,
+          ok: false,
+          body: { success: false, error: 'internal server error' },
+        });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    const c = mount(reviewWs());
+    await flush(20);
+
+    clickButtonByText(c, 'Merge');
+    await flush(20);
+
+    // A 500 is a backend error, not a gate verdict.
+    expect(c.querySelector('.detail-gate-verdict')).toBeNull();
+    expect(c.querySelector('.action-error')).toBeTruthy();
+    expect(c.querySelector('.action-error')?.textContent).toContain('Backend error');
+  });
+
+  it('shows the success note and no gate card when merge succeeds', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/merge')) {
+        return makeResponse({
+          status: 200,
+          ok: true,
+          body: { success: true, data: { workspaceId: 'ws-gate', branch: 'feature/gate-test', merged: true } },
+        });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+
+    const c = mount(reviewWs());
+    await flush(20);
+
+    clickButtonByText(c, 'Merge');
+    await flush(20);
+
+    // On success: the success note is shown, the gate card is not.
+    expect(c.querySelector('.detail-gate-verdict')).toBeNull();
+    expect(c.querySelector('.action-error')).toBeNull();
+    expect(c.querySelector('.action-note')).toBeTruthy();
+    expect(c.querySelector('.action-note')?.textContent).toContain('Merged.');
   });
 });
