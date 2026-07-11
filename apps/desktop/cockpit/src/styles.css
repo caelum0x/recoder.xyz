@@ -1021,6 +1021,20 @@ body {
 .gate-verdict-reason { white-space: normal; word-break: break-word; }
 .gate-verdict-note { margin: 0; font-size: 12px; color: #f0c77a; line-height: 1.5; }
 
+/* Inline gate verdict in WorkspaceDetail — same visual language as .gate-verdict
+   but scoped to the detail panel where the operator triggered the blocked action. */
+.detail-gate-verdict {
+  background: rgba(210, 153, 34, 0.08); border: 1px solid var(--warn); border-radius: var(--radius-lg);
+  padding: 12px; display: flex; flex-direction: column; gap: 8px; margin: 4px 0;
+}
+.detail-gate-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.detail-gate-action { font-weight: 600; font-size: 12px; color: var(--text); }
+.detail-gate-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 0; }
+.detail-gate-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.detail-gate-grid dt, .detail-gate-grid dd { margin: 0; }
+.detail-gate-reason { margin: 0; font-size: 12px; color: var(--text-dim); word-break: break-word; }
+.detail-gate-hint { margin: 0; font-size: 11px; color: #f0c77a; line-height: 1.5; }
+
 /* Connectors: per-status summary header (truthful counts over the 7 channels). */
 .connector-summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 0 4px; }
 
