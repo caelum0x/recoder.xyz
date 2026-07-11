@@ -56,6 +56,7 @@ import { metrics } from './conductor-metrics.js';
 import { governanceAuditEntries, verifyGovernanceAudit } from './governance-gate.js';
 import {
   requireWorkspaceAccess,
+  requireAuthenticatedMutation,
   stampOwner,
   scopeBatchFilter,
 } from './workspace-access.js';
@@ -112,6 +113,11 @@ function buildDeliveryIntent(req: Request): DeliveryIntent {
 
 export function createConductorRouter(): Router {
   const router = Router();
+
+  // Reject anonymous (migration-mode) callers on any mutation, even when the
+  // backend globally runs with STRICT_AUTH off. Reads and the solo desktop are
+  // exempt; ownership is enforced per-workspace by requireWorkspaceAccess.
+  router.use(requireAuthenticatedMutation);
 
   router.get('/health', async (_req: Request, res: Response) => {
     res.json({ success: true, data: await conductorAvailability() });
