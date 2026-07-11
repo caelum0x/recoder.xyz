@@ -8,10 +8,10 @@ description = "NAPI-RS bindings for claw-code-parity — exposes the parity-harn
 
 [lib]
 # cdylib produces the .node native addon loaded by Node.js via require().
-crate-type = ["cdylib"]
+# rlib keeps `cargo check --lib` and unit tests working without a full build.
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-compat-harness = { path = "../compat-harness" }
 napi.workspace = true
 napi-derive.workspace = true
 serde_json.workspace = true

@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/*"]
+# Only the NAPI binding crate is committed and built in CI.  The rest of the
+# claw-code-parity workspace (compat-harness, commands, tools, runtime, api,
+# plugins, telemetry, rusty-claude-cli, mock-anthropic-service) is disk-deferred
+# and gitignored.  Explicit membership avoids the `crates/*` glob expanding into
+# missing directories and failing the build with "No such file or directory".
+members = ["crates/claw-code-parity-napi"]
 resolver = "2"
 
 [workspace.package]

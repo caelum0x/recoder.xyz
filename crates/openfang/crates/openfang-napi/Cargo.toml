@@ -6,21 +6,21 @@ license.workspace = true
 description = "NAPI-RS binding crate — exposes openfang-kernel entry points as a Node.js native addon (.node)"
 
 # cdylib: the .node shared library loaded by Node.js via require().
-# lib: allows `cargo check --lib` / unit tests without a full build.
+# rlib: allows `cargo check --lib` / unit tests without a full build.
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "rlib"]
 name = "openfang_napi"
 
 [dependencies]
-openfang-types = { path = "../openfang-types" }
-openfang-kernel = { path = "../openfang-kernel" }
 napi = { workspace = true }
 napi-derive = { workspace = true }
-tokio = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
-dirs = { workspace = true }
 
 [build-dependencies]
 napi-build = "2"
+
+# napi-derive macros internally emit unsafe code (FFI boundary).
+# The workspace-level `unsafe_code = "forbid"` lint cannot apply here.
+[lints.rust]
+unsafe_code = "allow"
