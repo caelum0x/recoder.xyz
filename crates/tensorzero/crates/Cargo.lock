@@ -8051,6 +8051,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tensorzero-gateway-napi"
+version = "2026.6.0"
+dependencies = [
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "serde_json",
+ "tensorzero-core",
+ "tokio",
+]
+
+[[package]]
 name = "tensorzero-http"
 version = "2026.6.0"
 dependencies = [
