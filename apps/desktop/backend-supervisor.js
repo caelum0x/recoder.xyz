@@ -431,6 +431,9 @@ class BackendSupervisor {
     this._fs = options.fs || nodeFs;
     this._pickFreePort = options.pickFreePort
       || (() => pickFreePortWithRetry({ sleep: options.sleep }));
+    // Injectable so unit tests never probe a REAL port (a live backend on
+    // :3100 must not change test outcomes).
+    this._portIsFree = options.portIsFree || portIsFree;
     this._mintKey = options.mintKey || ((env) => this._mintKeyViaScript(env));
     this._log = options.log || (() => {});
     this._sleep = options.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
@@ -543,7 +546,7 @@ class BackendSupervisor {
       // port if 3100 (or RECODER_BACKEND_PORT) is already taken.
       const preferred = Number.parseInt(String(process.env.RECODER_BACKEND_PORT || '3100'), 10);
       let port;
-      if (Number.isInteger(preferred) && preferred > 0 && (await portIsFree(preferred))) {
+      if (Number.isInteger(preferred) && preferred > 0 && (await this._portIsFree(preferred))) {
         port = preferred;
       } else {
         port = await this._pickFreePort();
@@ -587,8 +590,19 @@ class BackendSupervisor {
       }
       this.apiKey = apiKey;
 
-      this._appendLog('info', 'spawning backend child', { backendUrl, tmuxBin });
-      this._spawnChild(env);
+      // Fail-closed: when we hold a real minted key, the backend must REQUIRE
+      // it (STRICT_AUTH) — otherwise the key is decorative and any local
+      // process could drive the conductor. The permissive loopback mode is
+      // reserved for the documented mint-failure degrade above.
+      const spawnEnv = apiKey ? { ...env, STRICT_AUTH: 'true' } : env;
+      this._env = spawnEnv;
+
+      this._appendLog('info', 'spawning backend child', {
+        backendUrl,
+        tmuxBin,
+        strictAuth: spawnEnv.STRICT_AUTH,
+      });
+      this._spawnChild(spawnEnv);
 
       const health = await pollHealth({
         backendUrl,

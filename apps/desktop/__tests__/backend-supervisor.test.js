@@ -101,6 +101,9 @@ function baseOptions(overrides = {}) {
     spawn: vi.fn(() => makeFakeChild()),
     fetchImpl: vi.fn(),
     pickFreePort: vi.fn(() => Promise.resolve(45678)),
+    // Deterministic: the preferred-port (3100) probe must never touch a real
+    // socket in unit tests — force the pickFreePort path.
+    portIsFree: vi.fn(() => Promise.resolve(false)),
     mintKey: vi.fn(() => Promise.resolve('sk_test_minted_key')),
     sleep: noopSleep,
     healthIntervalMs: 1,
@@ -405,7 +408,11 @@ describe('BackendSupervisor crash + stop lifecycle', () => {
       return c;
     });
     const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
-    const sup = new BackendSupervisor(baseOptions({ spawn, fetchImpl, maxRestarts: 3 }));
+    // jitter 0: the test waits backoffMs(1)+50, so any jitter > 50ms would
+    // make the restart assertion time-dependent (flaky).
+    const sup = new BackendSupervisor(
+      baseOptions({ spawn, fetchImpl, maxRestarts: 3, restartJitterMs: 0 }),
+    );
 
     await sup.start();
     expect(sup.phase).toBe(PHASE.READY);
@@ -474,5 +481,38 @@ describe('BackendSupervisor packaged spawn target', () => {
     expect(command).toBe(process.execPath);
     expect(args[0]).toBe(path.join('/Resources', 'backend', 'dist', 'server.js'));
     expect(spawnOpts.cwd).toBe(path.join('/Resources', 'backend'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fail-closed auth: the minted key must be REQUIRED, not decorative
+// ---------------------------------------------------------------------------
+
+describe('BackendSupervisor auth posture', () => {
+  it('runs the child STRICT (fail-closed) when the key mint succeeded', async () => {
+    const child = makeFakeChild();
+    const spawn = vi.fn(() => child);
+    const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+    const sup = new BackendSupervisor(baseOptions({ spawn, fetchImpl }));
+
+    const result = await sup.start();
+
+    expect(result.ok).toBe(true);
+    const [, , spawnOpts] = spawn.mock.calls[0];
+    expect(spawnOpts.env.STRICT_AUTH).toBe('true');
+  });
+
+  it('degrades to STRICT_AUTH=false ONLY when the mint failed (documented loopback fallback)', async () => {
+    const child = makeFakeChild();
+    const spawn = vi.fn(() => child);
+    const mintKey = vi.fn(() => Promise.reject(new Error('mint boom')));
+    const fetchImpl = vi.fn(async () => ({ status: 200, json: async () => ({ success: true }) }));
+    const sup = new BackendSupervisor(baseOptions({ spawn, mintKey, fetchImpl }));
+
+    const result = await sup.start();
+
+    expect(result.ok).toBe(true);
+    const [, , spawnOpts] = spawn.mock.calls[0];
+    expect(spawnOpts.env.STRICT_AUTH).toBe('false');
   });
 });

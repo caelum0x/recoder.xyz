@@ -160,6 +160,7 @@ import {
 } from './opencode-sandbox.js';
 import {
   getAnonymousIdFromRequest,
+  extractPlatformApiKeyCandidate,
   getProjectIdFromRequest,
   isLikelySandboxProjectId,
   isStrictAuthMode,
@@ -789,10 +790,10 @@ function optionalAuthenticateRequest(req: AuthenticatedRequest, res: express.Res
 function resolvePlatformApiKeySession(
   req: express.Request,
 ): { userId: string; sessionId: string } | null {
-  const header = req.headers['x-api-key'];
-  const raw = Array.isArray(header) ? header[0] : header;
-  const key = raw?.trim();
-  if (!key || !key.startsWith('sk_')) {
+  // sk_ keys arrive as `x-api-key` OR `Authorization: Bearer sk_…` (the desktop
+  // cockpit sends its minted embedded-backend key as a bearer).
+  const key = extractPlatformApiKeyCandidate(req.headers);
+  if (!key) {
     return null;
   }
   const apiKey = validatePlatformApiKey(key);
