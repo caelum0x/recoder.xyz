@@ -63,9 +63,16 @@ export interface NapiApprovalManagerInstance {
  * both CJS `require()` and `node:module` `createRequire()`. Relative specifiers
  * are tried as-is and will fail silently when absent (degrade-safe).
  *
- * The list is intentionally short and deterministic:
- *   1. The release artifact produced by `cargo build --release -p recoder-governance-napi`.
- *   2. A co-located `.node` file next to the running JS (production deploy layout).
+ * Resolution priority (highest first):
+ *   1. `RECODER_NATIVE_DIR` env var — explicit override for CI / custom layouts.
+ *   2. `process.resourcesPath` — Electron packaged app: addons land under
+ *      Resources/native/ via extraResources in the electron-builder config.
+ *   3. Monorepo dev path (`crates/recoder-governance/target/release/...`),
+ *      derived at runtime so the file is not tied to a hardcoded developer home.
+ *   4. Co-located `.node` next to the compiled JS (production deploy layout).
+ *
+ * All candidates are tried in order; the first successful `require()` wins. Any
+ * path that fails is silently skipped — the loader is degrade-safe and never throws.
  *
  * `__dirname` is not available in pure ESM; we use `import.meta.url` via
  * `new URL(...)` instead, but only when the env supports it (caught + skipped
@@ -74,24 +81,85 @@ export interface NapiApprovalManagerInstance {
 function buildCandidatePaths(): string[] {
   const candidates: string[] = [];
 
-  // 1. Derive the absolute path to the Rust target relative to this file's
-  //    location (packages/governance/src/napi/napi-loader.ts → up 5 levels to
-  //    workspace root → crates/recoder-governance/target/release/...).
+  // 1. Explicit override: RECODER_NATIVE_DIR env var (CI / custom layouts).
+  const nativeDir = process.env.RECODER_NATIVE_DIR;
+  if (nativeDir && nativeDir.trim()) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const nodePath = require('path') as typeof import('path');
+      candidates.push(nodePath.join(nativeDir.trim(), 'recoder-governance-napi.node'));
+    } catch {
+      // path module unavailable — skip
+    }
+  }
+
+  // 2. Electron packaged app: process.resourcesPath/native/ (set by electron-builder
+  //    extraResources, lands the .node files in Resources/native/).
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (resourcesPath && typeof resourcesPath === 'string') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const nodePath = require('path') as typeof import('path');
+      candidates.push(nodePath.join(resourcesPath, 'native', 'recoder-governance-napi.node'));
+    } catch {
+      // path module unavailable — skip
+    }
+  }
+
+  // 3. Monorepo dev path: derive from this file's location when possible, so the
+  //    path is not hardcoded to a specific developer's home directory.
   try {
-    // ESM: use import.meta.url when available.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodePath = require('path') as typeof import('path');
+    // CJS __dirname: packages/governance/src/napi → up 5 → workspace root
+    if (typeof __dirname !== 'undefined') {
+      const workspaceRoot = nodePath.resolve(__dirname, '..', '..', '..', '..', '..');
+      candidates.push(
+        nodePath.join(
+          workspaceRoot,
+          'crates',
+          'recoder-governance',
+          'target',
+          'release',
+          'recoder-governance-napi.node',
+        ),
+      );
+    }
+  } catch {
+    // __dirname or path not available — fall through to ESM variant below
+  }
+
+  try {
+    // ESM: use import.meta.url when available. The path module must be loaded
+    // dynamically to avoid failing in CJS environments.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodePath = require('path') as typeof import('path');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeUrl = require('url') as typeof import('url');
     const metaUrl = (
       typeof globalThis !== 'undefined' &&
       (globalThis as Record<string, unknown>)['import_meta_url'] as string | undefined
     ) ?? undefined;
-    // Fallback: use a heuristic absolute path based on the known monorepo layout.
-    const absoluteFallback =
-      '/Users/arhansubasi/recoder.xyz/crates/recoder-governance/target/release/recoder-governance-napi.node';
-    candidates.push(absoluteFallback);
+    if (metaUrl) {
+      const thisFile = nodeUrl.fileURLToPath(metaUrl);
+      // packages/governance/src/napi/napi-loader.ts → up 5 → workspace root
+      const workspaceRoot = nodePath.resolve(nodePath.dirname(thisFile), '..', '..', '..', '..', '..');
+      candidates.push(
+        nodePath.join(
+          workspaceRoot,
+          'crates',
+          'recoder-governance',
+          'target',
+          'release',
+          'recoder-governance-napi.node',
+        ),
+      );
+    }
   } catch {
-    // Ignore — absolute path is still added below.
+    // Ignore — previous candidates cover dev environments
   }
 
-  // 2. Co-located next to the compiled JS output (production deploy artifact).
+  // 4. Co-located next to the compiled JS output (production deploy artifact).
   candidates.push('recoder-governance-napi.node');
 
   return candidates;

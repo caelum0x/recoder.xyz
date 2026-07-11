@@ -131,6 +131,66 @@ function hasPnpm() {
 const appNodeModules = path.join(__dirname, 'node_modules');
 
 /**
+ * Build the available NAPI native addon crates (governance + lance) so their
+ * .node binaries are fresh for packaging. The build is degrade-safe: a missing
+ * Rust toolchain or disk-deferred crate logs a warning and continues — we rely
+ * on the committed pre-built .node at the extraResources source path.
+ *
+ * The three disk-deferred crates (tensorzero, openfang, claw-code-parity) are
+ * intentionally NOT listed here; their loaders degrade safely when absent and
+ * their .node files are not yet committed.
+ *
+ * The NAPI addons ship in the packaged app under Resources/native/ via the
+ * extraResources entries in package.json. At runtime:
+ *   - In dev: loaders resolve via __dirname → workspace root → target/release/
+ *   - Packaged: loaders check process.resourcesPath/native/ first, then fall back
+ * Both are degrade-safe — the loader returns undefined when the addon is absent.
+ */
+function buildNapiAddons() {
+  const napiScript = path.join(__dirname, 'scripts', 'napi-build.js');
+  if (!fs.existsSync(napiScript)) {
+    console.warn('[before-build] napi-build.js not found — skipping NAPI crate builds.');
+    return;
+  }
+  try {
+    console.log('[before-build] building NAPI addons (scripts/napi-build.js)');
+    runIn(__dirname, `node scripts/napi-build.js`);
+  } catch (err) {
+    // Degrade-safe: a build failure here is non-fatal. The committed pre-built
+    // .node files (if present) are used as-is by extraResources.
+    console.warn(
+      `[before-build] WARNING: NAPI addon build failed (non-fatal): ${err && err.message ? err.message : String(err)}. ` +
+        'Pre-built .node binaries (if committed) will be used as-is.',
+    );
+  }
+
+  // Log presence of the committed .node source files so a regression that
+  // removes them is visible in the build log (after-pack.js asserts their
+  // landing in the packaged output).
+  const governanceNode = path.join(
+    repoRoot,
+    'crates',
+    'recoder-governance',
+    'target',
+    'release',
+    'recoder-governance-napi.node',
+  );
+  const lanceNode = path.join(
+    repoRoot,
+    'crates',
+    'lance',
+    'npm-bindings',
+    'target',
+    'release',
+    'lance_npm_bindings.node',
+  );
+  console.log(
+    `[before-build] NAPI addon inputs: governance=${fs.existsSync(governanceNode) ? 'present' : 'MISSING'}, ` +
+      `lance=${fs.existsSync(lanceNode) ? 'present' : 'MISSING'}`,
+  );
+}
+
+/**
  * Assert the native-module inputs are present BEFORE electron-builder packages
  * them. node-pty ships a native `pty.node` plus a `spawn-helper` exec'd at
  * runtime; electron-updater is the auto-update engine. If a partial/corrupt
@@ -199,6 +259,7 @@ exports.default = async function beforeBuild() {
   assertNativeModuleInputs();
   generateProductIcon();
   buildEmbeddedBackend();
+  buildNapiAddons();
 
   if (!fs.existsSync(cockpitBuild)) {
     throw new Error(`[before-build] cockpit build script missing at ${cockpitBuild}`);
