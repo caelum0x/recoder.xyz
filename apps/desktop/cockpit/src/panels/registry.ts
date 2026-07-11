@@ -200,6 +200,17 @@ export const PANEL_REGISTRY: readonly PanelEntry[] = [
       return m.GatewayPanel as unknown as PanelComponent;
     },
   },
+  {
+    id: 'agents',
+    title: 'Openfang',
+    capability: 'openfang-agent-engine',
+    healthKey: null,
+    primary: false,
+    load: async () => {
+      const m = await import('../components/AgentsPanel');
+      return m.AgentsPanel as unknown as PanelComponent;
+    },
+  },
 ];
 
 /** Look up a panel entry by its stable id. Returns undefined when not found. */

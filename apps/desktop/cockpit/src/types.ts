@@ -634,6 +634,35 @@ export interface GatewayInferenceBody {
   episode_id?: string;
 }
 
+/**
+ * OpenFang agent surface types — mirror the real /api/agents/openfang endpoint shapes.
+ *
+ * Source of truth:
+ *  - docker-backend/src/conductor/openfang-daemon.ts (createOpenfangAgentRouter)
+ *
+ * Mounted at /api/agents/openfang (NOT /api/conductor or /api/agent-os).
+ */
+
+/** GET /api/agents/openfang/health — truthful daemon health (503 when absent). */
+export interface OpenfangHealth {
+  agent: 'openfang';
+  status: 'up' | 'unavailable';
+  listenAddr?: string;
+  binPath?: string;
+  pid?: number;
+  reason?: string;
+}
+
+/** GET /api/agents/openfang — agent card + current runtime status. */
+export interface OpenfangAgentCard {
+  agentId: 'openfang';
+  name: string;
+  description: string;
+  a2aBoundary: boolean;
+  status: 'up' | 'unavailable';
+  listenAddr: string | null;
+}
+
 /** The standard backend envelope: { success, data?, error? }. */
 export interface ApiEnvelope<T> {
   success: boolean;
