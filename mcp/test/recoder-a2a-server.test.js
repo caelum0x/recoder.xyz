@@ -242,3 +242,52 @@ test('recoder_sandbox_exec builds Daytona create body with snapshot + autoStopIn
     daytona.close();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Lifecycle: orphan prevention + auth-rejection reconnect discipline
+// ---------------------------------------------------------------------------
+
+test('exits when stdin ends (parent gone) instead of lingering as an orphan', async () => {
+  const child = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, RECODER_A2A_URL: 'ws://127.0.0.1:1' },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const exited = new Promise((resolve) => child.on('exit', (code) => resolve(code)));
+  // Give it a beat to boot, then simulate the MCP host dying.
+  await new Promise((r) => setTimeout(r, 300));
+  child.stdin.end();
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => { child.kill('SIGKILL'); reject(new Error('did not exit on stdin EOF')); }, 5000),
+  );
+  const code = await Promise.race([exited, timeout]);
+  assert.equal(code, 0);
+});
+
+test('a 401-rejected bridge upgrade disables reconnects (no retry hammering)', async () => {
+  let upgrades = 0;
+  const server = http.createServer((req, res) => { res.writeHead(404); res.end(); });
+  server.on('upgrade', (req, socket) => {
+    upgrades += 1;
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+    socket.destroy();
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const child = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, RECODER_A2A_URL: `ws://127.0.0.1:${port}` },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  let err = '';
+  child.stderr.on('data', (c) => { err += c.toString(); });
+
+  // The first connect happens ~500ms after boot; a hammering client would have
+  // retried several times within 4s (backoff starts at 5s but a hot loop or
+  // error-path reconnect would show up immediately).
+  await new Promise((r) => setTimeout(r, 4000));
+  child.kill('SIGKILL');
+  server.close();
+
+  assert.equal(upgrades, 1, `expected exactly one upgrade attempt, saw ${upgrades}`);
+  assert.match(err, /not retrying/i);
+});

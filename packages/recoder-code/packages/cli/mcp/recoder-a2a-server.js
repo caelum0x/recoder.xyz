@@ -52,6 +52,9 @@ let wsConnected = false;
 let wsReconnectTimer = null;
 let wsHeartbeatInterval = null;
 let wsRetries = 0;
+// Set when the bridge REJECTED the upgrade for auth (401/403): retrying cannot
+// succeed until the operator provides a token, so reconnects are disabled.
+let wsAuthRejected = false;
 const WS_MAX_RETRIES = 9999; // effectively unlimited — reconnect until process exits
 
 // Inbound task queue — tasks assigned to this agent by the bridge
@@ -150,10 +153,22 @@ function connectBridge() {
     ws.on('message', (data) => {
       try { handleBridgeMessage(JSON.parse(data.toString())); } catch {}
     });
+    // An auth-rejected upgrade (401/403) will not fix itself by retrying —
+    // surface the fix (set a token) once and disable the bridge quietly.
+    ws.on('unexpected-response', (_req, res) => {
+      wsConnected = false;
+      if (res && (res.statusCode === 401 || res.statusCode === 403)) {
+        wsAuthRejected = true;
+        process.stderr.write(
+          `[recoder-a2a] A2A bridge rejected the connection (${res.statusCode}) — set RECODER_SESSION_TOKEN/PLATFORM_TOKEN to enable the bridge. Not retrying.\n`,
+        );
+      }
+      try { ws.terminate(); } catch {}
+    });
     ws.on('close', () => {
       wsConnected = false;
       if (wsHeartbeatInterval) { clearInterval(wsHeartbeatInterval); wsHeartbeatInterval = null; }
-      if (wsRetries < WS_MAX_RETRIES) {
+      if (!wsAuthRejected && wsRetries < WS_MAX_RETRIES) {
         wsRetries++;
         const delay = Math.min(5000 * wsRetries, 30000);
         wsReconnectTimer = setTimeout(connectBridge, delay);
@@ -172,6 +187,10 @@ setTimeout(connectBridge, 500);
 
 let buffer = '';
 process.stdin.setEncoding('utf8');
+// When the MCP host (the parent process) goes away, stdin ends. Exit instead
+// of lingering as an orphan that keeps a bridge socket + timers alive forever.
+process.stdin.on('end', () => process.exit(0));
+process.stdin.on('close', () => process.exit(0));
 process.stdin.on('data', (chunk) => {
   buffer += chunk;
   let newlineIdx;
