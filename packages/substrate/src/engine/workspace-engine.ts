@@ -126,6 +126,9 @@ export class WorkspaceEngine {
       updatedAt: now,
       metadata: {
         ...(input.metadata ?? {}),
+        // Persist the ORIGINAL prompt (not the enriched one) so UIs can label
+        // the workspace by its goal instead of the opaque branch/workspace id.
+        ...(input.prompt ? { prompt: input.prompt } : {}),
         ...(knowledgeSources.length ? { knowledgeSources } : {}),
       },
     };
