@@ -8,7 +8,7 @@
 
 Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it) · ⏭️ skipped (honest: no clean additive seam — reason in row)
 
-**Progress (2026-06-29): 11 of 15 wired in-process on the real product path; 2 skipped (gateway/worker — engine already fused elsewhere); 2 open (`ops-recorder` gitignored, `recoder-browser-tools` dist now ready to consume). BYOK runtime drivers verified real (FR-1).**
+**Progress (2026-07-11): 12 of 15 wired in-process on the real product path; 2 skipped (gateway/worker — engine already fused elsewhere); 1 open (`ops-recorder` gitignored). BYOK runtime drivers verified real (FR-1). `recoder-browser-tools` fused into browser-check node (WIRE-UP #13).**
 
 | | Package (built, unused) | Wire into (consumer) | Status |
 |---|--------------------------|----------------------|----------------|
@@ -24,7 +24,7 @@ Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it) �
 | ⬜ | **`py/ops-recorder`** | `/work-signals` ingress (docker-backend) | open — backend already has a same-named inline concept; needs Python-vs-TS call (INTEGRATION-PLAN §d.4) |
 | ✅ | **`packages/document-preprocessor`** | `packages/brain` RAG ingest | **wired** — `POST /api/conductor/context/ingest` → `brain.ingestDocument` (preprocess→remember) |
 | ✅ | **`packages/browser-verification`** | browser-check node in the run loop | **wired** — `browser-check.ts` node verifies preview health on the post-run path |
-| ⬜ | **`packages/recoder-browser-tools`** | the browser-check node | open — source-only ESM + playwright peer; needs a CJS dist before the node can drive Playwright (browser-verification used meanwhile) |
+| ✅ | **`packages/recoder-browser-tools`** | the browser-check node | **wired** — CJS dist (`dist/index.cjs`) built via tsup; `browser-check.ts` lazy-imports `@recoder/browser-tools` + `playwright` via `loadBrowserDriver()`, drives Playwright render/console/screenshot checks when available, degrades to fetch probe when absent; `docker-backend` declares `workspace:*` dep; 9 tests cover both paths |
 | ✅ | **`packages/design-tokens`** | `apps/desktop/cockpit` | **wired** — `applyDesignTokens` rebinds cockpit semantic colors at startup |
 | ✅ | **`shared/src/animations`** | `apps/desktop/cockpit` | **wired** — added a Preact-native `@recoder/shared/animations/preact` entry (preact/hooks, no compat); cockpit `EventLog` streams live RunEvents via `useSmoothText`. Root-caused the original break: duplicate preact copies → anchored aliases |
 
