@@ -12226,6 +12226,7 @@ import { createLlmRouterRouter } from './routes/llm-router.routes.js';
 import { createZitiRouter } from './routes/ziti.routes.js';
 import { createTensorzeroRouter } from './routes/tensorzero.routes.js';
 import { createMulticaRouter } from './routes/multica.routes.js';
+import { createRetrievalRouter } from './routes/retrieval.routes.js';
 import { createAgentSkillProfilesRouter } from './routes/agent-skill-profiles.routes.js';
 import { createMem0Router } from './routes/mem0.routes.js';
 import { createContext7Router } from './routes/context7.routes.js';
@@ -13376,6 +13377,14 @@ app.use(createTensorzeroRouter({ authenticateRequest }));
 // remains authoritative; Multica is an optional enrichment layer.
 
 app.use(createMulticaRouter({ authenticateRequest }));
+
+// ── Retrieval API (ColBERT reranker + LanceDB vector store) ────────────────
+// Degrade-safe RAG/retrieval surface at /api/retrieval/*.
+// POST /api/retrieval/search — vector search + optional ColBERT reranking.
+// GET  /api/retrieval/health — public capability health (no auth).
+// Returns 503 when COLBERT_RERANK_URL and LANCE_DB_PATH are not set.
+
+app.use(createRetrievalRouter({ authenticateRequest }));
 
 // ── Code Intelligence API (code knowledge graph) ────────────────────────────
 // Build a queryable symbol/import graph from project files so agents can

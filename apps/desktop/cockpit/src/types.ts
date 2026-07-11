@@ -740,6 +740,53 @@ export interface MulticaSquadsResult {
   squads: MulticaSquad[];
 }
 
+/**
+ * Retrieval (RAG) surface types — mirror the real /api/retrieval/* endpoint shapes.
+ *
+ * Source of truth:
+ *  - docker-backend/src/routes/retrieval.routes.ts (createRetrievalRouter)
+ *
+ * Mounted at /api/retrieval (NOT /api/conductor or /api/agent-os).
+ */
+
+/** GET /api/retrieval/health — truthful retrieval capability health. */
+export interface RetrievalHealth {
+  service: 'retrieval';
+  available: boolean;
+  colbertConfigured: boolean;
+  lanceConfigured: boolean;
+  colbertUrl?: string | null;
+  lanceDbPath?: string | null;
+  reason?: string;
+}
+
+/** A single ranked result from POST /api/retrieval/search. */
+export interface RetrievalResult {
+  rank: number;
+  text: string;
+  score: number;
+  rerankScore?: number;
+  similarityThreshold?: number;
+}
+
+/** POST /api/retrieval/search response data. */
+export interface RetrievalSearchResult {
+  query: string;
+  results: RetrievalResult[];
+  colbertAvailable: boolean;
+  lanceAvailable: boolean;
+  totalCandidates: number;
+  rerankApplied: boolean;
+  reason?: string;
+}
+
+/** POST /api/retrieval/search request body. */
+export interface RetrievalSearchBody {
+  query: string;
+  limit?: number;
+  threshold?: number;
+}
+
 /** The standard backend envelope: { success, data?, error? }. */
 export interface ApiEnvelope<T> {
   success: boolean;

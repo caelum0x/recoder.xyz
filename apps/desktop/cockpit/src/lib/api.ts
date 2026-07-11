@@ -67,6 +67,9 @@ import type {
   PolicyDecision,
   PolicyEvaluateBody,
   ProposeMemoryCandidateBody,
+  RetrievalHealth,
+  RetrievalSearchBody,
+  RetrievalSearchResult,
   ReviewMemoryCandidateBody,
   ReviewMemoryResult,
   RunEvent,
@@ -221,6 +224,11 @@ function zitiRequest<T>(method: string, path: string, body?: unknown): Promise<T
 /** Multica managed-agents request: every call hits `${backendUrl}/api/multica/...`. */
 function multicaRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/multica', method, path, body);
+}
+
+/** Retrieval (RAG) request: every call hits `${backendUrl}/api/retrieval/...`. */
+function retrievalRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/retrieval', method, path, body);
 }
 
 /**
@@ -451,4 +459,21 @@ export const api = {
    * "unavailable" state. Never fabricates squad data.
    */
   multicaSquads: () => multicaRequest<MulticaSquadsResult>('GET', '/squads'),
+
+  // --- Retrieval (RAG) surface (mounted at /api/retrieval) ---
+
+  /**
+   * GET /api/retrieval/health — truthful retrieval capability health.
+   * Public (no auth). Returns 503 when neither COLBERT_RERANK_URL nor
+   * LANCE_DB_PATH is configured. Callers must handle 503.
+   */
+  retrievalHealth: () => requestAt<RetrievalHealth>('/api/retrieval', 'GET', '/health'),
+
+  /**
+   * POST /api/retrieval/search — vector search with optional ColBERT reranking.
+   * Authenticated. Returns 503 when the retrieval surface is unconfigured.
+   * Callers must handle 503 — the panel degrades safely when RAG is absent.
+   */
+  retrievalSearch: (body: RetrievalSearchBody) =>
+    retrievalRequest<RetrievalSearchResult>('POST', '/search', body),
 };
