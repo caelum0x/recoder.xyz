@@ -4,6 +4,7 @@
  * ~2s by the parent). No mock cards: an empty backend yields empty columns.
  */
 import { BOARD_COLUMNS, lockConflict, stateLabel, stateTone } from '../lib/workspace-state';
+import { workspaceGoal } from '../lib/workspace-goal';
 import type { Workspace } from '../types';
 
 interface BoardProps {
@@ -59,7 +60,10 @@ export function Board({ workspaces, selectedId, onSelect }: BoardProps) {
                         )}
                         <span class="card-runtime">{w.runtimeId}</span>
                       </div>
-                      <div class="card-branch" title={w.branch}>{w.branch}</div>
+                      <div class="card-goal" title={workspaceGoal(w)}>{workspaceGoal(w)}</div>
+                      {workspaceGoal(w) !== w.branch && (
+                        <div class="card-branch" title={w.branch}>{w.branch}</div>
+                      )}
                       {collision && (
                         <div class="card-collision-msg" title={collision.message}>
                           {collision.message}

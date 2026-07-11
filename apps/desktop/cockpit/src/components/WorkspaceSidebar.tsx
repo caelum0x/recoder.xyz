@@ -15,6 +15,7 @@
 import { groupWorkspacesByRepo } from '../lib/workspace-groups';
 import { lockConflict, statePill, stateTone } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
+import { workspaceGoal } from '../lib/workspace-goal';
 import type { Workspace } from '../types';
 
 interface WorkspaceSidebarProps {
@@ -52,12 +53,12 @@ function WorkspaceRow({
     <button
       class={`ws-row ${selected ? 'ws-row-active' : ''} ${collision ? 'ws-row-collision' : ''}`}
       onClick={() => onSelect(workspace.workspaceId)}
-      title={workspace.branch}
+      title={`${workspaceGoal(workspace)} (${workspace.branch})`}
     >
       <span class={`ws-row-dot dot-${tone}`} aria-hidden="true" />
       <span class="ws-row-body">
         <span class="ws-row-main">
-          <span class="ws-row-branch">{workspace.branch}</span>
+          <span class="ws-row-branch">{workspaceGoal(workspace)}</span>
           <DiffStat workspace={workspace} />
         </span>
         <span class="ws-row-meta">
@@ -92,10 +93,10 @@ export function WorkspaceSidebar({
           <div class="ws-sidebar-empty">Loading workspaces…</div>
         ) : groups.length === 0 ? (
           <div class="ws-sidebar-empty">
+            {/* Informational only — the single create CTA lives in the center
+                pane's empty state (App.tsx); duplicating the button reads as
+                two different actions. "Add repository" in the footer stays. */}
             <p>No workspaces yet.</p>
-            <button class="btn btn-primary btn-sm" onClick={onNewWorkspace}>
-              Create your first workspace
-            </button>
           </div>
         ) : (
           groups.map((group) => (
