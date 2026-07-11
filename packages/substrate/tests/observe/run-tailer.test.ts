@@ -213,3 +213,42 @@ test('is idempotent per workspace — a second start returns the same handle', a
   assert.equal(registry.count(), 0);
   sub.isAlive = false;
 });
+
+test('emits needs_input ONCE per distinct blocking prompt (deduped across ticks)', async () => {
+  const sub = new FakeTailSubstrate();
+  const clock = new FakeClock();
+  const { deps, sink } = makeDeps(sub, clock);
+  startRunTail({ ...baseInput, intervalMs: 5 }, deps);
+  await settle();
+
+  // Agent hits a confirmation prompt.
+  sub.output = 'writing files...\nOverwrite existing file? (y/n)';
+  await new Promise((r) => setTimeout(r, 12));
+  await settle();
+  const waits = () => sink.events.filter((e) => e.type === 'needs_input');
+  assert.equal(waits().length, 1, 'needs_input emitted on entering the wait');
+  assert.equal(waits()[0]?.message, 'Overwrite existing file? (y/n)');
+
+  // Same prompt still on screen next tick → NO duplicate event.
+  await new Promise((r) => setTimeout(r, 12));
+  await settle();
+  assert.equal(waits().length, 1, 'no duplicate for the same prompt');
+
+  // The operator answered; output moves on → wait cleared (no event, just logs).
+  sub.output = 'writing files...\nOverwrite existing file? (y/n)\ny\ncontinuing...';
+  await new Promise((r) => setTimeout(r, 12));
+  await settle();
+  assert.equal(waits().length, 1);
+
+  // A NEW distinct prompt later → a second needs_input.
+  sub.output += '\nDo you want to allow this command?\n  1. Yes\n  2. No';
+  await new Promise((r) => setTimeout(r, 12));
+  await settle();
+  assert.equal(waits().length, 2, 'a new distinct prompt emits again');
+  assert.equal(waits()[1]?.message, 'Do you want to allow this command?');
+
+  sub.isAlive = false;
+  sub.exit = 0;
+  await new Promise((r) => setTimeout(r, 12));
+  await settle();
+});

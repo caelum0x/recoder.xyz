@@ -5,7 +5,7 @@
  * `{ success, data }` envelope; errors are surfaced truthfully, never masked
  * as an empty herd.
  */
-import type { Workspace } from '@recoder/agent-os';
+import type { RunEvent, Workspace } from '@recoder/agent-os';
 
 interface Envelope<T> {
   success: boolean;
@@ -34,4 +34,27 @@ export async function fetchWorkspaces(backend: string, token?: string): Promise<
   if (body.success && Array.isArray(body.data)) return body.data;
   const message = typeof body.error === 'string' ? body.error : body.error?.message;
   throw new HerdBackendError(message || 'unexpected workspaces payload');
+}
+
+/**
+ * A workspace's RunEvents (used to derive blocked-on-input). Best-effort: any
+ * failure returns [] so a single flaky events fetch never breaks the frame.
+ */
+export async function fetchWorkspaceEvents(
+  backend: string,
+  workspaceId: string,
+  token?: string,
+): Promise<RunEvent[]> {
+  try {
+    const res = await fetch(
+      `${backend}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/events`,
+      { headers: token ? { authorization: `Bearer ${token}` } : undefined },
+    );
+    if (!res.ok) return [];
+    const body = (await res.json()) as Envelope<RunEvent[]> | RunEvent[];
+    if (Array.isArray(body)) return body;
+    return body.success && Array.isArray(body.data) ? body.data : [];
+  } catch {
+    return [];
+  }
 }

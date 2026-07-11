@@ -6,7 +6,8 @@
  */
 import { spawnSync } from 'node:child_process';
 import type { Workspace } from '@recoder/agent-os';
-import { fetchWorkspaces, HerdBackendError } from './client.js';
+import { HerdBackendError } from './client.js';
+import { fetchHerdSnapshot } from './snapshot.js';
 import { attachTargets, renderFrame } from './render.js';
 
 export interface HerdOptions {
@@ -36,9 +37,9 @@ export async function runHerd(opts: HerdOptions): Promise<void> {
     if (paused) return;
     let frame: string;
     try {
-      const workspaces = await fetchWorkspaces(opts.backend, opts.token);
-      targets = attachTargets(workspaces);
-      frame = renderFrame({ workspaces, backend: opts.backend });
+      const { workspaces, waits } = await fetchHerdSnapshot(opts.backend, opts.token);
+      targets = attachTargets(workspaces, waits);
+      frame = renderFrame({ workspaces, waits, backend: opts.backend });
     } catch (err) {
       targets = [];
       frame =

@@ -18,5 +18,6 @@ export type { RunTailInput, RunTailerDeps, TailSubstrate } from './run-tailer.js
 export { TailRegistry } from './tail-registry.js';
 export type { TailHandle } from './tail-registry.js';
 export { computeDelta, MAX_DELTA_CHARS } from './delta.js';
+export { detectInputWait } from './input-wait.js';
 export type { CaptureDeltaResult } from './delta.js';
 export type { RunEventSink } from './event-sink.port.js';

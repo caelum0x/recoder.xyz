@@ -51,27 +51,36 @@ function clamp(s: string, width: number): string {
   return s.length <= width ? s.padEnd(width) : `${s.slice(0, width - 1)}…`;
 }
 
+/** Active blocked-on-input prompts by workspaceId (from waitingPrompt()). */
+export type WaitMap = Record<string, string>;
+
+function statusOf(w: Workspace, waits?: WaitMap): HerdStatus {
+  return herdStatus(w.state, { waiting: Boolean(waits?.[w.workspaceId]) });
+}
+
 /**
  * Rows in exact render order — the digit key [N] attaches to attachTargets[N-1].
  * Kept as its own export so the key handler and the frame can never disagree.
  */
-export function attachTargets(workspaces: Workspace[]): Workspace[] {
+export function attachTargets(workspaces: Workspace[], waits?: WaitMap): Workspace[] {
   return HERD_STATUS_ORDER.flatMap((status) =>
-    workspaces.filter((w) => herdStatus(w.state) === status),
+    workspaces.filter((w) => statusOf(w, waits) === status),
   );
 }
 
 export interface FrameInput {
   workspaces: Workspace[];
   backend: string;
+  /** Active blocked-on-input prompts by workspaceId. */
+  waits?: WaitMap;
   /** Injected for deterministic tests; defaults to wall clock. */
   nowMs?: number;
 }
 
-export function renderFrame({ workspaces, backend, nowMs = Date.now() }: FrameInput): string {
+export function renderFrame({ workspaces, backend, waits, nowMs = Date.now() }: FrameInput): string {
   const counts = new Map<HerdStatus, number>();
   for (const w of workspaces) {
-    const s = herdStatus(w.state);
+    const s = statusOf(w, waits);
     counts.set(s, (counts.get(s) ?? 0) + 1);
   }
   const summary = [
@@ -89,18 +98,24 @@ export function renderFrame({ workspaces, backend, nowMs = Date.now() }: FrameIn
   if (workspaces.length === 0) {
     lines.push(C.dim('  no agents running — create one in the cockpit or POST /api/conductor/workspaces'));
   } else {
-    const ordered = attachTargets(workspaces);
+    const ordered = attachTargets(workspaces, waits);
     let row = 0;
     for (const status of HERD_STATUS_ORDER) {
-      const group = ordered.filter((w) => herdStatus(w.state) === status);
+      const group = ordered.filter((w) => statusOf(w, waits) === status);
       if (group.length === 0) continue;
       lines.push(C.bold(` ${GROUP_TITLE[status]}`));
       for (const w of group) {
         row += 1;
         const key = row <= 9 ? `[${row}]` : '   ';
+        const wait = waits?.[w.workspaceId];
+        const stateLabel = wait ? 'needs input' : w.state;
         lines.push(
-          `  ${GROUP_MARK[status]} ${clamp(goalLabel(w), 44)} ${C.dim(clamp(w.runtimeId, 12))} ${clamp(w.state, 17)} ${C.dim(timeAgo(w.updatedAt, nowMs).padStart(4))}  ${C.dim(key)}`,
+          `  ${GROUP_MARK[status]} ${clamp(goalLabel(w), 44)} ${C.dim(clamp(w.runtimeId, 12))} ${clamp(stateLabel, 17)} ${C.dim(timeAgo(w.updatedAt, nowMs).padStart(4))}  ${C.dim(key)}`,
         );
+        if (wait) {
+          // The prompt the agent is blocked on — attach ([N]) to answer it.
+          lines.push(`      ${C.yellow('↳')} ${clamp(wait, 78).trimEnd()}`);
+        }
       }
       lines.push('');
     }

@@ -9,7 +9,8 @@
  * Auth: pass $RECODER_TOKEN when the backend requires it; solo-mode local
  * backends need none.
  */
-import { fetchWorkspaces, HerdBackendError } from './client.js';
+import { HerdBackendError } from './client.js';
+import { fetchHerdSnapshot } from './snapshot.js';
 import { renderFrame } from './render.js';
 import { runHerd } from './loop.js';
 
@@ -37,8 +38,8 @@ async function main(): Promise<void> {
 
   if (args.includes('--once')) {
     try {
-      const workspaces = await fetchWorkspaces(backend, token);
-      process.stdout.write(`${renderFrame({ workspaces, backend })}\n`);
+      const { workspaces, waits } = await fetchHerdSnapshot(backend, token);
+      process.stdout.write(`${renderFrame({ workspaces, waits, backend })}\n`);
     } catch (err) {
       process.stderr.write(
         `${err instanceof HerdBackendError ? err.message : String(err)}\n`,
