@@ -184,7 +184,7 @@ export interface GovernanceAuditEntry {
 }
 
 /** GET /governance/audit response: genuine chain verification + entries (newest-first). */
-export interface GovernanceAudit {
+export interface GovernanceAuditTrail {
   verified: { ok: boolean; tipHash?: string; brokenAtSeq?: number; entries: number };
   entries: GovernanceAuditEntry[];
 }

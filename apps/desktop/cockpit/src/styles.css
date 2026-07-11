@@ -463,6 +463,13 @@ body {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .card-branch { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); word-break: break-all; margin-bottom: 6px; }
+/* Blocked-on-input: a running agent waiting on the operator. */
+.card-needs-input { box-shadow: inset 2px 0 0 #f0c77a; }
+.badge-needs-input { color: #f0c77a; border-color: rgba(240, 199, 122, 0.4); }
+.card-needs-input-msg {
+  font-size: 11px; color: #f0c77a; margin-bottom: 6px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .card-foot { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-faint); }
 
 /* Badges — calm: colored text on a soft hairline border (no full-saturation
