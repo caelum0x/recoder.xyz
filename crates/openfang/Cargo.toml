@@ -1,0 +1,38 @@
+# Minimal workspace Cargo.toml for CI builds of the openfang-napi binding crate.
+#
+# The full openfang workspace (14 crates + heavy deps: wasmtime, openssl-vendored,
+# tokio-tungstenite, etc.) is disk-deferred and gitignored. Only the NAPI binding
+# surface is committed and built in CI. This workspace contains only that crate so
+# `cargo build --release -p openfang-napi` works from this directory without the
+# full source tree.
+#
+# The binding crate itself is intentionally self-contained: it exposes probe +
+# version + routing helpers that work without the kernel, and degrades safely (JSON
+# ok=false) for the kernel entry-points that are not available in the thin build.
+# The TS facade falls back to the subprocess/loopback path when these functions
+# return ok=false.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/openfang-napi",
+]
+
+[workspace.package]
+version = "0.6.9"
+edition = "2021"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/RightNow-AI/openfang"
+rust-version = "1.75"
+
+[workspace.dependencies]
+napi = { version = "3", features = ["napi4"] }
+napi-derive = "3"
+serde_json = "1"
+tracing = "0.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3

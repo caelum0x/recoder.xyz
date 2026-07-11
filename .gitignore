@@ -661,10 +661,19 @@ packages/a2a-js/dist/
 # Gitignored: large + Mac disk-constrained. Fused/owned code lands in tracked
 # packages/ subsystems; we edit these in place as ours.
 crates/openfang/*
+!crates/openfang/Cargo.toml
+!crates/openfang/Cargo.lock
 !crates/openfang/crates/
 crates/openfang/crates/*
 !crates/openfang/crates/openfang-napi/
-crates/claw-code-parity/
+crates/claw-code-parity/*
+!crates/claw-code-parity/rust/
+crates/claw-code-parity/rust/*
+!crates/claw-code-parity/rust/Cargo.toml
+!crates/claw-code-parity/rust/Cargo.lock
+!crates/claw-code-parity/rust/crates/
+crates/claw-code-parity/rust/crates/*
+!crates/claw-code-parity/rust/crates/claw-code-parity-napi/
 go/beads/
 go/ziti/
 go/multica/
