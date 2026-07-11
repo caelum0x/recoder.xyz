@@ -584,6 +584,56 @@ export interface McpToolCheckResult {
   auditEvent: McpToolAuditEvent;
 }
 
+/**
+ * TensorZero gateway surface types — mirror the real /api/gateway endpoint shapes.
+ *
+ * Source of truth:
+ *  - docker-backend/src/routes/tensorzero.routes.ts
+ *  - docker-backend/src/tensorzero-client.ts (TensorzeroHealth)
+ *
+ * Mounted at /api/gateway (NOT /api/conductor or /api/agent-os).
+ */
+
+export type GatewayMode = 'managed' | 'external' | 'unconfigured';
+
+/** GET /api/gateway/health — truthful health snapshot (public, no auth). */
+export interface GatewayHealth {
+  available: boolean;
+  mode: GatewayMode;
+  baseUrl?: string;
+  listenAddr?: string;
+  reason?: string;
+}
+
+/** GET /api/gateway/status — authenticated status including binary info. */
+export interface GatewayStatus {
+  gateway: 'tensorzero';
+  mode: GatewayMode;
+  available: boolean;
+  baseUrl: string | null;
+  listenAddr: string | null;
+  binaryFound: boolean;
+}
+
+/** POST /api/gateway/inference — result of a proxied inference call. */
+export interface GatewayInferenceResult {
+  routed: boolean;
+  inference_id?: string;
+  content?: unknown;
+  usage?: { input_tokens?: number; output_tokens?: number };
+  reason?: string;
+}
+
+/** POST /api/gateway/inference request body. */
+export interface GatewayInferenceBody {
+  function_name: string;
+  input: {
+    messages: Array<{ role: string; content: string }>;
+    [key: string]: unknown;
+  };
+  episode_id?: string;
+}
+
 /** The standard backend envelope: { success, data?, error? }. */
 export interface ApiEnvelope<T> {
   success: boolean;

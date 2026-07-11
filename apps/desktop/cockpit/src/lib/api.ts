@@ -50,6 +50,10 @@ import type {
   DmuxLaunchBody,
   DmuxLaunchResult,
   DmuxStatus,
+  GatewayHealth,
+  GatewayInferenceBody,
+  GatewayInferenceResult,
+  GatewayStatus,
   McpHostSummary,
   McpServer,
   McpToolCheckResult,
@@ -191,6 +195,11 @@ function agentOsRequest<T>(method: string, path: string, body?: unknown): Promis
 /** MCP control-plane request: every call hits `${backendUrl}/api/mcp/...`. */
 function mcpRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/mcp', method, path, body);
+}
+
+/** Gateway (TensorZero) request: every call hits `${backendUrl}/api/gateway/...`. */
+function gatewayRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/gateway', method, path, body);
 }
 
 /**
@@ -350,4 +359,27 @@ export const api = {
       `/tools/${encodeURIComponent(serverId)}/${encodeURIComponent(toolName)}/check`,
       body,
     ),
+
+  // --- TensorZero LLM gateway (mounted at /api/gateway, NOT /api/conductor or /api/agent-os) ---
+
+  /**
+   * GET /api/gateway/health — truthful health snapshot. Public (no auth).
+   * Returns 503 when the gateway is not running; callers must handle both cases.
+   * NOTE: This route is not under /api/conductor, so it uses requestAt directly.
+   */
+  gatewayHealth: () => requestAt<GatewayHealth>('/api/gateway', 'GET', '/health'),
+
+  /**
+   * GET /api/gateway/status — authenticated status including gateway mode,
+   * baseUrl, listenAddr, and whether the binary was found on disk.
+   */
+  gatewayStatus: () => gatewayRequest<GatewayStatus>('GET', '/status'),
+
+  /**
+   * POST /api/gateway/inference — proxy an inference call through TensorZero.
+   * On success includes `inference_id` for observability. Falls back to 503
+   * when the gateway is not running (callers must handle that case).
+   */
+  gatewayInference: (body: GatewayInferenceBody) =>
+    gatewayRequest<GatewayInferenceResult>('POST', '/inference', body),
 };

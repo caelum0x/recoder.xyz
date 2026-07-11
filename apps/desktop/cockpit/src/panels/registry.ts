@@ -189,6 +189,17 @@ export const PANEL_REGISTRY: readonly PanelEntry[] = [
       return m.McpToolsPanel as unknown as PanelComponent;
     },
   },
+  {
+    id: 'gateway',
+    title: 'Gateway',
+    capability: 'tensorzero-llm-gateway',
+    healthKey: null,
+    primary: false,
+    load: async () => {
+      const m = await import('../components/GatewayPanel');
+      return m.GatewayPanel as unknown as PanelComponent;
+    },
+  },
 ];
 
 /** Look up a panel entry by its stable id. Returns undefined when not found. */
