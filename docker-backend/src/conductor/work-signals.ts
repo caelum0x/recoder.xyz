@@ -21,14 +21,30 @@
  *      Idempotent via the durable dedup ledger; degrade-safe (coordination
  *      unavailable → record-only, the handoff is `skipped`, never thrown).
  *
+ *   4. [FUSION SEAM] after the inline record+handoff, the signal is optionally
+ *      FORWARDED to the Python ops-recorder service (`OPS_RECORDER_URL`) so that
+ *      service's richer store, normalisation, and handoff-prompt pipeline also
+ *      has the signal. Gated by env flag — when absent, this step is silently
+ *      skipped and the existing inline path is UNCHANGED. The forward result is
+ *      carried in `RecordedWorkSignal.opsRecorderForward` for auditability.
+ *
  * DEGRADE-SAFE end to end: this never throws. The worst case is "recorded only"
- * (handoff skipped) — it never fakes a pickup it could not initiate.
+ * (handoff skipped, forward skipped) — it never fakes a pickup it could not
+ * initiate and never fakes a forward it could not complete.
  */
 import { randomUUID } from 'node:crypto';
 import { agentOsContainer } from '../agent-os/service-container.js';
 import { emitWorkSignalHandoff, type WorkSignalHandoffResult } from './coordination-integration.js';
 import { createLogger } from '../logger.js';
 import type { RunEvent } from '@recoder/agent-os';
+import {
+  forwardToOpsRecorder,
+  opsRecorderAvailability,
+  isOpsRecorderShape,
+  opsRecorderShapeToDetail,
+  type OpsRecorderForwardResult,
+  type OpsRecorderIngestShape,
+} from './ops-recorder-adapter.js';
 
 const logger = createLogger('conductor:work-signals');
 
@@ -60,6 +76,12 @@ export type RecordedWorkSignal = WorkSignalInput & {
   recorded: boolean;
   /** The handoff outcome (emitted / duplicate / skipped + reason). */
   handoff: WorkSignalHandoffResult;
+  /**
+   * The result of forwarding the signal to the Python ops-recorder service
+   * (FUSION SEAM §d.4). Present only when `OPS_RECORDER_URL` is set; absent
+   * when the seam is off (existing inline path unchanged).
+   */
+  opsRecorderForward?: OpsRecorderForwardResult;
 };
 
 /** In-memory ring of the most recent signals (newest last). Process-local. */
@@ -69,6 +91,12 @@ const ring: RecordedWorkSignal[] = [];
  * Validate + normalize a raw ingest body. Returns `{ ok:false, error }` with a
  * caller-facing message on the first missing/invalid field (fail fast at the
  * system boundary), or `{ ok:true, value }` with a normalized signal.
+ *
+ * FUSION SEAM: also accepts bodies that carry the ops-recorder `WorkSignalIngest`
+ * shape (source/item_type/title/source_url/detected_reason/priority) alongside
+ * the mandatory WorkSignalInput fields (workspaceId/spaceId/taskId). When detected,
+ * the ops-recorder fields are folded into `detail` + `reportedBy` so the signal
+ * flows through the exact same inline path — no schema divergence.
  */
 export function parseWorkSignal(
   body: unknown,
@@ -91,10 +119,24 @@ export function parseWorkSignal(
   const value: WorkSignalInput = { workspaceId, spaceId, taskId, kind };
   const runId = asNonEmptyString(b.runId);
   if (runId) value.runId = runId;
-  const detail = asNonEmptyString(b.detail);
-  if (detail) value.detail = detail;
-  const reportedBy = asNonEmptyString(b.reportedBy);
-  if (reportedBy) value.reportedBy = reportedBy;
+
+  // Detect the fused ops-recorder shape (FUSION SEAM §d.4).
+  // When the body carries ops-recorder fields (source/item_type/title/source_url/
+  // detected_reason/priority), fold them into detail+reportedBy so the existing
+  // inline path is unchanged — we never branch on shape downstream.
+  if (isOpsRecorderShape(b)) {
+    const { detail: fusedDetail, reportedBy: fusedReportedBy } = opsRecorderShapeToDetail(b);
+    // Fused detail wins over an explicit `detail` field when both are present,
+    // since the ops-recorder shape is richer and the caller intentionally sent it.
+    value.detail = fusedDetail;
+    value.reportedBy = fusedReportedBy;
+  } else {
+    const detail = asNonEmptyString(b.detail);
+    if (detail) value.detail = detail;
+    const reportedBy = asNonEmptyString(b.reportedBy);
+    if (reportedBy) value.reportedBy = reportedBy;
+  }
+
   return { ok: true, value };
 }
 
@@ -132,9 +174,37 @@ export async function ingestWorkSignal(input: WorkSignalInput): Promise<Recorded
     handoff = { status: 'skipped', reason: 'handoff-threw' };
   }
 
-  const signal: RecordedWorkSignal = { ...input, signalId, recordedAt, recorded, handoff };
+  // 3) FUSION SEAM §d.4 — optionally forward to the Python ops-recorder service.
+  // This step runs AFTER the inline record+handoff so the inline path is fully
+  // independent. When OPS_RECORDER_URL is unset the forward is silently skipped
+  // and the result is omitted — the existing inline path is UNCHANGED.
+  let opsRecorderForward: OpsRecorderForwardResult | undefined;
+  const { available: opsAvailable } = opsRecorderAvailability();
+  if (opsAvailable) {
+    // Build a best-effort ops-recorder ingest payload from what we have.
+    // We coerce the WorkSignalInput fields to the ops-recorder shape; missing
+    // source/item_type/title/source_url are synthesised from the available ids.
+    const opsPayload = buildOpsRecorderPayload(input);
+    opsRecorderForward = await forwardToOpsRecorder(
+      opsPayload,
+      process.env.OPS_RECORDER_API_KEY,
+    );
+    logger.info(
+      { ...idFields(input), signalId, forwarded: opsRecorderForward.forwarded },
+      'ops-recorder forward complete',
+    );
+  }
 
-  // 3) Mirror to the in-memory ring (newest last, bounded).
+  const signal: RecordedWorkSignal = {
+    ...input,
+    signalId,
+    recordedAt,
+    recorded,
+    handoff,
+    ...(opsRecorderForward !== undefined ? { opsRecorderForward } : {}),
+  };
+
+  // 4) Mirror to the in-memory ring (newest last, bounded).
   ring.push(signal);
   if (ring.length > MAX_SIGNALS) ring.splice(0, ring.length - MAX_SIGNALS);
 
@@ -152,6 +222,35 @@ function handoffPrompt(input: WorkSignalInput): string | undefined {
     `Workspace ${input.workspaceId} reported "${input.kind}" on task ${input.taskId}: ` +
     `${input.detail}. Pick up the stuck work and re-dispatch.`
   );
+}
+
+/**
+ * Build a best-effort ops-recorder ingest payload from a WorkSignalInput.
+ *
+ * The ops-recorder service expects source/item_type/title/source_url/detected_reason/
+ * priority. We synthesise these from the inline signal fields, using the kind
+ * and detail as the detected reason and coercing a recoder:// URL from the ids.
+ * This is purely additive — the forward is best-effort and degrade-safe.
+ */
+function buildOpsRecorderPayload(input: WorkSignalInput): OpsRecorderIngestShape {
+  return {
+    source: 'recoder',
+    item_type: 'workspace',
+    title: input.detail
+      ? `${input.kind}: ${input.detail.slice(0, 120)}`
+      : `workspace ${input.workspaceId} — ${input.kind}`,
+    source_url: `recoder://workspaces/${input.workspaceId}/tasks/${input.taskId}`,
+    detected_reason: input.detail ?? input.kind,
+    priority: kindToPriority(input.kind),
+    ...(input.reportedBy ? { why_it_matters: `Reported by ${input.reportedBy}` } : {}),
+  };
+}
+
+/** Map a work-signal kind to an ops-recorder priority string. */
+function kindToPriority(kind: string): string {
+  if (kind === 'blocked') return 'high';
+  if (kind === 'needs-handoff') return 'medium';
+  return 'low'; // 'stuck-work' and unknown → low (the detector decides real priority)
 }
 
 /**
