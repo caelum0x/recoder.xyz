@@ -7,11 +7,13 @@ import { validateBody } from '../middleware/schema-guard.middleware';
 import { drainAgentOsOutbox } from '../outbox-drain.service';
 import { createNatsOutboxPublisher } from '../nats-outbox-publisher';
 import { createCodeGraphRouter } from './code-graph.routes';
+import { safeEqual } from '../../auth-utils';
 
 function requireInternalServiceKey(req: Request, res: Response, next: NextFunction) {
   const configured = process.env.INTERNAL_SERVICE_KEY;
   const provided = req.header('x-internal-service-key') || req.header('authorization')?.replace(/^Bearer\s+/i, '');
-  if (!configured || provided !== configured) {
+  // Constant-time compare: a `!==` leaks the key length/prefix via timing.
+  if (!configured || !provided || !safeEqual(provided, configured)) {
     res.status(403).json({ success: false, error: 'internal service key required' });
     return;
   }
