@@ -36,6 +36,10 @@ function isTruthy(value: string | undefined): boolean {
  * Resolve the RuntimeProfile from an environment. Pure + fail-closed:
  * `embedded` is entered ONLY when RECODER_SOLO_MODE is explicitly truthy;
  * everything else defaults to self_host strictness.
+ *
+ * NOTE: getRuntimeProfile() memoizes process.env on first call — ensure env is
+ * fully populated before the first invocation (true at server boot). Tests must
+ * call resetRuntimeProfileForTest() after mutating process.env.
  */
 export function resolveRuntimeProfile(env: NodeJS.ProcessEnv = process.env): RuntimeProfile {
   const embedded = isSoloMode(env);

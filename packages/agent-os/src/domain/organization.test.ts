@@ -34,6 +34,8 @@ test('membershipPermissions derives permissions from the canonical RBAC role', (
 test('isSeatActive is true only for active seats', () => {
   const active: Seat = { seatId: 's1', orgId: 'org-1', userId: 'u2', status: 'active', assignedAt: '2026-07-11T00:00:00.000Z' };
   const revoked: Seat = { seatId: 's2', orgId: 'org-1', status: 'revoked' };
+  const reserved: Seat = { seatId: 's3', orgId: 'org-1', status: 'reserved' };
   assert.equal(isSeatActive(active), true);
   assert.equal(isSeatActive(revoked), false);
+  assert.equal(isSeatActive(reserved), false);
 });
