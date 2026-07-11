@@ -53,6 +53,7 @@ import {
   generateMemoryCandidate,
 } from './delivery-summary.js';
 import { metrics } from './conductor-metrics.js';
+import { governanceAuditEntries, verifyGovernanceAudit } from './governance-gate.js';
 import { bulkCancel, bulkArchive, listByState } from './batch-ops.js';
 import { cleanupStaleWorktrees } from './worktree-cleanup.js';
 import { planConductorRun, effectiveRuntimeId } from './conductor-planner.js';
@@ -638,6 +639,23 @@ export function createConductorRouter(): Router {
   // Prometheus-style metrics snapshot (counters, gauges, histograms).
   router.get('/metrics', (_req: Request, res: Response) => {
     res.json({ success: true, data: metrics.snapshot() });
+  });
+
+  // Tamper-evident governance audit trail: every delivery decision is sealed
+  // into the SHA-256 Merkle chain; `verified` is a GENUINE full-chain check
+  // (ok:false when governance is unavailable — never a fabricated green).
+  // Entries are newest-first, capped by ?limit= (default 100, max 500).
+  router.get('/governance/audit', async (req: Request, res: Response) => {
+    const rawLimit = Number.parseInt(String(req.query.limit ?? '100'), 10);
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 100;
+    const [verified, entries] = await Promise.all([
+      verifyGovernanceAudit(),
+      governanceAuditEntries(),
+    ]);
+    res.json({
+      success: true,
+      data: { verified, entries: [...entries].reverse().slice(0, limit) },
+    });
   });
 
   // Current resource-governor utilization vs. limits (truthful capacity view).
