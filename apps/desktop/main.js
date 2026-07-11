@@ -325,10 +325,13 @@ async function startEmbeddedBackend() {
   return result;
 }
 
-// Cockpit mode: load the bundled conductor cockpit renderer instead of the web app.
-// Triggered by RECODER_COCKPIT=1 (env) or the "Open Cockpit" menu/tray item.
-const cockpitModeEnabledByEnv = ['1', 'true', 'yes', 'on'].includes(
-  String(process.env.RECODER_COCKPIT || '').trim().toLowerCase(),
+// Cockpit mode: load the bundled conductor cockpit renderer (the desktop
+// product UI). DEFAULT ON — the desktop app is the cockpit; the legacy web
+// app (old platform UI) is reachable only by explicitly setting
+// RECODER_COCKPIT=0. Unauthenticated sessions get the cockpit's native
+// device-flow SignIn, not the old website sign-in page.
+const cockpitModeEnabledByEnv = !['0', 'false', 'no', 'off'].includes(
+  String(process.env.RECODER_COCKPIT || '').trim().toLowerCase() || 'on',
 );
 const cockpitIndexPath = path.join(__dirname, 'cockpit', 'dist', 'index.html');
 const desktopWorkflowRetryRaw = process.env.RECODER_WORKFLOW_FETCH_RETRIES || process.env.OPENCLAW_WORKFLOW_FETCH_RETRIES || '2';
