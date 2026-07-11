@@ -60,6 +60,8 @@ import type {
   McpToolEntry,
   MemoryCandidate,
   MergeResult,
+  MulticaSquadsResult,
+  MulticaStatus,
   OpenfangAgentCard,
   OpenfangHealth,
   PolicyDecision,
@@ -214,6 +216,11 @@ function openfangRequest<T>(method: string, path: string, body?: unknown): Promi
 /** Ziti networking request: every call hits `${backendUrl}/api/ziti/...`. */
 function zitiRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/ziti', method, path, body);
+}
+
+/** Multica managed-agents request: every call hits `${backendUrl}/api/multica/...`. */
+function multicaRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/multica', method, path, body);
 }
 
 /**
@@ -428,4 +435,20 @@ export const api = {
    * unconfigured — never fabricates identity data.
    */
   zitiIdentities: () => zitiRequest<ZitiIdentityList>('GET', '/identities'),
+
+  // --- Multica managed-agents/squads (mounted at /api/multica) ---
+
+  /**
+   * GET /api/multica/status — truthful Multica seam health.
+   * Returns 503 when unconfigured (no MULTICA_URL or binary). Authenticated.
+   * Callers must handle 503 — the panel degrades safely when Multica is absent.
+   */
+  multicaStatus: () => multicaRequest<MulticaStatus>('GET', '/status'),
+
+  /**
+   * GET /api/multica/squads — list squads from the Multica loopback.
+   * Returns 503 when Multica is unconfigured; the panel surfaces a truthful
+   * "unavailable" state. Never fabricates squad data.
+   */
+  multicaSquads: () => multicaRequest<MulticaSquadsResult>('GET', '/squads'),
 };
