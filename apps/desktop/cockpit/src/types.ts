@@ -635,6 +635,40 @@ export interface GatewayInferenceBody {
 }
 
 /**
+ * Zero-Trust Networking (OpenZiti) surface types — mirror the real /api/ziti/* endpoint shapes.
+ *
+ * Source of truth:
+ *  - docker-backend/src/routes/ziti.routes.ts
+ *  - docker-backend/src/ziti-client.ts (ZitiHealth, ZitiIdentity)
+ *
+ * Mounted at /api/ziti (NOT /api/conductor or /api/agent-os).
+ */
+
+/** GET /api/ziti/health — truthful mesh health; available=false when controller absent. */
+export interface ZitiHealth {
+  available: boolean;
+  configured: boolean;
+  controllerUrl?: string;
+  reason?: string;
+}
+
+/** A single zero-trust identity returned by /api/ziti/identities. */
+export interface ZitiIdentity {
+  id: string;
+  name: string;
+  isAdmin?: boolean;
+  enrollmentJwt?: string;
+  [key: string]: unknown;
+}
+
+/** GET /api/ziti/identities — list of provisioned identities (wrapped in available flag). */
+export interface ZitiIdentityList {
+  available: boolean;
+  identities: ZitiIdentity[];
+  reason?: string;
+}
+
+/**
  * OpenFang agent surface types — mirror the real /api/agents/openfang endpoint shapes.
  *
  * Source of truth:
