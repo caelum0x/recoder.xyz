@@ -1,0 +1,610 @@
+# native-build.yml
+#
+# Cross-arch NAPI native addon builds + signed macOS desktop installer.
+#
+# Two jobs:
+#
+#   build-napi   — matrix over macos-latest (arm64 + x64), ubuntu-latest (x64),
+#                  windows-latest (x64).  Builds each NAPI .node binary and
+#                  stages it into apps/desktop/resources/native/ so the L5 loader
+#                  resolution path (process.resourcesPath/native/<addon>.node) is
+#                  satisfied when electron-builder packages the app.
+#
+#   installer-mac — builds, signs, and notarizes the macOS .dmg on top of the
+#                   NAPI artifacts produced by the mac-arm64 run.  Signing is
+#                   gated on the five code-signing secrets being present; the job
+#                   degrades safely (unsigned/un-notarized .dmg) when any secret
+#                   is absent — mirroring the degrade-safe contract in notarize.js
+#                   and build-signed.js.
+#
+# Crate build notes
+# -----------------
+#   recoder-governance-napi  — standalone workspace (crates/recoder-governance/).
+#                              No DATABASE_URL requirement.  Builds with stable
+#                              Rust via plain `cargo build --release`.
+#
+#   lance-npm-bindings       — standalone workspace (crates/lance/npm-bindings/).
+#                              No DATABASE_URL requirement.  Heavy dependency
+#                              surface (~2–3 GB on first run; cached).
+#
+#   tensorzero-gateway-napi  — workspace root crates/tensorzero/crates/.
+#                              Rust toolchain pinned to 1.94.0 (rust-toolchain.toml).
+#                              tensorzero-core carries sqlx macros that embed
+#                              compile-time query metadata.  Set SQLX_OFFLINE=true
+#                              so `cargo build --release` succeeds without a live
+#                              Postgres connection.  The gateway-napi crate itself
+#                              only calls config-validate and version helpers
+#                              (no live DB at runtime), so offline mode is correct
+#                              here.  The prerequisite: sqlx-data.json or the
+#                              .sqlx/ directory must be present in the repo for
+#                              every query! macro reachable from the build graph.
+#                              If they are absent the build fails with a clear
+#                              sqlx error — set continue-on-error: true handles
+#                              this without failing the matrix.
+#
+#   openfang-napi            — workspace root crates/openfang/.
+#                              Uses stable toolchain.  Heavy tokio/async surface.
+#
+#   claw-code-parity-napi    — workspace root crates/claw-code-parity/rust/.
+#                              Uses stable toolchain.  NAPI v3/napi4.
+#
+# All three disk-deferred crates (tensorzero, openfang, claw-code-parity) are
+# built with `continue-on-error: true` so one flaky crate or a missing sqlx
+# prerequisite does not block the matrix.  The two primary crates
+# (recoder-governance-napi + lance-npm-bindings) propagate real failures so a
+# regression in the main loaders is caught immediately.
+#
+# Secrets referenced (never hardcoded)
+# -------------------------------------
+#   DESKTOP_CSC_LINK                  — base64-encoded .p12 signing cert
+#   DESKTOP_CSC_KEY_PASSWORD          — .p12 passphrase
+#   DESKTOP_APPLE_ID                  — Apple ID email for notarytool
+#   DESKTOP_APPLE_APP_SPECIFIC_PASSWORD — app-specific password for notarytool
+#   DESKTOP_APPLE_TEAM_ID             — 10-char Apple team ID
+
+name: Native Build (NAPI + Desktop Installer)
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
+      - 'release/**'
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'apps/desktop/**'
+      - '.github/workflows/native-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Shared across all jobs.
+  NODE_VERSION: '20.x'
+  # Prevent cargo from fetching the index on every run when using the cache.
+  CARGO_TERM_COLOR: always
+  # sqlx: compile queries against the embedded metadata file instead of a live DB.
+  SQLX_OFFLINE: 'true'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 1 — Build NAPI .node binaries for every target
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  build-napi:
+    name: NAPI ${{ matrix.crate }} [${{ matrix.target }}]
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── macOS arm64 (Apple Silicon) ──────────────────────────────────
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+            os_label: mac
+            crate: recoder-governance-napi
+            workspace_dir: crates/recoder-governance
+            cargo_pkg: recoder-governance-napi
+            output_node: crates/recoder-governance/target/release/recoder-governance-napi.node
+            staging_name: recoder-governance-napi.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+            os_label: mac
+            crate: lance-npm-bindings
+            workspace_dir: crates/lance/npm-bindings
+            cargo_pkg: lance-npm-bindings
+            output_node: crates/lance/npm-bindings/target/release/lance_npm_bindings.node
+            staging_name: lance_npm_bindings.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+            os_label: mac
+            crate: tensorzero-gateway-napi
+            workspace_dir: crates/tensorzero/crates
+            cargo_pkg: tensorzero-gateway-napi
+            output_node: crates/tensorzero/crates/target/release/tensorzero_gateway_napi.node
+            staging_name: tensorzero_gateway_napi.node
+            continue_on_error: true
+            rust_toolchain_file: crates/tensorzero/crates/rust-toolchain.toml
+
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+            os_label: mac
+            crate: openfang-napi
+            workspace_dir: crates/openfang
+            cargo_pkg: openfang-napi
+            output_node: crates/openfang/target/release/libopenfang_napi.dylib
+            staging_name: openfang_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+            os_label: mac
+            crate: claw-code-parity-napi
+            workspace_dir: crates/claw-code-parity/rust
+            cargo_pkg: claw-code-parity-napi
+            output_node: crates/claw-code-parity/rust/target/release/libclaw_code_parity_napi.dylib
+            staging_name: claw_code_parity_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+          # ── macOS x64 (Intel) ─────────────────────────────────────────────
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            arch: x64
+            os_label: mac
+            crate: recoder-governance-napi
+            workspace_dir: crates/recoder-governance
+            cargo_pkg: recoder-governance-napi
+            output_node: crates/recoder-governance/target/x86_64-apple-darwin/release/recoder-governance-napi.node
+            staging_name: recoder-governance-napi.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            arch: x64
+            os_label: mac
+            crate: lance-npm-bindings
+            workspace_dir: crates/lance/npm-bindings
+            cargo_pkg: lance-npm-bindings
+            output_node: crates/lance/npm-bindings/target/x86_64-apple-darwin/release/lance_npm_bindings.node
+            staging_name: lance_npm_bindings.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            arch: x64
+            os_label: mac
+            crate: tensorzero-gateway-napi
+            workspace_dir: crates/tensorzero/crates
+            cargo_pkg: tensorzero-gateway-napi
+            output_node: crates/tensorzero/crates/target/x86_64-apple-darwin/release/tensorzero_gateway_napi.node
+            staging_name: tensorzero_gateway_napi.node
+            continue_on_error: true
+            rust_toolchain_file: crates/tensorzero/crates/rust-toolchain.toml
+
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            arch: x64
+            os_label: mac
+            crate: openfang-napi
+            workspace_dir: crates/openfang
+            cargo_pkg: openfang-napi
+            output_node: crates/openfang/target/x86_64-apple-darwin/release/libopenfang_napi.dylib
+            staging_name: openfang_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+          - runner: macos-latest
+            target: x86_64-apple-darwin
+            arch: x64
+            os_label: mac
+            crate: claw-code-parity-napi
+            workspace_dir: crates/claw-code-parity/rust
+            cargo_pkg: claw-code-parity-napi
+            output_node: crates/claw-code-parity/rust/target/x86_64-apple-darwin/release/libclaw_code_parity_napi.dylib
+            staging_name: claw_code_parity_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+          # ── Linux x64 ─────────────────────────────────────────────────────
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+            os_label: linux
+            crate: recoder-governance-napi
+            workspace_dir: crates/recoder-governance
+            cargo_pkg: recoder-governance-napi
+            output_node: crates/recoder-governance/target/release/recoder-governance-napi.node
+            staging_name: recoder-governance-napi.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+            os_label: linux
+            crate: lance-npm-bindings
+            workspace_dir: crates/lance/npm-bindings
+            cargo_pkg: lance-npm-bindings
+            output_node: crates/lance/npm-bindings/target/release/lance_npm_bindings.node
+            staging_name: lance_npm_bindings.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+            os_label: linux
+            crate: tensorzero-gateway-napi
+            workspace_dir: crates/tensorzero/crates
+            cargo_pkg: tensorzero-gateway-napi
+            output_node: crates/tensorzero/crates/target/release/tensorzero_gateway_napi.node
+            staging_name: tensorzero_gateway_napi.node
+            continue_on_error: true
+            rust_toolchain_file: crates/tensorzero/crates/rust-toolchain.toml
+
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+            os_label: linux
+            crate: openfang-napi
+            workspace_dir: crates/openfang
+            cargo_pkg: openfang-napi
+            output_node: crates/openfang/target/release/libopenfang_napi.so
+            staging_name: openfang_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            arch: x64
+            os_label: linux
+            crate: claw-code-parity-napi
+            workspace_dir: crates/claw-code-parity/rust
+            cargo_pkg: claw-code-parity-napi
+            output_node: crates/claw-code-parity/rust/target/release/libclaw_code_parity_napi.so
+            staging_name: claw_code_parity_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+          # ── Windows x64 ───────────────────────────────────────────────────
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+            os_label: windows
+            crate: recoder-governance-napi
+            workspace_dir: crates/recoder-governance
+            cargo_pkg: recoder-governance-napi
+            output_node: crates/recoder-governance/target/release/recoder_governance_napi.dll
+            staging_name: recoder-governance-napi.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+            os_label: windows
+            crate: lance-npm-bindings
+            workspace_dir: crates/lance/npm-bindings
+            cargo_pkg: lance-npm-bindings
+            output_node: crates/lance/npm-bindings/target/release/lance_npm_bindings.dll
+            staging_name: lance_npm_bindings.node
+            continue_on_error: false
+            rust_toolchain_file: ''
+
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+            os_label: windows
+            crate: tensorzero-gateway-napi
+            workspace_dir: crates/tensorzero/crates
+            cargo_pkg: tensorzero-gateway-napi
+            output_node: crates/tensorzero/crates/target/release/tensorzero_gateway_napi.dll
+            staging_name: tensorzero_gateway_napi.node
+            continue_on_error: true
+            rust_toolchain_file: crates/tensorzero/crates/rust-toolchain.toml
+
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+            os_label: windows
+            crate: openfang-napi
+            workspace_dir: crates/openfang
+            cargo_pkg: openfang-napi
+            output_node: crates/openfang/target/release/openfang_napi.dll
+            staging_name: openfang_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            arch: x64
+            os_label: windows
+            crate: claw-code-parity-napi
+            workspace_dir: crates/claw-code-parity/rust
+            cargo_pkg: claw-code-parity-napi
+            output_node: crates/claw-code-parity/rust/target/release/claw_code_parity_napi.dll
+            staging_name: claw_code_parity_napi.node
+            continue_on_error: true
+            rust_toolchain_file: ''
+
+    # continue-on-error is matrix-controlled per crate: the two primary crates
+    # (governance + lance) propagate failures; the three disk-deferred crates
+    # (tensorzero, openfang, claw) are non-fatal.
+    continue-on-error: ${{ matrix.continue_on_error }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Rust toolchain ───────────────────────────────────────────────────
+      # If the workspace pins a specific channel via rust-toolchain.toml, dtolnay/
+      # rust-toolchain respects it.  We also set the target here so cross-arch
+      # builds work on the macOS runner without a separate rustup invocation.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Override with the pinned channel when the workspace has one.
+          # For tensorzero the matrix provides the toolchain file path; if absent
+          # we fall back to stable.  dtolnay/rust-toolchain@stable always resolves
+          # from the channel arg first, so providing "stable" is safe for all
+          # crates that pin stable.  Tensorzero's rust-toolchain.toml specifying
+          # 1.94.0 is read by cargo automatically when we `cd` into its workspace.
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      # ── Cargo registry + build cache ─────────────────────────────────────
+      # We scope the cache key to the workspace's Cargo.lock so a lock-file
+      # change busts the build cache.  The restore-keys fallback lets a warm
+      # partial cache cut compile time even when the key misses.
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-registry-${{ matrix.os_label }}-${{ matrix.target }}-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace_dir)) }}
+          restore-keys: |
+            cargo-registry-${{ matrix.os_label }}-${{ matrix.target }}-
+            cargo-registry-${{ matrix.os_label }}-
+
+      - name: Cache cargo build target
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.workspace_dir }}/target
+          key: cargo-target-${{ matrix.crate }}-${{ matrix.target }}-${{ hashFiles(format('{0}/Cargo.lock', matrix.workspace_dir)) }}
+          restore-keys: |
+            cargo-target-${{ matrix.crate }}-${{ matrix.target }}-
+            cargo-target-${{ matrix.crate }}-
+
+      # ── Build the NAPI crate ─────────────────────────────────────────────
+      # For cross-arch mac builds (x64 on macos-latest which is arm64) we must
+      # pass --target explicitly.  The native arm64 build omits --target so cargo
+      # uses the host triple directly (fastest path, avoids linker confusion).
+      # On Linux/Windows the runner arch matches the target so --target is also
+      # omitted for the native builds; the matrix uses the full triple only for
+      # mac-x64 cross-compiles.
+      - name: Build NAPI addon (native target)
+        if: matrix.target == 'aarch64-apple-darwin' || matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'x86_64-pc-windows-msvc'
+        working-directory: ${{ matrix.workspace_dir }}
+        env:
+          SQLX_OFFLINE: 'true'
+        run: cargo build --release -p ${{ matrix.cargo_pkg }}
+
+      - name: Build NAPI addon (cross-arch mac x64)
+        if: matrix.target == 'x86_64-apple-darwin'
+        working-directory: ${{ matrix.workspace_dir }}
+        env:
+          SQLX_OFFLINE: 'true'
+        run: cargo build --release -p ${{ matrix.cargo_pkg }} --target x86_64-apple-darwin
+
+      # ── Stage .node into the loader's expected location ──────────────────
+      # The L5 loader resolves packaged addons from process.resourcesPath/native/.
+      # We pre-stage them at apps/desktop/resources/native/ so electron-builder's
+      # extraResources entries pick them up without path remapping.
+      - name: Stage .node binary
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/resources/native
+          src="${{ matrix.output_node }}"
+          dst="apps/desktop/resources/native/${{ matrix.staging_name }}"
+          if [ -f "$src" ]; then
+            cp "$src" "$dst"
+            echo "Staged: $src -> $dst"
+          else
+            echo "WARNING: expected output not found at $src"
+            echo "  crate=${{ matrix.crate }} target=${{ matrix.target }}"
+            # Non-fatal: the loader degrades safely when the .node is absent.
+            exit 0
+          fi
+
+      # ── Upload the .node artifact ─────────────────────────────────────────
+      # Artifact name encodes crate + os + arch for unambiguous download in the
+      # installer job and for manual inspection.
+      - name: Upload .node artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: napi-${{ matrix.crate }}-${{ matrix.os_label }}-${{ matrix.arch }}
+          path: apps/desktop/resources/native/${{ matrix.staging_name }}
+          if-no-files-found: warn
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Job 2 — macOS .dmg: build + sign + notarize
+  # ───────────────────────────────────────────────────────────────────────────
+  installer-mac:
+    name: macOS Installer (signed .dmg)
+    runs-on: macos-latest
+    needs: [build-napi]
+    # Only run on pushes to main/release branches or on tags; skip on PRs so we
+    # don't burn macOS runner minutes on every patch PR.
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Restore NAPI artifacts for mac-arm64 (the native installer arch) ─
+      # Download all four (or five) mac-arm64 .node files produced by build-napi.
+      # The two primary crates (governance + lance) are required; the three
+      # disk-deferred crates are optional (after-pack warns but doesn't fail).
+      - name: Download mac-arm64 NAPI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: napi-*-mac-arm64
+          path: apps/desktop/resources/native
+          merge-multiple: true
+        continue-on-error: true
+
+      # ── Node.js + pnpm ───────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-store
+        shell: bash
+        run: echo "dir=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.dir }}
+          key: pnpm-store-macos-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-macos-
+
+      # ── Install desktop dependencies ─────────────────────────────────────
+      # electron-builder needs the full node_modules tree (including devDeps) to
+      # produce the installer.  We install directly in apps/desktop since the
+      # desktop app uses npm (package-lock.json), not pnpm.
+      - name: Install desktop npm dependencies
+        working-directory: apps/desktop
+        run: npm ci
+
+      # ── Build the cockpit renderer ───────────────────────────────────────
+      # before-build.js calls node cockpit/build.mjs internally, but we run it
+      # explicitly here so CI gets a clear step for the renderer build and its
+      # logs are separated from the electron-builder output.
+      - name: Install cockpit dependencies
+        working-directory: apps/desktop/cockpit
+        run: |
+          if command -v pnpm &> /dev/null; then
+            pnpm install --ignore-workspace
+          else
+            npm install
+          fi
+
+      - name: Build cockpit renderer
+        working-directory: apps/desktop/cockpit
+        run: node build.mjs
+
+      # ── Build the embedded backend ───────────────────────────────────────
+      # The packager (before-build.js) also triggers this, but running it
+      # explicitly gives CI a clean step and the correct working directory.
+      - name: Install docker-backend dependencies
+        working-directory: docker-backend
+        run: npm ci
+
+      - name: Build embedded backend (tsc)
+        working-directory: docker-backend
+        run: npx tsc
+
+      # ── Generate icon assets ─────────────────────────────────────────────
+      # before-build.js calls generate-icon.js; macOS runners have sips/iconutil
+      # so this works natively.
+      - name: Generate product icon
+        working-directory: apps/desktop
+        run: node scripts/generate-icon.js
+
+      # ── Code-signing secret gate ─────────────────────────────────────────
+      # Detect whether all five required Apple signing secrets are present.
+      # Output 'signed=true' if complete; 'signed=false' otherwise.
+      # The installer builds either way — notarize.js degrades safely — but we
+      # log the signing mode explicitly so the artifact description is accurate.
+      - name: Detect signing secrets
+        id: signing
+        env:
+          CSC_LINK: ${{ secrets.DESKTOP_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          missing=0
+          for key in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!key}" ]; then
+              echo "Signing secret absent: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "All code-signing secrets present — will sign and notarize."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "One or more signing secrets absent — building unsigned .dmg (degrade-safe)."
+          fi
+
+      # ── Skip NAPI build inside electron-builder ──────────────────────────
+      # We already staged the .node files above.  Tell napi-build.js to skip so
+      # before-build.js does not attempt a redundant (and potentially slow)
+      # Rust build inside the electron-builder process.
+      - name: Build macOS .dmg (signed + notarized)
+        if: steps.signing.outputs.signed == 'true'
+        working-directory: apps/desktop
+        env:
+          NAPI_SKIP_BUILD: '1'
+          CSC_LINK: ${{ secrets.DESKTOP_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
+        run: npm run build:mac:ci-signed
+
+      - name: Build macOS .dmg (unsigned — secrets absent)
+        if: steps.signing.outputs.signed == 'false'
+        working-directory: apps/desktop
+        env:
+          NAPI_SKIP_BUILD: '1'
+          # Explicitly clear signing env vars so electron-builder does not try to
+          # sign with empty credentials and produce a misleading error.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run build:mac:unsigned
+
+      # ── Upload .dmg installer artifact ───────────────────────────────────
+      - name: Upload macOS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-mac-${{ steps.signing.outputs.signed == 'true' && 'signed' || 'unsigned' }}
+          path: apps/desktop/dist/*.dmg
+          if-no-files-found: error
