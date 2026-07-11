@@ -27,6 +27,12 @@
  *   - All tool calls from Recoder to openfang still route through the policy
  *     gate (`oss-dispatch.ts` → `OpenFangAdapter`) — never raw subprocess IO.
  *
+ * NATIVE ADDON (preferred path):
+ *   When `crates/openfang/crates/openfang-napi/target/(release|debug)/openfang_napi.node`
+ *   exists, `oss-dispatch.ts` loads it via `openfang-native.ts` and runs the engine
+ *   in-process (no subprocess, no loopback HTTP).  This daemon module is only needed
+ *   when the native addon is absent (build deferred, wrong arch, etc.).
+ *
  * Resolution order for the binary (first existing wins):
  *   1. `OPENFANG_BIN` env (absolute path to a prebuilt binary).
  *   2. `<repo>/crates/openfang/target/release/openfang`.
@@ -36,6 +42,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 import { createLogger } from '../logger.js';
+import { loadNativeAddon, resolveNativeAddonPath } from './openfang-native.js';
 
 const logger = createLogger('conductor:openfang-daemon');
 
@@ -312,29 +319,63 @@ export function createOpenfangAgentRouter() {
   const { Router } = require('express') as typeof import('express');
   const router = Router();
 
-  /** GET /api/agents/openfang/health — truthful daemon health. */
+  /** GET /api/agents/openfang/health — truthful daemon health (native-first). */
   router.get('/health', (_req: import('express').Request, res: import('express').Response) => {
+    // Check the native addon first — it is the preferred in-process path.
+    const native = loadNativeAddon();
+    if (native) {
+      const addonPath = resolveNativeAddonPath();
+      let version: unknown = {};
+      try { version = JSON.parse(native.nativeVersion()); } catch { /* ignore */ }
+      res.json({
+        agent: 'openfang',
+        status: 'up',
+        mode: 'native_addon',
+        addonPath,
+        version,
+        note: 'Running in-process via NAPI-RS native addon (no subprocess)',
+      });
+      return;
+    }
+
+    // Fall back to the subprocess daemon health.
     const h = openfangDaemonHandle();
     if (!h) {
       res.status(503).json({
         agent: 'openfang',
         status: 'unavailable',
         reason:
-          'openfang daemon is not running. Build crates/openfang or set OPENFANG_BIN to enable the autonomous agent engine.',
+          'openfang daemon is not running and the native addon is not built. ' +
+          'Build crates/openfang or set OPENFANG_BIN to enable the autonomous agent engine, ' +
+          'or build openfang-napi for the in-process path.',
       });
       return;
     }
     res.json({
       agent: 'openfang',
       status: 'up',
+      mode: 'subprocess',
       listenAddr: h.listenAddr,
       binPath: h.binPath,
       pid: h.child.pid,
     });
   });
 
-  /** GET /api/agents/openfang — agent card + current runtime status. */
+  /** GET /api/agents/openfang — agent card + current runtime status (native-first). */
   router.get('/', (_req: import('express').Request, res: import('express').Response) => {
+    const native = loadNativeAddon();
+    if (native) {
+      res.json({
+        agentId: 'openfang',
+        name: 'OpenFang Autonomous Agent Engine',
+        description: '24/7 autonomous agent engine (Rust). Running in-process via NAPI-RS native addon. RunEvents route through Recoder. Task/approval/memory owned by Recoder control plane.',
+        a2aBoundary: true,
+        status: 'up',
+        mode: 'native_addon',
+        listenAddr: null,
+      });
+      return;
+    }
     const h = openfangDaemonHandle();
     res.json({
       agentId: 'openfang',
@@ -342,6 +383,7 @@ export function createOpenfangAgentRouter() {
       description: '24/7 autonomous agent engine (Rust). RunEvents route through Recoder. Task/approval/memory owned by Recoder control plane.',
       a2aBoundary: true,
       status: h ? 'up' : 'unavailable',
+      mode: h ? 'subprocess' : 'unavailable',
       listenAddr: h ? h.listenAddr : null,
     });
   });
