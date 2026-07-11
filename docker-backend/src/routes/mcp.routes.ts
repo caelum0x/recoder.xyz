@@ -16,7 +16,7 @@
 
 import express, { Router } from 'express';
 import { createLogger } from '../logger.js';
-import { mcpManager, PREINSTALLED_SERVERS, NPX_SERVERS } from '../mcp-manager.js';
+import { mcpManager, PREINSTALLED_SERVERS, NPX_SERVERS, PYTHON_SERVERS } from '../mcp-manager.js';
 
 interface AuthenticatedRequest extends express.Request {
   userId?: string;
@@ -65,7 +65,20 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
       requiredEnvVars: config.env ? Object.keys(config.env) : [],
     }));
 
-    res.json({ servers: [...preinstalled, ...npxServers] });
+    // Python servers are degrade-safe: only offered when the opt-in env flag is set.
+    const pythonServers = Object.entries(PYTHON_SERVERS)
+      .filter(([, config]) => process.env[config.enabledByEnv] === '1')
+      .map(([id, config]) => {
+        const { enabledByEnv: _gate, ...rest } = config;
+        return {
+          id,
+          ...rest,
+          preinstalled: false,
+          requiresApiKey: false,
+        };
+      });
+
+    res.json({ servers: [...preinstalled, ...npxServers, ...pythonServers] });
   });
 
   // Start an MCP server for a project
@@ -93,6 +106,20 @@ export function createMcpRouter(deps: McpRouterDeps): Router {
         id: serverId,
         ...npxConfig,
         env: { ...npxConfig.env, ...config?.env },
+      };
+    } else if (PYTHON_SERVERS[serverId]) {
+      // Python server: degrade-safe — refuse if the opt-in env flag is absent
+      const pyEntry = PYTHON_SERVERS[serverId];
+      if (process.env[pyEntry.enabledByEnv] !== '1') {
+        return res.status(503).json({
+          error: `MCP server '${serverId}' is not available (set ${pyEntry.enabledByEnv}=1 to enable)`,
+        });
+      }
+      const { enabledByEnv: _gate, ...pyConfig } = pyEntry;
+      serverConfig = {
+        id: serverId,
+        ...pyConfig,
+        env: { ...pyConfig.env, ...config?.env },
       };
     } else if (config) {
       // Custom server config

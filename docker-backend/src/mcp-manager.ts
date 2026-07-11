@@ -521,3 +521,42 @@ export const NPX_SERVERS: Record<string, Omit<MCPServerConfig, 'id'>> = {
     env: { SLACK_BOT_TOKEN: '', SLACK_TEAM_ID: '' },
   },
 };
+
+/**
+ * First-party Python-based MCP servers.
+ *
+ * Degrade-safe: each entry is only surfaced in the catalog when the
+ * corresponding opt-in env flag is set to `"1"` (checked at call-site in
+ * mcp.routes.ts). If the Python runtime or the server's dependencies are
+ * absent the spawn will fail cleanly — the manager already handles that by
+ * marking the instance `error` and returning `{ success: false }`.
+ *
+ * Spawn env: follows the same pattern as the entries above — only the keys
+ * listed in `env` are forwarded beyond what the manager already merges from
+ * `process.env` in `startServer()`.  Do NOT add secrets here; pass them at
+ * start-time via the client's `config.env` payload.
+ *
+ * Launch command:
+ *   `python -m browser_use.mcp` (requires browser-use installed in the
+ *   Python env that `python` resolves to inside the user container).
+ *   The module entrypoint runs `asyncio.run(main())` which starts the MCP
+ *   stdio server — identical to the documented `uvx browser-use --mcp` path
+ *   but usable without uvx/uv when the package is already installed.
+ */
+export const PYTHON_SERVERS: Record<string, Omit<MCPServerConfig, 'id'> & { enabledByEnv: string }> = {
+  'browser-use': {
+    name: 'Browser Use',
+    command: 'python',
+    args: ['-m', 'browser_use.mcp'],
+    // Degrade-safe gate: server is only offered/spawnable when BROWSER_USE_ENABLED=1
+    enabledByEnv: 'BROWSER_USE_ENABLED',
+    // MCP tool calls to this server route through estimateMcpToolRisk() in
+    // packages/agent-mcp — tool names containing "browser" already resolve to
+    // 'medium' risk, so approval gates apply automatically.
+    env: {
+      // Suppress browser-use's own verbose logging on MCP stdio paths.
+      BROWSER_USE_LOGGING_LEVEL: 'critical',
+      BROWSER_USE_SETUP_LOGGING: 'false',
+    },
+  },
+};
