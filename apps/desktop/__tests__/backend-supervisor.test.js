@@ -195,8 +195,23 @@ describe('assembleBackendEnv', () => {
     expect(env.RECODER_TMUX_BUILD_PATH).toBe('/repo/c/tmux/tmux');
     expect(env.TMUX_BIN).toBe('/repo/c/tmux/tmux');
     expect(env.PATH).toBe('/bin'); // base env preserved
+    // Embedded desktop lowers the admission disk floor to 2GB (lightweight
+    // worktrees on a single-user laptop), overridable via base env.
+    expect(env.CONDUCTOR_MIN_FREE_DISK_GB).toBe('2');
     // base env object not mutated
     expect(baseEnv.PORT).toBeUndefined();
+  });
+
+  it('honors an operator-supplied CONDUCTOR_MIN_FREE_DISK_GB override', () => {
+    const env = assembleBackendEnv({
+      baseEnv: { CONDUCTOR_MIN_FREE_DISK_GB: '10' },
+      port: 1,
+      dataDir: '/d',
+      tmuxBin: '/t',
+      apiKeyHashSalt: 's',
+      internalServiceKey: 'i',
+    });
+    expect(env.CONDUCTOR_MIN_FREE_DISK_GB).toBe('10');
   });
 
   it('omits ELECTRON_RUN_AS_NODE in dev (electronRunAsNode falsy)', () => {
