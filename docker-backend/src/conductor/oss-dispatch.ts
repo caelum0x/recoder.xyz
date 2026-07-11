@@ -22,12 +22,21 @@
  * REAL EXECUTION SURFACE (the capability that must flow end-to-end): most OSS
  * profiles agent-oss publishes today are mapping-only — they translate the task
  * but do not own a runnable engine. ONE profile, `openfang`, is a genuine
- * execution surface: `OpenFangAdapter.run()` spawns the `openfang` CLI as a
- * subprocess and streams real `RunEvent`s (and degrades safely to a single honest
- * `failed` event when the binary is absent). For that profile `resolveOssDispatch`
- * attaches a lazy `run()` starter on the result so the substrate run loop can
- * drive the engine's actual RunEvents — instead of only logging a translation.
- * Mapping-only profiles return `run: undefined` and keep prior behavior.
+ * execution surface.  The engine run is now resolved in NATIVE-FIRST order:
+ *
+ *   1. Native addon (.node via NAPI-RS) — direct in-process call, zero IPC.
+ *      Loaded by openfang-native.ts; present only when the crate was built
+ *      (`cargo build -p openfang-napi --release`).
+ *   2. Subprocess/loopback path (existing `OpenFangAdapter.run()`) — spawns
+ *      the openfang CLI and streams RunEvents over stdout/loopback HTTP.
+ *      Active whenever the native addon is absent (build deferred, wrong arch,
+ *      ENOSPC, etc.).  Degrades safely to a single honest `failed` RunEvent
+ *      when the binary is also absent.
+ *
+ * For that profile `resolveOssDispatch` attaches a lazy `run()` starter on the
+ * result so the substrate run loop can drive the engine's actual RunEvents —
+ * instead of only logging a translation. Mapping-only profiles return
+ * `run: undefined` and keep prior behavior.
  */
 import {
   assertAdapterCanHandle,
@@ -55,6 +64,7 @@ import {
 } from '@recoder/agent-oss';
 import type { RunEvent, TaskSpec } from '@recoder/agent-os';
 import type { RuntimePolicy } from '@recoder/agent-runtimes';
+import { loadNativeAddon } from './openfang-native.js';
 
 /**
  * The OSS adapter profiles agent-oss publishes today. Kept as a flat list so the
@@ -192,12 +202,21 @@ function buildPolicy(): RuntimePolicy {
  * REAL execution capability flows into the product run loop: invoking it
  * instantiates the adapter and returns its live `RunEvent` async iterable.
  *
+ * NATIVE-FIRST ORDER (for the `openfang` profile):
+ *   1. Native addon (.node via NAPI-RS) — direct in-process call.
+ *      When `openfang-napi` is built and present, the engine runs in-process
+ *      without spawning a subprocess or hitting the loopback HTTP API.
+ *   2. Subprocess/loopback path (`OpenFangAdapter.run()`) — prior behavior,
+ *      active whenever the native addon is absent.
+ *
  * Fully degrade-safe:
  * - A profile with no registered factory (every provider except `openfang`
  *   today) gets `undefined` — translate-only, prior behavior preserved.
- * - If the factory itself throws (engine package shape changed, ctor fault), we
- *   fold the failure into a single honest `failed` RunEvent instead of throwing,
- *   so draining `events` never blocks the launch.
+ * - If the native addon require() throws or ping() fails, `loadNativeAddon()`
+ *   returns `undefined` and we fall through to the subprocess path — never
+ *   throws into the caller.
+ * - If the subprocess factory throws, we fold the failure into a single honest
+ *   `failed` RunEvent so draining `events` never blocks the launch.
  * - The adapter's own `run()` already degrades to a `failed` event when its
  *   binary is absent, so the live path is safe end to end.
  */
@@ -206,10 +225,21 @@ function buildEngineRun(
   task: TaskSpec,
   runInput: OssAdapterRunInput,
 ): (() => OssEngineRun) | undefined {
-  const factory = RUNNABLE_OSS_ADAPTERS[normalize(profile.adapterId)];
+  const normalizedId = normalize(profile.adapterId);
+  const factory = RUNNABLE_OSS_ADAPTERS[normalizedId];
   if (!factory) return undefined;
 
   return () => {
+    // --- PATH 1: native addon (in-process, zero IPC) ---
+    if (normalizedId === 'openfang') {
+      const native = loadNativeAddon();
+      if (native) {
+        return buildNativeEngineRun(native, task, runInput);
+      }
+      // Native addon absent — fall through to the subprocess path below.
+    }
+
+    // --- PATH 2: subprocess/loopback (existing OSS adapter behavior) ---
     let adapter: OssAdapter;
     try {
       adapter = factory();
@@ -249,6 +279,103 @@ function buildEngineRun(
         }
       },
     };
+  };
+}
+
+/**
+ * Build a native-addon-backed `OssEngineRun` for the openfang profile.
+ *
+ * The native addon calls `runAgent()` in-process via the Rust kernel — no
+ * subprocess, no loopback HTTP.  The result is wrapped into a minimal
+ * `RunEvent` stream so the substrate run loop can drain it like any other
+ * engine run.
+ *
+ * Degrade-safe: any exception from the native call is folded into a single
+ * honest `failed` RunEvent rather than thrown.
+ */
+function buildNativeEngineRun(
+  native: import('./openfang-native.js').OpenfangNativeAddon,
+  task: TaskSpec,
+  runInput: OssAdapterRunInput,
+): OssEngineRun {
+  const abortController = { cancelled: false };
+
+  return {
+    events: (async function* nativeEvents(): AsyncIterable<RunEvent> {
+      yield {
+        eventId: `oss_native_${task.taskId}_${Date.now()}`,
+        taskId: task.taskId,
+        agentId: 'openfang',
+        createdAt: new Date().toISOString(),
+        type: 'started',
+        state: 'running',
+        message: 'openfang native addon: agent run started (in-process)',
+        data: { native: true },
+      };
+
+      if (abortController.cancelled) {
+        yield {
+          eventId: `oss_native_${task.taskId}_cancel_${Date.now()}`,
+          taskId: task.taskId,
+          agentId: 'openfang',
+          createdAt: new Date().toISOString(),
+          type: 'failed',
+          state: 'failed',
+          message: 'openfang native addon: run cancelled before agent call',
+          data: { native: true, cancelled: true },
+        };
+        return;
+      }
+
+      try {
+        // `renderedPrompt` is the canonical message to send to the agent.
+        const prompt = runInput.bundle?.renderedPrompt ?? runInput.task.goal;
+        // Use the first agent listed in the task spec or a well-known default.
+        const agentId = 'default';
+
+        const raw = await native.runAgent(agentId, prompt, null);
+        const result: { ok: boolean; response?: string; error?: string } = JSON.parse(raw);
+
+        if (result.ok) {
+          yield {
+            eventId: `oss_native_${task.taskId}_done_${Date.now()}`,
+            taskId: task.taskId,
+            agentId: 'openfang',
+            createdAt: new Date().toISOString(),
+            type: 'completed',
+            state: 'completed',
+            message: result.response ?? '',
+            data: { native: true, response: result.response },
+          };
+        } else {
+          yield {
+            eventId: `oss_native_${task.taskId}_err_${Date.now()}`,
+            taskId: task.taskId,
+            agentId: 'openfang',
+            createdAt: new Date().toISOString(),
+            type: 'failed',
+            state: 'failed',
+            message: `openfang native addon error: ${result.error ?? 'unknown'}`,
+            data: { native: true, error: result.error, degraded: true },
+          };
+        }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        yield {
+          eventId: `oss_native_${task.taskId}_exc_${Date.now()}`,
+          taskId: task.taskId,
+          agentId: 'openfang',
+          createdAt: new Date().toISOString(),
+          type: 'failed',
+          state: 'failed',
+          message: `openfang native addon threw: ${reason}`,
+          data: { native: true, error: reason, degraded: true },
+        };
+      }
+    })(),
+    cancel: async () => {
+      abortController.cancelled = true;
+    },
   };
 }
 
