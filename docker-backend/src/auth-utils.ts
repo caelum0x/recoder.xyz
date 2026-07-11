@@ -174,6 +174,26 @@ export function resolveInternalServiceSession(
   };
 }
 
+/**
+ * The platform API key (sk_…) a request presents, or null. Primary transport is
+ * `x-api-key`; `Authorization: Bearer sk_…` is equally valid — the desktop
+ * cockpit sends its minted embedded-backend key as a bearer. A non-sk_ bearer
+ * is a session token, never a key candidate. Pure header inspection — the
+ * caller still validates the key against the store.
+ */
+export function extractPlatformApiKeyCandidate(
+  headers: Record<string, string | string[] | undefined>,
+): string | null {
+  const fromHeader = firstHeaderValue(headers['x-api-key'])?.trim();
+  if (fromHeader?.startsWith('sk_')) return fromHeader;
+  const authorization = firstHeaderValue(headers.authorization);
+  if (authorization?.startsWith('Bearer ')) {
+    const bearer = authorization.slice('Bearer '.length).trim();
+    if (bearer.startsWith('sk_')) return bearer;
+  }
+  return null;
+}
+
 export function isStrictAuthMode(): boolean {
   // Allow explicit override via STRICT_AUTH=false for local sandbox development.
   if (process.env.STRICT_AUTH === 'false') return false;

@@ -497,3 +497,29 @@ describe('Auth Error Message Scenarios', () => {
     expect(getTokenError(true, false)).toBeNull();
   });
 });
+
+describe('extractPlatformApiKeyCandidate', () => {
+  it('reads x-api-key when it is a platform key', async () => {
+    const { extractPlatformApiKeyCandidate } = await import('../auth-utils.js');
+    expect(extractPlatformApiKeyCandidate({ 'x-api-key': 'sk_abc123' })).toBe('sk_abc123');
+  });
+
+  it('falls back to Authorization: Bearer sk_… (desktop cockpit sends bearer)', async () => {
+    const { extractPlatformApiKeyCandidate } = await import('../auth-utils.js');
+    expect(extractPlatformApiKeyCandidate({ authorization: 'Bearer sk_abc123' })).toBe('sk_abc123');
+  });
+
+  it('never treats a non-sk_ bearer (session token) as a platform key', async () => {
+    const { extractPlatformApiKeyCandidate } = await import('../auth-utils.js');
+    expect(extractPlatformApiKeyCandidate({ authorization: 'Bearer some-session-token' })).toBeNull();
+    expect(extractPlatformApiKeyCandidate({})).toBeNull();
+    expect(extractPlatformApiKeyCandidate({ 'x-api-key': 'not-a-key' })).toBeNull();
+  });
+
+  it('prefers x-api-key over the bearer when both are present', async () => {
+    const { extractPlatformApiKeyCandidate } = await import('../auth-utils.js');
+    expect(
+      extractPlatformApiKeyCandidate({ 'x-api-key': 'sk_header', authorization: 'Bearer sk_bearer' }),
+    ).toBe('sk_header');
+  });
+});
