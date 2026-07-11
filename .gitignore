@@ -666,12 +666,15 @@ crates/openfang/*
 !crates/openfang/crates/
 crates/openfang/crates/*
 !crates/openfang/crates/openfang-napi/
+crates/herdr/
 crates/claw-code-parity/*
 !crates/claw-code-parity/rust/
+crates/herdr/
 crates/claw-code-parity/rust/*
 !crates/claw-code-parity/rust/Cargo.toml
 !crates/claw-code-parity/rust/Cargo.lock
 !crates/claw-code-parity/rust/crates/
+crates/herdr/
 crates/claw-code-parity/rust/crates/*
 !crates/claw-code-parity/rust/crates/claw-code-parity-napi/
 go/beads/
