@@ -1,0 +1,29 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+serde_json = "1"
+# napi / napi-derive / napi-build are workspace-level version pins so all
+# crates that wrap NAPI agree on the same major version.  The binding crate
+# (claw-code-parity-napi) is cdylib-only and is not a dependency of any other
+# crate in this workspace.
+napi = { version = "3", features = ["napi4"] }
+napi-derive = { version = "3" }
+napi-build = { version = "2" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"

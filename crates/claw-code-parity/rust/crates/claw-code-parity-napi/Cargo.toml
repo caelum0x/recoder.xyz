@@ -1,0 +1,32 @@
+[package]
+name = "claw-code-parity-napi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "NAPI-RS bindings for claw-code-parity — exposes the parity-harness core to the Node process."
+
+[lib]
+# cdylib produces the .node native addon loaded by Node.js via require().
+crate-type = ["cdylib"]
+
+[dependencies]
+compat-harness = { path = "../compat-harness" }
+napi.workspace = true
+napi-derive.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+napi-build.workspace = true
+
+# napi-derive macros internally emit unsafe code (FFI boundary).
+# We cannot inherit the workspace's `unsafe_code = "forbid"` lint here.
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_panics_doc = "allow"
+missing_errors_doc = "allow"

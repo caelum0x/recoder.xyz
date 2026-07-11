@@ -49,6 +49,94 @@ import {
 const log = createLogger('a2a-openclaw-adapter');
 
 // ---------------------------------------------------------------------------
+// Native addon (degrade-safe seam)
+//
+// The claw-code-parity-napi crate compiles to a platform-specific .node file
+// whose location is resolved relative to this file at runtime.  If the addon
+// is absent (build deferred, unsupported arch, CI, …) we fall back silently
+// to the existing subprocess/loopback path — the adapter NEVER regresses.
+//
+// The .node path follows the napi-rs convention:
+//   <crate-root>/claw-code-parity-napi.<arch>.node
+// In production the file is placed next to the compiled JS bundle or at the
+// path given by CLAW_PARITY_NAPI_PATH.
+// ---------------------------------------------------------------------------
+
+interface ClawParityNativeAddon {
+  routeMessage(message: string): { targetAgent: string; method: string };
+  extractCommands(source: string): Array<{ name: string; source: string }>;
+  extractTools(source: string): Array<{ name: string; source: string }>;
+  extractBootstrapPlan(source: string): string[];
+  extractManifest(repoRoot: string): {
+    commands: Array<{ name: string; source: string }>;
+    tools: Array<{ name: string; source: string }>;
+    bootstrapPhases: string[];
+  } | null;
+  addonVersion(): string;
+}
+
+/**
+ * Attempt to load the native NAPI addon.  Returns the module on success or
+ * `null` if the .node file is absent or fails to load.
+ *
+ * We use a plain require() so that the absence of the file is a soft error
+ * rather than a hard crash.  The surrounding try/catch ensures the fallback
+ * path is always available.
+ */
+function loadNativeAddon(): ClawParityNativeAddon | null {
+  const customPath = process.env['CLAW_PARITY_NAPI_PATH'];
+  const candidates: string[] = [];
+
+  if (customPath) {
+    candidates.push(customPath);
+  }
+
+  const arch = process.arch;           // e.g. "arm64", "x64"
+  const platform = process.platform;  // e.g. "darwin", "linux", "win32"
+
+  // napi-rs default output name pattern
+  const addonName = `claw-code-parity-napi.${platform}-${arch}.node`;
+
+  // Look next to the compiled JS bundle first, then relative to src/.
+  // __dirname is always defined in CJS (module:"commonjs").
+  // eslint-disable-next-line no-undef
+  const dirRoot = typeof __dirname === 'string' ? __dirname : process.cwd();
+  candidates.push(
+    `${dirRoot}/../../crates/claw-code-parity/rust/target/release/${addonName}`,
+    `${dirRoot}/../../crates/claw-code-parity/rust/target/debug/${addonName}`,
+    // Installed location when shipped as a workspace package
+    `${dirRoot}/../native/${addonName}`,
+    // Relative to CWD for development convenience
+    `./native/${addonName}`,
+  );
+
+  for (const candidate of candidates) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+      const mod = require(candidate) as ClawParityNativeAddon;
+      if (mod && typeof mod.routeMessage === 'function') {
+        log.info({ path: candidate }, 'claw-code-parity native addon loaded');
+        return mod;
+      }
+    } catch {
+      // Not found at this path — try next candidate
+    }
+  }
+
+  log.debug(
+    { candidates },
+    'claw-code-parity native addon not available — using TS fallback path',
+  );
+  return null;
+}
+
+/**
+ * Module-level singleton: resolved once at startup.
+ * `null` means the addon is absent and we use the TS path.
+ */
+const _nativeAddon: ClawParityNativeAddon | null = loadNativeAddon();
+
+// ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
@@ -87,8 +175,38 @@ const AGENCY_KEYWORDS = [
  * Priority: PM keywords > Agency keywords > Backend (fallback).
  * If the message contains keywords from both PM and Agency, PM wins
  * (task management is typically the higher-urgency routing target).
+ *
+ * Seam: when the claw-code-parity native addon is present the routing
+ * decision is made in-process via Rust (zero IPC overhead).  When the
+ * addon is absent the existing pure-TS keyword logic is used as a
+ * degrade-safe fallback — behaviour is identical, only the execution
+ * path differs.
  */
 function routeOpenClawMessage(message: string): RoutableAgent {
+  // --- Native in-process path (preferred) ---
+  if (_nativeAddon !== null) {
+    try {
+      const result = _nativeAddon.routeMessage(message);
+      const agent = result.targetAgent as RoutableAgent;
+      // Validate the returned agent is one of the known routable agents
+      if (
+        agent === 'recoder_pm' ||
+        agent === 'recoder_agency' ||
+        agent === 'recoder_backend'
+      ) {
+        return agent;
+      }
+      // Unexpected value — fall through to TS path
+      log.warn(
+        { native_result: result },
+        'Native addon returned unexpected agent — falling back to TS router',
+      );
+    } catch (err) {
+      log.warn({ err }, 'Native addon routeMessage threw — falling back to TS router');
+    }
+  }
+
+  // --- Pure-TS fallback path (always available) ---
   const lower = message.toLowerCase();
 
   const hasPm = PM_KEYWORDS.some((kw) => lower.includes(kw));
@@ -715,4 +833,7 @@ export {
   generateTraceId as __testGenerateTraceId,
   routeOpenClawMessage as __testRouteOpenClawMessage,
   extractTextFromEnvelope as __testExtractTextFromEnvelope,
+  // Native addon seam -- exported so tests can inspect / override the addon
+  _nativeAddon as __testNativeAddon,
+  loadNativeAddon as __testLoadNativeAddon,
 };
