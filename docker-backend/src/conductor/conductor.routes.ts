@@ -22,6 +22,7 @@ import {
   type CreateWorkspaceInput,
 } from './workspace-service.js';
 import { normalizeCreateBody } from './create-defaults.js';
+import { applyEmptyStartDefault } from './empty-start.js';
 import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, archiveWorkspace } from './review.js';
@@ -366,7 +367,13 @@ export function createConductorRouter(): Router {
       // canonical identity fields (spaceId/projectId/taskId/createdBy) BEFORE
       // validation so that minimal body succeeds. Full-payload callers are
       // untouched — any caller-provided value always wins (normalize is additive).
-      const body = normalizeCreateBody<CreateWorkspaceInput>(req.body ?? {});
+      // Empty-start: the form allows creating a workspace with no goal ("start
+      // empty and chat once it's running"). When neither prompt nor command is
+      // given, provision the worktree with a clean no-op → awaiting_review, and
+      // the first message drives the real agent run (continueWorkspace).
+      const body = applyEmptyStartDefault(
+        normalizeCreateBody<CreateWorkspaceInput>(req.body ?? {}),
+      );
       const {
         spaceId,
         projectId,
