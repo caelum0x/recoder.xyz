@@ -54,6 +54,11 @@ import {
 } from './delivery-summary.js';
 import { metrics } from './conductor-metrics.js';
 import { governanceAuditEntries, verifyGovernanceAudit } from './governance-gate.js';
+import {
+  requireWorkspaceAccess,
+  stampOwner,
+  scopeBatchFilter,
+} from './workspace-access.js';
 import { bulkCancel, bulkArchive, listByState } from './batch-ops.js';
 import { cleanupStaleWorktrees } from './worktree-cleanup.js';
 import { planConductorRun, effectiveRuntimeId } from './conductor-planner.js';
@@ -398,7 +403,10 @@ export function createConductorRouter(): Router {
         command,
         prompt,
         model,
-        createdBy,
+        // Ownership becomes real here: under strict auth the VERIFIED caller
+        // owns the workspace (a client cannot squat another user's name or
+        // create a record it could not later access).
+        createdBy: stampOwner(req, createdBy),
         branch,
         baseRef,
         env,
@@ -481,6 +489,7 @@ export function createConductorRouter(): Router {
     '/workspaces/:workspaceId/pr',
     async (req: Request, res: Response) => {
       try {
+        if (!(await requireWorkspaceAccess(req, res, req.params.workspaceId))) return;
         const { title, body, base, draft, remote } = req.body ?? {};
         const intent = buildDeliveryIntent(req);
         res.status(201).json({
@@ -532,6 +541,7 @@ export function createConductorRouter(): Router {
     '/workspaces/:workspaceId/merge',
     async (req: Request, res: Response) => {
       try {
+        if (!(await requireWorkspaceAccess(req, res, req.params.workspaceId))) return;
         const { strategy, deleteBranch } = req.body ?? {};
         // A merge POST is a user-initiated delivery: in solo mode (single-user
         // desktop) this click IS the approval, so carry an explicit approve intent.
@@ -585,6 +595,7 @@ export function createConductorRouter(): Router {
     '/workspaces/:workspaceId/message',
     async (req: Request, res: Response) => {
       try {
+        if (!(await requireWorkspaceAccess(req, res, req.params.workspaceId))) return;
         const { text, model, createdBy } = req.body ?? {};
         if (typeof text !== 'string' || !text.trim()) {
           res.status(400).json({ success: false, error: 'text is required' });
@@ -609,6 +620,7 @@ export function createConductorRouter(): Router {
     '/workspaces/:workspaceId/archive',
     async (req: Request, res: Response) => {
       try {
+        if (!(await requireWorkspaceAccess(req, res, req.params.workspaceId))) return;
         res.json({
           success: true,
           data: await archiveWorkspace(req.params.workspaceId),
@@ -820,13 +832,8 @@ export function createConductorRouter(): Router {
           res.status(400).json({ success: false, error: 'keys is required' });
           return;
         }
-        const workspace = await getWorkspace(req.params.workspaceId);
-        if (!workspace) {
-          res
-            .status(404)
-            .json({ success: false, error: 'workspace not found' });
-          return;
-        }
+        const workspace = await requireWorkspaceAccess(req, res, req.params.workspaceId);
+        if (!workspace) return;
         if (isTerminalWorkspaceState(workspace.state)) {
           res
             .status(409)
@@ -905,9 +912,11 @@ export function createConductorRouter(): Router {
   router.post('/batch/cancel', async (req: Request, res: Response) => {
     try {
       const { projectId, createdBy } = req.body ?? {};
+      // Scope to the verified caller under strict auth: a client cannot
+      // batch-cancel across users by supplying (or omitting) a filter.
       res.json({
         success: true,
-        data: await bulkCancel({ projectId, createdBy }),
+        data: await bulkCancel(scopeBatchFilter(req, { projectId, createdBy })),
       });
     } catch (err) {
       res
@@ -923,9 +932,13 @@ export function createConductorRouter(): Router {
   router.post('/batch/archive', async (req: Request, res: Response) => {
     try {
       const { projectId, states } = req.body ?? {};
+      const archiveFilter: { projectId?: string; states?: string[]; createdBy?: string } = {
+        projectId,
+        states,
+      };
       res.json({
         success: true,
-        data: await bulkArchive({ projectId, states }),
+        data: await bulkArchive(scopeBatchFilter(req, archiveFilter)),
       });
     } catch (err) {
       res
