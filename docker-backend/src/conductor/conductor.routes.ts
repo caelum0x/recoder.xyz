@@ -57,6 +57,8 @@ import { governanceAuditEntries, verifyGovernanceAudit } from './governance-gate
 import {
   requireWorkspaceAccess,
   requireAuthenticatedMutation,
+  canAccessWorkspace,
+  callerId,
   stampOwner,
   scopeBatchFilter,
 } from './workspace-access.js';
@@ -1128,16 +1130,39 @@ export function createConductorRouter(): Router {
   // the router directly), `.ws` is absent — skip registering rather than throw,
   // so the rest of the router (the REST product surface) still mounts.
   if (typeof (router as unknown as { ws?: unknown }).ws === 'function') {
-    (router as any).ws(
-      '/workspaces/:workspaceId/stream',
-      (ws: any, req: { params: { workspaceId: string } }) => {
-        const cleanup = attachWorkspaceStream(ws, req.params.workspaceId);
-        ws.on('close', cleanup);
-      }
-    );
+    (router as any).ws('/workspaces/:workspaceId/stream', handleWorkspaceStreamUpgrade);
   }
 
   return router;
+}
+
+/**
+ * WebSocket upgrade handler for the live-terminal stream. Exported for tests
+ * (the unit-built router has no express-ws `.ws`). Ownership-checked: the
+ * stream replays another user's agent output, so a non-owner is closed with a
+ * policy code (1008). Solo/dev modes and internal callers pass, matching the
+ * REST mutation rule.
+ */
+interface StreamSocket {
+  close: (code?: number, reason?: string) => void;
+  on: (event: string, cb: () => void) => void;
+}
+
+export async function handleWorkspaceStreamUpgrade(
+  ws: StreamSocket,
+  req: Request,
+): Promise<void> {
+  const workspace = await getWorkspace(req.params.workspaceId);
+  if (!workspace) {
+    try { ws.close(1008, 'workspace not found'); } catch { /* already closed */ }
+    return;
+  }
+  if (!canAccessWorkspace(callerId(req), workspace)) {
+    try { ws.close(1008, 'forbidden: workspace belongs to another user'); } catch { /* already closed */ }
+    return;
+  }
+  const cleanup = attachWorkspaceStream(ws as unknown as Parameters<typeof attachWorkspaceStream>[0], req.params.workspaceId);
+  ws.on('close', cleanup);
 }
 
 /**
