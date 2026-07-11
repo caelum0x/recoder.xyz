@@ -11,6 +11,8 @@ interface BoardProps {
   workspaces: Workspace[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** workspaceId → the prompt a running agent is blocked on (needs_input). */
+  waits?: Record<string, string>;
 }
 
 function timeAgo(iso: string): string {
@@ -25,7 +27,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function Board({ workspaces, selectedId, onSelect }: BoardProps) {
+export function Board({ workspaces, selectedId, onSelect, waits }: BoardProps) {
   return (
     <div class="board">
       {BOARD_COLUMNS.map((col) => {
@@ -45,14 +47,20 @@ export function Board({ workspaces, selectedId, onSelect }: BoardProps) {
                   // collision is rendered distinctly so the operator can see the
                   // moat working: the launch was refused, not silently lost.
                   const collision = lockConflict(w);
+                  const waitPrompt = waits?.[w.workspaceId];
                   return (
                     <button
-                      class={`card ${selectedId === w.workspaceId ? 'card-selected' : ''} ${collision ? 'card-collision' : ''}`}
+                      class={`card ${selectedId === w.workspaceId ? 'card-selected' : ''} ${collision ? 'card-collision' : ''} ${waitPrompt ? 'card-needs-input' : ''}`}
                       key={w.workspaceId}
                       onClick={() => onSelect(w.workspaceId)}
                     >
                       <div class="card-top">
                         <span class={`badge tone-${stateTone(w.state)}`}>{stateLabel(w.state)}</span>
+                        {waitPrompt && (
+                          <span class="badge badge-needs-input" title={waitPrompt}>
+                            ⏳ needs you
+                          </span>
+                        )}
                         {collision && (
                           <span class="badge badge-lock" title={collision.message}>
                             🔒 collision
@@ -63,6 +71,9 @@ export function Board({ workspaces, selectedId, onSelect }: BoardProps) {
                       <div class="card-goal" title={workspaceGoal(w)}>{workspaceGoal(w)}</div>
                       {workspaceGoal(w) !== w.branch && (
                         <div class="card-branch" title={w.branch}>{w.branch}</div>
+                      )}
+                      {waitPrompt && (
+                        <div class="card-needs-input-msg" title={waitPrompt}>{waitPrompt}</div>
                       )}
                       {collision && (
                         <div class="card-collision-msg" title={collision.message}>

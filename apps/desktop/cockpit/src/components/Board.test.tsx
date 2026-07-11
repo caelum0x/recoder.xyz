@@ -14,12 +14,12 @@ import type { Workspace } from '../types';
 
 let container: HTMLDivElement | null = null;
 
-function mount(workspaces: Workspace[]): HTMLDivElement {
+function mount(workspaces: Workspace[], waits?: Record<string, string>): HTMLDivElement {
   const c = document.createElement('div');
   document.body.appendChild(c);
   container = c;
   act(() => {
-    render(<Board workspaces={workspaces} selectedId={null} onSelect={() => {}} />, c);
+    render(<Board workspaces={workspaces} selectedId={null} onSelect={() => {}} waits={waits} />, c);
   });
   return c;
 }
@@ -69,5 +69,19 @@ describe('Board card labels', () => {
   it('ignores a non-string metadata.prompt (never renders [object Object])', () => {
     const c = mount([ws({ metadata: { prompt: { nested: true } as unknown as string } })]);
     expect(c.querySelector('.card-goal')?.textContent).toBe('recoder/ws_0a1b2c3d-4e5f');
+  });
+
+  it('badges a workspace blocked on input and shows the prompt', () => {
+    const c = mount([ws({ workspaceId: 'ws_1', state: 'running' })], {
+      ws_1: 'Do you want to allow this command?',
+    });
+    expect(c.querySelector('.badge-needs-input')?.textContent).toContain('needs you');
+    expect(c.querySelector('.card-needs-input-msg')?.textContent).toBe('Do you want to allow this command?');
+    expect(c.querySelector('.card-needs-input')).not.toBeNull();
+  });
+
+  it('no needs-input badge when the workspace is not waiting', () => {
+    const c = mount([ws({ workspaceId: 'ws_1', state: 'running' })], {});
+    expect(c.querySelector('.badge-needs-input')).toBeNull();
   });
 });

@@ -54,7 +54,7 @@ import type {
   GatewayInferenceBody,
   GatewayInferenceResult,
   GatewayStatus,
-  GovernanceAudit,
+  GovernanceAuditTrail,
   McpHostSummary,
   McpServer,
   McpToolCheckResult,
@@ -292,7 +292,7 @@ export const api = {
    * (newest-first) + a genuine full-chain verification result.
    */
   governanceAudit: (limit = 100) =>
-    request<GovernanceAudit>('GET', `/governance/audit?limit=${limit}`),
+    request<GovernanceAuditTrail>('GET', `/governance/audit?limit=${limit}`),
   listWorkspaces: () => request<Workspace[]>('GET', '/workspaces'),
   getWorkspace: (id: string) => request<Workspace>('GET', `/workspaces/${encodeURIComponent(id)}`),
   createWorkspace: (body: CreateWorkspaceBody) => request<Workspace>('POST', '/workspaces', body),

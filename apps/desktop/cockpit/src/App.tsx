@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
 import { api, BackendUnreachableError, UnauthorizedError } from './lib/api';
 import { usePoll } from './lib/usePoll';
+import { useWorkspaceWaits } from './lib/useWorkspaceWaits';
 import {
   readConfig,
   configWasInjected,
@@ -195,6 +196,9 @@ export function App() {
   const health = usePoll(() => api.health(), HEALTH_POLL_MS);
   const tmuxBin = health.data?.tmuxBin;
   const workspaces = board.data || [];
+  // Which running agents are blocked on operator input (needs_input), so the
+  // Board can badge "needs you" the same way the recoder-herd terminal does.
+  const waits = useWorkspaceWaits(workspaces);
   // Agents actively holding a run slot (provisioning / running / merging) — drives
   // a calm live "N agents" indicator. PRODUCT DECISION (docs/PLAN-MODEL.md · PRD
   // FR-2): local desktop agents are UNLIMITED on every tier (your Mac, your keys),
@@ -476,7 +480,7 @@ export function App() {
                  agent thread takes the spotlight above and the board collapses to
                  a compact strip (the tests still read its cards). */
               <div class={`board-area ${selected ? 'board-area-compact' : ''}`}>
-                <Board workspaces={workspaces} selectedId={selectedId} onSelect={setSelectedId} />
+                <Board workspaces={workspaces} selectedId={selectedId} onSelect={setSelectedId} waits={waits} />
               </div>
             )}
           </section>
