@@ -461,14 +461,14 @@ export function App() {
             waits={waits}
           />
 
-          {/* CENTER: when a workspace is selected, its live agent stream +
-              "What changed" summary + steer input sit on top; the lifecycle
-              board (grouped by state) is always present below so the operator
-              keeps the at-a-glance pipeline view. */}
+          {/* CENTER: a FOCUSED surface. With a workspace selected it is a pure
+              conversation (the reference keeps the thread uncluttered — no
+              kanban underneath); the lifecycle board is hidden, not stacked
+              below. With nothing selected the board is the at-a-glance view. */}
           <section class={`center-pane ${selected ? 'center-pane-thread' : ''}`}>
             {selected && <WorkspaceCenter workspace={selected} />}
             {board.loading && !board.data ? (
-              <div class="board-loading">Loading workspaces…</div>
+              !selected && <div class="board-loading">Loading workspaces…</div>
             ) : workspaces.length === 0 && !board.error ? (
               !selected && (
                 <div class="board-empty">
@@ -477,10 +477,10 @@ export function App() {
                 </div>
               )
             ) : (
-              /* The at-a-glance lifecycle board. When a workspace is selected the
-                 agent thread takes the spotlight above and the board collapses to
-                 a compact strip (the tests still read its cards). */
-              <div class={`board-area ${selected ? 'board-area-compact' : ''}`}>
+              /* Hidden (not stacked) when a conversation is open — the board
+                 stays mounted so the pipeline keeps updating, but the center is
+                 the thread alone. */
+              <div class={`board-area ${selected ? 'board-area-hidden' : ''}`}>
                 <Board workspaces={workspaces} selectedId={selectedId} onSelect={setSelectedId} waits={waits} />
               </div>
             )}

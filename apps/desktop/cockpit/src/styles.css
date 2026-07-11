@@ -8,50 +8,55 @@
    fallbacks. The neutral surface tokens and the muted ready/merge affordance
    below are cockpit-owned and are NOT touched by the token bridge. */
 :root {
-  /* Layered neutral near-black surfaces: canvas → elevated chrome → card. */
-  --bg: #181818;
-  --bg-elev: #1e1e1e;
-  --bg-card: #202020;
-  --bg-inset: #1a1a1a;
-  /* Hairline borders — quiet cool-neutral gray. */
-  --border: #2a2a2a;
-  --border-strong: #353535;
-  /* Text scale: light primary, muted secondary, faint tertiary. */
-  --text: #e4e4e4;
-  --text-dim: #8a8a8a;
-  --text-faint: #5c5c5c;
-  /* Semantic accents (rebound from design-tokens at startup). The single
-     restrained accent is a desaturated blue used sparingly for focus + the
-     active nav underline. */
-  --accent: #3b82f6;
-  --good: #3fb950;
-  --bad: #f85149;
-  --warn: #d29922;
-  --active: #3b82f6;
-  --progress: #a371f7;
-  --neutral: #5c5c5c;
-  /* "ready/merge" affordance — restrained NEUTRAL surface (dark fill + hairline
-     + light text), NOT a vibrant green. Cockpit-owned; not token-bound. */
-  --ready: #2b2b2b;
-  --ready-border: #3a3a3a;
-  --ready-text: #d6d6d6;
-  --ready-soft: rgba(255, 255, 255, 0.03);
+  /* Warm near-black surfaces — a calm terminal console, not a cool IDE. The
+     slight warmth (a hair of red over pure gray) reads as premium/considered
+     rather than default-dark. canvas → elevated chrome → card → inset. */
+  --bg: #0e0d0c;
+  --bg-elev: #151412;
+  --bg-card: #1a1817;
+  --bg-inset: #100f0e;
+  /* Hairline borders — warm, quiet, barely-there. Depth comes from the border,
+     not from heavy fills. */
+  --border: #26241f;
+  --border-strong: #33302a;
+  /* Text scale: warm off-white primary, muted secondary, faint tertiary. */
+  --text: #ece9e3;
+  --text-dim: #948e83;
+  --text-faint: #5f5a51;
+  /* Semantic accents (rebound from design-tokens at startup). Soft, desaturated
+     — a calm sage green, muted terracotta, warm amber. No vibrant fills. */
+  --accent: #7aa2a0;
+  --good: #6bbf8a;
+  --bad: #e0715f;
+  --warn: #d9a441;
+  --active: #7aa2a0;
+  --progress: #b99bd8;
+  --neutral: #5f5a51;
+  /* "ready/merge" affordance — restrained warm NEUTRAL surface, not a vibrant
+     green. Cockpit-owned; not token-bound. */
+  --ready: #221f1b;
+  --ready-border: #34302a;
+  --ready-text: #ddd8cf;
+  --ready-soft: rgba(255, 250, 240, 0.025);
   /* macOS traffic-light hues. */
   --tl-close: #ff5f57;
   --tl-min: #febc2e;
   --tl-max: #28c840;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  /* Radius scale — consistent corner rounding across chrome, cards, controls,
-     and panels. Earlier surfaces hardcoded ad-hoc 6/7/9/10px literals; the
-     scale below is the single source so the create flow, sign-in, health strip,
-     and side panels share the reference's calm rounded geometry. */
-  --radius-sm: 6px;
-  --radius: 8px;
-  --radius-md: 9px;
-  --radius-lg: 11px;
-  /* Soft focus ring reused by every text/select control — quiet desaturated
-     blue at low alpha, no glow. */
-  --focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.22);
+  /* Mono is the STRUCTURAL identity — nav, sidebar, paths, pills, terminal all
+     lean on it for the reference's console character. A distinctive coding mono
+     when installed, else a refined system fallback. */
+  --mono: "Berkeley Mono", "JetBrains Mono", "Commit Mono", ui-monospace,
+    SFMono-Regular, "SF Mono", Menlo, monospace;
+  /* Prose (agent messages) uses the OS refined sans — SF Pro on the target Mac,
+     never a generic web-slop stack. */
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  /* Radius scale — softer, rounder geometry matching the reference's calm cards. */
+  --radius-sm: 7px;
+  --radius: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  /* Soft focus ring — the sage accent at low alpha, no glow. */
+  --focus-ring: 0 0 0 2px rgba(122, 162, 160, 0.28);
 }
 
 * { box-sizing: border-box; }
@@ -64,8 +69,11 @@ html, body, #cockpit-root {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--sans);
   font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .cockpit {
@@ -80,9 +88,9 @@ body {
 .topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  height: 44px;
-  padding: 0 14px;
+  gap: 18px;
+  height: 48px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
   -webkit-app-region: drag;
@@ -114,7 +122,7 @@ body {
   object-fit: contain; flex-shrink: 0;
   image-rendering: -webkit-optimize-contrast;
 }
-.brand-name { font-weight: 600; font-size: 13px; letter-spacing: -0.01em; color: var(--text); }
+.brand-name { font-family: var(--mono); font-weight: 600; font-size: 13px; letter-spacing: 0.02em; color: var(--text); }
 .brand-sub {
   color: var(--text-faint); font-size: 11px; font-family: var(--mono); margin-left: 6px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
@@ -215,8 +223,11 @@ body {
 
 /* Main layout */
 .main { flex: 1; display: flex; min-height: 0; background: var(--bg); }
-.board-area { flex: 1; overflow: auto; padding: 20px; }
+.board-area { flex: 1; overflow: auto; padding: 24px; }
 .board-area.with-detail { max-width: calc(100% - 460px); }
+/* Hidden when a conversation is open — stays mounted (the pipeline keeps
+   updating) but the center pane is the thread alone, like the reference. */
+.board-area-hidden { display: none; }
 
 /* 3-pane Conductor-style console: sidebar | center | detail. */
 .main-3pane { display: flex; min-height: 0; }
@@ -293,11 +304,14 @@ body {
   font-weight: 500; white-space: nowrap;
   border: 1px solid var(--border); color: var(--text-dim); background: var(--bg-inset);
 }
-.ws-row-pill.pill-active { color: var(--text-dim); border-color: rgba(59, 130, 246, 0.28); }
-.ws-row-pill.pill-progress { color: var(--text-dim); border-color: rgba(163, 113, 247, 0.24); }
-.ws-row-pill.pill-good { color: var(--text-dim); border-color: rgba(63, 185, 80, 0.24); }
-.ws-row-pill.pill-warn { color: var(--text-dim); border-color: rgba(210, 153, 34, 0.26); }
-.ws-row-pill.pill-bad { color: var(--text-dim); border-color: rgba(248, 81, 73, 0.26); }
+/* Soft-tinted pills — the state hue reads in the TEXT (calmly), on a matching
+   low-alpha border + wash. Legible like the reference ("Ready to merge" green,
+   "Merge conflicts" amber) without a saturated fill. */
+.ws-row-pill.pill-active { color: var(--active); border-color: rgba(122, 162, 160, 0.32); background: rgba(122, 162, 160, 0.06); }
+.ws-row-pill.pill-progress { color: var(--progress); border-color: rgba(185, 155, 216, 0.3); background: rgba(185, 155, 216, 0.06); }
+.ws-row-pill.pill-good { color: var(--good); border-color: rgba(107, 191, 138, 0.3); background: rgba(107, 191, 138, 0.06); }
+.ws-row-pill.pill-warn { color: var(--warn); border-color: rgba(217, 164, 65, 0.32); background: rgba(217, 164, 65, 0.07); }
+.ws-row-pill.pill-bad { color: var(--bad); border-color: rgba(224, 113, 95, 0.32); background: rgba(224, 113, 95, 0.06); }
 .ws-row-pill.pill-neutral { color: var(--text-dim); }
 
 /* "New workspace" row + "Add repository" footer. */
@@ -330,7 +344,6 @@ body {
    pipeline + so the lifecycle tests can read its cards). */
 .center-pane-thread { display: flex; flex-direction: column; }
 .center-pane-thread .ws-center { flex: 1 1 auto; min-height: 0; }
-.center-pane-thread .board-area-compact { flex: 0 0 auto; max-height: 168px; }
 .ws-center-head {
   display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
   padding: 11px 16px; border-bottom: 1px solid var(--border);
@@ -383,19 +396,26 @@ body {
 .ws-summary-files { color: var(--text-dim); }
 .ws-summary-stat { margin: 0; font-family: var(--mono); font-size: 11px; color: var(--text-dim); background: var(--bg); border-radius: 6px; padding: 8px; overflow: auto; white-space: pre-wrap; }
 
-/* Command bar — input + model chip + Link issue + send button. */
+/* Command bar — one rounded elevated panel (like the reference): the input sits
+   flush inside a card, with the chip row (model · link · send) beneath. The
+   card carries the border; the input is borderless and blends in. */
 .ws-cmdbar {
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg-elev);
+  display: flex; flex-direction: column; gap: 10px;
+  margin: 12px 16px 16px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--bg-card);
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
-.ws-cmdbar-disabled { align-items: flex-start; }
-.ws-cmdbar-disabled-note { font-size: 12.5px; color: var(--text-faint); line-height: 1.4; }
+.ws-cmdbar:focus-within { border-color: var(--border-strong); box-shadow: var(--focus-ring); }
+.ws-cmdbar-disabled { align-items: flex-start; background: var(--bg-inset); }
+.ws-cmdbar-disabled-note { font-size: 12.5px; color: var(--text-faint); line-height: 1.5; }
 .ws-cmdbar-input {
-  width: 100%; background: var(--bg); color: var(--text);
-  border: 1px solid var(--border-strong); border-radius: 9px; padding: 10px 12px;
-  font-size: 13px; font-family: inherit;
+  width: 100%; background: transparent; color: var(--text);
+  border: none; padding: 2px 2px;
+  font-size: 13.5px; font-family: inherit; line-height: 1.5;
 }
-.ws-cmdbar-input:focus { outline: none; border-color: var(--accent); }
+.ws-cmdbar-input::placeholder { color: var(--text-faint); }
+.ws-cmdbar-input:focus { outline: none; }
 .ws-cmdbar-input:disabled { opacity: 0.6; cursor: not-allowed; }
 .ws-cmdbar-row { display: flex; align-items: center; gap: 8px; }
 .ws-cmdbar-chip {
@@ -415,36 +435,38 @@ body {
 .ws-cmdbar-send {
   width: 30px; height: 30px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ready); border: 1px solid var(--ready-border); color: var(--ready-text);
+  background: var(--text); border: 1px solid var(--text); color: var(--bg);
   border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600;
-  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+  transition: opacity 0.12s, transform 0.08s;
 }
-.ws-cmdbar-send:hover:not(:disabled) { background: #323232; border-color: #444444; }
+.ws-cmdbar-send:hover:not(:disabled) { opacity: 0.85; }
+.ws-cmdbar-send:active:not(:disabled) { transform: translateY(1px); }
 .ws-cmdbar-send:disabled { opacity: 0.4; cursor: not-allowed; }
 .ws-cmdbar-error { color: var(--bad); font-size: 11px; }
 
 .board-loading, .board-empty, .board-col-empty { color: var(--text-faint); }
 .board-empty { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 80px; }
 
-/* Board columns */
-.board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; align-items: start; }
+/* Board columns — open lanes (no boxed borders), header label + count, cards
+   stacked below. Calmer than four bordered boxes; the reference's board reads
+   as columns of cards, not framed containers. */
+.board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; align-items: start; }
 .board-col {
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 8px;
   display: flex; flex-direction: column;
   min-height: 120px;
 }
 .board-col-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 4px 12px;
 }
-.board-col-title { font-weight: 600; font-size: 12px; }
+.board-col-title {
+  font-family: var(--mono); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim);
+}
 .board-col-count {
-  background: var(--bg-card); color: var(--text-dim);
-  border-radius: 999px; padding: 1px 8px; font-size: 11px;
+  color: var(--text-faint); font-family: var(--mono); font-size: 11px;
 }
-.board-col-cards { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.board-col-cards { display: flex; flex-direction: column; gap: 10px; }
 .board-col-empty { text-align: center; padding: 14px; }
 
 /* Cards */
@@ -452,13 +474,14 @@ body {
   text-align: left; width: 100%;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 10px; cursor: pointer;
+  border-radius: var(--radius);
+  padding: 12px; cursor: pointer;
   color: var(--text);
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, background 0.12s, transform 0.08s;
 }
-.card:hover { border-color: var(--border-strong); }
-.card-selected { border-color: var(--accent); }
+.card:hover { border-color: var(--border-strong); background: var(--bg-elev); }
+.card:active { transform: translateY(1px); }
+.card-selected { border-color: var(--border-strong); box-shadow: inset 2px 0 0 var(--accent); }
 .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .card-runtime { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
 .card-goal {
@@ -720,14 +743,15 @@ body {
 }
 .view-tab {
   background: transparent; border: none; color: var(--text-dim);
-  border-radius: 0; padding: 5px 11px; cursor: pointer; font-size: 12px; font-weight: 500;
+  border-radius: 0; padding: 5px 11px; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 0.01em;
   border-bottom: 1.5px solid transparent;
   transition: color 0.12s, border-color 0.12s;
 }
 .view-tab:hover { color: var(--text); }
-/* Active tab — quiet light text + a faint underline, not a bright filled box. */
+/* Active tab — light text + a soft accent underline. */
 .view-tab-active {
-  color: var(--text); border-bottom-color: var(--text-faint);
+  color: var(--text); border-bottom-color: var(--accent);
 }
 
 /* "More" menu — one calm dropdown that holds the advanced/technical views so
