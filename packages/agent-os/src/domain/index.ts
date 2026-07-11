@@ -17,3 +17,4 @@ export * from './work-signal';
 export * from './workspace';
 export * from './rbac';
 export * from './audit-envelope';
+export * from './organization';
