@@ -660,7 +660,10 @@ packages/a2a-js/dist/
 # --- Owned component sources, organized by language (2026-06-24) ---
 # Gitignored: large + Mac disk-constrained. Fused/owned code lands in tracked
 # packages/ subsystems; we edit these in place as ours.
-crates/openfang/
+crates/openfang/*
+!crates/openfang/crates/
+crates/openfang/crates/*
+!crates/openfang/crates/openfang-napi/
 crates/claw-code-parity/
 go/beads/
 go/ziti/
