@@ -165,7 +165,7 @@ jobs:
             rust_toolchain_file: ''
 
           # ── macOS x64 (Intel) ─────────────────────────────────────────────
-          - runner: macos-latest
+          - runner: macos-13
             target: x86_64-apple-darwin
             arch: x64
             os_label: mac
@@ -177,7 +177,7 @@ jobs:
             continue_on_error: false
             rust_toolchain_file: ''
 
-          - runner: macos-latest
+          - runner: macos-13
             target: x86_64-apple-darwin
             arch: x64
             os_label: mac
@@ -189,7 +189,7 @@ jobs:
             continue_on_error: false
             rust_toolchain_file: ''
 
-          - runner: macos-latest
+          - runner: macos-13
             target: x86_64-apple-darwin
             arch: x64
             os_label: mac
@@ -201,7 +201,7 @@ jobs:
             continue_on_error: true
             rust_toolchain_file: crates/tensorzero/crates/rust-toolchain.toml
 
-          - runner: macos-latest
+          - runner: macos-13
             target: x86_64-apple-darwin
             arch: x64
             os_label: mac
@@ -213,7 +213,7 @@ jobs:
             continue_on_error: true
             rust_toolchain_file: ''
 
-          - runner: macos-latest
+          - runner: macos-13
             target: x86_64-apple-darwin
             arch: x64
             os_label: mac
