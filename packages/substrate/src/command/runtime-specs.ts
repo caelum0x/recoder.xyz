@@ -24,8 +24,12 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
       `claude -p ${shellQuote(o.prompt)} --permission-mode acceptEdits${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   codex: {
+    // `codex exec` defaults to a read-only sandbox, which blocks the agent from
+    // writing files even inside its own worktree. `--sandbox workspace-write`
+    // allows edits under the cwd (the isolated worktree) while staying sandboxed.
     bin: 'codex',
-    build: (o) => `codex exec ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    build: (o) =>
+      `codex exec ${shellQuote(o.prompt)} --sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   opencode: {
     bin: 'opencode',

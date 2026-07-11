@@ -13,7 +13,7 @@ const PROMPT = 'fix the bug';
 // Exact expected command line per runtime, prompt single-quoted at the chokepoint.
 const EXPECTED: Record<string, string> = {
   claude_code: "claude -p 'fix the bug' --permission-mode acceptEdits",
-  codex: "codex exec 'fix the bug'",
+  codex: "codex exec 'fix the bug' --sandbox workspace-write",
   opencode: "opencode run 'fix the bug'",
   recoder_code: "recoder-code --prompt 'fix the bug'",
   pi: "pi --print 'fix the bug' -ne",
@@ -56,7 +56,7 @@ test('model override is appended and shell-quoted for each runtime', () => {
     "claude -p 'fix the bug' --permission-mode acceptEdits --model 'opus-4'",
   );
   const codex = resolveRuntimeCommand('codex', { prompt: PROMPT, model: 'gpt-5' });
-  assert.equal(codex.commandLine, "codex exec 'fix the bug' --model 'gpt-5'");
+  assert.equal(codex.commandLine, "codex exec 'fix the bug' --sandbox workspace-write --model 'gpt-5'");
 });
 
 test('extraArgs are appended verbatim after the model flag', () => {
