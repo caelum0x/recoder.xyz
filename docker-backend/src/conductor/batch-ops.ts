@@ -80,6 +80,8 @@ export async function bulkCancel(filter: {
 export async function bulkArchive(filter: {
   projectId?: string;
   states?: string[];
+  /** Owner scope — enforced by the route's scopeBatchFilter under strict auth. */
+  createdBy?: string;
 }): Promise<BatchResult> {
   const all = await listWorkspaces();
   const terminalStates = filter.states ?? ['merged', 'failed', 'cancelled'];
@@ -87,6 +89,7 @@ export async function bulkArchive(filter: {
     (w) =>
       terminalStates.includes(w.state) &&
       (!filter.projectId || w.projectId === filter.projectId) &&
+      (!filter.createdBy || w.createdBy === filter.createdBy) &&
       w.state !== 'archived',
   );
 
