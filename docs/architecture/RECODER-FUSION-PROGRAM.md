@@ -4,6 +4,35 @@
 >
 > **This overrides the "still park" list in `WIRE-UP-BACKLOG.md`.** The parked upstreams (tensorzero, lance, openfang, ziti, multica, browser-use, mem0, ops-recorder, claw-code-parity) are now IN SCOPE — each fused via its correct integration mode.
 
+## The cake — Recoder is composed LAYER BY LAYER (not a connector army)
+
+Full composition, onion/cake style: each layer is a *complete* composition of its ingredients, built on the layer below. All ingredients already exist in the repo. Build bottom-up; a layer is done only when everything above can stand on it.
+
+```
+        ┌─────────────────────────────────────────────────────────┐
+  L5 ▏  │ DISTRIBUTION — signed .dmg/msi/deb, homebrew, auto-update │  icing
+        ├─────────────────────────────────────────────────────────┤
+  L4 ▏  │ SURFACES — desktop shell + rich cockpit (panels), mobile  │  frosting
+        ├─────────────────────────────────────────────────────────┤
+  L3 ▏  │ POLYGLOT ENGINES fused as authorities — Rust (governance✅,│  filling
+        │ openfang, tensorzero, lance), Go (ziti, multica, xds),     │
+        │ Python (colbert✅, mem0, browser-use, ops-recorder)        │
+        ├─────────────────────────────────────────────────────────┤
+  L2 ▏  │ RUNTIME HOST — docker-backend composes ALL L1 in-process   │  sponge
+        ├─────────────────────────────────────────────────────────┤
+  L1 ▏  │ CORE ENGINES (TS, in-process fusion) — agent-os spine,     │  sponge
+        │ coordination, governance-TS, brain, runtime, interop,      │
+        │ pal✅, workflows✅, hooks✅, schemas✅, a2a-sdk, memory     │
+        ├─────────────────────────────────────────────────────────┤
+  L0 ▏  │ SUBSTRATE — c/tmux + git worktrees + Postgres state +      │  base
+        │ reconciler (restart-survivable — the moat)                 │
+        └─────────────────────────────────────────────────────────┘
+```
+
+**Composition status:** L0 ✅ real · L1 ✅ mostly fused (11/15 packages + governance-TS) · L2 ✅ (docker-backend; server.ts monolith is the debt) · **L3 🔄 in progress (governance daemon ✅ DONE, colbert ✅; openfang/tensorzero/lance/ziti/multica/mem0/browser-use/ops-recorder pending)** · L4 🔄 thin (cockpit needs the panel composition) · L5 ⬜ (signing done in P0d runbook; packaging pending).
+
+Build order from here: **finish L3 (fuse the remaining polyglot authorities) → compose L4 (surface every fused capability as cockpit panels) → L5 (package the whole cake).**
+
 ## The fusion law (from `INTEGRATION-PLAN.md` — non-negotiable)
 
 Every component fuses in exactly ONE mode. HTTP is NOT the default — **in-process fusion is**:
@@ -29,7 +58,7 @@ Rust builds are heavy and the box is disk-constrained (per memory) — build out
 
 | Crate | Mode | Fuse into (seam) | Notes |
 |---|---|---|---|
-| `crates/recoder-governance` | subprocess/UDS | governance daemon behind `packages/governance` facade via `GOVERNANCE_SOCKET` | Kernel built + e2e-proven; just needs the socket wired + supervised. **Highest leverage.** |
+| `crates/recoder-governance` | subprocess/UDS | governance daemon behind `packages/governance` facade via `GOVERNANCE_SOCKET` | ✅ **DONE** — binaries prebuilt (release+debug), boot-spawn wired in server.ts:12404, facade delegates over UDS with degrade-safe TS fallback, 12/12 tests. Activates when `INTERNAL_SERVICE_KEY` set. |
 | `crates/openfang` | subprocess/loopback | 24/7 autonomous-agent engine; A2A boundary (Recoder owns task/approval/memory) | Config exists (`openfang.toml`); build binary, supervise, emit RunEvents |
 | `crates/tensorzero` | subprocess/loopback | LLM gateway → inference logging/eval/A-B, consumed by `packages/runtime` | Unifies provider calls; observability |
 | `crates/lance` | subprocess (via py bindings) | vector store backing retrieval/memory | Feeds colbert/mem0 retrieval |
