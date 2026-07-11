@@ -37,6 +37,8 @@
     "dev:desktop": "cd apps/desktop && npm run start",
     "start": "pnpm run start:engine",
     "start:engine": "cd docker-backend && pnpm start",
+    "herd": "pnpm --filter @recoder/herd build && node packages/herd/dist/cli.js",
+    "herd:once": "pnpm --filter @recoder/herd build && node packages/herd/dist/cli.js --once",
     "test": "pnpm run test:all",
     "test:all": "npm-run-all --parallel test:core test:platforms",
     "test:coverage": "npm-run-all --parallel test:coverage:docker-backend",

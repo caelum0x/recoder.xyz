@@ -27,6 +27,11 @@ export async function fetchWorkspaces(backend: string, token?: string): Promise<
     );
   }
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new HerdBackendError(
+        `backend requires auth (${res.status}) — set RECODER_TOKEN to the conductor bearer token`,
+      );
+    }
     throw new HerdBackendError(`backend replied ${res.status} for /api/conductor/workspaces`);
   }
   const body = (await res.json()) as Envelope<Workspace[]> | Workspace[];
