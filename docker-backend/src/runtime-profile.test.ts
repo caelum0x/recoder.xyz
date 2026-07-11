@@ -34,6 +34,7 @@ describe('resolveRuntimeProfile', () => {
     const p = resolveRuntimeProfile({ REDIS_URL: 'redis://x' });
     expect(p.quotaBackend).toBe('redis');
     expect(p.rateLimitBackend).toBe('redis');
+    expect(resolveRuntimeProfile({ RECODER_A2A_REDIS_URL: 'redis://y' }).quotaBackend).toBe('redis');
     const q = resolveRuntimeProfile({});
     expect(q.quotaBackend).toBe('in_process');
   });

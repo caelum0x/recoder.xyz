@@ -58,6 +58,7 @@ export function membershipPermissions(membership: Membership): Set<Permission> {
   return permissionsForRoles([membership.role]);
 }
 
+/** True when a seat is actively assigned and in use. */
 export function isSeatActive(seat: Seat): boolean {
   return seat.status === 'active';
 }
