@@ -29,7 +29,7 @@ Full composition, onion/cake style: each layer is a *complete* composition of it
         └─────────────────────────────────────────────────────────┘
 ```
 
-**Composition status:** L0 ✅ real · L1 ✅ mostly fused (11/15 packages + governance-TS) · L2 ✅ (docker-backend; server.ts monolith is the debt) · **L3 🔄 in progress (governance daemon ✅, colbert ✅, browser-use ✅; openfang/tensorzero/lance/ziti/multica/mem0/ops-recorder pending)** · L4 🔄 thin (cockpit needs the panel composition) · L5 ⬜ (signing done in P0d runbook; packaging pending).
+**Composition status:** L0 ✅ real · L1 ✅ mostly fused (11/15 packages + governance-TS) · L2 ✅ (docker-backend; server.ts monolith is the debt) · **L3 ✅ ALL SEAMS FUSED (governance, colbert, browser-use, mem0, ops-recorder, openfang, tensorzero, lance, ziti, multica) — degrade-safe; native binaries (openfang/tensorzero/lance/ziti/multica) activate when built** · L4 🔄 thin (cockpit needs the panel composition) · L5 ⬜ (signing done in P0d runbook; packaging pending).
 
 Build order from here: **finish L3 (fuse the remaining polyglot authorities) → compose L4 (surface every fused capability as cockpit panels) → L5 (package the whole cake).**
 
@@ -49,7 +49,7 @@ The desktop embeds `docker-backend` (the fused spine); `docker-backend` in-proce
 
 | Subsystem | Mode | Fuse into (seam) | Status |
 |---|---|---|---|
-| `py/ops-recorder` | subprocess/stdio | `/work-signals` ingress in docker-backend (Python↔TS bridge) | ⬜ open |
+| `py/ops-recorder` | subprocess/loopback | ✅ **DONE** — `ops-recorder-adapter.ts` forwards to py service behind `OPS_RECORDER_URL`; work-signals ingress accepts fused shape; degrade-safe; 27 tests (commit 9fd3cd517) |
 | `packages/recoder-browser-tools` | in-process | browser-check node (needs CJS dist first) | ⬜ open |
 
 ## Wave B — Fuse the parked Rust crates (subprocess/UDS, build-gated)
@@ -59,19 +59,19 @@ Rust builds are heavy and the box is disk-constrained (per memory) — build out
 | Crate | Mode | Fuse into (seam) | Notes |
 |---|---|---|---|
 | `crates/recoder-governance` | subprocess/UDS | governance daemon behind `packages/governance` facade via `GOVERNANCE_SOCKET` | ✅ **DONE** — binaries prebuilt (release+debug), boot-spawn wired in server.ts:12404, facade delegates over UDS with degrade-safe TS fallback, 12/12 tests. Activates when `INTERNAL_SERVICE_KEY` set. |
-| `crates/openfang` | subprocess/loopback | 24/7 autonomous-agent engine; A2A boundary (Recoder owns task/approval/memory) | Config exists (`openfang.toml`); build binary, supervise, emit RunEvents |
-| `crates/tensorzero` | subprocess/loopback | LLM gateway → inference logging/eval/A-B, consumed by `packages/runtime` | Unifies provider calls; observability |
-| `crates/lance` | subprocess (via py bindings) | vector store backing retrieval/memory | Feeds colbert/mem0 retrieval |
+| `crates/openfang` | subprocess/loopback | ✅ **DONE** — `openfang-daemon.ts` (governance-pattern): boot-spawn when binary present, `/api/agents/openfang` edge, backoff-supervised, degrade-safe 503; 12 tests (b3bb0d572). Rust build deferred. |
+| `crates/tensorzero` | subprocess/loopback | ✅ **DONE** — `tensorzero-client.ts` + `/api/gateway/*`; supervised loopback, degrade-safe when absent; runtime observability logger; 26 tests (0dd427f02). Rust build deferred. |
+| `crates/lance` | subprocess/lib | ✅ **DONE** — `@recoder/rag` vector-store seam, degrade-safe SDK-absent fallback + truthful skipReason; 97 tests (ac82795b5). LanceDB SDK/build deferred. |
 | `crates/claw-code-parity` | in-process/subprocess (TBD on inspection) | parity harness into the eval/runtime path | Inspect interface first |
 
 ## Wave C — Fuse the parked Go + Python subsystems
 
 | Subsystem | Mode | Fuse into (seam) | Notes |
 |---|---|---|---|
-| `go/ziti` | subprocess/loopback | zero-trust mesh; `ziti-client.ts` + `routes/ziti.routes.ts` already exist — compile the controller, wire enrollment | Backend routes exist; needs the compiled binary |
-| `go/multica` | subprocess/loopback | managed-agents/squads assignment behind docker-backend | Inspect interface; squad assignment |
+| `go/ziti` | subprocess/loopback | ✅ **DONE** — strengthened `ziti-client.ts` degrade-safe + truthful health; 19 tests (ee894da93). Controller compile deferred. |
+| `go/multica` | subprocess/loopback | ✅ **DONE** — `multica-client.ts` degrade-safe loopback adapter gated by `MULTICA_BIN`/URL; 19 tests (259d8666b). Go build deferred. |
 | `py/browser-use` | subprocess/MCP | ✅ **DONE** — `PYTHON_SERVERS` registry entry `browser-use` (`python -m browser_use.mcp`), gated `BROWSER_USE_ENABLED`, surfaced via `/api/mcp`, policy-gated, 15 tests. Python env + `playwright install` deferred (container build). |
-| `py/mem0` | subprocess/loopback | durable memory backing `packages/brain` (dedupe vs `packages/mem0` TS — pick one runtime, per docs) | Resolve the dual-runtime duplication as part of fusion |
+| `py/mem0` | in-process + loopback | ✅ **DONE** — `createMemoryAuthority`: in-process TS default, py/mem0 optional loopback via `MEM0_SERVICE_URL`; degrade-safe; 197 brain tests (044e77e00). Server activation deferred. |
 | `go/recoder-xds` | subprocess/loopback | Envoy xDS control plane (enterprise mesh) | Later; diagnostics surface |
 
 ## Wave D — Surface the fused product in the cockpit (per DESKTOP-COMPREHENSIVE-INTEGRATION.md)
