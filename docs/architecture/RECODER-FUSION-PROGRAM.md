@@ -111,3 +111,13 @@ Three proofs pass against the composed stack:
 3. `apps/desktop/scripts/dev-boot-proof.js` → EXIT 0: desktop supervisor boots embedded docker-backend, **Rust governance daemon spawns and routes delivery decisions**, **c/tmux substrate resolved+live**, `/api/conductor/health` 200 `{available,git,tmux}`, Redis-absent degrades to in-memory (degrade-safe verified), clean shutdown.
 
 Verdict: L0→L4 + native governance are composed AND running end-to-end. Remaining = 3 disk-deferred native compiles + signed .dmg + external-service activation (all disk/CI-gated, not code-blocked).
+
+## Wave F — herdr (owner add, 2026-07-11) — ⚠️ LICENSE-GATED
+
+`herdr` (github.com/ogulcancelik/herdr) — a Rust agent-multiplexer TUI (tmux-style, session-survival, socket API for agents; one binary, no Electron). Heavily overlaps Recoder's OWN conductor + `ts/dmux`.
+
+- **Vendored:** `crates/herdr/` (gitignored, on-disk only — matches openfang/tensorzero vendored-subtree policy).
+- **⚠️ LICENSE = AGPL-3.0-or-later OR commercial** (hey@herdr.dev). Recoder is a COMMERCIAL product (billing/Polar/enterprise). AGPL is network-copyleft: shipping/serving a work that incorporates herdr can force AGPL on the combined work (incl. network-served) — a non-starter for a proprietary product — UNLESS a commercial license is obtained. **This is an OWNER/legal decision. Do NOT link or ship herdr code until it's resolved.**
+- **Only sane integration if approved:** arms-length **subprocess** — spawn the separate `herdr` binary + talk to its socket API (`src/ipc.rs`, `src/app/api.rs`); never link its source. Even then, AGPL reach over combined works is legally nuanced. Degrade-safe adapter, gated behind an env flag.
+- **Alternative:** herdr does what Recoder's own conductor/dmux already do (Recoder-owned, no license issue) — take inspiration, not the AGPL code.
+- **Build note:** `cargo build --release` of herdr is multi-GB; disk is ~2.6 GB — build belongs on CI, not locally.
