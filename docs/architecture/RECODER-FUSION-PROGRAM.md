@@ -102,3 +102,12 @@ Deeper than supervised-subprocess: each Rust crate gets a `#[napi]` cdylib bindi
 | `claw-code-parity` | ✅ claw-code-parity-napi | ✅ `a2a-openclaw-adapter.ts` | ⏸ deferred (~7.5–8.5 GB) | 10 (0e1d938) |
 
 **Open items:** (1) reclaim disk (currently ~3.7 GB) then `cargo build --release` the 3 deferred `.node`s; (2) add a `.gitignore` exception so `openfang-napi`/`claw-code-parity-napi` binding crates commit to the root repo; (3) wire `napi build` into `electron-builder` `asarUnpack` per-arch for the signed bundle (L5).
+
+## END-TO-END PROOF (2026-07-11) — the fused product RUNS, not just compiles
+
+Three proofs pass against the composed stack:
+1. `docker-backend/scripts/e2e-conductor-loop.ts` → PASS: fused run loop `running → awaiting_review` with real delivery summary + post-run workflow + RunEvents (no BYOK key).
+2. `docker-backend/scripts/e2e-conductor-approval.ts` → EXIT 0: governance gate enforced, Merkle auditHash, native `NapiGovernanceKernel` loads in-process.
+3. `apps/desktop/scripts/dev-boot-proof.js` → EXIT 0: desktop supervisor boots embedded docker-backend, **Rust governance daemon spawns and routes delivery decisions**, **c/tmux substrate resolved+live**, `/api/conductor/health` 200 `{available,git,tmux}`, Redis-absent degrades to in-memory (degrade-safe verified), clean shutdown.
+
+Verdict: L0→L4 + native governance are composed AND running end-to-end. Remaining = 3 disk-deferred native compiles + signed .dmg + external-service activation (all disk/CI-gated, not code-blocked).
