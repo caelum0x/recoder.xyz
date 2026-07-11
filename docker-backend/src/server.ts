@@ -12225,6 +12225,7 @@ import { createCodeGraphRouter } from './routes/code-graph.routes.js';
 import { createLlmRouterRouter } from './routes/llm-router.routes.js';
 import { createZitiRouter } from './routes/ziti.routes.js';
 import { createTensorzeroRouter } from './routes/tensorzero.routes.js';
+import { createMulticaRouter } from './routes/multica.routes.js';
 import { createAgentSkillProfilesRouter } from './routes/agent-skill-profiles.routes.js';
 import { createMem0Router } from './routes/mem0.routes.js';
 import { createContext7Router } from './routes/context7.routes.js';
@@ -13367,6 +13368,14 @@ app.use(createLlmRouterRouter({ authenticateRequest }));
 // inference logging + routing at /api/gateway/*. Returns 503 when unconfigured.
 
 app.use(createTensorzeroRouter({ authenticateRequest }));
+
+// ── Multica Managed-Agents / Squads API ──────────────────────────────────────
+// Degrade-safe loopback adapter for the Multica managed-agents platform.
+// Surfaces squad/assignment status at /api/multica/*. Returns 503 when
+// unconfigured (no MULTICA_URL or prebuilt binary). Local squad.service.ts
+// remains authoritative; Multica is an optional enrichment layer.
+
+app.use(createMulticaRouter({ authenticateRequest }));
 
 // ── Code Intelligence API (code knowledge graph) ────────────────────────────
 // Build a queryable symbol/import graph from project files so agents can

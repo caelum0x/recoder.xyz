@@ -697,6 +697,49 @@ export interface OpenfangAgentCard {
   listenAddr: string | null;
 }
 
+/**
+ * Multica managed-agents/squads surface types — mirror the real /api/multica/* shapes.
+ *
+ * Source of truth:
+ *  - docker-backend/src/routes/multica.routes.ts (createMulticaRouter)
+ *  - docker-backend/src/multica-client.ts (MulticaSquad, MulticaHealthResult)
+ *
+ * Mounted at /api/multica (NOT /api/conductor or /api/agent-os).
+ */
+
+/** GET /api/multica/status — truthful Multica seam health (503 when unconfigured). */
+export interface MulticaStatus {
+  service: 'multica';
+  available: boolean;
+  mode: 'managed' | 'external' | 'unconfigured';
+  baseUrl: string | null;
+  listenAddr: string | null;
+  binaryFound: boolean;
+  reason?: string;
+  env: {
+    MULTICA_URL: boolean;
+    MULTICA_BIN: boolean;
+  };
+}
+
+/** A single squad returned by Multica. */
+export interface MulticaSquad {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string;
+  leader_id: string;
+  member_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /api/multica/squads — list of squads from Multica (empty when routed=false). */
+export interface MulticaSquadsResult {
+  routed: boolean;
+  squads: MulticaSquad[];
+}
+
 /** The standard backend envelope: { success, data?, error? }. */
 export interface ApiEnvelope<T> {
   success: boolean;

@@ -222,6 +222,17 @@ export const PANEL_REGISTRY: readonly PanelEntry[] = [
       return m.NetworkingPanel as unknown as PanelComponent;
     },
   },
+  {
+    id: 'squads',
+    title: 'Squads',
+    capability: 'multica-managed-agents',
+    healthKey: null,
+    primary: false,
+    load: async () => {
+      const m = await import('../components/SquadsPanel');
+      return m.SquadsPanel as unknown as PanelComponent;
+    },
+  },
 ];
 
 /** Look up a panel entry by its stable id. Returns undefined when not found. */
