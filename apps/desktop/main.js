@@ -93,6 +93,10 @@ const PROTOCOL_SCHEME = 'recoder';
 // Get URL from environment variable or default to production
 const APP_URL = process.env.APP_URL || 'https://recoder.xyz/';
 
+// The web app's sign-in route. recoder.xyz serves auth at /auth/signin
+// (bare /auth is a 404 on production — never point the window there).
+const AUTH_PATH = '/auth/signin';
+
 // Simple dev check without ES module dependency
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -2058,8 +2062,8 @@ function createWindow() {
 
   // Always load auth page directly for desktop app
   const authUrl = normalizedUrl.endsWith('/')
-    ? normalizedUrl + 'auth'
-    : normalizedUrl + '/auth';
+    ? normalizedUrl + AUTH_PATH.slice(1)
+    : normalizedUrl + AUTH_PATH;
 
   // Load the bundled conductor cockpit renderer (real local file, not the web app).
   // The renderer reads window.__RECODER_COCKPIT__ (injected via preload) for
@@ -2365,7 +2369,7 @@ function createWindow() {
         history.pushState = function() {
           const url = arguments[2];
           if (url === '/' || url === '') {
-            window.location.href = '/auth';
+            window.location.href = '/auth/signin';
             return;
           }
           return originalPushState.apply(history, arguments);
@@ -2374,19 +2378,19 @@ function createWindow() {
         history.replaceState = function() {
           const url = arguments[2];
           if (url === '/' || url === '') {
-            window.location.href = '/auth';
+            window.location.href = '/auth/signin';
             return;
           }
           return originalReplaceState.apply(history, arguments);
         };
         
         if (window.location.pathname === '/' || window.location.pathname === '') {
-          window.location.href = '/auth';
+          window.location.href = '/auth/signin';
         }
         
         window.addEventListener('popstate', function() {
           if (window.location.pathname === '/' || window.location.pathname === '') {
-            window.location.href = '/auth';
+            window.location.href = '/auth/signin';
           }
         });
         
