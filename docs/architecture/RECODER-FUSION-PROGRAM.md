@@ -112,12 +112,19 @@ Three proofs pass against the composed stack:
 
 Verdict: L0→L4 + native governance are composed AND running end-to-end. Remaining = 3 disk-deferred native compiles + signed .dmg + external-service activation (all disk/CI-gated, not code-blocked).
 
-## Wave F — herdr (owner add, 2026-07-11) — ⚠️ LICENSE-GATED
+## Wave F — herdr → `@recoder/herd` (RESOLVED 2026-07-11)
 
-`herdr` (github.com/ogulcancelik/herdr) — a Rust agent-multiplexer TUI (tmux-style, session-survival, socket API for agents; one binary, no Electron). Heavily overlaps Recoder's OWN conductor + `ts/dmux`.
+`herdr` (github.com/ogulcancelik/herdr, AGPL-3.0-or-later/commercial) was briefly
+vendored for evaluation and **removed** on owner decision — AGPL network-copyleft
+is incompatible with shipping Recoder commercially, and everything herdr offers
+was already Recoder-owned or cheaply buildable:
 
-- **Vendored:** `crates/herdr/` (gitignored, on-disk only — matches openfang/tensorzero vendored-subtree policy).
-- **⚠️ LICENSE = AGPL-3.0-or-later OR commercial** (hey@herdr.dev). Recoder is a COMMERCIAL product (billing/Polar/enterprise). AGPL is network-copyleft: shipping/serving a work that incorporates herdr can force AGPL on the combined work (incl. network-served) — a non-starter for a proprietary product — UNLESS a commercial license is obtained. **This is an OWNER/legal decision. Do NOT link or ship herdr code until it's resolved.**
-- **Only sane integration if approved:** arms-length **subprocess** — spawn the separate `herdr` binary + talk to its socket API (`src/ipc.rs`, `src/app/api.rs`); never link its source. Even then, AGPL reach over combined works is legally nuanced. Degrade-safe adapter, gated behind an env flag.
-- **Alternative:** herdr does what Recoder's own conductor/dmux already do (Recoder-owned, no license issue) — take inspiration, not the AGPL code.
-- **Build note:** `cargo build --release` of herdr is multi-GB; disk is ~2.6 GB — build belongs on CI, not locally.
+- **Shipped instead:** `packages/herd` (`recoder-herd`, MIT-clean, zero runtime
+  deps) — the terminal at-a-glance herd view over the conductor API (NEEDS YOU /
+  WORKING / FAILED / DONE, goal labels, digit-key attach to the real tmux
+  session, `--once` for scripting). Implemented from the public feature
+  description only; no herdr code was read into the implementation.
+- **Already owned:** detach/reattach + restart survival (tmux substrate), agents
+  spawning/observing agents (conductor + MCP API), desktop board (cockpit).
+- If a commercial herdr license is ever obtained, re-evaluation starts from a
+  fresh clone — nothing herdr-derived exists in this tree.
