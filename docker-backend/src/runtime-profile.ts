@@ -54,3 +54,18 @@ export function resolveRuntimeProfile(env: NodeJS.ProcessEnv = process.env): Run
     rateLimitBackend: backend,
   });
 }
+
+let cachedProfile: RuntimeProfile | null = null;
+
+/** The boot-time RuntimeProfile, resolved once from process.env and memoized. */
+export function getRuntimeProfile(): RuntimeProfile {
+  if (cachedProfile === null) {
+    cachedProfile = resolveRuntimeProfile(process.env);
+  }
+  return cachedProfile;
+}
+
+/** Test-only: clear the memoized profile so the next getRuntimeProfile re-resolves. */
+export function resetRuntimeProfileForTest(): void {
+  cachedProfile = null;
+}
