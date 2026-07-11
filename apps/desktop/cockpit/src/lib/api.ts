@@ -74,6 +74,8 @@ import type {
   SubstrateAvailability,
   Workspace,
   WorkspaceDiff,
+  ZitiHealth,
+  ZitiIdentityList,
 } from '../types';
 import { readConfig } from './config';
 
@@ -207,6 +209,11 @@ function gatewayRequest<T>(method: string, path: string, body?: unknown): Promis
 /** OpenFang agent request: every call hits `${backendUrl}/api/agents/openfang/...`. */
 function openfangRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
   return requestAt<T>('/api/agents/openfang', method, path, body);
+}
+
+/** Ziti networking request: every call hits `${backendUrl}/api/ziti/...`. */
+function zitiRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return requestAt<T>('/api/ziti', method, path, body);
 }
 
 /**
@@ -405,4 +412,20 @@ export const api = {
    * Read-only — respects the A2A boundary (Recoder owns task/approval/memory state).
    */
   openfangAgent: () => openfangRequest<OpenfangAgentCard>('GET', '/'),
+
+  // --- Zero-Trust Networking (OpenZiti) surface (mounted at /api/ziti) ---
+
+  /**
+   * GET /api/ziti/health — truthful mesh health.
+   * Returns { available: false } when ZITI_CONTROLLER_URL is absent or the
+   * controller is unreachable. No auth required (public liveness check).
+   */
+  zitiHealth: () => zitiRequest<ZitiHealth>('GET', '/health'),
+
+  /**
+   * GET /api/ziti/identities — list of provisioned zero-trust identities.
+   * Requires auth. Returns { available: false, identities: [] } when Ziti is
+   * unconfigured — never fabricates identity data.
+   */
+  zitiIdentities: () => zitiRequest<ZitiIdentityList>('GET', '/identities'),
 };

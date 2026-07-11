@@ -211,6 +211,17 @@ export const PANEL_REGISTRY: readonly PanelEntry[] = [
       return m.AgentsPanel as unknown as PanelComponent;
     },
   },
+  {
+    id: 'networking',
+    title: 'Networking',
+    capability: 'ziti-zero-trust-mesh',
+    healthKey: null,
+    primary: false,
+    load: async () => {
+      const m = await import('../components/NetworkingPanel');
+      return m.NetworkingPanel as unknown as PanelComponent;
+    },
+  },
 ];
 
 /** Look up a panel entry by its stable id. Returns undefined when not found. */
