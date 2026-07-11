@@ -11,6 +11,8 @@
  * resume after a backend restart. See docs/CONDUCTOR-ARCHITECTURE.md.
  */
 
+import type { TenantContext } from './tenant-context';
+
 export type WorkspaceState =
   | 'created'
   | 'setting_up'
@@ -63,6 +65,8 @@ export type Workspace = {
   updatedAt: string;
   archivedAt?: string;
   metadata?: Record<string, unknown>;
+  /** Tenancy binding. Absent on legacy/embedded records (resolves to LOCAL_TENANT). */
+  tenant?: TenantContext;
 };
 
 const ALLOWED_TRANSITIONS: Record<WorkspaceState, readonly WorkspaceState[]> = {
