@@ -270,6 +270,7 @@ body {
 .ws-row:hover { background: var(--bg-card); }
 .ws-row-active { background: var(--bg-card); border-color: var(--border-strong); }
 .ws-row-collision { border-color: rgba(210, 153, 34, 0.45); }
+.ws-row-needs-input { box-shadow: inset 2px 0 0 #f0c77a; }
 /* Status dots — desaturated: the semantic hue reads quietly at reduced opacity,
    so state is legible without shouting. No glow. */
 .ws-row-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--neutral); opacity: 0.85; }

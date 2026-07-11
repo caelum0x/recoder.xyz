@@ -24,6 +24,8 @@ interface WorkspaceSidebarProps {
   loading: boolean;
   onSelect: (id: string) => void;
   onNewWorkspace: () => void;
+  /** workspaceId → prompt a running agent is blocked on (needs_input). */
+  waits?: Record<string, string>;
 }
 
 function DiffStat({ workspace }: { workspace: Workspace }) {
@@ -41,19 +43,21 @@ function WorkspaceRow({
   workspace,
   selected,
   onSelect,
+  waitPrompt,
 }: {
   workspace: Workspace;
   selected: boolean;
   onSelect: (id: string) => void;
+  waitPrompt?: string;
 }) {
   const collision = lockConflict(workspace);
-  const tone = collision ? 'warn' : stateTone(workspace.state);
-  const pill = statePill(workspace.state, Boolean(collision));
+  const tone = waitPrompt ? 'warn' : collision ? 'warn' : stateTone(workspace.state);
+  const pill = waitPrompt ? 'Needs you' : statePill(workspace.state, Boolean(collision));
   return (
     <button
-      class={`ws-row ${selected ? 'ws-row-active' : ''} ${collision ? 'ws-row-collision' : ''}`}
+      class={`ws-row ${selected ? 'ws-row-active' : ''} ${collision ? 'ws-row-collision' : ''} ${waitPrompt ? 'ws-row-needs-input' : ''}`}
       onClick={() => onSelect(workspace.workspaceId)}
-      title={`${workspaceGoal(workspace)} (${workspace.branch})`}
+      title={waitPrompt ? `${waitPrompt} — ${workspaceGoal(workspace)}` : `${workspaceGoal(workspace)} (${workspace.branch})`}
     >
       <span class={`ws-row-dot dot-${tone}`} aria-hidden="true" />
       <span class="ws-row-body">
@@ -76,6 +80,7 @@ export function WorkspaceSidebar({
   loading,
   onSelect,
   onNewWorkspace,
+  waits,
 }: WorkspaceSidebarProps) {
   const groups = groupWorkspacesByRepo(workspaces);
 
@@ -111,6 +116,7 @@ export function WorkspaceSidebar({
                     workspace={ws}
                     selected={ws.workspaceId === selectedId}
                     onSelect={onSelect}
+                    waitPrompt={waits?.[ws.workspaceId]}
                   />
                 ))}
                 <button class="ws-new-row" onClick={onNewWorkspace}>
