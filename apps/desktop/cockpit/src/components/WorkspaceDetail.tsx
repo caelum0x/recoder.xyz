@@ -35,6 +35,7 @@ function hasDesktopTerminal(): boolean {
   return Boolean(w.recoderDesktop && typeof w.recoderDesktop.spawnTerminal === 'function');
 }
 import { diffFileList, type DiffFile } from '../lib/diff-files';
+import { workspaceGoal } from '../lib/workspace-goal';
 import type { ConductorSession, WorkspaceDiff } from '../types';
 import {
   canArchive,
@@ -317,9 +318,15 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
         <div>
           <div class="detail-title-row">
             <span class={`ws-row-pill pill-${stateTone(workspace.state)}`}>{statePill(workspace.state)}</span>
-            <h2 class="detail-branch">{workspace.branch}</h2>
+            <h2 class="detail-branch" title={workspaceGoal(workspace)}>{workspaceGoal(workspace)}</h2>
           </div>
           <div class="detail-sub">
+            {workspaceGoal(workspace) !== workspace.branch && (
+              <>
+                <span title={workspace.branch}>{workspace.branch}</span>
+                <span>·</span>
+              </>
+            )}
             <span>{workspace.runtimeId}</span>
             <span>·</span>
             <span>{workspace.substrate}</span>
