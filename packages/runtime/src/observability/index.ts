@@ -22,3 +22,10 @@ export {
   createHealthMonitor,
   type HealthSnapshot,
 } from './health-monitor';
+export {
+  TensorZeroLogger,
+  createTensorZeroLogger,
+  type TensorzeroLoggerOptions,
+  type TensorzeroLogInput,
+  type TensorzeroLogRecord,
+} from './tensorzero-logger';
