@@ -241,6 +241,8 @@ export {
   createHealthMonitor,
   FrameDebugTap,
   createFrameDebugTap,
+  TensorZeroLogger,
+  createTensorZeroLogger,
 } from './observability';
 export type {
   LogLevel,
@@ -249,6 +251,9 @@ export type {
   RunOutcome,
   RunMetricsSnapshot,
   HealthSnapshot,
+  TensorzeroLoggerOptions,
+  TensorzeroLogInput,
+  TensorzeroLogRecord,
 } from './observability';
 
 // Contract re-exports (kept compatible with @recoder/agent-runtimes)

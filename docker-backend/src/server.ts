@@ -12224,6 +12224,7 @@ import { createTemplatesRouter } from './routes/templates.routes.js';
 import { createCodeGraphRouter } from './routes/code-graph.routes.js';
 import { createLlmRouterRouter } from './routes/llm-router.routes.js';
 import { createZitiRouter } from './routes/ziti.routes.js';
+import { createTensorzeroRouter } from './routes/tensorzero.routes.js';
 import { createAgentSkillProfilesRouter } from './routes/agent-skill-profiles.routes.js';
 import { createMem0Router } from './routes/mem0.routes.js';
 import { createContext7Router } from './routes/context7.routes.js';
@@ -12431,6 +12432,24 @@ void ensureOpenfangDaemon()
     }
   })
   .catch((err) => logger.warn({ err }, 'openfang daemon boot step failed (non-fatal, degrading to pure-TS dispatch)'));
+
+// TensorZero LLM gateway: when TENSORZERO_URL is set (external) or a prebuilt
+// gateway binary is present (crates/tensorzero/crates/gateway — target/release|debug,
+// or TENSORZERO_BIN), connect/spawn it so inference calls route through the LLM
+// gateway for logging, routing, and experiment tracking. Degrade-safe: when
+// unconfigured/absent the run loop falls back to direct provider calls (no fake
+// success). Fire-and-forget; a gateway problem never blocks boot.
+import { ensureTensorzeroGateway } from './tensorzero-client.js';
+void ensureTensorzeroGateway()
+  .then((gw) => {
+    if (gw) {
+      logger.info(
+        { baseUrl: gw.baseUrl, listenAddr: gw.listenAddr },
+        'TensorZero gateway ready — inference calls now route through the LLM gateway',
+      );
+    }
+  })
+  .catch((err) => logger.warn({ err }, 'TensorZero gateway boot step failed (non-fatal, degrading to direct provider calls)'));
 
 // Survivability: on boot AND on a periodic timer, reconcile persisted workspaces
 // against the real tmux + git substrate (fire-and-forget; safe no-op when the
@@ -13342,6 +13361,12 @@ app.use(createAgentSkillProfilesRouter({ authenticateRequest }));
 // One endpoint routes to any provider by `provider/model`, BYOK-aware.
 
 app.use(createLlmRouterRouter({ authenticateRequest }));
+
+// ── TensorZero LLM Gateway API ───────────────────────────────────────────────
+// Degrade-safe loopback adapter for TensorZero (crates/tensorzero). Surfaces
+// inference logging + routing at /api/gateway/*. Returns 503 when unconfigured.
+
+app.use(createTensorzeroRouter({ authenticateRequest }));
 
 // ── Code Intelligence API (code knowledge graph) ────────────────────────────
 // Build a queryable symbol/import graph from project files so agents can
