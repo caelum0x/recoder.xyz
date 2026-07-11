@@ -49,3 +49,23 @@ describe('resolveRuntimeProfile', () => {
     expect(() => { (p as unknown as { mode: string }).mode = 'x'; }).toThrow();
   });
 });
+
+import { getRuntimeProfile, resetRuntimeProfileForTest } from './runtime-profile.js';
+
+describe('getRuntimeProfile (boot singleton)', () => {
+  it('resolves once and returns the same frozen instance', () => {
+    resetRuntimeProfileForTest();
+    const a = getRuntimeProfile();
+    const b = getRuntimeProfile();
+    expect(a).toBe(b);
+    expect(Object.isFrozen(a)).toBe(true);
+  });
+
+  it('resetRuntimeProfileForTest forces re-resolution', () => {
+    resetRuntimeProfileForTest();
+    const a = getRuntimeProfile();
+    resetRuntimeProfileForTest();
+    const b = getRuntimeProfile();
+    expect(a).not.toBe(b);
+  });
+});

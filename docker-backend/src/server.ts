@@ -116,6 +116,7 @@ import {
   type AIProviderKeys,
 } from './public-api/byok-provider-keys.js';
 import { startSslRenewalScheduler } from './domain-manager.js';
+import { getRuntimeProfile } from './runtime-profile.js';
 import {
   createWebhookHandler as createPolarWebhookHandler,
   onWebhookEvent,
@@ -350,6 +351,17 @@ function validateEnvironment() {
   if (warnings.length > 0) {
     logger.warn({ warnings }, 'Environment warnings');
   }
+
+  const runtimeProfile = getRuntimeProfile();
+  logger.info(
+    {
+      mode: runtimeProfile.mode,
+      multiTenant: runtimeProfile.multiTenant,
+      distributedState: runtimeProfile.distributedState,
+      quotaBackend: runtimeProfile.quotaBackend,
+    },
+    'Resolved RuntimeProfile at boot',
+  );
 }
 
 function startupInfo(component: string, message: string, details?: Record<string, unknown>): void {
