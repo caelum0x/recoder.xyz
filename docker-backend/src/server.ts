@@ -12413,6 +12413,25 @@ void ensureGovernanceDaemon()
   })
   .catch((err) => logger.warn({ err }, 'governance daemon boot step failed (non-fatal, degrading to pure-TS)'));
 
+// OpenFang autonomous agent engine: when the prebuilt openfang binary is
+// present (crates/openfang — target/release|debug, or OPENFANG_BIN), spawn it
+// on boot as a loopback subprocess so the OSS dispatch path can drive real
+// RunEvents. A2A boundary: Recoder owns task/approval/memory; openfang only
+// emits RunEvents. Degrade-safe: when the binary is absent the backend stays
+// on the pure-TS OpenFangAdapter path (no fake success). Fire-and-forget; a
+// daemon problem never blocks boot.
+import { ensureOpenfangDaemon, createOpenfangAgentRouter } from './conductor/openfang-daemon.js';
+void ensureOpenfangDaemon()
+  .then((daemon) => {
+    if (daemon) {
+      logger.info(
+        { listenAddr: daemon.listenAddr, binPath: daemon.binPath },
+        'openfang daemon up — autonomous agent engine ready (A2A RunEvents route through Recoder)',
+      );
+    }
+  })
+  .catch((err) => logger.warn({ err }, 'openfang daemon boot step failed (non-fatal, degrading to pure-TS dispatch)'));
+
 // Survivability: on boot AND on a periodic timer, reconcile persisted workspaces
 // against the real tmux + git substrate (fire-and-forget; safe no-op when the
 // substrate is unavailable). Per docs/CONDUCTOR-ARCHITECTURE.md §1: the reconciler
@@ -12451,6 +12470,9 @@ app.use('/api/v1/app-keys', appKeysRouter);
 // external Claude Code / Codex clients) takes precedence over the admin-gated legacy
 // connector registry at a2a-gateway.ts (`GET /agents`, `PUT /agents/:id`).
 app.use('/api/a2a/agents', agentRegistryRouter);
+// OpenFang agent edge — health + card behind authenticateRequest. Truthful:
+// returns 503 when the openfang daemon is absent (degrade-safe, never fakes).
+app.use('/api/agents/openfang', authenticateRequest, createOpenfangAgentRouter());
 app.use('/api/a2a', authenticateMutatingRequest, a2aRouter);
 app.use('/api/a2a/tasks', authenticateMutatingRequest, taskLifecycleRouter);
 app.use('/api/a2a/channels', collaborationRouter);
