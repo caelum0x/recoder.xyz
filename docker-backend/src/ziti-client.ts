@@ -19,15 +19,32 @@ const logger = createLogger('ziti-client');
 
 const EDGE_MGMT_PATH = '/edge/management/v1';
 
+// Exported env-key constants — used by tests for safe isolation.
+export const ZITI_CONTROLLER_URL_ENV = 'ZITI_CONTROLLER_URL';
+export const ZITI_API_TOKEN_ENV = 'ZITI_API_TOKEN';
+export const ZITI_ADMIN_USERNAME_ENV = 'ZITI_ADMIN_USERNAME';
+export const ZITI_ADMIN_PASSWORD_ENV = 'ZITI_ADMIN_PASSWORD';
+
+/**
+ * Resolve the controller base URL from the environment.
+ * Exported so tests can assert resolution behaviour without calling the API.
+ */
+export function resolveControllerUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const raw = env[ZITI_CONTROLLER_URL_ENV];
+  if (!raw) return undefined;
+  const trimmed = raw.trim().replace(/\/$/, '');
+  return trimmed || undefined;
+}
+
 function controllerUrl(): string | undefined {
-  const url = process.env.ZITI_CONTROLLER_URL;
-  return url ? url.replace(/\/$/, '') : undefined;
+  return resolveControllerUrl();
 }
 
 function isConfigured(): boolean {
   return !!(
     controllerUrl() &&
-    (process.env.ZITI_API_TOKEN || (process.env.ZITI_ADMIN_USERNAME && process.env.ZITI_ADMIN_PASSWORD))
+    (process.env[ZITI_API_TOKEN_ENV] ||
+      (process.env[ZITI_ADMIN_USERNAME_ENV] && process.env[ZITI_ADMIN_PASSWORD_ENV]))
   );
 }
 
@@ -73,7 +90,8 @@ async function api<T>(method: string, path: string, body?: unknown, token?: stri
 }
 
 async function authenticate(): Promise<string> {
-  if (process.env.ZITI_API_TOKEN) return process.env.ZITI_API_TOKEN;
+  const staticToken = process.env[ZITI_API_TOKEN_ENV];
+  if (staticToken) return staticToken;
 
   if (session && session.expiresAt > Date.now() + 30_000) {
     return session.token;
@@ -82,7 +100,10 @@ async function authenticate(): Promise<string> {
   const result = await api<{ data?: { token?: string; expiresAt?: string } }>(
     'POST',
     '/authenticate?method=password',
-    { username: process.env.ZITI_ADMIN_USERNAME, password: process.env.ZITI_ADMIN_PASSWORD },
+    {
+      username: process.env[ZITI_ADMIN_USERNAME_ENV],
+      password: process.env[ZITI_ADMIN_PASSWORD_ENV],
+    },
   );
   const token = result?.data?.token;
   if (!token) throw new Error('Ziti authentication returned no session token');
@@ -191,4 +212,12 @@ export async function deleteIdentity(id: string): Promise<{ available: boolean; 
     logger.warn({ err, id }, 'Ziti deleteIdentity failed');
     return { available: false, deleted: false, reason: err instanceof Error ? err.message : 'delete failed' };
   }
+}
+
+/**
+ * Reset session cache for test isolation. Do not call from production code.
+ * Mirrors the `__resetXxxForTest` convention used in sibling clients.
+ */
+export function __resetZitiForTest(): void {
+  session = null;
 }
