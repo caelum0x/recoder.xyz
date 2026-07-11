@@ -20,7 +20,14 @@ const publicDir = join(root, 'public');
  */
 const STATIC_ASSETS = ['logo.png'];
 
-const html = `<!DOCTYPE html>
+/**
+ * The index HTML. The JS/CSS hrefs are content-hashed (filled in after the
+ * build) so a rebuilt bundle is a NEW url — Electron's renderer cache can never
+ * serve a stale cockpit.js after an update. (Before this, the fixed
+ * `cockpit.js`/`cockpit.css` names meant a restart kept serving cached assets.)
+ */
+function renderHtml({ js, css }) {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -28,14 +35,15 @@ const html = `<!DOCTYPE html>
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://localhost:* http://127.0.0.1:* https://*;" />
   <title>Recoder Cockpit</title>
-  <link rel="stylesheet" href="./cockpit.css" />
+  <link rel="stylesheet" href="./${css}" />
 </head>
 <body>
   <div id="cockpit-root"></div>
-  <script src="./cockpit.js"></script>
+  <script src="./${js}"></script>
 </body>
 </html>
 `;
+}
 
 async function main() {
   await rm(dist, { recursive: true, force: true });
@@ -50,7 +58,11 @@ async function main() {
     target: ['chrome120'],
     jsx: 'automatic',
     jsxImportSource: 'preact',
-    outfile: join(dist, 'cockpit.js'),
+    // Content-hashed output names → cache-busting. loadFile() serves the fresh
+    // bundle on every update instead of a cached cockpit.js.
+    outdir: dist,
+    entryNames: 'cockpit-[hash]',
+    assetNames: 'asset-[hash]',
     // apps/desktop is outside the pnpm workspace and the package ships no dist
     // during dev, so resolve @recoder/conductor-ui to its TS source. esbuild
     // bundles it in-tree, exactly like the cockpit's own src/.
@@ -73,7 +85,14 @@ async function main() {
     metafile: true,
   });
 
-  await writeFile(join(dist, 'index.html'), html, 'utf-8');
+  // Resolve the actual hashed output filenames from the metafile.
+  const outputs = Object.keys(result.metafile.outputs);
+  const jsFile = outputs.map((o) => o.split('/').pop()).find((f) => f.endsWith('.js'));
+  const cssFile = outputs.map((o) => o.split('/').pop()).find((f) => f.endsWith('.css'));
+  if (!jsFile || !cssFile) {
+    throw new Error(`build: could not resolve hashed outputs (js=${jsFile}, css=${cssFile})`);
+  }
+  await writeFile(join(dist, 'index.html'), renderHtml({ js: jsFile, css: cssFile }), 'utf-8');
 
   // Copy static brand assets (the real Recoder cube logo) into dist/ so the
   // renderer's `./logo.png` reference resolves alongside index.html.
@@ -81,7 +100,6 @@ async function main() {
     await copyFile(join(publicDir, asset), join(dist, asset));
   }
 
-  const outputs = Object.keys(result.metafile.outputs);
   // eslint-disable-next-line no-console
   console.log(
     '[cockpit] built:',
