@@ -115,7 +115,7 @@ describe('WorkspaceCenter is a real conversation', () => {
       return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
     });
 
-    const c = mountCenter(workspace());
+    const c = mountCenter(workspace({ state: 'awaiting_review' }));
     await flush(20);
 
     await sendMessage(c, 'Add a greeting to the README');
@@ -140,7 +140,7 @@ describe('WorkspaceCenter is a real conversation', () => {
       return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
     });
 
-    const c = mountCenter(workspace());
+    const c = mountCenter(workspace({ state: 'awaiting_review' }));
     await flush(20);
 
     await sendMessage(c, 'try anyway');
@@ -151,5 +151,15 @@ describe('WorkspaceCenter is a real conversation', () => {
     // And a truthful failure note is shown on it.
     expect(c.querySelector('.ws-msg-error')).toBeTruthy();
     expect(c.textContent).toContain("Couldn't send to the agent");
+  });
+  it('disables the composer on a terminal (archived) workspace with a truthful reason', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      makeResponse({ status: 200, ok: true, body: { success: true, data: [] } }),
+    );
+    const c = mountCenter(workspace({ state: 'archived' }));
+    await flush(20);
+    // No input to invite a message the backend would 400.
+    expect(c.querySelector('.ws-cmdbar-input')).toBeNull();
+    expect(c.querySelector('.ws-cmdbar-disabled-note')?.textContent).toMatch(/closed/i);
   });
 });

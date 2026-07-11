@@ -23,7 +23,7 @@ import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog, friendlyAgentText } from './EventLog';
 import type { RunEventType } from '../types';
-import { isLive } from '../lib/workspace-state';
+import { isLive, messageDisabledReason } from '../lib/workspace-state';
 import { mergeEvents, useLiveStream } from '../lib/event-stream';
 import type { RunEvent, Workspace, WorkspaceState } from '../types';
 
@@ -163,8 +163,17 @@ function UserBubble({ message }: { message: UserMessage }) {
  * `sendMessage` starts the next agent run with the typed text as a prompt. This
  * is deliberately NOT the raw `tmux send-keys` path the full terminal uses.
  */
-function Composer({ busy, onSend }: { busy: boolean; onSend: (text: string) => void }) {
+function Composer({
+  busy,
+  onSend,
+  state,
+}: {
+  busy: boolean;
+  onSend: (text: string) => void;
+  state: Workspace['state'];
+}) {
   const [value, setValue] = useState('');
+  const disabledReason = messageDisabledReason(state);
 
   function submit(e: Event) {
     e.preventDefault();
@@ -172,6 +181,14 @@ function Composer({ busy, onSend }: { busy: boolean; onSend: (text: string) => v
     if (!text) return;
     onSend(text);
     setValue('');
+  }
+
+  if (disabledReason) {
+    return (
+      <div class="ws-cmdbar ws-cmdbar-disabled">
+        <span class="ws-cmdbar-disabled-note">{disabledReason}</span>
+      </div>
+    );
   }
 
   return (
@@ -273,7 +290,7 @@ export function ConversationView({ workspace }: ConversationViewProps) {
         </div>
       </div>
 
-      <Composer busy={sending} onSend={(t) => void send(t)} />
+      <Composer busy={sending} onSend={(t) => void send(t)} state={workspace.state} />
     </section>
   );
 }
