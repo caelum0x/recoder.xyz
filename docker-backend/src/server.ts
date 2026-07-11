@@ -67,6 +67,7 @@ import { domainRouter } from './public-api/routes/domains.js';
 import { a2aRouter, getDockerBackendAgentCard } from './a2a-gateway.js';
 import { createAgentMcpRouter, createAgentOsGitHubWebhookRouter, createAgentOsRouter, createInternalAgentOsRouter } from './agent-os/index.js';
 import { createConductorRouter } from './conductor/conductor.routes.js';
+import { isSoloMode } from './conductor/solo-mode.js';
 import {
   getDistributionModule,
   createCliAuthRouter,
@@ -14310,6 +14311,16 @@ server.listen(PORT, async () => {
     collaborationUrlPattern: `${PUBLIC_DOCKER_BACKEND_WS_URL}/collab?projectId=XXX&file=YYY`,
     lspStartEndpoint: '/api/lsp/:projectId/start',
   });
+
+  // Solo mode auto-approves deliveries (the single user's click IS the
+  // approval). That is safe ONLY on a single-user machine. If it is ever set on
+  // a shared/multi-tenant backend, every merge/PR self-approves — warn loudly
+  // so an operator misconfiguration is visible, not silent.
+  if (isSoloMode()) {
+    logger.warn(
+      '[security] RECODER_SOLO_MODE is ENABLED: conductor deliveries auto-approve (single-user desktop model). Do NOT enable this on a shared/multi-tenant backend.',
+    );
+  }
 
   // Run startup sequence AFTER server is listening
   // This ensures cleanup happens first, then pool is initialized
