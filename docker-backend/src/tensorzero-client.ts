@@ -46,10 +46,170 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { createLogger } from './logger.js';
 
 const logger = createLogger('tensorzero-client');
+
+// ---------------------------------------------------------------------------
+// Native addon loader — tensorzero-gateway-napi (.node)
+//
+// FUSION PATTERN: prefer the in-process native addon when present; degrade
+// safely to the existing subprocess/loopback path otherwise (never regress,
+// never fake success).
+//
+// The native addon exposes:
+//   - gatewayVersion(): string  — returns the Rust crate's CARGO_PKG_VERSION
+//   - validateConfigPath(path: string): Promise<void>  — validates a TZ config
+//
+// If the .node file is absent (fresh checkout, unsupported arch, build deferred)
+// these functions return undefined / throw — the callers fall back gracefully.
+// ---------------------------------------------------------------------------
+
+interface TensorzeroGatewayNapiModule {
+  gatewayVersion(): string;
+  validateConfigPath(configPath: string): Promise<void>;
+}
+
+/**
+ * Build candidate absolute paths for the `tensorzero-gateway-napi.node` file.
+ * Resolution order:
+ *   1. `TENSORZERO_GATEWAY_NAPI_NODE` env var (explicit override for CI/deploy).
+ *   2. `<repo>/crates/tensorzero/crates/tensorzero-gateway-napi/target/release/tensorzero_gateway_napi.node`
+ *   3. `<repo>/crates/tensorzero/crates/tensorzero-gateway-napi/target/debug/tensorzero_gateway_napi.node`
+ *   4. Co-located `tensorzero-gateway-napi.node` next to the running JS (deploy layout).
+ *
+ * This module compiles as CommonJS (`"module": "commonjs"` in tsconfig.json) so
+ * `__dirname` is always defined and `import.meta.url` is never used here.
+ */
+function buildGatewayNapiCandidates(): string[] {
+  const candidates: string[] = [];
+
+  const explicit = process.env.TENSORZERO_GATEWAY_NAPI_NODE?.trim();
+  if (explicit) {
+    candidates.push(explicit);
+    return candidates;
+  }
+
+  // Walk up from this file's directory (docker-backend/src or docker-backend/dist)
+  // to the repo root to find the tensorzero-gateway-napi target directory.
+  let dir: string;
+  try {
+    dir = __dirname;
+  } catch {
+    // Extremely unlikely in CJS; degrade to co-located only.
+    candidates.push('tensorzero-gateway-napi.node');
+    return candidates;
+  }
+
+  for (let i = 0; i < 8; i++) {
+    const crateDir = join(
+      dir,
+      'crates',
+      'tensorzero',
+      'crates',
+      'tensorzero-gateway-napi',
+    );
+    if (existsSync(crateDir)) {
+      const base = join(crateDir, 'target');
+      const binaryName = 'tensorzero_gateway_napi.node';
+      candidates.push(join(base, 'release', binaryName));
+      candidates.push(join(base, 'debug', binaryName));
+      break;
+    }
+    const parent = join(dir, '..');
+    // Detect FS root (parent equals dir after normalization).
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  // Co-located deploy artifact (production deploy layout).
+  candidates.push('tensorzero-gateway-napi.node');
+  return candidates;
+}
+
+let _nativeGatewayModule: TensorzeroGatewayNapiModule | null | undefined = null;
+
+/**
+ * Try to load the `tensorzero-gateway-napi` native addon (degrade-safe).
+ *
+ * Returns the module on success, `undefined` when the .node file is not
+ * available for this environment. Result is cached after the first call.
+ *
+ * Never throws.
+ */
+export function tryLoadGatewayNapiModule(): TensorzeroGatewayNapiModule | undefined {
+  if (_nativeGatewayModule !== null) return _nativeGatewayModule ?? undefined;
+
+  const candidates = buildGatewayNapiCandidates();
+
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require(candidate) as unknown;
+      if (
+        mod !== null &&
+        typeof mod === 'object' &&
+        'gatewayVersion' in (mod as object) &&
+        typeof (mod as Record<string, unknown>).gatewayVersion === 'function'
+      ) {
+        _nativeGatewayModule = mod as TensorzeroGatewayNapiModule;
+        logger.info(
+          { path: candidate },
+          'tensorzero-gateway-napi native addon loaded — using in-process gateway version + config-validate',
+        );
+        return _nativeGatewayModule;
+      }
+    } catch (err) {
+      logger.debug(
+        { candidate, err },
+        'tensorzero-gateway-napi candidate not loadable — trying next',
+      );
+    }
+  }
+
+  _nativeGatewayModule = undefined;
+  logger.debug(
+    'tensorzero-gateway-napi native addon not found — falling back to loopback/subprocess path (degrade-safe)',
+  );
+  return undefined;
+}
+
+/**
+ * Return the TensorZero Rust crate version if the native addon is available,
+ * `undefined` otherwise. Never throws.
+ */
+export function nativeGatewayVersion(): string | undefined {
+  try {
+    return tryLoadGatewayNapiModule()?.gatewayVersion();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Validate a TensorZero config path in-process using the native addon.
+ *
+ * Returns `true` when the native addon validated the config successfully.
+ * Returns `false` when the native addon is not available (caller should fall
+ * back to the loopback health-check path).
+ * Throws when the config is available but invalid (the error message contains
+ * the validation failure reason from Rust).
+ */
+export async function nativeValidateConfigPath(configPath: string): Promise<boolean> {
+  const mod = tryLoadGatewayNapiModule();
+  if (!mod) return false;
+  // Throws on validation failure (re-thrown to the caller intentionally).
+  await mod.validateConfigPath(configPath);
+  return true;
+}
+
+/** Reset the native module cache (for testing only). */
+export function __resetNativeGatewayModuleForTest(): void {
+  _nativeGatewayModule = null;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -189,6 +349,15 @@ export function ensureTensorzeroGateway(): Promise<TensorzeroHandle | undefined>
 }
 
 async function startTensorzeroGateway(): Promise<TensorzeroHandle | undefined> {
+  // Log the native addon version if available (in-process config-validate capability).
+  const nativeVersion = nativeGatewayVersion();
+  if (nativeVersion) {
+    logger.info(
+      { nativeVersion },
+      'tensorzero-gateway-napi native addon present — in-process config-validate available (version matches Rust crate)',
+    );
+  }
+
   // Under the test runner we do NOT auto-spawn: a background child process
   // makes test assertions non-deterministic. Tests that want the real binary
   // opt in with TENSORZERO_DAEMON_FORCE=1.

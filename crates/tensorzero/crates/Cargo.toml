@@ -23,6 +23,7 @@ members = [
     "tensorzero-core/tests/mock-provider-api",
     "tensorzero-derive",
     "tensorzero-mcp",
+    "tensorzero-gateway-napi",
     "tensorzero-node",
     "tensorzero-optimizers",
     "tensorzero-stored-config",

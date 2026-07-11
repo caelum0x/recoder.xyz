@@ -1,0 +1,25 @@
+[package]
+name = "tensorzero-gateway-napi"
+version.workspace = true
+rust-version.workspace = true
+license.workspace = true
+edition.workspace = true
+description = "NAPI bindings — exposes TensorZero gateway config-validate and version helpers as a native Node.js addon (.node), replacing loopback/subprocess fusion with a direct in-process call. Degrade-safe: the TS facade falls back to the existing subprocess/loopback path when this module is absent."
+
+[lib]
+# cdylib produces the .node binary; rlib keeps `cargo check` / `cargo test` working.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Default enable napi4 feature — mirrors tensorzero-node's feature selection.
+napi = { version = "3.9.0", default-features = false, features = [
+    "napi4",
+    "tokio_rt",
+] }
+napi-derive = "3.5.6"
+serde_json.workspace = true
+tokio.workspace = true
+tensorzero-core = { path = "../tensorzero-core" }
+
+[build-dependencies]
+napi-build = "2.3.1"
