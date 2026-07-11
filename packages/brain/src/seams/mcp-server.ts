@@ -19,7 +19,7 @@ import {
 import { Brain, createBrain } from "../brain";
 import { createRepoIntelAuto } from "../repo/recodergit-repo-intel";
 import { createContinuumActivity } from "../activity/continuum-activity-adapter";
-import { createMem0Memory } from "../memory/mem0-memory";
+import { createMemoryAuthority } from "../memory/memory-authority";
 import { createContext7Docs } from "../docs/context7-docs";
 import { createBeadsTasks } from "../tasks/beads-tasks";
 import { createBrainTools, type BrainTool } from "./mcp-seam";
@@ -28,12 +28,17 @@ import { createBrainTools, type BrainTool } from "./mcp-seam";
  * Construct a Brain with every default adapter wired in. Each adapter degrades to
  * empty when its tool/key is absent, so this never throws and always yields a
  * usable (if sparse) Brain.
+ *
+ * Memory authority: in-process TS Map (DEFAULT, always available) optionally
+ * backed by the py/mem0 REST loopback when `MEM0_SERVICE_URL` (or the legacy
+ * `MEM0_BASE_URL`) is set. The loopback is degrade-safe — absent or unreachable
+ * means the in-process store carries on alone, never failing the caller.
  */
 export function createDefaultBrain(): Brain {
   return createBrain({
     repo: createRepoIntelAuto(),
     activity: createContinuumActivity(),
-    memory: createMem0Memory(),
+    memory: createMemoryAuthority(),
     docs: createContext7Docs(),
     tasks: createBeadsTasks(),
   });

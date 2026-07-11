@@ -57,7 +57,21 @@ export {
   type ContinuumActivityOptions,
 } from "./activity/continuum-activity-adapter";
 
-// Real mem0-backed semantic memory (degrade-safe to empty when key/tool absent)
+// Default in-process TS memory authority (Map-backed, no external service)
+export {
+  InProcessMemory,
+  createInProcessMemory,
+} from "./memory/in-process-memory";
+
+// Single memory-authority factory: in-process default + optional py/mem0 loopback
+// (MEM0_SERVICE_URL or legacy MEM0_BASE_URL); degrade-safe when service absent.
+export {
+  createMemoryAuthority,
+  type MemoryAuthorityOptions,
+} from "./memory/memory-authority";
+
+// Optional REST loopback adapter — py/mem0 FastAPI server (MEM0_SERVICE_URL /
+// MEM0_BASE_URL); degrade-safe to empty when the service is absent or unconfigured.
 export {
   Mem0Memory,
   createMem0Memory,
