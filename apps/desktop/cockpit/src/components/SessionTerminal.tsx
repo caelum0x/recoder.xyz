@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
+import { workspaceCodename } from '../lib/workspace-codename';
 import type { ConductorSession } from '../types';
 
 interface SessionTerminalProps {
@@ -73,8 +74,8 @@ function HttpTerminal({ session }: { session: ConductorSession }) {
   return (
     <div class="terminal-shell">
       <div class="terminal-mode">
-        <span class="pill">
-          <span class="pill-dot" /> tmux · /sessions/{session.sessionId.slice(0, 10)}…/output
+        <span class="pill" title={session.tmuxName}>
+          <span class="pill-dot" /> {workspaceCodename(session.sessionId)}
         </span>
         <span class="terminal-status">
           {output.loading && !output.data ? 'loading' : output.error ? 'error' : 'live'}
@@ -86,24 +87,21 @@ function HttpTerminal({ session }: { session: ConductorSession }) {
         ) : output.data?.output ? (
           <pre class="terminal-buffer">{output.data.output}</pre>
         ) : (
-          <span class="log-empty">No pane output yet.</span>
+          <span class="log-empty">Waiting for output…</span>
         )}
       </div>
       <form class="terminal-input-row" onSubmit={submit}>
         <input
           class="terminal-input"
           value={input}
-          placeholder="Type a command and press Enter (sent via /sessions/:id/keys)…"
+          placeholder="Type a command and press Enter…"
           disabled={busy}
           onInput={(e) => setInput((e.target as HTMLInputElement).value)}
         />
         <button class="btn btn-sm" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send'}</button>
-        <button class="btn btn-sm" type="button" disabled={busy} onClick={() => void send('C-c')} title="Send Ctrl+C">^C</button>
+        <button class="btn btn-sm" type="button" disabled={busy} onClick={() => void send('C-c')} title="Send Ctrl+C (interrupt)">^C</button>
       </form>
       {sendError && <p class="action-error">{sendError}</p>}
-      <p class="terminal-hint">
-        Driving the live tmux pane <code>{session.tmuxName}</code> over HTTP via <code>tmux send-keys</code> (Enter is appended server-side).
-      </p>
     </div>
   );
 }
