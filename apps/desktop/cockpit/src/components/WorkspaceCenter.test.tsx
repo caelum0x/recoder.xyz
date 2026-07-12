@@ -144,6 +144,32 @@ describe('WorkspaceCenter is a real conversation', () => {
     expect(input.value).toBe('After every 10 trains, show an animation.');
   });
 
+  it('renders a persisted user_message event as a user bubble (survives reload)', async () => {
+    // Simulate a reload: no optimistic local state, only the persisted event log.
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/events')) {
+        return makeResponse({
+          status: 200,
+          ok: true,
+          body: {
+            success: true,
+            data: [
+              { eventId: 'u1', type: 'user_message', taskId: 't', runId: 'r', message: 'fix the header', createdAt: '2026-07-12T00:00:00Z' },
+              { eventId: 'a1', type: 'log', taskId: 't', runId: 'r', message: 'On it.', createdAt: '2026-07-12T00:00:01Z' },
+            ],
+          },
+        });
+      }
+      return makeResponse({ status: 200, ok: true, body: { success: true, data: [] } });
+    });
+    const c = mountCenter(workspace({ state: 'awaiting_review' }));
+    await flush(30);
+    // The user's message is present as a user bubble even with no optimistic state.
+    expect(c.querySelector('.ws-msg-user')?.textContent).toContain('fix the header');
+    // And the agent's reply still renders.
+    expect(c.textContent).toContain('On it.');
+  });
+
   it('keeps the user bubble and shows a truthful note when /message 404s', async () => {
     (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
       if (typeof url === 'string' && url.endsWith('/message')) {

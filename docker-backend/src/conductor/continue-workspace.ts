@@ -18,6 +18,7 @@
  *
  * See docs/CONDUCTOR-ARCHITECTURE.md (review → changes_requested → running).
  */
+import { randomUUID } from 'node:crypto';
 import type { TaskRun, Workspace } from '@recoder/agent-os';
 import { resolveRuntimeCommand } from '@recoder/substrate';
 import { createLogger } from '../logger';
@@ -144,6 +145,21 @@ export async function continueWorkspace(
     metadata: { workspaceId, runtimeId: workspace.runtimeId, continued: true },
   };
   await Promise.resolve(agentOsContainer.repository.upsertRun(run));
+
+  // Persist the USER's message to the SAME event log as an audited event, so it
+  // survives a reload and interleaves with the agent's reply (the cockpit renders
+  // it as a user bubble). Without this, user messages lived only in the frontend's
+  // optimistic state and vanished on refresh, leaving a one-sided transcript.
+  await agentOsContainer.repository.appendEvent({
+    eventId: `event_${randomUUID()}`,
+    type: 'user_message',
+    taskId: workspace.taskId,
+    runId,
+    agentId: input.createdBy ?? workspace.createdBy,
+    message: text,
+    createdAt: now,
+    data: { role: 'user' },
+  });
 
   const running = await advanceWorkspace(
     workspaceId,

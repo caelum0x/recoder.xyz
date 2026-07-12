@@ -235,6 +235,21 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   const hasThread = merged.length > 0 || messages.length > 0;
   const starterDraft = !hasThread && typeof rawDraft === 'string' && rawDraft.trim() ? rawDraft : undefined;
 
+  // User messages now PERSIST as `user_message` events (they survive a reload).
+  // Render those as the source of truth, and keep an in-flight optimistic message
+  // only until its persisted twin (same text) arrives — so nothing double-renders
+  // and nothing is lost on refresh.
+  const persistedUserMessages: UserMessage[] = merged
+    .filter((e) => e.type === 'user_message' && typeof e.message === 'string')
+    .map((e) => ({ id: e.eventId, text: e.message as string, sentAt: Date.parse(e.createdAt) || 0 }));
+  const persistedTexts = new Set(persistedUserMessages.map((m) => m.text.trim()));
+  const allUserMessages = [
+    ...persistedUserMessages,
+    ...messages.filter((m) => !persistedTexts.has(m.text.trim())),
+  ].sort((a, b) => a.sentAt - b.sentAt);
+  // Agent turns render from everything EXCEPT the user-message events.
+  const agentEvents = merged.filter((e) => e.type !== 'user_message');
+
   // Reset the local conversation when switching workspaces — each workspace has
   // its own thread, and the persisted agent activity carries the real history.
   const wsId = workspace.workspaceId;
@@ -281,8 +296,8 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
 
       <div class="ws-center-scroll">
         <Conversation
-          messages={messages}
-          events={merged}
+          messages={allUserMessages}
+          events={agentEvents}
           eventsError={events.error}
           eventsLoading={events.loading}
           workspace={workspace}

@@ -116,6 +116,7 @@ describe('cockpit EventLog -> @recoder/shared/animations/preact wiring', () => {
       started: 'Working…',
       state_transition: 'Update',
       log: 'Working…',
+      user_message: 'You',
       artifact: 'Saved work',
       needs_input: 'Waiting for you',
       verified: 'Reviewing',
