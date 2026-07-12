@@ -1,3 +1,0 @@
-segmenter:
-  mode: "normal"
-  dictionary: "./python/tests/models/lindera/ipadic/main"

@@ -1,6 +1,0 @@
-{
-    "main": "../default/dict.txt",
-    "users": [
-        "user.txt"
-    ]
-}
