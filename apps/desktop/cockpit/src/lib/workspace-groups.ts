@@ -37,7 +37,21 @@ function repoLabel(workspace: Workspace): string {
       }
     }
   }
-  return workspace.projectId;
+  return readableProjectId(workspace.projectId);
+}
+
+/**
+ * Make a raw projectId presentable: the generic 'default' becomes 'Local
+ * project', a path-like id collapses to its basename, otherwise it's used as-is.
+ * Never invents a name — just formats the real key.
+ */
+function readableProjectId(projectId: string): string {
+  if (!projectId || projectId === 'default') return 'Local project';
+  if (projectId.includes('/') || projectId.includes('\\')) {
+    const base = projectId.replace(/\\/g, '/').replace(/\/+$/, '').split('/').filter(Boolean).pop();
+    return base || projectId;
+  }
+  return projectId;
 }
 
 /**

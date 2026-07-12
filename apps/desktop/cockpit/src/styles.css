@@ -275,6 +275,11 @@ body {
   display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center;
 }
 .ws-group { display: flex; flex-direction: column; gap: 4px; }
+.ws-projects-head {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint); padding: 2px 6px 6px;
+}
+.ws-row-ordinal { color: var(--text-faint); margin-right: 5px; }
 .ws-group-head { display: flex; align-items: center; justify-content: space-between; padding: 0 6px; margin-bottom: 2px; }
 .ws-group-label {
   font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text-dim);

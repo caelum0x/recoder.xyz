@@ -45,11 +45,13 @@ function DiffStat({ workspace }: { workspace: Workspace }) {
 
 function WorkspaceRow({
   workspace,
+  ordinal,
   selected,
   onSelect,
   waitPrompt,
 }: {
   workspace: Workspace;
+  ordinal?: number;
   selected: boolean;
   onSelect: (id: string) => void;
   waitPrompt?: string;
@@ -66,7 +68,10 @@ function WorkspaceRow({
       <span class={`ws-row-dot dot-${tone}`} aria-hidden="true" />
       <span class="ws-row-body">
         <span class="ws-row-main">
-          <span class="ws-row-branch">{workspaceGoal(workspace)}</span>
+          <span class="ws-row-branch">
+            {ordinal != null && <span class="ws-row-ordinal">{ordinal}.</span>}
+            {workspaceGoal(workspace)}
+          </span>
           <DiffStat workspace={workspace} />
         </span>
         <span class="ws-row-meta">
@@ -137,16 +142,19 @@ export function WorkspaceSidebar({
             <p>No workspaces yet.</p>
           </div>
         ) : (
-          groups.map((group) => (
+          <>
+            <div class="ws-projects-head">Projects</div>
+            {groups.map((group) => (
             <div class="ws-group" key={group.projectId}>
               <div class="ws-group-head" title={group.projectId}>
                 <span class="ws-group-label">{group.label}</span>
               </div>
               <div class="ws-group-rows">
-                {group.workspaces.map((ws) => (
+                {group.workspaces.map((ws, i) => (
                   <WorkspaceRow
                     key={ws.workspaceId}
                     workspace={ws}
+                    ordinal={i + 1}
                     selected={ws.workspaceId === selectedId}
                     onSelect={onSelect}
                     waitPrompt={waits?.[ws.workspaceId]}
@@ -158,7 +166,8 @@ export function WorkspaceSidebar({
                 </button>
               </div>
             </div>
-          ))
+            ))}
+          </>
         )}
       </div>
 

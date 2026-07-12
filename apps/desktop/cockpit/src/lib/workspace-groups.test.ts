@@ -52,6 +52,16 @@ describe('groupWorkspacesByRepo', () => {
     expect(groups[0].label).toBe('plain-project');
   });
 
+  it("presents the generic 'default' projectId as 'Local project'", () => {
+    const groups = groupWorkspacesByRepo([ws({ projectId: 'default' })]);
+    expect(groups[0].label).toBe('Local project');
+  });
+
+  it('collapses a path-like projectId to its basename', () => {
+    const groups = groupWorkspacesByRepo([ws({ projectId: '/Users/op/code/widget' })]);
+    expect(groups[0].label).toBe('widget');
+  });
+
   it('sorts workspaces within a group by most-recently-updated first', () => {
     const groups = groupWorkspacesByRepo([
       ws({ workspaceId: 'old', projectId: 'p', updatedAt: '2026-01-01T00:00:00Z' }),
