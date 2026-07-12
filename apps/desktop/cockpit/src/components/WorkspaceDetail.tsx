@@ -35,6 +35,7 @@ function hasDesktopTerminal(): boolean {
 }
 import { diffFileList, type DiffFile } from '../lib/diff-files';
 import { workspaceGoal } from '../lib/workspace-goal';
+import { workspaceCodename } from '../lib/workspace-codename';
 import type { ConductorSession, WorkspaceDiff } from '../types';
 import {
   canArchive,
@@ -315,17 +316,15 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
             <h2 class="detail-branch" title={workspaceGoal(workspace)}>{workspaceGoal(workspace)}</h2>
           </div>
           <div class="detail-sub">
-            {workspaceGoal(workspace) !== workspace.branch && (
-              <>
-                <span title={workspace.branch}>{workspace.branch}</span>
-                <span>·</span>
-              </>
-            )}
+            {/* Friendly codename as the stable handle; the raw id + git branch
+                live in the tooltip so the UI never shows a bare ws_<uuid>. */}
+            <span title={`${workspace.workspaceId} · ${workspace.branch}`}>
+              {workspaceCodename(workspace.workspaceId)}
+            </span>
+            <span>·</span>
             <span>{workspace.runtimeId}</span>
             <span>·</span>
             <span>{workspace.substrate}</span>
-            <span>·</span>
-            <span title={workspace.workspaceId}>{workspace.workspaceId.slice(0, 14)}…</span>
           </div>
         </div>
         <button class="icon-btn" onClick={onClose} aria-label="Close detail">×</button>
@@ -402,7 +401,7 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
               <span class="detail-terminal-skin" aria-hidden="true">
                 {surfaceMode === 'chat' ? 'Chat' : 'Terminal'}
               </span>
-              <span class="detail-terminal-branch" title={workspace.branch}>{workspace.branch}</span>
+              <span class="detail-terminal-branch" title={`${workspace.workspaceId} · ${workspace.branch}`}>{workspaceCodename(workspace.workspaceId)}</span>
               <span class="detail-terminal-spacer" />
               <button
                 type="button"
@@ -436,7 +435,7 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
                 args={['attach', '-t', session.tmuxName]}
                 cwd={session.worktreePath || undefined}
                 env={tmuxBin ? { CONDUCTOR_TMUX_BIN: tmuxBin } : undefined}
-                sessionLabel={workspace.branch}
+                sessionLabel={workspaceCodename(workspace.workspaceId)}
                 onPtyUnavailable={() => setPtyUnavailable(true)}
               />
             ) : (
