@@ -1,7 +1,7 @@
 import {
 	EMBEDDING_PROFILES,
 	type EmbeddingProfileId,
-} from "@recoder/protocol";
+} from "../embedding-profiles";
 import { ConfigurationError } from "../errors";
 import type { EmbedderConfig } from "./ai-sdk-embedder";
 import {

@@ -1,4 +1,4 @@
-import { EMBEDDING_PROFILES } from "@recoder/protocol";
+import { EMBEDDING_PROFILES } from "../embedding-profiles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createGatewayEmbedder,
