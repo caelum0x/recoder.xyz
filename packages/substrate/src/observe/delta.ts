@@ -22,8 +22,15 @@ export interface CaptureDeltaResult {
 /**
  * Compute the incremental delta between the previous and current capture.
  *
- * - prefix-diff: if `current` starts with `previous`, the delta is the suffix;
- *   otherwise it is the full `current` (the prefix changed).
+ * - append (the common case): if `current` starts with `previous`, the delta is
+ *   the new suffix.
+ * - repaint/scroll: when the prefix changed, a naive "emit the whole capture"
+ *   RE-SENDS everything and DUPLICATES the visible output on every repaint — the
+ *   failure mode of scraping an interactive TUI (a spinner/status line at the top
+ *   repaints each poll, so `startsWith` fails and the whole screen — greeting and
+ *   all — is emitted again and again). Instead we emit only the LINES that were
+ *   NOT already in the previous capture, so stable content (the greeting, the
+ *   response text) is emitted once while genuinely-new lines still surface.
  * - trimmed: leading/trailing whitespace stripped (a whitespace-only delta is
  *   reported as empty — nothing to emit).
  * - capped: keep only the last `maxChars` characters of the trimmed delta.
@@ -33,7 +40,16 @@ export function computeDelta(
   current: string,
   maxChars: number = MAX_DELTA_CHARS,
 ): CaptureDeltaResult {
-  const raw = current.startsWith(previous) ? current.slice(previous.length) : current;
+  let raw: string;
+  if (current.startsWith(previous)) {
+    raw = current.slice(previous.length);
+  } else {
+    const prevLines = new Set(previous.split('\n'));
+    raw = current
+      .split('\n')
+      .filter((line) => !prevLines.has(line))
+      .join('\n');
+  }
   const trimmed = raw.trim();
   if (!trimmed) return { delta: '', truncated: false };
   if (trimmed.length > maxChars) {
