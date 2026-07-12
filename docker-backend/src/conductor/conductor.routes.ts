@@ -26,6 +26,7 @@ import { applyEmptyStartDefault } from './empty-start.js';
 import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
 import { workspaceDiff, workspaceTree, archiveWorkspace } from './review.js';
+import { workspaceDevCommand } from './dev-command.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
 import { continueWorkspace } from './continue-workspace.js';
 import {
@@ -506,6 +507,23 @@ export function createConductorRouter(): Router {
         res
           .status(msg.includes('not found') ? 404 : 500)
           .json({ success: false, error: msg });
+      }
+    }
+  );
+
+  // Detected dev command for the workspace's project (powers the Run tab's
+  // one-click "Start Run"). Null when the project shape isn't recognized.
+  router.get(
+    '/workspaces/:workspaceId/dev-command',
+    async (req: Request, res: Response) => {
+      try {
+        res.json({
+          success: true,
+          data: await workspaceDevCommand(req.params.workspaceId),
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'dev-command detection failed';
+        res.status(500).json({ success: false, error: msg });
       }
     }
   );

@@ -20,6 +20,7 @@ import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { DiffView } from './DiffView';
 import { FileTree } from './FileTree';
+import { RunPanel } from './RunPanel';
 import { SessionTerminal } from './SessionTerminal';
 import { RecoderTerminal } from './RecoderTerminal';
 import { ConversationView } from './ConversationView';
@@ -118,7 +119,7 @@ function InlineGateVerdict({
   );
 }
 
-type Tab = 'files' | 'output' | 'diff' | 'terminal';
+type Tab = 'files' | 'output' | 'diff' | 'run' | 'terminal';
 
 /**
  * Within the Terminal tab, the SAME conductor session is shown either as a
@@ -386,6 +387,13 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
           Diff
         </button>
         <button
+          class={tab === 'run' ? 'tab tab-active' : 'tab'}
+          onClick={() => setTab('run')}
+          title="Run this workspace's app (its dev server) and watch it live"
+        >
+          Run
+        </button>
+        <button
           class={tab === 'terminal' ? 'tab tab-active' : 'tab'}
           onClick={() => setTab('terminal')}
           disabled={!session}
@@ -413,6 +421,8 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
           </div>
         ) : tab === 'diff' ? (
           <DiffView diff={diff.data} error={diff.error} loading={diff.loading} />
+        ) : tab === 'run' ? (
+          <RunPanel workspace={workspace} tmuxBin={tmuxBin} />
         ) : session ? (
           <div class="detail-terminal">
             {/* Surface affordance: the friendly conversation is the calm DEFAULT;

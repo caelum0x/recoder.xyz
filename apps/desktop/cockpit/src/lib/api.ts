@@ -78,6 +78,7 @@ import type {
   SessionOutput,
   StartSessionBody,
   SubstrateAvailability,
+  DevCommand,
   Workspace,
   WorkspaceDiff,
   WorkspaceTree,
@@ -325,6 +326,8 @@ export const api = {
   ): ConductorStreamHandle => conductorClient().openStream(id, onEvent, opts),
   diff: (id: string) => request<WorkspaceDiff>('GET', `/workspaces/${encodeURIComponent(id)}/diff`),
   tree: (id: string) => request<WorkspaceTree>('GET', `/workspaces/${encodeURIComponent(id)}/tree`),
+  devCommand: (id: string) =>
+    request<DevCommand | null>('GET', `/workspaces/${encodeURIComponent(id)}/dev-command`),
   openPr: (id: string, body: { title: string; body?: string; base?: string; draft?: boolean }) =>
     request<CreatePrResult>('POST', `/workspaces/${encodeURIComponent(id)}/pr`, body),
   merge: (id: string, body: { strategy?: 'squash' | 'merge' | 'rebase'; deleteBranch?: boolean }) =>
