@@ -63,14 +63,19 @@ Recoder should behave like an agent control plane, not a prompt library.
 
 ## Project Snapshot
 
-- Monorepo for the Recoder platform (`recoder.xyz`) with multiple deployed surfaces.
-- Main production surfaces:
-  - `app/` -> `https://recoder.xyz`
-  - `recoder-agents/` -> `https://agents.recoder.xyz`
-  - `recoder-agency/` -> `https://agency.recoder.xyz`
-  - `recoder-pm/` -> `https://pm.recoder.xyz`
-  - `recoder-web/` -> `https://web.recoder.xyz`
-  - `docker-backend/` for service runtime and agent orchestration
+- Monorepo for the Recoder platform (`recoder.xyz`).
+- **The product is a terminal.** The user opens Recoder and runs their chosen
+  coding agent (Claude Code, Codex, Cursor, pi, opencode) in parallel isolated
+  git worktrees, then reviews and merges. The frontend (`apps/desktop/cockpit`)
+  stays as plain as a terminal — no infra dashboards.
+- **`c/ crates/ go/ py/ ts/ packages/` are BACKEND capabilities, not frontend.**
+  They are the power the *agents* use (memory, retrieval, browser, governance,
+  networking, LLM gateway, issue graph). See
+  **[docs/architecture/RECODER-CAPABILITIES.md](docs/architecture/RECODER-CAPABILITIES.md)**
+  for the canonical capability map and the connection backlog (binding each as
+  an MCP tool the agents can call, behind the governance gate).
+- Primary runtime: `docker-backend/` (the control plane: conductor + agent-os +
+  MCP host). The desktop app embeds it.
 
 ## Core Engineering Philosophy
 
