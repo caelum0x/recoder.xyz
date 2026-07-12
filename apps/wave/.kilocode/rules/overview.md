@@ -1,13 +1,13 @@
-# Wave Terminal - High Level Architecture Overview
+# Recoder Terminal - High Level Architecture Overview
 
 ## Project Description
 
-Wave Terminal is an open-source AI-native terminal built for seamless workflows. It's an Electron application that serves as a command line terminal host (it hosts CLI applications rather than running inside a CLI). The application combines a React frontend with a Go backend server to provide a modern terminal experience with advanced features.
+Recoder Terminal is Recoder's AI-native terminal shell — the desktop surface where users run their coding agents in parallel isolated worktrees. It is a fork of Wave Terminal (Apache-2.0), fully rebranded to Recoder; the upstream LICENSE/NOTICE/copyright attribution is preserved. Load-bearing internal identifiers from upstream (the `wsh`/"WSH (Wave Shell)" protocol, `wavesrv` binary, `wps` Wave PubSub, `waveobj`, and `Wave*` code symbols) are intentionally kept as-is, so they still appear throughout the code and this doc. It's an Electron application that serves as a command line terminal host (it hosts CLI applications rather than running inside a CLI), combining a React frontend with a Go backend server.
 
 ## Top-Level Directory Structure
 
 ```
-waveterm/
+apps/wave/  (Recoder Terminal)
 ├── emain/              # Electron main process code
 ├── frontend/           # React application (renderer process)
 ├── cmd/                # Go command-line applications
