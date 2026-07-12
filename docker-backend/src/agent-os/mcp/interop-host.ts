@@ -38,6 +38,9 @@ import {
   repoMcpServer,
   retrievalMcpServer,
   browserEngineMcpServer,
+  coordinationMcpServer,
+  workflowMcpServer,
+  palPlanMcpServer,
 } from '@recoder/agent-mcp';
 
 /**
@@ -74,6 +77,9 @@ const IN_PROC_SERVERS: McpServerRegistration[] = [
   billingMcpServer,
   retrievalMcpServer,
   browserEngineMcpServer,
+  coordinationMcpServer,
+  workflowMcpServer,
+  palPlanMcpServer,
 ];
 
 /**

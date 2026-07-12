@@ -63,6 +63,7 @@
     "@recoder/substrate": "workspace:*",
     "@recoder/ui-agent-os": "workspace:*",
     "@recoder/vault": "workspace:*",
+    "@recoder/workflow-engine": "workspace:*",
     "@types/ws": "^8.18.1",
     "better-sqlite3": "^11.7.0",
     "cors": "^2.8.5",

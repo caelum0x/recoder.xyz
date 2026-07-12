@@ -260,6 +260,68 @@ const CAPABILITY_TOOLS = [
       },
     },
   },
+  {
+    name: 'recoder_coordination_acquire_lock',
+    description: "Claim an advisory work-lock on a shared resource so parallel agents don't collide on it. Returns a conflict (with the current holder) if it's already locked, or a truthful 'not configured' when no lock store is wired. Advisory only — pair with recoder_coordination_detect_conflict before risky writes.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        resource: { type: 'string', description: 'The resource to lock (e.g. a file path, workspace id, or logical key)' },
+        holder: { type: 'string', description: 'Optional holder id (defaults to this agent)' },
+        ttlMs: { type: 'number', description: 'Optional lock time-to-live in ms (expires automatically)' },
+      },
+      required: ['resource'],
+    },
+  },
+  {
+    name: 'recoder_coordination_detect_conflict',
+    description: 'Check whether a shared resource is currently locked by another holder before you write to it. Returns whether there is a conflict and who holds it, or a truthful "not configured" when no lock store is wired.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        resource: { type: 'string', description: 'The resource to check' },
+        holder: { type: 'string', description: 'Optional holder id to check against (defaults to this agent)' },
+      },
+      required: ['resource'],
+    },
+  },
+  {
+    name: 'recoder_workflow_verify',
+    description: "Run a named verification workflow (default 'delivery' = verify → browser-check → memory) over a run and get a truthful verdict with per-check results. Returns 'not configured' when no verification runner is wired — it never fabricates a pass.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workflow: { type: 'string', description: "Named workflow to run (default 'delivery')" },
+        runId: { type: 'string', description: 'Optional run id to verify' },
+        workspaceId: { type: 'string', description: 'Optional workspace id to verify' },
+      },
+    },
+  },
+  {
+    name: 'recoder_workflow_capture_hook',
+    description: 'Run a capture hook (e.g. a secret-scan) over some text or a file and return its findings as an audit artifact. Returns "not configured" when no hook runner is wired.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hook: { type: 'string', description: "Hook to run (e.g. 'secret-scan')" },
+        text: { type: 'string', description: 'Inline text to scan (use this OR path)' },
+        path: { type: 'string', description: 'Absolute path to a file to scan' },
+      },
+    },
+  },
+  {
+    name: 'recoder_pal_plan',
+    description: 'Ask the planner (PAL) to decide runtime / substrate / tool-grants / risk / approval for a task before you act. Deny-biased on uncertainty (least privilege + approval required). Returns the planning decision, or a conservative default when planning inputs are missing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        goal: { type: 'string', description: 'What the task is trying to accomplish' },
+        scope: { type: 'string', description: 'Optional scope/constraints for the task' },
+        runtimeHint: { type: 'string', description: 'Optional preferred runtime (advisory)' },
+      },
+      required: ['goal'],
+    },
+  },
 ];
 
 const CAPABILITY_TOOL_NAMES = new Set(CAPABILITY_TOOLS.map((t) => t.name));
@@ -675,6 +737,102 @@ function createCapabilityTools(options = {}) {
           return `Ingested ${content.upserted ?? 0}/${content.chunks ?? 0} chunks of "${content.docId || args.docId || 'document'}" into ${content.collection || 'the retrieval corpus'}.`;
         } catch (err) {
           return `retrieval ingest: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_coordination_acquire_lock': {
+        if (!hasInteropAuth()) return unavailable('coordination');
+        try {
+          const content = await callInteropTool('recoder.coordination', 'coordination.acquire_lock', {
+            resource: String(args.resource || ''),
+            holder: args.holder ? String(args.holder) : undefined,
+            ttlMs: args.ttlMs,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Coordination is not configured (no lock store).';
+          }
+          if (content && content.status === 'conflict') {
+            return `Lock on "${args.resource}" is held by ${(content.lock && content.lock.holder) || 'another agent'}.`;
+          }
+          const lockId = content && content.lock && content.lock.lockId;
+          return `Acquired lock on "${args.resource}"${lockId ? ` (id ${lockId})` : ''}.`;
+        } catch (err) {
+          return `coordination acquire_lock: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_coordination_detect_conflict': {
+        if (!hasInteropAuth()) return unavailable('coordination');
+        try {
+          const content = await callInteropTool('recoder.coordination', 'coordination.detect_conflict', {
+            resource: String(args.resource || ''),
+            holder: args.holder ? String(args.holder) : undefined,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Coordination is not configured (no lock store).';
+          }
+          return content && content.conflict
+            ? `Conflict: "${args.resource}" is held by ${content.holder || 'another agent'}.`
+            : `No conflict — "${args.resource}" is free to claim.`;
+        } catch (err) {
+          return `coordination detect_conflict: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_workflow_verify': {
+        if (!hasInteropAuth()) return unavailable('workflow');
+        try {
+          const content = await callInteropTool('recoder.workflow', 'workflow.verify', {
+            workflow: args.workflow ? String(args.workflow) : undefined,
+            runId: args.runId,
+            workspaceId: args.workspaceId,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Workflow verification is not configured (no runner).';
+          }
+          const checks = (content && content.checks) || [];
+          const verdict = content && content.passed ? '✓ passed' : '✗ failed';
+          return `Verification ${verdict} (${checks.length} checks): ${JSON.stringify(checks).slice(0, 800)}`;
+        } catch (err) {
+          return `workflow verify: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_workflow_capture_hook': {
+        if (!hasInteropAuth()) return unavailable('workflow');
+        try {
+          const content = await callInteropTool('recoder.workflow', 'workflow.capture_hook', {
+            hook: args.hook ? String(args.hook) : undefined,
+            text: args.text,
+            path: args.path,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Hook capture is not configured (no runner).';
+          }
+          const findings = (content && content.findings) || [];
+          return findings.length
+            ? `Hook captured ${findings.length} finding(s): ${JSON.stringify(findings).slice(0, 800)}`
+            : 'Hook captured — no findings.';
+        } catch (err) {
+          return `workflow capture_hook: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_pal_plan': {
+        if (!hasInteropAuth()) return unavailable('pal');
+        try {
+          const content = await callInteropTool('recoder.pal-plan', 'pal.plan', {
+            goal: args.goal,
+            scope: args.scope,
+            runtimeHint: args.runtimeHint,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Planning is not configured.';
+          }
+          const d = (content && content.decision) || content;
+          return `Plan: runtime=${d.runtimeId || '?'} substrate=${d.substrate || '?'} risk=${d.risk || '?'} approval=${d.approvalRequired ? 'REQUIRED' : 'not required'} grants=${JSON.stringify(d.toolGrants || []).slice(0, 400)}`;
+        } catch (err) {
+          return `pal plan: ${errMsg(err)}`;
         }
       }
 
