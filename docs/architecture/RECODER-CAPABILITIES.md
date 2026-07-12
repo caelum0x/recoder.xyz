@@ -112,7 +112,8 @@ The interop host registers 15 in-proc servers. Concrete executors bound so far:
 | **beads** | `bd` CLI | `recoder_issues_ready` · `issue_create` · `issue_close` | **wired** ✓ proven |
 | **repo** | git grep + `gh search code` | `recoder_repo_search` (local + GitHub) · `recoder_repo_diff` | **wired** ✓ proven |
 | **browser** | puppeteer automation | `recoder_browser_open` · `recoder_browser_verify` | **wired** (needs `puppeteer` installed) |
-| approvals / artifacts | agent-os store | — | catalog |
+| **approvals** | agent-os store | `recoder_request_approval` | **wired** ✓ proven |
+| **artifacts** | agent-os store | `recoder_attach_artifact` | **wired** |
 | github / preview / logs / oss / deployment / billing | their backends | — | catalog |
 
 Each binding runs behind the same governance gate and seals into the Merkle
