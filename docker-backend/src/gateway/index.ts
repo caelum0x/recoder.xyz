@@ -29,3 +29,10 @@ export type {
 
 export { createGatewayRouter } from './gateway.routes.js';
 export type { GatewayRouterDeps } from './gateway.routes.js';
+
+export {
+  createOpenAiCompatRouter,
+  handleChatCompletion,
+  parseOpenAiMessages,
+} from './openai-compat.routes.js';
+export type { OpenAiCompatDeps } from './openai-compat.routes.js';

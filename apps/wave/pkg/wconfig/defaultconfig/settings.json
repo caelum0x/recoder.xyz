@@ -1,5 +1,6 @@
 {
     "ai:preset": "ai@global",
+    "ai:baseurl": "http://127.0.0.1:3100/api/gateway/v1",
     "ai:model": "gpt-5-mini",
     "ai:maxtokens": 4000,
     "ai:timeoutms": 60000,

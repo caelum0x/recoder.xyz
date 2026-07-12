@@ -26,6 +26,7 @@ import {
   type LlmGatewayPort,
   type GatewayMessage,
 } from './tensorzero-client.js';
+import { createOpenAiCompatRouter } from './openai-compat.routes.js';
 
 const logger = createLogger('gateway:routes');
 
@@ -137,6 +138,12 @@ export function createGatewayRouter(deps: GatewayRouterDeps = {}): Router {
     }
     ok(res, result);
   });
+
+  // ── OpenAI wire-compatible surface ─────────────────────────────────────────
+  // Mounts POST /v1/chat/completions so off-the-shelf OpenAI clients (Wave AI's
+  // `ai:baseurl`) route completions through this same governed gateway client.
+  // Effective path under /api/gateway is /api/gateway/v1/chat/completions.
+  router.use(createOpenAiCompatRouter({ client, authenticateRequest: auth }));
 
   return router;
 }
