@@ -923,11 +923,13 @@ upstream-tracking burden — must be worth it; (5) governance + the engine fleet
 - **E · No fork — deepen the current shell** — the terminal-first center + interactive TUIs already
   land 80% of the value with zero fork burden; we own the UX and keep the engine mount intact.
 
-**Recommendation.** Default to **E now, B as the north-star.** The terminal-first center + interactive
-TUIs (shipped) already give the real-terminal experience without a fork's upstream burden. If we do
-fork, **Wave Terminal (B)** is the base — block model + Go backend fit Recoder — with the conductor/
-governance/engine fleet mounted behind it exactly as in this doc (the shell is just L3; L0–L2 are
-unchanged). A fork is a *surface* swap, never an engine swap.
+**DECISION (2026-07-12): Option E now — deepen the terminal-first shell — with Wave Terminal (B) as
+the documented north-star, adopted only once the backend is massive enough to be worth wrapping.**
+The shipped terminal-first center + interactive runtime TUIs (real Claude Code, not headless `-p`)
+already give the real-terminal experience without a fork's upstream burden. A fork is a *surface*
+(L3) swap, never an engine swap — so it must never block engine work. If/when we fork, Wave Terminal
+is the base (block model + Go backend fit Recoder); the conductor/governance/engine fleet mounts behind
+it exactly as in this doc. Execution now = finish the interactive-TUI shell path + build the engines.
 
 **Implication for the plan.** The 16 engines + fleet + governance are **shell-agnostic** — they mount
 the same whether L3 is our Preact cockpit, a Hyper fork, or a Wave fork. So the fork decision does NOT
