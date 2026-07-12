@@ -159,7 +159,17 @@ function PanelLoader({ panelId }: { panelId: string }) {
 // readonly string[] (not CockpitView[]) because new panels may be added before
 // a CockpitView union update — the nav still works.
 const PRIMARY_VIEWS: readonly string[] = PRIMARY_PANEL_IDS;
-const MORE_VIEWS: readonly string[] = MORE_PANEL_IDS;
+// The cockpit is a TERMINAL, not an infra dashboard: the human runs coding
+// agents and reviews their work. The polyglot capabilities (memory, retrieval,
+// browser, governance, networking, search from c/go/py/ts/crates) are BACKEND
+// power the AGENTS use — not human nav tabs. So the "More" menu is curated down
+// to the two genuinely human-facing surfaces: reviewing the delivery
+// gate/audit (Approvals) and seeing what tools the agents wield (MCP Tools).
+// The rest stay in the registry as the capability catalog (reachable by deep
+// link) but are kept out of the everyday nav. (registry-derived MORE_PANEL_IDS
+// remains the full catalog; this is the nav-visible subset.)
+const NAV_MORE_ALLOWLIST: ReadonlySet<string> = new Set(['governance', 'mcp']);
+const MORE_VIEWS: readonly string[] = MORE_PANEL_IDS.filter((id) => NAV_MORE_ALLOWLIST.has(id));
 
 // Build the set of all registered view ids for the navigate-event guard.
 const ALL_VIEW_IDS: ReadonlySet<string> = new Set(PANEL_REGISTRY.map((p) => p.id));
@@ -319,8 +329,6 @@ export function App() {
         </div>
         <div class="brand">
           <img class="brand-mark" src="./logo.png" alt="Recoder" width={18} height={18} />
-          <span class="brand-name">Cockpit</span>
-          <span class="brand-sub">{config.backendUrl}</span>
         </div>
         <nav class="view-tabs">
           {/* Primary tabs driven by the panel registry. */}
