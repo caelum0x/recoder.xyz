@@ -1,4 +1,14 @@
 {
+    "defwidget@recoder": {
+        "display:order": -6,
+        "icon": "layer-group",
+        "label": "recoder",
+        "blockdef": {
+            "meta": {
+                "view": "recoder"
+            }
+        }
+    },
     "defwidget@terminal": {
         "display:order": -5,
         "icon": "square-terminal",
