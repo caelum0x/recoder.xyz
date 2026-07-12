@@ -114,13 +114,23 @@ The interop host registers 15 in-proc servers. Concrete executors bound so far:
 | **browser** | puppeteer automation | `recoder_browser_open` · `recoder_browser_verify` | **wired** (needs `puppeteer` installed) |
 | **approvals** | agent-os store | `recoder_request_approval` | **wired** ✓ proven |
 | **artifacts** | agent-os store | `recoder_attach_artifact` | **wired** |
-| github / preview / logs / oss / deployment / billing | their backends | — | catalog |
+| **github** | `gh` CLI | `recoder_github_search_repos` · `recoder_github_pr_create` | **wired** |
+| **logs** | RunEvent store | (log stream/search/append) | **wired** |
+| **preview** | workspace-service + browser-check | `recoder_preview_url` · `recoder_preview_health` · `recoder_preview_check` | **wired** |
+| deployment | (no safe programmatic backend — manual + approval-gated) | — | deferred → `recoder-ccy1` |
+| billing | (no clean agent→billing-subject mapping) | — | deferred → `recoder-r6ek` |
+
+The agent-facing bridge tools live once in `mcp/recoder-capability-tools.cjs`,
+vendored byte-identically into every stdio server copy (main + `packages/recoder-a2a`
++ `packages/recoder-code`), guarded by a drift test — so packaged agents get the
+exact same governed capability set as the product.
 
 Each binding runs behind the same governance gate and seals into the Merkle
 audit chain, so every capability an agent uses is policy-checked and
-non-repudiable. The remaining catalog entries follow the same proven pattern:
-executor (`*-engine.ts`) → interop router (`inproc-engines.ts` `ENGINE_SERVERS`)
-→ agent bridge tool (`mcp/recoder-a2a-server.js`).
+non-repudiable. Deferred entries carry a filed cause (above) rather than a stub;
+new bindings follow the proven pattern: executor (`*-engine.ts`) → interop router
+(`inproc-engines.ts` `ENGINE_SERVERS`) → shared bridge tool
+(`mcp/recoder-capability-tools.cjs`).
 
 See `docs/architecture/RECODER-FUSION-PROGRAM.md` for the layer-by-layer fusion
 status and `AGENTS.md` for the cross-agent policy.
