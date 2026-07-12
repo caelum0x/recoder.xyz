@@ -135,6 +135,38 @@ export function parallelAgentUsageLabel(
 }
 
 /**
+ * The top-bar agents indicator. "0 agents" reads as "nothing is connected" when
+ * really it's just the count of RUNNING agents — so when none are running we
+ * show how many agent CLIs are installed and READY ("2 agents ready"), or a
+ * truthful install prompt when none are detected. When agents are running we
+ * fall back to the live "N of M agents" usage. Pure so it is unit-tested.
+ */
+export function agentsIndicator(
+  active: number,
+  readyRuntimeIds: readonly string[],
+  plan: string | null | undefined,
+): { label: string; title: string } {
+  const running = Math.max(0, Math.floor(active) || 0);
+  if (running > 0) {
+    return {
+      label: `${parallelAgentUsageLabel(running, plan)} agents`,
+      title: 'Agents running locally now — local runs are unlimited (BYOK).',
+    };
+  }
+  const ready = readyRuntimeIds.length;
+  if (ready > 0) {
+    return {
+      label: `${ready} agent${ready === 1 ? '' : 's'} ready`,
+      title: `Installed and ready: ${readyRuntimeIds.join(', ')} — start one with New workspace.`,
+    };
+  }
+  return {
+    label: 'No agents',
+    title: 'No coding agent detected. Install one (like claude or codex) to get started.',
+  };
+}
+
+/**
  * True when the active count is at or over the plan's parallel limit — a cue to
  * show the gentle upgrade hint. NEVER used to block creation (surfaced only).
  * Always false for an unlimited (enterprise) plan.

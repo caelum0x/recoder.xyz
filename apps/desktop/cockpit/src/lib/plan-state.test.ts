@@ -16,6 +16,7 @@ import {
   capabilityUnlockLabel,
   parallelAgentLimit,
   parallelAgentUsageLabel,
+  agentsIndicator,
   atParallelAgentLimit,
   seatLimit,
   type PlanTier,
@@ -137,6 +138,30 @@ describe('parallelAgentUsageLabel', () => {
   it('clamps a negative/garbage active count to 0', () => {
     expect(parallelAgentUsageLabel(-3, 'free')).toBe('0');
     expect(parallelAgentUsageLabel(Number.NaN, 'free')).toBe('0');
+  });
+});
+
+describe('agentsIndicator', () => {
+  it('shows the running count while agents are active', () => {
+    const ind = agentsIndicator(2, ['claude', 'codex'], 'free');
+    expect(ind.label).toBe('2 agents');
+    expect(ind.title).toMatch(/running locally/i);
+  });
+
+  it('shows "N agents ready" when none running but CLIs are installed', () => {
+    const ind = agentsIndicator(0, ['claude', 'codex'], 'free');
+    expect(ind.label).toBe('2 agents ready');
+    expect(ind.title).toMatch(/claude, codex/);
+  });
+
+  it('singularizes a single ready agent', () => {
+    expect(agentsIndicator(0, ['claude'], 'free').label).toBe('1 agent ready');
+  });
+
+  it('gives a truthful install prompt when nothing is running or installed', () => {
+    const ind = agentsIndicator(0, [], 'free');
+    expect(ind.label).toBe('No agents');
+    expect(ind.title).toMatch(/install one/i);
   });
 });
 
