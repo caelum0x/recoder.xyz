@@ -57,6 +57,7 @@ import { getSubstrate, listSubstrates } from './substrate.js';
 import { registerTmuxSubstrate } from './substrate-tmux.js';
 import { registerDaytonaSubstrate } from './substrate-daytona.js';
 import { registerInProcessSubstrate } from './substrate-in-process.js';
+import { registerSshConductorSubstrate } from './wiring/ssh-exec.js';
 import { TMUX_BIN } from './tmux-path.js';
 import {
   acquireWorkspaceLock,
@@ -80,6 +81,9 @@ export const ADMISSION_REJECTED_PREFIX = PACKAGE_ADMISSION_REJECTED_PREFIX;
 registerTmuxSubstrate();
 registerDaytonaSubstrate();
 registerInProcessSubstrate();
+// Durable-SSH remote substrate: inert unless RECODER_SSH_HOST/REPO_PATH are set,
+// then Workspace.substrate:'ssh' runs worktrees+tmux on a remote host over ssh.
+registerSshConductorSubstrate();
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor:workspace');
