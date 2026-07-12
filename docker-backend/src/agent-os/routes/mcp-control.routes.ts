@@ -16,6 +16,8 @@ import {
   previewMcpServer,
   repoMcpServer,
   recodergitMcpServer,
+  retrievalMcpServer,
+  browserEngineMcpServer,
   checkMcpToolPermission,
   createMcpToolAuditEvent,
   createMcpToolCall,
@@ -41,6 +43,8 @@ const defaultServers = [
   ossMcpServer,
   deploymentMcpServer,
   billingMcpServer,
+  retrievalMcpServer,
+  browserEngineMcpServer,
 ];
 
 /**
