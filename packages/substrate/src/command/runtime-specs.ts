@@ -22,6 +22,10 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     bin: 'claude',
     build: (o) =>
       `claude -p ${shellQuote(o.prompt)} --permission-mode acceptEdits${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    // Interactive: the real Claude Code TUI, opened with the initial prompt (no
+    // `-p`, so it stays live). Edits auto-accepted in the isolated worktree.
+    buildInteractive: (o) =>
+      `claude ${shellQuote(o.prompt)} --permission-mode acceptEdits${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   codex: {
     // `codex exec` defaults to a read-only sandbox, which blocks the agent from
@@ -30,10 +34,15 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     bin: 'codex',
     build: (o) =>
       `codex exec ${shellQuote(o.prompt)} --sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    // Interactive: the Codex TUI (no `exec`), started with the prompt.
+    buildInteractive: (o) =>
+      `codex ${shellQuote(o.prompt)} --sandbox workspace-write${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   opencode: {
     bin: 'opencode',
     build: (o) => `opencode run ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    // Interactive: the opencode TUI (no `run`), started with the prompt.
+    buildInteractive: (o) => `opencode ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   recoder_code: {
     bin: 'recoder-code',
@@ -47,6 +56,9 @@ export const RUNTIME_SPECS: Record<ConductorRuntimeId, RuntimeSpec> = {
     bin: 'pi',
     build: (o) =>
       `pi --print ${shellQuote(o.prompt)} -ne${modelFlag('--model', o.model)}${extraArgs(o)}`,
+    // Interactive: the pi TUI, started with the prompt (drop `--print`).
+    buildInteractive: (o) =>
+      `pi ${shellQuote(o.prompt)}${modelFlag('--model', o.model)}${extraArgs(o)}`,
   },
   gemini_cli: {
     bin: 'gemini',

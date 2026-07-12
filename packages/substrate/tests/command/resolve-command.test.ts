@@ -68,6 +68,33 @@ test('extraArgs are appended verbatim after the model flag', () => {
   assert.equal(resolved.commandLine, "opencode run 'fix the bug' --model 'sonnet' --verbose --no-color");
 });
 
+test('interactive request builds the TUI variant (no -p / exec / run / --print)', () => {
+  assert.equal(
+    resolveRuntimeCommand('claude_code', { prompt: PROMPT, interactive: true }).commandLine,
+    "claude 'fix the bug' --permission-mode acceptEdits",
+  );
+  assert.equal(
+    resolveRuntimeCommand('codex', { prompt: PROMPT, interactive: true }).commandLine,
+    "codex 'fix the bug' --sandbox workspace-write",
+  );
+  assert.equal(
+    resolveRuntimeCommand('opencode', { prompt: PROMPT, interactive: true }).commandLine,
+    "opencode 'fix the bug'",
+  );
+  assert.equal(
+    resolveRuntimeCommand('pi', { prompt: PROMPT, interactive: true }).commandLine,
+    "pi 'fix the bug'",
+  );
+});
+
+test('interactive falls back to the headless line when a runtime has no TUI variant', () => {
+  // gemini has no buildInteractive → same as headless
+  assert.equal(
+    resolveRuntimeCommand('gemini_cli', { prompt: PROMPT, interactive: true }).commandLine,
+    "gemini --prompt 'fix the bug'",
+  );
+});
+
 test('unsupported runtime throws a typed INVALID_INPUT SubstrateError', () => {
   assert.throws(
     () => resolveRuntimeCommand('not_a_runtime', { prompt: PROMPT }),

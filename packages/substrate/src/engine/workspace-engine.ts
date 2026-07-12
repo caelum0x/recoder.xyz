@@ -100,6 +100,7 @@ export class WorkspaceEngine {
       command = resolveRuntimeCommand(input.runtimeId, {
         prompt: enriched.prompt,
         model: input.model,
+        interactive: input.interactive,
       }).commandLine;
     }
 

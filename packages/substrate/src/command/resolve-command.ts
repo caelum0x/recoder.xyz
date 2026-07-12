@@ -27,5 +27,9 @@ export function resolveRuntimeCommand(
     );
   }
   const spec = RUNTIME_SPECS[runtimeId];
-  return { runtimeId, bin: spec.bin, commandLine: spec.build(opts) };
+  // Interactive request → the TUI variant when the runtime has one; otherwise the
+  // headless command (degrade-safe).
+  const commandLine =
+    opts.interactive && spec.buildInteractive ? spec.buildInteractive(opts) : spec.build(opts);
+  return { runtimeId, bin: spec.bin, commandLine };
 }
