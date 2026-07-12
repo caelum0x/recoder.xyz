@@ -396,6 +396,18 @@ body {
 .ws-center-spacer { flex: 1; }
 .ws-center-meta { font-size: 11px; color: var(--text-faint); font-family: var(--mono); white-space: nowrap; }
 
+/* Terminal / Chat mode toggle for the center — terminal-first surface. */
+.ws-center-modes { display: inline-flex; gap: 2px; background: var(--bg-inset, #1b1b1b); border-radius: var(--radius-sm, 6px); padding: 2px; }
+.ws-center-mode {
+  background: none; border: none; cursor: pointer; font: inherit;
+  font-size: 11px; padding: 3px 10px; border-radius: 4px; color: var(--text-dim);
+}
+.ws-center-mode:hover { color: var(--text); }
+.ws-center-mode-active { background: var(--bg-card, #2a2a2a); color: var(--text); }
+/* The real terminal fills the center; xterm sizes itself inside. */
+.ws-center-terminal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.ws-center-terminal > * { flex: 1 1 auto; min-height: 0; }
+
 /* Center sub-tabs: All changes / <task> / Review branch changes. */
 .ws-center-tabs { display: flex; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .ws-ctab {

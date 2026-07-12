@@ -29,6 +29,9 @@ import { isLive, statePill, stateTone, messageDisabledReason } from '../lib/work
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
 import { workspaceCodename } from '../lib/workspace-codename';
 import { mergeEvents, useLiveStream } from '../lib/event-stream';
+import { workspaceSession, hasDesktopTerminal } from '../lib/workspace-session';
+import { RecoderTerminal } from './RecoderTerminal';
+import { SessionTerminal } from './SessionTerminal';
 import type { RunEvent, Workspace } from '../types';
 
 interface WorkspaceCenterProps {
@@ -213,6 +216,19 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   const merged = mergeEvents(events.data, streamed);
   const counts = threadCounts(merged);
 
+  // TERMINAL-FIRST: the center can show the REAL tmux session (the actual coding
+  // agent's TUI — original Claude Code / Codex / opencode), not just a scraped
+  // chat. This is the true "it's a terminal" surface: an xterm attached to the
+  // workspace's live tmux session. Chat stays available as the calm alternate.
+  const session = workspaceSession(workspace);
+  const health = usePoll(() => api.health(), 15_000);
+  const tmuxBin = health.data?.tmuxBin;
+  const canTerminal = Boolean(session) && hasDesktopTerminal();
+  // Default to the real terminal when it's available — that's what users want to
+  // see. Falls back to chat when there's no PTY / no session.
+  const [mode, setMode] = useState<'terminal' | 'chat'>(canTerminal ? 'terminal' : 'chat');
+  const [ptyUnavailable, setPtyUnavailable] = useState(false);
+
   // The model the workspace was actually launched with, if the backend recorded
   // one — shown in the composer chip. Never fabricated: falls back to a label.
   // The real model id the workspace recorded (a variant WITHIN its fixed
@@ -257,6 +273,8 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   if (lastWsId.current !== wsId) {
     lastWsId.current = wsId;
     if (messages.length) setMessages([]);
+    setPtyUnavailable(false);
+    setMode(canTerminal ? 'terminal' : 'chat');
   }
 
   async function send(text: string): Promise<void> {
@@ -291,27 +309,68 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
           {counts.tools} tool call{counts.tools === 1 ? '' : 's'}, {counts.messages} message{counts.messages === 1 ? '' : 's'}
         </span>
         <span class="ws-center-spacer" />
-        <span class="ws-center-meta">{live ? 'live (2s)' : 'terminal (15s)'}</span>
+        {canTerminal && (
+          <div class="ws-center-modes" role="tablist">
+            <button
+              class={mode === 'terminal' ? 'ws-center-mode ws-center-mode-active' : 'ws-center-mode'}
+              onClick={() => setMode('terminal')}
+              title="The real terminal — the coding agent's live session (Claude Code / Codex / …)"
+            >
+              Terminal
+            </button>
+            <button
+              class={mode === 'chat' ? 'ws-center-mode ws-center-mode-active' : 'ws-center-mode'}
+              onClick={() => setMode('chat')}
+              title="A calm chat view over the same session"
+            >
+              Chat
+            </button>
+          </div>
+        )}
+        <span class="ws-center-meta">{live ? 'live' : ''}</span>
       </div>
 
-      <div class="ws-center-scroll">
-        <Conversation
-          messages={allUserMessages}
-          events={agentEvents}
-          eventsError={events.error}
-          eventsLoading={events.loading}
-          workspace={workspace}
-        />
-      </div>
+      {mode === 'terminal' && session ? (
+        // The REAL terminal: an xterm attached to this workspace's live tmux
+        // session — the actual agent CLI (original Claude Code / Codex / opencode),
+        // not a scraped chat. If the desktop PTY is unavailable, fall back to the
+        // HTTP /sessions surface so we never show a dead terminal.
+        <div class="ws-center-terminal">
+          {hasDesktopTerminal() && !ptyUnavailable ? (
+            <RecoderTerminal
+              command={tmuxBin || 'tmux'}
+              args={['attach', '-t', session.tmuxName]}
+              cwd={session.worktreePath || undefined}
+              env={tmuxBin ? { CONDUCTOR_TMUX_BIN: tmuxBin } : undefined}
+              sessionLabel={workspaceCodename(workspace.workspaceId)}
+              onPtyUnavailable={() => setPtyUnavailable(true)}
+            />
+          ) : (
+            <SessionTerminal session={session} tmuxBin={tmuxBin} />
+          )}
+        </div>
+      ) : (
+        <>
+          <div class="ws-center-scroll">
+            <Conversation
+              messages={allUserMessages}
+              events={agentEvents}
+              eventsError={events.error}
+              eventsLoading={events.loading}
+              workspace={workspace}
+            />
+          </div>
 
-      <Composer
-        key={wsId}
-        modelLabel={modelLabel}
-        busy={sending}
-        onSend={(t) => void send(t)}
-        state={workspace.state}
-        initialDraft={starterDraft}
-      />
+          <Composer
+            key={wsId}
+            modelLabel={modelLabel}
+            busy={sending}
+            onSend={(t) => void send(t)}
+            state={workspace.state}
+            initialDraft={starterDraft}
+          />
+        </>
+      )}
     </section>
   );
 }
