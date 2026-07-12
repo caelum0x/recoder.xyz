@@ -291,3 +291,69 @@ test('a 401-rejected bridge upgrade disables reconnects (no retry hammering)', a
   assert.equal(upgrades, 1, `expected exactly one upgrade attempt, saw ${upgrades}`);
   assert.match(err, /not retrying/i);
 });
+
+// ---------------------------------------------------------------------------
+// Capability bridge: agent → recoder-a2a-server (stdio MCP) → interop host
+// ---------------------------------------------------------------------------
+
+test('capability tools appear in tools/list', async () => {
+  const s = await handshake({});
+  const listed = await s.request(2, 'tools/list', {});
+  s.close();
+  const names = (listed.result?.tools || []).map((t) => t.name);
+  for (const expected of [
+    'recoder_memory_search',
+    'recoder_remember',
+    'recoder_issues_ready',
+    'recoder_repo_search',
+    'recoder_browser_open',
+    'recoder_request_approval',
+    'recoder_attach_artifact',
+  ]) {
+    assert.ok(names.includes(expected), `tools/list is missing ${expected}`);
+  }
+});
+
+test('recoder_repo_search bridges to the governed interop host with the internal key', async () => {
+  // Mock the interop host: assert the internal key + actor, return a result.
+  let sawKey = null;
+  let sawPath = '';
+  const host = http.createServer((req, res) => {
+    sawKey = req.headers['x-internal-service-key'];
+    sawPath = req.url;
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          data: {
+            status: 'completed',
+            result: { content: { source: 'github', matches: [{ repo: 'acme/x', path: 'a.ts', fragments: ['hit'] }] } },
+          },
+        }),
+      );
+    });
+  });
+  await new Promise((r) => host.listen(0, '127.0.0.1', r));
+  const port = host.address().port;
+
+  const s = await handshake({
+    RECODER_INTERNAL_URL: `http://127.0.0.1:${port}`,
+    INTERNAL_SERVICE_KEY: 'agent-facing-test-key',
+  });
+  const out = await s.request(3, 'tools/call', {
+    name: 'recoder_repo_search',
+    arguments: { query: 'thing', github: 'acme/x' },
+  });
+  s.close();
+  host.close();
+
+  // The bridge authenticated with the internal key and hit the interop call route.
+  assert.equal(sawKey, 'agent-facing-test-key');
+  assert.match(sawPath, /\/api\/mcp\/tools\/recoder\.repo\/repo\.search\/call/);
+  // And the agent got the formatted result back over MCP.
+  const text = out.result?.content?.[0]?.text || '';
+  assert.match(text, /acme\/x\/a\.ts/);
+});
