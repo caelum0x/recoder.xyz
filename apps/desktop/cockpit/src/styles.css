@@ -133,6 +133,27 @@ body {
    bar. The email/plan is secondary chrome, not a headline. */
 .account { display: flex; align-items: center; gap: 8px; }
 .account-avatar { border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+
+/* macOS permission coach — a calm, dismissible bottom-left card. */
+.permission-coach {
+  position: fixed; bottom: 16px; left: 16px; z-index: 40;
+  max-width: 300px; padding: 14px 16px;
+  background: var(--bg-elev, #1c1c1c); border: 1px solid var(--border);
+  border-left: 3px solid var(--warn, #d29922); border-radius: var(--radius, 8px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+.permission-coach-close {
+  position: absolute; top: 8px; right: 10px;
+  background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 15px;
+}
+.permission-coach-close:hover { color: var(--text); }
+.permission-coach-title { font-weight: 600; font-size: 13px; color: var(--warn, #d29922); margin-bottom: 6px; padding-right: 14px; }
+.permission-coach-body { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin: 0 0 10px; }
+.permission-coach-action {
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--warn, #d29922); font-size: 12px; font-weight: 600;
+}
+.permission-coach-action:hover { text-decoration: underline; }
 .account-id {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--text-faint); font-size: 11px; max-width: 200px;

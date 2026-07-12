@@ -2595,6 +2595,24 @@ app.on('window-all-closed', () => {
 // IPC Handlers - File System
 // ============================================================================
 
+// Open a macOS System Settings privacy pane so the user can grant Recoder the
+// access its agents need without hunting through Settings. macOS only; a no-op
+// (truthful false) elsewhere.
+ipcMain.handle('system:openSettings', async (_event, pane) => {
+  if (process.platform !== 'darwin') return { ok: false, reason: 'not macOS' };
+  const PANES = {
+    fullDiskAccess: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+    accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+  };
+  const url = PANES[pane] || PANES.fullDiskAccess;
+  try {
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+});
+
 ipcMain.handle('dialog:openFile', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openFile'],
