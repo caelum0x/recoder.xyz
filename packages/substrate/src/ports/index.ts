@@ -53,3 +53,8 @@ export type {
   DaytonaExecOptions,
   DaytonaSandboxRef,
 } from './daytona-client.port.js';
+export type {
+  SshExecPort,
+  SshExecResult,
+  SshExecOptions,
+} from './ssh-exec.port.js';

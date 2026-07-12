@@ -93,6 +93,7 @@ export {
   defaultRegistry,
   selectSubstrate,
   resolveSubstrate,
+  registerSshSubstrate,
 } from './registry/index.js';
 export type {
   SubstrateSelectable,
@@ -165,6 +166,9 @@ export type {
   DaytonaExecResult,
   DaytonaExecOptions,
   DaytonaSandboxRef,
+  SshExecPort,
+  SshExecResult,
+  SshExecOptions,
 } from './ports/index.js';
 
 // === Engine — the orchestration brain (persisted Workspace lifecycle) ===
@@ -178,9 +182,21 @@ export type {
 // === Reconcile — restart survivability (join records × live substrate) ===
 export { reconcile } from './reconcile/index.js';
 
-// === Remote — off-machine substrate (Daytona) over the injected client port ===
+// === Remote — off-machine substrates over injected transport ports ===
+//   - Daytona (DaytonaClientPort), SSH host + tmux worktree (SshExecPort).
 export { createDaytonaSubstrate } from './remote/index.js';
 export type { CreateDaytonaSubstrateDeps } from './remote/index.js';
+export {
+  createSshSubstrate,
+  createSshSubstrateFromEnv,
+  readSshConfig,
+} from './remote/index.js';
+export type {
+  CreateSshSubstrateDeps,
+  SshSubstrateConfig,
+  SshSubstrateFromEnvDeps,
+  SshEnv,
+} from './remote/index.js';
 
 // === Factory — the composition root (ports → registry) ===
 export {
