@@ -71,6 +71,8 @@ export interface RecoderDesktopBridge {
   terminalKill: (id: string) => Promise<unknown>;
   onTerminalData: (cb: (msg: TerminalDataMessage) => void) => () => void;
   onTerminalExit: (cb: (msg: TerminalExitMessage) => void) => () => void;
+  /** Open a macOS System Settings privacy pane. macOS only. */
+  openSystemSettings?: (pane: string) => Promise<{ ok: boolean; reason?: string }>;
 }
 
 /**
@@ -106,6 +108,24 @@ export function getDesktopBridge(): RecoderDesktopBridge | null {
 /** True when a real local node-pty terminal is available via the Electron shell. */
 export function hasLocalTerminal(): boolean {
   return getDesktopBridge() !== null;
+}
+
+/** The desktop platform ('darwin' | 'win32' | 'linux'), or '' outside Electron. */
+export function desktopPlatform(): string {
+  if (typeof window === 'undefined') return '';
+  return window.recoderDesktop?.platform ?? '';
+}
+
+/** Open a macOS System Settings privacy pane; resolves false when unavailable. */
+export async function openSystemSettings(pane: string): Promise<boolean> {
+  const bridge = typeof window !== 'undefined' ? window.recoderDesktop : undefined;
+  if (!bridge?.openSystemSettings) return false;
+  try {
+    const result = await bridge.openSystemSettings(pane);
+    return Boolean(result?.ok);
+  } catch {
+    return false;
+  }
 }
 
 /** Normalize the spawn result — preload may return a bare id string or { id }. */

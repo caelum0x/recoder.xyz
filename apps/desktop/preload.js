@@ -91,6 +91,10 @@ contextBridge.exposeInMainWorld('recoderDesktop', {
   isDesktop: true,
   version: process.env.npm_package_version || '1.0.0',
 
+  // ============== System ==============
+  /** Open a macOS System Settings privacy pane (e.g. 'fullDiskAccess'). */
+  openSystemSettings: (pane) => ipcRenderer.invoke('system:openSettings', pane),
+
   // ============== File System ==============
   /** Open a native file picker dialog */
   openFile: () => ipcRenderer.invoke('dialog:openFile'),

@@ -35,6 +35,7 @@ import {
 // props (sessions needs tmuxBin from the health poll).
 import { Board } from './components/Board';
 import { HealthStrip } from './components/HealthStrip';
+import { PermissionCoach } from './components/PermissionCoach';
 import { NewWorkspaceForm } from './components/NewWorkspaceForm';
 import { WorkspaceDetail } from './components/WorkspaceDetail';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar';
@@ -525,6 +526,8 @@ export function App() {
       {showCreate && (
         <NewWorkspaceForm onCreated={() => board.refresh()} onClose={() => setShowCreate(false)} />
       )}
+
+      <PermissionCoach />
     </div>
   );
 }
