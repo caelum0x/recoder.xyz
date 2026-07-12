@@ -324,7 +324,7 @@ export function App() {
           <span class="traffic-light traffic-max" />
         </div>
         <div class="brand">
-          <img class="brand-mark" src="./logo.png" alt="Recoder" width={18} height={18} />
+          <img class="brand-mark" src="./logo.png" alt="Recoder" width={28} height={28} />
         </div>
         <nav class="view-tabs">
           {/* Primary tabs driven by the panel registry. */}
@@ -464,6 +464,7 @@ export function App() {
             waits={waits}
             collapsed={leftCollapsed}
             onToggleCollapse={() => setLeftCollapsed((v) => !v)}
+            onHome={() => setSelectedId(null)}
           />
 
           {/* CENTER: a FOCUSED surface. With a workspace selected it is a pure
