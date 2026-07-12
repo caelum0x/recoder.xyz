@@ -18,7 +18,7 @@
     "conn:askbeforewshinstall": true,
     "conn:wshenabled": true,
     "editor:minimapenabled": true,
-    "web:defaulturl": "https://github.com/wavetermdev/waveterm",
+    "web:defaulturl": "https://recoder.xyz",
     "web:defaultsearch": "https://www.google.com/search?q={query}",
     "window:tilegapsize": 3,
     "window:maxtabcachesize": 10,
@@ -30,7 +30,7 @@
     "window:magnifiedblockblursecondarypx": 2,
     "window:confirmclose": true,
     "window:savelastwindow": true,
-    "telemetry:enabled": true,
+    "telemetry:enabled": false,
     "term:bellsound": false,
     "term:bellindicator": true,
     "term:osc52": "always",
@@ -39,7 +39,7 @@
     "term:copyonselect": true,
     "term:trimtrailingwhitespace": true,
     "term:durable": false,
-    "waveai:showcloudmodes": true,
+    "waveai:showcloudmodes": false,
     "waveai:defaultmode": "waveai@balanced",
     "preview:defaultsort": "name"
 }

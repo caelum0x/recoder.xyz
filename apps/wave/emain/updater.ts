@@ -93,8 +93,8 @@ export class Updater {
             // Display the update banner and create a system notification
             this.status = "ready";
             const updateNotification = new Notification({
-                title: "Wave Terminal",
-                body: "A new version of Wave Terminal is ready to install.",
+                title: "Recoder",
+                body: "A new version of Recoder is ready to install.",
             });
             updateNotification.on("click", () => {
                 fireAndForget(this.promptToInstallUpdate.bind(this));
@@ -230,6 +230,14 @@ let autoUpdateLock = false;
 export async function configureAutoUpdater() {
     if (isDev()) {
         console.log("skipping auto-updater in dev mode");
+        return;
+    }
+
+    // Recoder fork: the auto-updater is inert by default so it never contacts an upstream
+    // release server. It only activates when an explicit RECODER_UPDATE_FEED is configured.
+    // The full mechanism below stays intact; this only changes the default to no-op.
+    if (!process.env.RECODER_UPDATE_FEED) {
+        console.log("skipping auto-updater: RECODER_UPDATE_FEED is not configured");
         return;
     }
 

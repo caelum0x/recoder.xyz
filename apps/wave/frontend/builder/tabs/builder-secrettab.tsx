@@ -250,7 +250,7 @@ const BuilderSecretTab = memo(() => {
             <h2 className="text-lg font-semibold mb-2">Secret Bindings</h2>
 
             <div className="mb-4 p-2 bg-blue-500/10 border border-blue-500/30 rounded text-sm text-secondary">
-                Map app secrets to Wave secret store names. Required secrets must be bound before the app can run
+                Map app secrets to Recoder secret store names. Required secrets must be bound before the app can run
                 successfully. Changes are saved automatically.
             </div>
 

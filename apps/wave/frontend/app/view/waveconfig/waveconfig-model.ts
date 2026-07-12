@@ -61,14 +61,14 @@ function makeConfigFiles(isWindows: boolean): ConfigFile[] {
             name: "General",
             path: "settings.json",
             language: "json",
-            docsUrl: "https://docs.waveterm.dev/config",
+            docsUrl: "https://recoder.xyz/docs",
             hasJsonView: true,
         },
         {
             name: "Connections",
             path: "connections.json",
             language: "json",
-            docsUrl: "https://docs.waveterm.dev/connections",
+            docsUrl: "https://recoder.xyz/docs",
             description: isWindows ? "SSH hosts and WSL distros" : "SSH hosts",
             hasJsonView: true,
         },
@@ -76,15 +76,15 @@ function makeConfigFiles(isWindows: boolean): ConfigFile[] {
             name: "Sidebar Widgets",
             path: "widgets.json",
             language: "json",
-            docsUrl: "https://docs.waveterm.dev/customwidgets",
+            docsUrl: "https://recoder.xyz/docs",
             hasJsonView: true,
         },
         {
-            name: "Wave AI Modes",
+            name: "Recoder AI Modes",
             path: "waveai.json",
             language: "json",
             description: "Local models and BYOK",
-            docsUrl: "https://docs.waveterm.dev/waveai-modes",
+            docsUrl: "https://recoder.xyz/docs",
             validator: validateWaveAiJson,
             hasJsonView: true,
             // visualComponent: WaveAIVisualContent,
@@ -93,7 +93,7 @@ function makeConfigFiles(isWindows: boolean): ConfigFile[] {
             name: "Tab Backgrounds",
             path: "backgrounds.json",
             language: "json",
-            docsUrl: "https://docs.waveterm.dev/tab-backgrounds",
+            docsUrl: "https://recoder.xyz/docs",
             hasJsonView: true,
         },
         {
@@ -119,7 +119,7 @@ const deprecatedConfigFiles: ConfigFile[] = [
         path: "presets/ai.json",
         language: "json",
         deprecated: true,
-        docsUrl: "https://docs.waveterm.dev/ai-presets",
+        docsUrl: "https://recoder.xyz/docs",
         validator: validateAiJson,
         hasJsonView: true,
     },
@@ -129,7 +129,7 @@ export class WaveConfigViewModel implements ViewModel {
     blockId: string;
     viewType = "waveconfig";
     viewIcon = atom("gear");
-    viewName = atom("Wave Config");
+    viewName = atom("Recoder Config");
     viewComponent = WaveConfigView;
     noPadding = atom(true);
     nodeModel: BlockNodeModel;

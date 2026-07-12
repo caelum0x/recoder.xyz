@@ -85,7 +85,7 @@ const InitPage = ({
                 <div className={`${isCompact ? "" : "mb-2.5"} flex justify-center`}>
                     <Logo />
                 </div>
-                <div className="text-center text-[25px] font-normal text-foreground">Welcome to Wave Terminal</div>
+                <div className="text-center text-[25px] font-normal text-foreground">Welcome to Recoder</div>
             </header>
             <OverlayScrollbarsComponent
                 className="flex-1 overflow-y-auto min-h-0"
@@ -123,34 +123,6 @@ const InitPage = ({
                     </div>
                     <div className="flex w-full items-center gap-[18px]">
                         <div>
-                            <a
-                                target="_blank"
-                                href="https://discord.gg/XfvZ334gwU"
-                                rel="noopener"
-                                className="text-accent"
-                            >
-                                <i className="text-[25px] text-white/50 fa-solid fa-people-group"></i>
-                            </a>
-                        </div>
-                        <div className="flex flex-col items-start gap-1 flex-1">
-                            <div className="text-foreground text-base leading-[18px]">Join our Community</div>
-                            <div className="text-secondary leading-5">
-                                Get help, submit feature requests, report bugs, or just chat with fellow terminal
-                                enthusiasts.
-                                <br />
-                                <a
-                                    target="_blank"
-                                    href="https://discord.gg/XfvZ334gwU"
-                                    rel="noopener"
-                                    className="text-accent"
-                                >
-                                    Join the Wave&nbsp;Discord&nbsp;Channel
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex w-full items-center gap-[18px]">
-                        <div>
                             <i className="text-[32px] text-white/50 fa-solid fa-chart-line"></i>
                         </div>
                         <div className="flex flex-col items-start gap-1 flex-1">
@@ -160,7 +132,7 @@ const InitPage = ({
                                 <a
                                     className="text-secondary! hover:underline!"
                                     target="_blank"
-                                    href="https://waveterm.dev/privacy"
+                                    href="https://recoder.xyz/privacy"
                                     rel="noopener"
                                 >
                                     Privacy Policy
@@ -244,8 +216,8 @@ const NoTelemetryStarPage = ({ isCompact }: { isCompact: boolean }) => {
                     <div className="text-center text-secondary leading-relaxed max-w-md">
                         <p className="mb-4">No problem, we respect your privacy.</p>
                         <p className="mb-4">
-                            But, without usage data, we're flying blind. A GitHub star helps us know Wave is useful and
-                            worth maintaining.
+                            But, without usage data, we're flying blind. A GitHub star helps us know Recoder is useful
+                            and worth maintaining.
                         </p>
                     </div>
                 </div>

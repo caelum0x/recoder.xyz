@@ -593,7 +593,7 @@ type WshInstallOpts struct {
 }
 
 var queryTextTemplate = strings.TrimSpace(`
-Wave requires Wave Shell Extensions to be
+Recoder requires Recoder Shell Extensions to be
 installed on %q
 to ensure a seamless experience.
 
@@ -620,7 +620,7 @@ func (conn *SSHConn) UpdateWsh(ctx context.Context, clientDisplayName string, re
 func (conn *SSHConn) getPermissionToInstallWsh(ctx context.Context, clientDisplayName string) (bool, error) {
 	conn.Infof(ctx, "running getPermissionToInstallWsh...\n")
 	queryText := fmt.Sprintf(queryTextTemplate, clientDisplayName)
-	title := "Install Wave Shell Extensions"
+	title := "Install Recoder Shell Extensions"
 	request := &userinput.UserInputRequest{
 		ResponseType: "confirm",
 		QueryText:    queryText,
