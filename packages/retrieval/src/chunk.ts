@@ -126,7 +126,7 @@ async function loadText(path: string): Promise<string> {
 	if (path.toLowerCase().endsWith(".pdf")) {
 		try {
 			const buffer = await readFile(path);
-			const dp = (await import("@recoder/document-preprocessor")) as {
+			const dp = (await import("@recoder/document-preprocessor")) as unknown as {
 				extractPdfText?: (
 					data: unknown,
 				) => Promise<{ pages?: Array<{ text?: unknown }> }>;

@@ -140,7 +140,7 @@ importers:
         version: 2.10.0(@prisma/client@7.1.0(prisma@7.1.0(@types/react@19.2.7)(better-sqlite3@12.11.1)(magicast@0.3.5)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(typescript@5.9.2))(nodemailer@8.0.4)
       '@qwen-code/qwen-code':
         specifier: ^0.0.7
-        version: 0.0.7(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(@types/react@19.2.7)(bufferutil@4.0.9)(encoding@0.1.13)(react-devtools-core@6.1.5(bufferutil@4.0.9)(utf-8-validate@6.0.6))(utf-8-validate@6.0.6)
+        version: 0.0.7(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(@types/react@19.2.7)(bufferutil@4.0.9)(react-devtools-core@6.1.5(bufferutil@4.0.9)(utf-8-validate@6.0.6))(utf-8-validate@6.0.6)
       '@radix-ui/react-progress':
         specifier: ^1.1.7
         version: 1.1.7(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -215,7 +215,7 @@ importers:
         version: 19.1.1(react@19.1.1)
       recoder-cli-router:
         specifier: ^2.3.1
-        version: 2.3.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
+        version: 2.3.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76)
       redis:
         specifier: ^5.7.0
         version: 5.8.2
@@ -730,6 +730,9 @@ importers:
       '@recoder/a2a-sdk':
         specifier: workspace:*
         version: link:../packages/a2a-sdk
+      '@recoder/agent-browser':
+        specifier: workspace:*
+        version: link:../packages/agent-browser
       '@recoder/agent-events':
         specifier: workspace:*
         version: link:../packages/agent-events
@@ -1006,6 +1009,24 @@ importers:
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(@swc/core@1.15.7(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.2)(yaml@2.8.3)
+
+  packages/agent-browser:
+    devDependencies:
+      '@recoder/tsconfig':
+        specifier: workspace:^
+        version: link:../tsconfig
+      '@types/node':
+        specifier: 'catalog:'
+        version: 20.19.27
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(@swc/core@1.15.7(@swc/helpers@0.5.17))(jiti@2.7.0)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.2)(yaml@2.8.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.2
+      vitest:
+        specifier: 'catalog:'
+        version: 2.1.9(@types/node@20.19.27)(@vitest/ui@2.1.9)(happy-dom@20.8.9(bufferutil@4.0.9)(utf-8-validate@6.0.6))(jsdom@27.4.0(@noble/hashes@2.0.1)(bufferutil@4.0.9)(canvas@3.2.0)(utf-8-validate@6.0.6))(lightningcss@1.31.1)(sass@1.93.3)(terser@5.44.1)
 
   packages/agent-events:
     dependencies:
@@ -9123,11 +9144,6 @@ packages:
   acorn-walk@8.3.4:
     resolution: {integrity: sha512-ueEepnujpqee2o5aIYnvHU6C0A42MNdsIDeqy5BydrkuC5R1ZuUFnm27EeFJGoEHJQgn3uleRvmTXaJgfXbt4g==}
     engines: {node: '>=0.4.0'}
-
-  acorn@8.15.0:
-    resolution: {integrity: sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg==}
-    engines: {node: '>=0.4.0'}
-    hasBin: true
 
   acorn@8.16.0:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
@@ -20514,7 +20530,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@google/genai@1.9.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)':
+  '@google/genai@1.9.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)':
     dependencies:
       google-auth-library: 9.15.1(encoding@0.1.13)
       ws: 8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6)
@@ -22361,9 +22377,9 @@ snapshots:
 
   '@qdrant/openapi-typescript-fetch@1.2.6': {}
 
-  '@qwen-code/qwen-code-core@0.0.7(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(zod@3.25.76)':
+  '@qwen-code/qwen-code-core@0.0.7(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(utf-8-validate@6.0.6)(zod@3.25.76)':
     dependencies:
-      '@google/genai': 1.9.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
+      '@google/genai': 1.9.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/exporter-logs-otlp-grpc': 0.52.1(@opentelemetry/api@1.9.0)
@@ -22402,11 +22418,11 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@qwen-code/qwen-code@0.0.7(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(@types/react@19.2.7)(bufferutil@4.0.9)(encoding@0.1.13)(react-devtools-core@6.1.5(bufferutil@4.0.9)(utf-8-validate@6.0.6))(utf-8-validate@6.0.6)':
+  '@qwen-code/qwen-code@0.0.7(@cfworker/json-schema@4.1.1)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(@types/react@19.2.7)(bufferutil@4.0.9)(react-devtools-core@6.1.5(bufferutil@4.0.9)(utf-8-validate@6.0.6))(utf-8-validate@6.0.6)':
     dependencies:
-      '@google/genai': 1.9.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)
+      '@google/genai': 1.9.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)
       '@iarna/toml': 2.2.5
-      '@qwen-code/qwen-code-core': 0.0.7(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(zod@3.25.76)
+      '@qwen-code/qwen-code-core': 0.0.7(@cfworker/json-schema@4.1.1)(bufferutil@4.0.9)(utf-8-validate@6.0.6)(zod@3.25.76)
       '@types/update-notifier': 6.0.8
       command-exists: 1.2.9
       diff: 7.0.0
@@ -25952,8 +25968,6 @@ snapshots:
   acorn-walk@8.3.4:
     dependencies:
       acorn: 8.16.0
-
-  acorn@8.15.0: {}
 
   acorn@8.16.0: {}
 
@@ -30990,7 +31004,7 @@ snapshots:
   jsdom@20.0.3(bufferutil@4.0.9)(utf-8-validate@5.0.10):
     dependencies:
       abab: 2.0.6
-      acorn: 8.15.0
+      acorn: 8.16.0
       acorn-globals: 7.0.1
       cssom: 0.5.0
       cssstyle: 2.3.0
@@ -33640,7 +33654,7 @@ snapshots:
     dependencies:
       resolve: 1.22.11
 
-  recoder-cli-router@2.3.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76):
+  recoder-cli-router@2.3.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(bufferutil@4.0.9)(utf-8-validate@6.0.6)(ws@8.20.0(bufferutil@4.0.9)(utf-8-validate@6.0.6))(zod@3.25.76):
     dependencies:
       '@anthropic-ai/sdk': 0.59.0
       '@anthropic-ai/vertex-sdk': 0.12.1(encoding@0.1.13)

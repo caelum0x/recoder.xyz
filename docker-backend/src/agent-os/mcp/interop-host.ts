@@ -36,6 +36,8 @@ import {
   ossMcpServer,
   previewMcpServer,
   repoMcpServer,
+  retrievalMcpServer,
+  browserEngineMcpServer,
 } from '@recoder/agent-mcp';
 
 /**
@@ -70,6 +72,8 @@ const IN_PROC_SERVERS: McpServerRegistration[] = [
   ossMcpServer,
   deploymentMcpServer,
   billingMcpServer,
+  retrievalMcpServer,
+  browserEngineMcpServer,
 ];
 
 /**
