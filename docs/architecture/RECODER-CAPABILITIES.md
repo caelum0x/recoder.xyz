@@ -89,23 +89,37 @@ registry + tool permissions), `agent-policy` (deterministic policy), `governance
 
 ---
 
+## How agents reach the tools (the last mile)
+
+When the conductor provisions a worktree it writes a `.mcp.json` registering the
+Recoder MCP server (`docker-backend/src/conductor/mcp-inject.ts`), so the
+launched agent auto-discovers it — **zero setup**. That server
+(`mcp/recoder-a2a-server.js`) exposes the A2A/sandbox/workspace tools directly
+and BRIDGES the governed interop-host capabilities via the internal service key
+the conductor injects. So an agent's `recoder_memory_search`,
+`recoder_issues_ready`, `recoder_repo_search`, `recoder_browser_verify` (etc.)
+run through `POST /api/mcp/tools/:server/:tool/call` behind the full
+`authorize → risk → execute → audit` gate.
+
 ## The connection backlog (making agents USE the capabilities)
 
-The MCP host registers 15 in-proc servers but wires concrete executors for only
-`git_nexus`, `tasks`, `runs` today. The rest authorize then return a truthful
-"no in-proc executor wired". Binding these — in value order — is how agents gain
-the capabilities:
+The interop host registers 15 in-proc servers. Concrete executors bound so far:
 
-1. **memory** → `mem0` (agents recall across runs — the moat).
-2. **beads** → `bd` (agents drive the issue graph).
-3. **repo** → git operations over the worktree.
-4. **browser** → `browser-use` (agents verify their own UI work).
-5. **approvals / artifacts** → the agent-os store (agents request approval,
-   attach artifacts).
-6. github, preview, logs, oss, deployment, billing → their backends.
+| Capability | Executor | Agent tool(s) | Status |
+|---|---|---|---|
+| tasks / runs / git_nexus | agent-os store + recodergit | (control-plane) | **wired** |
+| **memory** | reviewed-memory store (mem0 model) | `recoder_memory_search` · `recoder_remember` | **wired** ✓ proven |
+| **beads** | `bd` CLI | `recoder_issues_ready` · `issue_create` · `issue_close` | **wired** ✓ proven |
+| **repo** | git grep + `gh search code` | `recoder_repo_search` (local + GitHub) · `recoder_repo_diff` | **wired** ✓ proven |
+| **browser** | puppeteer automation | `recoder_browser_open` · `recoder_browser_verify` | **wired** (needs `puppeteer` installed) |
+| approvals / artifacts | agent-os store | — | catalog |
+| github / preview / logs / oss / deployment / billing | their backends | — | catalog |
 
-Each binding runs behind the same governance gate and seals into the audit
-chain, so every capability an agent uses is policy-checked and non-repudiable.
+Each binding runs behind the same governance gate and seals into the Merkle
+audit chain, so every capability an agent uses is policy-checked and
+non-repudiable. The remaining catalog entries follow the same proven pattern:
+executor (`*-engine.ts`) → interop router (`inproc-engines.ts` `ENGINE_SERVERS`)
+→ agent bridge tool (`mcp/recoder-a2a-server.js`).
 
 See `docs/architecture/RECODER-FUSION-PROGRAM.md` for the layer-by-layer fusion
 status and `AGENTS.md` for the cross-agent policy.
