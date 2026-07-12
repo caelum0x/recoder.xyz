@@ -13,10 +13,28 @@ test('extending the previous capture yields only the new suffix, trimmed', () =>
   assert.equal(r.truncated, false);
 });
 
-test('a changed prefix yields the whole current capture (trimmed)', () => {
+test('a changed prefix with all-new content still yields that content (trimmed)', () => {
   const r = computeDelta('aaa', 'totally different\n', MAX_DELTA_CHARS);
   assert.equal(r.delta, 'totally different');
   assert.equal(r.truncated, false);
+});
+
+test('a repaint (top line changed) emits only the new line, NOT the whole screen', () => {
+  // Interactive TUI: a spinner/status line at the top repaints while the
+  // greeting below is stable. Naive prefix-diff would re-emit the greeting every
+  // poll (the duplication bug); the line-diff emits only the changed line.
+  const previous = 'esc to interrupt\nHello — I can help.\nWhat next?';
+  const current = 'thinking…\nHello — I can help.\nWhat next?';
+  const r = computeDelta(previous, current, MAX_DELTA_CHARS);
+  assert.equal(r.delta, 'thinking…');
+});
+
+test('a repaint with NO new content emits nothing (no duplication)', () => {
+  const screen = 'working…\nGreeting line one\nGreeting line two';
+  // Same lines, reordered/rewrapped so startsWith fails but nothing is new.
+  const current = 'Greeting line one\nGreeting line two\nworking…';
+  const r = computeDelta(screen, current, MAX_DELTA_CHARS);
+  assert.equal(r.delta, '');
 });
 
 test('a whitespace-only delta is reported as empty (nothing to emit)', () => {
