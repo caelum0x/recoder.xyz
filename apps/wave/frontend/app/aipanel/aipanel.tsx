@@ -94,11 +94,11 @@ const AIWelcomeMessage = memo(() => {
         <div className="text-secondary py-8">
             <div className="text-center">
                 <i className="fa fa-sparkles text-4xl text-accent mb-2 block"></i>
-                <p className="text-lg font-bold text-primary">Welcome to Wave AI</p>
+                <p className="text-lg font-bold text-primary">Welcome to Recoder AI</p>
             </div>
             <div className="mt-4 text-left max-w-md mx-auto">
                 <p className="text-sm mb-6">
-                    Wave AI is your terminal assistant with context. I can read your terminal output, analyze widgets,
+                    Recoder AI is your terminal assistant with context. I can read your terminal output, analyze widgets,
                     access files, and help you solve problems faster.
                 </p>
                 <div className="bg-accent/10 border border-accent/30 rounded-lg p-4">
@@ -154,22 +154,6 @@ const AIWelcomeMessage = memo(() => {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-start gap-3">
-                            <div className="w-4 text-center flex-shrink-0">
-                                <i className="fa-brands fa-discord text-accent"></i>
-                            </div>
-                            <div>
-                                Questions or feedback?{" "}
-                                <a
-                                    target="_blank"
-                                    href="https://discord.gg/XfvZ334gwU"
-                                    rel="noopener"
-                                    className="text-accent hover:underline cursor-pointer"
-                                >
-                                    Join our Discord
-                                </a>
-                            </div>
-                        </div>
                     </div>
                 </div>
                 {!hasCustomModes && <BYOKAnnouncement />}
@@ -188,11 +172,11 @@ const AIBuilderWelcomeMessage = memo(() => {
         <div className="text-secondary py-8">
             <div className="text-center">
                 <i className="fa fa-sparkles text-4xl text-accent mb-4 block"></i>
-                <p className="text-lg font-bold text-primary">WaveApp Builder</p>
+                <p className="text-lg font-bold text-primary">Recoder App Builder</p>
             </div>
             <div className="mt-4 text-left max-w-md mx-auto">
                 <p className="text-sm mb-6">
-                    The WaveApp builder helps create wave widgets that integrate seamlessly into Wave Terminal.
+                    The Recoder App builder helps create widgets that integrate seamlessly into Recoder.
                 </p>
             </div>
         </div>

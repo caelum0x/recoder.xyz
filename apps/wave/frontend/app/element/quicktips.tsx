@@ -157,7 +157,7 @@ const QuickTips = () => {
                             <KeyBinding keyDecl="Cmd:n" />
                         </div>
                         <div className="flex flex-col gap-0.5 p-2 rounded-md hover:bg-white/5 transition-colors">
-                            <span className="text-[15px]">Open Wave AI Panel</span>
+                            <span className="text-[15px]">Open Recoder AI Panel</span>
                             <KeyBinding keyDecl="Cmd:Shift:a" />
                         </div>
                     </div>
@@ -193,7 +193,7 @@ const QuickTips = () => {
                             <KeyBinding keyDecl="Ctrl:Shift:Digit" />
                         </div>
                         <div className="flex flex-col gap-0.5 p-2 rounded-md hover:bg-white/5 transition-colors">
-                            <span className="text-[15px]">Focus Wave AI</span>
+                            <span className="text-[15px]">Focus Recoder AI</span>
                             <KeyBinding keyDecl="Ctrl:Shift:0" />
                         </div>
                     </div>
@@ -284,24 +284,11 @@ const QuickTips = () => {
                 <div className="grid grid-cols-1 @sm:grid-cols-2 gap-2">
                     <div className="flex items-center gap-3 p-3 rounded-md bg-black/20 hover:bg-black/30 transition-colors cursor-pointer">
                         <IconBox variant="secondary">
-                            <i className="fa-brands fa-discord fa-fw" />
-                        </IconBox>
-                        <a
-                            target="_blank"
-                            href="https://discord.gg/XfvZ334gwU"
-                            rel="noopener"
-                            className="hover:text-accent-400 hover:underline transition-colors font-medium"
-                        >
-                            Join Our Discord
-                        </a>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 rounded-md bg-black/20 hover:bg-black/30 transition-colors cursor-pointer">
-                        <IconBox variant="secondary">
                             <i className="fa-solid fa-sharp fa-sliders fa-fw" />
                         </IconBox>
                         <a
                             target="_blank"
-                            href="https://docs.waveterm.dev/config"
+                            href="https://recoder.xyz/docs"
                             rel="noopener"
                             className="hover:text-accent-400 hover:underline transition-colors font-medium"
                         >
@@ -314,7 +301,7 @@ const QuickTips = () => {
                         </IconBox>
                         <a
                             target="_blank"
-                            href="https://docs.waveterm.dev/keybindings"
+                            href="https://recoder.xyz/docs"
                             rel="noopener"
                             className="hover:text-accent-400 hover:underline transition-colors font-medium"
                         >
@@ -327,7 +314,7 @@ const QuickTips = () => {
                         </IconBox>
                         <a
                             target="_blank"
-                            href="https://docs.waveterm.dev"
+                            href="https://recoder.xyz/docs"
                             rel="noopener"
                             className="hover:text-accent-400 hover:underline transition-colors font-medium"
                         >

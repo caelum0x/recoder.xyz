@@ -32,7 +32,7 @@ const waveDirName = `${waveDirNamePrefix}${waveDirNameSuffix ? `-${waveDirNameSu
 
 const paths = envPaths("waveterm", { suffix: waveDirNameSuffix });
 
-app.setName(isDev ? "Wave (Dev)" : "Wave");
+app.setName(isDev ? "Recoder (Dev)" : "Recoder");
 const unamePlatform = process.platform;
 const unameArch: string = process.arch;
 keyutil.setKeyUtilPlatform(unamePlatform);
@@ -47,8 +47,8 @@ export function checkIfRunningUnderARM64Translation(fullConfig: FullConfigType) 
         const dialogOpts: Electron.MessageBoxOptions = {
             type: "warning",
             buttons: ["Dismiss", "Learn More"],
-            title: "Wave has detected a performance issue",
-            message: `Wave is running in ARM64 translation mode which may impact performance.\n\nRecommendation: Download the native ARM64 version from our website for optimal performance.`,
+            title: "Recoder has detected a performance issue",
+            message: `Recoder is running in ARM64 translation mode which may impact performance.\n\nRecommendation: Download the native ARM64 version from our website for optimal performance.`,
         };
 
         const choice = dialog.showMessageBoxSync(null, dialogOpts);
@@ -57,7 +57,7 @@ export function checkIfRunningUnderARM64Translation(fullConfig: FullConfigType) 
             console.log("User chose to learn more");
             fireAndForget(() =>
                 shell.openExternal(
-                    "https://docs.waveterm.dev/faq#why-does-wave-warn-me-about-arm64-translation-when-it-launches"
+                    "https://recoder.xyz/docs"
                 )
             );
             throw new Error("User redirected to docsite to learn more about ARM64 translation, exiting");

@@ -28,6 +28,14 @@ const WCloudEndpointVarName = "WCLOUD_ENDPOINT"
 const WCloudPingEndpoint = "https://ping.waveterm.dev/central"
 const WCloudPingEndpointVarName = "WCLOUD_PING_ENDPOINT"
 
+// Fork telemetry sink override. This fork does not report telemetry to Wave's
+// cloud. Unless one of these env vars is explicitly set to point at a
+// self-hosted sink, GetEndpoint/GetPingEndpoint return "" so every POST
+// short-circuits before any network call (see makeAnonPostReq / makePingPostReq
+// / SendDiagnosticPing, which all treat an empty endpoint as "send nowhere").
+const RecoderTelemetryEndpointVarName = "RECODER_TELEMETRY_URL"
+const RecoderPingEndpointVarName = "RECODER_PING_URL"
+
 var WCloudEndpoint_VarCache string
 var WCloudPingEndpoint_VarCache string
 
@@ -72,16 +80,22 @@ func checkEndpointVar(endpoint string, debugName string, varName string) error {
 }
 
 func GetEndpoint() string {
+	if endpoint := os.Getenv(RecoderTelemetryEndpointVarName); endpoint != "" {
+		return endpoint
+	}
 	if !wavebase.IsDevMode() {
-		return WCloudEndpoint
+		return ""
 	}
 	endpoint := WCloudEndpoint_VarCache
 	return endpoint
 }
 
 func GetPingEndpoint() string {
+	if endpoint := os.Getenv(RecoderPingEndpointVarName); endpoint != "" {
+		return endpoint
+	}
 	if !wavebase.IsDevMode() {
-		return WCloudPingEndpoint
+		return ""
 	}
 	endpoint := WCloudPingEndpoint_VarCache
 	return endpoint

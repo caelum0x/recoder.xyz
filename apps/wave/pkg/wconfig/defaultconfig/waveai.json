@@ -17,14 +17,13 @@
         "display:order": -2,
         "display:icon": "sparkles",
         "display:description": "Good mix of speed and accuracy\n(gpt-5.1 with minimal thinking)",
-        "ai:provider": "wave",
-        "ai:apitype": "openai-responses",
+        "ai:provider": "openai",
+        "ai:apitype": "openai-chat",
+        "ai:endpoint": "http://127.0.0.1:3100/api/gateway/v1/chat/completions",
         "ai:model": "gpt-5.1",
         "ai:thinkinglevel": "low",
         "ai:verbosity": "low",
-        "ai:capabilities": ["tools", "images", "pdfs"],
-        "waveai:premium": true,
-        "ai:switchcompat": ["wavecloud"]
+        "ai:capabilities": ["tools", "images", "pdfs"]
     },
     "waveai@deep": {
         "display:name": "Deep",

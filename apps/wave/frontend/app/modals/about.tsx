@@ -28,7 +28,7 @@ const AboutModalV = ({ versionString, updaterChannel, onClose }: AboutModalVProp
             <div className="flex flex-col gap-[26px] w-full relative z-10">
                 <div className="flex flex-col items-center justify-center gap-4 self-stretch w-full text-center">
                     <Logo />
-                    <div className="text-[25px]">Wave Terminal</div>
+                    <div className="text-[25px]">Recoder</div>
                     <div className="leading-5">
                         Open-Source AI-Integrated Terminal
                         <br />
@@ -50,7 +50,7 @@ const AboutModalV = ({ versionString, updaterChannel, onClose }: AboutModalVProp
                         <i className="fa-brands fa-github mr-2"></i>GitHub
                     </a>
                     <a
-                        href="https://www.waveterm.dev/?ref=about"
+                        href="https://recoder.xyz/?ref=about"
                         target="_blank"
                         rel="noopener"
                         className="inline-flex items-center justify-center px-4 py-2 rounded border border-border hover:bg-hoverbg transition-colors duration-200"
@@ -64,14 +64,6 @@ const AboutModalV = ({ versionString, updaterChannel, onClose }: AboutModalVProp
                         className="inline-flex items-center justify-center px-4 py-2 rounded border border-border hover:bg-hoverbg transition-colors duration-200"
                     >
                         <i className="fa-sharp fa-light fa-book mr-2"></i>Open Source
-                    </a>
-                    <a
-                        href="https://github.com/sponsors/wavetermdev"
-                        target="_blank"
-                        rel="noopener"
-                        className="inline-flex items-center justify-center px-4 py-2 rounded border border-border hover:bg-hoverbg transition-colors duration-200"
-                    >
-                        <i className="fa-sharp fa-light fa-heart mr-2"></i>Sponsor
                     </a>
                 </div>
                 <div className="items-center gap-4 self-stretch w-full text-center">
