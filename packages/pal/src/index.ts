@@ -8,3 +8,4 @@ export * from './risk-model';
 export * from './sandbox-selector';
 export * from './routing-policy';
 export * from './planner';
+export * from './plan-capability';
