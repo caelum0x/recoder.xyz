@@ -322,7 +322,147 @@ text-editor-utils trigger-registry workspace-utils web web-ai-assistant sdk pseu
 
 ---
 
-## 7. Invariants
+## 9. The run loop — how the engines compose (task lifecycle)
+
+A single task threads through the engines; **every step emits `RunEvent`s** (the audit + UI stream).
+This is the spine that makes the 16 engines one coherent backend, not a bag of tools.
+
+```
+ human intent
+   │  (goal · scope · constraints · verification · approvals)
+   ▼
+1 COMPILE   agent-os        → TaskSpec (canonical)              [S1]
+2 PLAN      pal             → runtime · substrate · tool-grants · risk · approval   [S4·E11]
+3 PROVISION substrate       → git worktree + tmux session (or Daytona sandbox)      [S5]
+4 INSTRUCT  agent-instructions → per-runtime instruction bundle (+ .mcp.json inject)[S2]
+5 RUN       runtime         → spawn agent CLI (claude/codex/opencode/pi/recoder-code)[S5·S6]
+             │  run-tailer streams RunEvents (deduped delta)
+             ▼
+6 ACT       agent calls MCP engines ── every call ⇒ interop gate:
+             authorize(actor,task) → risk(tool) → policy → execute(engine port) → AUDIT(Merkle)
+             │  code-intel · retrieval · memory · browser · gateway · beads · repo …    [E1–E16]
+7 COORDINATE coordination   → work-locks / conflict / A2A handoff across N parallel agents [S4·E13]
+8 VERIFY    agent-workflows → verify → browser-check → memory   ; agent-hooks capture artifacts/secret-scan [S4·E12]
+9 GATE      governance      → risky writes / delivery = deny-biased, needs_approval, Merkle-sealed [S3·E10]
+10 DELIVER  review-publish  → PR / merge (approval-gated)        [S5]
+11 LEARN    agent-memory    → reviewed memory candidate → durable memory (the compounding moat) [S8·E3]
+```
+
+The desktop shows steps 5–11 as the conversation + review; the audit trail is the same `RunEvent`
+stream sealed into the Rust Merkle chain.
+
+## 10. The mount contract — why a massive surface stays decoupled
+
+The only way 16 engines + a polyglot fleet don't collapse into spaghetti: **engines never import each
+other's concretes.** They depend on **`agent-os` ports** (hexagonal architecture).
+
+- **Port** — a typed interface in `agent-os` (e.g. `RuntimePort`, `MemoryStore`, `GitNexusPort`,
+  `VectorStorePort`, `LlmGatewayPort`, `AuditPort`).
+- **Engine** — a package that *implements* a port with real depth.
+- **`docker-backend/src/agent-os/service-container.ts`** — the **composition root**: injects the
+  concrete engine into the port at boot. Swap an engine = swap one injection.
+- **MCP server** — a thin adapter that calls a port **behind the interop gate**. It owns no logic.
+
+> Rule: `docker-backend` depends on ports; engines depend on `agent-os`; nothing depends sideways.
+> This is what lets us wire/replace/degrade any engine (openfang↔TS, Qdrant↔pgvector,
+> tensorzero↔pi-ai) without touching the rest.
+
+## 11. The fleet supervisor — running the polyglot services
+
+`docker-backend/src/fleet/` generalizes today's `openfang-daemon.ts` + `backend-supervisor` into one
+declarative supervisor for every non-TS service. A **service manifest** entry:
+
+```ts
+{ id, lang, resolveBinary(), spawn(env, port), health(url), degradeTo, loopbackOnly: true }
+```
+
+Lifecycle per service: **resolve prebuilt binary → spawn loopback → health-poll → mark
+available|degraded → restart w/ backoff → truthful status in `/health/full`.** Invariants:
+
+- **Never build** Rust/Go/Py in-process (disk/ENOSPC). Consume prebuilt binaries; absent binary ⇒
+  the engine's TS fallback runs. The desktop must boot with **zero external services present.**
+- **Loopback-only** by default (`127.0.0.1`); cross-machine reach is opt-in via `go/ziti` + `recoder-xds`.
+- **Auth**: pass only the configured key (e.g. `OPENFANG_API_KEY`) + listen addr; every tool call still
+  routes the governance gate, never raw subprocess IO.
+
+## 12. Governance spine — why "massive" is still safe
+
+A huge capability surface is only safe because **every call is gated + sealed**. This is the moat.
+
+```
+interop host  (packages/interop)
+  authorize(actor, task)      → identity + task ownership + signed-envelope validity
+  risk(toolName)              → low | medium | high  (packages/agent-policy, agent-mcp policy)
+  policy(risk, actor, target) → allow | needs_approval | deny   (deny-biased; unknown ⇒ deny)
+  execute(enginePort, args)   → the real engine
+  audit(call, result)         → SHA-256 Merkle seal (crates/recoder-governance, UDS daemon)
+```
+
+- **Deny-biased**: unknown tool/actor ⇒ deny; risky writes (branch push, PR, deploy, secret, delete)
+  ⇒ needs_approval. Solo desktop: the human's click **is** the approval; teams/cloud: real gate.
+- **Fail posture**: STRICT (cloud) fails **closed** if the governance daemon is down; solo desktop
+  degrades to loopback with the audit still sealed by the TS facade.
+- **Tamper-evident**: the audit chain is append-only + hash-linked; `verifyGovernanceAudit` proves it.
+
+## 13. Canonical data model — one store of record
+
+`agent-os` owns all durable state; **engines are replaceable adapters that never own it** (AGENTS.md):
+
+`Space` · `TaskSpec` · `TaskRun` · `Workspace` · `RunEvent` · `Approval` · `Artifact` ·
+`MemoryItem`/`MemoryCandidate` · `InstructionBundle` · `WorkflowDef` · `WorkSignal`.
+
+openfang, Daytona, langgraph, etc. **emit `RunEvent`s back** into this store — they run work, they
+don't hold truth. This is what makes runtimes swappable and the audit complete.
+
+## 14. Two deployment topologies — same engines, different fleet
+
+| | **Desktop (solo)** | **Teams / Cloud** |
+|---|---|---|
+| Fleet | loopback, minimal, degrade-safe | full: xDS mesh + ziti overlay + all services |
+| Governance | solo mode (click = approval), fail-open-loopback | real approval gate, fail-closed STRICT |
+| Networking | none needed | `go/recoder-xds` (Envoy) + `go/ziti` (zero-trust) |
+| Tenancy | `LOCAL_TENANT` | multi-tenant `TenantContext` |
+| Store | embedded (PM pgvector / json) | Postgres + NATS outbox |
+
+**Same engine code**; only the fleet manifest + governance posture + store binding differ. The desktop
+is the strict subset — proving every engine is degrade-safe.
+
+## 15. Extension & evolution model (how it grows)
+
+- **Add an engine** = new package implementing an `agent-os` port + (optional) fleet manifest entry +
+  MCP server adapter + a degrade-safe fallback. Zero changes to existing engines (composition root only).
+- **Third-party extensions** = the revived `plugins` marketplace installs MCP servers / skills, vetted
+  by `oss-registry` (health/license/ownership), run behind the gate.
+- **Strangler migration**: wire a new engine behind a flag with the old path as fallback; cut over when
+  proven by tests + live evidence. Never a big-bang swap.
+- **Contract stability**: `agent-os` + `agent-schemas` are the frozen spine; engines version independently.
+
+## 16. Non-functional invariants (architecture-wide)
+
+- **Degrade-safety is the first principle** — the desktop boots and works with *no* external service,
+  crate, or key present; every engine has a truthful fallback.
+- **BYOK everywhere** — all model + embedding calls route the LLM Gateway (tensorzero/pi-ai); keys live
+  in `vault`, never in a package.
+- **Observability** — `agent-observability` + revived `analytics` telemetry + `RunEvent`s + the Merkle
+  audit give end-to-end evidence for every run.
+- **Security** — governance gate on every call · revived `security` scan engine (secret-scan/SAST on
+  agent output) · signed A2A ingress · default-deny network.
+- **Truthful health** — the fleet reports real availability; never a faked "connected".
+
+## 17. Risk register & sequencing rationale
+
+| Risk | Mitigation |
+|---|---|
+| Disk ~100% full (ENOSPC landmine) | **Clean (Phase 0) first** — deletes free space *before* any install/build |
+| Heavy Rust/Go/Py builds | Fleet consumes **prebuilt** binaries; absent ⇒ TS fallback; never build in the run loop |
+| Engine coupling → spaghetti | **Ports + composition root**; no sideways deps |
+| Reviving 306-error `cli` | Optional — fold into `recoder-code` if not worth the cleanup (flagged in §8) |
+| Big-bang breakage | **Strangler** per engine, degrade-safe fallback, verified between phases |
+| Polar entanglement in `distribution` | Delete Polar + make the billing IPC degrade-safe in the same step |
+
+---
+
+## 7. Invariants (quick reference)
 - Every engine + fleet service is **degrade-safe**: absent daemon/service → truthful fallback, never a
   crash or a fake result. The desktop must run with **zero** external services present.
 - All model calls (incl. embeddings) route the **LLM Gateway** (tensorzero/pi-ai, BYOK).
