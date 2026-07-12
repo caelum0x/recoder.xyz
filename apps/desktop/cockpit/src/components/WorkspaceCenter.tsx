@@ -24,6 +24,7 @@ import { useMemo, useRef, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { EventLog } from './EventLog';
+import { AgentTurn } from './AgentTurn';
 import { isLive, statePill, stateTone, messageDisabledReason } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
 import { mergeEvents, useLiveStream } from '../lib/event-stream';
@@ -358,9 +359,7 @@ function Conversation({
         seg.kind === 'user' ? (
           <UserBubble key={seg.message.id} message={seg.message} />
         ) : (
-          <div class="ws-center-stream" key={`agent-${i}`}>
-            <EventLog events={seg.events} error={null} loading={false} />
-          </div>
+          <AgentTurn key={`agent-${i}`} events={seg.events} />
         ),
       )}
       <WhatChanged workspace={workspace} />
