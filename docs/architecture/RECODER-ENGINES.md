@@ -923,8 +923,15 @@ upstream-tracking burden — must be worth it; (5) governance + the engine fleet
 - **E · No fork — deepen the current shell** — the terminal-first center + interactive TUIs already
   land 80% of the value with zero fork burden; we own the UX and keep the engine mount intact.
 
-**DECISION (2026-07-12): Option E now — deepen the terminal-first shell — with Wave Terminal (B) as
-the documented north-star, adopted only once the backend is massive enough to be worth wrapping.**
+**DECISION (2026-07-12): the fork base is WAVE TERMINAL. Option E now — deepen the terminal-first
+shell — then adopt a Wave Terminal fork as L3 once the backend is massive enough to be worth wrapping.**
+Wave wins because its **block model IS Recoder's cockpit**: a grid of blocks where each block is a
+terminal (a parallel agent's real TUI) or a web widget (diff/review/board/approvals) — Electron +
+React frontend (our stack) + Go backend, open-source (Apache-2.0), actively developed. Rejected:
+VSCode (IDE identity, Cursor's turf), Hyper (single terminal — a blank canvas, not a foundation),
+Tabby (Angular), Ghostty/WezTerm (off-stack, no app layer), Zellij (a multiplexer, not a shell).
+Integration: Wave is **L3 only** — `docker-backend` stays the control plane and the 16 engines +
+governance + fleet mount behind it UNCHANGED; we replace Wave's block-state layer with our conductor.
 The shipped terminal-first center + interactive runtime TUIs (real Claude Code, not headless `-p`)
 already give the real-terminal experience without a fork's upstream burden. A fork is a *surface*
 (L3) swap, never an engine swap — so it must never block engine work. If/when we fork, Wave Terminal
