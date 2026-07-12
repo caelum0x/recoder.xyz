@@ -16,6 +16,15 @@ type RecoderWorkspace = {
     metadata?: Record<string, unknown>;
 };
 
+// First-run readiness surfaced by the conductor /health/full endpoint — which
+// coding agents are installed + whether git is present. Drives the Recoder-first
+// getting-started panel shown when there are no workspaces yet.
+type RecoderSetup = {
+    agents: { runtimeId: string; available: boolean }[];
+    git: boolean;
+    loaded: boolean;
+};
+
 class RecoderViewModel implements ViewModel {
     viewType: string;
     viewIcon: Atom<string>;
@@ -24,6 +33,7 @@ class RecoderViewModel implements ViewModel {
     workspacesAtom: PrimitiveAtom<RecoderWorkspace[]>;
     loadingAtom: PrimitiveAtom<boolean>;
     errorAtom: PrimitiveAtom<string>;
+    setupAtom: PrimitiveAtom<RecoderSetup>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -33,6 +43,26 @@ class RecoderViewModel implements ViewModel {
         this.workspacesAtom = atom([]) as PrimitiveAtom<RecoderWorkspace[]>;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
+        this.setupAtom = atom({ agents: [], git: false, loaded: false }) as PrimitiveAtom<RecoderSetup>;
+    }
+
+    // Degrade-safe: a failed/absent health probe leaves setup unloaded (the panel
+    // simply shows a neutral getting-started message), never throwing.
+    async refreshSetup() {
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/health/full`);
+            const body = await res.json();
+            const h = body?.data ?? {};
+            const agents = Array.isArray(h?.runtimes)
+                ? h.runtimes.map((r: { runtimeId: string; available: boolean }) => ({
+                      runtimeId: r.runtimeId,
+                      available: Boolean(r.available),
+                  }))
+                : [];
+            globalStore.set(this.setupAtom, { agents, git: Boolean(h?.substrate?.git), loaded: true });
+        } catch {
+            globalStore.set(this.setupAtom, { agents: [], git: false, loaded: false });
+        }
     }
 
     get viewComponent(): ViewComponent {
@@ -52,7 +82,9 @@ class RecoderViewModel implements ViewModel {
         } finally {
             globalStore.set(this.loadingAtom, false);
         }
+        // Setup readiness runs alongside (independently degrade-safe).
+        this.refreshSetup();
     }
 }
 
-export { RecoderViewModel, type RecoderWorkspace };
+export { RecoderViewModel, type RecoderWorkspace, type RecoderSetup };
