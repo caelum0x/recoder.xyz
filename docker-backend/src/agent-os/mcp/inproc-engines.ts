@@ -33,6 +33,7 @@ import {
   runsMcpServer,
   memoryMcpServer,
   beadsMcpServer,
+  repoMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -41,6 +42,7 @@ import type { RunEvent, TaskRun, TaskSpec } from '@recoder/agent-os';
 import type { AgentOsRepository } from '../repositories/agent-os.repository';
 import { createRepositoryMemoryStore } from './memory-store-adapter.js';
 import { registerBeadsMcpTools } from './beads-engine.js';
+import { registerRepoMcpTools } from './repo-engine.js';
 
 /**
  * Resolve a repo root to an absolute, scannable directory using the SAME source
@@ -161,6 +163,9 @@ export function buildInProcEngineRouter(
   // Beads: the issue graph — an agent reads ready work, inspects/creates/
   // updates/closes issues, checks sync. Shells to `bd` in the repo (degrade-safe).
   registerBeadsMcpTools(router, { cwd: options.baseRepoRoot });
+  // Repo: governed, audited read-only repository inspection — read a file,
+  // search the tree (git grep), see the working diff. Traversal-guarded.
+  registerRepoMcpTools(router, { baseRepoRoot: options.baseRepoRoot });
 
   return router;
 }
@@ -172,6 +177,7 @@ export const ENGINE_SERVERS = [
   runsMcpServer,
   memoryMcpServer,
   beadsMcpServer,
+  repoMcpServer,
 ] as const;
 
 /**
