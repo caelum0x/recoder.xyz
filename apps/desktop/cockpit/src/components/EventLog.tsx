@@ -81,6 +81,7 @@ const EVENT_KIND_LABEL: Record<RunEventType, string> = {
   started: 'Working…',
   state_transition: 'Update',
   log: 'Working…',
+  user_message: 'You',
   artifact: 'Saved work',
   needs_input: 'Waiting for you',
   verified: 'Reviewing',

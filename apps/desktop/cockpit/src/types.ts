@@ -50,6 +50,7 @@ export type RunEventType =
   | 'started'
   | 'state_transition'
   | 'log'
+  | 'user_message'
   | 'artifact'
   | 'needs_input'
   | 'verified'
