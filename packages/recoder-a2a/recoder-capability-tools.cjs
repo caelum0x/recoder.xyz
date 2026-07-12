@@ -218,6 +218,31 @@ const CAPABILITY_TOOLS = [
       properties: { userId: { type: 'string', description: 'Optional owner user id (defaults to the task/workspace owner)' } },
     },
   },
+  {
+    name: 'recoder_retrieval_search',
+    description: "Semantic search over Recoder's retrieval corpus (RAG) — the documents ingested for this project. Embeds your query, does a vector search, and ColBERT-reranks the results into ranked passages. Use this to recall reference material, docs, or prior notes by meaning (not just keywords). Returns a truthful 'not configured' message when no embeddings/vector store is wired.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to find (a question or description — matched by meaning)' },
+        topK: { type: 'number', description: 'Max passages to return (default 8)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recoder_retrieval_ingest',
+    description: "Ingest a document into Recoder's retrieval corpus (RAG) so it can be recalled later by recoder_retrieval_search. Chunks the text, embeds each chunk, and stores it in the vector store. Pass `text` (inline) or `path` (a file to read, incl. PDF). Returns a truthful 'not configured' status when no embeddings/vector store is wired — it never fabricates an ingest.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Inline document text to ingest (use this OR path)' },
+        path: { type: 'string', description: 'Absolute path to a file to read + ingest (text/markdown/PDF)' },
+        docId: { type: 'string', description: 'Optional logical document id (grouping key)' },
+        source: { type: 'string', description: 'Optional human-readable source label (filename, URL, title)' },
+      },
+    },
+  },
 ];
 
 const CAPABILITY_TOOL_NAMES = new Set(CAPABILITY_TOOLS.map((t) => t.name));
@@ -553,6 +578,48 @@ function createCapabilityTools(options = {}) {
           return `${planLine}${grantLine}`;
         } catch (err) {
           return `billing plan: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_retrieval_search': {
+        if (!hasInteropAuth()) return unavailable('retrieval');
+        try {
+          const content = await callInteropTool('recoder.retrieval', 'retrieval.search', {
+            query: String(args.query || ''),
+            topK: typeof args.topK === 'number' ? args.topK : undefined,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Retrieval is not configured (no embeddings/vector store).';
+          }
+          const passages = (content && content.passages) || [];
+          if (!passages.length) return `No passages found for "${args.query}".`;
+          return passages
+            .map((p) => `• ${p.source || p.docId || p.id}${typeof p.score === 'number' ? ` (${p.score.toFixed(3)})` : ''}\n  ${(p.text || '').slice(0, 400)}`)
+            .join('\n');
+        } catch (err) {
+          return `retrieval search: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_retrieval_ingest': {
+        if (!hasInteropAuth()) return unavailable('retrieval');
+        try {
+          const content = await callInteropTool('recoder.retrieval', 'retrieval.ingest', {
+            text: args.text,
+            path: args.path,
+            docId: args.docId,
+            source: args.source,
+          });
+          if (!content) return 'Ingest returned no result.';
+          if (content.status === 'not_configured') {
+            return content.reason || 'Retrieval is not configured (no embeddings/vector store).';
+          }
+          if (content.status === 'empty') {
+            return 'Nothing to ingest — the document produced no chunks.';
+          }
+          return `Ingested ${content.upserted ?? 0}/${content.chunks ?? 0} chunks of "${content.docId || args.docId || 'document'}" into ${content.collection || 'the retrieval corpus'}.`;
+        } catch (err) {
+          return `retrieval ingest: ${errMsg(err)}`;
         }
       }
 
