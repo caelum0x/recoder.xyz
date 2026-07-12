@@ -27,6 +27,13 @@ export interface CreateWorkspaceInput {
   prompt?: string;
   /** Optional model override passed to the runtime CLI. */
   model?: string;
+  /**
+   * Launch the agent's INTERACTIVE TUI (the real Claude Code / Codex / opencode)
+   * instead of the headless one-shot run — the terminal-first center shows it and
+   * the operator drives it in the terminal. Degrades to headless when the runtime
+   * has no interactive variant.
+   */
+  interactive?: boolean;
   /** Library to enrich the prompt with docs via context7 (e.g. 'next.js'). */
   library?: string;
   createdBy: string;
