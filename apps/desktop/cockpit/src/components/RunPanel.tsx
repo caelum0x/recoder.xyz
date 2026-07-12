@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
+import { extractPreviewUrl } from '../lib/preview-url';
 import { SessionTerminal } from './SessionTerminal';
 import type { ConductorSession, Workspace } from '../types';
 
@@ -22,6 +23,43 @@ interface RunPanelProps {
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * The live run: a control bar (command + detected preview link + Stop) over the
+ * streamed session terminal. The preview URL is sniffed from the session output
+ * so an "Open preview" link appears once the dev server announces its port.
+ */
+function RunningView({
+  session,
+  tmuxBin,
+  busy,
+  onStop,
+}: {
+  session: ConductorSession;
+  tmuxBin?: string;
+  busy: boolean;
+  onStop: () => void;
+}) {
+  const output = usePoll(() => api.sessionOutput(session.sessionId, 200), 3000, [session.sessionId]);
+  const previewUrl = extractPreviewUrl(output.data?.output);
+  return (
+    <div class="run-panel">
+      <div class="run-panel-bar">
+        <span class="run-panel-cmd" title={session.command}>{session.command}</span>
+        <span class="run-panel-spacer" />
+        {previewUrl && (
+          <a class="run-panel-preview" href={previewUrl} target="_blank" rel="noreferrer" title={previewUrl}>
+            Open preview ↗
+          </a>
+        )}
+        <button class="btn btn-sm btn-danger" onClick={onStop} disabled={busy}>
+          {busy ? 'Stopping…' : 'Stop'}
+        </button>
+      </div>
+      <SessionTerminal session={session} tmuxBin={tmuxBin} />
+    </div>
+  );
 }
 
 export function RunPanel({ workspace, tmuxBin }: RunPanelProps) {
@@ -86,18 +124,7 @@ export function RunPanel({ workspace, tmuxBin }: RunPanelProps) {
   }
 
   if (session) {
-    return (
-      <div class="run-panel">
-        <div class="run-panel-bar">
-          <span class="run-panel-cmd" title={session.command}>{session.command}</span>
-          <span class="run-panel-spacer" />
-          <button class="btn btn-sm btn-danger" onClick={stop} disabled={busy}>
-            {busy ? 'Stopping…' : 'Stop'}
-          </button>
-        </div>
-        <SessionTerminal session={session} tmuxBin={tmuxBin} />
-      </div>
-    );
+    return <RunningView session={session} tmuxBin={tmuxBin} busy={busy} onStop={stop} />;
   }
 
   return (
