@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wavetermdev/waveterm/pkg/util/utilfn"
+	"github.com/recoder/recoder-terminal/pkg/util/utilfn"
 )
 
 // set by main-server.go

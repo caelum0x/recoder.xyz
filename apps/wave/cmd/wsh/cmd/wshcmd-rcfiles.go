@@ -4,8 +4,8 @@
 package cmd
 
 import (
+	"github.com/recoder/recoder-terminal/pkg/wshutil"
 	"github.com/spf13/cobra"
-	"github.com/wavetermdev/waveterm/pkg/wshutil"
 )
 
 func init() {

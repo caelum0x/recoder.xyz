@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/recoder/recoder-terminal/pkg/util/migrateutil"
+	"github.com/recoder/recoder-terminal/pkg/wavebase"
+	"github.com/recoder/recoder-terminal/pkg/waveobj"
 	"github.com/sawka/txwrap"
-	"github.com/wavetermdev/waveterm/pkg/util/migrateutil"
-	"github.com/wavetermdev/waveterm/pkg/wavebase"
-	"github.com/wavetermdev/waveterm/pkg/waveobj"
 
-	dbfs "github.com/wavetermdev/waveterm/db"
+	dbfs "github.com/recoder/recoder-terminal/db"
 )
 
 const WStoreDBName = "waveterm.db"

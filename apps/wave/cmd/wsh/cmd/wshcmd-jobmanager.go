@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/recoder/recoder-terminal/pkg/jobmanager"
 	"github.com/spf13/cobra"
-	"github.com/wavetermdev/waveterm/pkg/jobmanager"
 )
 
 var jobManagerCmd = &cobra.Command{

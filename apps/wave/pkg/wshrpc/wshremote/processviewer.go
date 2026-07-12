@@ -15,13 +15,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/recoder/recoder-terminal/pkg/panichandler"
+	"github.com/recoder/recoder-terminal/pkg/util/procinfo"
+	"github.com/recoder/recoder-terminal/pkg/util/unixutil"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
 	goproc "github.com/shirou/gopsutil/v4/process"
-	"github.com/wavetermdev/waveterm/pkg/panichandler"
-	"github.com/wavetermdev/waveterm/pkg/util/procinfo"
-	"github.com/wavetermdev/waveterm/pkg/util/unixutil"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
 )
 
 const (

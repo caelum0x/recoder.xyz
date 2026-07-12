@@ -6,8 +6,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/recoder/recoder-terminal/pkg/util/shellutil"
 	"github.com/spf13/cobra"
-	"github.com/wavetermdev/waveterm/pkg/util/shellutil"
 )
 
 var tokenCmd = &cobra.Command{

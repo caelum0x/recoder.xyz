@@ -6,8 +6,8 @@ package anthropic
 import (
 	"testing"
 
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/chatstore"
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/uctypes"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/chatstore"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/uctypes"
 )
 
 func TestConvertPartsToAnthropicBlocks_TextOnly(t *testing.T) {
