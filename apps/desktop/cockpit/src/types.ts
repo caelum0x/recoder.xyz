@@ -217,6 +217,8 @@ export interface CreateWorkspaceBody {
   prompt?: string;
   command?: string;
   model?: string;
+  /** Run the agent's real interactive TUI (Claude Code / Codex / …) in the terminal. */
+  interactive?: boolean;
   branch?: string;
   baseRef?: string;
 }

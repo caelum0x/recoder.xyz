@@ -396,6 +396,7 @@ export function createConductorRouter(): Router {
         command,
         prompt,
         model,
+        interactive,
         createdBy,
         branch,
         baseRef,
@@ -431,6 +432,7 @@ export function createConductorRouter(): Router {
         command,
         prompt,
         model,
+        interactive,
         // Ownership becomes real here: under strict auth the VERIFIED caller
         // owns the workspace (a client cannot squat another user's name or
         // create a record it could not later access).
@@ -438,7 +440,9 @@ export function createConductorRouter(): Router {
         branch,
         baseRef,
         env,
-        metadata,
+        // Persist the interactive intent so follow-up runs (continueWorkspace)
+        // stay interactive too.
+        metadata: { ...(metadata ?? {}), ...(interactive ? { interactive: true } : {}) },
         userId,
       });
       // Resource-governor rejection maps to 429 (over budget, retry later);

@@ -38,6 +38,8 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
   const [runtimeId, setRuntimeId] = useState('');
   const [substrate, setSubstrate] = useState<WorkspaceSubstrate | ''>('');
   const [model, setModel] = useState('');
+  // Default ON: the real interactive agent TUI is the terminal-first experience.
+  const [interactive, setInteractive] = useState(true);
   const [spaceId, setSpaceId] = useState(defaults.spaceId || 'default');
   const [projectId, setProjectId] = useState(defaults.projectId || 'default');
   const [createdBy, setCreatedBy] = useState(defaults.createdBy || 'cockpit');
@@ -87,6 +89,7 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
     if (prompt.trim()) body.prompt = prompt.trim();
     if (substrate) body.substrate = substrate;
     if (model.trim()) body.model = model.trim();
+    if (interactive) body.interactive = true;
     if (baseRef.trim()) body.baseRef = baseRef.trim();
 
     setSubmitting(true);
@@ -186,6 +189,15 @@ export function NewWorkspaceForm({ onCreated, onClose }: NewWorkspaceFormProps) 
             />
           </label>
         </div>
+
+        <label class="field-check" title="Run the agent's real interactive TUI (Claude Code / Codex / …) in the terminal, instead of a one-shot headless run">
+          <input
+            type="checkbox"
+            checked={interactive}
+            onChange={(e) => setInteractive((e.target as HTMLInputElement).checked)}
+          />
+          <span>Interactive terminal — run the real agent TUI (recommended)</span>
+        </label>
 
         <div class="field-row">
           <label class="field">

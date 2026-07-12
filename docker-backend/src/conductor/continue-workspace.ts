@@ -105,7 +105,13 @@ export async function continueWorkspace(
 
   let command: string | undefined;
   try {
-    command = resolveRuntimeCommand(workspace.runtimeId, { prompt, model: input.model }).commandLine;
+    command = resolveRuntimeCommand(workspace.runtimeId, {
+      prompt,
+      model: input.model,
+      // Keep the workspace interactive across follow-up runs when it was created
+      // interactive (the terminal-first center shows the live TUI).
+      interactive: workspace.metadata?.interactive === true,
+    }).commandLine;
   } catch (err) {
     // in_process substrates drive the prompt directly (no shell command); only
     // surface the error for substrates that need a command (handled below).
