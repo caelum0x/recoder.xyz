@@ -35,6 +35,8 @@ import {
   beadsMcpServer,
   repoMcpServer,
   browserMcpServer,
+  approvalsMcpServer,
+  artifactsMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -45,6 +47,7 @@ import { createRepositoryMemoryStore } from './memory-store-adapter.js';
 import { registerBeadsMcpTools } from './beads-engine.js';
 import { registerRepoMcpTools } from './repo-engine.js';
 import { registerBrowserMcpTools } from './browser-engine.js';
+import { registerApprovalsMcpTools, registerArtifactsMcpTools } from './store-engines.js';
 
 /**
  * Resolve a repo root to an absolute, scannable directory using the SAME source
@@ -171,6 +174,10 @@ export function buildInProcEngineRouter(
   // Browser: a real page an agent can VERIFY its own work in — open, snapshot
   // the text, assert content is present. Backed by the puppeteer automation.
   registerBrowserMcpTools(router);
+  // Governance loop from the agent's side: request approval before a sensitive
+  // action; attach output artifacts to the task's audit trail.
+  registerApprovalsMcpTools(router, repository);
+  registerArtifactsMcpTools(router, repository);
 
   return router;
 }
@@ -184,6 +191,8 @@ export const ENGINE_SERVERS = [
   beadsMcpServer,
   repoMcpServer,
   browserMcpServer,
+  approvalsMcpServer,
+  artifactsMcpServer,
 ] as const;
 
 /**
