@@ -335,9 +335,8 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
         <button class="btn btn-sm" disabled={!canOpenPr(workspace.state) || busy !== null} onClick={openPr}>
           {busy === 'pr' ? 'Opening…' : 'Open PR'}
         </button>
-        <button class="btn btn-sm" disabled={!canMerge(workspace.state) || busy !== null} onClick={merge}>
-          {busy === 'merge' ? 'Merging…' : 'Merge'}
-        </button>
+        {/* Merge lives in the ready-to-merge banner above (same canMerge gate) —
+            not duplicated here. When not mergeable there is nothing to show. */}
         <button class="btn btn-sm btn-danger" disabled={!canArchive(workspace.state) || busy !== null} onClick={archive}>
           {busy === 'archive' ? 'Archiving…' : 'Archive'}
         </button>
