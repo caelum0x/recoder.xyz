@@ -81,6 +81,14 @@ export interface WorkspaceDiff {
   changedFiles: number;
 }
 
+/** GET /workspaces/:id/tree — the worktree's full file list (tracked + untracked). */
+export interface WorkspaceTree {
+  workspaceId: string;
+  files: string[];
+  changed: string[];
+  truncated: boolean;
+}
+
 /** GET /runtimes — runtimeAvailability() */
 export interface RuntimeAvailability {
   runtimeId: string;

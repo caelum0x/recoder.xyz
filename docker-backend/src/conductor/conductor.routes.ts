@@ -25,7 +25,7 @@ import { normalizeCreateBody } from './create-defaults.js';
 import { applyEmptyStartDefault } from './empty-start.js';
 import { runtimeAvailability } from './runtime-commands.js';
 import { listSubstrates, getSubstrate } from './substrate.js';
-import { workspaceDiff, archiveWorkspace } from './review.js';
+import { workspaceDiff, workspaceTree, archiveWorkspace } from './review.js';
 import { createWorkspacePr, mergeWorkspace } from './review-publish.js';
 import { continueWorkspace } from './continue-workspace.js';
 import {
@@ -503,6 +503,25 @@ export function createConductorRouter(): Router {
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'diff failed';
+        res
+          .status(msg.includes('not found') ? 404 : 500)
+          .json({ success: false, error: msg });
+      }
+    }
+  );
+
+  // Full file tree of the workspace's worktree (tracked + untracked), for the
+  // right panel's "All files" view. Read-only; degrade-safe on a non-repo tree.
+  router.get(
+    '/workspaces/:workspaceId/tree',
+    async (req: Request, res: Response) => {
+      try {
+        res.json({
+          success: true,
+          data: await workspaceTree(req.params.workspaceId),
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'tree failed';
         res
           .status(msg.includes('not found') ? 404 : 500)
           .json({ success: false, error: msg });

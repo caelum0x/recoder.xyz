@@ -19,6 +19,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { DiffView } from './DiffView';
+import { FileTree } from './FileTree';
 import { SessionTerminal } from './SessionTerminal';
 import { RecoderTerminal } from './RecoderTerminal';
 import { ConversationView } from './ConversationView';
@@ -117,7 +118,7 @@ function InlineGateVerdict({
   );
 }
 
-type Tab = 'output' | 'diff' | 'terminal';
+type Tab = 'files' | 'output' | 'diff' | 'terminal';
 
 /**
  * Within the Terminal tab, the SAME conductor session is shown either as a
@@ -227,6 +228,15 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
     () => (wantsDiff ? api.diff(workspace.workspaceId) : Promise.resolve(null)),
     live ? 4000 : 30_000,
     [workspace.workspaceId, wantsDiff],
+  );
+
+  // The full worktree file tree (All files tab) — fetched only when that tab is
+  // open. Polls a touch slower than the diff; the file set changes less often.
+  const wantsTree = tab === 'files';
+  const tree = usePoll(
+    () => (wantsTree ? api.tree(workspace.workspaceId) : Promise.resolve(null)),
+    live ? 5000 : 30_000,
+    [workspace.workspaceId, wantsTree],
   );
 
   const prMeta = (workspace.metadata?.pr as { url?: string } | undefined) || undefined;
@@ -359,6 +369,13 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
       )}
 
       <div class="detail-tabs">
+        <button
+          class={tab === 'files' ? 'tab tab-active' : 'tab'}
+          onClick={() => setTab('files')}
+          title="Every file in this workspace's worktree"
+        >
+          All files
+        </button>
         <button class={tab === 'output' ? 'tab tab-active' : 'tab'} onClick={() => setTab('output')}>Changes</button>
         <button
           class={tab === 'diff' ? 'tab tab-active' : 'tab'}
@@ -379,7 +396,15 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
       </div>
 
       <div class="detail-body">
-        {tab === 'output' ? (
+        {tab === 'files' ? (
+          /* All files = the full worktree tree, with changed files marked. */
+          <FileTree
+            files={tree.data?.files || []}
+            changed={tree.data?.changed}
+            truncated={tree.data?.truncated}
+            loading={tree.loading && !tree.data}
+          />
+        ) : tab === 'output' ? (
           /* Changes = the clean changed-files tree (like the reference). The
              agent's talk lives in the center conversation and the raw terminal
              behind the Terminal tab — this panel is no longer a duplicate log. */
