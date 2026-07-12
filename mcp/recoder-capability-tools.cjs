@@ -124,6 +124,23 @@ const CAPABILITY_TOOLS = [
     },
   },
   {
+    name: 'recoder_browser_navigate',
+    description: "Navigate a headless browser to a URL and get back its status, final URL, and page title. Backed by the browser-use engine (puppeteer, or a browser-use service). Returns a truthful 'not configured' message when no browser driver is wired.",
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'The URL to navigate to' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'recoder_browser_extract',
+    description: "Extract the visible text of a web page via the browser-use engine — pass a `url` to fetch it (or omit to read the current page). Use it to READ what a page actually renders. Returns a truthful 'not configured' message when no browser driver is wired.",
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'Optional URL to load before extracting (defaults to the current page)' } },
+    },
+  },
+  {
     name: 'recoder_request_approval',
     description: 'Request human approval before a sensitive action (e.g. pushing, deleting, a risky command). Records a pending approval in the control plane that a reviewer resolves. Use this instead of proceeding on your own for high-risk steps.',
     inputSchema: {
@@ -498,6 +515,44 @@ function createCapabilityTools(options = {}) {
             : `✗ Not found: the page does NOT contain "${args.contains}".`;
         } catch (err) {
           return `browser verify: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_browser_navigate': {
+        if (!hasInteropAuth()) return unavailable('browser');
+        try {
+          const content = await callInteropTool('recoder.browser-use', 'browser.navigate', {
+            url: String(args.url || ''),
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Browser is not configured (no puppeteer / BROWSER_USE_URL).';
+          }
+          if (content && content.status === 'error') {
+            return `browser navigate: ${content.reason || 'navigation failed'}`;
+          }
+          const title = content && content.title ? ` — "${content.title}"` : '';
+          return `Navigated to ${(content && content.url) || args.url}${title}.`;
+        } catch (err) {
+          return `browser navigate: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_browser_extract': {
+        if (!hasInteropAuth()) return unavailable('browser');
+        try {
+          const content = await callInteropTool('recoder.browser-use', 'browser.extract', {
+            url: args.url ? String(args.url) : undefined,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Browser is not configured (no puppeteer / BROWSER_USE_URL).';
+          }
+          if (content && content.status === 'error') {
+            return `browser extract: ${content.reason || 'extraction failed'}`;
+          }
+          const text = (content && content.text) || '';
+          return text ? text.slice(0, 20000) : 'The page had no extractable text.';
+        } catch (err) {
+          return `browser extract: ${errMsg(err)}`;
         }
       }
 

@@ -43,6 +43,7 @@ import {
   deploymentMcpServer,
   billingMcpServer,
   retrievalMcpServer,
+  browserEngineMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -60,6 +61,7 @@ import { registerPreviewMcpTools, type PreviewEngineDeps } from './preview-engin
 import { registerDeploymentMcpTools, type DeploymentEngineDeps } from './deployment-engine.js';
 import { registerBillingMcpTools, type BillingEngineDeps } from './billing-engine.js';
 import { registerRetrievalMcpTools } from './retrieval-engine.js';
+import { registerBrowserUseMcpTools } from './browser-use-engine.js';
 import { getWorkspace, listWorkspaces } from '../../conductor/workspace-service.js';
 import { runBrowserCheck } from '../../conductor/browser-check.js';
 import { getDistributionModule } from '../../distribution/module.js';
@@ -215,6 +217,12 @@ export function buildInProcEngineRouter(
   // Backed by @recoder/retrieval over the shared vector foundation; degrade-safe
   // ("not configured") when no embeddings provider / QDRANT_URL is present.
   registerRetrievalMcpTools(router, { collection: options.retrievalCollection });
+  // Browser (browser-use / E9): an agent can NAVIGATE to a URL, EXTRACT a page's
+  // visible text, and SCREENSHOT it. Backed by @recoder/agent-browser over a
+  // lazily-imported puppeteer (or a browser-use HTTP service via BROWSER_USE_URL);
+  // degrade-safe ("not configured") when no browser driver is present. Distinct
+  // from the older recoder.browser open/snapshot/verify session server.
+  registerBrowserUseMcpTools(router);
 
   return router;
 }
@@ -276,6 +284,7 @@ export const ENGINE_SERVERS = [
   deploymentMcpServer,
   billingMcpServer,
   retrievalMcpServer,
+  browserEngineMcpServer,
 ] as const;
 
 /**

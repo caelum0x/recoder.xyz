@@ -1,0 +1,41 @@
+{
+	"name": "@recoder/agent-browser",
+	"version": "0.1.0",
+	"description": "Browser engine (RECODER-ENGINES E9 browser-use) — navigate → extract text → screenshot over an injectable driver. Degrade-safe: no puppeteer / no BROWSER_USE_URL ⇒ truthful not_configured, never throws, never fakes.",
+	"license": "MIT",
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"dev": "tsup --watch",
+		"test": "vitest run",
+		"format": "biome check --write ."
+	},
+	"devDependencies": {
+		"@recoder/tsconfig": "workspace:^",
+		"@types/node": "catalog:",
+		"tsup": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"keywords": [
+		"browser",
+		"browser-use",
+		"puppeteer",
+		"headless",
+		"automation",
+		"degrade-safe"
+	]
+}
