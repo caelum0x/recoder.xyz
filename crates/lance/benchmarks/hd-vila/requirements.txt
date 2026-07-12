@@ -1,6 +1,0 @@
-ruff
-ray[data]
-yt-dlp
-pylance
-lancedb
-pyarrow>15.0

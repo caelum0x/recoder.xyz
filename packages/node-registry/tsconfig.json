@@ -1,5 +1,0 @@
-{
-	"extends": "@recoder/tsconfig/node-library",
-	"include": ["."],
-	"exclude": ["node_modules"]
-}

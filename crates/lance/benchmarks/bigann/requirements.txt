@@ -1,4 +1,0 @@
-pylance
-pyarrow
-torch
-tdqm
