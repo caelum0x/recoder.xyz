@@ -11,9 +11,43 @@ let _puppeteer: any | undefined;
 async function getPuppeteer() {
   if (!_puppeteer) {
     const dynamicImport = new Function('m', 'return import(m)') as (m: string) => Promise<any>;
-    _puppeteer = await dynamicImport('puppeteer');
+    // Prefer full `puppeteer` (bundled Chromium) when installed; fall back to
+    // the lightweight `puppeteer-core` (no bundled browser — uses the system
+    // Chrome via executablePath). This keeps the install small on a near-full
+    // disk while still enabling live browsing.
+    try {
+      _puppeteer = await dynamicImport('puppeteer');
+    } catch {
+      _puppeteer = await dynamicImport('puppeteer-core');
+    }
   }
   return _puppeteer.default || _puppeteer;
+}
+
+/**
+ * Resolve a Chrome/Chromium executable for puppeteer-core. Honors
+ * PUPPETEER_EXECUTABLE_PATH, else probes the common OS locations (macOS Chrome,
+ * Linux chromium/chrome). Returns undefined so full `puppeteer` uses its bundled
+ * browser when no system one is found.
+ */
+function resolveChromeExecutable(): string | undefined {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+  const candidates = [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ];
+  for (const c of candidates) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      if (require('node:fs').existsSync(c)) return c;
+    } catch {
+      /* ignore */
+    }
+  }
+  return undefined;
 }
 
 export interface BrowserActionResult {
@@ -88,7 +122,7 @@ export async function browserLaunch(
         '--disable-gpu',
         '--disable-software-rasterizer',
       ],
-      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+      executablePath: resolveChromeExecutable(),
     });
 
     const page = await browser.newPage();
