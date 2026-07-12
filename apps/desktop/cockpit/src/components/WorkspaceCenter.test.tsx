@@ -132,6 +132,18 @@ describe('WorkspaceCenter is a real conversation', () => {
     expect(c.querySelector('.ws-msg-error')).toBeNull();
   });
 
+  it('prefills the composer from metadata.starterDraft on a fresh (empty) workspace', async () => {
+    (globalThis as Record<string, unknown>).fetch = vi.fn(async () =>
+      makeResponse({ status: 200, ok: true, body: { success: true, data: [] } }),
+    );
+    const c = mountCenter(
+      workspace({ state: 'awaiting_review', metadata: { starterDraft: 'After every 10 trains, show an animation.' } }),
+    );
+    await flush(20);
+    const input = c.querySelector('.ws-cmdbar-input') as HTMLInputElement;
+    expect(input.value).toBe('After every 10 trains, show an animation.');
+  });
+
   it('keeps the user bubble and shows a truthful note when /message 404s', async () => {
     (globalThis as Record<string, unknown>).fetch = vi.fn(async (url: string) => {
       if (typeof url === 'string' && url.endsWith('/message')) {
