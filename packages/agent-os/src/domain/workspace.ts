@@ -38,8 +38,13 @@ export const TERMINAL_WORKSPACE_STATES: readonly WorkspaceState[] = ['archived']
  *                     `@recoder/runtime`'s in-process driver (no tmux, no child
  *                     CLI). Opt-in only; never the default. Selected solely when a
  *                     Workspace is explicitly created with `substrate: 'in_process'`.
+ * - `ssh`           — remote git worktree + tmux on an SSH host (durable SSH),
+ *                     driven over an injected ssh-exec transport. Opt-in only;
+ *                     selected solely when SSH host env is configured (else the
+ *                     substrate is never registered and the selection degrades to
+ *                     `tmux_worktree`).
  */
-export type WorkspaceSubstrate = 'tmux_worktree' | 'daytona' | 'in_process';
+export type WorkspaceSubstrate = 'tmux_worktree' | 'daytona' | 'in_process' | 'ssh';
 
 export type Workspace = {
   workspaceId: string;

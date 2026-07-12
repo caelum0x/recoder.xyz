@@ -25,6 +25,7 @@ import type { WorkspaceSubstrate } from '@recoder/agent-os';
 import type { ConductorSubstrate } from '../contract/index.js';
 import type { SubstrateRegistry } from './registry.js';
 import { selectSubstrate, type SubstrateSelectable } from './select.js';
+import { createSshSubstrateFromEnv, type SshSubstrateFromEnvDeps } from '../remote/ssh-config.js';
 
 /** The local substrate to fall back to when a remote choice is unavailable. */
 const DEFAULT_FALLBACK: WorkspaceSubstrate = 'tmux_worktree';
@@ -92,4 +93,26 @@ export async function resolveSubstrate(
     (availability.reason ? ` (${availability.reason})` : '') +
     `; degraded to '${fallbackId}'`;
   return { substrate: fallback, requested, degraded: true, reason };
+}
+
+/**
+ * Register the remote `ssh` substrate on a registry ONLY when SSH host/repo env
+ * is configured. Config-gating happens here (via `createSshSubstrateFromEnv`),
+ * so with no `RECODER_SSH_HOST` the substrate is simply never registered and thus
+ * never selectable — `resolveSubstrate` then keeps degrading to the local
+ * fallback. The durable-SSH transport is always injected (never opened here).
+ *
+ * Additive + reversible: this only adds an id when env opts in; existing
+ * single/local registries are unchanged. Returns the registered substrate, or
+ * `null` when unconfigured.
+ */
+export function registerSshSubstrate(
+  registry: SubstrateRegistry,
+  deps: SshSubstrateFromEnvDeps,
+): ConductorSubstrate | null {
+  const substrate = createSshSubstrateFromEnv(deps);
+  if (substrate) {
+    registry.register(substrate);
+  }
+  return substrate;
 }
