@@ -32,6 +32,7 @@ import {
   tasksMcpServer,
   runsMcpServer,
   memoryMcpServer,
+  beadsMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -39,6 +40,7 @@ import {
 import type { RunEvent, TaskRun, TaskSpec } from '@recoder/agent-os';
 import type { AgentOsRepository } from '../repositories/agent-os.repository';
 import { createRepositoryMemoryStore } from './memory-store-adapter.js';
+import { registerBeadsMcpTools } from './beads-engine.js';
 
 /**
  * Resolve a repo root to an absolute, scannable directory using the SAME source
@@ -156,6 +158,9 @@ export function buildInProcEngineRouter(
   // Memory: an agent can search accepted durable memory and PROPOSE new memory
   // candidates with evidence (reviewed-memory model) — the compounding moat.
   registerMemoryMcpTools(router, createRepositoryMemoryStore(repository));
+  // Beads: the issue graph — an agent reads ready work, inspects/creates/
+  // updates/closes issues, checks sync. Shells to `bd` in the repo (degrade-safe).
+  registerBeadsMcpTools(router, { cwd: options.baseRepoRoot });
 
   return router;
 }
@@ -166,6 +171,7 @@ export const ENGINE_SERVERS = [
   tasksMcpServer,
   runsMcpServer,
   memoryMcpServer,
+  beadsMcpServer,
 ] as const;
 
 /**

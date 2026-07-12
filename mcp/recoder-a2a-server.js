@@ -475,6 +475,35 @@ const TOOLS = [
       required: ['title', 'body', 'taskId', 'artifactId'],
     },
   },
+  {
+    name: 'recoder_issues_ready',
+    description: "List the READY issues from Recoder's issue graph (beads/bd) — the unblocked work you can pick up. Use this to decide what to work on next.",
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'recoder_issue_create',
+    description: 'Log a new issue in the Recoder issue graph (beads/bd) — e.g. discovered follow-up work. Returns the new issue id.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Issue title' },
+        description: { type: 'string', description: 'Optional details' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'recoder_issue_close',
+    description: 'Close an issue in the Recoder issue graph (beads/bd) when its work is done.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Issue id (e.g. recoder-abcd)' },
+        reason: { type: 'string', description: 'Why it is closed (e.g. "Completed")' },
+      },
+      required: ['id'],
+    },
+  },
 ];
 
 // ── Helpers ──
@@ -891,6 +920,53 @@ async function handleToolCall(name, args) {
         return `Proposed memory "${args.title}" (candidate ${id}). It will become durable after review — not written blindly.`;
       } catch (err) {
         return `remember: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_issues_ready': {
+      if (!hasInteropAuth()) {
+        return 'Recoder issue graph is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.beads', 'beads.ready', {});
+        const items = Array.isArray(content) ? content : [];
+        if (!items.length) return 'No ready issues.';
+        return items
+          .map((i) => `• ${i.id || '?'} [${i.priority ?? '?'}] ${i.title || '(untitled)'}`)
+          .join('\n');
+      } catch (err) {
+        return `issues: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_issue_create': {
+      if (!hasInteropAuth()) {
+        return 'Recoder issue graph is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.beads', 'beads.create', {
+          title: String(args.title || ''),
+          description: args.description,
+        });
+        const id = content?.id || content?.issueId || '(created)';
+        return `Created issue ${id}: ${args.title}`;
+      } catch (err) {
+        return `issue create: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_issue_close': {
+      if (!hasInteropAuth()) {
+        return 'Recoder issue graph is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        await callInteropTool('recoder.beads', 'beads.close', {
+          id: String(args.id || ''),
+          reason: args.reason,
+        });
+        return `Closed issue ${args.id}.`;
+      } catch (err) {
+        return `issue close: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
