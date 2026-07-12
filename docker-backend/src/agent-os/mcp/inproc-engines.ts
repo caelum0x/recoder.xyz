@@ -27,15 +27,18 @@ import {
   registerGitNexusMcpTools,
   registerRunsMcpTools,
   registerTasksMcpTools,
+  registerMemoryMcpTools,
   gitNexusMcpServer,
   tasksMcpServer,
   runsMcpServer,
+  memoryMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
 } from '@recoder/agent-mcp';
 import type { RunEvent, TaskRun, TaskSpec } from '@recoder/agent-os';
 import type { AgentOsRepository } from '../repositories/agent-os.repository';
+import { createRepositoryMemoryStore } from './memory-store-adapter.js';
 
 /**
  * Resolve a repo root to an absolute, scannable directory using the SAME source
@@ -150,12 +153,20 @@ export function buildInProcEngineRouter(
   registerGitNexusMcpTools(router, gitNexusPort);
   registerTasksMcpTools(router, repoPorts);
   registerRunsMcpTools(router, repoPorts);
+  // Memory: an agent can search accepted durable memory and PROPOSE new memory
+  // candidates with evidence (reviewed-memory model) — the compounding moat.
+  registerMemoryMcpTools(router, createRepositoryMemoryStore(repository));
 
   return router;
 }
 
 /** The in-proc servers whose tools this module owns the concrete engines for. */
-export const ENGINE_SERVERS = [gitNexusMcpServer, tasksMcpServer, runsMcpServer] as const;
+export const ENGINE_SERVERS = [
+  gitNexusMcpServer,
+  tasksMcpServer,
+  runsMcpServer,
+  memoryMcpServer,
+] as const;
 
 /**
  * Iterate every `(serverId, toolName)` the engine router can execute, so the
