@@ -16,6 +16,7 @@ import { activeTailCount } from './run-tailer.js';
 import { dmuxAvailability } from './dmux-adapter.js';
 import { colbertRerankAvailability } from './colbert-rerank.js';
 import { beadsAvailability } from './beads-sync.js';
+import { getFleetHealth, type FleetHealth } from '../fleet/index.js';
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger.js';
 
@@ -76,10 +77,16 @@ export interface ConductorHealth {
     /** `py/colbert` rerank seam — connected when `COLBERT_RERANK_URL` is set. */
     colbertRerank: { available: boolean; url?: string };
   };
+  /**
+   * The polyglot service fleet (Rust/Go/Py daemons) reported truthfully — each
+   * service's availability + the pure-TS fallback active when it is absent. The
+   * conductor is fully functional when every fleet service is degraded.
+   */
+  fleet: FleetHealth;
 }
 
 export async function conductorHealth(): Promise<ConductorHealth> {
-  const [substrate, runtimes, resources, dmux, workspaces] = await Promise.all([
+  const [substrate, runtimes, resources, dmux, workspaces, fleet] = await Promise.all([
     conductorAvailability(),
     runtimeAvailability(),
     resourceSnapshot(),
@@ -95,6 +102,7 @@ export async function conductorHealth(): Promise<ConductorHealth> {
       ).length;
       return { total: all.length, active, byState };
     })(),
+    getFleetHealth(),
   ]);
 
   const tails = activeTailCount();
@@ -134,5 +142,6 @@ export async function conductorHealth(): Promise<ConductorHealth> {
       beads: beadsAvailability(),
       colbertRerank: colbertRerankAvailability(),
     },
+    fleet,
   };
 }
