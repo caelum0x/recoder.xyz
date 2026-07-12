@@ -1,0 +1,44 @@
+{
+	"name": "@recoder/workflow-engine",
+	"version": "0.1.0",
+	"description": "Workflow + hooks capability engine (RECODER-ENGINES E12) — runs a named verification workflow to a truthful verdict and captures hook artifacts / secret-scan findings. Degrade-safe, injectable ports; skins @recoder/agent-workflows + @recoder/agent-hooks.",
+	"license": "MIT",
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"dev": "tsup --watch",
+		"test": "vitest run",
+		"format": "biome check --write ."
+	},
+	"dependencies": {
+		"@recoder/agent-hooks": "workspace:*",
+		"@recoder/agent-workflows": "workspace:*"
+	},
+	"devDependencies": {
+		"@recoder/tsconfig": "workspace:^",
+		"@types/node": "catalog:",
+		"tsup": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"keywords": [
+		"workflow",
+		"verification",
+		"hooks",
+		"secret-scan",
+		"agent-os"
+	]
+}
