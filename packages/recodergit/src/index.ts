@@ -7,4 +7,5 @@ export * from './repo-scan';
 export * from './ownership';
 export * from './impact';
 export * from './repo-indexer';
+export * from './semantic-index';
 export * from './mcp-server';

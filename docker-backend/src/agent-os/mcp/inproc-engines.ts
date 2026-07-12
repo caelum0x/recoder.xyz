@@ -42,6 +42,7 @@ import {
   previewMcpServer,
   deploymentMcpServer,
   billingMcpServer,
+  retrievalMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -58,6 +59,7 @@ import { registerLogsMcpTools } from './logs-engine.js';
 import { registerPreviewMcpTools, type PreviewEngineDeps } from './preview-engine.js';
 import { registerDeploymentMcpTools, type DeploymentEngineDeps } from './deployment-engine.js';
 import { registerBillingMcpTools, type BillingEngineDeps } from './billing-engine.js';
+import { registerRetrievalMcpTools } from './retrieval-engine.js';
 import { getWorkspace, listWorkspaces } from '../../conductor/workspace-service.js';
 import { runBrowserCheck } from '../../conductor/browser-check.js';
 import { getDistributionModule } from '../../distribution/module.js';
@@ -166,7 +168,7 @@ export function createAgentOsRepositoryPorts(
  */
 export function buildInProcEngineRouter(
   repository: AgentOsRepository,
-  options: { baseRepoRoot?: string } = {},
+  options: { baseRepoRoot?: string; retrievalCollection?: string } = {},
 ): McpToolRouter {
   const router = new McpToolRouter(new McpRegistry());
   const gitNexusPort = createGitNexusPort(options);
@@ -208,6 +210,11 @@ export function buildInProcEngineRouter(
   // the real DistributionModule (recoder.xyz plan authority, Polar MoR). Read-only,
   // fail-safe (deny/zero-headroom on miss), truthful when no subject resolves.
   registerBillingMcpTools(router, createBillingEngineDeps());
+  // Retrieval (RAG): an agent can INGEST a document (chunk → embed → Qdrant) and
+  // SEARCH its own corpus (embed → vector search → ColBERT rerank → passages).
+  // Backed by @recoder/retrieval over the shared vector foundation; degrade-safe
+  // ("not configured") when no embeddings provider / QDRANT_URL is present.
+  registerRetrievalMcpTools(router, { collection: options.retrievalCollection });
 
   return router;
 }
@@ -268,6 +275,7 @@ export const ENGINE_SERVERS = [
   previewMcpServer,
   deploymentMcpServer,
   billingMcpServer,
+  retrievalMcpServer,
 ] as const;
 
 /**

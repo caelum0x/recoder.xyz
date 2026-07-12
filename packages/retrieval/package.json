@@ -1,0 +1,43 @@
+{
+	"name": "@recoder/retrieval",
+	"version": "0.1.0",
+	"description": "Retrieval / RAG engine — chunk → embed → store (Qdrant) → colbert rerank → passages. Degrade-safe, injectable ports.",
+	"license": "MIT",
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"dev": "tsup --watch",
+		"test": "vitest run",
+		"format": "biome check --write ."
+	},
+	"dependencies": {
+		"@recoder/document-preprocessor": "workspace:*"
+	},
+	"devDependencies": {
+		"@recoder/tsconfig": "workspace:^",
+		"@types/node": "catalog:",
+		"tsup": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"keywords": [
+		"rag",
+		"retrieval",
+		"embeddings",
+		"vector-search",
+		"colbert"
+	]
+}

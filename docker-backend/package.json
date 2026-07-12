@@ -54,6 +54,7 @@
     "@recoder/pal": "workspace:*",
     "@recoder/pi-coding-agent": "workspace:*",
     "@recoder/recodergit": "workspace:*",
+    "@recoder/retrieval": "workspace:*",
     "@recoder/runtime": "workspace:*",
     "@recoder/sandbox-daytona": "workspace:*",
     "@recoder/shared": "workspace:*",
