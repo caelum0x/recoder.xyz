@@ -19,6 +19,7 @@ import { usePoll } from '../lib/usePoll';
 import { readConfig } from '../lib/config';
 import { hasLocalTerminal } from '../lib/desktop';
 import { SessionTerminal } from './SessionTerminal';
+import { workspaceCodename } from '../lib/workspace-codename';
 import type { ConductorSession } from '../types';
 
 const POLL_MS = 3000;
@@ -157,7 +158,7 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
           {sessions.loading && !sessions.data ? (
             <div class="log-empty">Loading sessions…</div>
           ) : list.length === 0 && !sessions.error ? (
-            <div class="log-empty">No interactive sessions running.</div>
+            <div class="log-empty">No runs yet.</div>
           ) : (
             list.map((s) => (
               // Row is a clickable container (role=button), NOT a <button>: it
@@ -179,8 +180,9 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
                 }}
               >
                 <div class="session-row-main">
-                  <span class="session-name">{s.sessionId}</span>
-                  <span class="session-branch">{s.branch}</span>
+                  <span class="session-name" title={`${s.sessionId} · ${s.branch}`}>
+                    {workspaceCodename(s.sessionId)}
+                  </span>
                 </div>
                 <div class="session-row-sub" title={s.command}>{s.command}</div>
                 <button
@@ -203,7 +205,7 @@ export function SessionsPanel({ tmuxBin }: { tmuxBin?: string }) {
           {selected ? (
             <SessionTerminal session={selected} tmuxBin={tmuxBin} />
           ) : (
-            <div class="log-empty">Select a session to open its live terminal.</div>
+            <div class="log-empty">Select a run to watch it.</div>
           )}
         </div>
       </div>
