@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { AgentTurn, agentProse } from './AgentTurn';
+import { AgentTurn, agentProse, turnElapsedLabel } from './AgentTurn';
 import type { RunEvent } from '../types';
 
 let container: HTMLDivElement | null = null;
@@ -48,6 +48,21 @@ describe('agentProse', () => {
     const prose = agentProse([ev('log', 'done working\nPane is dead (status 0, Tue)', 1)]);
     expect(prose).toContain('done working');
     expect(prose).not.toMatch(/pane is dead/i);
+  });
+});
+
+describe('turnElapsedLabel', () => {
+  it('formats a sub-minute span in seconds', () => {
+    expect(turnElapsedLabel([ev('started', undefined, 0), ev('completed', undefined, 12_000)])).toBe('12s');
+  });
+
+  it('formats a multi-minute span as minutes and seconds', () => {
+    expect(turnElapsedLabel([ev('started', undefined, 0), ev('completed', undefined, 135_000)])).toBe('2m 15s');
+  });
+
+  it('returns empty for a single event or a sub-second span', () => {
+    expect(turnElapsedLabel([ev('log', 'x', 1)])).toBe('');
+    expect(turnElapsedLabel([ev('started', undefined, 0), ev('completed', undefined, 400)])).toBe('');
   });
 });
 

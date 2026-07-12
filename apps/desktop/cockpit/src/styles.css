@@ -445,6 +445,14 @@ body {
   color: var(--text-faint); text-transform: uppercase;
 }
 .agent-turn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
+.agent-turn-elapsed { color: var(--text-faint); text-transform: none; }
+.agent-turn-copy {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  font: inherit; text-transform: uppercase; color: var(--text-faint);
+  opacity: 0; transition: opacity 0.12s;
+}
+.agent-turn:hover .agent-turn-copy { opacity: 1; }
+.agent-turn-copy:hover { color: var(--text); }
 .agent-turn-status.status-working { color: var(--warn); }
 .agent-turn-status.status-working .agent-turn-dot { background: var(--warn); animation: turn-pulse 1.4s ease-in-out infinite; }
 .agent-turn-status.status-done { color: var(--good); }
