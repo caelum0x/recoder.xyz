@@ -642,6 +642,8 @@ body {
 }
 .run-panel-cmd { font-family: var(--mono); font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run-panel-spacer { flex: 1; }
+.run-panel-preview { font-size: 11px; color: var(--accent); text-decoration: none; white-space: nowrap; }
+.run-panel-preview:hover { text-decoration: underline; }
 
 /* All-files tree — the full worktree, changed files dotted. Terminal-plain. */
 .filetree { padding: 4px 0 8px; font-size: 12px; }
