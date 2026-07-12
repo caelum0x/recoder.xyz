@@ -212,11 +212,15 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
 
   // The model the workspace was actually launched with, if the backend recorded
   // one — shown in the composer chip. Never fabricated: falls back to a label.
-  const model =
-    (workspace.metadata && typeof workspace.metadata === 'object'
+  // The real model id the workspace recorded (a variant WITHIN its fixed
+  // runtime), if any — sent with each message so the run uses it. Distinct from
+  // the display fallback: we never send the runtimeId as a "model".
+  const recordedModel =
+    workspace.metadata && typeof workspace.metadata === 'object'
       ? (workspace.metadata as Record<string, unknown>).model
-      : undefined) || workspace.runtimeId;
-  const modelLabel = typeof model === 'string' && model ? model : 'agent';
+      : undefined;
+  const modelId = typeof recordedModel === 'string' && recordedModel ? recordedModel : undefined;
+  const modelLabel = modelId || workspace.runtimeId || 'agent';
 
   // Reset the local conversation when switching workspaces — each workspace has
   // its own thread, and the persisted agent activity carries the real history.
@@ -234,7 +238,9 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
     setSending(true);
     try {
       // 2. POST it to start the next agent run; the reply streams in via events.
-      await api.sendMessage(wsId, text);
+      //    Carry the workspace's recorded model so the run uses it (backend
+      //    default applies when none was recorded).
+      await api.sendMessage(wsId, text, modelId);
     } catch (err) {
       // 3. Truthful failure note on the bubble (e.g. route 404s) — keep the bubble.
       const note = describeError(err);

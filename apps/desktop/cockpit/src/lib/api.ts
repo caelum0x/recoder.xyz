@@ -309,8 +309,11 @@ export const api = {
    * bubble. Returns whatever the backend echoes (kept loose: the contract is still
    * being finalized server-side; we only depend on success vs failure here).
    */
-  sendMessage: (id: string, text: string) =>
-    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/message`, { text }),
+  sendMessage: (id: string, text: string, model?: string) =>
+    request<unknown>('POST', `/workspaces/${encodeURIComponent(id)}/message`, {
+      text,
+      ...(model ? { model } : {}),
+    }),
   /**
    * Open a LIVE RunEvent stream for a workspace via the shared
    * `@recoder/conductor-ui` {@link ConductorClient}. The client upgrades to the
