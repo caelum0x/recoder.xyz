@@ -462,6 +462,76 @@ is the strict subset — proving every engine is degrade-safe.
 
 ---
 
+## 18. The port contracts (the seams — `agent-os/src/ports/`)
+
+The composition root binds engines to these ports. Sketch of the canonical set (every engine
+implements one; every consumer depends on the port, never the impl):
+
+```ts
+// Execution
+interface RuntimePort   { run(bundle: InstructionBundle, on: RunEventSink): Promise<RunHandle> }
+interface SubstratePort { provision(spec): Promise<Worktree|Sandbox>; teardown(ref): Promise<void>;
+                          diff(ref, base): Promise<SubstrateDiff>; tree(ref): Promise<FileList> }
+interface PlannerPort   { plan(task: TaskSpec, ctx): Promise<RunPlan> }          // ← packages/pal
+
+// Knowledge
+interface GitNexusPort  { index(repo): Promise<void>; search(q, {semantic,github}): Promise<Hit[]>;
+                          impact(paths): Promise<ImpactResult>; contextPack(task): Promise<ContextPack> }
+interface RetrievalPort { ingest(doc): Promise<void>; search(q, topK): Promise<Passage[]> }
+interface MemoryStore   { recall(q, scope): Promise<MemoryItem[]>; propose(candidate): Promise<Id> }
+interface VectorStorePort { ensure(coll, dim); upsert(coll, pts); search(coll, vec, k): Promise<Match[]> }
+interface EmbeddingPort { embed(texts: string[]): Promise<number[][] | null> }   // null ⇒ degrade
+
+// Platform
+interface LlmGatewayPort{ complete(req): Promise<Completion>; embed(req): Promise<number[][]> } // tensorzero/pi-ai
+interface BrowserPort   { open(url); snapshot(sel): Promise<string>; verify(text): Promise<boolean> }
+interface IssueGraphPort{ ready(): Promise<Issue[]>; create(i); close(id) }       // beads
+
+// Control plane (governance is not swappable — it wraps everything)
+interface PolicyPort    { decide(input): PolicyDecision }                          // allow|needs_approval|deny
+interface AuditPort     { seal(entry): Promise<AuditReceipt> }                     // Merkle chain
+interface WorkflowPort  { run(def: WorkflowDef, ctx): AsyncIterable<RunEvent> }
+interface CoordinationPort { lock(scope, ttl): Promise<Fence>; bus: A2ABus }
+interface ConnectorPort { channels(): Channel[]; send(ch, msg); onInbound(cb) }    // extracted-from-openclaw
+```
+
+**Degrade contract:** every port impl must return a truthful empty/fallback (not throw, not fake) when
+its backing service/key is absent — `EmbeddingPort.embed → null`, `RetrievalPort.search → []`,
+`GitNexusPort.search → keyword-only`, `PlannerPort.plan → default heuristic`.
+
+## 19. The agent-facing capability catalog (MCP surface)
+
+What an agent actually wields — one governed tool set (`mcp/recoder-capability-tools.cjs` skins these):
+
+| MCP server | Tools | Engine |
+|---|---|---|
+| `recoder.git_nexus` | search_code · package_map · owners · related_tests · impact_report · context_pack | E1 |
+| `recoder.repo` | repo.read · repo.search (kw+semantic+github) · repo.diff | E1 |
+| `recoder.retrieval` | retrieval.ingest · retrieval.search | E2 |
+| `recoder.memory` | memory.search · memory.candidate.create | E3 |
+| `recoder.browser` | browser.open · browser.snapshot · browser.verify | E9 |
+| `recoder.preview` | preview.issue_url · preview.health · preview.browser_check · preview.attach_evidence | E9 |
+| `recoder.web_search` | web.search | S9 (revived) |
+| `recoder.beads` | beads.ready · beads.create · beads.close · beads.sync | E14 |
+| `recoder.approvals` | approvals.request · status · list · decide | E10 |
+| `recoder.artifacts` | artifacts.create · get · list · link | E10 |
+| `recoder.github` | github.search · pr.create · pr.comment | E1/E16 |
+| `recoder.logs` | logs.stream · search · append · attach | control-plane |
+| `recoder.tasks`/`recoder.runs` | task/run read+write | control-plane (agent-os) |
+| `recoder.gateway` | gateway.complete · gateway.embed (internal) | E15 |
+
+Every call → `authorize → risk → policy → execute(port) → audit`. High-risk (pr.create, deploy,
+secret, delete, branch.push) ⇒ `needs_approval`. **Removed:** `deploy`/`billing` (Polar dropped).
+
+## 20. Definition of done — per engine (the acceptance bar)
+
+An engine is "shipped" only when: (1) a real owned package implements its port with depth; (2)
+`docker-backend` mounts it via the composition root; (3) an MCP skin exposes it behind the gate; (4) it
+is **degrade-safe** (proven by a test with the backing service absent); (5) a focused unit test + one
+live-evidence artifact exist; (6) the `DIRECTORY-MAP` row flips to `wired`.
+
+---
+
 ## 7. Invariants (quick reference)
 - Every engine + fleet service is **degrade-safe**: absent daemon/service → truthful fallback, never a
   crash or a fake result. The desktop must run with **zero** external services present.
