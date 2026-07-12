@@ -40,6 +40,8 @@ import {
   githubMcpServer,
   logsMcpServer,
   previewMcpServer,
+  deploymentMcpServer,
+  billingMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -54,8 +56,11 @@ import { registerApprovalsMcpTools, registerArtifactsMcpTools } from './store-en
 import { registerGithubMcpTools } from './github-engine.js';
 import { registerLogsMcpTools } from './logs-engine.js';
 import { registerPreviewMcpTools, type PreviewEngineDeps } from './preview-engine.js';
+import { registerDeploymentMcpTools, type DeploymentEngineDeps } from './deployment-engine.js';
+import { registerBillingMcpTools, type BillingEngineDeps } from './billing-engine.js';
 import { getWorkspace, listWorkspaces } from '../../conductor/workspace-service.js';
 import { runBrowserCheck } from '../../conductor/browser-check.js';
+import { getDistributionModule } from '../../distribution/module.js';
 
 /**
  * Resolve a repo root to an absolute, scannable directory using the SAME source
@@ -194,6 +199,15 @@ export function buildInProcEngineRouter(
   // OWN workspace — resolve the conductor-owned preview URL, probe health, run the
   // richer headless browser-check, attach evidence to the audit trail.
   registerPreviewMcpTools(router, repository, createPreviewEngineDeps());
+  // Deploy: an agent inspects its OWN workspace's delivery/preview state
+  // (read-only, always safe). deploy.preview/deploy.rollback are risk-gated at the
+  // interop host (/deploy/ → needs_approval) and degrade truthfully when no deploy
+  // backend is wired — no backend is configured today, so they never fake a deploy.
+  registerDeploymentMcpTools(router, createDeploymentEngineDeps());
+  // Billing: an agent reads the OWNER's authoritative plan + usage headroom over
+  // the real DistributionModule (recoder.xyz plan authority, Polar MoR). Read-only,
+  // fail-safe (deny/zero-headroom on miss), truthful when no subject resolves.
+  registerBillingMcpTools(router, createBillingEngineDeps());
 
   return router;
 }
@@ -212,6 +226,32 @@ export function createPreviewEngineDeps(): PreviewEngineDeps {
   };
 }
 
+/**
+ * Real deployment-engine deps over the conductor's workspace service. NO deploy
+ * backend is wired today, so `deploy.preview`/`deploy.rollback` degrade truthfully
+ * ("no deploy backend configured") instead of fabricating a deployment; when a
+ * concrete provider is added it is injected here as `deployBackend`.
+ */
+export function createDeploymentEngineDeps(): DeploymentEngineDeps {
+  return {
+    getWorkspace: (id) => getWorkspace(id),
+    listWorkspaces: () => listWorkspaces(),
+  };
+}
+
+/**
+ * Real billing-engine deps over the process-wide DistributionModule (lazy: the
+ * module is built on first use, not at registration) plus the conductor workspace
+ * service for owner fallback resolution.
+ */
+export function createBillingEngineDeps(): BillingEngineDeps {
+  return {
+    getModule: () => getDistributionModule(),
+    getWorkspace: (id) => getWorkspace(id),
+    listWorkspaces: () => listWorkspaces(),
+  };
+}
+
 /** The in-proc servers whose tools this module owns the concrete engines for. */
 export const ENGINE_SERVERS = [
   gitNexusMcpServer,
@@ -226,6 +266,8 @@ export const ENGINE_SERVERS = [
   githubMcpServer,
   logsMcpServer,
   previewMcpServer,
+  deploymentMcpServer,
+  billingMcpServer,
 ] as const;
 
 /**

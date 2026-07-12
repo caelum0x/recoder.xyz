@@ -202,6 +202,22 @@ const CAPABILITY_TOOLS = [
       properties: { workspaceId: { type: 'string', description: 'Optional workspace id' } },
     },
   },
+  {
+    name: 'recoder_deploy_status',
+    description: "Read your workspace's delivery/deploy status — the Recoder-owned workspace state, preview URL, and delivery summary. READ-ONLY (never triggers a deploy). Pass workspaceId, or it resolves from your current task.",
+    inputSchema: {
+      type: 'object',
+      properties: { workspaceId: { type: 'string', description: 'Optional workspace id (defaults to your task’s workspace)' } },
+    },
+  },
+  {
+    name: 'recoder_billing_plan',
+    description: "Read the authoritative plan + entitlements for the task/workspace owner (recoder.xyz is the plan authority). READ-ONLY. Pass userId, or it resolves from your current task/workspace owner. Reports a truthful message (not a fake plan) when the subject is unknown.",
+    inputSchema: {
+      type: 'object',
+      properties: { userId: { type: 'string', description: 'Optional owner user id (defaults to the task/workspace owner)' } },
+    },
+  },
 ];
 
 const CAPABILITY_TOOL_NAMES = new Set(CAPABILITY_TOOLS.map((t) => t.name));
@@ -500,6 +516,43 @@ function createCapabilityTools(options = {}) {
           return `Preview browser-check: ${JSON.stringify(outcome).slice(0, 800)}`;
         } catch (err) {
           return `preview check: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_deploy_status': {
+        if (!hasInteropAuth()) return unavailable('deploy');
+        try {
+          const content = await callInteropTool('recoder.deploy', 'deploy.status', {
+            workspaceId: args.workspaceId,
+          });
+          if (!content) return 'No deploy status available.';
+          const parts = [`Workspace ${content.workspaceId || '?'}: state=${content.state ?? 'unknown'}`];
+          if (content.previewUrl) parts.push(`preview=${content.previewUrl}`);
+          parts.push(`deployBackend=${content.deployBackendConfigured ? 'configured' : 'none'}`);
+          if (content.message) parts.push(content.message);
+          return parts.join('\n');
+        } catch (err) {
+          return `deploy status: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_billing_plan': {
+        if (!hasInteropAuth()) return unavailable('billing');
+        try {
+          const content = await callInteropTool('recoder.billing', 'billing.plan.read', {
+            userId: args.userId,
+          });
+          if (!content) return 'No plan available.';
+          const grants = Array.isArray(content.entitlements) ? content.entitlements : [];
+          const grantLine = grants.length
+            ? `\nEntitlements: ${grants.map((g) => `${g.kind}:${g.key}${g.granted ? '' : '(revoked)'}`).join(', ')}`
+            : '';
+          const planLine = content.plan == null
+            ? (content.message || 'Plan could not be resolved for this user.')
+            : `Plan: ${content.plan}`;
+          return `${planLine}${grantLine}`;
+        } catch (err) {
+          return `billing plan: ${errMsg(err)}`;
         }
       }
 
