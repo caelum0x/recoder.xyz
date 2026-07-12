@@ -585,6 +585,319 @@ orchestrator). Nothing proceeds until the prior phase verifies green.
 
 ---
 
+## 23. Sequence diagrams — the hard flows
+
+Three flows carry the real complexity: parallel-agent contention, the approval gate, and the
+learning loop. Each threads the same spine (`interop` gate + `RunEvent`s + `agent-os` state).
+
+### 23a · N parallel agents + work-locks (`packages/coordination` + A2A bus)
+
+Two agents claim overlapping paths. `lock-service` + `glob-overlap` + `lock-conflict-detector`
+grant one a fenced lease; the other waits (or hands off). `lock-ttl` + `lock-reaper` reclaim
+stale leases so a crashed agent never wedges the fleet.
+
+```
+ agent A (worktree A)        coordination [S4·E13]              agent B (worktree B)
+      │  lock("src/api/**",       │                                   │
+      │        ttl=90s)  ─────────▶ glob-overlap: no holder            │
+      │                            │ lock-service: grant              │
+      │  ◀── Fence{token=7} ───────┤ (fenceToken monotonic)           │
+      │                            │                        lock("src/api/v2/**",─┐
+      │  edit + write (fence 7)    │                              ttl=90s)  ◀──────┘
+      │                            │ glob-overlap: OVERLAPS token 7                │
+      │                            │ lock-conflict-detector: CONFLICT             │
+      │                            │  ── deny/queue ──▶ Fence pending ────────────▶ B waits
+      │                            │        A2A bus: notify(B, "path held by A")   │
+      │  commit + unlock ─────────▶│ release token 7                              │
+      │                            │ lock-service: promote queue ── Fence{8} ─────▶ B proceeds
+      ⋮   (A crashes here) ⋮       │ lock-ttl expires → lock-reaper reclaims → Fence{8}
+      │                            │ every grant/deny/expire ⇒ RunEvent (audited)  │
+```
+
+- **Fence tokens** (`fence_token`, monotonic) make writes idempotent under handoff: a stale holder's
+  fenced write is rejected by the store even if it wakes up late. No two agents mutate the same glob.
+- **Conflict is detected at claim time** (`lock-conflict-detector` + `lock-coverage`), not at merge —
+  cheaper and truthful. The A2A bus carries the handoff message; canonical lock state stays in `coordination`.
+- **Degrade:** absent `go/multica` ⇒ in-process locks only (single-host, still fenced) — never "no locking".
+
+### 23b · The approval gate (high-risk tool → `interop` → Approval → execute → Merkle seal)
+
+A `pr.create` / `branch.push` / `deploy` call is `risk=high`; policy returns `needs_approval`; an
+`Approval` record parks the run until a human decides; only then does the port execute and the
+Merkle chain seal the result. The branch differs by topology — never by faking success.
+
+```
+ agent ──▶ mcp.pr.create(args)
+   │
+   ▼ interop host  [S2·E10]
+   authorize(actor, task)        ── identity + task ownership + signed-envelope ok? ──┐ fail ⇒ DENY (sealed)
+   risk("pr.create")             = high                                               │
+   policy(high, actor, target)   = needs_approval                                     │
+   │                                                                                  ▼
+   ├─ create Approval{taskId, tool, args-hash, state=pending}  (agent-os canonical)   RunEvent: approval.requested
+   │
+   │   ┌─ SOLO desktop ────────────────┐     ┌─ TEAMS / CLOUD ───────────────────────┐
+   │   │ human click in cockpit        │     │ reviewer decides in approval queue     │
+   │   │  = the approval (degrade)     │     │ (RBAC; distinct actor from agent)      │
+   │   └───────────┬───────────────────┘     └───────────────┬────────────────────────┘
+   │               ▼ approve                                  ▼ approve / reject
+   ├─ decide(Approval) ─────────────────────────────────────────────────────────────▶ RunEvent: approval.decided
+   │        reject ⇒ STOP (no execute) ── sealed as denied
+   ▼ approve
+   execute(GitNexusPort.prCreate, args)   ── the real side effect happens ONLY here
+   ▼
+   audit(call, result) ── SHA-256 Merkle seal (crates/recoder-governance, UDS)        RunEvent: tool.audited
+```
+
+- **Fail-closed (cloud/STRICT):** governance daemon down ⇒ the high-risk call is **denied**, not passed.
+- **Solo-degrade (desktop):** no reviewer exists, so the operator's click *is* the approval; the audit
+  still seals via the TS governance facade. The gate is never skipped — only its approver differs.
+- **Args-hash** binds the Approval to the exact call; a mutated arg after approval re-triggers the gate.
+
+### 23c · The memory-learning loop (reviewed, never blind — the compounding moat)
+
+A finished run proposes a `MemoryCandidate` with evidence; review promotes it to a durable
+`MemoryItem`; the next task's `BrainContext` recalls it. Nothing becomes a durable default silently.
+
+```
+ run N completes ─▶ agent-hooks (PostToolUse) [S4·E12]
+      │  observes: taskId, artifactId(s), diff, verification result
+      ▼
+ agent-memory.propose(MemoryCandidate{                     [S8·E3]
+     claim, evidence:{taskId, artifactId}, scope, provenance })   RunEvent: memory.candidate.created
+      │
+      ▼ REVIEW  (solo: operator ok · teams: reviewer)   ── reject ⇒ discarded, evidence kept for audit
+      │  approve
+      ▼
+ durable MemoryItem  (agent-os canonical state)                    RunEvent: memory.item.durable
+      │
+      ⋮ (later)
+      ▼
+ run N+1 · PLAN ─▶ brain.contextPack(task)  recalls MemoryItem ── into BrainContext ──▶ agent starts smarter
+```
+
+- **Evidence-bound:** every candidate carries `{taskId, artifactId}` provenance — recall is auditable,
+  not a black-box embedding drift. This is the AGENTS.md rule "propose with evidence, never write blind".
+- **Compounding:** memory + code-graph + retrieval accrete per repo/user each run; the store-of-record
+  (`agent-os`) means the moat survives swapping the runtime, model, or memory backend.
+- **Degrade:** absent `py/mem0` ⇒ pgvector-backed `agent-memory` store; the candidate→review→item
+  lifecycle is unchanged, only the recall backend differs.
+
+---
+
+## 24. The fleet manifest (concrete) — `docker-backend/src/fleet/manifest.ts`
+
+The shape §11 sketches, filled with one entry per polyglot service. Every entry: `resolveBinary()`
+(where the prebuilt cmd lives — **never built in the run loop**), `spawn` (loopback port), `health`
+(probe), `degradeTo` (the TS fallback when absent). All entries are `loopbackOnly` + degrade-safe;
+the supervisor marks each `available | degraded` and reports it truthfully in `/health/full`.
+
+```ts
+// docker-backend/src/fleet/manifest.ts   — declarative, consumed by supervisor.ts
+export const FLEET: FleetService[] = [
+  // ── Rust kernels ────────────────────────────────────────────────────────────
+  { id: 'governance',  lang: 'rust',
+    resolveBinary: () => bin('recoder-governance'),                 // crates/recoder-governance (prebuilt)
+    spawn: (env) => ['recoder-governance', '--uds', env.GOV_SOCK],  // UDS, no TCP port
+    health: { kind: 'uds-ping', path: '$GOV_SOCK' },
+    degradeTo: 'in-proc TS policy facade (fail-closed cloud / seal-loopback solo)' },
+
+  { id: 'openfang',    lang: 'rust',
+    resolveBinary: () => bin('openfang'),                           // crates/openfang
+    spawn: (env, port) => ['openfang', 'serve', '--addr', `127.0.0.1:${port}`],
+    port: 4200,
+    health: { kind: 'http', url: 'http://127.0.0.1:4200/health', auth: 'OPENFANG_API_KEY' },
+    degradeTo: 'pure-TS OSS dispatch (packages/agent-oss)' },
+
+  { id: 'tensorzero',  lang: 'rust',
+    resolveBinary: () => bin('tensorzero-gateway'),                 // crates/tensorzero
+    spawn: (env, port) => ['tensorzero-gateway', '--config', env.TZ_CONFIG, '--port', String(port)],
+    port: 3030,
+    health: { kind: 'http', url: 'http://127.0.0.1:3030/health' },
+    degradeTo: 'pi-ai direct BYOK client (packages/pi-ai)' },
+
+  // ── Go networking / graph ─────────────────────────────────────────────────────
+  { id: 'recoder-xds', lang: 'go',
+    resolveBinary: () => bin('recoder-xds'),                        // go/recoder-xds
+    spawn: (_e, port) => ['recoder-xds', '--ads-port', String(port)],
+    port: 18000,
+    health: { kind: 'grpc', target: '127.0.0.1:18000' },
+    degradeTo: 'static Envoy bootstrap (no dynamic mesh)' },
+
+  { id: 'ziti',        lang: 'go',
+    resolveBinary: () => bin('ziti'),                               // go/ziti (overlay router)
+    spawn: (env) => ['ziti', 'router', 'run', env.ZITI_CFG],
+    health: { kind: 'http', url: 'http://127.0.0.1:8081/health-checks' },
+    degradeTo: 'loopback only (no cross-machine overlay)' },
+
+  { id: 'beads',       lang: 'go',
+    resolveBinary: () => bin('bd'),                                 // go/beads — CLI, not a daemon
+    spawn: null,                                                    // invoked per-command
+    health: { kind: 'cmd', run: ['bd', 'vc', 'status'] },
+    degradeTo: 'no issue graph (TaskSpec-only)' },
+
+  { id: 'multica',     lang: 'go',
+    resolveBinary: () => bin('multica'),                            // go/multica dispatch
+    spawn: (_e, port) => ['multica', 'serve', '--addr', `127.0.0.1:${port}`],
+    port: 7070,
+    health: { kind: 'http', url: 'http://127.0.0.1:7070/healthz' },
+    degradeTo: 'in-proc locks only (packages/coordination)' },
+
+  // ── Python ML services ────────────────────────────────────────────────────────
+  { id: 'colbert',     lang: 'py',
+    resolveBinary: () => py('py/colbert/rerank_server.py'),
+    spawn: (_e, port) => ['python', 'py/colbert/rerank_server.py', '--port', String(port)],
+    port: 8070,                                                     // COLBERT_RERANK_URL points here
+    health: { kind: 'http', url: '$COLBERT_RERANK_URL/health' },
+    degradeTo: 'identity rerank order (packages/retrieval)' },
+
+  { id: 'mem0',        lang: 'py',
+    resolveBinary: () => py('py/mem0'),
+    spawn: (_e, port) => ['python', '-m', 'mem0.server', '--port', String(port)],
+    port: 8071,                                                     // MEM0_BASE_URL points here
+    health: { kind: 'http', url: '$MEM0_BASE_URL/health' },
+    degradeTo: 'pgvector store (packages/agent-memory)' },
+
+  { id: 'browser-use', lang: 'py',
+    resolveBinary: () => py('py/browser-use'),
+    spawn: (_e, port) => ['python', '-m', 'browser_use.server', '--port', String(port)],
+    port: 8072,
+    health: { kind: 'http', url: 'http://127.0.0.1:8072/health' },
+    degradeTo: 'puppeteer path (packages/recoder-browser-tools)' },
+
+  { id: 'ops-recorder', lang: 'py',
+    resolveBinary: () => py('py/ops-recorder'),
+    spawn: (_e, port) => ['uvicorn', 'ops_recorder.app:app', '--port', String(port)],  // FastAPI
+    port: 8073,
+    health: { kind: 'http', url: 'http://127.0.0.1:8073/health' },
+    degradeTo: 'no work-signals (coordination/work-signals inert)' },
+];
+```
+
+- `resolveBinary()` looks in the shipped prebuilt dir / `PATH`; **absent ⇒ the entry is skipped and its
+  `degradeTo` runs.** The supervisor never invokes `cargo`/`go build`/`pip install` in the run loop (ENOSPC).
+- Every service is `127.0.0.1`-only; cross-machine reach is opt-in through `ziti` + `recoder-xds` (§16).
+- `health` is polled with backoff; a service that fails its probe flips to `degraded` (truthful), not down.
+- `bd` and `colbert`/`mem0` are addressed by **env contract** (`COLBERT_RERANK_URL`, `MEM0_BASE_URL`) so the
+  same manifest works whether the service is local-spawned or a remote cloud endpoint.
+
+---
+
+## 25. Tenancy + security deep-dive
+
+Three concerns make the "massive surface" safe under multi-tenant load: isolation, BYOK key custody,
+and the revived `security` scan engine feeding the gate.
+
+### 25.1 · Multi-tenant isolation
+
+Canonical state carries a `TenantContext` (`packages/agent-os/src/domain/resolve-tenant-context.ts`);
+every query, lock, worktree, and audit entry is scoped by it. Desktop uses a fixed `LOCAL_TENANT`;
+cloud resolves the tenant per authenticated request and enforces it below the model.
+
+```
+ request ─▶ distribution (auth) ─▶ resolve-tenant-context ─▶ TenantContext{ tenantId, actor, rbac }
+                                                              │
+        ┌─────────────────────────────────────────────────────┼───────────────────────────────────┐
+        ▼ canonical state (agent-os)      ▼ coordination            ▼ substrate           ▼ audit
+   WHERE tenant_id = ctx.tenantId    locks keyed by tenant     worktree path per      audit-envelope
+   (Space/Task/Run/Approval/Memory)  (no cross-tenant glob)    (tenant, task)         scoped to tenant
+        └─────────────────────────────────────────────────────┴───────────────────────────────────┘
+ cloud network isolation:  go/recoder-xds default-deny mesh  +  go/ziti overlay (per-tenant identities)
+ desktop:  LOCAL_TENANT — single tenant, loopback, no mesh needed (degrade-safe subset)
+```
+
+- Work-locks, worktrees, and audit are **all tenant-keyed** — an agent in tenant A cannot lock, read, or
+  seal into tenant B. `rbac.ts` gates actor↔action; a reviewer (approvals, §23b) must be a distinct actor.
+- Cloud adds network-layer isolation: `recoder-xds` pushes a **default-deny** Envoy config (only declared
+  service edges allowed), and `ziti` gives each tenant a zero-trust overlay identity — no ambient reachability.
+
+### 25.2 · BYOK key flow (keys live in one place, used in one place)
+
+```
+ user key ─▶ distribution (tenant/auth) ─▶ vault (packages/vault: node-crypto, encrypted at rest)
+                                              │  create-vault / getSecret(tenant, provider)
+                                              ▼
+                                   LLM Gateway  (crates/tensorzero → pi-ai)   ◀── THE ONLY reader
+                                              │  attaches provider key server-side, per request
+                                              ▼
+                                   provider (Anthropic / OpenAI / …)
+ ✗ keys NEVER enter: an engine package env · an agent CLI env · a RunEvent · an artifact · the audit body
+```
+
+- The BYOK key enters through `distribution`/`vault` (encrypted; `noop-vault` in dev = truthful empty),
+  and is decrypted **only** inside the gateway boundary at call time. No engine, MCP server, or spawned
+  agent process ever receives a raw provider key — they call `LlmGatewayPort.complete/embed`, not the provider.
+- Embeddings route the same gateway, so vector work inherits the same custody. Absent key ⇒ `EmbeddingPort → null`
+  (degrade), never a hardcoded fallback key.
+
+### 25.3 · The revived `security` scan engine (S3) — secret-scan + SAST as a PostToolUse hook
+
+`packages/security` (`code-vulnerability-scanner`, `ai-prompt-sanitizer`) is revived as a scan engine that
+runs on **agent output and diffs** via `agent-hooks` (PostToolUse), feeding findings into the governance gate.
+A leaked-secret or high-severity SAST finding downgrades the action to `deny` / `needs_approval`.
+
+```
+ agent writes file / proposes diff ─▶ agent-hooks (PostToolUse)
+      ▼ security engine
+      ├─ secret-scan  (API keys, tokens, private keys in the diff)
+      └─ SAST         (injection / unsafe-eval / path-traversal patterns)
+      ▼ finding? ──▶ interop policy input:  leaked-secret ⇒ DENY   ·  high SAST ⇒ needs_approval
+                     clean ⇒ pass                                    ·  RunEvent: security.scanned
+```
+
+### 25.4 · Threat model (threat → control)
+
+| Threat | Control |
+|---|---|
+| Cross-tenant data read/write | `TenantContext` scoping on every query + tenant-keyed locks/worktrees/audit (25.1) |
+| Agent exfiltrates a BYOK key | Key decrypted only inside the gateway; never in engine/agent env or RunEvent (25.2) |
+| Agent commits a leaked secret | `security` secret-scan (PostToolUse) ⇒ gate DENY before the write lands (25.3) |
+| Injection / unsafe code in agent diff | SAST scan ⇒ `needs_approval`; human reviews before merge/PR (25.3, §23b) |
+| Hostile MCP tool description / remote instruction | `interop` authorize + deny-biased policy; unknown tool ⇒ deny (§12) |
+| Unsigned / spoofed A2A ingress | Signed-envelope validity checked in `authorize` (§12); default-deny mesh (25.1) |
+| Tampered audit trail | Append-only SHA-256 Merkle chain (`crates/recoder-governance`); `verifyGovernanceAudit` proves it |
+| Parallel agents corrupting shared files | Fenced work-locks + claim-time conflict detection (§23a) |
+| Ambient network reachability (cloud) | `recoder-xds` default-deny Envoy + `ziti` per-tenant overlay (25.1) |
+| Runtime reports fake success | Truthful health probes; execute happens only after the gate; RunEvent evidence (§11, §23b) |
+
+---
+
+## 26. North-star / moat — why a governed polyglot Agent OS is defensible
+
+**The gate is the moat, not the tool count.** Anyone can bolt an MCP tool onto a model; almost no one
+wraps *every* capability call — code-graph, retrieval, memory, browser, gateway, deploy — in a single
+`authorize → risk → policy → execute → audit` path sealed into a tamper-evident Merkle chain. That is
+what lets Recoder expose a genuinely massive capability surface *safely*: a competitor adding the same
+tools without a gate ships a liability, not a platform. The governance + audit spine
+(`packages/governance` + `crates/recoder-governance`) is the hard, unglamorous part that is expensive to
+retrofit and easy to underbuild — so it compounds as a durable advantage.
+
+**Data gravity compounds per repo and per user.** Reviewed memory (evidence-bound, §23c), the code-graph
+index (`recodergit`), and retrieval corpora accrete every run. Because they are governed and provenance-tracked
+rather than blind embeddings, they get *more* trustworthy with scale instead of noisier. A team that has run
+Recoder for six months on a codebase has a private, auditable knowledge layer a fresh competitor cannot
+replicate by copying features — the moat is the accumulated, reviewed state, not the algorithm.
+
+**Vendor-neutral runtime fleet avoids the trap everyone else is walking into.** Recoder runs every coding
+CLI (Claude Code, Codex, opencode, pi, recoder-code) *and* autonomous engines (openfang) behind one control
+plane, routing all model calls through a BYOK gateway (`crates/tensorzero` / `pi-ai`). We are not betting the
+company on one model or one agent framework; when the frontier shifts, we swap a runtime adapter, not the
+platform. Lock-in to a single vendor is a competitor's fragility and our option value.
+
+**The store-of-record makes runtimes commodities.** `agent-os` owns task, approval, memory, artifact, and
+audit state; runtimes and OSS engines emit `RunEvent`s back but never hold truth. This inversion — the
+control plane owns state, the executors are replaceable — is what lets the fleet grow (add an engine = add
+a port impl + manifest entry) without the surface collapsing into spaghetti, and what keeps switching costs
+on *our* side of the table rather than the vendor's.
+
+**Honest framing.** None of this claims better raw model quality or that the engines are all shipped today —
+this is a plan (§6, §21), and depth is earned engine-by-engine against the DoD (§20). The defensibility
+argument is structural: a governed, audited, vendor-neutral control plane that owns reviewed state is hard
+to build and harder to retrofit, and it gets stronger with every governed run. That is the bet, stated
+without hype.
+
+---
+
 ## 22. Invariants (quick reference)
 - Every engine + fleet service is **degrade-safe**: absent daemon/service → truthful fallback, never a
   crash or a fake result. The desktop must run with **zero** external services present.
