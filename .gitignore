@@ -13,6 +13,12 @@ backups/
 dist/
 build/
 out/
+# Exception: apps/wave/tsunami/build is a SOURCE package (the tsunami app-builder:
+# TsunamiBuild/BuildOpts/FindGoExecutable/…), not build output. The broad build/
+# rule above wrongly excluded it, so it was never vendored and the Go backend
+# could not compile. Re-include it.
+!apps/wave/tsunami/build/
+!apps/wave/tsunami/build/**
 .next/
 .nuxt/
 .vuepress/dist
