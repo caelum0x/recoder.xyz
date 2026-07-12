@@ -898,6 +898,44 @@ without hype.
 
 ---
 
+## 27. ADR — the shell: fork an open-source terminal (the "Cursor-for-terminals" play)
+
+**Context.** Recoder's identity is "**it's a terminal**" — run your coding agent (Claude Code /
+Codex / opencode / pi) in parallel worktrees, review, merge. The current shell (`apps/desktop`) is a
+from-scratch Electron + Preact cockpit; the terminal is embedded (xterm). The scraped-chat center was
+the wrong abstraction (duplication/broken-md); we've moved to a **terminal-first center** + **interactive
+runtime TUIs** (real Claude Code, not headless `-p`). The question: do we keep building a custom shell,
+or **fork an open-source terminal** (the way Cursor forked VSCode) and layer the conductor + engines on it?
+
+**Decision drivers.** (1) terminal-native identity (NOT an IDE); (2) our stack (Electron · React/Preact ·
+Node · Go/Rust/Py); (3) the block/pane model must render N parallel agent sessions; (4) fork = ongoing
+upstream-tracking burden — must be worth it; (5) governance + the engine fleet must mount unchanged.
+
+**Options.**
+- **A · Fork VSCode/Code-OSS** — REJECTED. It's an IDE; conflicts with the terminal identity and
+  Cursor/Windsurf already own it. Huge maintenance.
+- **B · Fork Wave Terminal** (Electron+Go+React, AI-native, block-based) — strongest *conceptual* fit:
+  each parallel agent = a "block", Go backend aligns with our Go engines. The "terminal Cursor."
+- **C · Fork Hyper** (Electron+React over xterm) — lightest fork: it's a React app, so we embed the
+  existing conductor UI + terminal-first center almost directly. Less active upstream.
+- **D · Swap the multiplexer to Zellij/WezTerm** — keep our shell but replace `c/tmux` with a
+  plugin-capable multiplexer for native parallel-agent panes.
+- **E · No fork — deepen the current shell** — the terminal-first center + interactive TUIs already
+  land 80% of the value with zero fork burden; we own the UX and keep the engine mount intact.
+
+**Recommendation.** Default to **E now, B as the north-star.** The terminal-first center + interactive
+TUIs (shipped) already give the real-terminal experience without a fork's upstream burden. If we do
+fork, **Wave Terminal (B)** is the base — block model + Go backend fit Recoder — with the conductor/
+governance/engine fleet mounted behind it exactly as in this doc (the shell is just L3; L0–L2 are
+unchanged). A fork is a *surface* swap, never an engine swap.
+
+**Implication for the plan.** The 16 engines + fleet + governance are **shell-agnostic** — they mount
+the same whether L3 is our Preact cockpit, a Hyper fork, or a Wave fork. So the fork decision does NOT
+block engine work (Phases 0–5); it only re-skins L3. Sequence: prove the engines behind the current
+shell; adopt a fork once the backend is massive enough to be worth wrapping in a terminal-native surface.
+
+---
+
 ## 22. Invariants (quick reference)
 - Every engine + fleet service is **degrade-safe**: absent daemon/service → truthful fallback, never a
   crash or a fake result. The desktop must run with **zero** external services present.
