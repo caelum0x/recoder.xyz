@@ -485,8 +485,24 @@ export function App() {
             ) : workspaces.length === 0 && !board.error ? (
               !selected && (
                 <div class="board-empty">
-                  <p>No workspaces yet.</p>
-                  <button class="btn btn-primary" onClick={() => setShowCreate(true)}>Create your first workspace</button>
+                  <img class="board-empty-logo" src="./logo.png" alt="" width={40} height={40} />
+                  <h2 class="board-empty-title">Start your first agent</h2>
+                  {readyRuntimeIds.length > 0 ? (
+                    <p class="board-empty-sub">
+                      {readyRuntimeIds.length} agent{readyRuntimeIds.length === 1 ? '' : 's'} ready
+                      on your machine ({readyRuntimeIds.slice(0, 4).join(', ')}
+                      {readyRuntimeIds.length > 4 ? '…' : ''}). Pick a folder and it runs in an
+                      isolated worktree.
+                    </p>
+                  ) : (
+                    <p class="board-empty-sub">
+                      Install a coding agent (like <code>claude</code> or <code>codex</code>), then
+                      pick a folder to run it in an isolated worktree.
+                    </p>
+                  )}
+                  <button class="btn btn-primary" onClick={() => setShowCreate(true)}>
+                    {readyRuntimeIds.length > 0 ? 'New workspace' : 'Set up a workspace'}
+                  </button>
                 </div>
               )
             ) : (
