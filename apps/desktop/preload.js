@@ -39,6 +39,10 @@ const { contextBridge, ipcRenderer } = require('electron');
       identity:
         config.identity && typeof config.identity === 'object'
           ? {
+              name:
+                typeof config.identity.name === 'string' && config.identity.name
+                  ? config.identity.name
+                  : undefined,
               email:
                 typeof config.identity.email === 'string' && config.identity.email
                   ? config.identity.email
@@ -46,6 +50,10 @@ const { contextBridge, ipcRenderer } = require('electron');
               plan:
                 typeof config.identity.plan === 'string' && config.identity.plan
                   ? config.identity.plan
+                  : undefined,
+              avatarUrl:
+                typeof config.identity.avatarUrl === 'string' && config.identity.avatarUrl
+                  ? config.identity.avatarUrl
                   : undefined,
             }
           : undefined,

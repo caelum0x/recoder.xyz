@@ -837,8 +837,12 @@ export interface ApiEnvelope<T> {
  * fabricated. When absent, the cockpit shows a generic "Signed in" state.
  */
 export interface CockpitIdentity {
+  /** The user's display name (from recoder.xyz), when captured. */
+  name?: string;
   email?: string;
   plan?: string;
+  /** Avatar URL (from recoder.xyz Better Auth), when captured. */
+  avatarUrl?: string;
 }
 
 /** Result of the desktop login / token-resolve / refresh IPC bridge. */
