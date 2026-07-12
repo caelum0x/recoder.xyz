@@ -175,6 +175,33 @@ const CAPABILITY_TOOLS = [
       required: ['title'],
     },
   },
+  {
+    name: 'recoder_preview_url',
+    description: "Get the live preview URL for your workspace (the deployed/served page produced by your task), if one exists. The URL is owned by Recoder — it returns null truthfully when your task produced code, not a live page. Pass workspaceId, or it resolves from your current task.",
+    inputSchema: {
+      type: 'object',
+      properties: { workspaceId: { type: 'string', description: 'Optional workspace id (defaults to your task’s workspace)' } },
+    },
+  },
+  {
+    name: 'recoder_preview_health',
+    description: "Health-check your workspace's live preview — probes the preview URL and reports whether it responded healthy (2xx/3xx). Use this to CONFIRM your change actually serves before claiming done.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'string', description: 'Optional workspace id' },
+        url: { type: 'string', description: 'Optional explicit URL to probe (defaults to the workspace preview URL)' },
+      },
+    },
+  },
+  {
+    name: 'recoder_preview_check',
+    description: 'Run the richer headless-browser check on your preview (render assert + console/page errors + screenshot evidence), attached to the task audit trail. Use it to verify the UI actually renders without errors, not just that a socket answered.',
+    inputSchema: {
+      type: 'object',
+      properties: { workspaceId: { type: 'string', description: 'Optional workspace id' } },
+    },
+  },
 ];
 
 const CAPABILITY_TOOL_NAMES = new Set(CAPABILITY_TOOLS.map((t) => t.name));
@@ -430,6 +457,49 @@ function createCapabilityTools(options = {}) {
             : `✗ Not found: the page does NOT contain "${args.contains}".`;
         } catch (err) {
           return `browser verify: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_preview_url': {
+        if (!hasInteropAuth()) return unavailable('preview');
+        try {
+          const content = await callInteropTool('recoder.preview', 'preview.issue_url', {
+            workspaceId: args.workspaceId,
+          });
+          if (!content || content.url == null) {
+            return (content && content.message) || 'This workspace has no preview URL (it produced code, not a live page).';
+          }
+          return `Preview URL: ${content.url}`;
+        } catch (err) {
+          return `preview url: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_preview_health': {
+        if (!hasInteropAuth()) return unavailable('preview');
+        try {
+          const content = await callInteropTool('recoder.preview', 'preview.health', {
+            workspaceId: args.workspaceId,
+            url: args.url,
+          });
+          return content && content.healthy
+            ? `✓ Preview healthy (HTTP ${content.status}): ${content.url}`
+            : `✗ Preview unhealthy: ${(content && content.message) || 'no response'}`;
+        } catch (err) {
+          return `preview health: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_preview_check': {
+        if (!hasInteropAuth()) return unavailable('preview');
+        try {
+          const content = await callInteropTool('recoder.preview', 'preview.browser_check', {
+            workspaceId: args.workspaceId,
+          });
+          const outcome = (content && content.outcome) || content;
+          return `Preview browser-check: ${JSON.stringify(outcome).slice(0, 800)}`;
+        } catch (err) {
+          return `preview check: ${errMsg(err)}`;
         }
       }
 

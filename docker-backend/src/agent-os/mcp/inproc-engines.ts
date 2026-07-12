@@ -39,6 +39,7 @@ import {
   artifactsMcpServer,
   githubMcpServer,
   logsMcpServer,
+  previewMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -52,6 +53,9 @@ import { registerBrowserMcpTools } from './browser-engine.js';
 import { registerApprovalsMcpTools, registerArtifactsMcpTools } from './store-engines.js';
 import { registerGithubMcpTools } from './github-engine.js';
 import { registerLogsMcpTools } from './logs-engine.js';
+import { registerPreviewMcpTools, type PreviewEngineDeps } from './preview-engine.js';
+import { getWorkspace, listWorkspaces } from '../../conductor/workspace-service.js';
+import { runBrowserCheck } from '../../conductor/browser-check.js';
 
 /**
  * Resolve a repo root to an absolute, scannable directory using the SAME source
@@ -186,8 +190,26 @@ export function buildInProcEngineRouter(
   registerGithubMcpTools(router, { baseRepoRoot: options.baseRepoRoot });
   // Logs: search / read the run event log so an agent can inspect what happened.
   registerLogsMcpTools(router, repository);
+  // Preview: close the verify-your-own-work loop on a live preview of the agent's
+  // OWN workspace — resolve the conductor-owned preview URL, probe health, run the
+  // richer headless browser-check, attach evidence to the audit trail.
+  registerPreviewMcpTools(router, repository, createPreviewEngineDeps());
 
   return router;
+}
+
+/**
+ * Real preview-engine deps, wired onto the conductor's workspace service +
+ * browser-check. The conductor OWNS the preview URL (on workspace metadata); this
+ * only reads it. `runBrowserCheck` is degrade-safe by construction (skips when no
+ * preview / no browser driver), so exposing it to an agent never fabricates health.
+ */
+export function createPreviewEngineDeps(): PreviewEngineDeps {
+  return {
+    getWorkspace: (id) => getWorkspace(id),
+    listWorkspaces: () => listWorkspaces(),
+    runBrowserCheck: (workspaceId) => runBrowserCheck(workspaceId),
+  };
 }
 
 /** The in-proc servers whose tools this module owns the concrete engines for. */
@@ -203,6 +225,7 @@ export const ENGINE_SERVERS = [
   artifactsMcpServer,
   githubMcpServer,
   logsMcpServer,
+  previewMcpServer,
 ] as const;
 
 /**
