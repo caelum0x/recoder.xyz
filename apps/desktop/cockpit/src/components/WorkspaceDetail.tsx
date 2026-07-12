@@ -18,7 +18,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, ApiError, BackendUnreachableError } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
-import { EventLog } from './EventLog';
 import { DiffView } from './DiffView';
 import { SessionTerminal } from './SessionTerminal';
 import { RecoderTerminal } from './RecoderTerminal';
@@ -219,11 +218,6 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
   }, [workspace.workspaceId]);
 
   const live = isLive(workspace.state);
-  const events = usePoll(
-    () => api.listEvents(workspace.workspaceId),
-    live ? 2000 : 15_000,
-    [workspace.workspaceId],
-  );
   // The file list (Changes tab) and the full patch (Diff tab) share the same
   // GET /diff payload — fetch it whenever the backend has reviewable work and
   // we're on a tab that shows it, so the Changes tab can render the file list.
@@ -388,12 +382,11 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
 
       <div class="detail-body">
         {tab === 'output' ? (
+          /* Changes = the clean changed-files tree (like the reference). The
+             agent's talk lives in the center conversation and the raw terminal
+             behind the Terminal tab — this panel is no longer a duplicate log. */
           <div class="detail-changes">
             <FileList diff={diff.data} loading={diff.loading} error={diff.error} />
-            <div class="detail-output-log">
-              <div class="detail-output-label">Run · Output</div>
-              <EventLog events={events.data} error={events.error} loading={events.loading} />
-            </div>
           </div>
         ) : tab === 'diff' ? (
           <DiffView diff={diff.data} error={diff.error} loading={diff.loading} />
