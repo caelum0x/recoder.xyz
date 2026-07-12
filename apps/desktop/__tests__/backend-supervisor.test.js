@@ -21,6 +21,8 @@ const {
   resolveTmuxBin,
   loadOrCreateSecrets,
   assembleBackendEnv,
+  resolveLoginShellPath,
+  mergePathIntoEnv,
   backendUrlForPort,
   pollHealth,
   backoffMs,
@@ -237,6 +239,58 @@ describe('assembleBackendEnv', () => {
       electronRunAsNode: true,
     });
     expect(env.ELECTRON_RUN_AS_NODE).toBe('1');
+  });
+
+  it('augments PATH with the login-shell PATH (installed agents become resolvable)', () => {
+    const env = assembleBackendEnv({
+      baseEnv: { PATH: '/usr/bin:/bin' },
+      port: 1,
+      dataDir: '/d',
+      tmuxBin: '/t',
+      apiKeyHashSalt: 's',
+      internalServiceKey: 'i',
+      loginShellPath: '/opt/homebrew/bin:/usr/bin:/Users/me/.local/bin',
+    });
+    // Inherited entries stay first; new dirs appended; duplicates collapsed.
+    expect(env.PATH).toBe('/usr/bin:/bin:/opt/homebrew/bin:/Users/me/.local/bin');
+  });
+});
+
+describe('mergePathIntoEnv', () => {
+  it('is a no-op when there is no extra PATH', () => {
+    const base = { PATH: '/bin' };
+    expect(mergePathIntoEnv(base, '')).toBe(base);
+  });
+
+  it('appends and de-duplicates while preserving order, without mutating input', () => {
+    const base = { PATH: '/usr/bin:/bin' };
+    const out = mergePathIntoEnv(base, '/bin:/opt/homebrew/bin', ':');
+    expect(out.PATH).toBe('/usr/bin:/bin:/opt/homebrew/bin');
+    expect(base.PATH).toBe('/usr/bin:/bin'); // untouched
+  });
+});
+
+describe('resolveLoginShellPath', () => {
+  it('returns "" on win32 without spawning a shell', () => {
+    const execFileSync = vi.fn();
+    expect(resolveLoginShellPath({ platform: 'win32', execFileSync })).toBe('');
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+
+  it('parses the delimited PATH from the login shell output', () => {
+    const execFileSync = vi.fn(
+      () => 'rc-file noise\n__RECODER_PATH_DELIM__/opt/homebrew/bin:/usr/bin__RECODER_PATH_DELIM__\n',
+    );
+    const out = resolveLoginShellPath({ platform: 'darwin', shell: '/bin/zsh', execFileSync });
+    expect(out).toBe('/opt/homebrew/bin:/usr/bin');
+    expect(execFileSync).toHaveBeenCalledWith('/bin/zsh', expect.arrayContaining(['-ilc']), expect.any(Object));
+  });
+
+  it('degrades to "" when the shell invocation throws', () => {
+    const execFileSync = vi.fn(() => {
+      throw new Error('shell missing');
+    });
+    expect(resolveLoginShellPath({ platform: 'darwin', execFileSync })).toBe('');
   });
 });
 
