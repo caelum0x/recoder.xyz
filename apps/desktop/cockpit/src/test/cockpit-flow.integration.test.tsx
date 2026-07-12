@@ -213,11 +213,13 @@ describe('cockpit create -> events -> diff -> terminate (real UI vs stub conduct
       runningCard.click();
     });
 
-    // The live event log (GET /events) shows the real state_transition + log lines.
+    // The detail panel opens and the center conversation renders the agent's
+    // real output (log) as clean prose. Lifecycle noise (the state_transition
+    // message) is intentionally collapsed into the status line, not shown as a
+    // raw log row — so we assert the meaningful output, not the wire event.
     await waitForDom(
       () =>
         container.querySelector('.detail-panel') !== null &&
-        text().includes('agent started working') &&
         text().includes('editing README.md'),
     );
 
