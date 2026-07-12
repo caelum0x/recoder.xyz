@@ -44,6 +44,9 @@ import {
   billingMcpServer,
   retrievalMcpServer,
   browserEngineMcpServer,
+  coordinationMcpServer,
+  workflowMcpServer,
+  palPlanMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -62,6 +65,9 @@ import { registerDeploymentMcpTools, type DeploymentEngineDeps } from './deploym
 import { registerBillingMcpTools, type BillingEngineDeps } from './billing-engine.js';
 import { registerRetrievalMcpTools } from './retrieval-engine.js';
 import { registerBrowserUseMcpTools } from './browser-use-engine.js';
+import { registerCoordinationMcpTools } from './coordination-engine.js';
+import { registerWorkflowMcpTools } from './workflow-engine.js';
+import { registerPalPlanMcpTools } from './pal-plan-engine.js';
 import { getWorkspace, listWorkspaces } from '../../conductor/workspace-service.js';
 import { runBrowserCheck } from '../../conductor/browser-check.js';
 import { getDistributionModule } from '../../distribution/module.js';
@@ -223,6 +229,22 @@ export function buildInProcEngineRouter(
   // degrade-safe ("not configured") when no browser driver is present. Distinct
   // from the older recoder.browser open/snapshot/verify session server.
   registerBrowserUseMcpTools(router);
+  // Coordination (E13): advisory work-locks + conflict detection so N parallel
+  // agents can claim a resource, detect a conflicting holder, and hand off.
+  // Backed by @recoder/coordination over an injectable lock store (in-memory
+  // default; a Go multica daemon or DB store fills the port later); degrade-safe
+  // ("not configured") when no store is wired.
+  registerCoordinationMcpTools(router);
+  // Workflow + hooks (E12): run a named verification workflow over a run and get
+  // a truthful verdict, and capture a hook artifact / secret-scan. Backed by
+  // @recoder/workflow-engine skinning agent-workflows + agent-hooks; degrade-safe
+  // ("not configured") when no verification runner is wired.
+  registerWorkflowMcpTools(router);
+  // Planning (PAL, E11): an in-proc pal.plan that decides runtime/substrate/
+  // tool-grants/risk/approval for a TaskSpec via @recoder/pal's pure decision
+  // logic. Deny-biased on uncertainty (least privilege + approvalRequired), never
+  // fabricating a permissive grant. Complements the external py/pal-mcp-server.
+  registerPalPlanMcpTools(router);
 
   return router;
 }
@@ -285,6 +307,9 @@ export const ENGINE_SERVERS = [
   billingMcpServer,
   retrievalMcpServer,
   browserEngineMcpServer,
+  coordinationMcpServer,
+  workflowMcpServer,
+  palPlanMcpServer,
 ] as const;
 
 /**

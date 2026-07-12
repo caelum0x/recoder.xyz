@@ -18,6 +18,9 @@ import {
   recodergitMcpServer,
   retrievalMcpServer,
   browserEngineMcpServer,
+  coordinationMcpServer,
+  workflowMcpServer,
+  palPlanMcpServer,
   checkMcpToolPermission,
   createMcpToolAuditEvent,
   createMcpToolCall,
@@ -45,6 +48,9 @@ const defaultServers = [
   billingMcpServer,
   retrievalMcpServer,
   browserEngineMcpServer,
+  coordinationMcpServer,
+  workflowMcpServer,
+  palPlanMcpServer,
 ];
 
 /**
