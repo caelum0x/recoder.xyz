@@ -290,6 +290,17 @@ export const api = {
   /** Unified conductor health: substrate + runtimes + resources + tails + workspaces. */
   healthFull: () => request<ConductorHealth>('GET', '/health/full'),
   /**
+   * Whether the backend can forward a GitHub token into agent sessions (so
+   * agents run `gh` without a local `gh auth login`). Token-free by contract:
+   * only `{ connected, source }` is returned — never the token value. Drives the
+   * calm "GitHub" chip near the account block.
+   */
+  githubStatus: () =>
+    request<{ connected: boolean; source: 'GH_TOKEN' | 'GITHUB_TOKEN' | null }>(
+      'GET',
+      '/github/status',
+    ),
+  /**
    * Tamper-evident governance audit trail: sealed Merkle-chain entries
    * (newest-first) + a genuine full-chain verification result.
    */
@@ -331,6 +342,15 @@ export const api = {
   tree: (id: string) => request<WorkspaceTree>('GET', `/workspaces/${encodeURIComponent(id)}/tree`),
   devCommand: (id: string) =>
     request<DevCommand | null>('GET', `/workspaces/${encodeURIComponent(id)}/dev-command`),
+  /**
+   * Persist a sniffed dev-server preview URL to the workspace
+   * (POST /workspaces/:id/preview-url → `metadata.previewUrl`), so the
+   * agent-facing preview engine (preview.health) and the board can light up.
+   * The backend accepts only a http(s) localhost/loopback URL; callers post the
+   * URL the Run tab detected once it appears. Returns the updated workspace.
+   */
+  setPreviewUrl: (id: string, url: string) =>
+    request<Workspace>('POST', `/workspaces/${encodeURIComponent(id)}/preview-url`, { url }),
   openPr: (id: string, body: { title: string; body?: string; base?: string; draft?: boolean }) =>
     request<CreatePrResult>('POST', `/workspaces/${encodeURIComponent(id)}/pr`, body),
   merge: (id: string, body: { strategy?: 'squash' | 'merge' | 'rebase'; deleteBranch?: boolean }) =>

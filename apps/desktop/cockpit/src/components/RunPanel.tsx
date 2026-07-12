@@ -9,7 +9,7 @@
  * no worktree can't run; a failed start surfaces the real error, never a fake
  * "running" state.
  */
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { usePoll } from '../lib/usePoll';
 import { extractPreviewUrl } from '../lib/preview-url';
@@ -32,17 +32,34 @@ function errText(err: unknown): string {
  */
 function RunningView({
   session,
+  workspaceId,
   tmuxBin,
   busy,
   onStop,
 }: {
   session: ConductorSession;
+  workspaceId: string;
   tmuxBin?: string;
   busy: boolean;
   onStop: () => void;
 }) {
   const output = usePoll(() => api.sessionOutput(session.sessionId, 200), 3000, [session.sessionId]);
   const previewUrl = extractPreviewUrl(output.data?.output);
+
+  // Persist the sniffed dev-server URL to the workspace so the agent-facing
+  // preview engine (preview.health) and the board can light up. Fire once per
+  // distinct URL; best-effort — a failure never affects this live run view (the
+  // link above still opens locally). If persistence fails we clear the marker so
+  // a later poll retries.
+  const postedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!previewUrl || postedRef.current === previewUrl) return;
+    postedRef.current = previewUrl;
+    api.setPreviewUrl(workspaceId, previewUrl).catch(() => {
+      if (postedRef.current === previewUrl) postedRef.current = null;
+    });
+  }, [previewUrl, workspaceId]);
+
   return (
     <div class="run-panel">
       <div class="run-panel-bar">
@@ -124,7 +141,15 @@ export function RunPanel({ workspace, tmuxBin }: RunPanelProps) {
   }
 
   if (session) {
-    return <RunningView session={session} tmuxBin={tmuxBin} busy={busy} onStop={stop} />;
+    return (
+      <RunningView
+        session={session}
+        workspaceId={workspace.workspaceId}
+        tmuxBin={tmuxBin}
+        busy={busy}
+        onStop={stop}
+      />
+    );
   }
 
   return (

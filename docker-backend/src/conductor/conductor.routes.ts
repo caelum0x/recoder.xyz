@@ -12,15 +12,18 @@ import {
   killSession,
   paneExitCode,
 } from './tmux-orchestrator.js';
+import { githubStatus } from './github-token.js';
 import {
   createWorkspace,
   listWorkspaces,
   getWorkspace,
   listWorkspaceEvents,
+  advanceWorkspace,
   reconcile,
   ADMISSION_REJECTED_PREFIX,
   type CreateWorkspaceInput,
 } from './workspace-service.js';
+import { normalizeLocalPreviewUrl } from './preview-url-guard.js';
 import { normalizeCreateBody } from './create-defaults.js';
 import { applyEmptyStartDefault } from './empty-start.js';
 import { runtimeAvailability } from './runtime-commands.js';
@@ -126,6 +129,14 @@ export function createConductorRouter(): Router {
 
   router.get('/health', async (_req: Request, res: Response) => {
     res.json({ success: true, data: await conductorAvailability() });
+  });
+
+  // Whether the backend can hand agents a GitHub token (GH_TOKEN/GITHUB_TOKEN),
+  // so the cockpit can show a calm "GitHub connected / not connected" chip. The
+  // token VALUE is never returned — only { connected, source }. Read-only; safe
+  // for the solo desktop (exempt from requireAuthenticatedMutation).
+  router.get('/github/status', (_req: Request, res: Response) => {
+    res.json({ success: true, data: githubStatus(process.env) });
   });
 
   router.get('/sessions', async (_req: Request, res: Response) => {
@@ -526,6 +537,49 @@ export function createConductorRouter(): Router {
         res.status(500).json({ success: false, error: msg });
       }
     }
+  );
+
+  // Persist the dev-server preview URL the Run tab sniffed from the session
+  // output onto `workspace.metadata.previewUrl`, so the agent-facing preview
+  // engine (preview.health / preview.issue_url) and the board can light up.
+  // Ownership-checked. Only a http(s) localhost/loopback URL is accepted — this
+  // value is later `fetch`ed by the preview engine, so an arbitrary host would be
+  // an SSRF footgun; anything else is rejected with a 400 (nothing is written).
+  // Writes metadata via a same-state advance (no illegal transition), so it is
+  // safe to call repeatedly as the run restarts on a new port.
+  router.post(
+    '/workspaces/:workspaceId/preview-url',
+    async (req: Request, res: Response) => {
+      try {
+        const workspace = await requireWorkspaceAccess(req, res, req.params.workspaceId);
+        if (!workspace) return;
+        const url = normalizeLocalPreviewUrl(req.body?.url);
+        if (!url) {
+          res.status(400).json({
+            success: false,
+            error: 'a http(s) localhost/loopback url is required',
+          });
+          return;
+        }
+        const updated = await advanceWorkspace(
+          workspace.workspaceId,
+          workspace.state,
+          undefined,
+          { previewUrl: url },
+        );
+        void auditConductorMutation(req, {
+          action: 'workspace.preview_url',
+          targetId: workspace.workspaceId,
+          outcome: 'allowed',
+        });
+        res.json({ success: true, data: updated });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'preview-url update failed';
+        res
+          .status(msg.includes('not found') ? 404 : 400)
+          .json({ success: false, error: msg });
+      }
+    },
   );
 
   // Full file tree of the workspace's worktree (tracked + untracked), for the
