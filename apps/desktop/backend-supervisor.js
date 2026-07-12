@@ -221,6 +221,66 @@ function loadOrCreateSecrets(opts) {
 }
 
 /**
+ * Resolve the user's LOGIN-SHELL PATH. A GUI-launched macOS/Linux app inherits a
+ * minimal PATH (often just /usr/bin:/bin:/usr/sbin:/sbin), NOT the PATH from the
+ * user's shell profile — so `which claude` (and codex, pnpm, gh, …) fails even
+ * when the tool is installed via Homebrew / nvm / a dotfile, and the agent picker
+ * looks empty. We ask the login shell for its real PATH the way `shell-env` does:
+ * run it interactive+login and read `$PATH` between unique delimiters (so shell
+ * rc-file noise can't corrupt the value). Degrade-safe: any failure (or Windows,
+ * where GUI apps already inherit PATH) returns '' and the caller keeps the
+ * inherited PATH unchanged. Injectable for tests.
+ * @param {{ platform?: string, shell?: string, execFileSync?: Function }} [deps]
+ * @returns {string} the login-shell PATH, or '' when unavailable
+ */
+function resolveLoginShellPath(deps = {}) {
+  const platform = deps.platform || process.platform;
+  if (platform === 'win32') return '';
+  const shell = deps.shell || process.env.SHELL || '/bin/zsh';
+  const exec = deps.execFileSync || require('child_process').execFileSync;
+  const D = '__RECODER_PATH_DELIM__';
+  try {
+    // `-ilc` = interactive login, running one command; print PATH fenced by D.
+    const out = String(
+      exec(shell, ['-ilc', `printf %s "${D}"; printf %s "$PATH"; printf %s "${D}"`], {
+        encoding: 'utf8',
+        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    );
+    const parts = out.split(D);
+    return parts.length >= 3 ? parts[1].trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Merge extra PATH entries into an env's PATH (pure — returns a new env). The
+ * inherited entries stay first (an explicit override still wins); every dir the
+ * login shell knows about is appended and de-duplicated, preserving order. A
+ * falsy `extraPath` is a no-op.
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} extraPath
+ * @param {string} [sep]
+ * @returns {NodeJS.ProcessEnv}
+ */
+function mergePathIntoEnv(env, extraPath, sep = require('path').delimiter) {
+  if (!extraPath) return env;
+  const current = env.PATH || env.Path || '';
+  const seen = new Set();
+  const merged = [];
+  for (const raw of `${current}${sep}${extraPath}`.split(sep)) {
+    const dir = raw.trim();
+    if (dir && !seen.has(dir)) {
+      seen.add(dir);
+      merged.push(dir);
+    }
+  }
+  return { ...env, PATH: merged.join(sep) };
+}
+
+/**
  * Assemble the full child-process environment for the backend. Pure: takes the
  * resolved inputs and the base env, returns a new env object (no mutation).
  * @param {{
@@ -231,6 +291,7 @@ function loadOrCreateSecrets(opts) {
  *   apiKeyHashSalt: string,
  *   internalServiceKey: string,
  *   electronRunAsNode?: boolean,
+ *   loginShellPath?: string,
  * }} opts
  * @returns {NodeJS.ProcessEnv}
  */
@@ -268,7 +329,10 @@ function assembleBackendEnv(opts) {
   if (opts.electronRunAsNode) {
     env.ELECTRON_RUN_AS_NODE = '1';
   }
-  return env;
+  // Augment PATH with the user's login-shell PATH so the backend's runtime
+  // detection (`which claude`/`codex`/…) finds agents installed via Homebrew /
+  // nvm / dotfiles, which a GUI-launched app would otherwise miss.
+  return mergePathIntoEnv(env, opts.loginShellPath);
 }
 
 /**
@@ -578,6 +642,9 @@ class BackendSupervisor {
         internalServiceKey: secrets.internalServiceKey,
         // Packaged spawns use process.execPath (the Electron binary); run it as node.
         electronRunAsNode: this.isPackaged,
+        // Give the backend the user's real login-shell PATH so it can detect the
+        // agent CLIs (claude/codex/…) a GUI launch would otherwise not see.
+        loginShellPath: resolveLoginShellPath(),
       });
 
       this.port = port;
@@ -886,6 +953,8 @@ module.exports = {
   resolveTmuxBin,
   loadOrCreateSecrets,
   assembleBackendEnv,
+  resolveLoginShellPath,
+  mergePathIntoEnv,
   backendUrlForPort,
   pollHealth,
   backoffMs,
