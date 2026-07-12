@@ -26,6 +26,10 @@ interface WorkspaceSidebarProps {
   onNewWorkspace: () => void;
   /** workspaceId → prompt a running agent is blocked on (needs_input). */
   waits?: Record<string, string>;
+  /** Collapsed to a thin rail (the workspace list is hidden). */
+  collapsed?: boolean;
+  /** Toggle the collapsed state (shown as a chevron in the header/rail). */
+  onToggleCollapse?: () => void;
 }
 
 function DiffStat({ workspace }: { workspace: Workspace }) {
@@ -81,8 +85,27 @@ export function WorkspaceSidebar({
   onSelect,
   onNewWorkspace,
   waits,
+  collapsed,
+  onToggleCollapse,
 }: WorkspaceSidebarProps) {
   const groups = groupWorkspacesByRepo(workspaces);
+
+  // Collapsed: a thin rail with a single chevron to reopen — keeps the center
+  // conversation full-width (terminal-plain) without losing the way back.
+  if (collapsed) {
+    return (
+      <aside class="ws-sidebar ws-sidebar-collapsed">
+        <button
+          class="ws-sidebar-toggle"
+          onClick={onToggleCollapse}
+          title="Show workspaces"
+          aria-label="Show workspaces"
+        >
+          ›
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside class="ws-sidebar">
@@ -91,6 +114,16 @@ export function WorkspaceSidebar({
           <span class="ws-sidebar-home-icon" aria-hidden="true" />
           Home
         </span>
+        {onToggleCollapse && (
+          <button
+            class="ws-sidebar-toggle"
+            onClick={onToggleCollapse}
+            title="Hide workspaces"
+            aria-label="Hide workspaces"
+          >
+            ‹
+          </button>
+        )}
       </div>
 
       <div class="ws-sidebar-body">

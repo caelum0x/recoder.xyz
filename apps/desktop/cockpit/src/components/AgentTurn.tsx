@@ -14,6 +14,7 @@
  */
 import { useSmoothText } from '@recoder/shared/animations/preact';
 import { friendlyAgentText } from './EventLog';
+import { renderMarkdown } from '../lib/markdown';
 import type { RunEvent } from '../types';
 
 interface AgentTurnProps {
@@ -67,7 +68,7 @@ export function AgentTurn({ events, animate }: AgentTurnProps) {
   return (
     <div class={`agent-turn agent-turn-${status}`}>
       {prose ? (
-        <div class="agent-turn-body">{display}</div>
+        <div class="agent-turn-body">{renderMarkdown(display)}</div>
       ) : (
         <div class="agent-turn-thinking">{STATUS_LABEL.working}</div>
       )}

@@ -185,8 +185,8 @@ export function App() {
   const [view, setView] = useState<CockpitView>(() => readInitialView() || 'board');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [reconciling, setReconciling] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   // True once we have observed a working authenticated session this run. Used to
   // frame a later 401 as "your session expired" rather than a cold sign-in.
@@ -305,18 +305,6 @@ export function App() {
     }
   }
 
-  async function reconcile() {
-    setReconciling(true);
-    try {
-      await api.reconcile();
-      board.refresh();
-    } catch {
-      // surfaced via board.error on next poll; reconcile is best-effort
-    } finally {
-      setReconciling(false);
-    }
-  }
-
   return (
     <div class="cockpit">
       <header class="topbar">
@@ -377,9 +365,6 @@ export function App() {
           </div>
         </nav>
         <div class="topbar-actions">
-          <button class="btn btn-ghost btn-sm" onClick={reconcile} disabled={reconciling}>
-            {reconciling ? 'Syncing…' : 'Sync'}
-          </button>
           {view === 'board' && (
             <button class="btn btn-primary" onClick={() => setShowCreate(true)}>New workspace</button>
           )}
@@ -467,6 +452,8 @@ export function App() {
             onSelect={setSelectedId}
             onNewWorkspace={() => setShowCreate(true)}
             waits={waits}
+            collapsed={leftCollapsed}
+            onToggleCollapse={() => setLeftCollapsed((v) => !v)}
           />
 
           {/* CENTER: a FOCUSED surface. With a workspace selected it is a pure
