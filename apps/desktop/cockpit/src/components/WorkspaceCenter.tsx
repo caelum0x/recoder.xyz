@@ -27,6 +27,7 @@ import { EventLog } from './EventLog';
 import { AgentTurn } from './AgentTurn';
 import { isLive, statePill, stateTone, messageDisabledReason } from '../lib/workspace-state';
 import { workspaceDiffStat } from '../lib/workspace-diffstat';
+import { workspaceCodename } from '../lib/workspace-codename';
 import { mergeEvents, useLiveStream } from '../lib/event-stream';
 import type { RunEvent, Workspace } from '../types';
 
@@ -248,7 +249,9 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   return (
     <section class="ws-center">
       <div class="ws-center-head">
-        <span class="ws-center-branch" title={workspace.branch}>{workspace.branch}</span>
+        <span class="ws-center-branch" title={`${workspace.workspaceId} · ${workspace.branch}`}>
+          {workspaceCodename(workspace.workspaceId)}
+        </span>
         <span class={`ws-row-pill pill-${stateTone(workspace.state)}`}>{statePill(workspace.state)}</span>
         <span class="ws-center-counts">
           {counts.tools} tool call{counts.tools === 1 ? '' : 's'}, {counts.messages} message{counts.messages === 1 ? '' : 's'}

@@ -5,6 +5,7 @@
  */
 import { BOARD_COLUMNS, lockConflict, stateLabel, stateTone } from '../lib/workspace-state';
 import { workspaceGoal } from '../lib/workspace-goal';
+import { workspaceCodename } from '../lib/workspace-codename';
 import type { Workspace } from '../types';
 
 interface BoardProps {
@@ -69,8 +70,11 @@ export function Board({ workspaces, selectedId, onSelect, waits }: BoardProps) {
                         <span class="card-runtime">{w.runtimeId}</span>
                       </div>
                       <div class="card-goal" title={workspaceGoal(w)}>{workspaceGoal(w)}</div>
-                      {workspaceGoal(w) !== w.branch && (
-                        <div class="card-branch" title={w.branch}>{w.branch}</div>
+                      {/* Secondary codename handle — only when the primary label is
+                          a real goal (otherwise it already IS the codename). Raw
+                          branch stays in the tooltip, never on screen. */}
+                      {workspaceGoal(w) !== workspaceCodename(w.workspaceId) && (
+                        <div class="card-branch" title={w.branch}>{workspaceCodename(w.workspaceId)}</div>
                       )}
                       {waitPrompt && (
                         <div class="card-needs-input-msg" title={waitPrompt}>{waitPrompt}</div>
