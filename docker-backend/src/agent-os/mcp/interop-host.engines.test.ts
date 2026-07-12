@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentProfile } from '@recoder/agent-os';
-import { gitNexusMcpServer, tasksMcpServer } from '@recoder/agent-mcp';
+import { gitNexusMcpServer, tasksMcpServer, memoryMcpServer } from '@recoder/agent-mcp';
 import { InMemoryAgentOsRepository } from '../repositories/in-memory-agent-os.repository';
 import { InteropHostBundle } from './interop-host';
 
@@ -137,5 +137,35 @@ describe('InteropHostBundle concrete engine injection', () => {
     const fetched = getOutcome.result.content as { task: { taskId: string; title: string } };
     expect(fetched.task.taskId).toBe(created.taskId);
     expect(fetched.task.title).toBe('Wire the MCP last mile');
+  });
+
+  it('memory.search executes through the gated host (not "no executor wired")', async () => {
+    const repository = new InMemoryAgentOsRepository();
+    // Seed a durable memory item so search has something real to return.
+    await repository.upsertMemoryItem({
+      memoryId: 'mem_1',
+      scope: 'repo',
+      title: 'Recoder is a terminal',
+      body: 'The polyglot dirs are backend capabilities the agents use.',
+      status: 'accepted',
+      createdAt: new Date(0).toISOString(),
+      updatedAt: new Date(0).toISOString(),
+      evidence: { taskId: 't', artifactId: 'a' },
+    } as never);
+
+    const bundle = new InteropHostBundle({ repository, baseRepoRoot: repoRoot });
+    const outcome = await bundle.call({
+      server: memoryMcpServer,
+      toolName: 'memory.search',
+      actor: actor(),
+      args: { query: 'terminal', scope: 'repo' },
+    });
+
+    expect(outcome.status).toBe('completed');
+    if (outcome.status !== 'completed') {
+      throw new Error(`expected completed, got ${outcome.status}`);
+    }
+    const items = outcome.result.content as Array<{ memoryId: string; title: string }>;
+    expect(items.some((i) => i.memoryId === 'mem_1')).toBe(true);
   });
 });
