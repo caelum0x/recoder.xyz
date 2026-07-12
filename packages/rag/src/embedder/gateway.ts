@@ -1,5 +1,5 @@
 import { createGateway } from "@ai-sdk/gateway";
-import type { EmbeddingProfile } from "@recoder/protocol";
+import type { EmbeddingProfile } from "../embedding-profiles";
 import { createAiSdkEmbedder, type EmbedderConfig } from "./ai-sdk-embedder";
 import type { EmbedderFunction } from "./types";
 

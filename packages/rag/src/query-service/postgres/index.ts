@@ -1,7 +1,7 @@
 import {
 	EMBEDDING_PROFILES,
 	type EmbeddingProfileId,
-} from "@recoder/protocol";
+} from "../../embedding-profiles";
 import { escapeIdentifier } from "pg";
 import * as pgvector from "pgvector/pg";
 import type { z } from "zod/v4";

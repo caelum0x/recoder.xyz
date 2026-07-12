@@ -1,4 +1,4 @@
-import { DEFAULT_EMBEDDING_PROFILE_ID } from "@recoder/protocol";
+import { DEFAULT_EMBEDDING_PROFILE_ID } from "../../embedding-profiles";
 import { describe, expect, it } from "vitest";
 import { mapMetadataToColumns, prepareChunkRecords } from "./utils";
 

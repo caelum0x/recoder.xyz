@@ -36,8 +36,5 @@
 	},
 	"peerDependencies": {
 		"zod": "^3.25.0"
-	},
-	"dependencies": {
-		"@recoder/protocol": "workspace:*"
 	}
 }
