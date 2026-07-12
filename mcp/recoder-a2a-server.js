@@ -530,6 +530,27 @@ const TOOLS = [
       },
     },
   },
+  {
+    name: 'recoder_browser_open',
+    description: 'Open a URL in a real browser (headless) so you can VERIFY your own work — e.g. a preview or deployed page. Reuses one page per turn.',
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'The URL to open' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'recoder_browser_verify',
+    description: "Assert that text is present on the currently-open page (open one first with recoder_browser_open). Returns whether the expected content rendered — use it to CHECK your UI changes actually work.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contains: { type: 'string', description: 'The text you expect to see on the page' },
+        selector: { type: 'string', description: 'Optional CSS selector to scope the check (default body)' },
+      },
+      required: ['contains'],
+    },
+  },
 ];
 
 // ── Helpers ──
@@ -1036,6 +1057,37 @@ async function handleToolCall(name, args) {
         return `${stat}\n\n${patch}`.trim();
       } catch (err) {
         return `repo diff: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_browser_open': {
+      if (!hasInteropAuth()) {
+        return 'Recoder browser is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.browser', 'browser.open', {
+          url: String(args.url || ''),
+        });
+        return `Opened ${content?.url || args.url}. Use recoder_browser_verify to check the page content.`;
+      } catch (err) {
+        return `browser open: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_browser_verify': {
+      if (!hasInteropAuth()) {
+        return 'Recoder browser is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.browser', 'browser.verify', {
+          contains: String(args.contains || ''),
+          selector: args.selector,
+        });
+        return content?.present
+          ? `✓ Present: the page contains "${args.contains}".`
+          : `✗ Not found: the page does NOT contain "${args.contains}".`;
+      } catch (err) {
+        return `browser verify: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
