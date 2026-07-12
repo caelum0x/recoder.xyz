@@ -407,8 +407,14 @@ export function App() {
               generic "Signed in" rather than a fabricated address. */}
           {hasDesktopSignOut() && !unauthenticated && wasAuthed && (
             <div class="account">
-              <span class="account-id" title={config.identity?.email || 'Signed in'}>
-                {config.identity?.email || 'Signed in'}
+              {config.identity?.avatarUrl && (
+                <img class="account-avatar" src={config.identity.avatarUrl} alt="" width={20} height={20} />
+              )}
+              <span
+                class="account-id"
+                title={config.identity?.name || config.identity?.email || 'Signed in'}
+              >
+                {config.identity?.name || config.identity?.email || 'Signed in'}
                 {/* Always show the resolved plan tier as a calm, muted badge.
                     Defaults to "Free" when identity carries no plan — never
                     inflates to a paid tier the server did not grant. */}

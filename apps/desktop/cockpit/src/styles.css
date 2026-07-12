@@ -132,6 +132,7 @@ body {
 /* Signed-in identity + sign-out — calm and muted, sits at the right of the top
    bar. The email/plan is secondary chrome, not a headline. */
 .account { display: flex; align-items: center; gap: 8px; }
+.account-avatar { border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .account-id {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--text-faint); font-size: 11px; max-width: 200px;
