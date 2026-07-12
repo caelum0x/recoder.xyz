@@ -9,6 +9,16 @@
             }
         }
     },
+    "defwidget@recoder-terminal": {
+        "display:order": -5.5,
+        "icon": "terminal",
+        "label": "session",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-terminal"
+            }
+        }
+    },
     "defwidget@terminal": {
         "display:order": -5,
         "icon": "square-terminal",
