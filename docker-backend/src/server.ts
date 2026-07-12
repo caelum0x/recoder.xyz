@@ -12236,6 +12236,7 @@ import { createCodeGraphRouter } from './routes/code-graph.routes.js';
 import { createLlmRouterRouter } from './routes/llm-router.routes.js';
 import { createZitiRouter } from './routes/ziti.routes.js';
 import { createTensorzeroRouter } from './routes/tensorzero.routes.js';
+import { createGatewayRouter } from './gateway/index.js';
 import { createMulticaRouter } from './routes/multica.routes.js';
 import { createRetrievalRouter } from './routes/retrieval.routes.js';
 import { createAgentSkillProfilesRouter } from './routes/agent-skill-profiles.routes.js';
@@ -13380,6 +13381,12 @@ app.use(createLlmRouterRouter({ authenticateRequest }));
 // inference logging + routing at /api/gateway/*. Returns 503 when unconfigured.
 
 app.use(createTensorzeroRouter({ authenticateRequest }));
+// BYOK LLM Gateway skin (LlmGatewayPort): /api/gateway/{complete,embed} + the
+// OpenAI-compatible /api/gateway/v1/chat/completions that Wave AI (ai:baseurl)
+// and any OpenAI client call. Mounted AFTER tensorzero so tensorzero's
+// /api/gateway/health wins the shared path; the /v1, /complete, /embed paths are
+// unique. Degrade-safe: 503 when no gateway endpoint is configured.
+app.use('/api/gateway', createGatewayRouter({ authenticateRequest }));
 
 // ── Multica Managed-Agents / Squads API ──────────────────────────────────────
 // Degrade-safe loopback adapter for the Multica managed-agents platform.
