@@ -21,6 +21,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { createLogger } from '../logger.js';
 import { TMUX_BIN } from './tmux-path.js';
 import { injectRecoderMcp } from './mcp-inject.js';
+import { githubSessionEnv } from './github-token.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor');
@@ -154,6 +155,13 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
   if (process.env.INTERNAL_SERVICE_KEY) {
     capabilityEnv.INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY;
   }
+  // Forward a GitHub token (GH_TOKEN/GITHUB_TOKEN) into the session as GH_TOKEN so
+  // agents can drive `gh` + authenticated git non-interactively — no local
+  // `gh auth login` needed. Degrade-safe: when no token is resolvable this adds
+  // NOTHING (githubSessionEnv returns {}), so the session simply inherits whatever
+  // gh auth the host already has. The token value is never logged; input.env still
+  // wins if a caller pins its own.
+  Object.assign(capabilityEnv, githubSessionEnv(process.env));
   const injectedEnv = { ...capabilityEnv, ...(input.env ?? {}) };
   const sessionEnv = { ...process.env, ...injectedEnv } as NodeJS.ProcessEnv;
   for (const [key, value] of Object.entries(injectedEnv)) {

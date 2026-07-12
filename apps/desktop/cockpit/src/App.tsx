@@ -225,6 +225,11 @@ export function App() {
   const readyRuntimeIds = (runtimes.data || [])
     .filter((r) => r.available)
     .map((r) => r.runtimeId);
+  // Whether the backend can forward a GitHub token into agent sessions. Polled
+  // slowly (env-scoped, rarely changes). Degrade-safe: on error/absence the chip
+  // reads "not connected" rather than fabricating a link.
+  const github = usePoll(() => api.githubStatus(), RUNTIMES_POLL_MS);
+  const githubConnected = github.data?.connected === true;
 
   const selected = useMemo(
     () => workspaces.find((w) => w.workspaceId === selectedId) || null,
@@ -406,6 +411,23 @@ export function App() {
               (where the sign-out bridge exists) and only once authenticated. The
               identity is calm + muted; when no email/plan was captured we show a
               generic "Signed in" rather than a fabricated address. */}
+          {/* Calm GitHub connection chip: reflects whether the backend can hand
+              agents a GitHub token (GH_TOKEN/GITHUB_TOKEN) so they run `gh`
+              non-interactively. Only shown once the status has resolved — never
+              claims "connected" without a truthful backend signal. Presentation
+              only; the backend owns the real token forwarding. */}
+          {view === 'board' && github.data && (
+            <span
+              class={`plan-hint github-chip${githubConnected ? ' github-chip-on' : ''}`}
+              title={
+                githubConnected
+                  ? `GitHub connected — agents can use \`gh\` (via ${github.data.source}).`
+                  : 'GitHub not connected — set GH_TOKEN or GITHUB_TOKEN so agents can use `gh`.'
+              }
+            >
+              GitHub · {githubConnected ? 'connected' : 'not connected'}
+            </span>
+          )}
           {hasDesktopSignOut() && !unauthenticated && wasAuthed && (
             <div class="account">
               {config.identity?.avatarUrl && (
