@@ -34,7 +34,6 @@ interface WorkspaceCenterProps {
   workspace: Workspace;
 }
 
-type CenterTab = 'all' | 'task' | 'review';
 
 function describeError(err: unknown): string {
   if (err instanceof BackendUnreachableError) return `Backend unreachable: ${err.message}`;
@@ -196,7 +195,6 @@ function Composer({
 }
 
 export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
-  const [tab, setTab] = useState<CenterTab>('all');
   // The operator's typed messages this session, oldest-first. Rendered
   // optimistically so a bubble appears the instant Enter is pressed.
   const [messages, setMessages] = useState<UserMessage[]>([]);
@@ -259,34 +257,14 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
         <span class="ws-center-meta">{live ? 'live (2s)' : 'terminal (15s)'}</span>
       </div>
 
-      <div class="ws-center-tabs">
-        <button class={tab === 'all' ? 'ws-ctab ws-ctab-active' : 'ws-ctab'} onClick={() => setTab('all')}>
-          All changes
-        </button>
-        <button
-          class={tab === 'task' ? 'ws-ctab ws-ctab-active' : 'ws-ctab'}
-          onClick={() => setTab('task')}
-          title={workspace.taskId}
-        >
-          {workspace.branch}
-        </button>
-        <button class={tab === 'review' ? 'ws-ctab ws-ctab-active' : 'ws-ctab'} onClick={() => setTab('review')}>
-          Review branch changes
-        </button>
-      </div>
-
       <div class="ws-center-scroll">
-        {tab === 'review' ? (
-          <WhatChanged workspace={workspace} />
-        ) : (
-          <Conversation
-            messages={messages}
-            events={merged}
-            eventsError={events.error}
-            eventsLoading={events.loading}
-            workspace={workspace}
-          />
-        )}
+        <Conversation
+          messages={messages}
+          events={merged}
+          eventsError={events.error}
+          eventsLoading={events.loading}
+          workspace={workspace}
+        />
       </div>
 
       <Composer
