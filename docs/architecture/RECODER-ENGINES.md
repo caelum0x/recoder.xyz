@@ -532,6 +532,59 @@ live-evidence artifact exist; (6) the `DIRECTORY-MAP` row flips to `wired`.
 
 ---
 
+## 21. Execution spec — per phase (workflow-ready)
+
+Each phase: **deliverables · owner-files · verification · execution shape.** Phase 0 is by hand
+(workspace config); the rest are workflows (parallel agents on disjoint files, integrated by the
+orchestrator). Nothing proceeds until the prior phase verifies green.
+
+### Phase 0 — Clean (by hand, sequential; frees disk first)
+- Delete `crates/lance` (+ Cargo workspace member + Makefile target).
+- Delete Giselle cluster (21 pkgs) + prune pnpm workspace globs.
+- Delete `ts/oh-my-codex`, `ts/oh-my-openagent` (+ fix `runtime/.../repo-engine-locator.ts` maps + workspace).
+- Delete Polar: `py/recoder-billing`, `ts/polar`; make `distribution` billing IPC degrade-safe; drop the `billing` MCP engine + its bridge tools (+ re-sync the 3 capability-tool copies).
+- Relocate → `vendor/`: `crates/claw-code-parity`, `py/pal-mcp-server`, `docker-backend/vendor/opencode`.
+- **Then** regenerate lockfiles; verify `pnpm -w install` + targeted builds green.
+- **DoD:** tree shrinks, `pnpm install` clean, docker-backend still builds.
+
+### Phase 1 — Fleet + Gateway + vector foundation
+- `docker-backend/src/fleet/{supervisor,manifest,health}.ts` — declarative polyglot service supervisor.
+- `docker-backend/src/gateway/{tensorzero-daemon,gateway.routes}.ts` — `LlmGatewayPort` over `crates/tensorzero`; degrade → `pi-ai`.
+- `docker-backend/src/agent-os/mcp/vector-store.ts` — `VectorStorePort` (Qdrant REST) + `EmbeddingPort` (via gateway).
+- `packages/agent-os/src/ports/` — add `LlmGatewayPort`, `VectorStorePort`, `EmbeddingPort`, `PlannerPort`.
+- **DoD:** backend boots with **zero** external services (all degraded); gateway falls back to pi-ai.
+
+### Phase 2 — Intelligence engines (workflow · parallel · disjoint)
+- **E1** `packages/recodergit/src/semantic-index.ts` + rewrite `repo-engine.ts` to delegate (keyword+semantic+GitHub, merged).
+- **E2** NEW `packages/retrieval/*` + `packages/agent-mcp/src/servers/retrieval-server.ts` + `docker-backend/.../retrieval-engine.ts` + wire (inproc-engines + capability tools).
+- **E3** fold `mem0`/`continuum` behind `agent-memory`; keep reviewed-candidate model.
+- **DoD:** each MCP tool live + degrade-safe (test with Qdrant/embeddings absent).
+
+### Phase 3 — Execution breadth (workflow)
+- **E7** `crates/openfang` as a governed surface via the fleet (already seamed).
+- **E8** `packages/agent-oss` adapters behind `substrate` (langgraph/crewai/e2b), gated.
+- **E9** `py/browser-use` engine + `recoder-browser-tools` as the real browser depth.
+- **E6** Daytona/E2B remote substrate wired for cloud/teams.
+
+### Phase 4 — Orchestration brain (workflow)
+- **E11** `packages/pal` → `conductor-planner.ts` (decisions via PAL, heuristic fallback).
+- **E12** `agent-workflows` + `agent-hooks` into the run loop (verify→browser-check→memory; PostToolUse).
+- **E13** `go/multica` coordination fused; **E14** `beads-adapter` bd↔TaskSpec.
+
+### Phase 5 — Platform (workflow)
+- **E15** gateway full (tensorzero routing/cache/observability).
+- **E16** `go/recoder-xds` + `go/ziti` (cloud/teams) + `network`.
+- Connectors (`extracted-from-openclaw`) + `ops-recorder` work-signals.
+- **Revive:** `analytics`(telemetry) · `performance`(cache) · `plugins`(marketplace) · `security`(scan) · `ui`(components) · `web-search`(capability).
+
+### Phase 6 — Docs
+- Rewrite `DIRECTORY-MAP.md` + `RECODER-CAPABILITIES.md` to this reality; flip every wired row.
+
+> **Tracking:** each engine gets a `bd` issue linked to its §-ref; the orchestrator integrates +
+> verifies each workflow, commits per engine, and only advances phase when the DoD (§20) is met.
+
+---
+
 ## 7. Invariants (quick reference)
 - Every engine + fleet service is **degrade-safe**: absent daemon/service → truthful fallback, never a
   crash or a fake result. The desktop must run with **zero** external services present.
