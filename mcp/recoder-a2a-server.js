@@ -504,6 +504,32 @@ const TOOLS = [
       required: ['id'],
     },
   },
+  {
+    name: 'recoder_repo_search',
+    description: "Search code — the local project (git grep, gitignore-aware) OR any GitHub repository. Pass `github` (owner/name) to search a remote repo, or `githubOwner` to search across an owner's repos; otherwise it searches the current project. Returns file:line (local) or repo/path + fragments (GitHub).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Pattern / code to search for' },
+        repo: { type: 'string', description: 'Optional absolute LOCAL repo path (defaults to the current project)' },
+        github: { type: 'string', description: 'Optional GitHub repo to search, as "owner/name" (uses gh code search)' },
+        githubOwner: { type: 'string', description: "Optional GitHub owner/org to search across their repos" },
+        language: { type: 'string', description: 'Optional language filter for GitHub search (e.g. typescript)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recoder_repo_diff',
+    description: "See the repository's working-tree diff (stat + patch). Optionally against a base ref, or in another absolute repo path.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        base: { type: 'string', description: 'Optional base ref to diff against' },
+        repo: { type: 'string', description: 'Optional absolute repo path' },
+      },
+    },
+  },
 ];
 
 // ── Helpers ──
@@ -967,6 +993,49 @@ async function handleToolCall(name, args) {
         return `Closed issue ${args.id}.`;
       } catch (err) {
         return `issue close: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_repo_search': {
+      if (!hasInteropAuth()) {
+        return 'Recoder repo search is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.repo', 'repo.search', {
+          query: String(args.query || ''),
+          repo: args.repo,
+          github: args.github,
+          githubOwner: args.githubOwner,
+          language: args.language,
+        });
+        const matches = content?.matches || [];
+        if (!matches.length) return `No matches for "${args.query}".`;
+        // GitHub results are objects (repo/path/fragments); local are strings.
+        if (content?.source === 'github') {
+          return matches
+            .map((m) => `• ${m.repo}/${m.path}${m.fragments?.length ? `\n  ${m.fragments.join('\n  ')}` : ''}`)
+            .join('\n');
+        }
+        return matches.join('\n');
+      } catch (err) {
+        return `repo search: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_repo_diff': {
+      if (!hasInteropAuth()) {
+        return 'Recoder repo diff is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.repo', 'repo.diff', {
+          base: args.base,
+          repo: args.repo,
+        });
+        const stat = content?.stat || '(no changes)';
+        const patch = content?.patch || '';
+        return `${stat}\n\n${patch}`.trim();
+      } catch (err) {
+        return `repo diff: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
