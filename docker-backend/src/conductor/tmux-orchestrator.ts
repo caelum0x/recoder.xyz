@@ -20,6 +20,7 @@ import path from 'node:path';
 import { existsSync, rmSync } from 'node:fs';
 import { createLogger } from '../logger.js';
 import { TMUX_BIN } from './tmux-path.js';
+import { injectRecoderMcp } from './mcp-inject.js';
 
 const exec = promisify(execFile);
 const logger = createLogger('conductor');
@@ -112,6 +113,12 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
 
   // Isolated worktree on its own branch — parallel agents never collide.
   await exec('git', ['-C', input.repoPath, 'worktree', 'add', '-B', branch, worktreePath, input.baseRef || 'HEAD']);
+
+  // Give the agent Recoder's tools automatically: drop a `.mcp.json` registering
+  // the Recoder MCP server so the launched CLI (Claude Code auto-discovers it)
+  // can call the governed capability stack with zero user setup. Degrade-safe
+  // and hidden from the review diff (see mcp-inject).
+  injectRecoderMcp(worktreePath, input.repoPath);
 
   // Ensure remain-on-exit is globally on BEFORE launching the agent command.
   // This lets paneExitCode read #{pane_dead_status} after the agent exits,
