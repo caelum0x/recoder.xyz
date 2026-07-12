@@ -551,6 +551,33 @@ const TOOLS = [
       required: ['contains'],
     },
   },
+  {
+    name: 'recoder_request_approval',
+    description: 'Request human approval before a sensitive action (e.g. pushing, deleting, a risky command). Records a pending approval in the control plane that a reviewer resolves. Use this instead of proceeding on your own for high-risk steps.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The task this approval is for' },
+        reason: { type: 'string', description: 'What you want to do and why it needs approval' },
+        requiredAt: { type: 'string', description: 'before_push | before_pr | before_write | before_sensitive_action (default)' },
+      },
+      required: ['taskId', 'reason'],
+    },
+  },
+  {
+    name: 'recoder_attach_artifact',
+    description: "Attach an output artifact (a report, summary, log, or result) to the task's audit trail so it is reviewable in the cockpit and provenance-tracked. Use this to record what you produced.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'The task to attach the artifact to' },
+        content: { type: 'string', description: 'The artifact content (text)' },
+        kind: { type: 'string', description: 'report | log | diff | summary | … (default report)' },
+        mimeType: { type: 'string', description: 'Default text/plain' },
+      },
+      required: ['taskId', 'content'],
+    },
+  },
 ];
 
 // ── Helpers ──
@@ -1057,6 +1084,41 @@ async function handleToolCall(name, args) {
         return `${stat}\n\n${patch}`.trim();
       } catch (err) {
         return `repo diff: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_request_approval': {
+      if (!hasInteropAuth()) {
+        return 'Recoder approvals are not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.approvals', 'approvals.request', {
+          taskId: String(args.taskId || ''),
+          reason: String(args.reason || ''),
+          requiredAt: args.requiredAt,
+        });
+        const id = content?.approvalId || '(pending)';
+        return `Requested approval ${id} (status: ${content?.status || 'pending'}). A reviewer must resolve it before the action proceeds.`;
+      } catch (err) {
+        return `request approval: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_attach_artifact': {
+      if (!hasInteropAuth()) {
+        return 'Recoder artifacts are not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.artifacts', 'artifacts.create', {
+          taskId: String(args.taskId || ''),
+          content: String(args.content || ''),
+          kind: args.kind,
+          mimeType: args.mimeType,
+        });
+        const id = content?.artifactId || '(created)';
+        return `Attached artifact ${id} to task ${args.taskId}.`;
+      } catch (err) {
+        return `attach artifact: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
