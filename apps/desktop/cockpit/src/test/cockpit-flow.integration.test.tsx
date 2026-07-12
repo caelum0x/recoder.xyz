@@ -260,30 +260,37 @@ describe('cockpit create -> events -> diff -> terminate (real UI vs stub conduct
     expect(stub.workspaces()[0].state).toBe('archived');
   }, 30_000);
 
-  it('exposes dmux as a discoverable top-level surface reachable by tab and by deep-link', async () => {
+  it('keeps backend-capability surfaces (dmux) OUT of the human nav but deep-link reachable', async () => {
     await act(async () => {
       render(<App />, container);
     });
     await flush(50);
 
-    // dmux is an advanced surface, so it lives under the "More" menu (the top
-    // nav stays plain). Open the menu and find the dmux item inside it.
+    // The cockpit is a TERMINAL, not an infra dashboard: dmux (a backend
+    // operator capability) is NOT surfaced in the nav. If a "More" menu exists
+    // it must not offer dmux — the nav stays plain (Board + the curated few).
     const moreTrigger = Array.from(container.querySelectorAll('.view-tabs .view-tab')).find(
       (b) => b.textContent?.startsWith('More'),
-    ) as HTMLButtonElement;
-    expect(moreTrigger, 'a "More" menu trigger is rendered').toBeTruthy();
-    await act(async () => {
-      moreTrigger.click();
-    });
-    const dmuxItem = Array.from(container.querySelectorAll('.view-more-menu .view-more-item')).find(
-      (b) => b.textContent === 'dmux',
-    ) as HTMLButtonElement;
-    expect(dmuxItem, 'a "dmux" item is reachable from the More menu').toBeTruthy();
+    ) as HTMLButtonElement | undefined;
+    if (moreTrigger) {
+      await act(async () => {
+        moreTrigger.click();
+      });
+      const dmuxItem = Array.from(container.querySelectorAll('.view-more-menu .view-more-item')).find(
+        (b) => b.textContent === 'dmux',
+      );
+      expect(dmuxItem, 'dmux is NOT a human nav item').toBeFalsy();
+      await act(async () => {
+        moreTrigger.click();
+      });
+    }
 
-    // Clicking it opens the real DmuxPanel, which renders from GET /dmux on the
-    // stub (availability + bin + tmux binding).
+    // But the capability is still reachable programmatically via the navigate
+    // event (deep link / launcher), so power tooling can open it on demand.
     await act(async () => {
-      dmuxItem.click();
+      window.dispatchEvent(
+        new CustomEvent(COCKPIT_NAVIGATE_EVENT, { detail: { view: 'dmux' } }),
+      );
     });
     await waitForDom(
       () =>
@@ -291,25 +298,6 @@ describe('cockpit create -> events -> diff -> terminate (real UI vs stub conduct
         text().includes('dmux console') &&
         text().includes('available'),
     );
-    // The real bin/tmux metadata from the stub's DmuxStatus is shown.
     expect(text()).toContain('/usr/local/bin/dmux');
-
-    // Deep-link path: the desktop "Open dmux Console" menu item dispatches the
-    // navigate event; switch to the board first, then prove the event returns us
-    // to dmux without a reload.
-    const boardTab = Array.from(container.querySelectorAll('.view-tabs .view-tab')).find(
-      (b) => b.textContent === 'Board',
-    ) as HTMLButtonElement;
-    await act(async () => {
-      boardTab.click();
-    });
-    await waitForDom(() => container.querySelector('.dmux-panel') === null);
-
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent(COCKPIT_NAVIGATE_EVENT, { detail: { view: 'dmux' } }),
-      );
-    });
-    await waitForDom(() => container.querySelector('.dmux-panel') !== null);
   }, 20_000);
 });
