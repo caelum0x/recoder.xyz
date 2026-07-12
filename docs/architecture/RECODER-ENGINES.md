@@ -585,7 +585,7 @@ orchestrator). Nothing proceeds until the prior phase verifies green.
 
 ---
 
-## 7. Invariants (quick reference)
+## 22. Invariants (quick reference)
 - Every engine + fleet service is **degrade-safe**: absent daemon/service → truthful fallback, never a
   crash or a fake result. The desktop must run with **zero** external services present.
 - All model calls (incl. embeddings) route the **LLM Gateway** (tensorzero/pi-ai, BYOK).
