@@ -140,19 +140,32 @@ export async function startSession(input: StartSessionInput): Promise<ConductorS
   // at the LOCAL backend bridge. tmux only forwards env to a NEW server it spawns;
   // when an existing server already runs, also push the vars via `setenv -g` so
   // the new pane picks them up regardless of when the server was started.
-  const sessionEnv = input.env ? { ...process.env, ...input.env } : undefined;
-  if (input.env) {
-    for (const [key, value] of Object.entries(input.env)) {
-      try {
-        await exec(TMUX_BIN, ['set-environment', '-g', key, value]);
-      } catch {
-        // No running server yet / unsupported — the env passed on the exec below
-        // (which boots the server) still covers the fresh-server case.
-      }
+  //
+  // ALWAYS inject the CAPABILITY env so the agent's Recoder MCP server (dropped
+  // via .mcp.json above) can reach the governed interop host and call the
+  // capability tools (memory/beads/repo/browser/approvals/artifacts). Without a
+  // guaranteed INTERNAL_SERVICE_KEY + RECODER_INTERNAL_URL those tools would
+  // report "not available". Only these two specific vars are added (not a
+  // broader env dump); they already live in the backend's process env.
+  const capabilityEnv: Record<string, string> = {
+    RECODER_INTERNAL_URL:
+      process.env.RECODER_INTERNAL_URL || `http://127.0.0.1:${process.env.PORT || '3100'}`,
+  };
+  if (process.env.INTERNAL_SERVICE_KEY) {
+    capabilityEnv.INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY;
+  }
+  const injectedEnv = { ...capabilityEnv, ...(input.env ?? {}) };
+  const sessionEnv = { ...process.env, ...injectedEnv } as NodeJS.ProcessEnv;
+  for (const [key, value] of Object.entries(injectedEnv)) {
+    try {
+      await exec(TMUX_BIN, ['set-environment', '-g', key, value]);
+    } catch {
+      // No running server yet / unsupported — the env passed on the exec below
+      // (which boots the server) still covers the fresh-server case.
     }
   }
   await exec(TMUX_BIN, ['new-session', '-d', '-s', tmuxName, '-c', worktreePath, input.command], {
-    ...(sessionEnv ? { env: sessionEnv } : {}),
+    env: sessionEnv,
   });
 
   // Set remain-on-exit PER-SESSION immediately after creation. The global option
