@@ -118,7 +118,7 @@ body {
    by build.mjs and referenced as `./logo.png`). Rendered as an <img>, so it just
    needs sizing + crisp scaling; no square fill/border. */
 .brand-mark {
-  width: 18px; height: 18px; border-radius: 3px;
+  width: 28px; height: 28px; border-radius: 5px;
   object-fit: contain; flex-shrink: 0;
   image-rendering: -webkit-optimize-contrast;
 }
@@ -264,7 +264,11 @@ body {
 .ws-sidebar-home {
   display: inline-flex; align-items: center; gap: 8px;
   font-weight: 600; font-size: 12px; color: var(--text-dim);
+  background: none; border: none; cursor: pointer;
+  padding: 4px 6px; margin: -4px -6px; border-radius: var(--radius-sm, 6px);
+  font-family: inherit;
 }
+.ws-sidebar-home:hover { color: var(--text); background: var(--bg-inset, #1b1b1b); }
 .ws-sidebar-home-icon {
   width: 13px; height: 13px; border-radius: 3px;
   border: 1.5px solid var(--text-faint);

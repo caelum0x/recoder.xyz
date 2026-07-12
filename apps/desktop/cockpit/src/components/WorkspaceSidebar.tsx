@@ -30,6 +30,8 @@ interface WorkspaceSidebarProps {
   collapsed?: boolean;
   /** Toggle the collapsed state (shown as a chevron in the header/rail). */
   onToggleCollapse?: () => void;
+  /** Back to the board overview (deselects the current workspace). */
+  onHome?: () => void;
 }
 
 function DiffStat({ workspace }: { workspace: Workspace }) {
@@ -92,6 +94,7 @@ export function WorkspaceSidebar({
   waits,
   collapsed,
   onToggleCollapse,
+  onHome,
 }: WorkspaceSidebarProps) {
   const groups = groupWorkspacesByRepo(workspaces);
 
@@ -115,10 +118,10 @@ export function WorkspaceSidebar({
   return (
     <aside class="ws-sidebar">
       <div class="ws-sidebar-head">
-        <span class="ws-sidebar-home">
+        <button class="ws-sidebar-home" onClick={onHome} title="Back to the board overview">
           <span class="ws-sidebar-home-icon" aria-hidden="true" />
           Home
-        </span>
+        </button>
         {onToggleCollapse && (
           <button
             class="ws-sidebar-toggle"
