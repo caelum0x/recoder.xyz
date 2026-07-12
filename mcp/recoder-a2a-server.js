@@ -86,6 +86,51 @@ const buildPythonApiHeaders = (extra = {}) => coreBuildPythonApiHeaders(_creds, 
 const hasPythonApiAuth = () => coreHasPythonApiAuth(_creds);
 const hasPlatformAuth = () => coreHasPlatformAuth(_creds);
 
+// ── Recoder capability tools (governed MCP interop host) ──
+// The conductor injects RECODER_INTERNAL_URL + INTERNAL_SERVICE_KEY into the
+// agent's launch env, so this stdio server can call the backend's gated MCP host
+// (/api/mcp/tools/:server/:tool/call) on the agent's behalf. This bridges the
+// polyglot capability stack (memory, and later beads/repo/browser) to the agent
+// through the tools it already has — every call runs the authorize→risk→
+// execute→audit gate. No secret is written anywhere; it lives only in env.
+const INTERNAL_URL = process.env.RECODER_INTERNAL_URL || DOCKER_URL;
+const INTERNAL_SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY || '';
+const hasInteropAuth = () => Boolean(INTERNAL_SERVICE_KEY);
+
+/**
+ * Call one governed interop-host tool and return its `content`. Auth via the
+ * internal service key the conductor injected. Throws a truthful error string
+ * for the tool result when unconfigured or the gate denies.
+ */
+async function callInteropTool(serverId, toolName, args) {
+  if (!hasInteropAuth()) {
+    throw new Error('Recoder capability host not configured (no INTERNAL_SERVICE_KEY in this run).');
+  }
+  const actor = { agentId: AGENT_ID, permissions: { toolRules: [] } };
+  const res = await fetch(
+    `${INTERNAL_URL.replace(/\/+$/, '')}/api/mcp/tools/${encodeURIComponent(serverId)}/${encodeURIComponent(toolName)}/call`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-internal-service-key': INTERNAL_SERVICE_KEY },
+      body: JSON.stringify({ actor, args }),
+    },
+  );
+  const body = await res.json().catch(() => ({}));
+  const data = body?.data ?? {};
+  // The governance gate can deny or require approval — surface that truthfully.
+  if (data.status === 'denied') {
+    throw new Error(`capability denied by policy: ${data.reason || 'not allowed'}`);
+  }
+  if (data.status === 'needs_approval') {
+    throw new Error(`capability needs approval before it can run: ${data.reason || ''}`.trim());
+  }
+  if (!res.ok || data.status !== 'completed') {
+    throw new Error(data.error || body?.error || `capability call failed (HTTP ${res.status})`);
+  }
+  // Completed: the McpToolResult carries the real content.
+  return data.result?.content ?? data.result ?? data;
+}
+
 // ── WebSocket A2A Bridge Connection ──
 
 let ws = null;
@@ -400,6 +445,34 @@ const TOOLS = [
         delete_branch: { type: 'boolean', description: 'Delete the branch after merge', default: false },
       },
       required: ['workspace_id'],
+    },
+  },
+  {
+    name: 'recoder_memory_search',
+    description: "Search Recoder's durable, reviewed memory for facts learned in prior runs (project conventions, gotchas, decisions). Use this BEFORE asking the user things that may already be known. Returns accepted memory items matching the query.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to recall (keywords or a question)' },
+        scope: { type: 'string', description: 'Optional scope filter: repo | user | org | space | path | agent | task-type' },
+        limit: { type: 'number', description: 'Max results (default all matches)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recoder_remember',
+    description: "Propose a durable memory for Recoder to remember in future runs (a reusable fact/convention/gotcha). Requires evidence (a taskId + artifactId). The proposal is REVIEWED before it becomes durable — it is not written blindly. Use when you learn something worth persisting across sessions.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Short title of the fact' },
+        body: { type: 'string', description: 'The fact/convention/gotcha to remember' },
+        scope: { type: 'string', description: 'repo | user | org | space | path | agent | task-type (default repo)' },
+        taskId: { type: 'string', description: 'Evidence: the task this was learned in' },
+        artifactId: { type: 'string', description: 'Evidence: an artifact backing the fact' },
+      },
+      required: ['title', 'body', 'taskId', 'artifactId'],
     },
   },
 ];
@@ -781,6 +854,44 @@ async function handleToolCall(name, args) {
       });
       const res = data.data || {};
       return `Workspace: ${res.workspaceId || args.workspace_id}\nBranch: ${res.branch || '?'}\nMerged: ${res.merged === true ? 'yes' : 'no'}`;
+    }
+
+    case 'recoder_memory_search': {
+      if (!hasInteropAuth()) {
+        return 'Recoder memory is not available in this run (no INTERNAL_SERVICE_KEY). It works inside a Recoder workspace.';
+      }
+      try {
+        const content = await callInteropTool('recoder.memory', 'memory.search', {
+          query: String(args.query || ''),
+          scope: args.scope,
+          limit: typeof args.limit === 'number' ? args.limit : undefined,
+        });
+        const items = Array.isArray(content) ? content : [];
+        if (!items.length) return `No durable memory found for "${args.query}".`;
+        return items
+          .map((m) => `• [${m.scope || '?'}] ${m.title || '(untitled)'}\n  ${(m.body || '').slice(0, 400)}`)
+          .join('\n');
+      } catch (err) {
+        return `memory search: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_remember': {
+      if (!hasInteropAuth()) {
+        return 'Recoder memory is not available in this run (no INTERNAL_SERVICE_KEY). It works inside a Recoder workspace.';
+      }
+      try {
+        const candidate = await callInteropTool('recoder.memory', 'memory.candidate.create', {
+          title: String(args.title || ''),
+          body: String(args.body || ''),
+          scope: args.scope || 'repo',
+          evidence: { taskId: String(args.taskId || ''), artifactId: String(args.artifactId || '') },
+        });
+        const id = candidate?.candidateId || candidate?.id || '(pending)';
+        return `Proposed memory "${args.title}" (candidate ${id}). It will become durable after review — not written blindly.`;
+      } catch (err) {
+        return `remember: ${err instanceof Error ? err.message : String(err)}`;
+      }
     }
 
     case 'recoder_workspace_status': {
