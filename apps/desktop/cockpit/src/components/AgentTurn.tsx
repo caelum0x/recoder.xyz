@@ -64,14 +64,45 @@ export function turnElapsedLabel(events: RunEvent[]): string {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
+/**
+ * Collapse an EXACT whole-string repetition to a single copy. Older workspaces
+ * have logs polluted by the pre-fix run-tailer, which re-emitted the whole pane
+ * on every TUI repaint — so the prose is the same block repeated N times back to
+ * back. When (and only when) the entire string is a unit repeated ≥3×, we return
+ * one unit. Non-repeating text is returned untouched (safe: never collapses
+ * genuine content, only the artifact). O(n) in practice — the inner check breaks
+ * immediately for non-periodic input.
+ */
+export function collapseExactRepeat(text: string): string {
+  const n = text.length;
+  // Skip tiny strings (nothing to collapse) and very large ones (bounded cost).
+  if (n < 60 || n > 100_000) return text;
+  const maxPeriod = Math.floor(n / 3);
+  for (let p = 1; p <= maxPeriod; p++) {
+    let periodic = true;
+    for (let i = p; i < n; i++) {
+      if (text[i] !== text[i - p]) {
+        periodic = false;
+        break;
+      }
+    }
+    if (periodic) {
+      // `text` is `text[0:p]` repeated (n/p ≥ 3 times, possibly a partial tail).
+      return text.slice(0, p).trim();
+    }
+  }
+  return text;
+}
+
 /** The agent's prose: concatenate the streamed log output, banner-stripped. */
 export function agentProse(events: RunEvent[]): string {
-  return events
+  const joined = events
     .filter((e) => e.type === 'log' && e.message)
     .map((e) => friendlyAgentText(e.message as string))
     .join('')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+  return collapseExactRepeat(joined);
 }
 
 export function AgentTurn({ events, animate }: AgentTurnProps) {
