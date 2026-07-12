@@ -138,13 +138,16 @@ function Composer({
   busy,
   onSend,
   state,
+  initialDraft,
 }: {
   modelLabel: string;
   busy: boolean;
   onSend: (text: string) => void;
   state: Workspace['state'];
+  /** A pre-drafted task to prefill (e.g. a seeded Starter workspace). */
+  initialDraft?: string;
 }) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState(initialDraft ?? '');
   const disabledReason = messageDisabledReason(state);
 
   function submit(e: Event) {
@@ -222,6 +225,16 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
   const modelId = typeof recordedModel === 'string' && recordedModel ? recordedModel : undefined;
   const modelLabel = modelId || workspace.runtimeId || 'agent';
 
+  // A pre-drafted starter task (e.g. a seeded onboarding workspace) prefills the
+  // composer — but ONLY before any conversation exists, so we never clobber a
+  // real thread with a suggestion.
+  const rawDraft =
+    workspace.metadata && typeof workspace.metadata === 'object'
+      ? (workspace.metadata as Record<string, unknown>).starterDraft
+      : undefined;
+  const hasThread = merged.length > 0 || messages.length > 0;
+  const starterDraft = !hasThread && typeof rawDraft === 'string' && rawDraft.trim() ? rawDraft : undefined;
+
   // Reset the local conversation when switching workspaces — each workspace has
   // its own thread, and the persisted agent activity carries the real history.
   const wsId = workspace.workspaceId;
@@ -277,10 +290,12 @@ export function WorkspaceCenter({ workspace }: WorkspaceCenterProps) {
       </div>
 
       <Composer
+        key={wsId}
         modelLabel={modelLabel}
         busy={sending}
         onSend={(t) => void send(t)}
         state={workspace.state}
+        initialDraft={starterDraft}
       />
     </section>
   );
