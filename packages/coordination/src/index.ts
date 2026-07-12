@@ -247,3 +247,9 @@ export * as memory from './persistence/memory';
 export * as postgres from './persistence/postgres';
 export { InProcEventBus } from './transport/inproc-event-bus';
 // TODO(wave-2): export { NatsEventBus } from './transport/nats-event-bus';
+
+// ── Advisory coordination engine (E13 MCP seam) ─────────────────────────────
+// A degrade-safe, retrieval-shaped engine over an INJECTABLE lock store — the
+// surface the `recoder.coordination` MCP skin composes. Complements (does not
+// replace) the CQRS CoordinationEngine above; names are non-colliding.
+export * from './advisory';
