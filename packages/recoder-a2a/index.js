@@ -49,6 +49,14 @@ const DAYTONA_URL = process.env.RECODER_DAYTONA_URL || 'http://localhost:3900/ap
 const DAYTONA_KEY = process.env.DAYTONA_API_KEY || '';
 const RAW_AUTH_TOKEN = process.env.RECODER_API_TOKEN || '';
 const AGENT_ID = process.env.RECODER_AGENT_ID || 'claude_code';
+
+// ── Recoder capability tools (governed MCP interop host) ──
+// The conductor injects RECODER_INTERNAL_URL + INTERNAL_SERVICE_KEY into the
+// agent's launch env; the shared bridge calls the backend's gated MCP host on
+// the agent’s behalf (authorize→risk→execute→audit). Single source of truth:
+// recoder-capability-tools.cjs (vendored identically across copies).
+const { createCapabilityTools } = require('./recoder-capability-tools.cjs');
+const capabilities = createCapabilityTools({ agentId: AGENT_ID, dockerUrl: DOCKER_URL });
 const SESSION_ID = process.env.RECODER_SESSION_ID || `${AGENT_ID}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 function isRecoderApiKeyPair(value) {
@@ -750,6 +758,7 @@ const TOOLS = [
       required: ['workspace_id'],
     },
   },
+  ...capabilities.tools,
 ];
 
 // ── Helpers ──
@@ -767,6 +776,10 @@ async function apiFetch(url, options = {}) {
 // ── Tool Implementations ──
 
 async function handleToolCall(name, args, callParams = {}) {
+  // Governed capability tools are handled by the shared bridge; it returns
+  // null for names it does not own so we fall through to the switch below.
+  const cap = await capabilities.handleCapabilityTool(name, args);
+  if (cap !== null) return cap;
   switch (name) {
     case 'recoder_list_agents': {
       const lines = [];
