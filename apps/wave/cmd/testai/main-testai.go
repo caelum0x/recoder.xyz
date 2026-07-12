@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/wavetermdev/waveterm/pkg/aiusechat"
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/uctypes"
-	"github.com/wavetermdev/waveterm/pkg/web/sse"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/uctypes"
+	"github.com/recoder/recoder-terminal/pkg/web/sse"
 )
 
 //go:embed testschema.json

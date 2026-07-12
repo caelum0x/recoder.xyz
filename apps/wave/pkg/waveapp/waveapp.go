@@ -19,12 +19,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/wavetermdev/waveterm/pkg/vdom"
-	"github.com/wavetermdev/waveterm/pkg/wavebase"
-	"github.com/wavetermdev/waveterm/pkg/wps"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc/wshclient"
-	"github.com/wavetermdev/waveterm/pkg/wshutil"
+	"github.com/recoder/recoder-terminal/pkg/vdom"
+	"github.com/recoder/recoder-terminal/pkg/wavebase"
+	"github.com/recoder/recoder-terminal/pkg/wps"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc/wshclient"
+	"github.com/recoder/recoder-terminal/pkg/wshutil"
 )
 
 type AppOpts struct {

@@ -18,12 +18,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/launchdarkly/eventsource"
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/aiutil"
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/chatstore"
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/uctypes"
-	"github.com/wavetermdev/waveterm/pkg/util/logutil"
-	"github.com/wavetermdev/waveterm/pkg/util/utilfn"
-	"github.com/wavetermdev/waveterm/pkg/web/sse"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/aiutil"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/chatstore"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/uctypes"
+	"github.com/recoder/recoder-terminal/pkg/util/logutil"
+	"github.com/recoder/recoder-terminal/pkg/util/utilfn"
+	"github.com/recoder/recoder-terminal/pkg/web/sse"
 )
 
 const (
@@ -301,16 +301,16 @@ type partialJSON struct {
 }
 
 type streamingState struct {
-	blockMap        map[int]*blockState
-	toolCalls       []uctypes.WaveToolCall
-	stopFromDelta   string
-	msgID           string
-	model           string
-	stepStarted     bool
-	rtnMessage      *anthropicChatMessage
-	usage           *anthropicUsageType
-	chatOpts        uctypes.WaveChatOpts
-	webSearchCount  int
+	blockMap       map[int]*blockState
+	toolCalls      []uctypes.WaveToolCall
+	stopFromDelta  string
+	msgID          string
+	model          string
+	stepStarted    bool
+	rtnMessage     *anthropicChatMessage
+	usage          *anthropicUsageType
+	chatOpts       uctypes.WaveChatOpts
+	webSearchCount int
 }
 
 func (p *partialJSON) Write(s string) {

@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/wavetermdev/waveterm/pkg/waveobj"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
-	"github.com/wavetermdev/waveterm/pkg/wstore"
+	"github.com/recoder/recoder-terminal/pkg/waveobj"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/pkg/wstore"
 )
 
 const (

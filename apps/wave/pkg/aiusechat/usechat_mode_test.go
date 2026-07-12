@@ -6,8 +6,8 @@ package aiusechat
 import (
 	"testing"
 
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/uctypes"
-	"github.com/wavetermdev/waveterm/pkg/wconfig"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/uctypes"
+	"github.com/recoder/recoder-terminal/pkg/wconfig"
 )
 
 func TestApplyProviderDefaultsGroq(t *testing.T) {

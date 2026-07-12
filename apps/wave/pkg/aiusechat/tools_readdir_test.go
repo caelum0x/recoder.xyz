@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/uctypes"
-	"github.com/wavetermdev/waveterm/pkg/util/fileutil"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/uctypes"
+	"github.com/recoder/recoder-terminal/pkg/util/fileutil"
 )
 
 func TestReadDirCallback(t *testing.T) {

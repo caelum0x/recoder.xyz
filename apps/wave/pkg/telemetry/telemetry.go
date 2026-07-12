@@ -13,16 +13,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/wavetermdev/waveterm/pkg/panichandler"
-	"github.com/wavetermdev/waveterm/pkg/telemetry/telemetrydata"
-	"github.com/wavetermdev/waveterm/pkg/util/daystr"
-	"github.com/wavetermdev/waveterm/pkg/util/dbutil"
-	"github.com/wavetermdev/waveterm/pkg/util/utilfn"
-	"github.com/wavetermdev/waveterm/pkg/wavebase"
-	"github.com/wavetermdev/waveterm/pkg/waveobj"
-	"github.com/wavetermdev/waveterm/pkg/wconfig"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
-	"github.com/wavetermdev/waveterm/pkg/wstore"
+	"github.com/recoder/recoder-terminal/pkg/panichandler"
+	"github.com/recoder/recoder-terminal/pkg/telemetry/telemetrydata"
+	"github.com/recoder/recoder-terminal/pkg/util/daystr"
+	"github.com/recoder/recoder-terminal/pkg/util/dbutil"
+	"github.com/recoder/recoder-terminal/pkg/util/utilfn"
+	"github.com/recoder/recoder-terminal/pkg/wavebase"
+	"github.com/recoder/recoder-terminal/pkg/waveobj"
+	"github.com/recoder/recoder-terminal/pkg/wconfig"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/pkg/wstore"
 )
 
 const MaxTzNameLen = 50

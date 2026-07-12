@@ -8,10 +8,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/recoder/recoder-terminal/pkg/waveobj"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc/wshclient"
 	"github.com/spf13/cobra"
-	"github.com/wavetermdev/waveterm/pkg/waveobj"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc/wshclient"
 )
 
 // secretNameRegex must match the validation in pkg/wconfig/secretstore.go

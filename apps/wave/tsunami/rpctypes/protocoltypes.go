@@ -6,7 +6,7 @@ package rpctypes
 import (
 	"fmt"
 
-	"github.com/wavetermdev/waveterm/tsunami/vdom"
+	"github.com/recoder/recoder-terminal/tsunami/vdom"
 )
 
 // rendered element (output from rendering pipeline)

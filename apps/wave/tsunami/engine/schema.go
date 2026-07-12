@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wavetermdev/waveterm/tsunami/util"
+	"github.com/recoder/recoder-terminal/tsunami/util"
 )
 
 // createStructDefinition creates a JSON schema definition for a struct type

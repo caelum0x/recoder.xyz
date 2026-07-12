@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/wavetermdev/waveterm/pkg/blockcontroller"
-	"github.com/wavetermdev/waveterm/pkg/filestore"
-	"github.com/wavetermdev/waveterm/pkg/tsgen/tsgenmeta"
-	"github.com/wavetermdev/waveterm/pkg/waveobj"
-	"github.com/wavetermdev/waveterm/pkg/wcore"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
-	"github.com/wavetermdev/waveterm/pkg/wstore"
+	"github.com/recoder/recoder-terminal/pkg/blockcontroller"
+	"github.com/recoder/recoder-terminal/pkg/filestore"
+	"github.com/recoder/recoder-terminal/pkg/tsgen/tsgenmeta"
+	"github.com/recoder/recoder-terminal/pkg/waveobj"
+	"github.com/recoder/recoder-terminal/pkg/wcore"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/pkg/wstore"
 )
 
 type BlockService struct{}

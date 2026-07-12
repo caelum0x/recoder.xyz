@@ -8,11 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wavetermdev/waveterm/pkg/aiusechat/uctypes"
-	"github.com/wavetermdev/waveterm/pkg/filebackup"
-	"github.com/wavetermdev/waveterm/pkg/util/fileutil"
-	"github.com/wavetermdev/waveterm/pkg/util/utilfn"
-	"github.com/wavetermdev/waveterm/pkg/wavebase"
+	"github.com/recoder/recoder-terminal/pkg/aiusechat/uctypes"
+	"github.com/recoder/recoder-terminal/pkg/filebackup"
+	"github.com/recoder/recoder-terminal/pkg/util/fileutil"
+	"github.com/recoder/recoder-terminal/pkg/util/utilfn"
+	"github.com/recoder/recoder-terminal/pkg/wavebase"
 )
 
 const MaxEditFileSize = 100 * 1024 // 100KB

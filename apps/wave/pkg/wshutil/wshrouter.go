@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/wavetermdev/waveterm/pkg/baseds"
-	"github.com/wavetermdev/waveterm/pkg/panichandler"
-	"github.com/wavetermdev/waveterm/pkg/wps"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/pkg/baseds"
+	"github.com/recoder/recoder-terminal/pkg/panichandler"
+	"github.com/recoder/recoder-terminal/pkg/wps"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
 )
 
 const (

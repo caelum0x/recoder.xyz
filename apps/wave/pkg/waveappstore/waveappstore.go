@@ -12,11 +12,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/wavetermdev/waveterm/pkg/secretstore"
-	"github.com/wavetermdev/waveterm/pkg/util/fileutil"
-	"github.com/wavetermdev/waveterm/pkg/waveapputil"
-	"github.com/wavetermdev/waveterm/pkg/wavebase"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/pkg/secretstore"
+	"github.com/recoder/recoder-terminal/pkg/util/fileutil"
+	"github.com/recoder/recoder-terminal/pkg/waveapputil"
+	"github.com/recoder/recoder-terminal/pkg/wavebase"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
 )
 
 const (

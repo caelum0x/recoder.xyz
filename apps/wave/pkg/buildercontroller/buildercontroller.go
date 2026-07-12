@@ -16,17 +16,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wavetermdev/waveterm/pkg/panichandler"
-	"github.com/wavetermdev/waveterm/pkg/tsunamiutil"
-	"github.com/wavetermdev/waveterm/pkg/utilds"
-	"github.com/wavetermdev/waveterm/pkg/waveappstore"
-	"github.com/wavetermdev/waveterm/pkg/waveapputil"
-	"github.com/wavetermdev/waveterm/pkg/wavebase"
-	"github.com/wavetermdev/waveterm/pkg/waveobj"
-	"github.com/wavetermdev/waveterm/pkg/wconfig"
-	"github.com/wavetermdev/waveterm/pkg/wps"
-	"github.com/wavetermdev/waveterm/pkg/wshrpc"
-	"github.com/wavetermdev/waveterm/tsunami/build"
+	"github.com/recoder/recoder-terminal/pkg/panichandler"
+	"github.com/recoder/recoder-terminal/pkg/tsunamiutil"
+	"github.com/recoder/recoder-terminal/pkg/utilds"
+	"github.com/recoder/recoder-terminal/pkg/waveappstore"
+	"github.com/recoder/recoder-terminal/pkg/waveapputil"
+	"github.com/recoder/recoder-terminal/pkg/wavebase"
+	"github.com/recoder/recoder-terminal/pkg/waveobj"
+	"github.com/recoder/recoder-terminal/pkg/wconfig"
+	"github.com/recoder/recoder-terminal/pkg/wps"
+	"github.com/recoder/recoder-terminal/pkg/wshrpc"
+	"github.com/recoder/recoder-terminal/tsunami/build"
 )
 
 const (

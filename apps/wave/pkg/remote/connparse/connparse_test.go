@@ -3,7 +3,7 @@ package connparse_test
 import (
 	"testing"
 
-	"github.com/wavetermdev/waveterm/pkg/remote/connparse"
+	"github.com/recoder/recoder-terminal/pkg/remote/connparse"
 )
 
 func TestParseURI_WSHWithScheme(t *testing.T) {
