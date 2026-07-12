@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { AgentTurn, agentProse, turnElapsedLabel } from './AgentTurn';
+import { AgentTurn, agentProse, turnElapsedLabel, collapseExactRepeat } from './AgentTurn';
 import type { RunEvent } from '../types';
 
 let container: HTMLDivElement | null = null;
@@ -48,6 +48,31 @@ describe('agentProse', () => {
     const prose = agentProse([ev('log', 'done working\nPane is dead (status 0, Tue)', 1)]);
     expect(prose).toContain('done working');
     expect(prose).not.toMatch(/pane is dead/i);
+  });
+});
+
+describe('collapseExactRepeat', () => {
+  const block = "I don't have a task yet. What would you like me to work on? Given the repo, I can help with a few things here.";
+
+  it('collapses a block repeated many times to a single copy', () => {
+    expect(collapseExactRepeat(block.repeat(18))).toBe(block.trim());
+  });
+
+  it('collapses a repetition with a partial trailing copy', () => {
+    expect(collapseExactRepeat(block.repeat(5) + block.slice(0, 30))).toBe(block.trim());
+  });
+
+  it('leaves non-repeating prose untouched', () => {
+    const prose = 'First I looked at the router, then the store, then wrote a fix and a test.';
+    expect(collapseExactRepeat(prose)).toBe(prose);
+  });
+
+  it('leaves a block repeated only twice untouched (needs ≥3× to be an artifact)', () => {
+    expect(collapseExactRepeat(block + block)).toBe(block + block);
+  });
+
+  it('is a no-op on short strings', () => {
+    expect(collapseExactRepeat('hi hi hi')).toBe('hi hi hi');
   });
 });
 
