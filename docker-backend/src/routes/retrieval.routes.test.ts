@@ -13,10 +13,13 @@
  *   - GET /api/retrieval/health is NOT auth-gated (public liveness check).
  *   - createRetrievalRouter is idempotent: each call produces an independent instance.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import express from 'express';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { Request, Response, NextFunction } from 'express';
 import { createRetrievalRouter } from './retrieval.routes.js';
+import type { RetrievalSearchEngine } from './retrieval.routes.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -130,5 +133,160 @@ describe('retrieval.routes: route registration', () => {
     // Each router carries its own spy
     expect(search1?.route?.stack[0]?.handle).toBe(spy1);
     expect(search2?.route?.stack[0]?.handle).toBe(spy2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rag → retrieval consolidation seam (opt-in @recoder/retrieval engine path)
+// ---------------------------------------------------------------------------
+
+/**
+ * Post JSON to a freshly-mounted router over an ephemeral HTTP server, using
+ * node:http (the vitest setup globally mocks global.fetch, so real fetch is
+ * unavailable here — node:http exercises the true Express routing end-to-end).
+ */
+async function postSearch(
+  deps: Parameters<typeof createRetrievalRouter>[0],
+  body: unknown,
+): Promise<{ status: number; json: any }> {
+  const app = express();
+  app.use(express.json());
+  app.use(createRetrievalRouter(deps));
+  const server = app.listen(0);
+  await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+  try {
+    const { port } = server.address() as AddressInfo;
+    const payload = JSON.stringify(body);
+    return await new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          host: '127.0.0.1',
+          port,
+          path: '/api/retrieval/search',
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'content-length': Buffer.byteLength(payload),
+          },
+        },
+        (res) => {
+          let raw = '';
+          res.on('data', (c) => (raw += c));
+          res.on('end', () => {
+            resolve({ status: res.statusCode ?? 0, json: raw ? JSON.parse(raw) : null });
+          });
+        },
+      );
+      req.on('error', reject);
+      req.end(payload);
+    });
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+/** A fake @recoder/retrieval engine (records calls, returns a canned result). */
+function fakeEngine(
+  result: Awaited<ReturnType<RetrievalSearchEngine['search']>> | Error,
+): RetrievalSearchEngine & { calls: Array<{ query: string; topK?: number }> } {
+  const calls: Array<{ query: string; topK?: number }> = [];
+  return {
+    calls,
+    async search(query, topK) {
+      calls.push({ query, topK });
+      if (result instanceof Error) throw result;
+      return result;
+    },
+  };
+}
+
+describe('retrieval.routes: consolidation seam', () => {
+  const prevFlag = process.env['RECODER_RETRIEVAL_ENGINE'];
+
+  afterEach(() => {
+    if (prevFlag === undefined) delete process.env['RECODER_RETRIEVAL_ENGINE'];
+    else process.env['RECODER_RETRIEVAL_ENGINE'] = prevFlag;
+  });
+
+  it('serves engine results when RECODER_RETRIEVAL_ENGINE=qdrant + engine injected', async () => {
+    process.env['RECODER_RETRIEVAL_ENGINE'] = 'qdrant';
+    const engine = fakeEngine({
+      status: 'ok',
+      passages: [
+        { id: 'a', text: 'hit one', score: 0.9, source: 'a.md', docId: 'd1' },
+        { id: 'b', text: 'hit two', score: 0.8, docId: 'd2' },
+      ],
+    });
+    const { status, json } = await postSearch(
+      { authenticateRequest: noopAuth, retrievalEngine: engine },
+      { query: 'find it', limit: 5 },
+    );
+    expect(status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.data.engine).toBe('recoder-retrieval');
+    expect(json.data.results).toHaveLength(2);
+    expect(json.data.results[0]).toMatchObject({ rank: 1, text: 'hit one', score: 0.9 });
+    expect(engine.calls).toEqual([{ query: 'find it', topK: 5 }]);
+  });
+
+  it('returns 503 truthfully when the engine reports not_configured', async () => {
+    process.env['RECODER_RETRIEVAL_ENGINE'] = 'qdrant';
+    const engine = fakeEngine({
+      status: 'not_configured',
+      passages: [],
+      reason: 'retrieval not configured (no embedder and/or vector store available)',
+    });
+    const { status, json } = await postSearch(
+      { authenticateRequest: noopAuth, retrievalEngine: engine },
+      { query: 'q' },
+    );
+    expect(status).toBe(503);
+    expect(json.success).toBe(false);
+    expect(json.error.message).toContain('not configured');
+  });
+
+  it('degrades to 503 (never throws / fakes) when the engine throws', async () => {
+    process.env['RECODER_RETRIEVAL_ENGINE'] = 'qdrant';
+    const engine = fakeEngine(new Error('boom'));
+    const { status, json } = await postSearch(
+      { authenticateRequest: noopAuth, retrievalEngine: engine },
+      { query: 'q' },
+    );
+    expect(status).toBe(503);
+    expect(json.success).toBe(false);
+  });
+
+  it('flag OFF: injected engine is ignored, legacy path runs (503, no engine call)', async () => {
+    delete process.env['RECODER_RETRIEVAL_ENGINE'];
+    const engine = fakeEngine({ status: 'ok', passages: [] });
+    const { status, json } = await postSearch(
+      { authenticateRequest: noopAuth, retrievalEngine: engine },
+      { query: 'q' },
+    );
+    // Legacy env-gated path: no COLBERT_RERANK_URL / LANCE_DB_PATH in test env.
+    expect(status).toBe(503);
+    expect(json.data?.engine).toBeUndefined();
+    expect(engine.calls).toHaveLength(0);
+  });
+
+  it('flag ON but no engine injected: falls through to legacy path', async () => {
+    process.env['RECODER_RETRIEVAL_ENGINE'] = 'qdrant';
+    const { status, json } = await postSearch(
+      { authenticateRequest: noopAuth },
+      { query: 'q' },
+    );
+    expect(status).toBe(503);
+    expect(json.data?.engine).toBeUndefined();
+  });
+
+  it('still validates: empty query is 400 even on the engine path', async () => {
+    process.env['RECODER_RETRIEVAL_ENGINE'] = 'qdrant';
+    const engine = fakeEngine({ status: 'ok', passages: [] });
+    const { status } = await postSearch(
+      { authenticateRequest: noopAuth, retrievalEngine: engine },
+      { query: '   ' },
+    );
+    expect(status).toBe(400);
+    expect(engine.calls).toHaveLength(0);
   });
 });

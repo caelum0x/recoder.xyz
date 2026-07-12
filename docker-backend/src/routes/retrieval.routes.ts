@@ -40,8 +40,55 @@ type AuthMiddleware = (
   next: express.NextFunction,
 ) => void;
 
+/**
+ * A passage as the OWNED Phase-2 engine (`@recoder/retrieval`) emits it — the
+ * structural slice this route consumes. Re-declared locally so the route stays a
+ * thin HTTP skin and gains no import/coupling to the engine package; the concrete
+ * engine is injected by the composition root that already owns it.
+ */
+interface RetrievalEnginePassage {
+  id: string | number;
+  text: string;
+  score: number;
+  source?: string;
+  docId?: string;
+}
+
+/** The `search` slice of `@recoder/retrieval`'s `RetrievalEngine`. */
+export interface RetrievalSearchEngine {
+  search(
+    query: string,
+    topK?: number,
+  ): Promise<{
+    status: 'ok' | 'not_configured';
+    passages: RetrievalEnginePassage[];
+    reason?: string;
+  }>;
+}
+
 export interface RetrievalRouterDeps {
   authenticateRequest: AuthMiddleware;
+  /**
+   * rag → retrieval consolidation seam (OPT-IN, default OFF).
+   *
+   * When the composition root injects the OWNED `@recoder/retrieval` engine here
+   * (Qdrant + real embeddings + ColBERT rerank) AND `RECODER_RETRIEVAL_ENGINE`
+   * is set to `qdrant`, `POST /api/retrieval/search` serves results from the new
+   * engine instead of the legacy COLBERT_RERANK_URL + LANCE_DB_PATH placeholder
+   * path below. Absent the flag or the injected engine, the EXISTING path is used
+   * unchanged, so nothing breaks. The engine is degrade-safe: a `not_configured`
+   * status surfaces as a truthful empty result, never a throw or a fake hit.
+   *
+   * Retirement path: once this seam is proven in prod, the legacy ColBERT/Lance
+   * placeholder branch (and any @recoder/rag usage) can be removed. See
+   * docs/architecture/RAG-CONSOLIDATION.md.
+   */
+  retrievalEngine?: RetrievalSearchEngine;
+}
+
+/** True when the new @recoder/retrieval engine should serve search (opt-in flag). */
+function useNewRetrievalEngine(engine: RetrievalSearchEngine | undefined): engine is RetrievalSearchEngine {
+  return Boolean(engine) && process.env['RECODER_RETRIEVAL_ENGINE']?.trim() === 'qdrant';
 }
 
 /**
@@ -140,7 +187,7 @@ async function colbertRerank(
 }
 
 export function createRetrievalRouter(deps: RetrievalRouterDeps): Router {
-  const { authenticateRequest } = deps;
+  const { authenticateRequest, retrievalEngine } = deps;
   const router = Router();
 
   /**
@@ -199,18 +246,6 @@ export function createRetrievalRouter(deps: RetrievalRouterDeps): Router {
     '/api/retrieval/search',
     authenticateRequest,
     asyncHandler(async (req: AuthenticatedRequest, res: express.Response) => {
-      const health = getRetrievalHealth();
-
-      if (!health.available) {
-        return sendError(
-          res,
-          createError(
-            ErrorCode.SERVICE_UNAVAILABLE,
-            health.reason ?? 'retrieval unavailable — no RAG store configured',
-          ),
-        );
-      }
-
       const { query, limit, threshold } = req.body as {
         query?: unknown;
         limit?: unknown;
@@ -225,6 +260,62 @@ export function createRetrievalRouter(deps: RetrievalRouterDeps): Router {
       }
 
       const maxResults = typeof limit === 'number' && limit > 0 ? Math.min(limit, 100) : 10;
+
+      // rag → retrieval consolidation seam (OPT-IN via RECODER_RETRIEVAL_ENGINE=qdrant
+      // + an injected @recoder/retrieval engine). Serves from the OWNED Phase-2
+      // engine and returns before the legacy env-gated path. Degrade-safe: a
+      // `not_configured` status yields a truthful empty result, never a throw.
+      if (useNewRetrievalEngine(retrievalEngine)) {
+        let engineResult: Awaited<ReturnType<RetrievalSearchEngine['search']>>;
+        try {
+          engineResult = await retrievalEngine.search(query.trim(), maxResults);
+        } catch {
+          // A future/wrapped engine could throw; degrade truthfully, never fake.
+          return sendError(
+            res,
+            createError(ErrorCode.SERVICE_UNAVAILABLE, 'retrieval engine error'),
+          );
+        }
+        if (engineResult.status !== 'ok') {
+          return sendError(
+            res,
+            createError(
+              ErrorCode.SERVICE_UNAVAILABLE,
+              engineResult.reason ??
+                'retrieval unavailable — engine not configured (no embedder / QDRANT_URL)',
+            ),
+          );
+        }
+        const results = engineResult.passages.slice(0, maxResults).map((p, idx) => ({
+          rank: idx + 1,
+          text: p.text,
+          score: p.score,
+          rerankScore: p.score,
+          documentKey: p.docId,
+          source: p.source,
+        }));
+        sendSuccess(res, {
+          query: query.trim(),
+          results,
+          engine: 'recoder-retrieval',
+          totalCandidates: engineResult.passages.length,
+          rerankApplied: true,
+        });
+        return;
+      }
+
+      const health = getRetrievalHealth();
+
+      if (!health.available) {
+        return sendError(
+          res,
+          createError(
+            ErrorCode.SERVICE_UNAVAILABLE,
+            health.reason ?? 'retrieval unavailable — no RAG store configured',
+          ),
+        );
+      }
+
       const similarityThreshold =
         typeof threshold === 'number' && threshold >= 0 && threshold <= 1 ? threshold : 0.0;
 

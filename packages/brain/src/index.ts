@@ -57,6 +57,19 @@ export {
   type ContinuumActivityOptions,
 } from "./activity/continuum-activity-adapter";
 
+// rag → retrieval consolidation seam: a VectorStorePort backed by the OWNED
+// Phase-2 @recoder/retrieval engine (Qdrant + ColBERT), degrade-safe to empty
+// when the engine is not_configured. Lets a host swap @recoder/rag's QueryService
+// for the newer engine behind the same port. See docs/architecture/RAG-CONSOLIDATION.md.
+export {
+  RetrievalVectorStore,
+  createRetrievalVectorStore,
+  type RetrievalVectorStoreOptions,
+  type RetrievalSearchPort,
+  type RetrievalSearchResultLike,
+  type RetrievalPassageLike,
+} from "./adapters/retrieval-vector-store.adapter";
+
 // Default in-process TS memory authority (Map-backed, no external service)
 export {
   InProcessMemory,
