@@ -37,6 +37,8 @@ import {
   browserMcpServer,
   approvalsMcpServer,
   artifactsMcpServer,
+  githubMcpServer,
+  logsMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -48,6 +50,8 @@ import { registerBeadsMcpTools } from './beads-engine.js';
 import { registerRepoMcpTools } from './repo-engine.js';
 import { registerBrowserMcpTools } from './browser-engine.js';
 import { registerApprovalsMcpTools, registerArtifactsMcpTools } from './store-engines.js';
+import { registerGithubMcpTools } from './github-engine.js';
+import { registerLogsMcpTools } from './logs-engine.js';
 
 /**
  * Resolve a repo root to an absolute, scannable directory using the SAME source
@@ -178,6 +182,10 @@ export function buildInProcEngineRouter(
   // action; attach output artifacts to the task's audit trail.
   registerApprovalsMcpTools(router, repository);
   registerArtifactsMcpTools(router, repository);
+  // GitHub: find repos, open PRs, comment — via the gh CLI (writes are gated).
+  registerGithubMcpTools(router, { baseRepoRoot: options.baseRepoRoot });
+  // Logs: search / read the run event log so an agent can inspect what happened.
+  registerLogsMcpTools(router, repository);
 
   return router;
 }
@@ -193,6 +201,8 @@ export const ENGINE_SERVERS = [
   browserMcpServer,
   approvalsMcpServer,
   artifactsMcpServer,
+  githubMcpServer,
+  logsMcpServer,
 ] as const;
 
 /**

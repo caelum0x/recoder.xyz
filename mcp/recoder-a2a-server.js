@@ -578,6 +578,31 @@ const TOOLS = [
       required: ['taskId', 'content'],
     },
   },
+  {
+    name: 'recoder_github_search_repos',
+    description: 'Find GitHub repositories by query (name, topic, description). Returns fullName, description, url, stars. Complements recoder_repo_search (which searches CODE).',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Repo search query' } },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recoder_github_pr_create',
+    description: 'Open a GitHub pull request via gh (from the current repo/branch by default). APPROVAL-GATED — a PR is a customer-visible action; policy may require approval. Returns the PR url.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'PR title' },
+        body: { type: 'string', description: 'PR description' },
+        repo: { type: 'string', description: 'owner/name (default: current repo)' },
+        head: { type: 'string', description: 'Head branch (default: current)' },
+        base: { type: 'string', description: 'Base branch' },
+        draft: { type: 'boolean', description: 'Open as draft' },
+      },
+      required: ['title'],
+    },
+  },
 ];
 
 // ── Helpers ──
@@ -1119,6 +1144,43 @@ async function handleToolCall(name, args) {
         return `Attached artifact ${id} to task ${args.taskId}.`;
       } catch (err) {
         return `attach artifact: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_github_search_repos': {
+      if (!hasInteropAuth()) {
+        return 'Recoder GitHub is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.github', 'github.search', {
+          query: String(args.query || ''),
+        });
+        const repos = Array.isArray(content) ? content : [];
+        if (!repos.length) return `No repositories found for "${args.query}".`;
+        return repos
+          .map((r) => `• ${r.fullName} ★${r.stargazersCount ?? '?'} — ${(r.description || '').slice(0, 100)}\n  ${r.url || ''}`)
+          .join('\n');
+      } catch (err) {
+        return `github search: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    case 'recoder_github_pr_create': {
+      if (!hasInteropAuth()) {
+        return 'Recoder GitHub is not available in this run (no INTERNAL_SERVICE_KEY).';
+      }
+      try {
+        const content = await callInteropTool('recoder.github', 'github.pr.create', {
+          title: String(args.title || ''),
+          body: args.body,
+          repo: args.repo,
+          head: args.head,
+          base: args.base,
+          draft: args.draft === true,
+        });
+        return `Opened PR: ${content?.url || '(created)'}`;
+      } catch (err) {
+        return `github pr create: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
