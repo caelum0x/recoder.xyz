@@ -5,6 +5,7 @@ export * from './runs-server';
 export * from './artifacts-server';
 export * from './approvals-server';
 export * from './browser-server';
+export * from './browser-engine-server';
 export * from './memory-server';
 export * from './work-locks-server';
 export * from './deployment-server';
