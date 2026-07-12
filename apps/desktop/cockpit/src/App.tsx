@@ -28,7 +28,7 @@ import {
   planLabel,
   isCapabilityGated,
   capabilityUnlockLabel,
-  parallelAgentUsageLabel,
+  agentsIndicator,
 } from './lib/plan-state';
 // Board-view and sessions-view components remain eagerly imported — they are
 // always needed at startup (board is the default view) or receive shell-level
@@ -65,6 +65,7 @@ import {
 
 const WORKSPACE_POLL_MS = 2000;
 const HEALTH_POLL_MS = 15_000;
+const RUNTIMES_POLL_MS = 30_000;
 
 /**
  * Derive the nav label for a given view id from the registry.
@@ -216,6 +217,13 @@ export function App() {
   const activeAgents = workspaces.filter(
     (w) => w.state === 'setting_up' || w.state === 'running' || w.state === 'merging',
   ).length;
+  // Detected agent CLIs (claude/codex/…) so the top-bar can say "N agents ready"
+  // instead of a bare "0 agents" when none are running yet. Polled slowly — the
+  // installed set rarely changes.
+  const runtimes = usePoll(() => api.runtimes(), RUNTIMES_POLL_MS);
+  const readyRuntimeIds = (runtimes.data || [])
+    .filter((r) => r.available)
+    .map((r) => r.runtimeId);
 
   const selected = useMemo(
     () => workspaces.find((w) => w.workspaceId === selectedId) || null,
@@ -380,17 +388,19 @@ export function App() {
               Remote substrate · {capabilityUnlockLabel('remote_substrate')}+
             </span>
           )}
-          {/* Calm "N of M agents" indicator vs the plan's parallel limit. At the
-              limit it reads a touch stronger and hints an upgrade — but never blocks
-              creating a workspace (surfaced only; the server enforces the real cap). */}
-          {view === 'board' && (
-            <span
-              class="plan-hint"
-              title="Agents running locally now — local runs are unlimited (BYOK)."
-            >
-              {parallelAgentUsageLabel(activeAgents, config.identity?.plan)} agents
-            </span>
-          )}
+          {/* Calm agents indicator: "N of M agents" while running; otherwise
+              "N agents ready" (installed CLIs) or a truthful install prompt — so a
+              fresh, idle board never reads as "nothing is connected". Surfaced
+              only; the server enforces the real parallel cap. */}
+          {view === 'board' &&
+            (() => {
+              const ind = agentsIndicator(activeAgents, readyRuntimeIds, config.identity?.plan);
+              return (
+                <span class="plan-hint" title={ind.title}>
+                  {ind.label}
+                </span>
+              );
+            })()}
           {/* Signed-in identity + sign-out. Shown only inside the desktop shell
               (where the sign-out bridge exists) and only once authenticated. The
               identity is calm + muted; when no email/plan was captured we show a
