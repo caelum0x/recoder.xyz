@@ -89,6 +89,12 @@ export interface WorkspaceTree {
   truncated: boolean;
 }
 
+/** GET /workspaces/:id/dev-command — detected command to run the app (or null). */
+export interface DevCommand {
+  command: string;
+  label: string;
+}
+
 /** GET /runtimes — runtimeAvailability() */
 export interface RuntimeAvailability {
   runtimeId: string;

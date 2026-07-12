@@ -624,6 +624,25 @@ body {
 .tab:disabled { color: var(--text-faint); cursor: not-allowed; }
 .detail-body { flex: 1; overflow: auto; min-height: 0; }
 
+/* Run tab — start the workspace's dev server and watch it live. */
+.run-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.run-panel-empty { padding: 16px; color: var(--text-dim); font-size: 12px; }
+.run-panel-start { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+.run-panel-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.run-panel-input {
+  font-family: var(--mono); font-size: 12px; padding: 8px 10px;
+  background: var(--bg-inset, #1b1b1b); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm, 6px);
+}
+.run-panel-detected { font-size: 11px; color: var(--text-faint); }
+.run-panel-error { font-size: 12px; color: var(--bad); margin: 0; }
+.run-panel-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.run-panel-cmd { font-family: var(--mono); font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-panel-spacer { flex: 1; }
+
 /* All-files tree — the full worktree, changed files dotted. Terminal-plain. */
 .filetree { padding: 4px 0 8px; font-size: 12px; }
 .filetree-empty, .filetree-truncated { padding: 12px 16px; color: var(--text-dim); font-size: 12px; }
