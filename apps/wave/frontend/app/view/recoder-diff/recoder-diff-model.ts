@@ -42,6 +42,9 @@ class RecoderDiffViewModel implements ViewModel {
     mergingAtom: PrimitiveAtom<boolean>;
     // Human result of the last merge action ("Merged.", approval reason, …).
     mergeStatusAtom: PrimitiveAtom<string>;
+    prCreatingAtom: PrimitiveAtom<boolean>;
+    // Human result of the last PR action ("PR created: <url>", approval reason, …).
+    prStatusAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -57,6 +60,8 @@ class RecoderDiffViewModel implements ViewModel {
         this.diffStatusAtom = atom("") as PrimitiveAtom<string>;
         this.mergingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.mergeStatusAtom = atom("") as PrimitiveAtom<string>;
+        this.prCreatingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.prStatusAtom = atom("") as PrimitiveAtom<string>;
     }
 
     get viewComponent(): ViewComponent {
@@ -172,6 +177,46 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.mergeStatusAtom, "Merge unavailable — backend not reachable.");
         } finally {
             globalStore.set(this.mergingAtom, false);
+        }
+    }
+
+    // Open a PR for the selected workspace branch. Degrade-safe: 409 (delivery
+    // gate / awaiting approval) → the backend's truthful reason; other non-2xx →
+    // truthful failure; success → "PR created: <url>" (or "PR created." when the
+    // backend returns no url). Never fabricates a PR.
+    async createPr() {
+        const workspaceId = globalStore.get(this.selectedIdAtom);
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.prCreatingAtom, true);
+        globalStore.set(this.prStatusAtom, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/pr`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                }
+            );
+            const body = await res.json().catch(() => null);
+            if (res.ok) {
+                const url = body?.data && typeof body.data.url == "string" ? body.data.url : "";
+                globalStore.set(this.prStatusAtom, url ? `PR created: ${url}` : "PR created.");
+                await this.refresh();
+                return;
+            }
+            const reason = (body && typeof body.error == "string" && body.error) || "";
+            if (res.status == 409) {
+                globalStore.set(this.prStatusAtom, reason || "PR needs approval.");
+                return;
+            }
+            globalStore.set(this.prStatusAtom, reason || `PR failed (${res.status}).`);
+        } catch {
+            globalStore.set(this.prStatusAtom, "PR unavailable — backend not reachable.");
+        } finally {
+            globalStore.set(this.prCreatingAtom, false);
         }
     }
 }

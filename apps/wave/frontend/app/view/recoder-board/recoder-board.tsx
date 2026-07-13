@@ -1,9 +1,18 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createBlock } from "@/app/store/global";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { BoardStatus, RecoderBoardViewModel } from "./recoder-board-model";
+
+async function pickUpIssue() {
+    try {
+        await createBlock({ meta: { view: "recoder-launch" } });
+    } catch {
+        // Opening the launch form is best-effort; a failure here must not crash the board.
+    }
+}
 
 const STATUS_MESSAGES: Record<BoardStatus, string> = {
     loading: "",
@@ -55,6 +64,12 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
                         {issue.id != "" && (
                             <span className="text-xs text-secondary font-mono ml-auto shrink-0">{issue.id}</span>
                         )}
+                        <button
+                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
+                            onClick={() => pickUpIssue()}
+                        >
+                            Pick up
+                        </button>
                     </div>
                 ))}
             </div>
