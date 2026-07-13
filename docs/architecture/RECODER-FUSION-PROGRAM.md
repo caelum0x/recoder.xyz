@@ -121,7 +121,9 @@ Verdict (2026-07-13): L0→L4 + native governance + openfang are composed AND ru
 > *agent-facing* surface, but the BACKEND consumes every engine directly. Done-bar per
 > item: the named consumer runs the fused code end-to-end (no fake-ready).
 
-### G1 — TS engines: subprocess → in-process import (cheapest, deepest)
+### G1 — TS engines: subprocess → in-process import — **✅ LANDED 2026-07-14** (4 workflows, all adversarially verified)
+
+> dmux: layout+attention engines in-process over conductor state (25/25). openclaw: `apps/social` composes the real connectors pipeline, truthful zero-cred boot (10/10). opencode: NOT adapted per owner — 3 packages absorbed instead (`@recoder/opencode-sdk|schema|plugin`, 3/3 each). recodergit: service default path in-process (zero subprocess on happy path) + `pr-swarm-review` = `reviewPullRequest()` GitHub review engine (67/67). **⚠ LICENSE: recodergit engine is PolyForm-Noncommercial — owner posture decision needed.**
 | Dir | Today (deepest) | Next phase | Acceptance |
 |---|---|---|---|
 | `ts/recodergit` | service SPAWNS its CLI (`dist/cli`) | **import `dist/lib` + `dist/core` directly** in `recodergit-service.ts` — the knowledge-graph engine runs in the backend process; CLI stays for humans | code-graph query answered with zero child processes |
