@@ -7,6 +7,8 @@ Related docs:
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [CONDUCTOR-ARCHITECTURE.md](./CONDUCTOR-ARCHITECTURE.md)
 - [RECODER-PRODUCT-ARCHITECTURE.md](./RECODER-PRODUCT-ARCHITECTURE.md)
+- [architecture/RECODER-ENGINES.md](./architecture/RECODER-ENGINES.md) — the engine plan + delivery status (the `/api/gateway` + `/api/mcp` engines below)
+- [architecture/RECODER-CAPABILITIES.md](./architecture/RECODER-CAPABILITIES.md) — the capability map + the 21 in-proc MCP servers
 
 ## Surface map
 
@@ -18,7 +20,8 @@ Related docs:
 | `/internal/agent-os` | `createInternalAgentOsRouter()` (`src/agent-os/routes/internal.routes.ts`) | `x-internal-service-key` | line 12355 |
 | `/api/a2a` | `a2aRouter` + many sub-routers (`src/a2a/*`) | mixed (see [A2A](#apia2a--agent-to-agent)) | lines 12423–12478 |
 | `/api/auth/cli` | `createCliAuthRouter()` (`src/distribution/cli-auth.routes.ts`) | unauthenticated handshake | line 12364 |
-| `/api/mcp` | `createAgentMcpRouter()` | `authenticateRequest` | line 8050 |
+| `/api/mcp` | `createAgentMcpRouter()` (`src/agent-os/routes/mcp-control.routes.ts`) | `authenticateRequest` | line 8073 |
+| `/api/gateway` | `createGatewayRouter()` (`src/gateway/gateway.routes.ts`) | `authenticateRequest` (write routes); `/health` public | line 13389 |
 | `/api/billing` | `createBillingRouter()` | `authenticateRequest` | line 12365 |
 
 All JSON bodies are capped at `2mb` by the per-prefix `express.json` parsers.
@@ -289,6 +292,50 @@ curl -X POST https://recoder.xyz/api/auth/cli/token \
   -H 'content-type: application/json' \
   -d '{"grant_type":"urn:ietf:params:oauth:grant-type:device_code","device_code":"<code>"}'
 ```
+
+---
+
+## `/api/mcp` — governed capability host (the MCP tool gate)
+
+The single interface through which an agent invokes a backend **capability engine**. Every call passes the interop gate `authorize → risk → policy → execute(engine) → audit` (Merkle-sealed). Source: `src/agent-os/routes/mcp-control.routes.ts` (`createAgentMcpRouter`), mounted at `src/server.ts:8073`. All routes require `authenticateRequest`. See [RECODER-CAPABILITIES.md](./architecture/RECODER-CAPABILITIES.md) for the capability map and [RECODER-ENGINES.md](./architecture/RECODER-ENGINES.md) §19 for the agent-facing tool catalog.
+
+| Method | Path | Description | Source |
+|--------|------|-------------|--------|
+| `GET` | `/` | Host index (registered server/tool summary) | L135 |
+| `GET` | `/servers` | Registered MCP servers | L147 |
+| `GET` | `/tools` | Registered tools across servers | L151 |
+| `GET` | `/resources` | Registered resources | L212 |
+| `GET` | `/prompts` | Registered prompts | L224 |
+| `GET` | `/sessions` | Active MCP sessions | L234 |
+| `GET` | `/external` | External / PAL multi-model surface | L244 |
+| `POST` | `/tools/:serverId/:toolName/check` | Dry-run the gate (authorize → risk → policy) **without** executing | L165 |
+| `POST` | `/tools/:serverId/:toolName/call` | Governed execute: authorize → risk → policy → execute(engine port) → audit | L285 |
+
+The host registers **21 in-proc capability servers** (`defaultServers`, `mcp-control.routes.ts:34`): `tasks`, `runs`, `artifacts`, `approvals`, `github`, `repo`, `browser`, `memory`, `beads`, `git_nexus`, `preview`, `logs`, `oss`, `deployment`, `billing`, `retrieval`, `browser-use` (browser engine), `coordination`, `workflow`, `pal-plan`, `notify`. The `deployment` and `billing` servers are **registered but their executors are deferred** (no safe programmatic backend yet — see RECODER-CAPABILITIES connection backlog). Engines are degrade-safe: absent a backing service/key a tool returns a truthful `not_configured` rather than faking success.
+
+The call body requires an `actor` (AgentProfile — `400` without it), plus optional `task` (TaskSpec) and `args`. `serverId` is the full MCP server id (e.g. `recoder.retrieval`); unknown ids return `404`.
+
+```bash
+# Governed capability call (behind authorize → risk → policy → execute → audit)
+curl -X POST https://docker.recoder.xyz/api/mcp/tools/recoder.retrieval/retrieval.search/call \
+  -H 'x-api-key: sk_live_xxx' -H 'content-type: application/json' \
+  -d '{"actor":{"id":"agent-1","kind":"agent"},"args":{"query":"payment webhook","topK":5}}'
+```
+
+---
+
+## `/api/gateway` — BYOK LLM Gateway (E15)
+
+The one governed path for every model call. Skins `crates/tensorzero` when configured; degrades to a direct BYOK provider (`pi-ai`) otherwise. Source: `src/gateway/gateway.routes.ts` (`createGatewayRouter`), mounted at `src/server.ts:13389`. Write routes (`/embed`, `/complete`, `/v1/chat/completions`) are guarded by `authenticateRequest`; `GET /health` is public and never leaks the key.
+
+| Method | Path | Body / Notes | Source |
+|--------|------|--------------|--------|
+| `GET` | `/health` | Truthful `{ configured, endpoint, reachable?, reason? }` — never the key | `gateway.routes.ts:75` |
+| `POST` | `/embed` | `{ model, input: string \| string[] }` → embeddings. `503` (truthful reason) when the gateway is unconfigured | `gateway.routes.ts:90` |
+| `POST` | `/complete` | `{ model, messages: {role,content}[], temperature?, maxTokens? }` → completion. `503` when unconfigured | `gateway.routes.ts:115` |
+| `POST` | `/v1/chat/completions` | OpenAI wire-compatible chat completion (so an OpenAI base URL of `.../api/gateway/v1` resolves). Used by the Wave-fork shell's `ai:baseurl`. | `src/gateway/openai-compat.routes.ts:190` |
+
+Configuration seam: `TENSORZERO_URL` / `TENSORZERO_GATEWAY_URL` (env). When both are unset the routes respond `503` with a truthful "gateway not configured" body — callers fall back to a direct provider. The gateway never throws.
 
 ---
 

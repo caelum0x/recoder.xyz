@@ -11,6 +11,24 @@
 > inflates their counts above true authored-source size — flagged inline where it
 > matters (`security`, `intelligence`, etc.).
 
+> **⚠️ Snapshot note (superseded in part — updated 2026-07-13).** This inventory is a
+> 2026-06-26 snapshot taken **before** the engine-consolidation work
+> ([architecture/RECODER-ENGINES.md](./architecture/RECODER-ENGINES.md)). Since then, on disk:
+> - **Removed (Phase 0 clean):** the entire **Giselle cluster** (§2e — `packages/{giselle,protocol,react,…}`
+>   no longer exist), `ts/oh-my-codex`, `ts/oh-my-openagent`, and `crates/lance`. Treat every §2e row and
+>   the `ts/oh-my-*` rows below as **historical** — verify against disk (`ls packages ts crates`) before
+>   relying on them. `ts/` now holds only `dmux · extracted-from-openclaw · open-agents · opencode · recodergit`;
+>   `crates/` only `claw-code-parity · openfang · recoder-governance · tensorzero`.
+> - **Added — five new owned engine packages** (Phases 2–5): `@recoder/retrieval`, `@recoder/agent-browser`,
+>   `@recoder/coordination`, `@recoder/workflow-engine`, `@recoder/agent-notify` — each an owned package
+>   skinned as a governed MCP server (see §2a-bis below and the RECODER-CAPABILITIES connection table).
+> - **Added — the L3 shell fork** `apps/wave` (a fork of Wave Terminal, Apache-2.0), fully rebranded to
+>   Recoder and buildable end-to-end (GUI not yet launch-verified). See [apps/wave/FORK.md](../apps/wave/FORK.md)
+>   + [architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md).
+>
+> The rest of the inventory (Agent OS `@recoder/agent-*` contracts, the `pi-*` cluster, the Daytona
+> clients, `recoder-code`) remains accurate.
+
 ---
 
 ## 1. How the monorepo is organized
@@ -22,7 +40,7 @@ along directory lines:
 |------|------------------|--------|
 | `packages/*` | 79 workspace packages: Agent OS contracts, owned services, **plus** a large vendored cluster (Giselle, pi, mem0, Daytona, a2a-js, Context7). | Mixed owned + vendored TS |
 | `packages/recoder-code/` | The terminal coding IDE — its own nested monorepo. Only `packages/{cli,core}` are the real product; the rest are auxiliary. | Owned (nested) |
-| `apps/*` | Deployed/runnable surfaces: `agent-gateway`, `agent-worker`, `desktop`, `mobile`. | Owned apps |
+| `apps/*` | Deployed/runnable surfaces: `agent-gateway`, `agent-worker`, `desktop`, `mobile`, **`wave`** (the L3 terminal shell — a rebranded Wave Terminal fork, Apache-2.0; buildable, GUI not yet launch-verified). | Owned apps + one vendored-fork surface |
 | `crates/*` | Rust OSS subsystems: `openfang`, `tensorzero`, `lance`, `claw-code-parity`. | Vendored OSS (Rust) |
 | `go/*` | Go OSS: `beads`, `multica`, `ziti`. | Vendored OSS (Go) |
 | `py/*` | Python OSS: `mem0`, `colbert`, `browser-use`, `pal-mcp-server`, `ops-recorder`. | Vendored OSS (Py) |
@@ -69,6 +87,25 @@ These are the real net-new Recoder authorship. Mostly small/medium contract laye
 | `@recoder/browser-verification` | `browser-verification` | 2 | **stub** | Browser-verification contracts (previews/Playwright evidence) |
 | `@recoder/auth` | `auth` | 33 | real | Cross-subdomain auth (Better Auth: session/edge/keys/verify) |
 | `@recoder/ui-agent-os` | `ui-agent-os` | 4 | **stub** | Shared UI contracts for Agent OS cockpit |
+
+### 2a-bis. Owned capability engines (added Phases 2–5, 2026-07)
+
+Net-new Recoder authorship — each an owned package implementing an `agent-os` port with real depth and
+skinned as a governed MCP server (reachable via `POST /api/mcp/tools/:server/:tool/call`). All degrade-safe
+and unit-tested. See [architecture/RECODER-CAPABILITIES.md](./architecture/RECODER-CAPABILITIES.md)
+connection table + [architecture/RECODER-ENGINES.md](./architecture/RECODER-ENGINES.md) §6.
+
+| Package | Path (`packages/…`) | Class | Purpose | MCP skin |
+|---------|---------------------|-------|---------|----------|
+| `@recoder/retrieval` | `retrieval` | real | RAG engine: chunk → embed → Qdrant → ColBERT rerank → retrieve (supersedes the pgvector `rag` path via a strangler adapter) | `recoder.retrieval` (E2) |
+| `@recoder/agent-browser` | `agent-browser` | real | Browser-automation engine (lazy puppeteer / `BROWSER_USE_URL`) | `recoder.browser-use` (E9) |
+| `@recoder/coordination` | `coordination` | real | Advisory work-locks + conflict detection + A2A handoff for N parallel agents (multica-ready) | `recoder.coordination` (E13) |
+| `@recoder/workflow-engine` | `workflow-engine` | real | verify → hooks run-loop skin over `agent-workflows` + `agent-hooks` | `recoder.workflow` (E12) |
+| `@recoder/agent-notify` | `agent-notify` | real | Human-in-the-loop notify (webhook to a human channel) | `recoder.notify` (Phase 5) |
+
+> Note: `packages/coordination` was not in the original 2026-06-26 inventory above (it postdates the
+> snapshot). In-proc `pal.plan` (E11) reuses the existing `@recoder/pal` package (no new package) and is
+> skinned as `recoder.pal-plan`.
 
 ### 2b. Owned services / libraries (real, not Agent OS contracts)
 

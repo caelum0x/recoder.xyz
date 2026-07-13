@@ -9,6 +9,38 @@
 
 ---
 
+## Landed since — the engine fleet + the L3 shell (2026-07-13)
+
+> This roadmap predates the [16-engine backend program](./architecture/RECODER-ENGINES.md) and the
+> [L3 terminal shell](./architecture/RECODER-SHELL.md). Both have since landed on the branch; record
+> here so the milestones below read against current reality.
+
+- ✅ **Backend engines — Phases 1–4 built + wired**, governed through the interop/MCP host + agent
+  bridge, each degrade-safe + unit-tested: fleet supervisor (`docker-backend/src/fleet/`), LLM gateway
+  + OpenAI-compat `/v1/chat/completions` (`docker-backend/src/gateway/`), retrieval/RAG
+  (`packages/retrieval`), hybrid `repo.search` semantic code-intel, browser-use
+  (`packages/agent-browser`), coordination work-locks (`packages/coordination`), workflow verify/hooks
+  (`packages/workflow-engine`), in-proc PAL planning. Reachable via
+  `POST /api/mcp/tools/:server/:tool/call`. See the connection table in
+  [RECODER-CAPABILITIES](./architecture/RECODER-CAPABILITIES.md).
+- 🔄 **Phase 5 (Platform) — partial.** Landed: the **notify** engine (`@recoder/agent-notify` → MCP
+  `recoder.notify`, degrade-safe) + the Wave-fork capability bridges. **Remaining:** connectors
+  (Slack/Discord/Telegram send), work-signals (`py/ops-recorder`), networking (xds/ziti, cloud/teams —
+  deferred until multi-machine is real).
+- ✅ **L3 shell — `apps/wave` (Wave Terminal fork, Apache-2.0) fully rebranded + builds end-to-end.**
+  Cloud-decoupled (telemetry off, updater/AI decoupled), Go module + server binary renamed
+  (`recoder-server`), carries an **11-block governed cockpit** (launch → live session + message the
+  agent → review → merge/PR → archive; plus board/health/runs/memory/tools/settings), all degrade-safe.
+  See [RECODER-SHELL](./architecture/RECODER-SHELL.md) + [FORK.md](../apps/wave/FORK.md).
+  **Honest state:** source-level + full-build verified (`task build:backend:quickdev` + electron-vite,
+  both exit 0). The Electron **GUI has not been launched** — block appearance + live interaction are
+  **not** eyeballed.
+- ⬜ **Running-app frontier (needs the GUI on screen).** Visual/UX polish, the `wsh`→`recoder` CLI
+  rename (shell-integration runtime risk), the app icon (`build/*.icns`), and a signed
+  `electron-builder` `.dmg`. Deploy + billing stay deferred (filed — see Milestones 2–4).
+
+---
+
 ## Milestone 0 — Foundations (mostly done)
 
 | | Item | Notes |
@@ -77,7 +109,7 @@
 ---
 
 ## Always-on hygiene (parallel, never blocks shipping)
-- **Wire-up backlog** — **11/15 wired in-process** on the real product path (pal→createWorkspace, agent-workflows/hooks/schemas, beads live, agent-oss, document-preprocessor+rag, browser-verification(+lazy playwright), conductor-ui, design-tokens, animations-preact); 2 skipped (gateway/worker — engine already fused), 2 open (ops-recorder now committable; recoder-browser-tools dist ready). See [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md).
+- **Wire-up backlog** — **12/15 wired in-process** on the real product path (pal→createWorkspace, agent-workflows/hooks/schemas, beads live, agent-oss, document-preprocessor+rag, browser-verification(+lazy playwright), recoder-browser-tools, conductor-ui, design-tokens, animations-preact); 2 skipped (gateway/worker — engine already fused), 1 open (`ops-recorder` gitignored, now committable). See [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md).
 - **Park vendored clones** under a labeled vendor area; drop dead dirs (see DIRECTORY-MAP §park/drop).
 - Truthful health everywhere; no fake-ready; `bd` for granular issues.
 

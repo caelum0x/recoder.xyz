@@ -1,8 +1,23 @@
 # Recoder Conductor — System Architecture
 
-Last updated: 2026-06-23. The architecture for Recoder's parallel coding-agent
-infrastructure (Conductor.build-equivalent, multi-runtime, self-hostable). Read
+Last updated: 2026-06-23 (conductor core). The architecture for Recoder's parallel
+coding-agent infrastructure (Conductor.build-equivalent, multi-runtime, self-hostable). Read
 with `BACKEND-PLATFORM.md` (component ownership) and `PIVOT-INFRA.md` (the goal).
+
+> **Status note (2026-07-13).** The conductor model below — worktree + tmux + Postgres
+> state-of-record + reconciler + the workspace lifecycle — is **current and load-bearing**;
+> nothing here is superseded. What has grown *around* it: `docker-backend` is now the
+> **fleet supervisor** for the broader Agent OS engine set (Phases 1–5 landed — fleet/gateway,
+> retrieval, browser, coordination/work-locks, workflow/hooks, PAL planning, notify), each
+> governed + degrade-safe; see [architecture/RECODER-ENGINES.md](./architecture/RECODER-ENGINES.md)
+> and [architecture/RECODER-CAPABILITIES.md](./architecture/RECODER-CAPABILITIES.md). Two
+> refinements to reconcile with the newer docs: (1) **planning/routing is now `packages/pal`
+> in-proc (`pal.plan`, deny-biased)** — the `openfang` sidecar referenced below stays a
+> **deferred** alternate execution surface, not the shipping router (see §7 step 4); (2) the
+> "thin operator console" (§7 step 7) has since been **built** as the Preact cockpit
+> (`apps/desktop/cockpit`, see [USER-GUIDE.md](./USER-GUIDE.md)) and the L3 terminal shell
+> (`apps/wave`, see [architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md)) — both
+> built + backend-proof-backed, neither GUI-launch-verified here.
 
 ## 0. One paragraph
 
@@ -148,7 +163,9 @@ Restart at any point → reconciler rebinds from DB + tmux + worktrees; no work 
 6. **DONE** — Interop + substrate: ConductorSubstrate contract with tmux_worktree +
    daytona impls (selected per Workspace.substrate); A2A entry (inbound A2A code task
    → createWorkspace, reply with workspace/run ids). `GET /substrates` exposes availability.
-7. **NEXT** — Thin operator console over the APIs (no chat). [frontend — deprioritized]
+7. **BUILT (GUI not launch-verified)** — Thin operator console over the APIs (no chat):
+   the Preact cockpit `apps/desktop/cockpit` ([USER-GUIDE.md](./USER-GUIDE.md)) and the L3
+   terminal shell `apps/wave` ([architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md)).
 
 ### Step 6 reconciliation — reuse existing a2a services, do NOT duplicate
 
@@ -238,7 +255,8 @@ every delivery decision is sealed tamper-evidently. Run:
   `GET /substrates` exposes availability. **daytona impl** (one drop-in file delegating
   to a2a/cli-agent-runtime + daytona-sdk) still TODO — needs Daytona creds to be real.
 - ~~A2A entry~~ DONE (conductor/a2a-entry.ts).
-- Thin operator console (step 7) — frontend, deprioritized.
+- ~~Thin operator console (step 7)~~ BUILT — `apps/desktop/cockpit` + `apps/wave` shell
+  (both build; neither GUI-launch-verified here).
 - Full e2e launch verified on a box with tmux installed + agent CLI auth.
 - daytona substrate runtime verification (needs Daytona creds + reachable remote).
 - openfang sidecar deployment (step 4).

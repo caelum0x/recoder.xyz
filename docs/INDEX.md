@@ -10,6 +10,21 @@ you are: **Users**, **Operators**, **Builders**, **Product/Strategy**.
 
 ---
 
+## Ground truth — read these first (current + authoritative)
+
+These reflect what has actually landed and **supersede** older claims elsewhere in
+the doc set. Backend engines Phases 1–5 are **built + wired** through the governed
+MCP interop host + agent bridge (degrade-safe + unit-tested); the terminal shell
+`apps/wave` **builds end-to-end** but its Electron **GUI is not yet launch-verified**.
+
+| Doc | What it answers |
+|-----|-----------------|
+| [`architecture/RECODER-ENGINES.md`](./architecture/RECODER-ENGINES.md) | The polyglot Agent-OS backend — the 16-engine plan + phased roadmap with per-phase delivery status (fleet supervisor · LLM gateway · retrieval · code-intel · browser · coordination · workflow · PAL · notify). |
+| [`architecture/RECODER-CAPABILITIES.md`](./architecture/RECODER-CAPABILITIES.md) | The capability map (`c/ crates/ go/ py/ ts/ packages/` as backend power the agents wield) + the "21 in-proc servers" connection table. |
+| [`architecture/RECODER-SHELL.md`](./architecture/RECODER-SHELL.md) | The L3 terminal cockpit — `apps/wave`, a Wave Terminal fork (Apache-2.0) rebranded to Recoder: 11 governed blocks + the launch→session→review→merge loop. See also [`apps/wave/FORK.md`](../apps/wave/FORK.md). |
+
+---
+
 ## Users — run the app
 
 | Doc | What it answers |
@@ -55,7 +70,7 @@ you are: **Users**, **Operators**, **Builders**, **Product/Strategy**.
 
 | Doc | What it answers |
 |-----|-----------------|
-| [`RECODER-PRODUCT-ARCHITECTURE.md`](./RECODER-PRODUCT-ARCHITECTURE.md) | Institutional product & directory architecture (background). |
+| [`RECODER-PRODUCT-ARCHITECTURE.md`](./RECODER-PRODUCT-ARCHITECTURE.md) | Institutional product & directory architecture (**superseded background** — see the ground-truth docs above for current naming + engine reality). |
 | [`PRODUCT-PLAN.md`](./PRODUCT-PLAN.md) | Forward-looking product & products plan grounded in the actual code across all trees. |
 | [`WORKING-PRODUCT-PLAN.md`](./WORKING-PRODUCT-PLAN.md) | "Make it actually work" plan — get ONE real end-to-end flow (login → run → diff) shipping. |
 

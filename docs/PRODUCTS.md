@@ -7,6 +7,20 @@
 One company, one stack, four products around a single loop: **run your own coding
 agents in parallel, safely.**
 
+> **Status update (2026-07-13).** The backend that powers these products has since
+> been built out as a **polyglot Agent-OS engine fleet** (Phases 1–5 **built + wired**
+> through the governed MCP interop host + agent bridge, degrade-safe + unit-tested —
+> see [`architecture/RECODER-ENGINES.md`](./architecture/RECODER-ENGINES.md) and the
+> capability map in
+> [`architecture/RECODER-CAPABILITIES.md`](./architecture/RECODER-CAPABILITIES.md)),
+> and a terminal-native desktop shell (`apps/wave`, a rebranded Wave Terminal fork)
+> has been built and **builds end-to-end** — its Electron **GUI is not yet
+> launch-verified** (see [`architecture/RECODER-SHELL.md`](./architecture/RECODER-SHELL.md)).
+> Two honest corrections to the product line below: **billing was dropped from the
+> near-term plan (Polar removed — `py/recoder-billing`/`ts/polar` deleted) and, with
+> deploy, is deferred/filed, not live**; and the Codex driver's `ts/oh-my-codex`
+> source was removed (the runtime is fused into `packages/runtime`).
+
 ---
 
 ## 1. Recoder Desktop — *the core product*
@@ -18,9 +32,13 @@ A self-contained Mac app that runs parallel coding agents on your machine.
 - **Key features:** parallel worktree isolation · BYOK (Claude Code/Codex/pi/
   open-agents/opencode, your login) · live output + review + merge/PR · one shared
   brain · governance gates risky writes · restart-survivable.
-- **Powered by:** `apps/desktop` (Electron + cockpit) → embeds `docker-backend`
-  (host) → `packages/{substrate,runtime,coordination,brain,governance,agent-os}` +
-  `c/tmux` + `ts/{dmux,opencode,oh-my-codex,recodergit}`.
+- **Powered by:** `apps/desktop` (Electron + Preact cockpit — current shipping app) →
+  embeds `docker-backend` (host) →
+  `packages/{substrate,runtime,coordination,brain,governance,agent-os}` + `c/tmux` +
+  `ts/{dmux,opencode,recodergit}`. A second, terminal-native surface — `apps/wave`
+  (a rebranded Wave Terminal fork, 11-block governed cockpit) — is **built + builds
+  end-to-end** but **GUI-unverified**; it becomes the primary surface once launch-verified
+  (see [`architecture/RECODER-SHELL.md`](./architecture/RECODER-SHELL.md)).
 - **Install:** `.dmg` (electron-builder) · `brew install --cask recoder`
   (`homebrew-recoder`).
 - **Proof it's a real product (not a shell):** two headless, runnable proofs back
@@ -48,8 +66,9 @@ The spine that monetizes + connects the desktop.
   **device limits + remote revoke + new-device alerts** · entitlement gate
   (fail-safe deny) · checkout→webhook→entitlement (subject-linked).
 - **Powered by:** `app/` (Next auth/data) · `site/` (marketing) ·
-  `packages/{auth,distribution}` · `py/recoder-billing` (Polar engine) ·
-  `docker-backend` (cloud host).
+  `packages/{auth,distribution}` · `docker-backend` (cloud host). **Billing is
+  deferred** — the Polar engine (`py/recoder-billing`) was removed; entitlements
+  remain in `distribution`.
 - **Plan:** the billing + identity layer under every paid tier.
 
 ## 3. Recoder for Teams / Enterprise — *the moat*

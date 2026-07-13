@@ -1,5 +1,16 @@
 # Recoder — Integration Plan (how we connect everything into the shipping product)
 
+> **Current reality (2026-07-13).** The integration *modes* below (in-process fusion / subprocess-cli under
+> tmux / http-edge only at true edges) still hold and are the canonical rule. But several "still to wire"
+> items in this doc have since **landed**: the headline gap — **`pal` → the run loop** (§a.3/§a.4) — is now
+> wired as an in-proc `pal.plan` engine (RECODER-ENGINES **Phase 4 / E11**), and `agent-workflows` +
+> `agent-hooks` (§b.1) ship as the `workflow-engine` MCP server (E12), alongside `coordination` (E13),
+> `retrieval` (E2), `agent-browser` (E9), and `notify`. See **[RECODER-ENGINES.md](./RECODER-ENGINES.md)**
+> (§6 roadmap + §8/§21 ledger) and **[RECODER-CAPABILITIES.md](./RECODER-CAPABILITIES.md)** (the 21 in-proc
+> capability servers + connection table) for what is built + wired now, and
+> **[RECODER-SHELL.md](./RECODER-SHELL.md)** for the L3 shell (`apps/wave`, the Recoder cockpit). "Built +
+> wired + unit-tested + builds" is **not** "deployed / GUI-verified"; deploy + billing remain deferred.
+
 > The **how-we-wire-it** companion to the design docs. This file does not restate
 > *what* the product is or *when* to build it — for that read:
 > [`ARCHITECTURE.md`](../ARCHITECTURE.md) (the design + run loop),
@@ -131,10 +142,12 @@ cockpit ──http-edge──► POST /api/conductor/workspaces {prompt,...}
 loop — `docker-backend/src/conductor/coordination-integration.ts` builds a
 `CoordinationEngine` (`buildCoordinationEngine`), does **claim-before-launch** on
 dispatch and **review handoff**, degrade-safe (skips, never blocks, if the engine is
-unavailable). What is **missing** is the **`pal` decision step** between
-`workspace-service` persistence and the coordination claim. That is WIRE-UP
-backlog **#1** (`pal` → run loop), the headline gap. The bus exists; the brain of
-the loop does not call it yet.
+unavailable). What **was missing** — the **`pal` decision step** between
+`workspace-service` persistence and the coordination claim (WIRE-UP backlog **#1**,
+`pal` → run loop, the headline gap) — has since **landed** as an in-proc `pal.plan`
+engine (RECODER-ENGINES **Phase 4 / E11**, deny-biased on uncertainty, degrade-safe).
+The §a.4 steps below record how it was done; treat them as delivered, not pending. The
+bus existed; the brain of the loop now calls it.
 
 ### a.4 Concrete wiring steps (pal → run loop)
 

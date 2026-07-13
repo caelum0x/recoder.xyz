@@ -1,5 +1,19 @@
 # Recoder — Surface Map
 
+> **Current reality (2026-07-13).** This is a large reference table from an earlier phase; several rows
+> predate the engine-fleet build and the Phase-0 deletes (e.g. rows for `crates/lance`, the Giselle
+> cluster, `ts/oh-my-codex`, `py/recoder-billing`/`ts/polar` describe dirs that are now **deleted**).
+> Ground truth for what is built now lives in **[RECODER-ENGINES.md](./RECODER-ENGINES.md)** (16-engine plan
+> + §6 roadmap + the §8/§21 ledger — Phases 1–5 built + wired through the governed MCP interop host,
+> degrade-safe + unit-tested), **[RECODER-CAPABILITIES.md](./RECODER-CAPABILITIES.md)** (the 21 in-proc
+> capability servers + connection table), **[RECODER-SHELL.md](./RECODER-SHELL.md)** (the L3 terminal
+> cockpit — `apps/wave`, absent from this table, is now the Recoder shell), and
+> **[DIRECTORY-MAP.md](./DIRECTORY-MAP.md)** (the concise current directory map). Where a row below marks an
+> engine `park` / "not adopted" / "no consumer" that the fleet now wires — **tensorzero** gateway,
+> **retrieval**, **browser-use**, **coordination**, **pal**, **workflow**, **notify** — prefer those docs.
+> "Built + wired + unit-tested + builds" is **not** "deployed / live / GUI-verified"; the `apps/wave` shell
+> is not yet launch-verified, and deploy + billing are deferred (filed).
+
 > The authoritative table mapping **every** monorepo component to the **surfaces** it
 > powers and **how** it is integrated into each. Pairs with
 > [`../ARCHITECTURE.md`](../ARCHITECTURE.md) (the design + execution model),
@@ -168,7 +182,7 @@ truth), device-flow, entitlements, billing (Polar MoR), downloads.
 | `packages/http` | JSON-RPC over HTTP router (Giselle context) | http-edge | REST/JSON layer over Giselle | keep-supporting |
 | `packages/analytics` | Usage tracking + production monitoring | in-process-import | Telemetry/quality dashboards | keep-supporting |
 | `packages/performance` | Redis cache + CDN middleware | in-process-import | Legacy v1 web perf middleware — no importer | drop |
-| `crates/tensorzero` | LLMOps gateway/observability platform | http-edge | Candidate LLM gateway — not adopted | park |
+| `crates/tensorzero` | LLMOps gateway/observability platform | in-process-import (native-first) / http-edge | **Adopted as E15 — the LLM Gateway** (`LlmGatewayPort` over tensorzero, degrade → pi-ai; `.node` build deferred) | wire-up |
 | `deploy` | Self-host manifests (compose/Envoy/Packer) | http-edge | Single-command self-hosted control plane | keep-supporting |
 | `nginx` | Production reverse proxy / LB | http-edge | L7 routing, TLS termination | keep-supporting |
 | `monitoring` | Prometheus/Grafana/AlertManager | http-edge | Observability + alerting | keep-supporting |
@@ -220,7 +234,7 @@ is **legitimate cross-machine edge traffic**, not in-process avoidance.
 | `go/ziti` | OpenZiti zero-trust overlay | vendored-park | Cross-machine encrypted tunneling (thin adapter) | park |
 | `go/multica` | Multi-agent task-tracking platform | vendored-park | Source ref for claim/dispatch semantics (ported) | park |
 | `py/ops-recorder` | Work-signals API (detectors/storage) | http-edge | Fleet telemetry / anomaly tracking (**wire-up**) | wire-up |
-| `crates/openfang` | Rust autonomous-agent runtime | subprocess-cli | Provenance for governance/runtime port (no consumer) | park |
+| `crates/openfang` | Rust autonomous-agent runtime | subprocess-cli / NAPI (native-first) | E7 governed autonomous-agent surface — seamed via the fleet, degrade → pure-TS OSS dispatch (`.node` build deferred) | wire-up |
 | `deploy` | AMI / compose / Envoy self-host manifests | http-edge | Recoder Cloud as a machine image in the customer VPC | keep-supporting |
 
 ---

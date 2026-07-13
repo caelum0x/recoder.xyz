@@ -10,6 +10,22 @@
 > **wire-up** (built, not yet consumed) · **park** (vendor/provenance, do not delete)
 > · **held** (auth/deploy-sensitive, untouched) · **drop** (dead, remove).
 
+> **⚠️ Delta since this list was written (updated 2026-07-13).** After the engine-consolidation
+> ([architecture/RECODER-ENGINES.md](./architecture/RECODER-ENGINES.md)), disk reality diverges from some
+> rows below:
+> - **Removed (Phase 0 clean) — the following rows are now historical:** `ts/oh-my-codex`,
+>   `ts/oh-my-openagent`, `ts/polar`, `crates/lance`, `py/recoder-billing` (Polar), and the **entire
+>   Giselle / recoder-agency cluster**. `ts/` now holds only `dmux · extracted-from-openclaw · open-agents ·
+>   opencode · recodergit`; `crates/` only `claw-code-parity · openfang · recoder-governance · tensorzero`.
+> - **Added — five owned capability engines** (Phases 2–5): `packages/{retrieval, agent-browser,
+>   coordination, workflow-engine, agent-notify}` (coordination is already listed under L1) — each a
+>   governed MCP engine (see [RECODER-CAPABILITIES.md](./architecture/RECODER-CAPABILITIES.md)).
+> - **Added — the L3 shell fork** `apps/wave` (rebranded Wave Terminal, Apache-2.0; builds, GUI not yet
+>   launch-verified — see [architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md)).
+> - **Status change:** `crates/tensorzero` is now **adopted** as the E15 LLM gateway (wired via the
+>   `docker-backend/src/gateway` HTTP skin at `/api/gateway`; native `.node` build deferred) — no longer
+>   "not adopted".
+
 ## L0 · Substrate
 
 | Dir | Role | Status |
@@ -36,7 +52,11 @@
 | `packages/a2a-sdk` | Owned A2A interop SDK (types, envelopes, ingress) | keep-core |
 | `packages/agent-mcp` | MCP host + registry + permissions + first-party servers | keep-core |
 | `packages/agent-events` | CloudEvents + transactional outbox (NATS + Postgres) | keep-core |
-| `packages/coordination` | Work-locks + reaper + conflict detection + A2A bus + handoff | keep-core |
+| `packages/coordination` | Work-locks + reaper + conflict detection + A2A bus + handoff (E13, MCP `recoder.coordination`) | keep-core |
+| `packages/retrieval` | Owned RAG engine (chunk→embed→Qdrant→ColBERT), MCP `recoder.retrieval` (E2) | keep-core |
+| `packages/agent-browser` | Owned browser-automation engine (lazy puppeteer / `BROWSER_USE_URL`), MCP `recoder.browser-use` (E9) | keep-core |
+| `packages/workflow-engine` | verify→hooks run-loop skin over agent-workflows + agent-hooks, MCP `recoder.workflow` (E12) | keep-core |
+| `packages/agent-notify` | Human-in-the-loop notify (webhook to a human channel), MCP `recoder.notify` (Phase 5) | keep-core |
 | `packages/brain` | BrainContext assembly, mem0, beads, continuum, doctors | keep-core |
 | `packages/recodergit` | Owned code-graph engine (indexer, dep/impact, MCP) | keep-core |
 | `packages/agent-memory` | Memory store + candidate/review + vector search | keep-core |
@@ -113,6 +133,7 @@
 | Dir | Role | Status |
 |-----|------|--------|
 | `apps/desktop` | THE paid product — Electron boots embedded backend + cockpit | keep-core |
+| `apps/wave` | L3 terminal shell — rebranded Wave Terminal fork (Apache-2.0), 11-block governed cockpit; builds end-to-end, GUI not yet launch-verified (see [RECODER-SHELL.md](./architecture/RECODER-SHELL.md)) | keep-supporting |
 | `packages/ui-agent-os` | Backend-free cockpit summary view-model | keep-core |
 | `apps/agent-gateway` | Standalone Express+WS+A2A/MCP gateway (scale-out) | keep-supporting |
 | `apps/agent-worker` | Outbox/queue + workflow worker (scale-out) | keep-supporting |

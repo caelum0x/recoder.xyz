@@ -1,5 +1,17 @@
 # Recoder — Architecture Diagrams
 
+> **Current reality (2026-07-13).** These diagrams capture the layering + integration modes accurately, but
+> some node labels predate the engine-fleet build and the Phase-0 deletes (nodes like `crates/lance`,
+> `py/recoder-billing`, `ts/polar`, and the Giselle packages refer to dirs that are now **deleted**; the
+> LLM-gateway path `crates/tensorzero` and `crates/openfang` are now **wired** as engines, not parked).
+> They also do **not** yet show the L3 shell **`apps/wave`** (the rebranded Wave fork that is now the
+> Recoder terminal cockpit — see **[RECODER-SHELL.md](./RECODER-SHELL.md)** for its 11-block block-model
+> topology). For the built-and-wired backend, read **[RECODER-ENGINES.md](./RECODER-ENGINES.md)** (§6
+> roadmap + §8/§21 ledger — Phases 1–5 wired through the governed MCP interop host, degrade-safe +
+> unit-tested), **[RECODER-CAPABILITIES.md](./RECODER-CAPABILITIES.md)** (the 21 in-proc capability servers),
+> and **[DIRECTORY-MAP.md](./DIRECTORY-MAP.md)**. "Built + wired + builds" is **not** "deployed /
+> GUI-verified"; `apps/wave` is not yet launch-verified and deploy + billing are deferred.
+
 > A true map of the monorepo. Every node label below is a **real directory** from
 > the inventory (see [`../DIRECTORY-MAP.md`](../DIRECTORY-MAP.md)). These diagrams
 > are the visual companion to [`../ARCHITECTURE.md`](../ARCHITECTURE.md) (the L0→L4

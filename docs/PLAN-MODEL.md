@@ -6,6 +6,12 @@
 > `PLAN_PEEK`). The **durable source of truth is the billing port (Polar)**; this file
 > records the *policy the code encodes* as the deny-safe floor.
 
+> **Delivered status (2026-07-13).** Live **billing is deferred / filed** (no Polar org + keys wired;
+> deploy not shipped) — see [RECODER-CAPABILITIES](./architecture/RECODER-CAPABILITIES.md) (`billing`
+> deferred → `recoder-r6ek`). So the entitlement gate today sits at its **deny-safe Free floor**: local
+> BYOK agents run uncapped, and paid capabilities (remote substrate, seats) are not yet purchasable. The
+> tier *policy* below is what the code encodes and is ready to enforce once billing is configured.
+
 ## Tiers
 
 | Tier | Price | What it is |

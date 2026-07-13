@@ -2,6 +2,16 @@
 
 > Code-grounded plan (repo + live server probes): get ONE real end-to-end flow working — Google login -> dashboard -> launch a conductor agent run -> watch output -> see diff. The conductor backend is complete + committed but has NO UI front door; building it is the highest-leverage ungated work.
 
+> **Status update (2026-07-13) — the front door now exists (built, not GUI-verified).** The "no UI calls
+> the conductor" gap below is substantially addressed: the L3 shell `apps/wave`
+> ([RECODER-SHELL](./architecture/RECODER-SHELL.md), [FORK.md](../apps/wave/FORK.md)) carries an 11-block
+> governed cockpit — **launch → live session (+ message the agent) → diff → merge/PR → archive** — hitting
+> the real `/api/conductor/*` contract this doc verified. **Honesty:** it is **source-level + full-build
+> verified only** (electron-vite + Go backend both exit 0); the Electron **GUI has not been launched**, so
+> the flow is not yet eyeballed end-to-end in the app. The **prod deployment** of `docker-backend` (§"Not
+> deployed" below) and the **email/Polar** gaps remain as described. So the vertical slice is now *buildable
+> and reachable*, but "runs end-to-end in a launched app" is still unproven.
+
 ## Make Recoder Actually Work — Head-of-Product Plan
 
 This plan is grounded in code I verified, not aspiration. The honest summary: **the engines are real, the wiring and provisioning are not.** Three independent areas each have one fatal gap. Two of those gaps are pure code (no secrets). One area (payments) is fully gated on a Polar org. We attack the code-only gaps first to get ONE provable end-to-end flow, and we explicitly fence off the gated items so they never block starting.

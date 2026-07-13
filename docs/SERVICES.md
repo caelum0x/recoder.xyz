@@ -48,6 +48,14 @@ degraded — never as healthy.
 
 ## billing — distribution billing & entitlement engine
 
+> **⚠️ Removed on disk (2026-07).** `py/recoder-billing` (the Polar slice) was **deleted in the Phase 0
+> clean** ([architecture/RECODER-ENGINES.md](../docs/architecture/RECODER-ENGINES.md) §5), and the billing
+> capability is **deferred** (no clean agent→billing-subject mapping — filed as `recoder-r6ek`, see
+> [architecture/RECODER-CAPABILITIES.md](../docs/architecture/RECODER-CAPABILITIES.md)). The
+> `scripts/recoder-services.sh billing` target still references `py/recoder-billing`, so it will **not
+> resolve** until/unless the engine is re-vendored. The section below is **historical** — kept for when
+> billing is revived. The other three services (colbert · ops · mem0) are current.
+
 - **What it is:** The fused Polar monetization spine (`py/recoder-billing`). The
   runnable ASGI app is `recoder_billing.app:app`; it exposes the internal IPC surface
   `/internal/agent-os/billing/*`. **Fail-safe:** when a required secret/URL is absent
