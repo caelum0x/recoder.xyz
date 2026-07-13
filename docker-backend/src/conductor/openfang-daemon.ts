@@ -494,5 +494,62 @@ export function createOpenfangAgentRouter() {
     withEngine(res, (e) => e.usageSummary(agentId));
   });
 
+  // ---- Sessions + agent config -------------------------------------------
+  router.get('/agents/:id/context', (req: Req, res: Res) => withEngine(res, (e) => e.contextReport(id(req))));
+  router.post('/agents/:id/session', (req: Req, res: Res) => {
+    const label = typeof req.body?.label === 'string' ? req.body.label : null;
+    withEngine(res, (e) => e.createSession(id(req), label));
+  });
+  router.post('/agents/:id/session/switch', (req: Req, res: Res) => {
+    const sessionId = typeof req.body?.sessionId === 'string' ? req.body.sessionId : '';
+    if (sessionId.trim() === '') {
+      res.status(400).json({ ok: false, reason: 'sessionId is required' });
+      return;
+    }
+    withEngine(res, (e) => e.switchSession(id(req), sessionId));
+  });
+  router.post('/agents/:id/compact', (req: Req, res: Res) => withEngine(res, (e) => e.compactSession(id(req))));
+  router.post('/agents/:id/mcp-servers', (req: Req, res: Res) => {
+    const servers = Array.isArray(req.body?.servers) ? req.body.servers.map((s: unknown) => String(s)) : [];
+    withEngine(res, (e) => e.setAgentMcpServers(id(req), servers));
+  });
+  router.post('/agents/:id/tool-filters', (req: Req, res: Res) => {
+    const allowlist = Array.isArray(req.body?.allowlist) ? req.body.allowlist.map((s: unknown) => String(s)) : null;
+    const blocklist = Array.isArray(req.body?.blocklist) ? req.body.blocklist.map((s: unknown) => String(s)) : null;
+    withEngine(res, (e) => e.setAgentToolFilters(id(req), allowlist, blocklist));
+  });
+
+  // ---- Spawn / verify / extensions / workflows ---------------------------
+  router.post('/agents', (req: Req, res: Res) => {
+    const manifest = req.body?.manifest;
+    if (manifest == null) {
+      res.status(400).json({ ok: false, reason: 'manifest is required' });
+      return;
+    }
+    const manifestJson = typeof manifest === 'string' ? manifest : JSON.stringify(manifest);
+    withEngine(res, (e) => e.spawnAgent(manifestJson));
+  });
+  router.post('/manifests/verify', (req: Req, res: Res) => {
+    const signed = req.body?.signed;
+    if (signed == null) {
+      res.status(400).json({ ok: false, reason: 'signed manifest is required' });
+      return;
+    }
+    const signedJson = typeof signed === 'string' ? signed : JSON.stringify(signed);
+    withEngine(res, (e) => e.verifySignedManifest(signedJson));
+  });
+  router.post('/extensions/mcp/reload', (_req: Req, res: Res) => withEngine(res, (e) => e.reloadExtensionMcps()));
+  router.post('/extensions/:id/mcp/reconnect', (req: Req, res: Res) =>
+    withEngine(res, (e) => e.reconnectExtensionMcp(id(req))),
+  );
+  router.post('/workflows/load', (req: Req, res: Res) => {
+    const dir = typeof req.body?.dir === 'string' ? req.body.dir : '';
+    if (dir.trim() === '') {
+      res.status(400).json({ ok: false, reason: 'dir is required' });
+      return;
+    }
+    withEngine(res, (e) => e.loadWorkflowsFromDir(dir));
+  });
+
   return router;
 }

@@ -68,6 +68,19 @@ export interface OpenfangEngineInstance {
   removeTrigger(triggerId: string): string;
   setTriggerEnabled(triggerId: string, enabled: boolean): string;
   reloadSkills(): string;
+  // sessions + agent config
+  createSession(agentId: string, label?: string | null): string;
+  switchSession(agentId: string, sessionId: string): string;
+  compactSession(agentId: string): string;
+  contextReport(agentId: string): string;
+  setAgentMcpServers(agentId: string, servers: string[]): string;
+  setAgentToolFilters(agentId: string, allowlist?: string[] | null, blocklist?: string[] | null): string;
+  // spawn / verify / extensions / workflows
+  spawnAgent(manifestJson: string): string;
+  verifySignedManifest(signedJson: string): string;
+  reloadExtensionMcps(): string;
+  reconnectExtensionMcp(id: string): string;
+  loadWorkflowsFromDir(dir: string): string;
 }
 
 /** The `OpenfangEngine` Rust class as seen from JS (factory `boot` → static method). */
