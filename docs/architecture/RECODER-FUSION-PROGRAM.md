@@ -114,6 +114,65 @@ Three proofs pass against the composed stack:
 
 Verdict (2026-07-13): L0→L4 + native governance + openfang are composed AND running end-to-end. Remaining = tensorzero (disk-deferred) + signed .dmg + external-service activation (all disk/CI-gated, not code-blocked).
 
+## Wave G — FULL ADAPTATION (owner mandate 2026-07-14): every directory is a backend engine
+
+> **NOT MCPs. NOT thin HTTP.** Each dir's CODE becomes Recoder's code — imported, linked,
+> or owned outright, the way Cursor absorbed VSCode. MCP/bridge tools remain as the
+> *agent-facing* surface, but the BACKEND consumes every engine directly. Done-bar per
+> item: the named consumer runs the fused code end-to-end (no fake-ready).
+
+### G1 — TS engines: subprocess → in-process import (cheapest, deepest)
+| Dir | Today (deepest) | Next phase | Acceptance |
+|---|---|---|---|
+| `ts/recodergit` | service SPAWNS its CLI (`dist/cli`) | **import `dist/lib` + `dist/core` directly** in `recodergit-service.ts` — the knowledge-graph engine runs in the backend process; CLI stays for humans | code-graph query answered with zero child processes |
+| `ts/dmux` | adapter resolves a dmux BINARY | **import `@recoder/dmux` modules** (`dist/index.js` — grid/layout/pane-state logic) as the operator-console library; render through the cockpit/shell instead of a separate binary | operator grid state computed in-process from conductor workspaces |
+| `ts/opencode` | subprocess CLI under tmux (CORRECT for restart-survival — stays) | **own the binary** (pin + bundle an opencode install with the desktop, stop trusting PATH — beads pattern) AND **import its `client` package** in-process for the `in_process` substrate driver | workspace launches with the OWNED opencode; client lib drives an in-process run |
+| `ts/extracted-from-openclaw` | `@recoder/connectors` fused (workspace member) + cockpit block | **activate the gateway loop in-backend**: social-gateways channel drivers supervised BY the backend (telegram first), skills-reference folded into the skills registry | a real message ingresses → gated → conductor workspace, end-to-end |
+
+### G2 — Inference spine: tensorzero becomes THE LLM path
+| Today | Next phase | Acceptance |
+|---|---|---|
+| `EmbeddedGateway` boots in-process; `postInference` native-first but the conductor run-loop still calls providers directly | (1) generate TZ function configs from Recoder's model registry at boot; (2) route the RUN LOOP's inference through the embedded engine by default (BYOK keys injected as TZ credentials); (3) add streaming to the binding (`inference_stream` → napi async iterator); (4) wire `feedback()` to delivery outcomes (merge/approve = positive signal) | a conductor run completes with every LLM call routed through the in-process TZ engine, observable in its inference log |
+
+### G3 — Agent engine: openfang kernel as a first-class conductor runtime
+| Today | Next phase | Acceptance |
+|---|---|---|
+| 45-method `.node`; `/api/agents/openfang/*`; cockpit + wsh | (1) `openfang` as a RUNTIME in `runtime-commands.ts` — a conductor workspace whose agent IS an in-process openfang agent (spawn_agent from task spec, send_message per turn, session per workspace); (2) bridge openfang's event bus → RunEvents (publish_event both ways); (3) bind channels send/receive + cron + background-agent controls (the last unbound subsystems) | `POST /workspaces {runtimeId:"openfang"}` runs a task end-to-end with RunEvents in the audit trail |
+| `crates/recoder-governance` | native `decide()` already on the delivery path | extend the Merkle audit seal to EVERY conductor mutation (create/merge/archive/memory-promote) | audit verify passes over a full workspace lifecycle |
+
+### G4 — Data + memory engines
+| Dir | Today | Next phase | Acceptance |
+|---|---|---|---|
+| `go/beads` | owned binary + CLI subprocess per call; memory layer live | **direct SQL reads** — the dolt sql-server ALREADY runs (`.beads/dolt-server.port`); connect a mysql2 client for hot reads (ready/search/recall), keep `bd` CLI for writes (its logic = the write path) | board + memory recall served with zero subprocess spawns |
+| `py/mem0` | TS authority default + optional loopback URL | **self-activating sidecar** (colbert pattern): backend spawns+supervises the mem0 server, owns the venv; loopback activates itself | mem0 recall live in enrichPrompt without any manual server start |
+| `py/colbert` | supervised sidecar ✅ | **owned model bootstrap**: checkpoint download to a Recoder cache dir on first health, `COLBERT_CHECKPOINT` defaulted | rerank_available:true after cold boot with no manual steps |
+
+### G5 — Python decision/browse engines: own them outright
+| Dir | Today | Next phase | Acceptance |
+|---|---|---|---|
+| `py/browser-use` | registry entry gated on external python env | **app-owned sidecar** (colbert pattern): backend bootstraps the venv (`uv venv` + install + `playwright install chromium`), spawns `python -m browser_use.mcp`, supervises with backoff | browser task served by browser-use with zero manual env setup |
+| `py/pal-mcp-server` | external stdio MCP | **port the decision logic into `packages/pal`** (in-process TS — the target package already exists: agent-team, approval-estimator); stdio server stays for external runtimes only | pal plan produced fully in-process; no stdio child on the default path |
+| `py/ops-recorder` | supervised sidecar ✅ | enable-by-default: API key minted at boot when unset; signals default-on | work-signals flow on a fresh checkout with no env vars |
+
+### G6 — Substrate: tmux all the way down
+| Today | Next phase | Acceptance |
+|---|---|---|
+| owned binary + poller (correct mode) + opt-in control-mode | (1) control-mode DEFAULT-ON after burn-in (poller stays terminal authority); (2) **unify `apps/wave`'s Go durable-shell onto the SAME c/tmux sessions** (two restart mechanisms → one substrate); (3) multi-arch builds (arm64-mac only today) | shell blocks + conductor tails observe the same session in real time |
+
+### G7 — Cloud tier (kept for the cloud phase — build now, mesh later)
+| Dir | Today | Next phase (pre-cloud) |
+|---|---|---|
+| `go/multica` | degrade-safe client, binary unbuilt | build `multica-server` (owned binary), supervise (colbert pattern), surface as an experimental conductor substrate |
+| `go/ziti` | strengthened client, controller unbuilt | out-of-band controller build; identity enrollment flow in backend health (diagnostics only until cloud) |
+| `go/recoder-xds` | dormant | compile check + diagnostics row in /health; mesh activation deferred to cloud launch |
+
+### G8 — `packages/` spine: pay the L2 debt
+| Today | Next phase | Acceptance |
+|---|---|---|
+| ~38 in-process; wave is a workspace member; conductor-ui types in the shell | (1) finish shell fusion: `design-tokens` (theme) + `ui-agent-os` (view-model) into `apps/wave`; migrate remaining `recoder-*` blocks to shared types; (2) begin `server.ts` decomposition (~12.8k lines → routed modules, conductor first) | shell renders from shared tokens/types; server.ts under 8k lines with conductor routes extracted |
+
+**Execution order:** G1 (pure TS, this machine) → G4-beads + G2 (inference spine) → G3 (openfang runtime) → G5 (python ownership) → G6 → G8 → G7 (cloud-gated). Same rules as ever: small PRs, disjoint consumers in parallel, degrade-safe, no fake-ready.
+
 ## Wave F — herdr → `@recoder/herd` (RESOLVED 2026-07-11)
 
 `herdr` (github.com/ogulcancelik/herdr, AGPL-3.0-or-later/commercial) was briefly
