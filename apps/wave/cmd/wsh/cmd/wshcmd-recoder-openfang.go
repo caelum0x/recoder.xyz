@@ -160,6 +160,70 @@ var openfangCompactCmd = &cobra.Command{
 	RunE:                  openfangPostIDRun("/agents/%s/compact", "openfang:compact"),
 }
 
+var openfangMemoryListCmd = &cobra.Command{
+	Use:                   "memory-list [agentId]",
+	Short:                 "list an agent's KV memory entries",
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
+	RunE:                  openfangGetIDRun("/agents/%s/memory", "openfang:memory-list"),
+}
+
+var openfangMemoryGetCmd = &cobra.Command{
+	Use:                   "memory-get [agentId] [key]",
+	Short:                 "get one KV memory entry",
+	Args:                  cobra.ExactArgs(2),
+	DisableFlagsInUseLine: true,
+	RunE: func(_ *cobra.Command, args []string) (rtnErr error) {
+		defer func() { sendActivity("openfang:memory-get", rtnErr == nil) }()
+		path := fmt.Sprintf("/agents/%s/memory/%s", url.PathEscape(strings.TrimSpace(args[0])), url.PathEscape(strings.TrimSpace(args[1])))
+		raw, err := openfangRequest(http.MethodGet, path, nil)
+		if err != nil {
+			return err
+		}
+		recoderPrintValue(raw)
+		return nil
+	},
+}
+
+var openfangMemorySetCmd = &cobra.Command{
+	Use:                   "memory-set [agentId] [key] [json-value]",
+	Short:                 "set one KV memory entry (value is JSON, e.g. '\"text\"' or '{\"k\":1}')",
+	Args:                  cobra.ExactArgs(3),
+	DisableFlagsInUseLine: true,
+	RunE: func(cmd *cobra.Command, args []string) (rtnErr error) {
+		defer func() { sendActivity("openfang:memory-set", rtnErr == nil) }()
+		var value interface{}
+		if err := json.Unmarshal([]byte(args[2]), &value); err != nil {
+			OutputHelpMessage(cmd)
+			return fmt.Errorf("value must be valid JSON (quote strings: '\"text\"'): %w", err)
+		}
+		path := fmt.Sprintf("/agents/%s/memory/%s", url.PathEscape(strings.TrimSpace(args[0])), url.PathEscape(strings.TrimSpace(args[1])))
+		raw, err := openfangRequest(http.MethodPut, path, map[string]interface{}{"value": value})
+		if err != nil {
+			return err
+		}
+		recoderPrintValue(raw)
+		return nil
+	},
+}
+
+var openfangMemoryDeleteCmd = &cobra.Command{
+	Use:                   "memory-delete [agentId] [key]",
+	Short:                 "delete one KV memory entry",
+	Args:                  cobra.ExactArgs(2),
+	DisableFlagsInUseLine: true,
+	RunE: func(_ *cobra.Command, args []string) (rtnErr error) {
+		defer func() { sendActivity("openfang:memory-delete", rtnErr == nil) }()
+		path := fmt.Sprintf("/agents/%s/memory/%s", url.PathEscape(strings.TrimSpace(args[0])), url.PathEscape(strings.TrimSpace(args[1])))
+		raw, err := openfangRequest(http.MethodDelete, path, nil)
+		if err != nil {
+			return err
+		}
+		recoderPrintValue(raw)
+		return nil
+	},
+}
+
 var openfangReloadExtensionsCmd = &cobra.Command{
 	Use:   "reload-extensions",
 	Short: "reload extension MCP servers",
@@ -183,6 +247,7 @@ func init() {
 		openfangActivateCmd, openfangPauseCmd, openfangResumeCmd, openfangDeactivateCmd,
 		openfangAgentActivateCmd, openfangAgentStopCmd, openfangAgentKillCmd, openfangMessageCmd,
 		openfangContextCmd, openfangCompactCmd, openfangReloadExtensionsCmd,
+		openfangMemoryListCmd, openfangMemoryGetCmd, openfangMemorySetCmd, openfangMemoryDeleteCmd,
 	)
 }
 
