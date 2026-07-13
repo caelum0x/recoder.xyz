@@ -84,7 +84,7 @@ Backend fusion is essentially **done**. The real remaining work:
 1. ~~`crates/recoder-governance` → native NAPI~~ **✅ done 2026-07-13**
 2. ~~`crates/tensorzero` → native NAPI (EmbeddedGateway in-process)~~ **✅ done 2026-07-13**
 3. ~~`crates/openfang` → native NAPI (45 methods)~~ **✅ done 2026-07-13**
-4. `apps/wave` → pnpm-workspace member (enables all shell package fusion). **Plan complete (GO verdict, agent-audited): electron packs `!node_modules` + `externalizeDeps:false`, so the classic pnpm/electron risk is absent; pre-flight = add `electron` to root `pnpm.onlyBuiltDependencies` + promote `apps/wave/tsunami/frontend` as member too.** ← **NEXT (structural)**
-5. Shell fusion: `conductor-ui`/`ui-agent-os`/`design-tokens`/`ecosystem-config` into `apps/wave` (after #4).
+4. ~~`apps/wave` → pnpm-workspace member~~ **✅ done 2026-07-13** — member (+ tsunami/frontend); electron postinstall gated in; npm lockfile dropped; ONE phantom dep surfaced+fixed (highlight.js scss relative path). Full gate green: install + build:prod (3 targets) + wsh go build + packaging tests.
+5. Shell fusion: **seeded 2026-07-13** — `conductor-ui` types imported via `workspace:*` into recoder-model.ts (proven through electron-vite). Remaining: migrate the other recoder-* blocks; `design-tokens`/`ui-agent-os` next. (`ecosystem-config` was mis-scoped in this plan — it holds studio metadata, not backend-URL config.)
 6. ~~`py/colbert` sidecar~~ **✅ done 2026-07-13 (app-owned supervised daemon)** · `c/tmux` control-mode + beads-owned-binary + ops-recorder supervision — **in flight (fusion-program-execute workflow)**.
 7. ~~Dormant reconciliation~~ **✅ done 2026-07-13** — pruned action-registry/data-store-registry/web-search/analytics/security + performance/plugins/cli residue; `herd` kept (CLI wired).
