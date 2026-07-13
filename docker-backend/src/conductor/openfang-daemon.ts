@@ -584,5 +584,22 @@ export function createOpenfangAgentRouter() {
     withEngine(res, (e) => e.registerTrigger(id(req), patternJson, promptTemplate, maxFires));
   });
 
+  // ---- Agent memory (openfang's own KV store — NOT Recoder's memory-of-record)
+  router.get('/agents/:id/memory', (req: Req, res: Res) => withEngine(res, (e) => e.memoryList(id(req))));
+  router.get('/agents/:id/memory/:key', (req: Req, res: Res) =>
+    withEngine(res, (e) => e.memoryGet(id(req), String(req.params.key))),
+  );
+  router.put('/agents/:id/memory/:key', (req: Req, res: Res) => {
+    const value = req.body?.value;
+    if (value === undefined) {
+      res.status(400).json({ ok: false, reason: 'value is required' });
+      return;
+    }
+    withEngine(res, (e) => e.memorySet(id(req), String(req.params.key), JSON.stringify(value)));
+  });
+  router.delete('/agents/:id/memory/:key', (req: Req, res: Res) =>
+    withEngine(res, (e) => e.memoryDelete(id(req), String(req.params.key))),
+  );
+
   return router;
 }

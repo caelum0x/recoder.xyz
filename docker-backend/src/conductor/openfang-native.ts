@@ -86,6 +86,11 @@ export interface OpenfangEngineInstance {
   runWorkflow(workflowId: string, input: string): string;
   publishEvent(eventJson: string): string;
   registerTrigger(agentId: string, patternJson: string, promptTemplate: string, maxFires: number): string;
+  // openfang's own per-agent KV memory (NOT Recoder's canonical memory-of-record)
+  memoryGet(agentId: string, key: string): string;
+  memorySet(agentId: string, key: string, valueJson: string): string;
+  memoryDelete(agentId: string, key: string): string;
+  memoryList(agentId: string): string;
 }
 
 /** The `OpenfangEngine` Rust class as seen from JS (factory `boot` → static method). */
