@@ -19,6 +19,46 @@
             }
         }
     },
+    "defwidget@recoder-launch": {
+        "display:order": -5.4,
+        "icon": "rocket",
+        "label": "launch",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-launch"
+            }
+        }
+    },
+    "defwidget@recoder-diff": {
+        "display:order": -5.3,
+        "icon": "code-compare",
+        "label": "review",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-diff"
+            }
+        }
+    },
+    "defwidget@recoder-approvals": {
+        "display:order": -5.2,
+        "icon": "shield-halved",
+        "label": "approvals",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-approvals"
+            }
+        }
+    },
+    "defwidget@recoder-board": {
+        "display:order": -5.1,
+        "icon": "clipboard-list",
+        "label": "board",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-board"
+            }
+        }
+    },
     "defwidget@terminal": {
         "display:order": -5,
         "icon": "square-terminal",
