@@ -12435,7 +12435,7 @@ void ensureGovernanceDaemon()
 // emits RunEvents. Degrade-safe: when the binary is absent the backend stays
 // on the pure-TS OpenFangAdapter path (no fake success). Fire-and-forget; a
 // daemon problem never blocks boot.
-import { ensureOpenfangDaemon, createOpenfangAgentRouter, createOpenfangProxyRouter } from './conductor/openfang-daemon.js';
+import { ensureOpenfangDaemon, createOpenfangAgentRouter } from './conductor/openfang-daemon.js';
 void ensureOpenfangDaemon()
   .then((daemon) => {
     if (daemon) {
@@ -12503,14 +12503,13 @@ app.use('/api/v1/app-keys', appKeysRouter);
 // external Claude Code / Codex clients) takes precedence over the admin-gated legacy
 // connector registry at a2a-gateway.ts (`GET /agents`, `PUT /agents/:id`).
 app.use('/api/a2a/agents', agentRegistryRouter);
-// OpenFang agent edge — health + card behind authenticateRequest. Truthful:
-// returns 503 when the openfang daemon is absent (degrade-safe, never fakes).
+// OpenFang engine edge — the FULL kernel surface, called IN-PROCESS via the
+// compiled-in openfang-napi native addon (no daemon, no HTTP proxy, no stub):
+// health + card, Hands (bundled/active/activate/pause/resume/deactivate), agents
+// (list/run/activate/stop/kill/reset/clear/model/skills/sessions/usage), triggers,
+// bindings, models, skills, usage. Degrade-safe 503 when the addon isn't built.
+// Recoder stays the owner of canonical task/approval/memory (A2A boundary).
 app.use('/api/agents/openfang', authenticateRequest, createOpenfangAgentRouter());
-// Full OpenFang surface — transparently proxy openfang's dashboard pages + all
-// 140+ REST/SSE endpoints (Hands, agents, channels, memory, skills, models, the
-// OpenAI-compat /v1/*) through Recoder at /api/openfang/*. Degrade-safe 503 when
-// the daemon is absent. Recoder stays the owner of canonical task/approval/memory.
-app.use('/api/openfang', authenticateRequest, createOpenfangProxyRouter());
 app.use('/api/a2a', authenticateMutatingRequest, a2aRouter);
 app.use('/api/a2a/tasks', authenticateMutatingRequest, taskLifecycleRouter);
 app.use('/api/a2a/channels', collaborationRouter);

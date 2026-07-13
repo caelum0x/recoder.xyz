@@ -7,52 +7,66 @@
  *      wrong arch, ENOSPC build deferral, etc.).
  *   3. The loader is degrade-safe: it NEVER throws to the caller.
  *   4. The addon path resolver follows the canonical resolution order.
+ *   5. The high-level facade (bundled hands + engine boot) degrades cleanly.
  *
- * NO Rust build is required.  We mock require() / the .node presence to drive
- * every code path in isolation, mirroring the pattern in openfang-daemon.test.ts.
+ * NO Rust build is required. We mock require() / the .node presence to drive
+ * every code path in isolation, mirroring openfang-daemon.test.ts.
  */
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// We import from the source module; vitest runs with tsx so .ts is fine.
 import {
   loadNativeAddon,
   resolveNativeAddonPath,
+  nativeBundledHands,
+  getOpenfangEngine,
   __resetNativeAddonForTest,
   __setRequireOverrideForTest,
   OPENFANG_NATIVE_ADDON_ENV,
   type OpenfangNativeAddon,
+  type OpenfangEngineInstance,
 } from './openfang-native.js';
 
+// An env that forces the resolver to report the addon absent, regardless of any
+// locally-built .node in the repo (bogus explicit path short-circuits discovery).
+const ABSENT: NodeJS.ProcessEnv = { [OPENFANG_NATIVE_ADDON_ENV]: '/no/such/dir/openfang_napi.node' };
+
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers — a stub matching the real class-based addon surface
 // ---------------------------------------------------------------------------
+
+function makeStubEngine(overrides: Partial<OpenfangEngineInstance> = {}): OpenfangEngineInstance {
+  return {
+    health: () => JSON.stringify({ ok: true, agents: 3, addon_version: '0.6.9', build_mode: 'full' }),
+    listAgents: () =>
+      JSON.stringify({ ok: true, agents: [{ id: 'a1', name: 'researcher', state: 'idle' }] }),
+    runAgent: (agentId: string, _message: string) =>
+      JSON.stringify({ ok: true, agent_id: agentId, response: 'hi', iterations: 1 }),
+    ...overrides,
+  };
+}
 
 function makeStubAddon(overrides: Partial<OpenfangNativeAddon> = {}): OpenfangNativeAddon {
   return {
     ping: () => true,
     nativeVersion: () =>
-      JSON.stringify({ addon: '0.6.9', kernel_version: '0.6.9', crate: 'openfang-napi', build_profile: 'release' }),
-    bootstrapKernel: async (_configPath?: string | null) =>
-      JSON.stringify({ ok: true, config_path: '/tmp/config.toml', agents: 0, default_model: null }),
-    runAgent: async (_agentId: string, _message: string, _configPath?: string | null) =>
-      JSON.stringify({ ok: true, agent_id: _agentId, response: 'hello from native stub' }),
+      JSON.stringify({ addon: '0.6.9', crate: 'openfang-napi', build_profile: 'release', build_mode: 'full' }),
+    bundledHandsJson: () =>
+      JSON.stringify({ ok: true, hands: [{ id: 'researcher', name: 'Researcher', description: 'Researches' }] }),
+    OpenfangEngine: { boot: (_configPath?: string | null) => makeStubEngine() },
     ...overrides,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Path resolution (no .node file on disk — unit tests only)
+// Path resolution
 // ---------------------------------------------------------------------------
 
 describe('openfang-native: resolveNativeAddonPath', () => {
-  it('returns undefined when env is empty and no .node file is on disk (degrade-safe default)', () => {
+  it('returns undefined or a real .node path with the env empty (degrade-safe default)', () => {
     const result = resolveNativeAddonPath({});
-    // In CI / dev without a Rust build the result must be undefined.
-    // If someone happened to build the crate, it would be a string pointing at
-    // an existing file — we accept both.
     if (result !== undefined) {
       expect(result).toMatch(/openfang_napi\.node$/);
     } else {
@@ -61,19 +75,14 @@ describe('openfang-native: resolveNativeAddonPath', () => {
   });
 
   it('returns undefined when OPENFANG_NATIVE_ADDON points at a non-existent file', () => {
-    const result = resolveNativeAddonPath({
-      [OPENFANG_NATIVE_ADDON_ENV]: '/no/such/openfang_napi.node',
-    });
-    expect(result).toBeUndefined();
+    expect(resolveNativeAddonPath({ [OPENFANG_NATIVE_ADDON_ENV]: '/no/such/openfang_napi.node' })).toBeUndefined();
   });
 
   it('returns the explicit path when OPENFANG_NATIVE_ADDON points at an existing file', () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'openfang-napi-'));
     const fakePath = path.join(dir, 'openfang_napi.node');
     writeFileSync(fakePath, '// fake .node');
-
-    const result = resolveNativeAddonPath({ [OPENFANG_NATIVE_ADDON_ENV]: fakePath });
-    expect(result).toBe(fakePath);
+    expect(resolveNativeAddonPath({ [OPENFANG_NATIVE_ADDON_ENV]: fakePath })).toBe(fakePath);
   });
 });
 
@@ -82,34 +91,25 @@ describe('openfang-native: resolveNativeAddonPath', () => {
 // ---------------------------------------------------------------------------
 
 describe('openfang-native: loadNativeAddon — native-first preference', () => {
-  beforeEach(() => {
-    __resetNativeAddonForTest();
-  });
-
+  beforeEach(() => __resetNativeAddonForTest());
   afterEach(() => {
     __resetNativeAddonForTest();
     vi.restoreAllMocks();
   });
 
+  function primeExistingNode(prefix: string): string {
+    const dir = mkdtempSync(path.join(os.tmpdir(), prefix));
+    const p = path.join(dir, 'openfang_napi.node');
+    writeFileSync(p, '/* placeholder — real .node not present in test env */');
+    process.env[OPENFANG_NATIVE_ADDON_ENV] = p;
+    return p;
+  }
+
   it('prefers the native addon when the module loads and ping() returns true', () => {
-    // The .node extension causes Node's native require() to dlopen the file as
-    // a binary.  In tests we use the __setRequireOverrideForTest seam to inject
-    // a stub addon without triggering dlopen.
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'openfang-napi-pref-'));
-    const realFakePath = path.join(dir, 'openfang_napi.node');
-    // The file must exist on disk (existsSync check in resolveNativeAddonPath).
-    writeFileSync(realFakePath, '/* placeholder — real .node not present in test env */');
-
-    const stub = makeStubAddon();
-
-    // Inject the stub via the module seam (avoids dlopen on a non-native file).
-    __setRequireOverrideForTest((_path) => stub);
-    process.env[OPENFANG_NATIVE_ADDON_ENV] = realFakePath;
-
+    primeExistingNode('openfang-napi-pref-');
+    __setRequireOverrideForTest(() => makeStubAddon());
     try {
       const addon = loadNativeAddon(process.env);
-      // The facade MUST prefer native when the require override returns a valid
-      // addon and ping() returns true.
       expect(addon).not.toBeUndefined();
       expect(addon?.ping()).toBe(true);
     } finally {
@@ -119,20 +119,12 @@ describe('openfang-native: loadNativeAddon — native-first preference', () => {
   });
 
   it('falls back gracefully when the require override throws (degrade-safe)', () => {
-    // Inject a factory that throws to simulate a broken native addon.
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'openfang-napi-fallback-'));
-    const badPath = path.join(dir, 'openfang_napi.node');
-    writeFileSync(badPath, '/* placeholder */');
-    process.env[OPENFANG_NATIVE_ADDON_ENV] = badPath;
-
-    __setRequireOverrideForTest((_path) => {
+    primeExistingNode('openfang-napi-fallback-');
+    __setRequireOverrideForTest(() => {
       throw new Error('simulated dlopen failure for test');
     });
-
     try {
-      // Must not throw — must return undefined.
-      const addon = loadNativeAddon(process.env);
-      expect(addon).toBeUndefined();
+      expect(loadNativeAddon(process.env)).toBeUndefined();
     } finally {
       delete process.env[OPENFANG_NATIVE_ADDON_ENV];
       __resetNativeAddonForTest();
@@ -140,19 +132,10 @@ describe('openfang-native: loadNativeAddon — native-first preference', () => {
   });
 
   it('falls back gracefully when ping() returns false (broken addon)', () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'openfang-napi-pingfail-'));
-    const fakePath = path.join(dir, 'openfang_napi.node');
-    writeFileSync(fakePath, '/* placeholder */');
-    process.env[OPENFANG_NATIVE_ADDON_ENV] = fakePath;
-
-    // Inject a stub where ping() returns false via the module seam.
-    const brokenStub = makeStubAddon({ ping: () => false });
-    __setRequireOverrideForTest((_path) => brokenStub);
-
+    primeExistingNode('openfang-napi-pingfail-');
+    __setRequireOverrideForTest(() => makeStubAddon({ ping: () => false }));
     try {
-      const addon = loadNativeAddon(process.env);
-      // ping() failed → must fall back to undefined.
-      expect(addon).toBeUndefined();
+      expect(loadNativeAddon(process.env)).toBeUndefined();
     } finally {
       delete process.env[OPENFANG_NATIVE_ADDON_ENV];
       __resetNativeAddonForTest();
@@ -160,36 +143,76 @@ describe('openfang-native: loadNativeAddon — native-first preference', () => {
   });
 
   it('returns undefined and never throws when no .node path is found (build deferred path)', () => {
-    // No OPENFANG_NATIVE_ADDON env + no built .node on disk.
-    delete process.env[OPENFANG_NATIVE_ADDON_ENV];
-    // Must not throw.
-    expect(() => loadNativeAddon({})).not.toThrow();
-    const addon = loadNativeAddon({});
-    // Already memoized from the call above — check it is still undefined.
-    expect(addon).toBeUndefined();
+    // Force absence via a bogus explicit path so the resolver skips repo
+    // auto-discovery (which would otherwise find a locally-built .node).
+    expect(() => loadNativeAddon(ABSENT)).not.toThrow();
+    expect(loadNativeAddon(ABSENT)).toBeUndefined();
   });
 
-  it('is idempotent — repeated loadNativeAddon calls return the same memoized result', () => {
-    delete process.env[OPENFANG_NATIVE_ADDON_ENV];
+  it('is idempotent — repeated calls return the same memoized result', () => {
     __resetNativeAddonForTest();
-    const a = loadNativeAddon({});
-    const b = loadNativeAddon({});
-    expect(a).toBe(b); // same reference (both undefined when no .node)
-  });
-
-  it('resetNativeAddonForTest restores a clean loader state', () => {
-    delete process.env[OPENFANG_NATIVE_ADDON_ENV];
-    loadNativeAddon({}); // prime memoization
-    __resetNativeAddonForTest();
-    // After reset the call should run the resolver again (still returns undefined
-    // if no .node present, but the memoization boundary was cleared).
-    const result = loadNativeAddon({});
-    expect(result).toBeUndefined();
+    expect(loadNativeAddon(ABSENT)).toBe(loadNativeAddon(ABSENT));
   });
 });
 
 // ---------------------------------------------------------------------------
-// Stub addon contract — prove the interface shape
+// High-level facade — bundled hands + engine boot
+// ---------------------------------------------------------------------------
+
+describe('openfang-native: high-level facade', () => {
+  beforeEach(() => __resetNativeAddonForTest());
+  afterEach(() => {
+    __resetNativeAddonForTest();
+    delete process.env[OPENFANG_NATIVE_ADDON_ENV];
+  });
+
+  function primeAddon(prefix: string, addon: OpenfangNativeAddon): void {
+    const dir = mkdtempSync(path.join(os.tmpdir(), prefix));
+    const p = path.join(dir, 'openfang_napi.node');
+    writeFileSync(p, '/* placeholder */');
+    process.env[OPENFANG_NATIVE_ADDON_ENV] = p;
+    __setRequireOverrideForTest(() => addon);
+  }
+
+  it('nativeBundledHands returns the compiled-in hands when the addon is present', () => {
+    primeAddon('openfang-hands-', makeStubAddon());
+    const hands = nativeBundledHands(process.env);
+    expect(hands).toBeDefined();
+    expect(hands?.[0]).toMatchObject({ id: 'researcher', name: 'Researcher' });
+  });
+
+  it('nativeBundledHands returns undefined when no addon is present (degrade-safe)', () => {
+    expect(nativeBundledHands(ABSENT)).toBeUndefined();
+  });
+
+  it('getOpenfangEngine boots and caches the engine when the addon is present', () => {
+    primeAddon('openfang-engine-', makeStubAddon());
+    const engine = getOpenfangEngine(process.env);
+    expect(engine).toBeDefined();
+    expect(JSON.parse(engine!.health())).toMatchObject({ ok: true, build_mode: 'full' });
+  });
+
+  it('getOpenfangEngine degrades to undefined when boot() throws', () => {
+    primeAddon(
+      'openfang-engine-fail-',
+      makeStubAddon({
+        OpenfangEngine: {
+          boot: () => {
+            throw new Error('no config on this machine');
+          },
+        },
+      }),
+    );
+    expect(getOpenfangEngine(process.env)).toBeUndefined();
+  });
+
+  it('getOpenfangEngine returns undefined when no addon is present', () => {
+    expect(getOpenfangEngine(ABSENT)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stub addon contract — prove the real interface shape
 // ---------------------------------------------------------------------------
 
 describe('openfang-native: OpenfangNativeAddon stub contract', () => {
@@ -197,25 +220,19 @@ describe('openfang-native: OpenfangNativeAddon stub contract', () => {
     expect(makeStubAddon().ping()).toBe(true);
   });
 
-  it('nativeVersion() returns valid JSON with expected keys', () => {
-    const raw = makeStubAddon().nativeVersion();
-    const parsed = JSON.parse(raw);
-    expect(parsed).toMatchObject({
-      addon: expect.any(String),
-      kernel_version: expect.any(String),
-      crate: 'openfang-napi',
-    });
+  it('nativeVersion() returns valid JSON with the full-build marker', () => {
+    const parsed = JSON.parse(makeStubAddon().nativeVersion());
+    expect(parsed).toMatchObject({ crate: 'openfang-napi', build_mode: 'full' });
   });
 
-  it('bootstrapKernel() resolves with ok=true on a well-formed stub', async () => {
-    const raw = await makeStubAddon().bootstrapKernel(null);
-    const parsed = JSON.parse(raw);
-    expect(parsed).toMatchObject({ ok: true });
+  it('bundledHandsJson() lists real bundled hands', () => {
+    const parsed = JSON.parse(makeStubAddon().bundledHandsJson());
+    expect(parsed.ok).toBe(true);
+    expect(parsed.hands.length).toBeGreaterThan(0);
   });
 
-  it('runAgent() resolves with ok=true and a response on a well-formed stub', async () => {
-    const raw = await makeStubAddon().runAgent('my-agent', 'hello', null);
-    const parsed = JSON.parse(raw);
-    expect(parsed).toMatchObject({ ok: true, response: expect.any(String) });
+  it('OpenfangEngine.boot().health() reports ok on a well-formed stub', () => {
+    const engine = makeStubAddon().OpenfangEngine.boot(null);
+    expect(JSON.parse(engine.health())).toMatchObject({ ok: true });
   });
 });
