@@ -119,6 +119,16 @@
             }
         }
     },
+    "defwidget@recoder-connectors": {
+        "display:order": -5.011,
+        "icon": "plug",
+        "label": "connectors",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-connectors"
+            }
+        }
+    },
     "defwidget@recoder-settings": {
         "display:order": -5.01,
         "icon": "gear",
