@@ -106,6 +106,13 @@ function buildGatewayNapiCandidates(): string[] {
     return candidates;
   }
 
+  // Electron packaged app: electron-builder extraResources lands the .node in
+  // Resources/native/ (same convention as the governance/lance/openfang addons).
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (resourcesPath) {
+    candidates.push(join(resourcesPath, 'native', 'tensorzero_gateway_napi.node'));
+  }
+
   // Walk up from this file's directory (docker-backend/src or docker-backend/dist)
   // to the repo root to find the tensorzero-gateway-napi target directory.
   let dir: string;

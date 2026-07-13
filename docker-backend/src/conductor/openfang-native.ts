@@ -159,19 +159,28 @@ export function resolveNativeAddonPath(env: NodeJS.ProcessEnv = process.env): st
     return existsSync(explicit) ? explicit : undefined;
   }
 
-  const root = findRepoRoot();
-  if (!root) return undefined;
-
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { join } = require('node:path') as typeof import('node:path');
-  const wsTarget = join(root, 'crates', 'openfang', 'target');
-  const crateTarget = join(root, 'crates', 'openfang', 'crates', 'openfang-napi', 'target');
-  const candidates = [
-    join(wsTarget, 'release', 'openfang_napi.node'),
-    join(wsTarget, 'debug', 'openfang_napi.node'),
-    join(crateTarget, 'release', 'openfang_napi.node'),
-    join(crateTarget, 'debug', 'openfang_napi.node'),
-  ];
+  const candidates: string[] = [];
+
+  // Electron packaged app: electron-builder extraResources lands the .node in
+  // Resources/native/ (same convention as the governance/lance addons).
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  if (resourcesPath) {
+    candidates.push(join(resourcesPath, 'native', 'openfang_napi.node'));
+  }
+
+  const root = findRepoRoot();
+  if (root) {
+    const wsTarget = join(root, 'crates', 'openfang', 'target');
+    const crateTarget = join(root, 'crates', 'openfang', 'crates', 'openfang-napi', 'target');
+    candidates.push(
+      join(wsTarget, 'release', 'openfang_napi.node'),
+      join(wsTarget, 'debug', 'openfang_napi.node'),
+      join(crateTarget, 'release', 'openfang_napi.node'),
+      join(crateTarget, 'debug', 'openfang_napi.node'),
+    );
+  }
   return candidates.find((p) => existsSync(p));
 }
 
