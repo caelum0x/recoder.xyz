@@ -172,24 +172,6 @@ export class PackageRegistry {
           tags: ['ai', 'providers', 'claude', 'groq', 'gemini', 'ollama'],
           compatibility: ['node >= 18', 'browser']
         }
-      },
-      {
-        name: '@recoder/security',
-        version: '1.0.0',
-        description: 'Security and vulnerability scanning for generated code',
-        platform: 'shared',
-        dependencies: {
-          '@recoder/shared': '^1.0.0'
-        },
-        installPath: path.join(this.registryPath, 'security'),
-        installedAt: Date.now(),
-        enabled: true,
-        recoder: {
-          type: 'core',
-          category: 'security',
-          tags: ['security', 'scanning', 'validation'],
-          compatibility: ['node >= 18']
-        }
       }
     ];
 
