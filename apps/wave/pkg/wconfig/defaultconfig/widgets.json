@@ -99,6 +99,16 @@
             }
         }
     },
+    "defwidget@recoder-settings": {
+        "display:order": -5.01,
+        "icon": "gear",
+        "label": "settings",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-settings"
+            }
+        }
+    },
     "defwidget@terminal": {
         "display:order": -5,
         "icon": "square-terminal",
