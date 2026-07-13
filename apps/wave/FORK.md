@@ -25,12 +25,12 @@ user-facing identity + the Go module path + the server binary name were changed.
 ## What has landed (Recoder-ification)
 - **Boots into Recoder** — the first-launch layout (`pkg/wcore/layout.go`) opens the `recoder` conductor
   view (workspaces / launch agents), focused, with a terminal alongside; new-tab stays a terminal.
-- **Conductor bridge** — `frontend/app/view/recoder/`: the `recoder` block (workspace list + a
-  readiness-aware "Welcome to Recoder" getting-started panel from `/api/conductor/health/full`) and the
-  `recoder-terminal` block (streams a workspace's live agent TUI over the conductor
-  `/workspaces/:id/stream` websocket). Registered in `blockregistry.ts`; `defwidget@recoder` +
-  `defwidget@recoder-terminal` ship as launchable widgets. Backend URL from `getRecoderBackendUrl()`
-  (`window.__RECODER_BACKEND_URL__`, default `http://127.0.0.1:3100`).
+- **The cockpit — 11 governed blocks** — a full agent-control loop as terminal blocks: launch an agent →
+  watch its **live TUI + message it** → **review the diff → merge / PR** → archive; observe via
+  health/runs/board/memory; act via the capability palette; configure the backend. Blocks open each other
+  via `createBlock`. Full reference: **[docs/architecture/RECODER-SHELL.md](../../docs/architecture/RECODER-SHELL.md)**.
+  All degrade-safe; the whole frontend compiles (electron-vite exit 0). Backend URL from
+  `getRecoderBackendUrl()` (localStorage → `window.__RECODER_BACKEND_URL__` → `http://127.0.0.1:3100`).
 - **Full rebrand** — product strings → Recoder across emain (About/menus/quit/updater/app.setName) and
   frontend; in-app links → recoder.xyz; logos → the Recoder cube (`public/logos/*`).
 - **Cloud decoupled** — `telemetry:enabled=false` + the `wcloud` sender inert unless

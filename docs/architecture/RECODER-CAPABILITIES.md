@@ -17,8 +17,10 @@
 > **Delivered (2026-07-13).** Phases 2–4 of [RECODER-ENGINES](./RECODER-ENGINES.md) landed as owned,
 > governed, degrade-safe engines reachable through the bridge: **retrieval** (RAG), **browser-use**,
 > **coordination** (work-locks), **workflow** (verify/hooks), and in-proc **PAL planning** — see the
-> connection table below. The L3 terminal shell (`apps/wave`) is fully rebranded to Recoder and builds
-> end-to-end ([FORK.md](../../apps/wave/FORK.md)).
+> connection table below. The L3 terminal shell (`apps/wave`) is fully rebranded to Recoder, builds
+> end-to-end, and now carries an **11-block governed cockpit** (launch → live-session + message the agent
+> → review → merge/PR, plus board/health/runs/memory/tools/settings) — see
+> [RECODER-SHELL.md](./RECODER-SHELL.md) + [FORK.md](../../apps/wave/FORK.md).
 
 ## How an agent gets a capability
 
