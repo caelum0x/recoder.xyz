@@ -11,25 +11,27 @@
 import type { MemoryStore } from '@recoder/agent-memory';
 import type { MemoryCandidate, MemoryItem } from '@recoder/agent-os';
 import type { AgentOsRepository } from '../repositories/agent-os.repository';
-import { rememberCandidate } from '../../conductor/beads-memory.js';
+import { getMemoryModule } from '../../modules/memory';
 
 export function createRepositoryMemoryStore(repository: AgentOsRepository): MemoryStore {
-  return {
+  const store: MemoryStore = {
     async createCandidate(candidate: MemoryCandidate): Promise<MemoryCandidate> {
       const stored = await repository.upsertMemoryCandidate(candidate);
-      // Mirror into the SHARED beads memory layer (ephemeral wisp) so every
-      // future agent launch recalls it from the issue graph (bundle.ts recall).
-      // The repository remains the store-of-record; the mirror is best-effort
-      // and degrade-safe (bd unavailable → repository copy untouched, nothing
+      // Mirror into the SHARED memory layer THROUGH the MemoryModule (beads wisp;
+      // mem0 when user-scoped) so every future agent launch recalls it. The
+      // repository remains the store-of-record; the mirror is best-effort and
+      // degrade-safe (all engines down → repository copy untouched, nothing
       // faked, nothing thrown).
-      rememberCandidate({
-        title: `[memory] ${stored.title}`,
-        body: [
-          stored.body,
-          `Candidate: ${stored.candidateId} · scope: ${stored.scope}`,
-        ].join('\n'),
-        scope: stored.scope,
-      });
+      try {
+        await getMemoryModule().remember({
+          title: `[memory] ${stored.title}`,
+          body: [stored.body, `Candidate: ${stored.candidateId} · scope: ${stored.scope}`].join('\n'),
+          scope: stored.scope,
+          evidence: { taskId: stored.evidence?.taskId, artifactId: stored.evidence?.artifactId },
+        });
+      } catch {
+        // Mirror is best-effort; the repository copy above is authoritative.
+      }
       return stored;
     },
     async listCandidates(scope?: string): Promise<MemoryCandidate[]> {
@@ -51,4 +53,9 @@ export function createRepositoryMemoryStore(repository: AgentOsRepository): Memo
       return typeof options?.limit === 'number' ? matched.slice(0, options.limit) : matched;
     },
   };
+
+  // Register the store-of-record with the module so fused recall can include
+  // reviewed agent-os items and `asMemoryStore()` returns this same port.
+  getMemoryModule().attachAgentOsStore(store);
+  return store;
 }
