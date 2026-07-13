@@ -14,6 +14,15 @@ type BoardIssue = {
     priority: string;
 };
 
+// A recorded work-signal: a stuck/blocked/needs-handoff workspace whose work was
+// handed back to the conductor and is now pickup-able (GET /api/conductor/work-signals).
+type BoardSignal = {
+    workspaceId: string;
+    kind: string;
+    detail: string;
+    when: string;
+};
+
 // Neutral, degrade-safe states. The component maps each to a plain message and
 // never fabricates a success:
 //   loading        — a probe is in flight
@@ -32,6 +41,7 @@ class RecoderBoardViewModel implements ViewModel {
     issuesAtom: PrimitiveAtom<BoardIssue[]>;
     loadingAtom: PrimitiveAtom<boolean>;
     statusAtom: PrimitiveAtom<BoardStatus>;
+    signalsAtom: PrimitiveAtom<BoardSignal[]>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -41,6 +51,32 @@ class RecoderBoardViewModel implements ViewModel {
         this.issuesAtom = atom([]) as PrimitiveAtom<BoardIssue[]>;
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.statusAtom = atom("loading") as PrimitiveAtom<BoardStatus>;
+        this.signalsAtom = atom([]) as PrimitiveAtom<BoardSignal[]>;
+    }
+
+    // Pickup-able stuck work (independent + degrade-safe): a stuck/blocked agent's
+    // work handed back to the conductor. Any failure just leaves the section empty.
+    async fetchSignals() {
+        try {
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/work-signals?limit=20`);
+            if (!res.ok) {
+                globalStore.set(this.signalsAtom, []);
+                return;
+            }
+            const body = await res.json();
+            const list = Array.isArray(body?.data) ? body.data : [];
+            const signals: BoardSignal[] = list
+                .map((s: Record<string, unknown>) => ({
+                    workspaceId: firstString(s?.workspaceId),
+                    kind: firstString(s?.kind),
+                    detail: firstString(s?.detail),
+                    when: firstString(s?.recordedAt),
+                }))
+                .filter((s: BoardSignal) => s.kind != "");
+            globalStore.set(this.signalsAtom, signals);
+        } catch {
+            globalStore.set(this.signalsAtom, []);
+        }
     }
 
     get viewComponent(): ViewComponent {
@@ -53,6 +89,8 @@ class RecoderBoardViewModel implements ViewModel {
     async refresh() {
         globalStore.set(this.loadingAtom, true);
         globalStore.set(this.statusAtom, "loading");
+        // Pickup-able stuck work loads independently of the beads ready-list.
+        void this.fetchSignals();
         try {
             const available = await this.probeAvailability();
             if (available == null) {
@@ -199,4 +237,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value == "object" && value != null && !Array.isArray(value);
 }
 
-export { RecoderBoardViewModel, type BoardIssue, type BoardStatus };
+export { RecoderBoardViewModel, type BoardIssue, type BoardStatus, type BoardSignal };

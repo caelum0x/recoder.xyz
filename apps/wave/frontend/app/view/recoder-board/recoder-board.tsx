@@ -31,6 +31,7 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
     const issues = useAtomValue(model.issuesAtom);
     const loading = useAtomValue(model.loadingAtom);
     const status = useAtomValue(model.statusAtom);
+    const signals = useAtomValue(model.signalsAtom);
 
     useEffect(() => {
         model.refresh();
@@ -77,6 +78,27 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
                     </div>
                 ))}
             </div>
+            {signals.length > 0 && (
+                <div className="flex flex-col gap-1 mt-1">
+                    <div className="text-xs uppercase tracking-wide text-secondary">Handed-off work (stuck / blocked)</div>
+                    {signals.map((sig, i) => (
+                        <div
+                            key={`${sig.workspaceId}-${i}`}
+                            className="flex items-center gap-2 rounded border border-border px-2 py-1"
+                            title={`${sig.workspaceId}${sig.when != "" ? ` · ${sig.when}` : ""}`}
+                        >
+                            <span className="text-xs text-error rounded bg-border/60 px-1.5 py-0.5 shrink-0">{sig.kind}</span>
+                            <span className="text-sm truncate">{sig.detail != "" ? sig.detail : sig.workspaceId}</span>
+                            <button
+                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0 ml-auto"
+                                onClick={() => pickUpIssue(sig.detail != "" ? sig.detail : `Pick up stuck work from ${sig.workspaceId}`)}
+                            >
+                                Pick up
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
