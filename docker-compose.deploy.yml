@@ -70,7 +70,7 @@ services:
       - RECODER_A2A_ALLOWED_AGENTS=codex,claude_code,recoder-web,docker-backend,openclaw-gateway,recoder-agency,recoder-pm
       - QDRANT_URL=http://qdrant:6333
       - MEILISEARCH_URL=http://meilisearch:7700
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-recoder_meili_dev_key}
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY must be set}
       - OPENMETER_URL=http://openmeter:8888  # internal Docker port (host: 8889)
       - FLAGSMITH_URL=http://flagsmith:8000
       - NATS_URL=nats://nats:4222
@@ -88,10 +88,6 @@ services:
       # Tier-1 connector flags (runtime image installs codex/claude CLIs).
       - RECODER_A2A_ENABLE_CODEX=${RECODER_A2A_ENABLE_CODEX:-true}
       - RECODER_A2A_ENABLE_CLAUDE_CODE=${RECODER_A2A_ENABLE_CLAUDE_CODE:-true}
-      # OpenCode centralized service
-      - OPENCODE_SERVICE_URL=http://opencode-service:4096
-      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-recoder_opencode_key}
-      - OPENCODE_SERVER_USERNAME=opencode
     depends_on:
       redis:
         condition: service_healthy
@@ -114,42 +110,6 @@ services:
           cpus: '1'
           memory: 512M
     stop_grace_period: 45s
-    networks:
-      - recoder
-
-  opencode-service:
-    build:
-      context: ./docker-backend/vendor/opencode
-      dockerfile: Dockerfile.service
-    container_name: recoder-opencode
-    restart: unless-stopped
-    environment:
-      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-recoder_opencode_key}
-      - OPENCODE_SERVER_USERNAME=opencode
-      - OPENCODE_DB=/data/opencode.db
-      - XDG_DATA_HOME=/data
-      - XDG_CONFIG_HOME=/config
-      - XDG_CACHE_HOME=/cache
-      - XDG_STATE_HOME=/state
-      - BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
-    volumes:
-      - opencode-data:/data
-      - opencode-config:/config
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    healthcheck:
-      test: ["CMD", "bun", "-e", "const u=process.env.OPENCODE_SERVER_USERNAME||'opencode';const p=process.env.OPENCODE_SERVER_PASSWORD;const h=p?{Authorization:'Basic '+Buffer.from(u+':'+p).toString('base64')}:{};fetch('http://localhost:4096/session',{headers:h}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
-    stop_grace_period: 30s
     networks:
       - recoder
 
@@ -481,7 +441,7 @@ services:
       - "127.0.0.1:3003:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-https://recoder.xyz/grafana}
     volumes:
@@ -554,9 +514,9 @@ services:
     environment:
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
       - DIRECT_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
-      - SESSION_SECRET=${TRIGGER_SESSION_SECRET:-recoder_trigger_session_secret}
-      - MAGIC_LINK_SECRET=${TRIGGER_MAGIC_LINK_SECRET:-recoder_trigger_magic_link_secret}
-      - ENCRYPTION_KEY=${TRIGGER_ENCRYPTION_KEY:-recoder_trigger_encryption_key_32ch}
+      - SESSION_SECRET=${TRIGGER_SESSION_SECRET:?TRIGGER_SESSION_SECRET must be set}
+      - MAGIC_LINK_SECRET=${TRIGGER_MAGIC_LINK_SECRET:?TRIGGER_MAGIC_LINK_SECRET must be set}
+      - ENCRYPTION_KEY=${TRIGGER_ENCRYPTION_KEY:?TRIGGER_ENCRYPTION_KEY must be set}
       - LOGIN_ORIGIN=http://localhost:3010
       - APP_ORIGIN=http://localhost:3010
       - V3_ENABLED=true
@@ -716,7 +676,7 @@ services:
     ports:
       - "127.0.0.1:18080:18080"
     environment:
-      - ZROK_ADMIN_TOKEN=${ZROK_ADMIN_TOKEN:-recoder_zrok_admin}
+      - ZROK_ADMIN_TOKEN=${ZROK_ADMIN_TOKEN:?ZROK_ADMIN_TOKEN must be set}
       - ZROK_API_ENDPOINT=http://0.0.0.0:18080
       - PFXLOG_NO_JSON=true
     command: ["controller", "/etc/zrok/ctrl.yml"]
@@ -850,7 +810,7 @@ services:
       - "127.0.0.1:8001:8000"
     environment:
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/recoder_backend
-      - DJANGO_SECRET_KEY=${FLAGSMITH_SECRET:-change_me_flagsmith_secret}
+      - DJANGO_SECRET_KEY=${FLAGSMITH_SECRET:?FLAGSMITH_SECRET must be set}
       - ENABLE_ADMIN_ACCESS_USER_PASS=True
     healthcheck:
       test: ["CMD", "python3", "-c", "import socket, sys; s = socket.create_connection(('127.0.0.1', 8000), 5); s.close(); sys.exit(0)"]
@@ -879,7 +839,7 @@ services:
       - "127.0.0.1:3006:3000"
     environment:
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/umami
-      - APP_SECRET=${UMAMI_SECRET:-change_me_umami_secret}
+      - APP_SECRET=${UMAMI_SECRET:?UMAMI_SECRET must be set}
       - DISABLE_UPDATES=1
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:3000/api/heartbeat || exit 1"]
@@ -910,7 +870,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/chatwoot
       - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      - SECRET_KEY_BASE=${CHATWOOT_SECRET:-change_me_in_production_chatwoot_secret}
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET:?CHATWOOT_SECRET must be set}
       - RAILS_ENV=production
       - NODE_ENV=production
       - INSTALLATION_NAME=Recoder
@@ -936,7 +896,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://recoder:recoder_prod_2026@${HOST_POSTGRES_HOST:-host.docker.internal}:5432/chatwoot
       - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      - SECRET_KEY_BASE=${CHATWOOT_SECRET:-change_me_in_production_chatwoot_secret}
+      - SECRET_KEY_BASE=${CHATWOOT_SECRET:?CHATWOOT_SECRET must be set}
       - RAILS_ENV=production
       - NODE_ENV=production
       - INSTALLATION_NAME=Recoder
@@ -979,7 +939,7 @@ services:
     volumes:
       - meili-data:/meili_data
     environment:
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-recoder_meili_dev_key}
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:?MEILI_MASTER_KEY must be set}
       - MEILI_ENV=production
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:7700/health || exit 1"]
@@ -1005,8 +965,6 @@ volumes:
   nats-data:
   zrok-data:
   alertmanager-data:
-  opencode-data:
-  opencode-config:
   grafana-data:
 
 networks:
