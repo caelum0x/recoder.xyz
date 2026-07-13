@@ -537,6 +537,50 @@ impl OpenfangEngine {
         }
     }
 
+    // ---- Agent memory (openfang's own KV store, per-agent) ----------------
+    // Note: this is openfang-internal agent memory, NOT Recoder's canonical
+    // memory-of-record (which stays owned by the Recoder control plane).
+
+    /// Get one KV memory entry for an agent. Returns `{ ok, value }` (value null when absent).
+    #[napi]
+    pub fn memory_get(&self, agent_id: String, key: String) -> String {
+        match self.kernel.memory.structured_get(parse_agent_id(&agent_id), &key) {
+            Ok(v) => json!({ "ok": true, "key": key, "value": v }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// Set one KV memory entry for an agent (value is arbitrary JSON).
+    #[napi]
+    pub fn memory_set(&self, agent_id: String, key: String, value_json: String) -> String {
+        let value: Value = match serde_json::from_str(&value_json) {
+            Ok(v) => v,
+            Err(e) => return err_json(format!("invalid value json: {e}")),
+        };
+        unit_result(self.kernel.memory.structured_set(parse_agent_id(&agent_id), &key, value))
+    }
+
+    /// Delete one KV memory entry for an agent.
+    #[napi]
+    pub fn memory_delete(&self, agent_id: String, key: String) -> String {
+        unit_result(self.kernel.memory.structured_delete(parse_agent_id(&agent_id), &key))
+    }
+
+    /// List all KV memory entries for an agent: `{ ok, entries: [{key, value}] }`.
+    #[napi]
+    pub fn memory_list(&self, agent_id: String) -> String {
+        match self.kernel.memory.list_kv(parse_agent_id(&agent_id)) {
+            Ok(pairs) => {
+                let entries: Vec<Value> = pairs
+                    .into_iter()
+                    .map(|(key, value)| json!({ "key": key, "value": value }))
+                    .collect();
+                json!({ "ok": true, "entries": entries }).to_string()
+            }
+            Err(e) => err_json(e),
+        }
+    }
+
     // ---- Skills (writes) --------------------------------------------------
 
     /// Reload skills from disk into the live registry.
