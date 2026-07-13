@@ -442,6 +442,10 @@ public
 # breaks fresh-checkout builds (e.g. site/public/logo.png). Re-include real ones.
 !site/public/
 !site/public/**
+# apps/wave/public = the Wave-fork shell's served static assets (logos, fonts,
+# fontawesome). Same landmine — un-ignore so the fork builds from a fresh checkout.
+!apps/wave/public/
+!apps/wave/public/**
 
 # Vuepress build output
 .vuepress/dist
