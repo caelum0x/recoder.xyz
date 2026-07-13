@@ -13,12 +13,14 @@
       "require": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "check-types": "tsc --noEmit",
     "clean": "rm -rf .turbo dist node_modules",
-    "test": "node --test --import tsx src/**/*.test.ts"
+    "test": "vitest run"
   },
   "dependencies": {
     "@recoder/agent-os": "workspace:*"
