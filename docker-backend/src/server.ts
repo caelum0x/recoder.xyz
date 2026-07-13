@@ -12435,7 +12435,7 @@ void ensureGovernanceDaemon()
 // emits RunEvents. Degrade-safe: when the binary is absent the backend stays
 // on the pure-TS OpenFangAdapter path (no fake success). Fire-and-forget; a
 // daemon problem never blocks boot.
-import { ensureOpenfangDaemon, createOpenfangAgentRouter } from './conductor/openfang-daemon.js';
+import { ensureOpenfangDaemon, createOpenfangAgentRouter, createOpenfangProxyRouter } from './conductor/openfang-daemon.js';
 void ensureOpenfangDaemon()
   .then((daemon) => {
     if (daemon) {
@@ -12506,6 +12506,11 @@ app.use('/api/a2a/agents', agentRegistryRouter);
 // OpenFang agent edge — health + card behind authenticateRequest. Truthful:
 // returns 503 when the openfang daemon is absent (degrade-safe, never fakes).
 app.use('/api/agents/openfang', authenticateRequest, createOpenfangAgentRouter());
+// Full OpenFang surface — transparently proxy openfang's dashboard pages + all
+// 140+ REST/SSE endpoints (Hands, agents, channels, memory, skills, models, the
+// OpenAI-compat /v1/*) through Recoder at /api/openfang/*. Degrade-safe 503 when
+// the daemon is absent. Recoder stays the owner of canonical task/approval/memory.
+app.use('/api/openfang', authenticateRequest, createOpenfangProxyRouter());
 app.use('/api/a2a', authenticateMutatingRequest, a2aRouter);
 app.use('/api/a2a/tasks', authenticateMutatingRequest, taskLifecycleRouter);
 app.use('/api/a2a/channels', collaborationRouter);

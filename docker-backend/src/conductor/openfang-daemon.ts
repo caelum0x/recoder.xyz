@@ -390,3 +390,87 @@ export function createOpenfangAgentRouter() {
 
   return router;
 }
+
+/** Hop-by-hop headers that must never be forwarded through the proxy. */
+const OPENFANG_HOP_BY_HOP = new Set([
+  'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
+  'te', 'trailer', 'transfer-encoding', 'upgrade', 'host', 'content-length',
+]);
+
+/**
+ * createOpenfangProxyRouter — a TRANSPARENT proxy that surfaces the FULL openfang
+ * product through Recoder at `/api/openfang/*`: its dashboard pages AND every one
+ * of its 140+ REST/SSE endpoints (Hands, agents, channels, memory, skills,
+ * models, the OpenAI-compatible `/v1/*`). Any method/path is forwarded to the
+ * loopback openfang daemon (default 127.0.0.1:4200).
+ *
+ * A2A boundary (AGENTS.md): this is the WIRE boundary only. Canonical task /
+ * approval / memory state stays owned by Recoder — the proxy exposes openfang's
+ * own surfaces, it does not delegate control-plane ownership. Degrade-safe:
+ * returns 503 when the daemon is absent, 502 on an upstream failure — never fakes.
+ * (WebSocket upgrades — e.g. live agent streams — are not proxied here; use the
+ * dashboard directly for those. HTTP GET/POST covers the pages + REST surface.)
+ */
+export function createOpenfangProxyRouter() {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { Router } = require('express') as typeof import('express');
+  const router = Router();
+
+  router.use(
+    async (req: import('express').Request, res: import('express').Response) => {
+      const h = openfangDaemonHandle();
+      if (!h) {
+        res.status(503).json({
+          agent: 'openfang',
+          status: 'unavailable',
+          reason:
+            'openfang daemon is not running — build crates/openfang (or set OPENFANG_BIN) ' +
+            'to bring up the full dashboard + API at /api/openfang/*.',
+        });
+        return;
+      }
+
+      // /api/openfang/foo?x=1 → http://127.0.0.1:4200/foo?x=1 (strip mount prefix).
+      const suffix = req.originalUrl.replace(/^\/api\/openfang/, '') || '/';
+      const target = `http://${h.listenAddr}${suffix}`;
+
+      const headers: Record<string, string> = {};
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (typeof value === 'string' && !OPENFANG_HOP_BY_HOP.has(key.toLowerCase())) {
+          headers[key] = value;
+        }
+      }
+
+      const method = req.method.toUpperCase();
+      let body: string | undefined;
+      if (
+        method !== 'GET' &&
+        method !== 'HEAD' &&
+        req.body != null &&
+        typeof req.body === 'object' &&
+        Object.keys(req.body).length > 0
+      ) {
+        body = JSON.stringify(req.body);
+        headers['content-type'] = 'application/json';
+      }
+
+      try {
+        const upstream = await fetch(target, { method, headers, body });
+        res.status(upstream.status);
+        upstream.headers.forEach((value, key) => {
+          if (!OPENFANG_HOP_BY_HOP.has(key.toLowerCase())) res.setHeader(key, value);
+        });
+        const buf = Buffer.from(await upstream.arrayBuffer());
+        res.send(buf);
+      } catch (err) {
+        res.status(502).json({
+          agent: 'openfang',
+          status: 'proxy_error',
+          reason: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  );
+
+  return router;
+}
