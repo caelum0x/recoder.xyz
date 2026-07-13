@@ -447,6 +447,12 @@ public
 !apps/wave/public/
 !apps/wave/public/**
 
+# apps/wave/build = electron-builder packaging inputs (entitlements.mac.plist,
+# icon.icns). Same broad-`build/` landmine — un-ignore so mac packaging works
+# from a fresh checkout (NOT build output; electron-vite emits to dist/).
+!apps/wave/build/
+!apps/wave/build/**
+
 # Vuepress build output
 .vuepress/dist
 
