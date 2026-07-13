@@ -20,6 +20,31 @@ bd close <id> --reason "Completed" --json
 bd vc status
 ```
 
+## Shared Memory (beads IS the memory layer)
+
+The bd issue graph is the cross-agent memory fabric. Every workspace launch
+recalls relevant memories into your prompt automatically; every completion
+harvests a memory candidate. Use it actively:
+
+```bash
+# RECALL before asking or re-deriving — prior agents may already know:
+bd search "<topic>" --label memory --status all --json -n 5
+
+# REMEMBER a fact/gotcha/convention worth persisting (candidate, not durable):
+bd create "<short fact>" --ephemeral -l memory,memory-scope:<repo|task|global> \
+  -d "<the fact + evidence>" --deps discovered-from:<issue-id> --json
+
+# NOTE running evidence on the issue you're working:
+bd note <id> "<finding / decision / gotcha>"
+```
+
+Rules:
+- Memory candidates are EPHEMERAL wisps (TTL-bound). Only a human/policy
+  review promotes them to durable (`bd promote` — never call this yourself).
+- Always include evidence in the body; an unevidenced memory is noise.
+- MCP runtimes: use `recoder_memory_search` / `recoder_remember` /
+  `recoder_issue_claim` / `recoder_issue_note` — same layer, gated route.
+
 ## Non-Interactive Shell Commands
 
 Always use non-interactive flags with file operations.
