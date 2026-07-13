@@ -81,6 +81,11 @@ export interface OpenfangEngineInstance {
   reloadExtensionMcps(): string;
   reconnectExtensionMcp(id: string): string;
   loadWorkflowsFromDir(dir: string): string;
+  // workflows + events + trigger registration (typed inputs as JSON)
+  registerWorkflow(workflowJson: string): string;
+  runWorkflow(workflowId: string, input: string): string;
+  publishEvent(eventJson: string): string;
+  registerTrigger(agentId: string, patternJson: string, promptTemplate: string, maxFires: number): string;
 }
 
 /** The `OpenfangEngine` Rust class as seen from JS (factory `boot` → static method). */
