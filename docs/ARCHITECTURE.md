@@ -6,8 +6,30 @@
 > and agent interop. Desktop like Conductor/Cursor; cloud as the spine that
 > monetizes + scales it.
 
-This is the canonical architecture. Every directory in the monorepo maps to a job
-here. Build order is the **Roadmap** at the bottom.
+This is the canonical *product* architecture. Every directory in the monorepo maps
+to a job here. Build order is the **Roadmap** at the bottom.
+
+> **Status update (2026-07-13) — what has since landed.** The L1 "engines" below have
+> been consolidated + expanded into a **polyglot Agent-OS engine fleet**, and a second
+> desktop surface (a Wave Terminal fork) has been built. The current, authoritative
+> references are:
+> - [`architecture/RECODER-ENGINES.md`](./architecture/RECODER-ENGINES.md) — the
+>   16-engine backend + phased roadmap. Phases 1–5 are **built + wired** through the
+>   governed MCP interop host + agent bridge, each **degrade-safe + unit-tested**
+>   (fleet supervisor · LLM gateway +OpenAI-compat · retrieval/RAG · code-intel ·
+>   browser · coordination · workflow/hooks · PAL · notify); **21 in-proc capability
+>   servers** are reachable via `POST /api/mcp/tools/:server/:tool/call`.
+> - [`architecture/RECODER-CAPABILITIES.md`](./architecture/RECODER-CAPABILITIES.md) —
+>   the capability map + the connection table (which executors are bound).
+> - [`architecture/RECODER-SHELL.md`](./architecture/RECODER-SHELL.md) +
+>   [`apps/wave/FORK.md`](../apps/wave/FORK.md) — `apps/wave`, the terminal cockpit,
+>   fully rebranded + cloud-decoupled + **builds end-to-end**; the Electron **GUI is
+>   not yet launch-verified**.
+>
+> **Honesty note:** "built + unit-tested + builds" is not "shipped/deployed/live" and
+> not GUI-verified. **Billing was dropped from the near-term plan (Polar removed) and,
+> together with deploy, is deferred/filed — not live.** Where the sections below still
+> say "Polar / billing live", read it as the *original* plan, superseded by the above.
 
 ---
 
@@ -101,7 +123,8 @@ shared repo context/memory → review the **diff** → merge / open PR.
 - **`brain`** (+ `ts/recodergit` code-graph + `py/mem0` + `context7`) — shared context/memory
 - **`coordination`** — work-locks + A2A bus + handoff (parallel agents don't collide)
 - **`network`** (+ `go/recoder-xds`) — **Envoy** zero-trust mesh + **XDR** (teams/enterprise, §3)
-- **`distribution`** (+ `py/recoder-billing` Polar MoR) — device-flow auth + entitlements + billing
+- **`distribution`** — device-flow auth + entitlements (billing deferred; **Polar
+  removed** — `py/recoder-billing` was deleted, see RECODER-ENGINES Phase 0)
 - **`interop`** (+ `shared` a2a contracts + `mcp/` + `ts/extracted-from-openclaw` connectors) — A2A/MCP + Slack/Discord/Telegram/etc.
 
 ### L2 · Runtime Host — `docker-backend`
@@ -110,7 +133,11 @@ Mounts the L1 engines; exposes `/api/conductor`, `/api/agent-os`, `/api/a2a`,
 per §0) **and** in the cloud (teams/remote-substrate). Same code, different host.
 
 ### L3 · Surfaces
-`apps/desktop` (cockpit + Electron — **the paid product**) · `apps/mobile`
+`apps/desktop` (Preact cockpit + Electron — **the current shipping app**) ·
+`apps/wave` (the **terminal-native shell** — a rebranded Wave Terminal fork with an
+11-block governed cockpit; built + builds end-to-end, **GUI not yet launch-verified**;
+becomes the primary surface once verified — see
+[`architecture/RECODER-SHELL.md`](./architecture/RECODER-SHELL.md)) · `apps/mobile`
 (monitor/approve on the go via `/api/a2a`) · `app/` (recoder.xyz — Better Auth
 source of truth + project/billing data) · `site/` (marketing/download) · `mcp/` +
 `packages/cli` + `recoder-skill` + `skills/` (agents drive Recoder; Recoder is a

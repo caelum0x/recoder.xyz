@@ -5,11 +5,28 @@ isolated git worktree, driven through a pinned tmux session — and gives you a 
 loop on top. The app is self-contained: opening it boots its own embedded backend on
 loopback. You bring your own agent login (BYOK); Recoder never asks for a model key.
 
-> Related reading: [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONDUCTOR-ARCHITECTURE.md](./CONDUCTOR-ARCHITECTURE.md) · [PRODUCTS.md](./PRODUCTS.md)
+> Related reading: [ARCHITECTURE.md](./ARCHITECTURE.md) · [CONDUCTOR-ARCHITECTURE.md](./CONDUCTOR-ARCHITECTURE.md) · [PRODUCTS.md](./PRODUCTS.md) · [architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md) · [architecture/RECODER-ENGINES.md](./architecture/RECODER-ENGINES.md)
+
+> **Status (2026-07-13) — read this first.** The embedded-backend boot loop and the
+> create→run→review→merge control-plane loop are **real and proof-backed** (headless
+> proofs in §2 and §4 exit 0 without a model key). What is **not** yet done: the app is
+> **not packaged/published** — there is no shipping `.dmg` or Homebrew cask yet
+> (`electron-builder` packaging + identity are deferred), and the **desktop GUI has not
+> been launch-verified here**. So §1 (Install) describes the *intended* distribution, not
+> a currently-downloadable release. A second, terminal-native surface — the L3 shell
+> `apps/wave` (a rebranded Wave Terminal fork) — **builds end-to-end** but is likewise not
+> GUI-verified; see [architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md) and
+> [`apps/wave/FORK.md`](../apps/wave/FORK.md).
 
 ---
 
 ## 1. Install
+
+> **Not yet published.** The Homebrew cask and `.dmg` release below are the **planned**
+> distribution path. `electron-builder` packaging + code-signing + the release pipeline are
+> deferred, so the tap and release assets are not live yet. Until then, run the app from
+> source in dev (see [DEVELOPMENT.md](./DEVELOPMENT.md)) and rely on the headless boot proof
+> in §2 for evidence the backend loop works.
 
 | Method | Command / Step |
 |---|---|

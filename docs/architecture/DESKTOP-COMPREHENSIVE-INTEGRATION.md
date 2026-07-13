@@ -3,6 +3,26 @@
 Author: Chief Architect pass · Repo: `/Users/arhansubasi/recoder.xyz` · Target: `apps/desktop`
 Status: architecture proposal for owner review → implementation plans
 
+> **Current reality (2026-07-13).** Much of this proposal has since been **delivered on the backend**. The
+> recommended **single-aggregation-hub** model (§1, model B — one embedded `docker-backend`, every
+> capability reached through it behind the governance gate) is the model that was built: the engine fleet
+> **Phases 1–5** are wired + degrade-safe + unit-tested through the governed MCP interop host, and the
+> agent-facing capabilities this doc proposed as future panels (LLM gateway, memory, retrieval, browser,
+> coordination, PAL, workflow, MCP tools, issues/beads) are now **21 in-proc capability servers** reachable
+> at `POST /api/mcp/tools/:server/:tool/call`. See **[RECODER-ENGINES.md](./RECODER-ENGINES.md)** (§6
+> roadmap + §8/§21 ledger) and **[RECODER-CAPABILITIES.md](./RECODER-CAPABILITIES.md)** (connection table).
+>
+> **Surface shift.** The rich operator cockpit envisioned here (§3–§4) was primarily built on a **different
+> surface** — **`apps/wave`**, a rebranded Wave-Terminal fork whose block model is the cockpit (11 governed
+> blocks, builds end-to-end) — see **[RECODER-SHELL.md](./RECODER-SHELL.md)** + **[../../apps/wave/FORK.md](../../apps/wave/FORK.md)**.
+> `apps/desktop` remains the **current shipping shell** until the Wave shell is GUI/launch-verified.
+>
+> **Honesty note.** "Built + wired + unit-tested + builds" is **not** "deployed / live / GUI-verified": the
+> Wave shell has **not** been launched here, so its panels' live appearance is unverified; **openfang** +
+> **tensorzero** are seamed but their native `.node` builds are deferred; **deploy + billing** are deferred
+> (filed), not live; and the deleted-dir notes elsewhere apply (`crates/lance` is gone, so its retrieval
+> rows below are stale).
+
 Verified against real code: `apps/desktop/{package.json,main.js (3356 lines),preload.js (326 lines),backend-supervisor.js (872 lines)}`, `apps/desktop/cockpit/src/components/*`, `docker-backend/src/server.ts` route mounts, `crates/{README.md,openfang.toml,recoder-governance/,tensorzero/,lance/}`, `ts/{recodergit,dmux}`, `packages/{brain,continuum,conductor-ui}`, `py/{pal-mcp-server,browser-use,mem0}`, `go/{beads,multica}`. One inventory citation (`packages/recoder-analytics`) did not resolve on disk and is flagged as unverified below.
 
 ---

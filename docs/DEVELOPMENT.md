@@ -150,6 +150,33 @@ pnpm runtime-adapter:verify
 pnpm oss:health
 ```
 
+### 4.6 Desktop shell build (`apps/wave`, the L3 terminal cockpit)
+
+The L3 terminal-native shell lives in [`apps/wave`](../apps/wave) — a fork of Wave
+Terminal (Apache-2.0) rebranded to Recoder. It is **not** part of the pnpm workspace;
+it has its own Go backend + `npm`/electron-vite frontend and is built with the Wave
+`Taskfile`. Both halves build end-to-end on this workstation (**VERIFIED: exit 0**):
+
+```bash
+cd apps/wave
+task build:backend:quickdev     # Go backend → dist/bin/recoder-server.<arch>   (verified exit 0)
+npm run build:dev               # electron-vite frontend + emain                (verified exit 0)
+
+# run the dev shell (spawns the recoder-server built above; point it at docker-backend on :3100):
+RECODER_BACKEND_URL=http://127.0.0.1:3100 npm run dev
+```
+
+Prerequisites beyond §1: Go (1.25.x used here), the `task` (Taskfile) runner, and
+`node_modules` installed under `apps/wave` — `task` + Go must be on `PATH`
+(`/opt/homebrew/bin`, `/usr/local/go/bin`). The Go all-arches path is `task build:backend`.
+
+> **Honest state:** both build halves exit 0 and the frontend is esbuild/electron-vite
+> clean, but the **Electron GUI has not been launched here** — block appearance and live
+> interaction are unverified. See [`apps/wave/FORK.md`](../apps/wave/FORK.md) (fork
+> mechanics, rebrand, build) and [`architecture/RECODER-SHELL.md`](./architecture/RECODER-SHELL.md)
+> (the 11-block cockpit + product loop) for the full picture and the app-gated remainder
+> (GUI launch, `wsh`→`recoder` CLI rename, app icon, signed `.dmg`).
+
 ---
 
 ## 5. Running the proofs

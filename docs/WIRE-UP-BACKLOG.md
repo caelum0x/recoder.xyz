@@ -10,6 +10,14 @@ Status: ⬜ todo · 🔄 in progress · ✅ wired (consumer imports + runs it) �
 
 **Progress (2026-07-11): 12 of 15 wired in-process on the real product path; 2 skipped (gateway/worker — engine already fused elsewhere); 1 open (`ops-recorder` gitignored). BYOK runtime drivers verified real (FR-1). `recoder-browser-tools` fused into browser-check node (WIRE-UP #13).**
 
+> **Beyond this list (2026-07-13).** The [16-engine program](./architecture/RECODER-ENGINES.md) added
+> *new owned engines* (not in the original 15 wire-up dirs) that are now wired + reachable through the
+> governed interop/MCP host: **retrieval** (`packages/retrieval`), **browser-use**
+> (`packages/agent-browser`), **coordination** (`packages/coordination`), **workflow-engine**, in-proc
+> **pal-plan**, and **notify** (`packages/agent-notify`). `pal` (row #1 below) is one of these. See the
+> connection table in [RECODER-CAPABILITIES](./architecture/RECODER-CAPABILITIES.md). The one item still
+> **open** from the list below — `py/ops-recorder` (work-signals) — is also Phase 5's next step there.
+
 | | Package (built, unused) | Wire into (consumer) | Status |
 |---|--------------------------|----------------------|----------------|
 | ✅ | **`packages/pal`** | `docker-backend` conductor run loop | **wired** — `pal-plan.ts` fused into `workspace-service.createWorkspace`; defaults runtime+substrate on the real create path; risk annotates (D1) |

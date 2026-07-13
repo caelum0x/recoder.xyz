@@ -4,6 +4,27 @@
 > [`ARCHITECTURE.md`](./ARCHITECTURE.md) (how) and [`ROADMAP.md`](./ROADMAP.md)
 > (when). Product line in [`PRODUCTS.md`](./PRODUCTS.md).
 
+> **Delivered status (2026-07-13).** Much of FR-1..FR-5 + FR-8 now has a built,
+> governed, degrade-safe implementation on the branch — reachable through the
+> interop/MCP host + agent bridge and carried by the L3 cockpit
+> ([RECODER-SHELL](./architecture/RECODER-SHELL.md), [RECODER-ENGINES](./architecture/RECODER-ENGINES.md),
+> [RECODER-CAPABILITIES](./architecture/RECODER-CAPABILITIES.md)):
+> - **FR-1 run any agent / FR-2 parallel workspaces** — conductor tmux + git-worktree substrate is
+>   load-bearing; BYOK runtime drivers verified real; coordination work-locks (`packages/coordination`) wired.
+> - **FR-3 see / review / merge** — the `apps/wave` cockpit carries launch → live session (+ message the
+>   agent) → diff → merge/PR → archive as governed blocks. **Built + full-build verified, NOT GUI-verified**
+>   (the Electron app has not been launched here).
+> - **FR-4 shared brain / FR-5 governance + audit** — brain context + retrieval (RAG) engine wired; the
+>   Rust governance kernel + Merkle audit gate every MCP call.
+> - **FR-8 interop** — the live MCP/A2A server + governed capability bridge; a **notify** connector landed;
+>   chat channel connectors (Slack/Discord/Telegram) remain **Phase 5 remaining work**.
+> - **FR-6 device-flow** — verified via `scripts/verify-cli-device-flow-e2e.sh`; **in-app wiring remains**.
+> - **FR-7 billing / FR-9 mesh / FR-10 XDR / FR-11 self-host** — **deferred / filed**, not live. Deploy +
+>   Polar billing are not shipped.
+>
+> "Built + committed + unit-tested + builds" is not "shipped/deployed/live". The requirements below stand
+> as the target; the markers above say how far each has actually landed.
+
 ## 1. Problem
 Developers increasingly run AI coding agents (Claude Code, Codex, Cursor, pi),
 but running **several at once** is chaos: no isolation (agents stomp each other),

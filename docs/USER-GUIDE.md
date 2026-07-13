@@ -10,9 +10,19 @@ state, and an unreachable backend shows a truthful banner instead of fabricated 
 > [`App.tsx`](../apps/desktop/cockpit/src/App.tsx); all components live under
 > `apps/desktop/cockpit/src/components/`.
 
+> **Status (2026-07-13).** This guide describes the **built** cockpit (`apps/desktop/cockpit`) —
+> every component and endpoint referenced below is real on disk, and the backend loop it drives
+> is proof-backed (see [GETTING-STARTED.md](./GETTING-STARTED.md) §2/§4). The Electron **GUI has
+> not been launch-verified here**, so screenshots/live interaction described as "watch them work
+> live" reflect the code's intent, not an eyeballed running app. `apps/desktop` remains the
+> shipping desktop surface; a second, terminal-native surface — the L3 shell `apps/wave` — carries
+> its own 11-block governed cockpit with the same launch→session→review→merge loop and **builds
+> end-to-end** (also not GUI-verified): see [architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md).
+
 Related reading:
 - [CONDUCTOR-ARCHITECTURE.md](./CONDUCTOR-ARCHITECTURE.md) — the conductor/worktree/tmux model the cockpit drives.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — overall platform architecture.
+- [architecture/RECODER-SHELL.md](./architecture/RECODER-SHELL.md) — the L3 terminal-native cockpit (`apps/wave`).
 
 ---
 

@@ -1,5 +1,31 @@
 # Recoder — Product & Directory Architecture
 
+> **⚠️ Superseded / background (2026-07-13).** This doc (from 2026-06-24) captured the
+> *early* fusion plan. Its directory naming, integration-state table, and layer
+> grouping predate what actually landed and are **out of date** in several concrete
+> ways — treat it as institutional background, not ground truth. Known drift vs. reality:
+> - **Naming was not applied as sketched.** The real trees are `crates/openfang`,
+>   `crates/recoder-governance`, `crates/tensorzero`, `go/beads`, `go/ziti`,
+>   `py/pal-mcp-server` — **not** `crates/recoder-openfang`, `go/recoder-beads`,
+>   `go/recoder-mesh`, `py/recoder-pal-mcp`. There is no `sources/` staging dir.
+> - **Deletions since:** Polar billing (`py/recoder-billing` + `ts/polar`),
+>   `crates/lance` (→ Qdrant), `ts/oh-my-codex`/`ts/oh-my-openagent`, and the Giselle
+>   cluster were removed. **Billing + deploy are deferred/filed, not live.** `multica`
+>   is vendored/de-scoped.
+> - **The engine model has moved on.** The eight "subsystems" here were consolidated +
+>   expanded into a **16-engine polyglot Agent-OS fleet**; Phases 1–5 are **built +
+>   wired** through the governed MCP interop host + agent bridge (degrade-safe +
+>   unit-tested). A terminal-native shell (`apps/wave`, a Wave Terminal fork) was built
+>   and **builds end-to-end** (GUI not yet launch-verified).
+>
+> **Current, authoritative references:**
+> [`architecture/RECODER-ENGINES.md`](./architecture/RECODER-ENGINES.md) (the engine
+> fleet + phased delivery status) ·
+> [`architecture/RECODER-CAPABILITIES.md`](./architecture/RECODER-CAPABILITIES.md) (the
+> capability map + connection table) ·
+> [`architecture/RECODER-SHELL.md`](./architecture/RECODER-SHELL.md) +
+> [`apps/wave/FORK.md`](../apps/wave/FORK.md) (the terminal cockpit).
+
 Last updated: 2026-06-24. The institutional architecture for the Recoder product:
 how every owned OSS component becomes one buildable product, grouped by **language**
 (for toolchains) and by **function** (for clarity), all in this one repo. No

@@ -51,7 +51,7 @@ executor/native build pending · **catalog** = registered, executor not yet boun
 | Capability | What it gives the agent | Status |
 |---|---|---|
 | `recoder-governance` | Deny-biased policy + tamper-evident Merkle audit on every delivery. The moat. Compiled `.node`, native-first, daemon + UDS fallback, pure-TS fail-closed fallback. | **wired** |
-| `lance` | In-process columnar/vector store for retrieval/RAG — no external Qdrant/pgvector. | **wired** |
+| `lance` | ~~In-process columnar/vector store~~ | **removed** (Phase 0) — RAG now uses Qdrant via `vector-store.ts` + `@recoder/retrieval`; see [RAG-CONSOLIDATION](./RAG-CONSOLIDATION.md) |
 | `openfang` | Autonomous Agent-OS execution engine (137K-LOC Rust) as a swappable authority. Subprocess + native-first seams. | **partial** (`.node` build deferred) |
 | `tensorzero` | Unified multi-provider LLM gateway (<1ms p99) + inference observability + fallbacks — one governed, logged path for every model call. | **partial** (`.node` deferred) |
 | `claw-code-parity` | Coding-agent parity/eval harness. | **partial** |
@@ -81,10 +81,10 @@ executor/native build pending · **catalog** = registered, executor not yet boun
 | Capability | What it gives the agent | Status |
 |---|---|---|
 | `opencode` (`@recoder/opencode`) | The opencode coding-agent runtime. | **wired** |
-| `oh-my-codex` (`@recoder/codex-runtime`) | The Codex runtime driver. | **wired** |
+| `oh-my-codex` | ~~Codex runtime driver~~ | **removed** (Phase 0 cleanup) |
 | `oh-my-openagent` | opencode harness. | **wired** |
 | `dmux` (`@recoder/dmux`) | Terminal-multiplexer operator console. | **partial** |
-| `polar` | Payments server (monetization). | **partial** |
+| `polar` | ~~Payments server (monetization)~~ | **removed** — Polar dropped; billing deferred (`recoder-r6ek`) |
 | `extracted-from-openclaw` (`@recoder/connectors`) | Chat-channel connectors (Slack/Discord/…). | **wired** |
 
 ### `packages/` — the Agent-OS control-plane spine

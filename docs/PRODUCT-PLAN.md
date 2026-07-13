@@ -2,6 +2,20 @@
 
 > Forward-looking plan grounded in the actual code across all 14 trees (app, apps, c, crates, docker-backend, go, mcp, packages, py, recoder-skill, site, ts, tools, docs). Not a status board — a map of the one product, its shippable products, and the roadmap to make them coherent.
 
+> **Status update (2026-07-13) — partially superseded.** This doc predates the
+> [16-engine backend program](./architecture/RECODER-ENGINES.md) and the
+> [L3 terminal shell](./architecture/RECODER-SHELL.md) ([FORK.md](../apps/wave/FORK.md)); read those for
+> the current engine reality. What has since **landed** (built + wired through the governed interop/MCP
+> host, degrade-safe + unit-tested): the fleet supervisor + LLM gateway, retrieval/RAG, semantic
+> code-intel, browser-use, coordination work-locks, workflow verify/hooks, in-proc PAL planning, and a
+> notify connector — see the connection table in
+> [RECODER-CAPABILITIES](./architecture/RECODER-CAPABILITIES.md). Several items this doc calls
+> **"vendored, parked/aspirational"** are now **wired or seamed**: `py/colbert` (rerank), `py/browser-use`
+> (via `packages/agent-browser`), `crates/tensorzero` (LLM-gateway seam over `docker-backend/src/gateway`),
+> and `packages/coordination`. Still deferred/filed: **deploy** and **Polar billing** (Product F) — not
+> shipped. The forked shell adds a real cockpit front door for Products A/B, but its Electron **GUI has
+> not been launched** — built + full-build verified only, not GUI-verified.
+
 ## 1. The Product
 
 **Recoder is one product: a local-first control plane that runs *your own* coding agents (Claude Code, Codex, opencode, pi) in parallel and makes them work as a coordinated team** — one shared brain so they read the repo once, work-locks + an A2A bus so they never collide or duplicate, and governance + a tamper-evident audit chain so a team can trust autonomous runs. Users bring their own agents and keys; Recoder never proxies models or resells tokens — that BYOK posture is the trust story, not a limitation.
