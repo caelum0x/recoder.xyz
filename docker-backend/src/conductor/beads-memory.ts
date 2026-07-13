@@ -152,38 +152,6 @@ export function promoteMemory(id: string): boolean {
   }
 }
 
-/**
- * bd dependency-type used for a semantic memory relation. `related-to` maps to
- * bd's `related` type; the rest pass through 1:1. Unknown kinds degrade to
- * `related` (a non-blocking edge) rather than inventing a type.
- */
-const RELATION_DEP_TYPE: Record<string, string> = {
-  'discovered-from': 'discovered-from',
-  supersedes: 'supersedes',
-  'related-to': 'related',
-  blocks: 'blocks',
-};
-
-/**
- * Link two existing memories/issues with a typed dependency edge
- * (`bd dep add <from> <to> --type <kind>`). Returns false (truthful degrade)
- * on empty ids or when bd is unavailable — never throws.
- */
-export function linkMemories(fromId: string, toId: string, kind: string): boolean {
-  const from = fromId.trim();
-  const to = toId.trim();
-  if (!from || !to) return false;
-  const type = RELATION_DEP_TYPE[kind] ?? 'related';
-  try {
-    run(['dep', 'add', from, to, '--type', type, '--json']);
-    logger.info({ from, to, type }, 'memory relation linked in beads');
-    return true;
-  } catch (err) {
-    logger.warn({ from, to, err: String(err).slice(0, 200) }, 'beads relate failed');
-    return false;
-  }
-}
-
 /** Append an evidence/progress note to an existing memory or work item. */
 export function appendMemoryNote(id: string, text: string): boolean {
   const trimmed = id.trim();

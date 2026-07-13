@@ -22,7 +22,9 @@ import type { BrainContext } from '@recoder/brain';
 import { agentOsContainer } from '../agent-os/service-container';
 import { buildTaskContextPack } from '../git-context.js';
 import { fetchLibraryDocs, isContext7Available } from '../context7.js';
-import { getMemoryModule, type RecalledMemory } from '../modules/memory';
+import { mem0Search } from '../mem0-client.js';
+import { colbertRerank } from './colbert-rerank.js';
+import { recallMemories } from './beads-memory.js';
 import { createLogger } from '../logger';
 
 const logger = createLogger('conductor:bundle');
@@ -148,34 +150,6 @@ function renderBrainContext(ctx: BrainContext): string | null {
   ].join('\n').trimEnd();
 }
 
-/** Map a fused store id to the provenance token recorded in `sources`. */
-const STORE_SOURCE: Record<RecalledMemory['store'], string> = {
-  beads: 'beads-memory',
-  mem0: 'mem0',
-  'agent-os': 'agent-os',
-};
-
-/**
- * Render the module's fused recall into a single provenance-carrying block.
- * Returns null when nothing was recalled (no faked section). Each line keeps its
- * store tag + id so the prompt is auditable.
- */
-function renderRecalledMemory(recalled: RecalledMemory[]): { text: string; sources: string[] } | null {
-  if (!recalled.length) return null;
-  const lines = recalled.map((m) => {
-    const scoreTag = typeof m.score === 'number' ? ` (score ${m.score.toFixed(2)})` : '';
-    const idTag = m.id ? ` ${m.id}` : '';
-    return `- [${m.store}${idTag}] ${m.text}${scoreTag}`;
-  });
-  const text = [
-    '## Recalled memory (fused: beads ∪ mem0 ∪ agent-os)',
-    ...lines,
-    '_Verify before relying on these; promote/refute via the memory module._',
-  ].join('\n');
-  const sources = [...new Set(recalled.map((m) => STORE_SOURCE[m.store]))];
-  return { text, sources };
-}
-
 /**
  * Build the enriched prompt + provenance. Always returns a usable prompt; missing
  * sources are simply omitted (never faked).
@@ -209,25 +183,45 @@ export async function enrichPrompt(input: EnrichPromptInput): Promise<EnrichedPr
     }
   }
 
-  // Fused memory recall — ONE call into the MemoryModule, the single owner of
-  // recall fusion. It gathers the beads issue graph (candidates + promoted), the
-  // mem0 per-user semantic layer, and agent-os reviewed candidates, then
-  // colbert-reranks + dedupes the WHOLE set (colbert no longer only sees mem0)
-  // and tags each row with provenance. Degrade-safe: any store down contributes
-  // nothing; recall never throws into the launch path.
+  // Beads memory layer: recall from the ISSUE GRAPH (candidates + promoted
+  // memories, with evidence + provenance ids). This is the shared cross-agent
+  // memory of record — mem0 below stays as the per-user semantic layer.
   try {
-    const recalled = await getMemoryModule().recall(input.prompt, undefined, {
-      limit: 5,
-      userId: input.userId,
-      repoPath: input.repoPath,
-    });
-    const block = renderRecalledMemory(recalled);
-    if (block) {
-      sections.push(block.text);
-      sources.push(...block.sources);
+    const graphMemories = recallMemories(input.prompt, { limit: 5 });
+    if (graphMemories.length) {
+      sections.push(
+        [
+          '## Shared memory (beads issue graph)',
+          ...graphMemories.map((m) => `- [${m.id}] ${m.title}${m.description ? ` — ${m.description.slice(0, 200)}` : ''}`),
+          '_Verify before relying on these; promote/refute via the issue graph._',
+        ].join('\n'),
+      );
+      sources.push('beads-memory');
     }
   } catch (err) {
-    logger.warn({ err }, 'memory recall skipped');
+    logger.warn({ err }, 'beads memory recall skipped');
+  }
+
+  if (input.userId) {
+    try {
+      const recall = await mem0Search(input.prompt, { userId: input.userId }, 5);
+      if (recall.available && recall.results.length) {
+        // ColBERT late-interaction rerank of the recalled memories against the
+        // prompt — a genuine call to the optional py/colbert service when
+        // COLBERT_RERANK_URL is set. Degrade-safe: unset/down → mem0's order.
+        const texts = recall.results.map((r) => r.memory);
+        const reranked = await colbertRerank(input.prompt, texts);
+        const memories = reranked.passages.map((m) => `- ${m}`);
+        const label = reranked.available
+          ? '## Relevant memory (mem0, colbert-reranked)'
+          : '## Relevant memory (mem0)';
+        sections.push([label, ...memories].join('\n'));
+        sources.push('mem0');
+        if (reranked.available) sources.push('colbert');
+      }
+    } catch (err) {
+      logger.warn({ userId: input.userId, err }, 'mem0 recall skipped');
+    }
   }
 
   if (input.library && isContext7Available()) {

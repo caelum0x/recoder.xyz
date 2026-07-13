@@ -129,7 +129,7 @@ function resolveOssEmbedder(): ProviderBlock | null {
   return null;
 }
 
-export function resolveMode(): Mem0Mode {
+function resolveMode(): Mem0Mode {
   if (process.env.MEM0_API_KEY) return 'platform';
   if (resolveOssLlm() && resolveOssEmbedder()) return 'oss';
   return 'none';

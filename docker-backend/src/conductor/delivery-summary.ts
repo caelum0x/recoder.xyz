@@ -31,7 +31,7 @@ import { createLogger } from '../logger.js';
 import { agentOsContainer } from '../agent-os/service-container';
 import { getWorkspace, listWorkspaceEvents } from './workspace-service.js';
 import { workspaceDiff } from './review.js';
-import { getMemoryModule } from '../modules/memory';
+import { rememberCandidate } from './beads-memory.js';
 import { Governance } from '@recoder/governance';
 import type { Workspace, RunEvent } from '@recoder/agent-os';
 
@@ -290,24 +290,16 @@ export async function generateMemoryCandidate(workspaceId: string): Promise<Memo
   // an ephemeral wisp: reviewable, recallable by every future agent launch, and
   // durable only after an explicit promote. Degrade-safe: bd unavailable →
   // candidate still lives in workspace metadata exactly as before.
-  let beadsId: string | undefined;
-  try {
-    const remembered = await getMemoryModule().remember({
-      title: `[memory] ${content.slice(0, 100)}`,
-      body: [
-        content,
-        `Evidence: exit=${summary.exitCode} changedFiles=${summary.changedFiles} diff=${summary.diffStat}`,
-        summary.evidenceAuditHash ? `Audit tip: ${summary.evidenceAuditHash}` : '',
-        `Workspace: ${workspaceId} · Task: ${workspace.taskId}`,
-      ].filter(Boolean).join('\n'),
-      scope: 'task',
-      evidence: { taskId: workspace.taskId },
-    });
-    if (remembered.store === 'beads') beadsId = remembered.id;
-  } catch {
-    // Degrade-safe: all memory engines down → candidate still lives in workspace
-    // metadata exactly as before, with no beadsId.
-  }
+  const beadsId = rememberCandidate({
+    title: `[memory] ${content.slice(0, 100)}`,
+    body: [
+      content,
+      `Evidence: exit=${summary.exitCode} changedFiles=${summary.changedFiles} diff=${summary.diffStat}`,
+      summary.evidenceAuditHash ? `Audit tip: ${summary.evidenceAuditHash}` : '',
+      `Workspace: ${workspaceId} · Task: ${workspace.taskId}`,
+    ].filter(Boolean).join('\n'),
+    scope: 'task',
+  });
   if (beadsId) candidate.beadsId = beadsId;
 
   logger.info(
