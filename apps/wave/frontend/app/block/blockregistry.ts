@@ -26,6 +26,7 @@ import { RecoderToolsViewModel } from "@/app/view/recoder-tools/recoder-tools-mo
 import { RecoderHealthViewModel } from "@/app/view/recoder-health/recoder-health-model";
 import { RecoderMemoryViewModel } from "@/app/view/recoder-memory/recoder-memory-model";
 import { RecoderRunsViewModel } from "@/app/view/recoder-runs/recoder-runs-model";
+import { RecoderSettingsViewModel } from "@/app/view/recoder-settings/recoder-settings-model";
 import { TermViewModel } from "@/view/term/term-model";
 import { WaveAiModel } from "@/view/waveai/waveai";
 import { WebViewModel } from "@/view/webview/webview";
@@ -55,6 +56,7 @@ BlockRegistry.set("recoder-tools", RecoderToolsViewModel);
 BlockRegistry.set("recoder-health", RecoderHealthViewModel);
 BlockRegistry.set("recoder-memory", RecoderMemoryViewModel);
 BlockRegistry.set("recoder-runs", RecoderRunsViewModel);
+BlockRegistry.set("recoder-settings", RecoderSettingsViewModel);
 
 function makeDefaultViewModel(viewType: string): ViewModel {
     const viewModel: ViewModel = {
