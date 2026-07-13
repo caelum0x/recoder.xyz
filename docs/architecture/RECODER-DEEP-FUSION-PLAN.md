@@ -33,7 +33,14 @@ across Node versions.
 |---|---|---|---|
 | **recoder-governance** (moat) | Rust daemon (UDS) + `-napi` crate + FFI + TS fallback | native `.node` loaded in-process | **✅ DONE (2026-07-13)** — `.node` built (`cargo build --release -p recoder-governance-napi`, 31s) + **loads + runs a real `decide()` + Merkle audit IN-PROCESS**. The TS facade (`packages/governance`) prefers it, degrades to daemon/TS when absent. |
 | **tensorzero** (LLM gateway) | TS HTTP client; `-napi` crate present | native `.node` for routing/cache; TS/pi-ai fallback | ⏳ **deferred (disk)** — build recipe in the script; the tensorzero crate graph is too large to build on the current ~7 GiB-free volume (ENOSPC risk). Run on a machine/CI with headroom. |
-| **openfang** (agent engine, 137K LOC) | `-napi` crate compiles; no `.node` | native `.node` in-process | ⏳ **deferred (disk)** — same; big build. |
+| **openfang** (agent engine, 137K LOC) | `-napi` crate compiles; no `.node` | native `.node` in-process | ⏳ **deferred (disk)** — same; big build. **BUT the full product surface is already fused into the desktop** (see below); only the native in-process `.node` and the binary build remain disk-gated. |
+
+**openfang product surface — fused into the desktop cockpit (2026-07-13).** Independent of the native `.node`, openfang's *whole product* is now reachable through Recoder, governed by the backend:
+- **All 140+ APIs + dashboard pages** — `createOpenfangProxyRouter()` (a transparent catch-all reverse proxy at `/api/openfang/*` → loopback `127.0.0.1:4200`, prefix-stripped, hop-by-hop-filtered), mounted behind `authenticateRequest`. Degrade-safe: 503 when the daemon is absent, 502 on upstream error.
+- **The 7 autonomous Hands** — native cockpit block `recoder-hands` (list via `GET /api/openfang/api/hands`, activate via `POST …/activate`; truthful `not-running`/`not-connected` states).
+- **The dashboard** — `recoder-openfang` web widget onto `:4200`.
+- **Supervision** — `ensureOpenfangDaemon()` already spawns `openfang start` with backoff/auto-restart, honors `OPENFANG_BIN`/`OPENFANG_EXTERNAL`, and stays on the pure-TS path when the binary is absent.
+- **Remaining (disk-gated):** build the openfang binary (137K LOC) so the proxy/Hands have a live upstream; then optionally the native `.node`. Terminal access is already implicit (Wave is a real shell → `openfang` CLI / `curl :4200` work once the binary exists); a dedicated `wsh recoder openfang` subcommand is optional polish (needs the Go RPC codegen cycle).
 | **claw-code-parity** | eval/parity harness | **removed** (2026-07-13) — not product runtime; consumer degrades to TS fallback | ~~drop~~ **done** |
 
 ### `go/`
