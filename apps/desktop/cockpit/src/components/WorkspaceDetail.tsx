@@ -119,6 +119,102 @@ function InlineGateVerdict({
   );
 }
 
+/**
+ * The narrow, cockpit-side view of the PALPlan annotation the workspace create
+ * path persists onto `metadata.palPlan` (docker-backend pal-plan.ts). Provenance
+ * DISPLAY only — it never drives an action or gate (D1: risk is advisory).
+ */
+export type PalPlanMeta = {
+  runtimeId?: string;
+  substrate?: string;
+  reviewerRuntimeId?: string | null;
+  risk?: string;
+  browserVerification?: boolean;
+  skills?: string[];
+  mcpTools?: string[];
+  generatedAt?: string;
+};
+
+/**
+ * Boundary-narrow `metadata.palPlan` into PalPlanMeta. The metadata record is
+ * untrusted (backend-persisted JSON) — every field is typeof-checked and string
+ * arrays are filtered, so a malformed annotation degrades to `null` (rendered as
+ * the truthful "not recorded" line) instead of crashing the detail panel.
+ */
+export function palPlanFromMetadata(
+  metadata: Record<string, unknown> | undefined,
+): PalPlanMeta | null {
+  const raw = metadata?.palPlan;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  const rec = raw as Record<string, unknown>;
+  const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+  const strings = (v: unknown): string[] | undefined =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined;
+  return {
+    runtimeId: str(rec.runtimeId),
+    substrate: str(rec.substrate),
+    reviewerRuntimeId: rec.reviewerRuntimeId === null ? null : str(rec.reviewerRuntimeId),
+    risk: str(rec.risk),
+    browserVerification:
+      typeof rec.browserVerification === 'boolean' ? rec.browserVerification : undefined,
+    skills: strings(rec.skills),
+    mcpTools: strings(rec.mcpTools),
+    generatedAt: str(rec.generatedAt),
+  };
+}
+
+/**
+ * Compact inline PAL plan provenance — the persisted `metadata.palPlan`
+ * annotation (recommended runtime team, substrate, D1 advisory risk tier)
+ * shown in the detail header area. Reuses the InlineGateVerdict visual
+ * language (labeled meta grid) but is purely descriptive: it never gates
+ * or drives any action. `plan === null` renders the truthful missing line.
+ */
+function PlanProvenance({ plan }: { plan: PalPlanMeta | null }) {
+  if (!plan) {
+    return <p class="detail-plan-missing detail-gate-reason">PAL plan: not recorded</p>;
+  }
+  const team =
+    plan.runtimeId && plan.reviewerRuntimeId
+      ? `${plan.runtimeId} → ${plan.reviewerRuntimeId}`
+      : plan.runtimeId;
+  return (
+    <div class="detail-plan detail-sub" title={plan.generatedAt ? `Plan generated ${plan.generatedAt}` : undefined}>
+      <span class="meta-k">Plan</span>
+      {team && <span class="meta-v">{team}</span>}
+      {plan.substrate && (
+        <>
+          <span>·</span>
+          <span class="meta-v">{plan.substrate}</span>
+        </>
+      )}
+      {plan.risk && (
+        <>
+          <span>·</span>
+          {/* Raw tier string, badge tone mapped for glanceability only. */}
+          <span class={`badge tone-${plan.risk === 'high' ? 'bad' : plan.risk === 'medium' ? 'warn' : 'neutral'}`}>
+            risk: {plan.risk}
+          </span>
+        </>
+      )}
+      {plan.browserVerification !== undefined && (
+        <>
+          <span>·</span>
+          <span>browser verification: {plan.browserVerification ? 'yes' : 'no'}</span>
+        </>
+      )}
+      {(plan.skills || plan.mcpTools) && (
+        <>
+          <span>·</span>
+          <span>
+            skills: {plan.skills?.length ?? 0} · tools: {plan.mcpTools?.length ?? 0}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 type Tab = 'files' | 'output' | 'diff' | 'run' | 'terminal';
 
 /**
@@ -241,6 +337,8 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
   );
 
   const prMeta = (workspace.metadata?.pr as { url?: string } | undefined) || undefined;
+  // Persisted PALPlan provenance (create-path annotation) — display only.
+  const palPlan = palPlanFromMetadata(workspace.metadata);
   const pr = prNumber(prMeta?.url);
   const readyToMerge = canMerge(workspace.state);
   const session = workspaceSession(workspace);
@@ -337,6 +435,10 @@ export function WorkspaceDetail({ workspace, onClose, onChanged }: WorkspaceDeta
             <span>·</span>
             <span>{workspace.substrate}</span>
           </div>
+          {/* PAL plan provenance — the annotation persisted at create time
+              (INTEGRATION-PLAN §a.4 step 4). Descriptive only; when absent or
+              malformed the truthful "not recorded" line is shown, never hidden. */}
+          <PlanProvenance plan={palPlan} />
         </div>
         <button class="icon-btn" onClick={onClose} aria-label="Close detail">×</button>
       </div>
