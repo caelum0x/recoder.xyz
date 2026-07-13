@@ -1,7 +1,7 @@
 {
   "name": "@recoder/conductor-ui",
   "version": "0.1.0",
-  "description": "Web front door for the Recoder Conductor — typed client + React surfaces for parallel agent workspaces.",
+  "description": "Web front door for the Recoder Conductor \u2014 typed client + React surfaces for parallel agent workspaces.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -34,7 +34,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "react": "^18.0.0"
+    "react": "^18.0.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
     "react": {

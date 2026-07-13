@@ -124,7 +124,7 @@ tasks:
     package:
         desc: Package the application for the current platform.
         cmds:
-            - npm run build:prod && npm exec electron-builder -- -c electron-builder.config.cjs -p never {{.CLI_ARGS}}
+            - pnpm run build:prod && pnpm exec electron-builder -c electron-builder.config.cjs -p never {{.CLI_ARGS}}
         deps:
             - clean
             - npm:install
@@ -468,7 +468,7 @@ tasks:
     init:
         desc: Initialize the project for development.
         cmds:
-            - npm install
+            - pnpm install
             - go mod tidy
             - cd docs && npm install
 
@@ -488,15 +488,14 @@ tasks:
         cmd: 'rm -rf ~/Library/Application\ Support/waveterm-dev'
 
     npm:install:
-        desc: Runs `npm install`
+        desc: Runs `pnpm install` (workspace member — lockfile lives at the monorepo root)
         internal: true
         generates:
             - node_modules/**/*
-            - package-lock.json
         sources:
-            - package-lock.json
+            - ../../pnpm-lock.yaml
             - package.json
-        cmd: npm install
+        cmd: pnpm install
 
     go:mod:tidy:
         desc: Runs `go mod tidy`
