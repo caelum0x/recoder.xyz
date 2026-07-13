@@ -29,7 +29,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { WorkspaceDetail } from './WorkspaceDetail';
+import { WorkspaceDetail, palPlanFromMetadata } from './WorkspaceDetail';
 import type { Workspace } from '../types';
 
 const BACKEND_URL = 'http://localhost:3100';
@@ -449,5 +449,117 @@ describe('WorkspaceDetail inline gate verdict', () => {
     expect(c.querySelector('.action-error')).toBeNull();
     expect(c.querySelector('.action-note')).toBeTruthy();
     expect(c.querySelector('.action-note')?.textContent).toContain('Merged.');
+  });
+});
+
+/**
+ * PAL plan provenance (INTEGRATION-PLAN §a.4 step 4, display half).
+ *
+ * The workspace create path persists the PALPlan annotation onto
+ * `workspace.metadata.palPlan` (runtime team, substrate, D1 advisory risk tier).
+ * WorkspaceDetail must SHOW that provenance — and, per the cockpit frontend
+ * rule, truthfully show "not recorded" when the annotation is absent or
+ * malformed instead of hiding the missing source or faking state.
+ */
+describe('WorkspaceDetail PAL plan provenance', () => {
+  /** A full persisted annotation, with values distinct from the workspace's own fields. */
+  const fullPlan = {
+    runtimeId: 'codex',
+    substrate: 'daytona',
+    reviewerRuntimeId: 'claude',
+    browserVerification: true,
+    skills: ['recoder-platform', 'tdd'],
+    mcpTools: ['workspace_diff'],
+    risk: 'high',
+    generatedAt: '2026-07-01T00:00:00Z',
+  };
+
+  it('renders the persisted palPlan — team, substrate, risk badge, verification, counts', async () => {
+    const c = mount(workspace({ metadata: { palPlan: fullPlan } }));
+    await flush(10);
+
+    const plan = c.querySelector('.detail-plan');
+    expect(plan).toBeTruthy();
+    const text = plan?.textContent ?? '';
+    // Runtime team: runtimeId → reviewerRuntimeId.
+    expect(text).toContain('codex → claude');
+    // Substrate from the plan (not the workspace's own tmux_worktree field).
+    expect(text).toContain('daytona');
+    // D1 advisory risk tier — raw string, shown as a badge.
+    expect(text).toContain('high');
+    expect(plan?.querySelector('.badge')?.textContent).toContain('high');
+    // Browser verification + skill/tool counts.
+    expect(text).toContain('browser verification: yes');
+    expect(text).toContain('skills: 2');
+    expect(text).toContain('tools: 1');
+    // The truthful missing-state line is NOT shown when the plan exists.
+    expect(text).not.toContain('not recorded');
+  });
+
+  it('omits the reviewer arrow when reviewerRuntimeId is null', async () => {
+    const c = mount(
+      workspace({ metadata: { palPlan: { ...fullPlan, reviewerRuntimeId: null } } }),
+    );
+    await flush(10);
+
+    const text = c.querySelector('.detail-plan')?.textContent ?? '';
+    expect(text).toContain('codex');
+    expect(text).not.toContain('→');
+  });
+
+  it("renders 'PAL plan: not recorded' when the workspace has no palPlan", async () => {
+    const c = mount(workspace());
+    await flush(10);
+
+    const missing = c.querySelector('.detail-plan-missing');
+    expect(missing).toBeTruthy();
+    expect(missing?.textContent).toContain('PAL plan: not recorded');
+    expect(c.querySelector('.detail-plan')).toBeNull();
+  });
+
+  it("renders 'not recorded' (and does not crash) for a malformed palPlan", async () => {
+    const c = mount(workspace({ metadata: { palPlan: 'garbage — not an object' } }));
+    await flush(10);
+
+    const missing = c.querySelector('.detail-plan-missing');
+    expect(missing).toBeTruthy();
+    expect(missing?.textContent).toContain('PAL plan: not recorded');
+    expect(c.querySelector('.detail-plan')).toBeNull();
+  });
+
+  describe('palPlanFromMetadata boundary narrowing', () => {
+    it('returns null for absent metadata, absent palPlan, and non-object palPlan', () => {
+      expect(palPlanFromMetadata(undefined)).toBeNull();
+      expect(palPlanFromMetadata({})).toBeNull();
+      expect(palPlanFromMetadata({ palPlan: 'nope' })).toBeNull();
+      expect(palPlanFromMetadata({ palPlan: null })).toBeNull();
+      expect(palPlanFromMetadata({ palPlan: 42 })).toBeNull();
+      expect(palPlanFromMetadata({ palPlan: ['array'] })).toBeNull();
+    });
+
+    it('narrows each field defensively — wrong-typed fields drop to undefined', () => {
+      const plan = palPlanFromMetadata({
+        palPlan: {
+          runtimeId: 'codex',
+          substrate: 7, // wrong type → dropped
+          reviewerRuntimeId: null,
+          browserVerification: 'yes', // wrong type → dropped
+          skills: ['a', 3, 'b'], // non-strings filtered
+          mcpTools: 'not-an-array', // wrong type → dropped
+          risk: 'medium',
+          generatedAt: '2026-07-01T00:00:00Z',
+        },
+      });
+      expect(plan).toEqual({
+        runtimeId: 'codex',
+        substrate: undefined,
+        reviewerRuntimeId: null,
+        browserVerification: undefined,
+        skills: ['a', 'b'],
+        mcpTools: undefined,
+        risk: 'medium',
+        generatedAt: '2026-07-01T00:00:00Z',
+      });
+    });
   });
 });
