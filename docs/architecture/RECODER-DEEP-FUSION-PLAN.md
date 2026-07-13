@@ -32,7 +32,7 @@ across Node versions.
 | Crate | Now | Target | Status |
 |---|---|---|---|
 | **recoder-governance** (moat) | Rust daemon (UDS) + `-napi` crate + FFI + TS fallback | native `.node` loaded in-process | **✅ DONE (2026-07-13)** — `.node` built (`cargo build --release -p recoder-governance-napi`, 31s) + **loads + runs a real `decide()` + Merkle audit IN-PROCESS**. The TS facade (`packages/governance`) prefers it, degrades to daemon/TS when absent. |
-| **tensorzero** (LLM gateway) | TS HTTP client; `-napi` crate present | native `.node` for routing/cache; TS/pi-ai fallback | ⏳ **deferred (disk)** — build recipe in the script; the tensorzero crate graph is too large to build on the current ~7 GiB-free volume (ENOSPC risk). Run on a machine/CI with headroom. |
+| **tensorzero** (LLM gateway) | TS HTTP client; `-napi` crate present | native `.node` for routing/cache; TS/pi-ai fallback | **✅ DONE (2026-07-13)** — `EmbeddedGateway` NAPI binding: the REAL TZ engine boots **in-process** (`ClientBuilderMode::EmbeddedGateway`, same as tensorzero-python) and `postInference()` is native-first (embedded → loopback → direct-provider, each truthful). Verified: `.node` builds, boots on default config, routing probe returns the real engine's `Unknown function` error. Build with `SQLX_OFFLINE=1` (sqlx macros walk ancestor `.env`s). |
 | **openfang** (agent engine, 14 crates) | `-napi` stub; no `.node` | native `.node` in-process | **✅ DONE (2026-07-13)** — the REAL kernel is compiled into a `.node` and **boots in-process** (verified: `health` = live agents, 205 models, real skills). No HTTP, no stub. See below. |
 
 **openfang — REAL in-process fusion (2026-07-13).** Not a proxy, not a stub. The actual openfang engine (kernel + runtime/wasmtime + memory/sqlite + channels + skills + hands + wire + extensions) is **compiled into a NAPI `.node` and called directly in the docker-backend Node process** — Cursor↔VSCode style.
@@ -81,10 +81,10 @@ Backend fusion is essentially **done**. The real remaining work:
 `go/multica` (dead) · `go/ziti` + `go/recoder-xds` (cross-machine, cloud/teams-only) · `ts/recodergit` (dup of the package) · `ts/dmux` (superseded by the shell) · `py/browser-use` (superseded by `@recoder/agent-browser`) · `crates/claw-code-parity` (eval harness, not runtime). **`ts/open-agents` — needs the owner's call.**
 
 ## Execution order (one by one)
-1. **`crates/recoder-governance` → native NAPI** (the moat; deepest scaffolding; cargo available). ← **START HERE**
-2. `crates/tensorzero` → native NAPI (reuse the pattern).
-3. `crates/openfang` → native NAPI.
-4. `apps/wave` → pnpm-workspace member (enables all shell package fusion).
-5. Shell fusion: `conductor-ui`/`ui-agent-os`/`design-tokens`/`ecosystem-config` into `apps/wave`.
-6. `py/colbert` + `c/tmux` control-mode + beads-owned-binary — the sidecar/substrate hardening.
-7. Dormant reconciliation: revive-or-delete the refs=0 packages.
+1. ~~`crates/recoder-governance` → native NAPI~~ **✅ done 2026-07-13**
+2. ~~`crates/tensorzero` → native NAPI (EmbeddedGateway in-process)~~ **✅ done 2026-07-13**
+3. ~~`crates/openfang` → native NAPI (45 methods)~~ **✅ done 2026-07-13**
+4. `apps/wave` → pnpm-workspace member (enables all shell package fusion). **Plan complete (GO verdict, agent-audited): electron packs `!node_modules` + `externalizeDeps:false`, so the classic pnpm/electron risk is absent; pre-flight = add `electron` to root `pnpm.onlyBuiltDependencies` + promote `apps/wave/tsunami/frontend` as member too.** ← **NEXT (structural)**
+5. Shell fusion: `conductor-ui`/`ui-agent-os`/`design-tokens`/`ecosystem-config` into `apps/wave` (after #4).
+6. ~~`py/colbert` sidecar~~ **✅ done 2026-07-13 (app-owned supervised daemon)** · `c/tmux` control-mode + beads-owned-binary + ops-recorder supervision — **in flight (fusion-program-execute workflow)**.
+7. ~~Dormant reconciliation~~ **✅ done 2026-07-13** — pruned action-registry/data-store-registry/web-search/analytics/security + performance/plugins/cli residue; `herd` kept (CLI wired).
