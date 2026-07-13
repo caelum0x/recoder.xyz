@@ -36,12 +36,23 @@ import {
 import { createLogger } from '../logger.js';
 import { agentOsContainer } from '../agent-os/service-container.js';
 import type { AgentOsRepository } from '../agent-os/repositories/agent-os.repository.js';
+import { resolveBeadsBin } from './beads-bin.js';
 
 const logger = createLogger('conductor:beads-sync');
 
-/** Binary name used to shell out to beads. Overridable for vendored installs. */
+/**
+ * Binary used to shell out to beads. Explicit env overrides win, then the OWNED
+ * repo build / PATH via {@link resolveBeadsBin}. Falls back to the bare name
+ * `bd` so the availability probe (not this resolver) stays the single truthful
+ * "is bd usable" gate — behavior is unchanged when nothing is installed.
+ */
 export function beadsBin(): string {
-  return process.env.CONDUCTOR_BD_BIN?.trim() || process.env.BD_BIN?.trim() || 'bd';
+  return (
+    process.env.CONDUCTOR_BD_BIN?.trim() ||
+    process.env.BD_BIN?.trim() ||
+    resolveBeadsBin() ||
+    'bd'
+  );
 }
 
 export type BeadsAvailability = {
