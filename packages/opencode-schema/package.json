@@ -1,0 +1,35 @@
+{
+  "name": "@recoder/opencode-schema",
+  "version": "0.1.0",
+  "description": "Recoder-branded opencode wire-model schemas (Effect Schema): session, message/part, event, permission, model, provider, pty, lsp/mcp events. Vendored from opencode packages/schema (MIT).",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "effect4": "npm:effect@4.0.0-beta.83"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.9"
+  }
+}

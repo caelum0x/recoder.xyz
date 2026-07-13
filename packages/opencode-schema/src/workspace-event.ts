@@ -1,0 +1,32 @@
+export * as WorkspaceEvent from "./workspace-event.js"
+
+import { Schema } from "effect4"
+import { Event } from "./event.js"
+import { WorkspaceID } from "./workspace-id.js"
+
+export const ConnectionStatus = Schema.Struct({
+  workspaceID: WorkspaceID,
+  status: Schema.Literals(["connected", "connecting", "disconnected", "error"]),
+}).annotate({ identifier: "WorkspaceEvent.ConnectionStatus" })
+export interface ConnectionStatus extends Schema.Schema.Type<typeof ConnectionStatus> {}
+
+export const Ready = Event.define({
+  type: "workspace.ready",
+  schema: {
+    name: Schema.String,
+  },
+})
+
+export const Failed = Event.define({
+  type: "workspace.failed",
+  schema: {
+    message: Schema.String,
+  },
+})
+
+export const Status = Event.define({
+  type: "workspace.status",
+  schema: ConnectionStatus.fields,
+})
+
+export const Definitions = Event.inventory(Ready, Failed, Status)

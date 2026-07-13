@@ -1,0 +1,13 @@
+export * as FileSystemWatcher from "./filesystem-watcher.js"
+
+import { Schema } from "effect4"
+import { define, inventory } from "./event.js"
+
+const Updated = define({
+  type: "file.watcher.updated",
+  schema: {
+    file: Schema.String,
+    event: Schema.Literals(["add", "change", "unlink"]),
+  },
+})
+export const Event = { Updated, Definitions: inventory(Updated) }
