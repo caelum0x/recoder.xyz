@@ -51,7 +51,7 @@ across Node versions.
 | **beads** (bd) | subprocess-cli via `execFileSync` | bundled owned binary (+ optional native lib) | yes (issue graph) |
 | **recoder-xds** | Envoy xDS control plane | cross-machine infra — **not fusable** | **no** (cloud/teams only) |
 | **ziti** | zero-trust mesh (1779 files) | cross-machine infra — **not fusable** | **no** (cloud/teams only) |
-| **multica** | de-scoped managed-agents | superseded by `packages/coordination` | **no** (dead) |
+| **multica** | managed-agents server; degrade-safe client exists (`multica-client.ts`, gated on binary/env) | KEEP — wire-in candidate (build `go/multica/server` → owned binary, same beads pattern) | yes (kept per user) |
 
 ### `py/` — ML muscle (own+supervise as sidecars, don't leave as URL seams)
 | Component | Now | Target | Needed |
@@ -60,15 +60,15 @@ across Node versions.
 | **colbert** (rerank) | HTTP-URL seam | app-owned bundled sidecar | yes (RAG quality) |
 | **ops-recorder** (work-signals) | already wired conductor-side + optional py forward | keep/supervise | yes |
 | **pal-mcp-server** | external stdio MCP (registered) | keep, or fold into in-proc `packages/pal` | optional |
-| **browser-use** | HTTP seam | **superseded** by `@recoder/agent-browser` (TS, in-proc) | **no** (redundant) |
+| **browser-use** | HTTP seam (browser-use engine falls back to puppeteer) | KEEP — supervise as app-owned sidecar (colbert pattern) for the py-native browsing path | yes (kept per user) |
 
 ### `ts/` — easiest tier (direct import)
 | Component | Now | Target | Needed |
 |---|---|---|---|
 | **opencode** | subprocess agent runtime (correct) | keep | yes |
 | **extracted-from-openclaw** → `@recoder/connectors` | **already fused** (workspace dep + dist + `docker-backend/src/connectors`) | done — surface in shell | yes |
-| **recodergit** | duplicate of `packages/recodergit` (the wired one) | **drop the `ts/` copy** | **no** (dup) |
-| **dmux** | terminal-mux console | superseded by the Wave cockpit | **no** |
+| **recodergit** | the ts/ copy ships the ONLY CLI (`recodergit-service.ts` spawns its dist; packages/recodergit has no CLI) | KEEP — it IS the wired engine binary | yes (live capability) |
+| **dmux** | optional operator grid over tmux (dmux-adapter.ts, never critical-path) | KEEP — optional operator console alongside the Wave cockpit | yes (kept per user) |
 | **open-agents** (374 files, own `apps/`) | unaudited; likely redundant w/ opencode | **⚠ owner's call** | **?** |
 
 ### `packages/` — the spine (~38/70 already deep-fused into the backend = correct)
@@ -77,8 +77,8 @@ Backend fusion is essentially **done**. The real remaining work:
 2. **Share into the shell** (after #1): `conductor-ui` (typed client) + `ui-agent-os` (view-model) + `design-tokens` (theme) so the `recoder-*-model.ts` blocks stop re-implementing backend shapes; `ecosystem-config` to replace the hardcoded `127.0.0.1:3100`; `distribution` device-flow into emain for auth.
 3. **Dormant ledger — revive or delete** (refs=0, stop faking coverage): `action-registry`, `data-store-registry`, `web-search`, `analytics`, `performance`, `plugins`, `cli`, `herd`(as-lib), `security`.
 
-## Not needed (prune / don't force-fuse)
-`go/multica` (dead) · `go/ziti` + `go/recoder-xds` (cross-machine, cloud/teams-only) · `ts/recodergit` (dup of the package) · `ts/dmux` (superseded by the shell) · `py/browser-use` (superseded by `@recoder/agent-browser`) · `crates/claw-code-parity` (eval harness, not runtime). **`ts/open-agents` — needs the owner's call.**
+## Keep everything (user rule: NO pruning)
+`go/ziti` + `go/recoder-xds` stay for cloud/teams. dmux/browser-use/multica/recodergit/open-agents remnants all STAY — plan verdicts are wiring opinions, not deletion consent. Deletions only happen when the user names exact paths.
 
 ## Execution order (one by one)
 1. ~~`crates/recoder-governance` → native NAPI~~ **✅ done 2026-07-13**
