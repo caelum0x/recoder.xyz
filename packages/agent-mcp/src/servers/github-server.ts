@@ -6,5 +6,5 @@ export const githubMcpServer: McpServerRegistration = {
   displayName: 'Recoder GitHub',
   transport: 'http',
   enabled: true,
-  toolNames: ['github.search', 'github.pr.create', 'github.pr.comment'],
+  toolNames: ['github.search', 'github.pr.create', 'github.pr.comment', 'github.pr_review'],
 };

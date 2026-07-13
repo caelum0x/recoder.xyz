@@ -98,4 +98,20 @@ export function registerGithubMcpTools(
     const out = ghGuard(() => run(args, repoCwd(input, options.baseRepoRoot)));
     return { content: { commented: true, url: out.trim() } };
   });
+
+  // github.pr_review — the recodergit swarm-review engine, reachable by agents.
+  // Returns the compiled multi-persona review bundle (orchestration + 7 lane
+  // specs, parameterized for the target PR) that Claude Code / an agent can then
+  // execute as its own review. Truthful when GitHub auth or the review pack is
+  // absent (never fabricates a review).
+  router.register(githubMcpServer, 'github.pr_review', async (input) => {
+    const { reviewPullRequest } = await import('../../conductor/github-engine/pr-review.js');
+    const repo = str(input.args.repo);
+    const prUrl = str(input.args.prUrl) ?? str(input.args.url);
+    const prNumberRaw = str(input.args.prNumber) ?? str(input.args.number) ?? str(input.args.pr);
+    const prNumber = prNumberRaw ? Number(prNumberRaw) : undefined;
+    const mode = str(input.args.mode) === 'solo' ? 'solo' : 'swarm';
+    const result = await reviewPullRequest({ repo, prUrl, prNumber, mode });
+    return { content: result };
+  });
 }
