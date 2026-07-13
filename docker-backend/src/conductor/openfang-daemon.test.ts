@@ -65,12 +65,12 @@ describe('openfang-daemon: binary resolution (no build)', () => {
     // Simulate a build layout by creating a fake target/release/openfang under a
     // temp dir that looks like the repo root.
     const fakeRoot = mkdtempSync(path.join(os.tmpdir(), 'openfang-root-'));
-    const releaseDir = path.join(fakeRoot, 'crates', 'openfang', 'target', 'release');
+    const releaseDir = path.join(fakeRoot, 'modules', 'agent-engine', 'openfang', 'target', 'release');
     const { mkdirSync } = require('node:fs') as typeof import('node:fs');
     mkdirSync(releaseDir, { recursive: true });
 
     // Also create the Cargo.toml marker so findRepoRoot can detect it.
-    const crateDir = path.join(fakeRoot, 'crates', 'openfang');
+    const crateDir = path.join(fakeRoot, 'modules', 'agent-engine', 'openfang');
     writeFileSync(path.join(crateDir, 'Cargo.toml'), '[workspace]\n');
 
     const fakeBin = path.join(releaseDir, 'openfang');

@@ -79,6 +79,23 @@ exports.TIER_RESOURCE_LIMITS = {
         maxConcurrentSandboxes: 3, // 3 concurrent sandboxes
         allowBackgroundDevServer: true, // Allow background dev servers
     },
+    // Team Tier: Pro capabilities plus collaboration headroom (more sandboxes,
+    // storage, and execution budget), but still bounded below Enterprise. This
+    // keeps `Record<SubscriptionTier, ResourceLimits>` exhaustive and gives the
+    // 'team' plan real, non-inflated limits.
+    [types_js_1.SubscriptionTier.TEAM]: {
+        cpu: 3,
+        memory: 4 * GB,
+        memoryMB: 4096,
+        storage: 50 * GB,
+        storageGB: 50,
+        networkBandwidth: 500, // 500 Mbps
+        pidsLimit: 384, // More processes than Pro, fewer than Enterprise
+        dailyExecutionMinutes: 480, // 8 hours per day
+        monthlyExecutionHours: 300, // 300 hours per month
+        maxConcurrentSandboxes: 5, // 5 concurrent sandboxes
+        allowBackgroundDevServer: true, // Allow background dev servers
+    },
     [types_js_1.SubscriptionTier.ENTERPRISE]: {
         cpu: 4,
         memory: 8 * GB,
@@ -156,7 +173,8 @@ function compareTiers(tier1, tier2) {
     const tierOrder = {
         [types_js_1.SubscriptionTier.FREE]: 0,
         [types_js_1.SubscriptionTier.PRO]: 1,
-        [types_js_1.SubscriptionTier.ENTERPRISE]: 2,
+        [types_js_1.SubscriptionTier.TEAM]: 2,
+        [types_js_1.SubscriptionTier.ENTERPRISE]: 3,
     };
     const order1 = tierOrder[tier1];
     const order2 = tierOrder[tier2];

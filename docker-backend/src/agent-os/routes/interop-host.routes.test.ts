@@ -12,7 +12,7 @@ import { PAL_SERVER_ID, PAL_TOOL_NAMES } from '@recoder/interop';
  *  1. A tool call routed through the interop host traverses authorize → risk →
  *     execute → audit. Un-permitted calls are DENIED before execution and still
  *     AUDITED; permitted calls EXECUTE and are AUDITED.
- *  2. The real Python `py/pal-mcp-server` is a registered EXTERNAL server with a
+ *  2. The real Python `modules/communication/pal-mcp-server` is a registered EXTERNAL server with a
  *     resolvable launch config and truthful (degrade-safe) health.
  *
  * No stubs/mocks of the host: a real `InteropHostBundle` (real `McpHost`, real
@@ -216,7 +216,7 @@ describe('docker-backend adopts the @recoder/interop MCP host', () => {
     expect(state.jsonData.data.reason).toContain('not registered');
   });
 
-  it('registers py/pal-mcp-server as an EXTERNAL server with a resolvable config + truthful health', async () => {
+  it('registers modules/communication/pal-mcp-server as an EXTERNAL server with a resolvable config + truthful health', async () => {
     const bundle = new InteropHostBundle();
 
     // Resolvable from the gated registry (in-proc + external in one place).

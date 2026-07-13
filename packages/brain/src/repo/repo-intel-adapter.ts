@@ -9,7 +9,7 @@ import type { RepoIntelPort } from "../ports/repo-intel.port";
 /**
  * Default {@link RepoIntelPort}, backed by the real RecoderGit repo indexer.
  *
- * This is the seam where the ts/recodergit knowledge-graph engine is merged in
+ * This is the seam where the modules/github/recodergit knowledge-graph engine is merged in
  * (see docs/subsystems/brain.md §repo). The port contract stays stable while the
  * engine behind it gets real: {@link RepoIndexer.contextPack} now walks the repo
  * on disk, parses TS/JS import edges into a populated dependency graph, derives

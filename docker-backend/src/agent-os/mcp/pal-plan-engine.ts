@@ -6,7 +6,7 @@
  * interop gate.
  *
  * This is the fast, in-proc PAL path (RECODER-ENGINES E11) — a dependency-free
- * complement to the external Python PAL MCP server (`py/pal-mcp-server`). It is
+ * complement to the external Python PAL MCP server (`modules/communication/pal-mcp-server`). It is
  * ADDITIVE and does not disturb that server.
  *
  * Nothing here fakes success. With a missing/malformed task spec the engine

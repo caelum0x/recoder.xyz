@@ -3,7 +3,7 @@
  * multica claim-recovery window has elapsed since the claim was taken.
  *
  * MERGED from multica's `claimResponseRecoveryWindow`
- * (go/multica server/internal/service/task.go): an in-flight claim must NOT be
+ * (modules/squads/multica server/internal/service/task.go): an in-flight claim must NOT be
  * reclaimed until the recovery window passes, so a slow runtime that has not yet
  * emitted RunStarted is never double-dispatched. Inside the window we stay
  * silent; only past it does the claim become reclaimable.

@@ -24,7 +24,7 @@ export {
   runBrainMcpStdio,
 } from "./seams/mcp-server";
 
-// Repo-intelligence adapter (the ts/recodergit fusion seam)
+// Repo-intelligence adapter (the modules/github/recodergit fusion seam)
 export { ContextPackRepoIntel, createRepoIntel } from "./repo/repo-intel-adapter";
 
 // Real RecoderGit-backed repo intelligence (opt-in, degrade-safe to the mock)
@@ -76,14 +76,14 @@ export {
   createInProcessMemory,
 } from "./memory/in-process-memory";
 
-// Single memory-authority factory: in-process default + optional py/mem0 loopback
+// Single memory-authority factory: in-process default + optional modules/memory/mem0 loopback
 // (MEM0_SERVICE_URL or legacy MEM0_BASE_URL); degrade-safe when service absent.
 export {
   createMemoryAuthority,
   type MemoryAuthorityOptions,
 } from "./memory/memory-authority";
 
-// Optional REST loopback adapter — py/mem0 FastAPI server (MEM0_SERVICE_URL /
+// Optional REST loopback adapter — modules/memory/mem0 FastAPI server (MEM0_SERVICE_URL /
 // MEM0_BASE_URL); degrade-safe to empty when the service is absent or unconfigured.
 export {
   Mem0Memory,

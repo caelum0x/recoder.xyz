@@ -3,7 +3,7 @@ import type { BrainMemory } from "../domain/memory.types";
 
 /**
  * REAL {@link MemoryPort}, backed by the owned self-hosted mem0 REST server
- * (py/mem0/server — FastAPI + pgvector). It speaks the two endpoints brain
+ * (modules/memory/mem0/server — FastAPI + pgvector). It speaks the two endpoints brain
  * needs over an INJECTABLE HTTP transport:
  *
  *   - recall  -> POST /search   { query, top_k, filters } -> { results: [...] }

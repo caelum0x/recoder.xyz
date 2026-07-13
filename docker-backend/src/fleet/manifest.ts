@@ -13,7 +13,7 @@
  * DEGRADE-SAFE BY CONSTRUCTION: with no external service/daemon/key present, the
  * supervisor reports `available:false` + the `degradeTo` fallback — never throws,
  * never fakes success. Every service is loopback-only in this phase; cross-machine
- * reach is opt-in later via `go/ziti` + `go/recoder-xds`.
+ * reach is opt-in later via `modules/networking/ziti` + `modules/networking/recoder-xds`.
  */
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -244,8 +244,8 @@ export const FLEET: readonly FleetService[] = [
       explicitEnvVars: ['GOVERNANCE_BIN'],
       name: 'recoder-governance',
       repoRelPaths: [
-        'crates/recoder-governance/target/release/recoder-governance',
-        'crates/recoder-governance/target/debug/recoder-governance',
+        'modules/governance/recoder-governance/target/release/recoder-governance',
+        'modules/governance/recoder-governance/target/debug/recoder-governance',
       ],
     }),
     resolveEndpoint: (env) => trimStr(env.GOV_SOCK) ?? trimStr(env.RECODER_GOVERNANCE_SOCK),
@@ -266,8 +266,8 @@ export const FLEET: readonly FleetService[] = [
       explicitEnvVars: ['OPENFANG_BIN'],
       name: 'openfang',
       repoRelPaths: [
-        'crates/openfang/target/release/openfang',
-        'crates/openfang/target/debug/openfang',
+        'modules/agent-engine/openfang/target/release/openfang',
+        'modules/agent-engine/openfang/target/debug/openfang',
       ],
     }),
   }),
@@ -286,8 +286,8 @@ export const FLEET: readonly FleetService[] = [
       explicitEnvVars: ['TENSORZERO_BIN'],
       name: 'tensorzero-gateway',
       repoRelPaths: [
-        'crates/tensorzero/target/release/tensorzero-gateway',
-        'crates/tensorzero/target/debug/tensorzero-gateway',
+        'modules/inference/tensorzero/target/release/tensorzero-gateway',
+        'modules/inference/tensorzero/target/debug/tensorzero-gateway',
       ],
     }),
   }),
@@ -306,7 +306,7 @@ export const FLEET: readonly FleetService[] = [
     resolveBinary: makeResolveBinary({
       explicitEnvVars: ['RECODER_XDS_BIN'],
       name: 'recoder-xds',
-      repoRelPaths: ['go/recoder-xds/recoder-xds', 'go/recoder-xds/bin/recoder-xds'],
+      repoRelPaths: ['modules/networking/recoder-xds/recoder-xds', 'modules/networking/recoder-xds/bin/recoder-xds'],
     }),
     resolveEndpoint: (env) => trimStr(env.RECODER_XDS_URL) ?? '127.0.0.1:18000',
     healthUrl: (env) => trimStr(env.RECODER_XDS_URL) ?? '127.0.0.1:18000',
@@ -325,7 +325,7 @@ export const FLEET: readonly FleetService[] = [
     resolveBinary: makeResolveBinary({
       explicitEnvVars: ['ZITI_BIN'],
       name: 'ziti',
-      repoRelPaths: ['go/ziti/ziti', 'go/ziti/build/ziti'],
+      repoRelPaths: ['modules/networking/ziti/ziti', 'modules/networking/ziti/build/ziti'],
     }),
   }),
 
@@ -341,7 +341,7 @@ export const FLEET: readonly FleetService[] = [
     resolveBinary: makeResolveBinary({
       explicitEnvVars: ['BD_BIN', 'BEADS_BIN'],
       name: 'bd',
-      repoRelPaths: ['go/beads/bd', 'go/beads/bin/bd'],
+      repoRelPaths: ['modules/memory/beads/bd', 'modules/memory/beads/bin/bd'],
     }),
     resolveEndpoint: () => undefined,
     healthUrl: () => undefined,
@@ -360,7 +360,7 @@ export const FLEET: readonly FleetService[] = [
     resolveBinary: makeResolveBinary({
       explicitEnvVars: ['MULTICA_BIN'],
       name: 'multica',
-      repoRelPaths: ['go/multica/multica', 'go/multica/bin/multica'],
+      repoRelPaths: ['modules/squads/multica/multica', 'modules/squads/multica/bin/multica'],
     }),
   }),
 
@@ -375,7 +375,7 @@ export const FLEET: readonly FleetService[] = [
     urlEnvVars: ['COLBERT_RERANK_URL'],
     resolveBinary: makeResolveBinary({
       name: 'rerank_server.py',
-      repoRelPaths: ['py/colbert/rerank_server.py'],
+      repoRelPaths: ['modules/memory/colbert/rerank_server.py'],
     }),
   }),
 
@@ -389,7 +389,7 @@ export const FLEET: readonly FleetService[] = [
     urlEnvVars: ['MEM0_BASE_URL'],
     resolveBinary: makeResolveBinary({
       name: 'mem0',
-      repoRelPaths: ['py/mem0'],
+      repoRelPaths: ['modules/memory/mem0'],
     }),
   }),
 
@@ -405,7 +405,7 @@ export const FLEET: readonly FleetService[] = [
     extraEnvVars: ['BROWSER_USE_API_KEY'],
     resolveBinary: makeResolveBinary({
       name: 'browser_use',
-      repoRelPaths: ['py/browser-use'],
+      repoRelPaths: ['modules/browsing/browser-use'],
     }),
   }),
 
@@ -421,7 +421,7 @@ export const FLEET: readonly FleetService[] = [
     extraEnvVars: ['OPS_RECORDER_API_KEY'],
     resolveBinary: makeResolveBinary({
       name: 'ops-recorder',
-      repoRelPaths: ['py/ops-recorder'],
+      repoRelPaths: ['modules/signals/ops-recorder'],
     }),
   }),
 ];

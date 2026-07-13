@@ -9,7 +9,7 @@ const STATUS_MESSAGES: Record<HandsStatus, string> = {
     loading: "",
     ok: "",
     empty: "No Hands compiled into the engine.",
-    "not-running": "OpenFang engine not built — run `cargo build -p openfang-napi` in crates/openfang to enable Hands.",
+    "not-running": "OpenFang engine not built — run `cargo build -p openfang-napi` in modules/agent-engine/openfang to enable Hands.",
     "not-connected": "Not connected — start the Recoder backend to reach OpenFang.",
 };
 

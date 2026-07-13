@@ -12,5 +12,6 @@ var SubscriptionTier;
 (function (SubscriptionTier) {
     SubscriptionTier["FREE"] = "free";
     SubscriptionTier["PRO"] = "pro";
+    SubscriptionTier["TEAM"] = "team";
     SubscriptionTier["ENTERPRISE"] = "enterprise";
 })(SubscriptionTier || (exports.SubscriptionTier = SubscriptionTier = {}));

@@ -123,7 +123,7 @@ export function AgentsPanel() {
   const unavailableReason =
     healthData?.reason ??
     (healthPoll.error instanceof ApiError ? healthPoll.error.message : null) ??
-    'OpenFang binary not built. Build crates/openfang or set OPENFANG_BIN to enable the autonomous agent engine.';
+    'OpenFang binary not built. Build modules/agent-engine/openfang or set OPENFANG_BIN to enable the autonomous agent engine.';
 
   const loading = healthPoll.loading || cardPoll.loading;
 
@@ -158,7 +158,7 @@ export function AgentsPanel() {
         <div class="banner banner-warn">
           <strong>OpenFang daemon not running.</strong> {unavailableReason}
           <p class="banner-hint">
-            Build <code>crates/openfang</code> or set <code>OPENFANG_BIN</code> to enable the
+            Build <code>modules/agent-engine/openfang</code> or set <code>OPENFANG_BIN</code> to enable the
             autonomous agent engine. The run loop degrades to the pure-TS OSS dispatch path while the
             daemon is absent.
           </p>

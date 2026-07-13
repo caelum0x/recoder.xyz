@@ -96,7 +96,7 @@ const PROBE_ARGS: Readonly<Record<"recodergit" | "bd", string>> = {
 /** Actionable hint shown when an exec engine cannot be reached. */
 const NOT_FOUND_HINT: Readonly<Record<"recodergit" | "bd", string>> = {
   recodergit:
-    "recodergit CLI not found — build ts/recodergit or set RECODERGIT_BIN",
+    "recodergit CLI not found — build modules/github/recodergit or set RECODERGIT_BIN",
   bd: "bd (beads) CLI not found — install beads or set BD_BIN",
 };
 

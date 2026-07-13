@@ -1,6 +1,6 @@
 /**
  * Governance daemon spawn seam — connect the embedded backend to the OWNED Rust
- * governance kernel (`crates/recoder-governance`) at runtime.
+ * governance kernel (`modules/governance/recoder-governance`) at runtime.
  *
  * The @recoder/governance facade already speaks the daemon's native UDS wire
  * (length-prefixed JSON over a Unix-domain socket — see
@@ -31,8 +31,8 @@
  *
  * Resolution order for the binary (first existing wins):
  *   1. `RECODER_GOVERNANCE_DAEMON` env (absolute path to a prebuilt binary).
- *   2. `<repo>/crates/recoder-governance/target/release/recoder-governance-daemon`.
- *   3. `<repo>/crates/recoder-governance/target/debug/recoder-governance-daemon`.
+ *   2. `<repo>/modules/governance/recoder-governance/target/release/recoder-governance-daemon`.
+ *   3. `<repo>/modules/governance/recoder-governance/target/debug/recoder-governance-daemon`.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -66,7 +66,7 @@ const SOCKET_POLL_MS = 50;
 function findRepoRoot(): string | undefined {
   let dir = __dirname;
   for (let i = 0; i < 12; i++) {
-    if (existsSync(path.join(dir, 'crates', 'recoder-governance', 'Cargo.toml'))) {
+    if (existsSync(path.join(dir, 'modules', 'governance', 'recoder-governance', 'Cargo.toml'))) {
       return dir;
     }
     const parent = path.dirname(dir);
@@ -88,7 +88,7 @@ export function resolveGovernanceDaemonBin(env: NodeJS.ProcessEnv = process.env)
   }
   const root = findRepoRoot();
   if (!root) return undefined;
-  const base = path.join(root, 'crates', 'recoder-governance', 'target');
+  const base = path.join(root, 'modules', 'governance', 'recoder-governance', 'target');
   const candidates = [
     path.join(base, 'release', DAEMON_BIN_NAME),
     path.join(base, 'debug', DAEMON_BIN_NAME),
@@ -170,7 +170,7 @@ async function startGovernanceDaemon(): Promise<GovernanceDaemonHandle | undefin
   if (!binPath) {
     logger.info(
       'governance daemon binary not built — staying on pure-TS governance path (degrade-safe). ' +
-        `Set ${GOVERNANCE_DAEMON_ENV} or build crates/recoder-governance to enable the Rust kernel.`,
+        `Set ${GOVERNANCE_DAEMON_ENV} or build modules/governance/recoder-governance to enable the Rust kernel.`,
     );
     return undefined;
   }

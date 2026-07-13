@@ -111,7 +111,7 @@ describe('work-signals ingest (POST/GET /api/conductor/work-signals)', () => {
         runId: 'run_sig_1',
         kind: 'blocked',
         detail: 'waiting on a credential the agent cannot obtain',
-        reportedBy: 'py/ops-recorder',
+        reportedBy: 'modules/signals/ops-recorder',
       }),
       res,
     );
@@ -134,7 +134,7 @@ describe('work-signals ingest (POST/GET /api/conductor/work-signals)', () => {
     expect(event.taskId).toBe('task_sig_1');
     expect(event.message).toContain('work-signal:blocked');
     expect(event.data?.workSignal).toBe(true);
-    expect(event.data?.reportedBy).toBe('py/ops-recorder');
+    expect(event.data?.reportedBy).toBe('modules/signals/ops-recorder');
   });
 
   it('lists ingested signals (newest first) and filters by taskId', async () => {
@@ -218,7 +218,7 @@ describe('work-signals ingest (POST/GET /api/conductor/work-signals)', () => {
 
   // ── FUSION SEAM §d.4 — fused ops-recorder shape ────────────────────────────
 
-  it('accepts the fused ops-recorder shape and maps it to a valid signal (reportedBy=py/ops-recorder)', async () => {
+  it('accepts the fused ops-recorder shape and maps it to a valid signal (reportedBy=modules/signals/ops-recorder)', async () => {
     // The fused body carries both the mandatory WorkSignalInput fields and the
     // richer ops-recorder WorkSignalIngest fields. The ingress must accept it,
     // fold the ops-recorder fields into detail+reportedBy, and return 201.
@@ -253,7 +253,7 @@ describe('work-signals ingest (POST/GET /api/conductor/work-signals)', () => {
     expect(signal?.kind).toBe('blocked');
     expect(signal?.taskId).toBe('task_fused');
     // The fused ops-recorder fields must be folded into detail + reportedBy.
-    expect(signal?.reportedBy).toBe('py/ops-recorder');
+    expect(signal?.reportedBy).toBe('modules/signals/ops-recorder');
     expect(signal?.detail).toContain('github/pull_request');
     expect(signal?.detail).toContain('Add retry to payment webhook');
     expect(signal?.detail).toContain('Failing CI for 3 days');

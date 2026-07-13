@@ -1,0 +1,202 @@
+name: Promote Downstream Releases
+
+on:
+  # may be triggered manually to promote a release tag to stable in the downstream package repositories and Docker Hub.
+  # Dispatch from the tag itself, or from any branch and set the 'tag' input to the release tag to promote.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to promote, e.g. v2.0.0. Defaults to the ref the run was dispatched from; set this to promote a specific tag when dispatching from a branch.
+        required: false
+        type: string
+  # GitHub release is marked stable, i.e., isPrerelease: false
+  release:
+    types: [released]  # this release event activity type excludes prereleases
+
+# cancel older, redundant runs of same workflow for the same tag (or dispatched ref)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.inputs.tag || github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  # the purpose of this job is to enforce that the Git ref promoted is a semver eligible for stable release, i.e., not having a semver pre-release suffix; the extracted version without the leading 'v' is passed to the docker job as the container image tag
+  parse_version:
+    name: Parse Tag Regex
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      highest: ${{ steps.compare.outputs.highest }}
+    steps:
+      - name: Validate the Release Tag is a Stable Release Ref
+        id: validate
+        shell: bash
+        env:
+          # the 'tag' input when dispatched from a branch, otherwise the ref the run fired on (the tag)
+          PROMOTE_REF: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if [[ "${PROMOTE_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "version=${PROMOTE_REF#v}" | tee -a $GITHUB_OUTPUT
+          else
+            echo "${PROMOTE_REF} is not a semver stable release ref" >&2
+            exit 1
+          fi
+
+      - name: Git Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Compare with Highest Version
+        id: compare
+        shell: bash
+        run: |
+          set -o pipefail
+          set -o xtrace
+          
+          HIGHEST_VERSION=$(
+            gh release list --repo "${GITHUB_REPOSITORY}" \
+                            --limit 999 \
+                            --exclude-drafts \
+                            --exclude-pre-releases \
+                            --json tagName \
+                            --jq '.[].tagName' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V \
+            | tail -1
+          )
+          CURRENT_VERSION="${PROMOTE_REF}"
+
+          if [[ "$CURRENT_VERSION" == "$HIGHEST_VERSION" ]]; then
+            echo "highest=true" | tee -a $GITHUB_OUTPUT
+          else
+            echo "highest=false" | tee -a $GITHUB_OUTPUT
+          fi
+        env:
+          PROMOTE_REF: ${{ github.event.inputs.tag || github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  promote_docker:
+    name: Tag Container Image ${{ matrix.image.repo }}:latest
+    needs: parse_version
+    if: needs.parse_version.outputs.highest == 'true'  # only promote the highest version as ":latest"
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      matrix:
+        image:
+          - repo: ${{ vars.ZITI_CLI_IMAGE || 'docker.io/openziti/ziti-cli' }}
+          - repo: ${{ vars.ZITI_CONTROLLER_IMAGE || 'docker.io/openziti/ziti-controller' }}
+          - repo: ${{ vars.ZITI_ROUTER_IMAGE || 'docker.io/openziti/ziti-router' }}
+          - repo: ${{ vars.ZITI_TUNNEL_IMAGE || 'docker.io/openziti/ziti-tunnel' }}
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_HUB_API_USER || secrets.DOCKER_HUB_API_USER }}
+          password: ${{ secrets.DOCKER_HUB_API_TOKEN }}
+
+      - name: Tag Latest
+        shell: bash
+        run: >
+          docker buildx imagetools create --tag
+          ${{ matrix.image.repo }}:latest
+          ${{ matrix.image.repo }}:${{ needs.parse_version.outputs.version }}
+
+  promote_artifactory:
+    name: Promote ${{ matrix.package_name }}-${{ matrix.arch.rpm }}.${{ matrix.packager }}
+    needs: parse_version
+    strategy:
+      fail-fast: true
+      matrix:
+        package_name:
+          - openziti
+          - openziti-controller
+          - openziti-router
+        arch:
+          - deb: amd64
+            rpm: x86_64
+          - deb: arm64
+            rpm: aarch64
+          - deb: armhf
+            rpm: armv7hl
+        packager:
+          - rpm
+          - deb
+    runs-on: ubuntu-24.04
+    env:
+      ZITI_DEB_TEST_REPO: ${{ vars.ZITI_DEB_TEST_REPO || 'zitipax-openziti-deb-test' }}
+      ZITI_RPM_TEST_REPO: ${{ vars.ZITI_RPM_TEST_REPO || 'zitipax-openziti-rpm-test' }}
+      ZITI_DEB_PROD_REPO: ${{ vars.ZITI_DEB_PROD_REPO || 'zitipax-openziti-deb-stable' }}
+      ZITI_RPM_PROD_REPO: ${{ vars.ZITI_RPM_PROD_REPO || 'zitipax-openziti-rpm-stable' }}
+    steps:
+      - name: Configure jFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_ENV_1: ${{ secrets.ZITI_ARTIFACTORY_CLI_CONFIG_PACKAGE_UPLOAD }}
+
+      - name: Copy RPM from test repo to stable repo with jFrog CLI
+        if: matrix.packager == 'rpm'
+        shell: bash
+        run: |
+          # meta packages produce noarch RPMs; binary packages use the target arch
+          META_PACKAGES=(openziti-controller openziti-router)
+          if [[ " ${META_PACKAGES[*]} " == *" ${{ matrix.package_name }} "* ]]; then
+            _rpm_arch="noarch"
+          else
+            _rpm_arch="${{ matrix.arch.rpm }}"
+          fi
+          jf rt copy \
+            --recursive=false \
+            --flat=true \
+            --fail-no-op=true \
+            "${{ env.ZITI_RPM_TEST_REPO }}/redhat/${{ matrix.arch.rpm }}/${{ matrix.package_name }}-${{ needs.parse_version.outputs.version }}-1.${_rpm_arch}.rpm" \
+            "${{ env.ZITI_RPM_PROD_REPO }}/redhat/${{ matrix.arch.rpm }}/"
+
+      - name: Copy DEB from test repo to stable repo with jFrog CLI
+        if: matrix.packager == 'deb'
+        shell: bash
+        run: |
+          # meta packages produce arch-independent (all) DEBs; binary packages use the target arch
+          META_PACKAGES=(openziti-controller openziti-router)
+          if [[ " ${META_PACKAGES[*]} " == *" ${{ matrix.package_name }} "* ]]; then
+            _deb_arch="all"
+          else
+            _deb_arch="${{ matrix.arch.deb }}"
+          fi
+          jf rt copy \
+            --recursive=false \
+            --flat=true \
+            --fail-no-op=true \
+            "${{ env.ZITI_DEB_TEST_REPO }}/pool/${{ matrix.package_name }}/${{ matrix.arch.deb }}/${{ matrix.package_name }}_${{ needs.parse_version.outputs.version }}_${_deb_arch}.deb" \
+            "${{ env.ZITI_DEB_PROD_REPO }}/pool/${{ matrix.package_name }}/${{ matrix.arch.deb }}/"
+
+  repository-dispatch:
+    needs:
+      - parse_version
+      - promote_docker
+    # run if promote_docker succeeded or was skipped (not highest version), but not if it failed or was cancelled
+    if: |
+      github.repository_owner == 'openziti'
+      && !cancelled()
+      && !failure()
+    name: Repository Dispatch Event
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Send repository_dispatch event
+        env:
+          # this token has fine-grained permission to send repository_dispatch events to the downstream private repo
+          GH_TOKEN: ${{ secrets.GH_FGPAT_NF_REPO_DISPATCH }}
+        shell: bash
+        run: |
+          set -o pipefail
+          set -o xtrace
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/netfoundry/ziti-fips/dispatches \
+            -f "event_type=ziti_promote_stable" \
+            -F "client_payload[version]=${{ needs.parse_version.outputs.version }}" \
+            -F "client_payload[run_id]=${{ github.run_id }}" \
+            -F "client_payload[repo]=${{ github.repository }}"

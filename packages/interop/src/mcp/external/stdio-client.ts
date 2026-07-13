@@ -5,7 +5,7 @@ import type { ExternalMcpServerConfig } from "./external-server-config";
 /**
  * A real stdio JSON-RPC client that SUPERVISES an external MCP server process.
  *
- * This is the genuine wire to a process like `py/pal-mcp-server`: spawn the
+ * This is the genuine wire to a process like `modules/communication/pal-mcp-server`: spawn the
  * executable, speak newline-delimited JSON-RPC 2.0 over stdin/stdout, and drain
  * stderr to a diagnostics buffer (never to the protocol stream). It is NOT a
  * REST wrapper — it is the MCP stdio transport, the same protocol the Python

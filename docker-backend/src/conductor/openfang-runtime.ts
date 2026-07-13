@@ -99,7 +99,7 @@ function sanitizeAgentName(raw: string): string {
 
 /**
  * Build the minimal AgentManifest JSON. openfang's AgentManifest is fully
- * `#[serde(default)]` (crates/openfang-types/src/agent.rs), so name +
+ * `#[serde(default)]` (modules/agent-engine/openfang-types/src/agent.rs), so name +
  * description + workspace + metadata is a complete, valid manifest — module
  * defaults to `builtin:chat`, model to the kernel default.
  */
@@ -173,7 +173,7 @@ export async function launchOpenfangRun(
   if (!engine) {
     const reason =
       'openfang native engine unavailable — addon not built or kernel boot failed. ' +
-      'Build with: cd crates/openfang && cargo build -p openfang-napi --release';
+      'Build with: cd modules/agent-engine/openfang && cargo build -p openfang-napi --release';
     logger.info({ workspaceId: input.workspaceId, taskId: input.taskId }, reason);
     return { available: false, reason };
   }

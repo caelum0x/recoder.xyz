@@ -122,7 +122,7 @@ export function SquadsPanel() {
     statusData?.reason ??
     (statusPoll.error instanceof ApiError ? statusPoll.error.message : null) ??
     (squadsPoll.error instanceof ApiError ? squadsPoll.error.message : null) ??
-    'Multica server not configured. Set MULTICA_URL or build go/multica to enable managed-agents/squads.';
+    'Multica server not configured. Set MULTICA_URL or build modules/squads/multica to enable managed-agents/squads.';
 
   const isAvailable = statusData?.available === true;
   const squads: MulticaSquad[] = squadsData?.squads ?? [];
@@ -160,7 +160,7 @@ export function SquadsPanel() {
           <strong>Multica not running.</strong> {unavailableReason}
           <p class="banner-hint">
             Set <code>MULTICA_URL</code> to an external Multica server or build{' '}
-            <code>go/multica</code> to enable managed-agents and squad routing.
+            <code>modules/squads/multica</code> to enable managed-agents and squad routing.
             The local squad.service.ts handles squad state while Multica is absent.
           </p>
         </div>

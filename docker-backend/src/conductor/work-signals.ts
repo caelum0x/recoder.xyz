@@ -2,7 +2,7 @@
  * Work-signals ingest — the THIN, IN-PROCESS TS sink for "this workspace is
  * stuck / blocked / needs a handoff" signals on the real product path.
  *
- * INTEGRATION-PLAN §d.4 keeps `py/ops-recorder` as the richer DETECTOR service;
+ * INTEGRATION-PLAN §d.4 keeps `modules/signals/ops-recorder` as the richer DETECTOR service;
  * this module is the lightweight INGEST it (or any caller) posts a signal to. A
  * signal is:
  *
@@ -64,7 +64,7 @@ export type WorkSignalInput = {
   kind: WorkSignalKind;
   /** Free-text detail from the detector (why it's stuck). */
   detail?: string;
-  /** Who/what reported the signal (e.g. `py/ops-recorder`). */
+  /** Who/what reported the signal (e.g. `modules/signals/ops-recorder`). */
   reportedBy?: string;
 };
 

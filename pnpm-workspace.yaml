@@ -13,7 +13,7 @@ packages:
   - shared
   - packages/*
   - scripts
-  - ts/extracted-from-openclaw
+  - modules/social/openclaw
   # dmux operator-console engine (Wave G1 full adaptation — backend imports its modules)
   - modules/terminal/dmux
 

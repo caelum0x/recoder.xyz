@@ -12,9 +12,9 @@ import { createMem0Memory, type Mem0MemoryOptions } from "./mem0-memory";
  *   A Map-backed `MemoryPort` that lives in the running Node.js process.
  *   No external service, no config, always available.
  *
- * OPTIONAL loopback — py/mem0 REST server (`Mem0Memory`):
+ * OPTIONAL loopback — modules/memory/mem0 REST server (`Mem0Memory`):
  *   Engaged when `MEM0_SERVICE_URL` (preferred) OR the legacy `MEM0_BASE_URL`
- *   is set. Points at the self-hosted FastAPI server in `py/mem0/server/`.
+ *   is set. Points at the self-hosted FastAPI server in `modules/memory/mem0/server/`.
  *   When present, `remember` writes to BOTH stores (in-process first, then
  *   the service best-effort); `recall` merges results (service first, then
  *   in-process for items not already present). When absent, the in-process
@@ -35,7 +35,7 @@ import { createMem0Memory, type Mem0MemoryOptions } from "./mem0-memory";
 
 export interface MemoryAuthorityOptions {
   /**
-   * Base URL for the optional py/mem0 REST loopback service.
+   * Base URL for the optional modules/memory/mem0 REST loopback service.
    * Defaults to `process.env.MEM0_SERVICE_URL ?? process.env.MEM0_BASE_URL`.
    * Pass an empty string `""` to disable the loopback even when the env var
    * is set (useful for tests that want purely in-process behavior).
@@ -111,7 +111,7 @@ function resolveServiceUrl(override?: string): string {
  *
  * - With no config: pure in-process TS memory (Map-backed, always works).
  * - With `MEM0_SERVICE_URL` (or legacy `MEM0_BASE_URL`) set: in-process +
- *   py/mem0 REST loopback combined, degrade-safe when the service is absent.
+ *   modules/memory/mem0 REST loopback combined, degrade-safe when the service is absent.
  */
 export function createMemoryAuthority(
   options: MemoryAuthorityOptions = {},

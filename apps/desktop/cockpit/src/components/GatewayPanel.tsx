@@ -211,7 +211,7 @@ export function GatewayPanel() {
           <strong>TensorZero gateway not running.</strong> {unavailableReason}
           <p class="banner-hint">
             Set <code>TENSORZERO_URL</code> to an external gateway or build{' '}
-            <code>crates/tensorzero</code> to enable inference logging and routing.
+            <code>modules/inference/tensorzero</code> to enable inference logging and routing.
             The run loop falls back to direct provider calls.
           </p>
         </div>

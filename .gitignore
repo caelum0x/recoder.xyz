@@ -740,3 +740,8 @@ packages/*/.claude/skills/recodergit/
 # Rust build artifacts (Recoder crates)
 crates/**/target/
 .dmux/
+
+# moved-engine env files (never commit)
+modules/**/.env
+modules/**/.env.*
+!modules/**/.env.example

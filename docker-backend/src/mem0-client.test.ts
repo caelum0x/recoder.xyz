@@ -2,7 +2,7 @@
  * Focused tests for the mem0 `MEM0_BASE_URL` connect seam.
  *
  * `mem0BaseUrl()` is the resolver that points the platform `@recoder/mem0`
- * client at a self-hosted `py/mem0` server (its `host`) instead of the SaaS
+ * client at a self-hosted `modules/memory/mem0` server (its `host`) instead of the SaaS
  * default. These assert the trimming/empty contract without constructing the
  * real SDK client (no network), plus that platform-mode health reports the
  * resolved base URL truthfully.

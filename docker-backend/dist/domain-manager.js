@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.isValidHostname = isValidHostname;
 exports.addDomain = addDomain;
 exports.removeDomain = removeDomain;
 exports.getDomainsForProject = getDomainsForProject;
@@ -42,6 +43,41 @@ const NGINX_CUSTOM_DOMAINS_DIR = process.env.NGINX_CUSTOM_DOMAINS_DIR || '/etc/n
 const CERTBOT_WEBROOT = process.env.CERTBOT_WEBROOT || '/var/www/html';
 const CERTBOT_EMAIL = process.env.ACME_EMAIL || '';
 const MAX_DOMAINS_PER_PROJECT = 5;
+// ==================== Validation ====================
+/**
+ * Strict RFC-1123 hostname validation.
+ *
+ * Security: the validated value flows unquoted into certbot args, nginx
+ * server_name directives, and on-disk config file paths. Anything that is not
+ * a plain hostname must be rejected BEFORE it can reach a shell/nginx/cert path.
+ *
+ * Rules:
+ *  - lowercase letters, digits, hyphens, and dots only
+ *  - each label is 1-63 chars, no leading/trailing hyphen
+ *  - at least two labels with a TLD of >=2 letters
+ *  - total length <= 253
+ */
+function isValidHostname(domain) {
+    if (typeof domain !== 'string')
+        return false;
+    if (domain.length === 0 || domain.length > 253)
+        return false;
+    const labels = domain.split('.');
+    if (labels.length < 2)
+        return false;
+    const LABEL_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+    for (const label of labels) {
+        if (label.length < 1 || label.length > 63)
+            return false;
+        if (!LABEL_RE.test(label))
+            return false;
+    }
+    // Final label (TLD) must be alphabetic and >= 2 chars.
+    const tld = labels[labels.length - 1];
+    if (!/^[a-z]{2,}$/.test(tld))
+        return false;
+    return true;
+}
 // ==================== Store ====================
 let _store = null;
 function getStore() {
@@ -63,9 +99,8 @@ function save() {
 function addDomain(domain, projectId, userId) {
     const store = getStore();
     const normalizedDomain = domain.trim().toLowerCase();
-    // Validate domain format to prevent injection
-    const DOMAIN_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/;
-    if (!DOMAIN_RE.test(normalizedDomain) || normalizedDomain.length > 253) {
+    // Validate domain format to prevent injection (strict RFC-1123 hostname).
+    if (!isValidHostname(normalizedDomain)) {
         return { success: false, error: 'Invalid domain format' };
     }
     // Check if domain already registered
@@ -224,6 +259,10 @@ async function provisionSsl(domain) {
     if (!record) {
         return { success: false, error: 'Domain not found' };
     }
+    // Defense-in-depth: never let a non-hostname reach the certbot CLI args.
+    if (!isValidHostname(normalizedDomain)) {
+        return { success: false, error: 'Invalid domain format' };
+    }
     if (record.status !== 'dns_verified' && record.status !== 'pending_ssl' && record.status !== 'active') {
         return { success: false, error: 'DNS must be verified before requesting SSL' };
     }
@@ -276,6 +315,12 @@ async function provisionSsl(domain) {
  */
 function writeNginxConfig(record) {
     const { domain, slug } = record;
+    // Defense-in-depth: never interpolate a non-hostname into nginx config,
+    // cert paths, or the on-disk *.conf filename.
+    if (!isValidHostname(domain)) {
+        console.error(`[Domains] Refusing to write nginx config for invalid domain: ${domain}`);
+        return;
+    }
     const publishedPath = (0, persistence_js_1.getPublishedPath)(slug);
     // Check if cert paths exist (they should after certbot)
     const certPath = `/etc/letsencrypt/live/${domain}/fullchain.pem`;

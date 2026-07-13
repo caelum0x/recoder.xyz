@@ -22,7 +22,7 @@ import {
 } from "./recodergit-symbol-resolve";
 
 /**
- * REAL {@link RepoIntelPort}, backed by the actual RecoderGit engine (ts/recodergit:
+ * REAL {@link RepoIntelPort}, backed by the actual RecoderGit engine (modules/github/recodergit:
  * tree-sitter parse -> scope resolution -> knowledge graph -> hybrid search).
  *
  * It shells the `recodergit impact` CLI — one call per target path — behind an
