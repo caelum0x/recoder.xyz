@@ -1,25 +1,52 @@
-# Recoder — Backend Modules (each OSS stack is a real domain module)
+# Recoder — Architecture: Apps · Modules · Engines (VSCode→Cursor)
 
-> **Owner mandate (2026-07-14):** stop shipping thin wrapper layers over vendored dists.
-> Each OSS stack becomes ONE cohesive **backend module** that *owns* a domain and exposes a
-> real interface — the way Cursor didn't "wrap" VSCode, it *became* an editor built on it.
-> The conductor + agents consume MODULES, not scattered helpers. This file is the canonical
-> module map; each module is planned and built separately.
+> **Owner mandate (2026-07-14):** stop shipping thin wrapper layers. Each OSS directory IS a
+> first-class **module** of Recoder, used deeply and directly FROM ITS OWN DIR (never copied into
+> `packages/`). Recoder is composed of modules the way Cursor is VSCode + its own layers.
 
-## The rule of a module
+## The three layers (do not confuse them)
 
-A module is real when it satisfies all of:
-1. **One domain, one owner** — a single directory `docker-backend/src/modules/<domain>/` (or a
-   `packages/<domain>` when it must be shared with the shell) that is THE place that capability lives.
-2. **A cohesive interface** — a `Module` object with the full verb set of the domain, not one function.
-   Callers depend on the interface, never on the vendored dist directly.
-3. **The OSS stack is the implementation, fully absorbed** — composed/linked/ported in, degrade-safe,
-   with the vendored source edited where it serves the fusion (clean exports, removed side-effects).
-4. **Truthful health** — `module.health()` reports what's live vs degraded; never fakes readiness.
-5. **Governed + audited** — writes go through the policy gate; state-of-record stays Recoder-owned.
+```
+  apps/          SURFACES / products. agent-gateway · agent-worker · desktop · wave · social.
+    │            They consume the backend over its edges. No capability logic lives here.
+    ▼ consume
+  MODULES        The capabilities. Each is a DIRECTORY, used in place:
+    │              docker-backend  → the HOST module (conductor + agent-os; composes the rest)
+    │              packages/*      → shared first-party contracts (agent-os, a2a-sdk, pal, …)
+    │              ts/*            → recodergit (github) · dmux (terminal-mux) · extracted-from-openclaw (social)
+    │              py/*            → mem0 · colbert (memory) · browser-use · ops-recorder · pal-mcp
+    │              crates/*        → openfang (agent-engine) · tensorzero (inference) · recoder-governance
+    │              go/*            → beads (memory/issue-graph) · multica · ziti · recoder-xds
+    │              c/tmux          → the session substrate
+    ▼ drive/consume in place (import dist · read the running server · boot the .node · spawn the sidecar)
+  Each module is edited IN ITS OWN DIR where fusion needs it (clean exports, killed side-effects).
+```
 
-Current state across the board: **capabilities exist but are SCATTERED** (a service here, an engine
-there, a loader elsewhere). The work is consolidation into modules, then deepening each.
+**Rules:**
+- A **module = an OSS directory used directly.** docker-backend imports/spawns/reads it in place. We do
+  NOT copy an engine into `packages/`. `packages/*` is only for genuinely-shared first-party contracts.
+- A **capability that composes several modules** (e.g. MEMORY = mem0 + beads + colbert) gets a thin
+  cohesive **composer** inside the host module (`docker-backend/src/modules/<domain>/`). The DEPTH lives
+  in the engine dirs; the composer only fuses + exposes one interface + truthful health. It must MOVE the
+  scattered consumer code behind it (not add a 4th copy).
+- **Edit the OSS source in its own dir** when the fusion needs it — that dir is ours (e.g. the dmux
+  clean-exports edit). Deepen the engine there, don't wrap it shallowly elsewhere.
+- `apps/*` never holds capability logic — it calls the modules.
+
+## The rule of a good module composer
+
+When docker-backend composes engine-modules into a domain capability, the composer is real when:
+1. **One domain, one owner** — `docker-backend/src/modules/<domain>/` is the single place that fuses the
+   engine dirs for that domain (it does not re-implement them).
+2. **Cohesive interface** — full verb set of the domain; callers depend on it, never on a raw dist.
+3. **Consumes engines from their dirs** — mem0/beads/colbert/openfang/tensorzero are read/imported/spawned
+   in place; nothing duplicated.
+4. **Truthful health** — reports each engine up|down; never fakes readiness.
+5. **Governed + audited** — writes through the policy gate; state-of-record stays Recoder-owned; the
+   scattered old consumer code is MOVED behind it (no 4th copy).
+
+Current state: **capabilities exist but are SCATTERED** across the host module. The work is consolidation
+behind one composer per domain, then deepening each engine in its own dir.
 
 ---
 
