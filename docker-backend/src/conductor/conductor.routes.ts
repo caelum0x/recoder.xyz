@@ -78,6 +78,7 @@ import type { Artifact, TaskSpec } from '@recoder/agent-os';
 import {
   beadsAvailability,
   importReadyBeadsTasks,
+  listReadyBeadsTasks,
   exportTaskToBeads,
 } from './beads-sync.js';
 import {
@@ -1126,6 +1127,16 @@ export function createConductorRouter(): Router {
   // Truthful availability of the `bd` CLI Conductor would shell to.
   router.get('/issues/availability', (_req: Request, res: Response) => {
     res.json({ success: true, data: beadsAvailability() });
+  });
+
+  // READ-ONLY ready-work list for the shell's board block — ready beads issues as
+  // canonical TaskSpecs, without importing them into the store. Degrade-safe: bd
+  // unavailable ⇒ { ready: [], skipped }. Loopback-friendly (no internal key).
+  router.get('/issues/ready', async (req: Request, res: Response) => {
+    const spaceId = (typeof req.query.spaceId === 'string' && req.query.spaceId) || 'terminal';
+    const repo = typeof req.query.repo === 'string' ? req.query.repo : undefined;
+    const result = await listReadyBeadsTasks({ spaceId, repo });
+    res.json({ success: true, data: result });
   });
 
   // Import ready beads issues into the canonical Agent OS task store. The adapter

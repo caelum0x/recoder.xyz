@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { BeadsClient, BeadsIssue } from '@recoder/beads-adapter';
 import type { Artifact, TaskSpec } from '@recoder/agent-os';
 import { InMemoryAgentOsRepository } from '../agent-os/repositories/in-memory-agent-os.repository.js';
-import { importReadyBeadsTasks, exportTaskToBeads } from './beads-sync.js';
+import { importReadyBeadsTasks, listReadyBeadsTasks, exportTaskToBeads } from './beads-sync.js';
 
 /**
  * Proves docker-backend injects the REAL @recoder/beads-adapter BeadsIssueTracker
@@ -76,6 +76,36 @@ describe('beads-sync product-path integration', () => {
     expect(task?.repo).toBe('recoder/recoder.xyz');
     expect(task?.intent).toBe('bugfix');
     expect(task?.metadata?.source).toBe('beads');
+  });
+
+  it('lists ready beads issues (read-only) WITHOUT upserting into the repository', async () => {
+    const { client } = makeFakeClient();
+    const repository = new InMemoryAgentOsRepository();
+
+    const result = await listReadyBeadsTasks(
+      { spaceId: 'space-conductor', repo: 'recoder/recoder.xyz' },
+      { client, repository },
+    );
+
+    expect(result.ready).toHaveLength(1);
+    expect(result.ready[0]?.taskId).toBe('rx-501');
+    expect(result.skipped).toBeUndefined();
+    // Read-only: the repository must be untouched (unlike import).
+    const tasks = await Promise.resolve(repository.listTasks());
+    expect(tasks).toHaveLength(0);
+  });
+
+  it('list degrades to empty when bd is unavailable (no injected client, bad binary)', async () => {
+    const prev = process.env.CONDUCTOR_BD_BIN;
+    process.env.CONDUCTOR_BD_BIN = '/nonexistent/bd-binary-xyz';
+    try {
+      const result = await listReadyBeadsTasks({ spaceId: 'space-x' });
+      expect(result.ready).toEqual([]);
+      expect(result.skipped).toBeTruthy();
+    } finally {
+      if (prev === undefined) delete process.env.CONDUCTOR_BD_BIN;
+      else process.env.CONDUCTOR_BD_BIN = prev;
+    }
   });
 
   it('exports a canonical task back to beads through the seam', async () => {

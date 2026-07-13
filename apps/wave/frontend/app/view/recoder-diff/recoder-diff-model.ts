@@ -39,6 +39,9 @@ class RecoderDiffViewModel implements ViewModel {
     diffLoadingAtom: PrimitiveAtom<boolean>;
     // Neutral, human diff status ("no diff", "diff endpoint not available", …).
     diffStatusAtom: PrimitiveAtom<string>;
+    mergingAtom: PrimitiveAtom<boolean>;
+    // Human result of the last merge action ("Merged.", approval reason, …).
+    mergeStatusAtom: PrimitiveAtom<string>;
 
     constructor(initOpts: ViewModelInitType) {
         this.blockId = initOpts.blockId;
@@ -52,6 +55,8 @@ class RecoderDiffViewModel implements ViewModel {
         this.loadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.diffLoadingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.diffStatusAtom = atom("") as PrimitiveAtom<string>;
+        this.mergingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.mergeStatusAtom = atom("") as PrimitiveAtom<string>;
     }
 
     get viewComponent(): ViewComponent {
@@ -128,6 +133,45 @@ class RecoderDiffViewModel implements ViewModel {
             globalStore.set(this.diffStatusAtom, "diff endpoint not available");
         } finally {
             globalStore.set(this.diffLoadingAtom, false);
+        }
+    }
+
+    // Merge the selected workspace — the "review → merge" close. Degrade-safe:
+    // 409 (delivery gate / awaiting approval) → the backend's truthful reason;
+    // other non-2xx → truthful failure; success → "Merged." then refresh. In a
+    // solo desktop the merge click IS the approval (server-side). Never fabricates.
+    async mergeSelected() {
+        const workspaceId = globalStore.get(this.selectedIdAtom);
+        if (!workspaceId) {
+            return;
+        }
+        globalStore.set(this.mergingAtom, true);
+        globalStore.set(this.mergeStatusAtom, "");
+        try {
+            const res = await fetch(
+                `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/merge`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                }
+            );
+            const body = await res.json().catch(() => null);
+            if (res.ok) {
+                globalStore.set(this.mergeStatusAtom, "Merged.");
+                await this.refresh();
+                return;
+            }
+            const reason = (body && typeof body.error == "string" && body.error) || "";
+            if (res.status == 409) {
+                globalStore.set(this.mergeStatusAtom, reason || "Merge needs approval.");
+                return;
+            }
+            globalStore.set(this.mergeStatusAtom, reason || `Merge failed (${res.status}).`);
+        } catch {
+            globalStore.set(this.mergeStatusAtom, "Merge unavailable — backend not reachable.");
+        } finally {
+            globalStore.set(this.mergingAtom, false);
         }
     }
 }
