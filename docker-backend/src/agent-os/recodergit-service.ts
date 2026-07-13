@@ -17,11 +17,26 @@
  *   into a request path, and NEVER claims fresh when stale.
  * - All IO (exec, git, clock, bin resolution, state store) is INJECTABLE so tests
  *   need no real clone, index, server, or network.
+ *
+ * ENGINE INVOCATION (in-process first, CLI-spawn fallback):
+ * - The DEFAULT path now dynamically imports the vendored engine's importable
+ *   surface (dist/core/run-analyze.js `runFullAnalysis` + dist/mcp/local/
+ *   local-backend.js `LocalBackend.callTool`) and runs analyze / detect_changes /
+ *   route_map IN-PROCESS — no stdout regex parsing, typed stats.
+ * - RECODERGIT_BIN still wins: when that env var is set, the in-process loader
+ *   returns null and every call goes through the CLI-spawn path against that bin.
+ * - Degrade-safe: lib import failure OR an in-process call failure logs and falls
+ *   back to the CLI-spawn path; if that also fails, the existing 'unavailable' /
+ *   empty-map degradation applies. Nothing ever throws into a request path.
+ * - Test seam: `loadEngineLib` is injectable. When a custom `exec` is injected
+ *   WITHOUT an explicit `loadEngineLib`, the lib path is disabled so the injected
+ *   exec stays authoritative (keeps every pre-existing test/consumer truthful).
  */
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const CODE_GRAPH_FLAG_ENV = 'RECODER_CODE_GRAPH_ENABLED';
 const RECODERGIT_BIN_ENV = 'RECODERGIT_BIN';
@@ -30,9 +45,11 @@ const DEFAULT_MCP_PORT = 7337;
 const MCP_HOST = '127.0.0.1';
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
-// Vendored engine entrypoint, relative to docker-backend/ (this file lives at
+// Vendored engine entrypoints, relative to docker-backend/ (this file lives at
 // docker-backend/src/agent-os/recodergit-service.ts -> ../../.. = repo root).
 const VENDORED_BIN_RELATIVE = '../ts/recodergit/recodergit/dist/cli/index.js';
+const VENDORED_CORE_RELATIVE = '../ts/recodergit/recodergit/dist/core/run-analyze.js';
+const VENDORED_LOCAL_BACKEND_RELATIVE = '../ts/recodergit/recodergit/dist/mcp/local/local-backend.js';
 
 export type IndexStatus = 'indexed' | 'stale' | 'not_indexed' | 'unavailable';
 
@@ -165,8 +182,15 @@ export interface RecoderGitServiceLogger {
 export interface RecoderGitServiceDeps {
   /** Reads the gate. Defaults to RECODER_CODE_GRAPH_ENABLED (truthy = on). */
   isEnabled?: () => boolean;
-  /** Runs the engine. Injected in tests; defaults to a `node <bin>` spawn. */
+  /** Runs the engine CLI (fallback path). Injected in tests; defaults to a `node <bin>` spawn. */
   exec?: EngineExec;
+  /**
+   * Loads the in-process engine lib (default path). Defaults to
+   * `defaultLoadEngineLib` — EXCEPT when a custom `exec` is injected without an
+   * explicit loader, in which case the lib path is disabled so the injected
+   * exec stays authoritative (test seams / bespoke CLI wrappers).
+   */
+  loadEngineLib?: EngineLibLoader;
   /** Resolves the engine bin path. Defaults to RECODERGIT_BIN or the vendored dist. */
   resolveBin?: () => string | null;
   /** Reads HEAD sha / branch. Injected in tests; defaults to `git` via exec. */
@@ -240,6 +264,119 @@ export function defaultResolveBin(): string | null {
   }
   const vendored = path.resolve(__dirname, '..', '..', VENDORED_BIN_RELATIVE);
   return existsSync(vendored) ? vendored : null;
+}
+
+/** Typed stats returned by the engine's in-process `runFullAnalysis`. */
+export interface EngineAnalyzeStats {
+  files?: number;
+  nodes?: number;
+  edges?: number;
+  communities?: number;
+  processes?: number;
+  embeddings?: number;
+}
+
+export interface EngineAnalyzeResult {
+  repoName?: string;
+  repoPath?: string;
+  stats?: EngineAnalyzeStats;
+}
+
+/**
+ * Importable surface of the vendored @recoder/recodergit-engine used in-process:
+ * - `runFullAnalysis` (dist/core/run-analyze.js) replaces the `analyze` CLI spawn
+ *   AND the stdout-regex stats parse with typed AnalyzeResult.stats.
+ * - `callTool` (dist/mcp/local/local-backend.js LocalBackend) replaces the
+ *   `route-map --json` / `detect-changes` CLI spawns. Optional — a lib without
+ *   it still analyzes in-process while tool calls fall back to the CLI.
+ */
+export interface EngineLib {
+  runFullAnalysis: (
+    repoPath: string,
+    options: Record<string, unknown>,
+    callbacks: {
+      onProgress: (phase: string, percent: number, message: string) => void;
+      onLog?: (message: string) => void;
+    },
+  ) => Promise<EngineAnalyzeResult>;
+  callTool?: (method: string, params: Record<string, unknown>) => Promise<unknown>;
+}
+
+/**
+ * Loads the engine lib, or null when the in-process path must not be used
+ * (RECODERGIT_BIN override, dist missing, import failure). Never throws
+ * meaningfully — callers treat a rejection exactly like null (CLI fallback).
+ */
+export type EngineLibLoader = () => Promise<EngineLib | null>;
+
+/**
+ * Native dynamic import that SURVIVES CJS transpilation/bundling. tsc
+ * (module=commonjs) and esbuild (format=cjs) both rewrite a literal `import()`
+ * into `require()`, which cannot load the engine's ESM dist — the Function
+ * indirection keeps the real `import()` intact.
+ */
+// eslint-disable-next-line @typescript-eslint/no-implied-eval
+const dynamicImport = new Function('specifier', 'return import(specifier)') as (
+  specifier: string,
+) => Promise<Record<string, unknown>>;
+
+/**
+ * Default engine-lib loader. Precedence (mirrors defaultResolveBin):
+ * 1. RECODERGIT_BIN set -> null: the explicit bin override wins, CLI path only.
+ * 2. Vendored dist/core/run-analyze.js present -> dynamic-import it (ESM).
+ * 3. LocalBackend is best-effort: its absence/failure yields an analyze-only
+ *    lib (callTool undefined) so tool calls keep their CLI fallback.
+ * Any failure returns null — the caller falls back to the CLI spawn.
+ */
+export async function defaultLoadEngineLib(): Promise<EngineLib | null> {
+  if (process.env[RECODERGIT_BIN_ENV]?.trim()) {
+    return null;
+  }
+  const coreEntry = path.resolve(__dirname, '..', '..', VENDORED_CORE_RELATIVE);
+  if (!existsSync(coreEntry)) {
+    return null;
+  }
+  const core = await dynamicImport(pathToFileURL(coreEntry).href);
+  const runFullAnalysis = core?.runFullAnalysis;
+  if (typeof runFullAnalysis !== 'function') {
+    return null;
+  }
+
+  let callTool: EngineLib['callTool'];
+  const backendEntry = path.resolve(__dirname, '..', '..', VENDORED_LOCAL_BACKEND_RELATIVE);
+  if (existsSync(backendEntry)) {
+    try {
+      const mod = await dynamicImport(pathToFileURL(backendEntry).href);
+      const LocalBackendCtor = mod?.LocalBackend;
+      if (typeof LocalBackendCtor === 'function') {
+        // Lazy singleton backend: constructed + init()'d on first tool call so
+        // merely loading the lib never touches the registry or LadybugDB.
+        let backendPromise: Promise<{ callTool: (method: string, params: unknown) => Promise<unknown> }> | null = null;
+        const getBackend = () => {
+          if (!backendPromise) {
+            backendPromise = (async () => {
+              const backend = new (LocalBackendCtor as new () => {
+                init: () => Promise<boolean>;
+                callTool: (method: string, params: unknown) => Promise<unknown>;
+              })();
+              await backend.init();
+              return backend;
+            })();
+          }
+          return backendPromise;
+        };
+        callTool = async (method, params) => (await getBackend()).callTool(method, params);
+      }
+    } catch {
+      // Analyze-only lib; tool calls fall back to the CLI spawn.
+      callTool = undefined;
+    }
+  }
+
+  return {
+    runFullAnalysis: runFullAnalysis as EngineLib['runFullAnalysis'],
+    callTool,
+  };
 }
 
 function spawnCapture(command: string, args: string[], cwd: string): Promise<ExecResult> {
@@ -423,6 +560,9 @@ function toStringArray(value: unknown): string[] | undefined {
 export class RecoderGitService {
   private readonly isEnabledFn: () => boolean;
   private readonly exec: EngineExec;
+  private readonly loadEngineLib: EngineLibLoader;
+  /** Memoized lib load (lazy; a failed load caches null -> CLI fallback). */
+  private engineLibPromise: Promise<EngineLib | null> | null = null;
   private readonly git: GitProvider;
   private readonly store: IndexStateStore;
   private readonly now: () => string;
@@ -442,6 +582,9 @@ export class RecoderGitService {
     this.isEnabledFn = deps.isEnabled ?? readFlagFromEnv;
     this.resolveBin = deps.resolveBin ?? defaultResolveBin;
     this.exec = deps.exec ?? makeDefaultExec(this.resolveBin);
+    // In-process lib is the default path; an injected exec (without an explicit
+    // loader) disables it so the injected CLI seam stays authoritative.
+    this.loadEngineLib = deps.loadEngineLib ?? (deps.exec ? async () => null : defaultLoadEngineLib);
     this.git = deps.git ?? makeDefaultGit();
     this.store = deps.store ?? new InMemoryIndexStateStore();
     this.now = deps.now ?? (() => new Date().toISOString());
@@ -566,20 +709,67 @@ export class RecoderGitService {
   }
 
   /**
-   * Build (or rebuild) the per-repo graph via `analyze`, record node/edge counts
-   * and HEAD sha into the state store. Fail-safe -> status:'unavailable' (logged,
-   * never thrown). No-op when the flag is off.
+   * Lazily load (once) the in-process engine lib. NEVER rejects: any loader
+   * failure logs and caches null so every later call takes the CLI fallback.
+   */
+  private engineLib(): Promise<EngineLib | null> {
+    if (!this.engineLibPromise) {
+      this.engineLibPromise = Promise.resolve()
+        .then(() => this.loadEngineLib())
+        .catch((error: unknown) => {
+          this.logger.error('[recodergit-service] engine lib import failed (falling back to CLI spawn)', error);
+          return null;
+        });
+    }
+    return this.engineLibPromise;
+  }
+
+  /**
+   * Run analyze — in-process (`runFullAnalysis`, typed stats) when the lib is
+   * loadable, else the CLI spawn + stdout parse. An in-process FAILURE (not just
+   * a missing lib) also falls back to the CLI before giving up. Throws only when
+   * every path failed; callers translate that into status:'unavailable'.
+   */
+  private async runAnalyze(repoRoot: string): Promise<{
+    nodes: number;
+    edges: number;
+    clusters?: number;
+    flows?: number;
+  }> {
+    const lib = await this.engineLib();
+    if (lib) {
+      try {
+        const result = await lib.runFullAnalysis(repoRoot, { skipGit: true }, { onProgress: () => undefined });
+        const stats = result?.stats ?? {};
+        return {
+          nodes: typeof stats.nodes === 'number' ? stats.nodes : 0,
+          edges: typeof stats.edges === 'number' ? stats.edges : 0,
+          clusters: typeof stats.communities === 'number' ? stats.communities : undefined,
+          flows: typeof stats.processes === 'number' ? stats.processes : undefined,
+        };
+      } catch (error: unknown) {
+        this.logger.error('[recodergit-service] in-process analyze failed (falling back to CLI spawn)', error);
+      }
+    }
+    const result = await this.exec(['analyze', repoRoot, '--skip-git'], { cwd: repoRoot });
+    if (result.code !== 0) {
+      throw new Error(`analyze exited with code ${result.code}: ${result.stderr.trim().slice(0, 200)}`);
+    }
+    return parseAnalyzeStats(result.stdout);
+  }
+
+  /**
+   * Build (or rebuild) the per-repo graph via analyze (in-process first, CLI
+   * fallback), record node/edge counts and HEAD sha into the state store.
+   * Fail-safe -> status:'unavailable' (logged, never thrown). No-op when the
+   * flag is off.
    */
   async indexRepo(input: IndexRepoInput): Promise<ServiceResult<{ state: IndexState }>> {
     if (!this.isEnabled()) return { enabled: false };
 
     const { repoRoot, repoId } = input;
     try {
-      const result = await this.exec(['analyze', repoRoot, '--skip-git'], { cwd: repoRoot });
-      if (result.code !== 0) {
-        throw new Error(`analyze exited with code ${result.code}: ${result.stderr.trim().slice(0, 200)}`);
-      }
-      const stats = parseAnalyzeStats(result.stdout);
+      const stats = await this.runAnalyze(repoRoot);
       const [lastIndexedSha, branch] = await Promise.all([
         this.git.headSha(repoRoot),
         this.git.currentBranch(repoRoot),
@@ -722,7 +912,13 @@ export class RecoderGitService {
 
     try {
       // Best-effort delta detection; ignored on failure, analyze still runs.
-      await this.exec(['detect-changes'], { cwd: existing.repoRoot }).catch(() => undefined);
+      // In-process detect_changes when the lib exposes callTool, else the CLI.
+      const lib = await this.engineLib();
+      if (lib?.callTool) {
+        await lib.callTool('detect_changes', { repo: existing.repoRoot }).catch(() => undefined);
+      } else {
+        await this.exec(['detect-changes'], { cwd: existing.repoRoot }).catch(() => undefined);
+      }
       const reindexed = await this.indexRepo({ repoRoot: existing.repoRoot, repoId: input.repoId });
       if (reindexed.enabled) {
         return { enabled: true, state: reindexed.state, status: reindexed.state.status };
@@ -744,6 +940,18 @@ export class RecoderGitService {
     const emptyMap: DomainMap = { repoId, domains: [], crossEdges: [] };
     const state = await this.store.get(repoId);
     const cwd = state?.repoRoot ?? process.cwd();
+
+    // In-process route_map (LocalBackend.callTool) when available; any failure
+    // logs and falls through to the CLI spawn below.
+    const lib = await this.engineLib();
+    if (lib?.callTool) {
+      try {
+        const raw = await lib.callTool('route_map', { repo: cwd });
+        return { enabled: true, map: projectDomainMap(repoId, raw) };
+      } catch (error: unknown) {
+        this.logger.error('[recodergit-service] in-process route_map failed (falling back to CLI spawn)', error);
+      }
+    }
 
     try {
       const result = await this.exec(['route-map', '--json'], { cwd });

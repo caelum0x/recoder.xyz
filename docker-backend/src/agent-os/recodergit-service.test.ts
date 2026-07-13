@@ -2,12 +2,14 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   RecoderGitService,
+  defaultLoadEngineLib,
   parseAnalyzeStats,
   projectDomainMap,
   extractJson,
   assertSafeRepoId,
   repoIdFromFullName,
   type EngineExec,
+  type EngineLib,
   type ExecResult,
   type GitProvider,
   type IndexState,
@@ -429,6 +431,283 @@ describe('pure helpers', () => {
     expect(() => assertSafeRepoId('owner__repo')).not.toThrow();
     for (const bad of ['', '.', '..', 'a/b', 'a\\b', '../escape', 'a..b', 'a\0b']) {
       expect(() => assertSafeRepoId(bad)).toThrow();
+    }
+  });
+});
+
+// ─── In-process engine lib (default path; CLI spawn is the fallback) ─────────
+
+function execMustNotRun(): EngineExec {
+  return vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => {
+    throw new Error('CLI exec must not run when the in-process lib handles the call');
+  });
+}
+
+function fakeLib(overrides: Partial<EngineLib> = {}): EngineLib {
+  return {
+    runFullAnalysis: vi.fn(async () => ({
+      stats: { nodes: 10, edges: 20, communities: 3, processes: 2 },
+    })),
+    ...overrides,
+  };
+}
+
+const silentLogger = { error: () => undefined };
+
+describe('RecoderGitService — in-process engine lib', () => {
+  it('indexRepo runs runFullAnalysis in-process (typed stats; communities->clusters, processes->flows) and never spawns the CLI', async () => {
+    const lib = fakeLib();
+    const exec = execMustNotRun();
+    const store = fakeStore();
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => lib,
+      exec,
+      git: fakeGit('sha-1'),
+      store,
+      now: () => 'T0',
+    });
+
+    const result = await service.indexRepo(INPUT);
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.state).toMatchObject({
+      repoId: 'r1',
+      status: 'indexed',
+      nodes: 10,
+      edges: 20,
+      clusters: 3,
+      flows: 2,
+      lastIndexedSha: 'sha-1',
+    });
+    expect(exec).not.toHaveBeenCalled();
+    expect(lib.runFullAnalysis).toHaveBeenCalledTimes(1);
+    const [repoPath, options, callbacks] = (lib.runFullAnalysis as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(repoPath).toBe('/repo');
+    expect(options).toEqual({ skipGit: true });
+    expect(typeof callbacks.onProgress).toBe('function');
+  });
+
+  it('lib loader returning null -> CLI exec fallback (stdout stats parse)', async () => {
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => ok(ANALYZE_OUT));
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => null,
+      exec,
+      git: fakeGit('sha-1'),
+      store: fakeStore(),
+    });
+
+    const result = await service.indexRepo(INPUT);
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.state).toMatchObject({ status: 'indexed', nodes: 1234, edges: 5678 });
+    expect(exec).toHaveBeenCalledWith(['analyze', '/repo', '--skip-git'], { cwd: '/repo' });
+  });
+
+  it('lib loader throwing -> logged and degrades to the CLI exec fallback (never throws)', async () => {
+    const logger = { error: vi.fn() };
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => ok(ANALYZE_OUT));
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => {
+        throw new Error('import boom');
+      },
+      exec,
+      git: fakeGit('sha-1'),
+      store: fakeStore(),
+      logger,
+    });
+
+    const result = await service.indexRepo(INPUT);
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.state.status).toBe('indexed');
+    expect(result.state.nodes).toBe(1234);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('engine lib import failed'),
+      expect.any(Error),
+    );
+  });
+
+  it('runFullAnalysis throwing -> falls back to the CLI exec before degrading', async () => {
+    const lib = fakeLib({
+      runFullAnalysis: vi.fn(async () => {
+        throw new Error('analyze boom');
+      }),
+    });
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => ok(ANALYZE_OUT));
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => lib,
+      exec,
+      git: fakeGit('sha-1'),
+      store: fakeStore(),
+      logger: silentLogger,
+    });
+
+    const result = await service.indexRepo(INPUT);
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.state).toMatchObject({ status: 'indexed', nodes: 1234, edges: 5678 });
+    expect(exec).toHaveBeenCalledWith(['analyze', '/repo', '--skip-git'], { cwd: '/repo' });
+  });
+
+  it('both lib analyze AND CLI fallback failing -> truthful unavailable state (never throws)', async () => {
+    const lib = fakeLib({
+      runFullAnalysis: vi.fn(async () => {
+        throw new Error('analyze boom');
+      }),
+    });
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () => ({
+      stdout: '',
+      stderr: 'engine exploded',
+      code: 1,
+    }));
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => lib,
+      exec,
+      git: fakeGit('sha-1'),
+      store: fakeStore(),
+      logger: silentLogger,
+    });
+
+    const result = await service.indexRepo(INPUT);
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.state.status).toBe('unavailable');
+  });
+
+  it('domainMap uses lib callTool("route_map", { repo }) in-process and never spawns the CLI', async () => {
+    const callTool = vi.fn(async () => ({
+      domains: [{ name: 'auth', files: ['a.ts'] }],
+      crossEdges: [{ from: 'auth', to: 'billing' }],
+    }));
+    const lib = fakeLib({ callTool });
+    const exec = execMustNotRun();
+    const store = fakeStore();
+    store.states.set('r1', {
+      repoId: 'r1',
+      repoRoot: '/repo',
+      branch: 'main',
+      lastIndexedSha: 'sha-1',
+      indexedAt: 'T0',
+      nodes: 1,
+      edges: 1,
+      status: 'indexed',
+    });
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => lib,
+      exec,
+      git: fakeGit('sha-1'),
+      store,
+    });
+
+    const result = await service.domainMap('r1');
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.map.domains).toEqual([{ name: 'auth', files: ['a.ts'], entryPoints: undefined, dependsOn: undefined }]);
+    expect(result.map.crossEdges).toEqual([{ from: 'auth', to: 'billing' }]);
+    expect(callTool).toHaveBeenCalledWith('route_map', { repo: '/repo' });
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('domainMap lib callTool failure -> logged, CLI route-map fallback', async () => {
+    const lib = fakeLib({
+      callTool: vi.fn(async () => {
+        throw new Error('route_map boom');
+      }),
+    });
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () =>
+      ok(JSON.stringify({ domains: [{ name: 'core' }] })),
+    );
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => lib,
+      exec,
+      git: fakeGit('sha-1'),
+      store: fakeStore(),
+      logger: silentLogger,
+    });
+
+    const result = await service.domainMap('r1');
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.map.domains).toEqual([{ name: 'core', files: undefined, entryPoints: undefined, dependsOn: undefined }]);
+    expect(exec).toHaveBeenCalledWith(['route-map', '--json'], expect.objectContaining({ cwd: expect.any(String) }));
+  });
+
+  it('lib WITHOUT callTool -> domainMap keeps the CLI route-map path', async () => {
+    const lib = fakeLib({ callTool: undefined });
+    const exec = vi.fn<Parameters<EngineExec>, ReturnType<EngineExec>>(async () =>
+      ok(JSON.stringify({ domains: [] })),
+    );
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => lib,
+      exec,
+      git: fakeGit('sha-1'),
+      store: fakeStore(),
+    });
+
+    const result = await service.domainMap('r1');
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(exec).toHaveBeenCalledWith(['route-map', '--json'], expect.objectContaining({ cwd: expect.any(String) }));
+  });
+
+  it('reindexOnPush uses lib detect_changes best-effort (rejection swallowed) then in-process analyze', async () => {
+    const callTool = vi.fn(async (method: string) => {
+      if (method === 'detect_changes') throw new Error('detect boom');
+      return {};
+    });
+    const lib = fakeLib({ callTool });
+    const exec = execMustNotRun();
+    const store = fakeStore();
+    store.states.set('r1', {
+      repoId: 'r1',
+      repoRoot: '/repo',
+      branch: 'main',
+      lastIndexedSha: 'old-sha',
+      indexedAt: 'T0',
+      nodes: 1,
+      edges: 1,
+      status: 'indexed',
+    });
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib: async () => lib,
+      exec,
+      git: fakeGit('new-sha'),
+      store,
+    });
+
+    const result = await service.reindexOnPush({ repoId: 'r1' });
+    if (!result.enabled) throw new Error('expected enabled');
+    expect(result.status).toBe('indexed');
+    expect(result.state).toMatchObject({ nodes: 10, edges: 20, lastIndexedSha: 'new-sha' });
+    expect(callTool).toHaveBeenCalledWith('detect_changes', { repo: '/repo' });
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it('memoizes the lib load: one loader call across many operations', async () => {
+    const lib = fakeLib();
+    const loadEngineLib = vi.fn(async () => lib);
+    const service = new RecoderGitService({
+      isEnabled: () => true,
+      loadEngineLib,
+      exec: execMustNotRun(),
+      git: fakeGit('sha-1'),
+      store: fakeStore(),
+    });
+
+    await service.indexRepo(INPUT);
+    await service.indexRepo({ repoRoot: '/repo2', repoId: 'r2' });
+    expect(loadEngineLib).toHaveBeenCalledTimes(1);
+  });
+
+  it('defaultLoadEngineLib: RECODERGIT_BIN override wins -> null (CLI path only)', async () => {
+    const prev = process.env.RECODERGIT_BIN;
+    try {
+      process.env.RECODERGIT_BIN = '/some/explicit/bin.js';
+      await expect(defaultLoadEngineLib()).resolves.toBeNull();
+    } finally {
+      if (prev === undefined) delete process.env.RECODERGIT_BIN;
+      else process.env.RECODERGIT_BIN = prev;
     }
   });
 });
