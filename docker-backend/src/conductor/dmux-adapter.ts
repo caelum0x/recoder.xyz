@@ -2,7 +2,7 @@
  * dmux operator-console adapter — the optional view layer over the tmux substrate.
  *
  * Per docs/subsystems/substrate.md §4.3 and docs/RECODER-PRODUCT-ARCHITECTURE.md §8c
- * (LOCKED): dmux is a vendored multiplexer (ts/dmux) used as an OPTIONAL operator
+ * (LOCKED): dmux is a vendored multiplexer (modules/terminal/dmux) used as an OPTIONAL operator
  * grid over N parallel agents. It is NEVER on the critical path — if dmux is absent,
  * the Conductor substrate is fully functional via tmux alone.
  *
@@ -12,7 +12,7 @@
  * dmux can observe and interact with those sessions since they share one tmux server.
  *
  * This adapter:
- *   - resolves the dmux binary (vendored ts/dmux or system PATH)
+ *   - resolves the dmux binary (vendored modules/terminal/dmux or system PATH)
  *   - reports truthful availability
  *   - launches dmux as an operator console for a repo
  *   - bridges conductor workspaces → dmux-visible tmux sessions
@@ -31,7 +31,7 @@ const logger = createLogger('conductor:dmux');
  * Environment that pins dmux to the SAME tmux binary the Conductor drives.
  *
  * dmux resolves its tmux binary from `DMUX_TMUX_BIN`/`CONDUCTOR_TMUX_BIN` (see
- * ts/dmux/src/utils/tmuxBin.ts, which mirrors this package's tmux-path.ts). Without
+ * modules/terminal/dmux/src/utils/tmuxBin.ts, which mirrors this package's tmux-path.ts). Without
  * this, a vendored/pinned tmux would be invisible to the operator console and dmux
  * would fall back to a system `tmux` on PATH — a different tmux server that cannot see
  * the conductor's `recoder-*` sessions. Propagating it makes the bridge real: one
@@ -48,22 +48,22 @@ export function dmuxTmuxEnv(): NodeJS.ProcessEnv {
 /**
  * Resolve the dmux binary. Order:
  *   1. CONDUCTOR_DMUX_BIN env override.
- *   2. The vendored ts/dmux/dmux launcher (with a built dist/).
+ *   2. The vendored modules/terminal/dmux/dmux launcher (with a built dist/).
  *   3. System `dmux` on PATH (returns the bare name for `command -v` resolution).
  */
 export function resolveDmuxBin(): string {
   if (process.env.CONDUCTOR_DMUX_BIN && existsSync(process.env.CONDUCTOR_DMUX_BIN)) {
     return process.env.CONDUCTOR_DMUX_BIN;
   }
-  // Resolve the vendored launcher relative to the repo root (contains ts/dmux/dmux).
+  // Resolve the vendored launcher relative to the repo root (contains modules/terminal/dmux/dmux).
   let dir = __dirname;
   for (let i = 0; i < 10; i++) {
-    const vendored = path.join(dir, 'ts', 'dmux', 'dmux');
-    const vendoredDist = path.join(dir, 'ts', 'dmux', 'dist', 'index.js');
+    const vendored = path.join(dir, 'modules', 'terminal', 'dmux', 'dmux');
+    const vendoredDist = path.join(dir, 'modules', 'terminal', 'dmux', 'dist', 'index.js');
     if (existsSync(vendored) && existsSync(vendoredDist)) {
       return vendored;
     }
-    if (existsSync(path.join(dir, 'c', 'tmux', 'tmux.c'))) break; // hit repo root
+    if (existsSync(path.join(dir, 'pnpm-workspace.yaml'))) break; // hit repo root
     dir = path.dirname(dir);
   }
   return 'dmux'; // fall back to system PATH
@@ -74,7 +74,7 @@ export interface DmuxAvailability {
   available: boolean;
   /** Resolved binary path (vendored, override, or system 'dmux'). */
   bin: string;
-  /** True when the resolved binary is the vendored ts/dmux build. */
+  /** True when the resolved binary is the vendored modules/terminal/dmux build. */
   vendored: boolean;
   /** The tmux binary dmux will be pinned to (shared with the conductor). */
   tmuxBin: string;
@@ -102,7 +102,7 @@ export async function dmuxAvailability(): Promise<DmuxAvailability> {
         vendored: false,
         tmuxBin,
         tmuxPinned,
-        reason: 'dmux not found on PATH and no vendored build at ts/dmux/dist',
+        reason: 'dmux not found on PATH and no vendored build at modules/terminal/dmux/dist',
       };
     }
   }
