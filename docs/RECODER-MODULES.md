@@ -232,6 +232,36 @@ background capabilities; its event bus bridged to RunEvents.
 
 ---
 
+## 8. GOVERNANCE module — `modules/governance/`
+**Domain:** the moat — policy decisions + tamper-evident audit. **Engine dir:** `crates/recoder-governance`
+(native `.node`: `decide()` verdict + Merkle audit).
+**Today:** `packages/governance` napi loader + `conductor/governance-native.ts`; `decide()` on the delivery
+path. **Deep target:** a `GovernanceModule` that seals EVERY conductor mutation (create/merge/archive/
+memory-promote) into the Merkle log and is the single `authorize→risk→audit` gate every module write flows
+through. **Build:** module wraps the native kernel; extend the seal to all mutations; audit-verify a full
+workspace lifecycle.
+
+## 9. BROWSING module — `modules/browsing/`
+**Domain:** web automation for agents. **Engine dirs:** `py/browser-use` (owned sidecar) + `@recoder/agent-browser`
+(in-proc puppeteer) + `@recoder/browser-tools`.
+**Today:** `browser-engine.ts` (puppeteer/browser-use switch) + `conductor/browser-check.ts`. **Deep target:**
+one `BrowsingModule` (open/snapshot/extract/verify/navigate) with browser-use as the owned-venv sidecar and
+puppeteer as the light fallback; the conductor's post-run browser-check calls it. **Build:** module unifies
+the two drivers; browser-use owned-venv bootstrap (uv + playwright install).
+
+## 10. SIGNALS module — `modules/signals/`
+**Domain:** work-signals + activity observability. **Engine dir:** `py/ops-recorder` (supervised sidecar — done).
+**Today:** `ops-recorder-daemon.ts` + `ops-recorder-adapter.ts` + work-signals ingress. **Deep target:** a
+`SignalsModule` owning the signal ingress→conductor path (stuck/blocked/needs-you signals drive the board),
+default-on. **Build:** module wraps the sidecar; API key minted at boot; signals feed the board module.
+
+## 11. NETWORKING module — `modules/networking/` (cloud tier — build now, mesh at cloud launch)
+**Domain:** zero-trust mesh + service control plane. **Engine dirs:** `go/ziti` (mesh) + `go/multica`
+(managed-agents) + `go/recoder-xds` (Envoy xDS). **Today:** degrade-safe clients (`ziti-client.ts`,
+`multica-client.ts`), binaries unbuilt. **Deep target:** a `NetworkingModule` exposing mesh identity +
+peer status + xDS control as diagnostics now, activated at cloud/teams launch. **Build:** owned-binary
+builds out-of-band; health/diagnostics surface; mesh deferred.
+
 ## Module build order
 
 Consolidation-first (each is "gather scattered code behind the interface", then deepen):
