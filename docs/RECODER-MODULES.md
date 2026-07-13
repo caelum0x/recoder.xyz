@@ -356,3 +356,24 @@ Consolidation-first (each is "gather scattered code behind the interface", then 
 
 Each module ships as: create `modules/<domain>/` + the interface + move scattered code behind it +
 one integration test proving a caller uses the module end-to-end + degrade-safe health. Then deepen.
+
+---
+
+## Owner decisions (2026-07-14 — "you choose all", architect's calls)
+
+1. **mem0 canonical store** → the owned `@recoder/mem0` (TS + platform Qdrant) is the ONE semantic
+   memory path. `py/mem0`'s FastAPI server stays an optional, unspawned `MEM0_BASE_URL` target — not
+   supervised, not deleted (no-pruning rule). The MEMORY module's `recall` uses `@recoder/mem0`.
+2. **colbert** → best-effort **rerank-only**. No ANN index build. When torch is absent the reranker is a
+   no-op identity pass (already the behavior); recall still fuses+dedupes without it.
+3. **recodergit license (PolyForm-Noncommercial)** → keep **dev / self-host only**, behind the
+   degrade-safe CLI/lib path. NOT shipped commercially-embedded until relicensed. The GitHub module
+   flags this; the capability degrades to `not_configured` cleanly when disabled.
+4. **openfang** → **widen the closed `ConductorRuntimeId` union** so the runtime driver is dispatchable
+   (`runtimeId:"openfang"`), completing the AGENT-ENGINE module. Owning a built binary stays disk-gated;
+   the union widening is code and is the deep target.
+5. **discord connector** → **drop from the exported channel set** (not truly extracted, ~172 type errors,
+   still OpenClaw-coupled). Keep the 7 working adapters; don't ship a broken channel.
+6. **ops-recorder LICENSE** → **added** (MIT, Recoder-authored — matches root `package.json` license).
+7. **networking (ziti/xds)** → **stays cloud-tier-deferred**. Registered + diagnostics only; no live data
+   plane until the cloud/teams launch.
