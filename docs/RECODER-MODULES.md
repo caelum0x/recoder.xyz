@@ -16,7 +16,7 @@
     │              ts/*            → recodergit (github) · dmux (terminal-mux) · extracted-from-openclaw (social)
     │              py/*            → mem0 · colbert (memory) · browser-use · ops-recorder · pal-mcp
     │              crates/*        → openfang (agent-engine) · tensorzero (inference) · recoder-governance
-    │              go/*            → beads (memory/issue-graph) · multica · ziti · recoder-xds
+    │              go/*            → beads (memory/issue-graph) · multica (squads/teammates) · ziti + recoder-xds (networking)
     │              c/tmux          → the session substrate
     ▼ drive/consume in place (import dist · read the running server · boot the .node · spawn the sidecar)
   Each module is edited IN ITS OWN DIR where fusion needs it (clean exports, killed side-effects).
@@ -256,11 +256,31 @@ the two drivers; browser-use owned-venv bootstrap (uv + playwright install).
 default-on. **Build:** module wraps the sidecar; API key minted at boot; signals feed the board module.
 
 ## 11. NETWORKING module — `modules/networking/` (cloud tier — build now, mesh at cloud launch)
-**Domain:** zero-trust mesh + service control plane. **Engine dirs:** `go/ziti` (mesh) + `go/multica`
-(managed-agents) + `go/recoder-xds` (Envoy xDS). **Today:** degrade-safe clients (`ziti-client.ts`,
-`multica-client.ts`), binaries unbuilt. **Deep target:** a `NetworkingModule` exposing mesh identity +
-peer status + xDS control as diagnostics now, activated at cloud/teams launch. **Build:** owned-binary
-builds out-of-band; health/diagnostics surface; mesh deferred.
+**Domain:** zero-trust mesh + service control plane. **Engine dirs:** `go/ziti` (OpenZiti — zero-trust
+networking, cryptographic identity per connection, dark services) + `go/recoder-xds` (real Envoy xDS
+control plane — dynamic LDS/CDS/RDS over ADS, the live equivalent of `docker-backend/src/network`'s static
+bootstrap). **Today:** degrade-safe `ziti-client.ts`; `docker-backend/src/network` generates the static
+Envoy bootstrap. **Deep target:** a `NetworkingModule` exposing mesh identity + peer status + LIVE xDS
+push as diagnostics now, activated at cloud/teams launch. **Build:** owned-binary builds out-of-band;
+health/diagnostics surface; mesh deferred to cloud.
+
+## 12. SQUADS module — `modules/squads/` (agents as teammates)
+**Domain:** managed agents as first-class teammates — assignment, squads, autopilots, the team board.
+**Engine dir:** `go/multica` ("Multiplexed Information and Computing Agent" — assign issues to an agent
+like a colleague; agents claim work, report blockers, update status; **Squads** = a group under a leader
+agent that delegates; **Autopilots** = cron/webhook-triggered recurring agent work; WebSocket progress
+streaming). This is the human+agent TEAMWORK layer — a direct sibling of Recoder's own conductor/board,
+so it FUSES into them rather than running beside them.
+**Today:** `multica-client.ts` (degrade-safe loopback client, binary unbuilt). Recoder already owns the
+conductor (task lifecycle: enqueue/claim/start/complete), the board (`packages/herd` + cockpit), and
+beads (issue graph). **Deep target:** a `SquadsModule` that folds multica's distinctive primitives into
+the Recoder conductor: **squads** (assign work to `@FrontendTeam`; a leader agent routes to a member) and
+**autopilots** (scheduled recurring agent runs that self-create the issue + route it), on top of the
+existing task lifecycle + beads assignment. Not a separate managed-agents server — its IDEAS become
+Recoder conductor features. **Build:** (a) squad = a named group of runtimes + a leader-routing policy
+over the existing launch path; (b) autopilot = a cron trigger that creates a beads issue + dispatches a
+conductor run; (c) surface squads/autopilots in the cockpit board. Port the logic (Go → TS conductor)
+rather than supervise the Go binary, since it overlaps our own control plane.
 
 ## Module build order
 
