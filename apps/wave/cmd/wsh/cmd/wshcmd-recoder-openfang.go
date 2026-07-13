@@ -144,6 +144,37 @@ var openfangMessageCmd = &cobra.Command{
 	RunE:                  openfangMessageRun,
 }
 
+var openfangContextCmd = &cobra.Command{
+	Use:                   "context [agentId]",
+	Short:                 "context/usage report for an agent's session",
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
+	RunE:                  openfangGetIDRun("/agents/%s/context", "openfang:context"),
+}
+
+var openfangCompactCmd = &cobra.Command{
+	Use:                   "compact [agentId]",
+	Short:                 "compact an agent's session history",
+	Args:                  cobra.ExactArgs(1),
+	DisableFlagsInUseLine: true,
+	RunE:                  openfangPostIDRun("/agents/%s/compact", "openfang:compact"),
+}
+
+var openfangReloadExtensionsCmd = &cobra.Command{
+	Use:   "reload-extensions",
+	Short: "reload extension MCP servers",
+	Args:  cobra.NoArgs,
+	RunE: func(_ *cobra.Command, _ []string) (rtnErr error) {
+		defer func() { sendActivity("openfang:reload-extensions", rtnErr == nil) }()
+		raw, err := openfangRequest(http.MethodPost, "/extensions/mcp/reload", map[string]interface{}{})
+		if err != nil {
+			return err
+		}
+		recoderPrintValue(raw)
+		return nil
+	},
+}
+
 func init() {
 	recoderCmd.AddCommand(openfangCmd)
 	openfangCmd.AddCommand(
@@ -151,7 +182,22 @@ func init() {
 		openfangModelsCmd, openfangSkillsCmd, openfangUsageCmd,
 		openfangActivateCmd, openfangPauseCmd, openfangResumeCmd, openfangDeactivateCmd,
 		openfangAgentActivateCmd, openfangAgentStopCmd, openfangAgentKillCmd, openfangMessageCmd,
+		openfangContextCmd, openfangCompactCmd, openfangReloadExtensionsCmd,
 	)
+}
+
+// openfangGetIDRun builds a GET runner whose path embeds a single positional id.
+func openfangGetIDRun(pathTemplate, activity string) func(*cobra.Command, []string) error {
+	return func(_ *cobra.Command, args []string) (rtnErr error) {
+		defer func() { sendActivity(activity, rtnErr == nil) }()
+		path := fmt.Sprintf(pathTemplate, url.PathEscape(strings.TrimSpace(args[0])))
+		raw, err := openfangRequest(http.MethodGet, path, nil)
+		if err != nil {
+			return err
+		}
+		recoderPrintValue(raw)
+		return nil
+	}
 }
 
 // openfangRequest performs an HTTP call to the native engine edge and returns the

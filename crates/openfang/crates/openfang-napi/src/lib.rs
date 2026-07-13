@@ -18,7 +18,7 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use openfang_hands::bundled::bundled_hands;
 use openfang_kernel::OpenFangKernel;
-use openfang_types::agent::AgentId;
+use openfang_types::agent::{AgentId, AgentManifest, SessionId};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -362,6 +362,115 @@ impl OpenfangEngine {
             }
             Err(e) => err_json(e),
         }
+    }
+
+    // ---- Sessions ---------------------------------------------------------
+
+    /// Create a new session for an agent (optional label). Returns the session JSON.
+    #[napi]
+    pub fn create_session(&self, agent_id: String, label: Option<String>) -> String {
+        match self.kernel.create_agent_session(parse_agent_id(&agent_id), label.as_deref()) {
+            Ok(v) => json!({ "ok": true, "session": v }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// Switch an agent to a different session (by session uuid).
+    #[napi]
+    pub fn switch_session(&self, agent_id: String, session_id: String) -> String {
+        match parse_uuid(&session_id) {
+            Ok(sid) => unit_result(self.kernel.switch_agent_session(parse_agent_id(&agent_id), SessionId(sid))),
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// Compact an agent's session history (async — blocked on). Returns a summary.
+    #[napi]
+    pub fn compact_session(&self, agent_id: String) -> String {
+        match self.rt.block_on(self.kernel.compact_agent_session(parse_agent_id(&agent_id))) {
+            Ok(summary) => json!({ "ok": true, "summary": summary }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// A context/usage report for one agent's session.
+    #[napi]
+    pub fn context_report(&self, agent_id: String) -> String {
+        match self.kernel.context_report(parse_agent_id(&agent_id)) {
+            Ok(report) => ok_data("report", report),
+            Err(e) => err_json(e),
+        }
+    }
+
+    // ---- Agent config: MCP servers + tool filters -------------------------
+
+    /// Set the MCP servers an agent may use.
+    #[napi]
+    pub fn set_agent_mcp_servers(&self, agent_id: String, servers: Vec<String>) -> String {
+        unit_result(self.kernel.set_agent_mcp_servers(parse_agent_id(&agent_id), servers))
+    }
+
+    /// Set an agent's tool allow/block filters (either may be omitted).
+    #[napi]
+    pub fn set_agent_tool_filters(
+        &self,
+        agent_id: String,
+        allowlist: Option<Vec<String>>,
+        blocklist: Option<Vec<String>>,
+    ) -> String {
+        unit_result(self.kernel.set_agent_tool_filters(parse_agent_id(&agent_id), allowlist, blocklist))
+    }
+
+    // ---- Spawn + verify ---------------------------------------------------
+
+    /// Spawn a new agent from a manifest (JSON matching openfang's AgentManifest).
+    /// Returns the new agent id, or a value-level error on bad JSON / spawn failure.
+    #[napi]
+    pub fn spawn_agent(&self, manifest_json: String) -> String {
+        let manifest: AgentManifest = match serde_json::from_str(&manifest_json) {
+            Ok(m) => m,
+            Err(e) => return err_json(format!("invalid manifest json: {e}")),
+        };
+        match self.kernel.spawn_agent(manifest) {
+            Ok(id) => json!({ "ok": true, "agent_id": id.to_string() }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// Verify a signed agent manifest; returns the verified manifest json on success.
+    #[napi]
+    pub fn verify_signed_manifest(&self, signed_json: String) -> String {
+        match self.kernel.verify_signed_manifest(&signed_json) {
+            Ok(verified) => json!({ "ok": true, "manifest": verified }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
+    // ---- Extensions / MCP reload / workflows ------------------------------
+
+    /// Reload extension MCP servers (async). Returns the count reconnected.
+    #[napi]
+    pub fn reload_extension_mcps(&self) -> String {
+        match self.rt.block_on(self.kernel.reload_extension_mcps()) {
+            Ok(count) => json!({ "ok": true, "reconnected": count }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// Reconnect a single extension's MCP server by id (async). Returns the tool count.
+    #[napi]
+    pub fn reconnect_extension_mcp(&self, id: String) -> String {
+        match self.rt.block_on(self.kernel.reconnect_extension_mcp(&id)) {
+            Ok(count) => json!({ "ok": true, "tools": count }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// Load workflow definitions from a directory (async). Returns the count loaded.
+    #[napi]
+    pub fn load_workflows_from_dir(&self, dir: String) -> String {
+        let count = self.rt.block_on(self.kernel.load_workflows_from_dir(std::path::Path::new(&dir)));
+        json!({ "ok": true, "loaded": count }).to_string()
     }
 
     // ---- Skills (writes) --------------------------------------------------
