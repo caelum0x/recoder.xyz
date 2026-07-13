@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { globalStore } from "@/app/store/global";
+import type { Workspace } from "@recoder/conductor-ui";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { RecoderConductorView } from "./recoder";
 
-type RecoderWorkspace = {
-    workspaceId: string;
-    branch: string;
+// SHELL FUSION: the workspace shape comes from @recoder/conductor-ui (the typed
+// client package the cockpit shares) instead of a hand-rolled local mirror. The
+// shell renders a lenient subset — the backend may be older/newer, so state stays
+// a plain string here and everything beyond the picked fields remains optional.
+type RecoderWorkspace = Pick<Workspace, "workspaceId" | "branch" | "runtimeId"> & {
     state: string;
-    runtimeId: string;
     substrate?: string;
     sessionName?: string;
     metadata?: Record<string, unknown>;
