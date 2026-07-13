@@ -4,6 +4,7 @@
 import { createBlock } from "@/app/store/global";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
+import { getRecoderBackendUrl } from "./recoder-endpoints";
 import { RecoderViewModel } from "./recoder-model";
 
 const AGENT_LABELS: Record<string, string> = {
@@ -39,6 +40,25 @@ function openReview() {
 
 function openLaunch() {
     openBlock({ meta: { view: "recoder-launch" } });
+}
+
+// Archive a finished workspace: POST to the conductor, then refresh so the row
+// drops out of the list. Degrade-safe: a non-2xx response or a thrown fetch is
+// swallowed and the list is left untouched — archiving must never crash the hub.
+async function archiveWorkspace(model: RecoderViewModel, workspaceId: string) {
+    try {
+        const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/workspaces/${workspaceId}/archive`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+        });
+        if (!res.ok) {
+            return;
+        }
+        model.refresh();
+    } catch {
+        // degrade-safe: a failed archive leaves the list as-is
+    }
 }
 
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
@@ -141,6 +161,12 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                             onClick={() => openReview()}
                         >
                             Review
+                        </button>
+                        <button
+                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                            onClick={() => archiveWorkspace(model, ws.workspaceId)}
+                        >
+                            Archive
                         </button>
                     </div>
                 ))}

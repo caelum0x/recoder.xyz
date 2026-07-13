@@ -76,6 +76,8 @@ class RecoderTerminalViewModel implements ViewModel {
     statusAtom: PrimitiveAtom<RecoderTerminalStatus>;
     errorAtom: PrimitiveAtom<string>;
     workspaceIdAtom: PrimitiveAtom<string>;
+    sendingAtom: PrimitiveAtom<boolean>;
+    sendStatusAtom: PrimitiveAtom<string>;
     socket: WebSocket;
     disposed: boolean;
 
@@ -89,6 +91,8 @@ class RecoderTerminalViewModel implements ViewModel {
         this.statusAtom = atom("idle") as PrimitiveAtom<RecoderTerminalStatus>;
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.workspaceIdAtom = atom("") as PrimitiveAtom<string>;
+        this.sendingAtom = atom(false) as PrimitiveAtom<boolean>;
+        this.sendStatusAtom = atom("") as PrimitiveAtom<string>;
         this.socket = null;
         this.disposed = false;
     }
@@ -186,6 +190,58 @@ class RecoderTerminalViewModel implements ViewModel {
                 ? [...prev.slice(prev.length - MaxScrollbackLines + 1), text]
                 : [...prev, text];
         globalStore.set(this.linesAtom, next);
+    }
+
+    // Send a follow-up instruction: POST it as a NEW agent run in the same
+    // workspace. The agent's response streams back through the existing socket,
+    // so we never re-render the scrollback here. Returns true on success so the
+    // component can clear the input. Degrade-safe: every failure path surfaces a
+    // truthful status; we never fabricate a green.
+    async sendMessage(text: string): Promise<boolean> {
+        const trimmed = text.trim();
+        if (trimmed == "") return false;
+        if (globalStore.get(this.sendingAtom)) return false;
+
+        const workspaceId = globalStore.get(this.workspaceIdAtom);
+        if (workspaceId == "") {
+            globalStore.set(this.sendStatusAtom, "send failed: no workspace bound");
+            return false;
+        }
+
+        globalStore.set(this.sendingAtom, true);
+        globalStore.set(this.sendStatusAtom, "sending…");
+
+        const url = `${getRecoderBackendUrl()}/api/conductor/workspaces/${encodeURIComponent(workspaceId)}/message`;
+        try {
+            const resp = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: trimmed }),
+            });
+            if (!resp.ok) {
+                const reason = await this.readErrorReason(resp);
+                globalStore.set(this.sendStatusAtom, `send failed: ${reason}`);
+                return false;
+            }
+            globalStore.set(this.sendStatusAtom, "sent — awaiting agent response");
+            return true;
+        } catch (e) {
+            const reason = e instanceof Error ? e.message : String(e);
+            globalStore.set(this.sendStatusAtom, `send failed: ${reason}`);
+            return false;
+        } finally {
+            globalStore.set(this.sendingAtom, false);
+        }
+    }
+
+    async readErrorReason(resp: Response): Promise<string> {
+        try {
+            const body = (await resp.json()) as { error?: unknown };
+            if (typeof body?.error == "string" && body.error != "") return body.error;
+        } catch {
+            /* non-JSON body */
+        }
+        return `HTTP ${resp.status}`;
     }
 
     teardownSocket(): void {

@@ -3,7 +3,7 @@
 
 import { cn } from "@/util/util";
 import { useAtomValue } from "jotai";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RecoderTerminalStatus, RecoderTerminalViewModel } from "./recoder-terminal-model";
 
 function statusText(status: RecoderTerminalStatus): string {
@@ -27,7 +27,10 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     const status = useAtomValue(model.statusAtom);
     const error = useAtomValue(model.errorAtom);
     const workspaceId = useAtomValue(model.workspaceIdAtom);
+    const sending = useAtomValue(model.sendingAtom);
+    const sendStatus = useAtomValue(model.sendStatusAtom);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [draft, setDraft] = useState("");
 
     useEffect(() => {
         model.connect();
@@ -41,6 +44,20 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
     }, [lines]);
 
     const empty = lines.length == 0;
+    const noWorkspace = workspaceId == "";
+    const canSend = !noWorkspace && !sending && draft.trim() != "";
+
+    const submit = async () => {
+        if (!canSend) return;
+        const ok = await model.sendMessage(draft);
+        if (ok) setDraft("");
+    };
+
+    const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key != "Enter" || e.shiftKey) return;
+        e.preventDefault();
+        void submit();
+    };
 
     return (
         <div className="flex flex-col h-full overflow-hidden">
@@ -82,6 +99,36 @@ function RecoderTerminalView({ model }: ViewComponentProps<RecoderTerminalViewMo
                         {line}
                     </div>
                 ))}
+            </div>
+            <div className="flex flex-col gap-1 px-3 py-2 border-t border-border shrink-0">
+                {sendStatus != "" && (
+                    <div
+                        className={cn(
+                            "text-xs",
+                            sendStatus.startsWith("send failed") ? "text-error" : "text-secondary"
+                        )}
+                    >
+                        {sendStatus}
+                    </div>
+                )}
+                <div className="flex items-center gap-2">
+                    <input
+                        type="text"
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={onKeyDown}
+                        disabled={noWorkspace}
+                        placeholder={noWorkspace ? "no workspace bound" : "Direct the agent — press Enter to send"}
+                        className="flex-1 min-w-0 rounded border border-border bg-transparent px-2 py-1 text-sm outline-none focus:border-accent disabled:opacity-50"
+                    />
+                    <button
+                        className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50 disabled:hover:bg-accent/80"
+                        onClick={() => void submit()}
+                        disabled={!canSend}
+                    >
+                        {sending ? "Sending…" : "Send"}
+                    </button>
+                </div>
             </div>
         </div>
     );
