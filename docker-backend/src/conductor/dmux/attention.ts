@@ -28,9 +28,6 @@
  * Degrade-safe: dmux unavailable → `classifyAttention` returns `undefined`
  * truthfully; this module NEVER throws and NEVER fakes a classification.
  */
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
 import { createLogger } from '../../logger.js';
 
 const logger = createLogger('conductor:dmux:attention');
@@ -60,18 +57,9 @@ export interface DmuxAttentionModule {
 /** Injectable loader seam (tests mock this; production uses the lazy default). */
 export type DmuxAttentionModuleLoader = () => Promise<DmuxAttentionModule | null>;
 
-/**
- * Resolve the vendored `@recoder/dmux` root via its exported "./package.json".
- * Works from the CJS tsc build (`__filename`) and ESM test runners (cwd fallback).
- */
-function resolveDmuxRoot(): string {
-  const anchor =
-    typeof __filename === 'string' && __filename.length > 0
-      ? __filename
-      : path.join(process.cwd(), 'noop.js');
-  const requireFromHere = createRequire(anchor);
-  return path.dirname(requireFromHere.resolve('@recoder/dmux/package.json'));
-}
+/** dmux's pure heuristics submodule, exposed as a clean subpath export (added to
+ * ts/dmux/package.json for the Recoder fusion) — side-effect-free, unlike root ".". */
+const DMUX_ATTENTION_SPECIFIER = '@recoder/dmux/utils/paneAttentionHeuristics';
 
 /** Native dynamic import shielded from tsc's CJS `import()`→`require()` rewrite. */
 const nativeImport = new Function('specifier', 'return import(specifier)') as (
@@ -79,31 +67,27 @@ const nativeImport = new Function('specifier', 'return import(specifier)') as (
 ) => Promise<Record<string, unknown>>;
 
 /**
- * Import an ESM dist file from CJS-compiled code, robust across BOTH runtimes:
- *   1. Plain CJS Node runtime: the indirect native `import(fileURL)` (verified —
- *      tsc cannot rewrite it into `require()`).
- *   2. vitest/vite-node VM: the indirect Function throws ("dynamic import
- *      callback was not specified"), so fall back to a plain `import(absPath)`
- *      which the vite transform handles (and which, under tsc-CJS on modern
- *      Node, degrades to `require(esm)` of the absolute path — also valid).
+ * Import an ESM package subpath from CJS-compiled code, robust across BOTH runtimes:
+ *   1. Plain CJS Node runtime: the indirect native `import(specifier)`.
+ *   2. vitest/vite-node VM: the indirect Function throws, so fall back to a plain
+ *      `import(specifier)` which the vite transform handles.
  */
-async function importEsmFile(absolutePath: string): Promise<Record<string, unknown>> {
+async function importEsmSpecifier(specifier: string): Promise<Record<string, unknown>> {
   try {
-    return await nativeImport(pathToFileURL(absolutePath).href);
+    return await nativeImport(specifier);
   } catch {
-    return (await import(absolutePath)) as Record<string, unknown>;
+    return (await import(specifier)) as Record<string, unknown>;
   }
 }
 
 /**
- * Default lazy loader for dmux's pane-attention heuristics submodule (verified
- * fully pure — zero imports in dist). Returns `null` (never throws) when the
+ * Default lazy loader for dmux's pane-attention heuristics submodule (via its
+ * clean subpath export). Side-effect-free. Returns `null` (never throws) when the
  * package or submodule is unavailable or structurally wrong.
  */
 export async function loadDmuxAttentionModule(): Promise<DmuxAttentionModule | null> {
   try {
-    const submodule = path.join(resolveDmuxRoot(), 'dist', 'utils', 'paneAttentionHeuristics.js');
-    const mod = await importEsmFile(submodule);
+    const mod = await importEsmSpecifier(DMUX_ATTENTION_SPECIFIER);
     const hasAgentWorkingIndicators = (mod as Partial<DmuxAttentionModule>).hasAgentWorkingIndicators;
     const buildPaneActivityFingerprint = (mod as Partial<DmuxAttentionModule>)
       .buildPaneActivityFingerprint;

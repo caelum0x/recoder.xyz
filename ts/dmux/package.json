@@ -39,6 +39,14 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./layout/LayoutCalculator": {
+      "import": "./dist/layout/LayoutCalculator.js",
+      "types": "./dist/layout/LayoutCalculator.d.ts"
+    },
+    "./utils/paneAttentionHeuristics": {
+      "import": "./dist/utils/paneAttentionHeuristics.js",
+      "types": "./dist/utils/paneAttentionHeuristics.d.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [
