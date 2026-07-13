@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createBlock } from "@/app/store/global";
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderViewModel } from "./recoder-model";
@@ -16,6 +17,28 @@ const AGENT_LABELS: Record<string, string> = {
 
 function agentLabel(runtimeId: string): string {
     return AGENT_LABELS[runtimeId] ?? runtimeId;
+}
+
+// createBlock is fire-and-forget from event handlers; a failed cross-block open
+// must never crash the view, so every call is wrapped and errors are swallowed.
+async function openBlock(blockDef: { meta: Record<string, unknown> }) {
+    try {
+        await createBlock(blockDef);
+    } catch {
+        // degrade-safe: opening a block should never take down the hub view
+    }
+}
+
+function openSession(workspaceId: string) {
+    openBlock({ meta: { view: "recoder-terminal", "recoder:workspaceid": workspaceId } });
+}
+
+function openReview() {
+    openBlock({ meta: { view: "recoder-diff" } });
+}
+
+function openLaunch() {
+    openBlock({ meta: { view: "recoder-launch" } });
 }
 
 function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
@@ -40,6 +63,12 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     onClick={() => model.refresh()}
                 >
                     Refresh
+                </button>
+                <button
+                    className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                    onClick={() => openLaunch()}
+                >
+                    New agent
                 </button>
             </div>
             {error != "" && <div className="text-error text-sm">{error}</div>}
@@ -79,7 +108,14 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                     )}
                     {setup.loaded && readyAgents.length > 0 && (
                         <div className="text-sm text-secondary">
-                            You're set up — create a workspace to run {agentLabel(readyAgents[0].runtimeId)} on a task.
+                            You're set up —{" "}
+                            <button
+                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                                onClick={() => openLaunch()}
+                            >
+                                create a workspace
+                            </button>{" "}
+                            to run {agentLabel(readyAgents[0].runtimeId)} on a task.
                         </div>
                     )}
                 </div>
@@ -94,6 +130,18 @@ function RecoderConductorView({ model }: ViewComponentProps<RecoderViewModel>) {
                         <span className="text-sm truncate">{ws.branch}</span>
                         <span className="text-xs text-secondary">{ws.state}</span>
                         <span className="text-xs text-secondary ml-auto">{ws.runtimeId}</span>
+                        <button
+                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                            onClick={() => openSession(ws.workspaceId)}
+                        >
+                            Session
+                        </button>
+                        <button
+                            className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                            onClick={() => openReview()}
+                        >
+                            Review
+                        </button>
                     </div>
                 ))}
             </div>

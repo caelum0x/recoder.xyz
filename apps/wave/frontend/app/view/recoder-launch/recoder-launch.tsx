@@ -1,6 +1,7 @@
 // Copyright 2026, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createBlock } from "@/app/store/global";
 import { useAtom, useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { RecoderLaunchViewModel } from "./recoder-launch-model";
@@ -136,6 +137,29 @@ function RecoderLaunchView({ model }: ViewComponentProps<RecoderLaunchViewModel>
                     )}
                     {result.workspaceId != null && (
                         <div className="text-xs text-secondary truncate">{result.workspaceId}</div>
+                    )}
+                    {result.workspaceId != null && (
+                        <div className="flex items-center gap-2 mt-2">
+                            <button
+                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                                onClick={() =>
+                                    createBlock({
+                                        meta: {
+                                            view: "recoder-terminal",
+                                            "recoder:workspaceid": result.workspaceId,
+                                        },
+                                    })
+                                }
+                            >
+                                Open session
+                            </button>
+                            <button
+                                className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                                onClick={() => createBlock({ meta: { view: "recoder-diff" } })}
+                            >
+                                Review
+                            </button>
+                        </div>
                     )}
                 </div>
             )}
