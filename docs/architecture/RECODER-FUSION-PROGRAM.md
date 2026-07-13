@@ -3,6 +3,8 @@
 > **Owner mandate (2026-07-11):** Every directory, folder, and package fuses into ONE big Recoder — millions of LOC, the way Linux is built on Unix. Nothing is parked. The desktop embeds the fused product.
 >
 > **This overrides the "still park" list in `WIRE-UP-BACKLOG.md`.** The parked upstreams (tensorzero, lance, openfang, ziti, multica, browser-use, mem0, ops-recorder, claw-code-parity) are now IN SCOPE — each fused via its correct integration mode.
+>
+> **Progress (2026-07-13).** Engine fusion Phases 1–4 landed (fleet+gateway · code-intel+retrieval · browser+ssh-substrate · coordination+workflow+pal), all governed + degrade-safe — see [RECODER-ENGINES §6](./RECODER-ENGINES.md) + [RECODER-CAPABILITIES](./RECODER-CAPABILITIES.md). L3 (the terminal shell) fused too: `apps/wave`, forked from Wave Terminal, is **fully rebranded to Recoder and builds end-to-end** (Go + electron-vite) — see [FORK.md](../../apps/wave/FORK.md). Remaining: L4/L5 (networking/connectors, signed packaging + GUI-launch verification).
 
 ## The cake — Recoder is composed LAYER BY LAYER (not a connector army)
 
