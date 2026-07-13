@@ -47,6 +47,10 @@
       "import": "./dist/utils/paneAttentionHeuristics.js",
       "types": "./dist/utils/paneAttentionHeuristics.d.ts"
     },
+    "./shared/StreamProtocol": {
+      "import": "./dist/shared/StreamProtocol.js",
+      "types": "./dist/shared/StreamProtocol.d.ts"
+    },
     "./package.json": "./package.json"
   },
   "files": [

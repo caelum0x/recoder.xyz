@@ -15,7 +15,7 @@ packages:
   - scripts
   - ts/extracted-from-openclaw
   # dmux operator-console engine (Wave G1 full adaptation — backend imports its modules)
-  - ts/dmux
+  - modules/terminal/dmux
 
 catalog:
   '@ai-sdk/anthropic': ^0.0.39

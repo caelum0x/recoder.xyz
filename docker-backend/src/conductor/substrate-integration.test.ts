@@ -73,7 +73,7 @@ describe('dmux-adapter', () => {
 
     it('falls back to bare "dmux" when override points to nonexistent path', async () => {
       delete process.env.CONDUCTOR_DMUX_BIN;
-      // Without override, resolveDmuxBin walks the tree looking for ts/dmux.
+      // Without override, resolveDmuxBin walks the tree looking for modules/terminal/dmux.
       // On this repo it exists, so we just verify it returns a string.
       const { resolveDmuxBin } = await import('./dmux-adapter.js');
       const result = resolveDmuxBin();
