@@ -63,6 +63,16 @@ const Capabilities: RecoderCapability[] = [
         argKey: "url",
         hasTopK: false,
     },
+    {
+        id: "notify.send",
+        label: "Notify — send",
+        serverId: "recoder.notify",
+        toolName: "notify.send",
+        inputLabel: "Message",
+        inputPlaceholder: "notify a human channel…",
+        argKey: "message",
+        hasTopK: false,
+    },
 ];
 
 // Outcome of a capability call, normalized so the UI never fabricates a win.
@@ -179,8 +189,8 @@ class RecoderToolsViewModel implements ViewModel {
                 globalStore.set(this.resultAtom, { ok: false, status: "not_configured", reason });
                 return;
             }
-            if (res.ok && dStatus === "completed") {
-                globalStore.set(this.resultAtom, { ok: true, status: "completed", result: data.result });
+            if (res.ok && (dStatus === "completed" || dStatus === "sent")) {
+                globalStore.set(this.resultAtom, { ok: true, status: dStatus, result: data.result ?? data });
                 return;
             }
             globalStore.set(this.resultAtom, { ok: false, status: dStatus, unavailable: true, reason });

@@ -115,7 +115,7 @@ run through `POST /api/mcp/tools/:server/:tool/call` behind the full
 
 ## The connection backlog (making agents USE the capabilities)
 
-The interop host registers 20 in-proc servers. Concrete executors bound so far:
+The interop host registers 21 in-proc servers. Concrete executors bound so far:
 
 | Capability | Executor | Agent tool(s) | Status |
 |---|---|---|---|
@@ -134,6 +134,7 @@ The interop host registers 20 in-proc servers. Concrete executors bound so far:
 | **coordination** (E13) | `@recoder/coordination` advisory lock store | `recoder_coordination_acquire_lock` · `recoder_coordination_detect_conflict` | **wired** |
 | **workflow** (E12) | `@recoder/workflow-engine` (agent-workflows + agent-hooks) | `recoder_workflow_verify` · `recoder_workflow_capture_hook` | **wired** (verify exec opt-in via `RECODER_WORKFLOW_VERIFY`) |
 | **pal-plan** (E11) | `@recoder/pal` in-proc decision (runtime/substrate/grants/risk/approval) | `recoder_pal_plan` | **wired** (deny-biased on uncertainty) |
+| **notify** (Phase 5) | `@recoder/agent-notify` (webhook to a human channel) | `recoder_notify` | **wired** (degrade: `not_configured` w/o RECODER_NOTIFY_URL/SLACK_WEBHOOK_URL) |
 | deployment | (no safe programmatic backend — manual + approval-gated) | — | deferred → `recoder-ccy1` |
 | billing | (no clean agent→billing-subject mapping) | — | deferred → `recoder-r6ek` |
 
