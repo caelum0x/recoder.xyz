@@ -111,12 +111,11 @@
     },
     "defwidget@recoder-openfang": {
         "display:order": -5.012,
-        "icon": "gauge-high",
+        "icon": "robot",
         "label": "openfang",
         "blockdef": {
             "meta": {
-                "view": "web",
-                "url": "http://127.0.0.1:4200"
+                "view": "recoder-openfang"
             }
         }
     },
