@@ -25,7 +25,7 @@
 | Root | What it is | Status |
 |---|---|---|
 | `c/tmux` | The pinned tmux substrate binary the conductor drives (restart-survivable sessions). | **core / wired** (L0) |
-| `crates/` | Native Rust engines: `recoder-governance` (Merkle audit + policy kernel, wired), `openfang` (autonomous agent engine, partial — `.node` deferred), `tensorzero` (LLM gateway, partial — `.node` deferred), `claw-code-parity` (parity harness). `lance` was **deleted** (Phase 0). | mixed — see CAPABILITIES |
+| `crates/` | Native Rust engines: `recoder-governance` (NAPI in-process, 2026-07-13+), `openfang` (NAPI in-process, 2026-07-13+), `tensorzero` (LLM gateway, NAPI deferred — disk constraint), `claw-code-parity` (REMOVED 2026-07-13 — not product runtime). `lance` was **deleted** (Phase 0). | core + deferred — see RECODER-DEEP-FUSION-PLAN.md |
 | `go/` | `beads` (bd issue graph, wired), `recoder-xds` (Envoy xDS control plane), `ziti` (zero-trust overlay, partial), `multica` (coordination source — fused into `packages/coordination`; standalone abandoned). | mixed |
 | `py/` | ML/services muscle: `colbert` (reranker, wired), `mem0` (memory server), `browser-use` (autonomous browser, partial), `ops-recorder` (work-signals, Phase 5), `pal-mcp-server` (vendored multi-model MCP). | mixed |
 | `ts/` | Forked coding-agent CLIs + connectors (subprocess-resolved, live substrate): `opencode`, `recodergit`, `open-agents`, `dmux`, `extracted-from-openclaw` (`@recoder/connectors`). `oh-my-codex` / `oh-my-openagent` / `polar` were **deleted** (Phase 0). | keep / core |

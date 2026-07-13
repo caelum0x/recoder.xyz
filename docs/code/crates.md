@@ -41,10 +41,10 @@ Top-level of `crates/` (what `git ls-files` confirms is tracked vs ignored):
 | `recoder-governance/` | tracked | **First-party** cargo workspace: the Rust governance kernel + IPC daemon (8 member crates). |
 | ~~`lance/`~~ | **DELETED** (2026-07-13) | Removed — vector storage superseded by Qdrant. Rows/sections mentioning Lance below are obsolete. |
 | `tensorzero/` | tracked | Vendored TensorZero — LLM gateway / inference + optimization platform (~40 Rust crates). **Adopted as the wired LLM gateway (E15)** via `docker-backend/src/gateway/`; degrade → `pi-ai`. |
-| `openfang/` | **gitignored** | Upstream openfang "Agent OS" clone (~199K LOC). Consumed only as an HTTP sidecar. |
-| `claw-code-parity/` | **gitignored** | Upstream clone kept as a coding-CLI parity reference. |
-| `openfang.toml` | tracked | Recoder-authored production config for the openfang sidecar (no secrets; `*_env` references only). |
-| `README.md` | tracked | The openfang integration seam contract (build/run/HTTP routes/fail-safe). |
+| `openfang/` | **gitignored** | Upstream openfang "Agent OS" clone (~199K LOC). **Compiled into NAPI `.node` and fused in-process** (2026-07-13). |
+| `claw-code-parity/` | **gitignored** | Upstream clone (deleted 2026-07-13 as not product runtime). |
+| `openfang.toml` | tracked | Recoder-authored production config for the openfang sidecar (no secrets; `*_env` references only). *Outdated note: config was for HTTP mode; review for in-process usage.* |
+| `README.md` | tracked | The openfang integration seam contract (build/run/HTTP routes/fail-safe). *Outdated; see RECODER-DEEP-FUSION-PLAN.md for in-process mode.* |
 
 ### recoder-governance/ (the part to actually read)
 
@@ -91,11 +91,11 @@ features, never `full`).
 - `docker-backend/src/conductor/governance-gate.ts` — builds the `Governance` instance.
 - `packages/governance/src/ipc/*` — the TS client that speaks the daemon's UDS wire.
 
-**openfang sidecar (HTTP, vendored):**
-- `crates/openfang/crates/openfang-api/src/server.rs` — route registry; handlers in `routes.rs`.
-- Single binary `openfang`, daemon subcommand `start`, HTTP on `127.0.0.1:4200`.
-- TS clients: `docker-backend/src/llm-router.ts`, `docker-backend/src/a2a/workflow-step-executor.ts`.
-- Config: Recoder-authored `crates/openfang.toml` → deployed as `$OPENFANG_HOME/config.toml`.
+**openfang engine (in-process NAPI, 2026-07-13+, vendored):**
+- **Status:** Compiled into a NAPI `.node` and fused in-process into the docker-backend Node process via `docker-backend/src/conductor/openfang-native.ts`.
+- **Old HTTP mode (deprecated):** ~~`crates/openfang/crates/openfang-api/src/server.rs`~~ — the HTTP server was replaced by the in-process binding.
+- **TS integration:** `docker-backend/src/conductor/openfang-native.ts` loads the `.node` + serves `/api/agents/openfang/*` from the in-process kernel. The old `createOpenfangProxyRouter` (HTTP→:4200) is removed.
+- **Config:** Recoder-authored `crates/openfang.toml` — review for in-process mode compatibility.
 
 **TensorZero gateway (vendored, now the wired E15 gateway):**
 - `crates/tensorzero/crates/gateway/src/main.rs` — the `gateway` binary (Cargo `name = "gateway"`).
@@ -137,22 +137,28 @@ the crate. Binary resolution order (`governance-daemon.ts`): `RECODER_GOVERNANCE
 env → `crates/recoder-governance/target/release/recoder-governance-daemon` →
 `.../target/debug/...`. If none exists, the backend stays on the pure-TS path.
 
-### openfang (vendored — Docker is the supported build)
+### openfang (vendored — NAPI build, 2026-07-13+)
 
+**Current mode (in-process NAPI):**
 ```bash
-cd crates/openfang
-docker compose up --build       # builds `cargo build --release --bin openfang`
-# image EXPOSEs 4200, OPENFANG_HOME=/data, ENTRYPOINT ["openfang"], CMD ["start"]
+# Build the NAPI `.node` into the workspace target/
+scripts/build-native-addons.sh openfang
+# Or per RECODER-DEEP-FUSION-PLAN.md:
+cd crates/openfang && cargo build -p openfang-napi --release
 ```
 
-Verify the Recoder config parses without building the 199K-LOC workspace:
+The `.node` is ~110 MB and is loaded by `docker-backend/src/conductor/openfang-native.ts` at startup (degrade-safe if absent).
+
+**Legacy HTTP mode (deprecated, not built):**
+~~`docker compose up --build` for `cargo build --release --bin openfang`~~ — replaced by in-process binding.
+
+Verify the Recoder config parses:
 
 ```bash
 python3 -c "import tomllib; tomllib.load(open('crates/openfang.toml','rb')); print('OK')"
 ```
 
-> Per `crates/README.md`: **no openfang binary is built as part of normal work** — a
-> cold `cargo check` of it risks ENOSPC on the dev box and is out of scope.
+> Per RECODER-DEEP-FUSION-PLAN.md: openfang is now deep-fused as a NAPI `.node`, not sidecar-proxied. The HTTP daemon at :4200 is obsolete.
 
 ### tensorzero / lance (vendored — use upstream tooling)
 
@@ -195,15 +201,16 @@ vector produced by the real TS algorithm. Pure/deterministic by design: no `Mute
 SQLite, no `tracing` — clock and sequence are injected so it runs identically on both
 sides of the IPC boundary.
 
-**openfang HTTP contract** (verified against source, see `crates/README.md` table):
-- `GET /api/health` is **public**; everything else requires `Authorization: Bearer`
-  when `OPENFANG_API_KEY` is set (`openfang-api/src/middleware.rs`).
-- Health is truthful: `{"status":"ok"|"degraded"}`. Callers must **not** treat
-  `degraded` as ready.
-- openfang's `/api/a2a/*` is its **own** A2A surface, distinct from Recoder's canonical
-  `/api/a2a/*` control-plane routes — Recoder stays the source of truth when bridging.
-- Missing provider key → typed `LlmError::MissingApiKey`, request fails (no panic);
-  missing channel token → `config_warnings`, not a boot abort.
+**openfang NAPI binding (current, 2026-07-13+):**
+- Compiled `.node` loaded by `docker-backend/src/conductor/openfang-native.ts`.
+- 45 NAPI methods exposed: agents/hands/triggers/workflows/events/extensions/memory/skills/usage/health.
+- Degrade-safe: absent `.node` → pure-TS OSS dispatch at `/api/agents/openfang/*`.
+- See RECODER-DEEP-FUSION-PLAN.md §openfang for the full binding reference.
+
+**Legacy: openfang HTTP contract (2026-07-12 and earlier, DEPRECATED):**
+- ~~`GET /api/health` public; everything else Bearer-gated~~ → now in-process NAPI.
+- ~~openfang's `/api/a2a/*` distinct from Recoder's~~ → unified via conductor routing.
+- (Kept for historical reference only; the HTTP daemon is no longer built or run.)
 
 ## 6. Gotchas
 
@@ -218,10 +225,7 @@ sides of the IPC boundary.
 - **recoder-governance README is stale.** It says only 2 of 8 crates exist. The source
   tree has all 8 (permission/approval/routing/kernel/ipc/daemon all implemented with
   tests). Read the code, not the "Not yet built" list.
-- **openfang is config + seam only in-repo.** Per `crates/README.md`, the HTTP/spawn
-  contract is verified against source but **not** live smoke-tested in this repo state;
-  no binary is built. A cold `cargo check` of openfang (~199K LOC) risks ENOSPC on the
-  dev box. Build via Docker, then run the live checks in `crates/openfang/CLAUDE.md`.
+- **openfang is now NAPI-fused (2026-07-13+).** The `.node` is built from `crates/openfang/` via `scripts/build-native-addons.sh openfang` or `cargo build -p openfang-napi`. The old HTTP mode (port :4200 daemon) is obsolete. See RECODER-DEEP-FUSION-PLAN.md for the in-process binding contract.
 - **Vendored crates carry their own AGENTS.md/CLAUDE.md and CI.** `lance/`, `tensorzero/`,
   and `openfang/` each have their own instruction files, licenses, and pre-commit/CI
   configs. Those govern *their* internals — they are not Recoder policy. Recoder's

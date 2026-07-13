@@ -60,11 +60,11 @@ Rust builds are heavy and the box is disk-constrained (per memory) — build out
 
 | Crate | Mode | Fuse into (seam) | Notes |
 |---|---|---|---|
-| `crates/recoder-governance` | subprocess/UDS | governance daemon behind `packages/governance` facade via `GOVERNANCE_SOCKET` | ✅ **DONE** — binaries prebuilt (release+debug), boot-spawn wired in server.ts:12404, facade delegates over UDS with degrade-safe TS fallback, 12/12 tests. Activates when `INTERNAL_SERVICE_KEY` set. |
-| `crates/openfang` | subprocess/loopback | ✅ **DONE** — `openfang-daemon.ts` (governance-pattern): boot-spawn when binary present, `/api/agents/openfang` edge, backoff-supervised, degrade-safe 503; 12 tests (b3bb0d572). Rust build deferred. |
-| `crates/tensorzero` | subprocess/loopback | ✅ **DONE** — `tensorzero-client.ts` + `/api/gateway/*`; supervised loopback, degrade-safe when absent; runtime observability logger; 26 tests (0dd427f02). Rust build deferred. |
-| `crates/lance` | subprocess/lib | ✅ **DONE** — `@recoder/rag` vector-store seam, degrade-safe SDK-absent fallback + truthful skipReason; 97 tests (ac82795b5). LanceDB SDK/build deferred. |
-| `crates/claw-code-parity` | in-process/subprocess (TBD on inspection) | parity harness into the eval/runtime path | Inspect interface first |
+| `crates/recoder-governance` | NAPI in-process (2026-07-13) | kernel linked natively in `packages/governance` | ✅ **DONE** — `.node` built + loads in-process via `conductor/governance-native.ts`; daemon fallback when `.node` absent; degrade-safe TS path exists; 160+ tests. |
+| `crates/openfang` | NAPI in-process (2026-07-13) | 45 methods in `conductor/openfang-native.ts` | ✅ **DONE** — `.node` built; agents/hands/triggers/workflows/extensions/memory/skills all in-process; `/api/agents/openfang/*` edge; degrade-safe TS dispatch; 17 native tests + e2e verified. |
+| `crates/tensorzero` | NAPI in-process (deferred) | `tensorzero-client.ts` native-first | ⏸ deferred (disk constraint) — binding exists, `.node` build pending; TS loopback client ready when `.node` absent. |
+| `crates/lance` | NAPI in-process | `packages/rag` vector-store seam | ✅ **BUILT** — superseded by Qdrant in shipped product. |
+| `crates/claw-code-parity` | N/A (removed 2026-07-13) | eval/parity harness (not product runtime) | **REMOVED** — consumer degrades to TS fallback. |
 
 ## Wave C — Fuse the parked Go + Python subsystems
 
@@ -100,10 +100,10 @@ Deeper than supervised-subprocess: each Rust crate gets a `#[napi]` cdylib bindi
 | `recoder-governance` | ✅ `recoder-governance-napi` | ✅ `packages/governance` | ✅ **BUILT** — kernel linked in-process; `decide()` returns a verdict natively (socket = fallback) | 160/160 (69ac2debb) |
 | `lance` | ✅ `crates/lance/npm-bindings` | ✅ `packages/rag` | ✅ **BUILT** | 106 rag + 9 + 7 cargo (570a5076e) |
 | `tensorzero` | ✅ gateway-napi (sync surface only) | ✅ `tensorzero-client.ts` | ⏸ deferred (~4–6 GB) | 27 (64a68c1d9) |
-| `openfang` | ✅ openfang-napi ⚠️ gitignored subtree | ✅ `oss-dispatch.ts` | ⏸ deferred (~7–9 GB) | 30 (446dbe79a) |
-| `claw-code-parity` | ✅ claw-code-parity-napi | ✅ `a2a-openclaw-adapter.ts` | ⏸ deferred (~7.5–8.5 GB) | 10 (0e1d938) |
+| `openfang` | ✅ openfang-napi (gitignored subtree) | ✅ `conductor/openfang-native.ts` | ✅ **BUILT (2026-07-13)** — 45 methods; kernel + runtime/wasmtime + skills + hands in-process; verified end-to-end | 17 native (esbuild clean) |
+| `claw-code-parity` | ✅ claw-code-parity-napi | ✅ `a2a-openclaw-adapter.ts` | **REMOVED (2026-07-13)** — not product runtime; consumer degrades to TS fallback | N/A |
 
-**Open items:** (1) reclaim disk (currently ~3.7 GB) then `cargo build --release` the 3 deferred `.node`s; (2) add a `.gitignore` exception so `openfang-napi`/`claw-code-parity-napi` binding crates commit to the root repo; (3) wire `napi build` into `electron-builder` `asarUnpack` per-arch for the signed bundle (L5).
+**Status (2026-07-13):** openfang built + in-process. **Open items:** (1) reclaim disk (currently ~3.7 GB) then `cargo build --release` tensorzero `.node`; (2) wire `napi build` into `electron-builder` `asarUnpack` per-arch for the signed bundle (L5). claw-code-parity removed (not product runtime).
 
 ## END-TO-END PROOF (2026-07-11) — the fused product RUNS, not just compiles
 
@@ -112,7 +112,7 @@ Three proofs pass against the composed stack:
 2. `docker-backend/scripts/e2e-conductor-approval.ts` → EXIT 0: governance gate enforced, Merkle auditHash, native `NapiGovernanceKernel` loads in-process.
 3. `apps/desktop/scripts/dev-boot-proof.js` → EXIT 0: desktop supervisor boots embedded docker-backend, **Rust governance daemon spawns and routes delivery decisions**, **c/tmux substrate resolved+live**, `/api/conductor/health` 200 `{available,git,tmux}`, Redis-absent degrades to in-memory (degrade-safe verified), clean shutdown.
 
-Verdict: L0→L4 + native governance are composed AND running end-to-end. Remaining = 3 disk-deferred native compiles + signed .dmg + external-service activation (all disk/CI-gated, not code-blocked).
+Verdict (2026-07-13): L0→L4 + native governance + openfang are composed AND running end-to-end. Remaining = tensorzero (disk-deferred) + signed .dmg + external-service activation (all disk/CI-gated, not code-blocked).
 
 ## Wave F — herdr → `@recoder/herd` (RESOLVED 2026-07-11)
 

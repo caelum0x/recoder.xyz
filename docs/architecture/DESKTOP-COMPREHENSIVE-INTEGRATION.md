@@ -17,11 +17,10 @@ Status: architecture proposal for owner review → implementation plans
 > blocks, builds end-to-end) — see **[RECODER-SHELL.md](./RECODER-SHELL.md)** + **[../../apps/wave/FORK.md](../../apps/wave/FORK.md)**.
 > `apps/desktop` remains the **current shipping shell** until the Wave shell is GUI/launch-verified.
 >
-> **Honesty note.** "Built + wired + unit-tested + builds" is **not** "deployed / live / GUI-verified": the
-> Wave shell has **not** been launched here, so its panels' live appearance is unverified; **openfang** +
-> **tensorzero** are seamed but their native `.node` builds are deferred; **deploy + billing** are deferred
-> (filed), not live; and the deleted-dir notes elsewhere apply (`crates/lance` is gone, so its retrieval
-> rows below are stale).
+> **Honesty note (2026-07-13).** "Built + wired + unit-tested + builds" is **not** "deployed / live / GUI-verified": the
+> Wave shell has **not** been launched here, so its panels' live appearance is unverified; **openfang NAPI is done
+> (in-process 2026-07-13+)**, but **tensorzero** is deferred (disk constraint); **deploy + billing** are
+> deferred (filed), not live; and the deleted-dir notes apply (`crates/lance` is gone).
 
 Verified against real code: `apps/desktop/{package.json,main.js (3356 lines),preload.js (326 lines),backend-supervisor.js (872 lines)}`, `apps/desktop/cockpit/src/components/*`, `docker-backend/src/server.ts` route mounts, `crates/{README.md,openfang.toml,recoder-governance/,tensorzero/,lance/}`, `ts/{recodergit,dmux}`, `packages/{brain,continuum,conductor-ui}`, `py/{pal-mcp-server,browser-use,mem0}`, `go/{beads,multica}`. One inventory citation (`packages/recoder-analytics`) did not resolve on disk and is flagged as unverified below.
 
@@ -35,7 +34,7 @@ Today the desktop is a thin Electron shell (`main.js` + `backend-supervisor.js`)
 ### The philosophy: thin shell + rich cockpit over ONE aggregation hub
 Two candidate models:
 
-- **(A) Desktop-spawns-everything** — `backend-supervisor.js` directly launches openfang, TensorZero, PAL, browser-use, mem0, colbert, governance daemon, Multica, etc., and the cockpit talks to each.
+- **(A) Desktop-spawns-everything (LEGACY)** — ~~`backend-supervisor.js` directly launches openfang, TensorZero, PAL~~ — (2026-07-13: openfang is now in-process NAPI, not spawned; others are backend-managed sidecars)
 - **(B) Single aggregation hub (RECOMMENDED)** — the embedded `docker-backend` remains the **only** thing the desktop shell boots and the **only** endpoint the cockpit talks to. Every other capability is an **adapter reached through the backend**: MCP servers via `mcp-manager.ts`, native Rust/Go daemons as backend-managed sidecars, CLIs via backend subprocess, HTTP services proxied through `/api/*`.
 
 **Recommend (B).** Rationale, grounded in this repo's own rules and code:
@@ -64,7 +63,7 @@ Grouped into desktop-facing domains. "Exposure today" is verified against real c
 | **Networking (zero-trust)** | `go/ziti`, `docker-backend/src/ziti-client.ts`, `routes/ziti.routes.ts` | OpenZiti identities/enrollment for runners | Backend-wired (routes exist) | **"Networking" panel** over `/api/ziti/health|identities|runners` |
 | **Service Mesh** | `go/recoder-xds` | Envoy xDS control plane | None | **Diagnostics-only** panel (listeners/clusters) if/when needed. Defer |
 | **Issues / Task Graph** | `go/beads` (`bd`), `docker-backend/src/conductor/beads-sync.ts` | Dolt-backed dependency issue graph | Backend uses `bd` CLI (fail-safe) | **"Issues" panel** over a backend `/api/beads/*` edge (reuse `beads-sync` pattern) |
-| **Autonomous Agents** | `crates/openfang` (Rust), `crates/openfang.toml` | 24/7 scheduled agents, `/api/agents`, budget, A2A | Config-only (`crates/openfang.toml`, `crates/README.md`); no binary | **Backend-managed sidecar** (`docker compose` build) → A2A boundary; cockpit **"Agents" panel** (list/message/budget) |
+| **Autonomous Agents** | `crates/openfang` (Rust, NAPI), `crates/openfang.toml` | 24/7 scheduled agents, `/api/agents`, budget, A2A | **In-process NAPI (2026-07-13+)** via `conductor/openfang-native.ts`; degrade → TS OSS dispatch | Backend-fused + cockpit **"Agents" panel** (list/message/budget); see RECODER-DEEP-FUSION-PLAN.md |
 | **Managed Agents / Squads** | `go/multica` | task assignment, skills, squads | None | **Later.** Daemon client via backend; cockpit squad/assignment view |
 | **Governance / Audit** | `crates/recoder-governance` (Rust), `packages/governance` (TS facade) | Merkle hash-chain audit, range proofs | TS facade; cockpit `GovernancePanel.tsx` exists | **Backend-managed daemon** → audit ops; extend `GovernancePanel` (chain head, integrity, risk tiers) |
 | **Billing / Entitlement** | `py/recoder-billing`, `@recoder/distribution` | license/entitlement, signed-envelope IPC | `@recoder/distribution` is a desktop dep (device flow in `main.js`) | **Read-only** tier/credits via backend `/distribution/me`; **no direct desktop→billing** |
@@ -116,7 +115,7 @@ Grouped into desktop-facing domains. "Exposure today" is verified against real c
 │ mcp-manager.ts│ │ SIDECARS      │ │ subprocess  │ │ proxy                │
 │ pal-mcp-server│ │ (backend-     │ │ bd (beads)  │ │ tensorzero :3000     │
 │ browser-use   │ │  managed)     │ │ omx (codex) │ │ colbert :8893        │
-│ (--mcp)       │ │ openfang :4200│ │ recodergit  │ │ mem0 self-hosted     │
+│ (--mcp)       │ │ openfang      │ │ recodergit  │ │ mem0 self-hosted     │
 │               │ │ governance    │ │             │ │ ziti controller      │
 │               │ │  daemon       │ │             │ │                      │
 └───────────────┘ └───────────────┘ └─────────────┘ └──────────────────────┘
@@ -142,12 +141,13 @@ This is the scalability mechanism — six deterministic steps, no new IPC channe
 **D1 — Does the desktop talk ONLY to the embedded backend? → YES (with the OS-privileged exception set).**
 The cockpit renderer talks **only** to `backendUrl`. The Electron main process keeps direct ownership of PTY, dialogs, clipboard, window, updater, auth/device-flow, and continuum capture — because those are OS-privileged or entitlement-gated and cannot sit behind an HTTP backend. Everything capability-shaped (gateway, memory, retrieval, agents, governance, MCP, issues, networking) goes through the hub. This preserves the single-seam invariant and the `AGENTS.md` control-plane-ownership rule.
 
-**D2 — How are Rust crates surfaced? → Sidecar process behind the backend, NOT NAPI in the Electron shell.**
-Options considered: (a) NAPI native addon compiled into the desktop, (b) sidecar process, (c) via backend proxy.
-- **openfang** (`crates/openfang`) and **TensorZero** (`crates/tensorzero`) are already HTTP services (`127.0.0.1:4200`, `:3000`) → **5d HTTP proxy** behind the backend; built via their own `docker compose` (keeps the heavy Rust build off the dev box and out of the signed bundle — consistent with the disk-constraint memory).
-- **recoder-governance** (`crates/recoder-governance`) — build `recoder-governance-daemon`, run as **5b native sidecar** managed by the backend, socket on `127.0.0.1:GOVERNANCE_PORT`. The TS facade `packages/governance` stays the in-process fast path; the daemon backs deep audit ops.
-- **Lance** (`crates/lance`) — surface via **`py/` bindings** through the retrieval HTTP edge, not a desktop addon.
-- **Reject NAPI-in-shell** for all four: it forces per-arch native compilation into the notarized Electron build (mac x64/arm64, win, linux), massively inflating the signing matrix and bundle. tmux is the one C binary we accept in `extraResources` because it's already load-bearing and tiny.
+**D2 — How are Rust crates surfaced? → Deep fusion via NAPI in the backend (NOT in Electron shell).**
+Options: (a) NAPI in Electron (bloated bundle), (b) sidecar process, (c) backend proxy, (d) backend-resident NAPI.
+- **openfang** (`crates/openfang`) — **2026-07-13: Deep-fused as NAPI into docker-backend.** The `.node` is loaded by `conductor/openfang-native.ts` at backend startup and served at `/api/agents/openfang/*` in-process. See RECODER-DEEP-FUSION-PLAN.md.
+- **TensorZero** (`crates/tensorzero`) — NAPI in-progress (disk-constrained, build deferred). When complete, same fusion as openfang.
+- **recoder-governance** (`crates/recoder-governance`) — **2026-07-13: NAPI in-process (done).** The `.node` is loaded by `conductor/governance-native.ts`; daemon fallback available. UDS socket for deep audit ops.
+- **Lance** (`crates/lance`) — ~~surface via `py/` bindings~~ **DELETED (2026-07-13)** — superseded by Qdrant.
+- **Reject NAPI-in-Electron-shell** consistently: the Electron bundle stays thin. tmux is the one C binary in `extraResources` (already load-bearing, tiny).
 
 **D3 — How is the cockpit extended into a multi-panel UI without bloating one file? → Lazy-loaded panel registry.**
 Today `App.tsx` composes fixed components. Introduce `cockpit/src/panels/registry.ts` — a declarative list `{ id, title, icon, capability, load: () => import('./XxxPanel'), healthKey }`. `App.tsx` renders a nav from the registry and lazy-imports the active panel (Preact `lazy`/dynamic import). Each panel is a focused <400-line file (matches the coding-style rule) that:
@@ -187,12 +187,12 @@ Highest ROI: these are live in `docker-backend` but invisible in the cockpit.
 Register **PAL** (`py/pal-mcp-server`, `uvx`) and **browser-use** (`py/browser-use --mcp`) via `mcp-manager.ts`. Cockpit **Consult actions** (codereview/consensus/planner) and **Browser panel** (task + live screenshots + action log). Gated on provider keys with honest "keys missing → disabled" states.
 **Ships:** multi-model second opinions + autonomous browser work.
 
-### Phase 4 — Native sidecars behind the hub (5b/5d, build-gated)
-- **TensorZero** (`crates/tensorzero`) → `/api/gateway/*` + Inference panel (cost/latency/A-B).
-- **recoder-governance daemon** (`crates/recoder-governance`) → deep audit ops; extend `GovernancePanel` (chain head, integrity, range proofs).
-- **openfang** (`crates/openfang`) → build via `docker compose`, `/api/agents/*` proxy + Agents panel (list/message/budget), respecting the A2A boundary (Recoder owns task/approval/memory).
-All supervised by the backend sidecar manifest (D4); optional and degrade-safe when unbuilt.
-**Ships:** LLMOps observability, tamper-evident audit, 24/7 autonomous agents.
+### Phase 4 — Native NAPI fusion into the backend (in-process)
+- **recoder-governance** (`crates/recoder-governance`) — **DONE (2026-07-13).** NAPI `.node` loaded in-process; daemon fallback. Deep audit ops; extend `GovernancePanel` (chain head, integrity, range proofs).
+- **openfang** (`crates/openfang`) — **DONE (2026-07-13).** NAPI `.node` in-process via `conductor/openfang-native.ts`; `/api/agents/openfang/*` + Agents panel (list/message/budget), respecting A2A boundary.
+- **TensorZero** (`crates/tensorzero`) — NAPI in-progress (disk-constrained build deferred). Will follow same pattern → `/api/gateway/*` + Inference panel (cost/latency/A-B).
+All fused as `.node` at backend startup; optional and degrade-safe when unbuilt.
+**Ships:** LLMOps observability, tamper-evident audit, 24/7 autonomous agents — no process sprawl, all in-process.
 
 ### Phase 5 — Retrieval, continuum capture, and the long tail
 - **continuum** background capture in Electron main (Screen Recording entitlement) → feeds brain; Memory panel shows episodes/recall.
@@ -206,7 +206,7 @@ All supervised by the backend sidecar manifest (D4); optional and degrade-safe w
 
 ### Risks
 1. **Bundle size / signing matrix (highest).** Every native binary in `extraResources`/`asarUnpack` inflates the notarized per-arch build (`notarize.js`, `entitlements.mac.plist`, mac x64+arm64, win, linux). **Mitigation:** D2 — Rust/Go stay backend-managed sidecars built out-of-band and discovered at runtime; only tmux stays bundled. Ship them optional, not in the DMG.
-2. **Native build/signing per-arch.** openfang/governance/TensorZero Rust builds are heavy and (per repo memory) the dev box is disk/RAM constrained. **Mitigation:** `docker compose` builds off the signed path; desktop degrades honestly when the sidecar binary is absent.
+2. **Native build/disk-constrained.** openfang/governance/TensorZero Rust builds are heavy. **Status (2026-07-13):** openfang + governance `.node` are built and in-process; tensorzero deferred (disk constraint). **Mitigation:** `scripts/build-native-addons.sh` or `docker compose` builds off-dev-box; backend degrades honestly when a `.node` is absent.
 3. **Process sprawl.** N sidecars = N crash domains, N ports, N zombie risks. **Mitigation:** D4 — a single backend sidecar supervisor with health/restart/backoff (mirror `backend-supervisor.js`'s existing backoff), and a hard concurrency cap. Desktop shell still supervises only one child.
 4. **Security surface.** Each new loopback service + provider key (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `TENSORZERO_API_KEY`, openfang key) widens the attack surface — and `.claude/rules/security.md` forbids trusting MCP tool descriptions / runtime-reported success. **Mitigation:** all adapter traffic behind `authenticateRequest` + `INTERNAL_SERVICE_KEY` for backend↔sidecar; MCP invokes pass through `agent-mcp` policy authorize; keys never in the cockpit/renderer; bind everything to `127.0.0.1`. (Note the recurring-miner memory: keep sidecars non-root, no public listeners.)
 5. **Cockpit chunk bloat.** More panels = larger renderer bundle. **Mitigation:** D3 lazy `import()` per panel → separate chunks, loaded on demand.
@@ -214,7 +214,7 @@ All supervised by the backend sidecar manifest (D4); optional and degrade-safe w
 
 ### Open Questions for the owner
 1. **Provider keys in desktop:** BYOK entered in-app (stored in Electron `safeStorage`) vs pulled from `recoder.xyz` entitlement? This gates Phase 3/4 UX. (Memory distinguishes platform keys vs BYOK — which applies here?)
-2. **Ship openfang/TensorZero in the installer or fetch-on-first-use?** Bundling bloats the DMG; fetch-on-use needs a trusted release channel + signature check. Recommend fetch-on-use.
+2. **Deprecated:** openfang is now in-process NAPI (not shipped separately). TensorZero build is deferred.
 3. **continuum capture default:** on-by-default (privacy/entitlement friction) or opt-in from a Memory panel toggle? Recommend opt-in.
 4. **`packages/recoder-analytics` did not resolve on disk** (inventory cited it; `packages/analytics` may be the real name). Confirm the package path before wiring a telemetry dashboard card.
 5. **Multi-user local accounts** (`@recoder/auth`) — needed for desktop, or is device-flow to `recoder.xyz` (already in `main.js`) sufficient? Recommend deferring local auth.
