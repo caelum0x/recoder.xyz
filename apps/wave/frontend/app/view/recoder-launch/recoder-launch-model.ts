@@ -26,6 +26,18 @@ type RecoderLaunchResult = {
     error?: string;
 };
 
+// Optional seed values a caller (e.g. the board's "Pick up") can pass through the
+// block meta so the launch form opens pre-filled instead of empty.
+const PrefillTaskMetaKey = "recoder:prefilltask";
+const PrefillRepoMetaKey = "recoder:prefillrepo";
+
+// Reads a string meta key off a freshly-created block. Untrusted external data:
+// anything non-string (or absent) degrades to "" so the form behaves as before.
+function readStringMeta(meta: Record<string, unknown>, key: string): string {
+    const raw = meta[key];
+    return typeof raw === "string" ? raw.trim() : "";
+}
+
 class RecoderLaunchViewModel implements ViewModel {
     viewType: string;
     viewIcon: Atom<string>;
@@ -52,9 +64,13 @@ class RecoderLaunchViewModel implements ViewModel {
         this.errorAtom = atom("") as PrimitiveAtom<string>;
         this.postingAtom = atom(false) as PrimitiveAtom<boolean>;
         this.resultAtom = atom(null) as PrimitiveAtom<RecoderLaunchResult>;
-        this.repoPathAtom = atom("") as PrimitiveAtom<string>;
+        const block = initOpts.waveEnv.wos.getWaveObjectAtom<Block>(`block:${initOpts.blockId}`);
+        const meta = (globalStore.get(block)?.meta ?? {}) as Record<string, unknown>;
+        const prefillTask = readStringMeta(meta, PrefillTaskMetaKey);
+        const prefillRepo = readStringMeta(meta, PrefillRepoMetaKey);
+        this.repoPathAtom = atom(prefillRepo) as PrimitiveAtom<string>;
         this.runtimeIdAtom = atom("") as PrimitiveAtom<string>;
-        this.promptAtom = atom("") as PrimitiveAtom<string>;
+        this.promptAtom = atom(prefillTask) as PrimitiveAtom<string>;
         this.branchAtom = atom("") as PrimitiveAtom<string>;
         this.interactiveAtom = atom(false) as PrimitiveAtom<boolean>;
     }

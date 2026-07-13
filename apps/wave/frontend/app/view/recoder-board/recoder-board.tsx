@@ -6,9 +6,13 @@ import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { BoardStatus, RecoderBoardViewModel } from "./recoder-board-model";
 
-async function pickUpIssue() {
+async function pickUpIssue(title: string) {
+    const meta: Record<string, unknown> = { view: "recoder-launch" };
+    if (title != "") {
+        meta["recoder:prefilltask"] = title;
+    }
     try {
-        await createBlock({ meta: { view: "recoder-launch" } });
+        await createBlock({ meta });
     } catch {
         // Opening the launch form is best-effort; a failure here must not crash the board.
     }
@@ -66,7 +70,7 @@ function RecoderBoardView({ model }: ViewComponentProps<RecoderBoardViewModel>) 
                         )}
                         <button
                             className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer shrink-0"
-                            onClick={() => pickUpIssue()}
+                            onClick={() => pickUpIssue(issue.title)}
                         >
                             Pick up
                         </button>
