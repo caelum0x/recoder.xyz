@@ -99,6 +99,27 @@
             }
         }
     },
+    "defwidget@recoder-hands": {
+        "display:order": -5.015,
+        "icon": "hand",
+        "label": "hands",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-hands"
+            }
+        }
+    },
+    "defwidget@recoder-openfang": {
+        "display:order": -5.012,
+        "icon": "gauge-high",
+        "label": "openfang",
+        "blockdef": {
+            "meta": {
+                "view": "web",
+                "url": "http://127.0.0.1:4200"
+            }
+        }
+    },
     "defwidget@recoder-settings": {
         "display:order": -5.01,
         "icon": "gear",
