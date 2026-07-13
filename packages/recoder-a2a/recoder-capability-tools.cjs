@@ -147,6 +147,16 @@ const CAPABILITY_TOOLS = [
     },
   },
   {
+    name: 'recoder_browser_snapshot',
+    description: "Snapshot the currently-open page (open one first with recoder_browser_open): extracts the visible text (optionally scoped to a CSS selector) plus the current URL. Use it to READ what actually rendered before/after your changes.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        selector: { type: 'string', description: 'Optional CSS selector to scope the snapshot (default body)' },
+      },
+    },
+  },
+  {
     name: 'recoder_browser_navigate',
     description: "Navigate a headless browser to a URL and get back its status, final URL, and page title. Backed by the browser-use engine (puppeteer, or a browser-use service). Returns a truthful 'not configured' message when no browser driver is wired.",
     inputSchema: {
@@ -676,6 +686,20 @@ function createCapabilityTools(options = {}) {
             : `✗ Not found: the page does NOT contain "${args.contains}".`;
         } catch (err) {
           return `browser verify: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_browser_snapshot': {
+        if (!hasInteropAuth()) return unavailable('browser');
+        try {
+          const content = await callInteropTool('recoder.browser', 'browser.snapshot', {
+            selector: args.selector,
+          });
+          if (!content) return 'browser snapshot: no content returned.';
+          const header = `Snapshot of ${content.currentUrl || '(unknown url)'} [${content.selector || 'body'}]${content.truncated ? ' (truncated)' : ''}:`;
+          return `${header}\n${content.text || '(empty)'}`;
+        } catch (err) {
+          return `browser snapshot: ${errMsg(err)}`;
         }
       }
 
