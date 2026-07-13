@@ -1,0 +1,40 @@
+{
+	"name": "@recoder/agent-notify",
+	"version": "0.1.0",
+	"description": "Notify engine — send a human-facing notification (delivery ready, review needed) to a configured webhook. Degrade-safe, injectable ports.",
+	"license": "MIT",
+	"main": "./dist/index.js",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"dev": "tsup --watch",
+		"test": "vitest run",
+		"format": "biome check --write ."
+	},
+	"devDependencies": {
+		"@recoder/tsconfig": "workspace:^",
+		"@types/node": "catalog:",
+		"tsup": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"keywords": [
+		"notify",
+		"webhook",
+		"slack",
+		"notification",
+		"degrade-safe"
+	]
+}

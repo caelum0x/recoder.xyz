@@ -41,6 +41,7 @@ import {
   coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
+  notifyMcpServer,
 } from '@recoder/agent-mcp';
 
 /**
@@ -80,6 +81,7 @@ const IN_PROC_SERVERS: McpServerRegistration[] = [
   coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
+  notifyMcpServer,
 ];
 
 /**

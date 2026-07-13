@@ -21,3 +21,4 @@ export * from './workspace-server';
 export * from './coordination-server';
 export * from './workflow-server';
 export * from './pal-plan-server';
+export * from './notify-server';

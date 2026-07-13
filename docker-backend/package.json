@@ -31,6 +31,7 @@
     "@recoder/agent-events": "workspace:*",
     "@recoder/agent-hooks": "workspace:*",
     "@recoder/agent-browser": "workspace:*",
+    "@recoder/agent-notify": "workspace:*",
     "@recoder/agent-instructions": "workspace:*",
     "@recoder/agent-mcp": "workspace:*",
     "@recoder/agent-memory": "workspace:*",
