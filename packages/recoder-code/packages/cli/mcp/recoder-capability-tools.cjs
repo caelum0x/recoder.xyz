@@ -100,6 +100,19 @@ const CAPABILITY_TOOLS = [
     },
   },
   {
+    name: 'recoder_github_pr_review',
+    description: "Run Recoder's multi-persona swarm review over a GitHub pull request. Returns a compiled review bundle (a coordinator brief + 7 specialist reviewer lanes — correctness, security, tests, perf, etc. — parameterized for the target PR) that YOU then carry out as the review, OR a completed verdict when a review executor is configured. Truthful 'not configured' when GitHub auth (gh/GITHUB_TOKEN) is absent; never fabricates a review.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prUrl: { type: 'string', description: 'Full PR URL (https://github.com/owner/repo/pull/N)' },
+        repo: { type: 'string', description: 'owner/repo (needed if prUrl is not given)' },
+        prNumber: { type: 'number', description: 'PR number (with repo)' },
+        mode: { type: 'string', description: "'swarm' (7 lanes, default) or 'solo' (single reviewer)" },
+      },
+    },
+  },
+  {
     name: 'recoder_repo_search',
     description: "Search code — the local project (git grep, gitignore-aware) OR any GitHub repository. Pass `github` (owner/name) to search a remote repo, or `githubOwner` to search across an owner's repos; otherwise it searches the current project. Returns file:line (local) or repo/path + fragments (GitHub).",
     inputSchema: {
@@ -557,6 +570,34 @@ function createCapabilityTools(options = {}) {
           return `Closed issue ${args.id}.`;
         } catch (err) {
           return `issue close: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_github_pr_review': {
+        if (!hasInteropAuth()) return unavailable('github pr review');
+        try {
+          const content = await callInteropTool('recoder.github', 'github.pr_review', {
+            prUrl: args.prUrl,
+            repo: args.repo,
+            prNumber: args.prNumber,
+            mode: args.mode,
+          });
+          if (!content || typeof content !== 'object') return 'pr review: no result.';
+          if (content.status === 'invalid_input') return `pr review: ${content.reason}`;
+          if (content.status === 'not_configured') return `pr review not configured: ${content.reason}`;
+          if (content.status === 'unavailable') {
+            const instr = content.bundle && content.bundle.instructions;
+            return instr
+              ? `Review executor not wired — here is the compiled swarm-review to carry out yourself:\n\n${instr}`
+              : `pr review unavailable: ${content.reason}`;
+          }
+          if (content.status === 'completed') {
+            const c = content.classifications || {};
+            return `Review complete (${content.bundle && content.bundle.mode}). Verdict: ${c.verdict || '?'}${c.mergeState ? ` · merge: ${c.mergeState}` : ''}\n\n${content.raw || ''}`;
+          }
+          return JSON.stringify(content);
+        } catch (err) {
+          return `github pr review: ${errMsg(err)}`;
         }
       }
 
