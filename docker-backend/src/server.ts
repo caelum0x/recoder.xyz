@@ -12447,6 +12447,25 @@ void ensureOpenfangDaemon()
   })
   .catch((err) => logger.warn({ err }, 'openfang daemon boot step failed (non-fatal, degrading to pure-TS dispatch)'));
 
+// ColBERT rerank sidecar: when COLBERT_RERANK_URL is set (external) or python3
+// + py/colbert/rerank_server.py are present, spawn/supervise the loopback
+// Flask rerank service and export COLBERT_RERANK_URL so the existing
+// `colbertRerank` seam (conductor/colbert-rerank.ts) connects. Degrade-safe:
+// python/torch/entrypoint absent → the conductor stays on the identity
+// (no-rerank) order (no fake success). Fire-and-forget; a sidecar problem
+// never blocks boot.
+import { ensureColbertDaemon } from './conductor/colbert-daemon.js';
+void ensureColbertDaemon()
+  .then((sidecar) => {
+    if (sidecar) {
+      logger.info(
+        { url: sidecar.url, mode: sidecar.mode },
+        'colbert rerank sidecar ready — late-interaction rerank seam connected',
+      );
+    }
+  })
+  .catch((err) => logger.warn({ err }, 'colbert rerank sidecar boot step failed (non-fatal, staying on no-rerank path)'));
+
 // TensorZero LLM gateway: when TENSORZERO_URL is set (external) or a prebuilt
 // gateway binary is present (crates/tensorzero/crates/gateway — target/release|debug,
 // or TENSORZERO_BIN), connect/spawn it so inference calls route through the LLM
