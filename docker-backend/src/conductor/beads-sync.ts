@@ -22,6 +22,7 @@ import { execFileSync } from 'node:child_process';
 import {
   BEADS_TRACKER_ID,
   BeadsIssueTracker,
+  beadsIssueToTaskSpec,
   createBeadsClient,
   syncTaskSpecToBeads,
   type BeadsClient,
@@ -37,6 +38,7 @@ import { createLogger } from '../logger.js';
 import { agentOsContainer } from '../agent-os/service-container.js';
 import type { AgentOsRepository } from '../agent-os/repositories/agent-os.repository.js';
 import { resolveBeadsBin } from './beads-bin.js';
+import { queryReadyIssues } from './beads-sql.js';
 
 const logger = createLogger('conductor:beads-sync');
 
@@ -213,11 +215,34 @@ export type ReadyBeadsResult = {
  *
  * Degrade-safe: `bd` unavailable (or no injected client) or a CLI failure returns
  * `{ ready: [], skipped }` — never throws, never fabricates issues.
+ *
+ * READ FAST-PATH: when the beads dolt sql-server is running (port file present,
+ * mysql2 resolvable) the ready list is answered directly from the db's own
+ * `ready_issues` view via {@link queryReadyIssues} — same rows, same
+ * {@link beadsIssueToTaskSpec} mapping as the CLI path, one SQL round trip
+ * instead of a `bd` subprocess. Any `undefined`/error from the SQL seam falls
+ * back to the existing CLI path unchanged. The bd CLI remains the write path.
  */
 export async function listReadyBeadsTasks(
   input: { spaceId: string; repo?: string },
   deps: BeadsSyncDeps = {},
 ): Promise<ReadyBeadsResult> {
+  try {
+    const issues = await queryReadyIssues();
+    if (issues !== undefined) {
+      return {
+        ready: issues.map((issue) =>
+          beadsIssueToTaskSpec({ issue, spaceId: input.spaceId, repo: input.repo }),
+        ),
+      };
+    }
+  } catch (err) {
+    logger.warn(
+      { reason: err instanceof Error ? err.message : String(err) },
+      'beads SQL fast-path errored — falling back to bd CLI path',
+    );
+  }
+
   if (!deps.client) {
     const availability = beadsAvailability();
     if (!availability.available) {
