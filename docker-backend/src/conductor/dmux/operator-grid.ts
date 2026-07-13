@@ -24,9 +24,6 @@
  * every entry point returns `undefined` truthfully — this module NEVER throws and
  * NEVER fakes a grid.
  */
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
 import { createLogger } from '../../logger.js';
 
 const logger = createLogger('conductor:dmux:operator-grid');
@@ -88,19 +85,12 @@ export interface DmuxLayoutModule {
 export type DmuxLayoutModuleLoader = () => Promise<DmuxLayoutModule | null>;
 
 /**
- * Resolve the on-disk root of the vendored `@recoder/dmux` package via its
- * exported "./package.json" (the ONLY exported subpath besides "."). Works from
- * both the CJS tsc build (`__filename`) and ESM test runners (cwd fallback —
- * vitest runs from docker-backend/, where the workspace symlink resolves).
+ * dmux exposes its PURE engine submodules as clean subpath exports (added to
+ * ts/dmux/package.json for the Recoder fusion) — so we import the specifier
+ * directly instead of resolving the package root + joining dist paths. The root
+ * "." export runs app setup on import; this subpath is side-effect-free.
  */
-function resolveDmuxRoot(): string {
-  const anchor =
-    typeof __filename === 'string' && __filename.length > 0
-      ? __filename
-      : path.join(process.cwd(), 'noop.js');
-  const requireFromHere = createRequire(anchor);
-  return path.dirname(requireFromHere.resolve('@recoder/dmux/package.json'));
-}
+const DMUX_LAYOUT_SPECIFIER = '@recoder/dmux/layout/LayoutCalculator';
 
 /**
  * Native dynamic import kept out of tsc's reach: with `module: commonjs`, a plain
@@ -112,31 +102,29 @@ const nativeImport = new Function('specifier', 'return import(specifier)') as (
 ) => Promise<Record<string, unknown>>;
 
 /**
- * Import an ESM dist file from CJS-compiled code, robust across BOTH runtimes:
- *   1. Plain CJS Node runtime: the indirect native `import(fileURL)` (verified —
+ * Import an ESM package subpath from CJS-compiled code, robust across BOTH runtimes:
+ *   1. Plain CJS Node runtime: the indirect native `import(specifier)` (verified —
  *    tsc cannot rewrite it into `require()`).
  *   2. vitest/vite-node VM: the indirect Function throws ("dynamic import
- *      callback was not specified"), so fall back to a plain `import(absPath)`
- *      which the vite transform handles (and which, under tsc-CJS on modern
- *      Node, degrades to `require(esm)` of the absolute path — also valid).
+ *      callback was not specified"), so fall back to a plain `import(specifier)`
+ *      which the vite transform handles.
  */
-async function importEsmFile(absolutePath: string): Promise<Record<string, unknown>> {
+async function importEsmSpecifier(specifier: string): Promise<Record<string, unknown>> {
   try {
-    return await nativeImport(pathToFileURL(absolutePath).href);
+    return await nativeImport(specifier);
   } catch {
-    return (await import(absolutePath)) as Record<string, unknown>;
+    return (await import(specifier)) as Record<string, unknown>;
   }
 }
 
 /**
- * Default lazy loader for dmux's PURE LayoutCalculator submodule. Verified
- * side-effect-free (zero imports in dist). Returns `null` (never throws) when the
+ * Default lazy loader for dmux's PURE LayoutCalculator submodule (via its clean
+ * subpath export). Side-effect-free. Returns `null` (never throws) when the
  * package or submodule is unavailable or structurally wrong.
  */
 export async function loadDmuxLayoutModule(): Promise<DmuxLayoutModule | null> {
   try {
-    const submodule = path.join(resolveDmuxRoot(), 'dist', 'layout', 'LayoutCalculator.js');
-    const mod = await importEsmFile(submodule);
+    const mod = await importEsmSpecifier(DMUX_LAYOUT_SPECIFIER);
     const LayoutCalculator = (mod as { LayoutCalculator?: DmuxLayoutModule['LayoutCalculator'] })
       .LayoutCalculator;
     if (typeof LayoutCalculator !== 'function') return null;
