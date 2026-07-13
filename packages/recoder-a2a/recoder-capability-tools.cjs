@@ -335,6 +335,43 @@ const CAPABILITY_TOOLS = [
       required: ['message'],
     },
   },
+  {
+    name: 'recoder_logs_search',
+    description: "Search the Recoder run-event log (the same log the cockpit streams and the audit trail reads) for events whose message matches a query. Use it to inspect what happened in a run — errors, prior agent notes, verification output. Optionally scope to one runId.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Text to find in event messages' },
+        runId: { type: 'string', description: 'Optional run id to scope the search to' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recoder_logs_stream',
+    description: "Read the most recent run-event log entries for a run (the tail of the canonical event stream). Use it to see what a run — yours or a sibling agent's — actually did before acting on it.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string', description: "The run id to read (e.g. 'run_<taskId>')" },
+        limit: { type: 'number', description: 'Max events to return (default 50)' },
+      },
+      required: ['runId'],
+    },
+  },
+  {
+    name: 'recoder_logs_append',
+    description: "Append a note to a run's canonical event log — it shows up in the cockpit conversation and the audit trail. Use it to leave a truthful, timestamped record of what you did or found (never to claim unverified success).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string', description: "The run id to annotate (e.g. 'run_<taskId>')" },
+        message: { type: 'string', description: 'The log note to append' },
+        taskId: { type: 'string', description: 'Optional task id the note belongs to' },
+      },
+      required: ['runId', 'message'],
+    },
+  },
 ];
 
 const CAPABILITY_TOOL_NAMES = new Set(CAPABILITY_TOOLS.map((t) => t.name));
@@ -386,6 +423,9 @@ function createCapabilityTools(options = {}) {
   const unavailable = (what) =>
     `Recoder ${what} is not available in this run (no INTERNAL_SERVICE_KEY). It works inside a Recoder workspace.`;
   const errMsg = (err) => (err instanceof Error ? err.message : String(err));
+  /** One canonical RunEvent -> a compact, truthful log line. */
+  const formatRunEvent = (e) =>
+    `• [${e.type || 'event'}] ${e.createdAt || '?'}${e.agentId ? ` (${e.agentId})` : ''} ${(e.message || '').slice(0, 300)}`;
 
   async function handleCapabilityTool(name, args = {}) {
     if (!CAPABILITY_TOOL_NAMES.has(name)) return null;
@@ -866,6 +906,51 @@ function createCapabilityTools(options = {}) {
           return `Notification sent${content && content.target ? ` to ${content.target}` : ''}.`;
         } catch (err) {
           return `notify: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_logs_search': {
+        if (!hasInteropAuth()) return unavailable('run logs');
+        try {
+          const content = await callInteropTool('recoder.logs', 'logs.search', {
+            query: String(args.query || ''),
+            runId: args.runId ? String(args.runId) : undefined,
+          });
+          const events = Array.isArray(content) ? content : [];
+          if (!events.length) return `No log events matched "${args.query}".`;
+          return events.map(formatRunEvent).join('\n');
+        } catch (err) {
+          return `logs search: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_logs_stream': {
+        if (!hasInteropAuth()) return unavailable('run logs');
+        try {
+          const content = await callInteropTool('recoder.logs', 'logs.stream', {
+            runId: String(args.runId || ''),
+            limit: typeof args.limit === 'number' ? args.limit : undefined,
+          });
+          const events = Array.isArray(content) ? content : [];
+          if (!events.length) return `No log events yet for run ${args.runId}.`;
+          return events.map(formatRunEvent).join('\n');
+        } catch (err) {
+          return `logs stream: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_logs_append': {
+        if (!hasInteropAuth()) return unavailable('run logs');
+        try {
+          const content = await callInteropTool('recoder.logs', 'logs.append', {
+            runId: String(args.runId || ''),
+            message: String(args.message || ''),
+            taskId: args.taskId ? String(args.taskId) : undefined,
+          });
+          const id = (content && content.eventId) || '(appended)';
+          return `Appended log event ${id} to run ${args.runId}.`;
+        } catch (err) {
+          return `logs append: ${errMsg(err)}`;
         }
       }
 
