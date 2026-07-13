@@ -21,6 +21,7 @@ import {
   coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
+  notifyMcpServer,
   checkMcpToolPermission,
   createMcpToolAuditEvent,
   createMcpToolCall,
@@ -51,6 +52,7 @@ const defaultServers = [
   coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
+  notifyMcpServer,
 ];
 
 /**

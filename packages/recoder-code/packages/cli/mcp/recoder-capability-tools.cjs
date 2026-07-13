@@ -322,6 +322,19 @@ const CAPABILITY_TOOLS = [
       required: ['goal'],
     },
   },
+  {
+    name: 'recoder_notify',
+    description: "Send a human-facing notification to the configured Recoder channel (Slack/webhook) — e.g. tell a human a delivery is ready for review or that you need input. Returns a truthful 'not configured' when no webhook is set; it never fabricates a send.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'The notification body' },
+        title: { type: 'string', description: 'Optional short title / prefix' },
+        level: { type: 'string', description: 'Optional severity: info | warn | error' },
+      },
+      required: ['message'],
+    },
+  },
 ];
 
 const CAPABILITY_TOOL_NAMES = new Set(CAPABILITY_TOOLS.map((t) => t.name));
@@ -833,6 +846,26 @@ function createCapabilityTools(options = {}) {
           return `Plan: runtime=${d.runtimeId || '?'} substrate=${d.substrate || '?'} risk=${d.risk || '?'} approval=${d.approvalRequired ? 'REQUIRED' : 'not required'} grants=${JSON.stringify(d.toolGrants || []).slice(0, 400)}`;
         } catch (err) {
           return `pal plan: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_notify': {
+        if (!hasInteropAuth()) return unavailable('notify');
+        try {
+          const content = await callInteropTool('recoder.notify', 'notify.send', {
+            message: String(args.message || ''),
+            title: args.title ? String(args.title) : undefined,
+            level: args.level ? String(args.level) : undefined,
+          });
+          if (content && content.status === 'not_configured') {
+            return content.reason || 'Notify is not configured (no RECODER_NOTIFY_URL / SLACK_WEBHOOK_URL).';
+          }
+          if (content && content.status === 'error') {
+            return `notify: ${content.reason || 'send failed'}`;
+          }
+          return `Notification sent${content && content.target ? ` to ${content.target}` : ''}.`;
+        } catch (err) {
+          return `notify: ${errMsg(err)}`;
         }
       }
 

@@ -47,6 +47,7 @@ import {
   coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
+  notifyMcpServer,
   type GitNexusPort,
   type TaskRepositoryPort,
   type RunRepositoryPort,
@@ -68,6 +69,7 @@ import { registerBrowserUseMcpTools } from './browser-use-engine.js';
 import { registerCoordinationMcpTools } from './coordination-engine.js';
 import { registerWorkflowMcpTools } from './workflow-engine.js';
 import { registerPalPlanMcpTools } from './pal-plan-engine.js';
+import { registerNotifyMcpTools } from './notify-engine.js';
 import { getWorkspace, listWorkspaces } from '../../conductor/workspace-service.js';
 import { runBrowserCheck } from '../../conductor/browser-check.js';
 import { getDistributionModule } from '../../distribution/module.js';
@@ -245,6 +247,11 @@ export function buildInProcEngineRouter(
   // logic. Deny-biased on uncertainty (least privilege + approvalRequired), never
   // fabricating a permissive grant. Complements the external py/pal-mcp-server.
   registerPalPlanMcpTools(router);
+  // Notify (E-notify, Phase 5): an agent pings a human channel (Slack/webhook)
+  // when a delivery needs review — the human-in-the-loop close. Backed by
+  // @recoder/agent-notify; degrade-safe ("not configured") when no webhook URL
+  // (RECODER_NOTIFY_URL / SLACK_WEBHOOK_URL) is set.
+  registerNotifyMcpTools(router);
 
   return router;
 }
@@ -310,6 +317,7 @@ export const ENGINE_SERVERS = [
   coordinationMcpServer,
   workflowMcpServer,
   palPlanMcpServer,
+  notifyMcpServer,
 ] as const;
 
 /**
