@@ -42,7 +42,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 import { createLogger } from '../logger.js';
-import { loadNativeAddon, resolveNativeAddonPath } from './openfang-native.js';
+import {
+  loadNativeAddon,
+  resolveNativeAddonPath,
+  nativeBundledHands,
+  getOpenfangEngine,
+  type OpenfangEngineInstance,
+} from './openfang-native.js';
 
 const logger = createLogger('conductor:openfang-daemon');
 
@@ -388,89 +394,105 @@ export function createOpenfangAgentRouter() {
     });
   });
 
-  return router;
-}
+  type Req = import('express').Request;
+  type Res = import('express').Response;
 
-/** Hop-by-hop headers that must never be forwarded through the proxy. */
-const OPENFANG_HOP_BY_HOP = new Set([
-  'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-  'te', 'trailer', 'transfer-encoding', 'upgrade', 'host', 'content-length',
-]);
+  // Run an engine method in-process; degrade-safe 503 when the engine isn't booted,
+  // 502 when the native call throws. The engine method returns a JSON string that
+  // we forward verbatim (it already carries its own `ok` flag).
+  const withEngine = (res: Res, fn: (e: OpenfangEngineInstance) => string): void => {
+    const engine = getOpenfangEngine();
+    if (!engine) {
+      res.status(503).json({
+        ok: false,
+        reason:
+          'openfang engine not booted in-process (native addon absent or no config). ' +
+          'Build with: cd crates/openfang && cargo build -p openfang-napi --release',
+      });
+      return;
+    }
+    try {
+      res.type('application/json').send(fn(engine));
+    } catch (err) {
+      res.status(502).json({ ok: false, reason: `native engine call failed: ${String(err)}` });
+    }
+  };
 
-/**
- * createOpenfangProxyRouter — a TRANSPARENT proxy that surfaces the FULL openfang
- * product through Recoder at `/api/openfang/*`: its dashboard pages AND every one
- * of its 140+ REST/SSE endpoints (Hands, agents, channels, memory, skills,
- * models, the OpenAI-compatible `/v1/*`). Any method/path is forwarded to the
- * loopback openfang daemon (default 127.0.0.1:4200).
- *
- * A2A boundary (AGENTS.md): this is the WIRE boundary only. Canonical task /
- * approval / memory state stays owned by Recoder — the proxy exposes openfang's
- * own surfaces, it does not delegate control-plane ownership. Degrade-safe:
- * returns 503 when the daemon is absent, 502 on an upstream failure — never fakes.
- * (WebSocket upgrades — e.g. live agent streams — are not proxied here; use the
- * dashboard directly for those. HTTP GET/POST covers the pages + REST surface.)
- */
-export function createOpenfangProxyRouter() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { Router } = require('express') as typeof import('express');
-  const router = Router();
+  const id = (req: Req): string => String(req.params.id);
 
-  router.use(
-    async (req: import('express').Request, res: import('express').Response) => {
-      const h = openfangDaemonHandle();
-      if (!h) {
-        res.status(503).json({
-          agent: 'openfang',
-          status: 'unavailable',
-          reason:
-            'openfang daemon is not running — build crates/openfang (or set OPENFANG_BIN) ' +
-            'to bring up the full dashboard + API at /api/openfang/*.',
-        });
-        return;
-      }
+  // ---- Hands: bundled + active + full lifecycle (all in-process) ----------
+  // Bundled defs read straight from the linked-in crate — no kernel boot needed.
+  router.get('/hands', (_req: Req, res: Res) => {
+    const hands = nativeBundledHands();
+    if (hands) {
+      res.json({ ok: true, mode: 'native_addon', hands });
+      return;
+    }
+    res.status(503).json({
+      ok: false,
+      reason:
+        'openfang native addon not built — no in-process Hands available. ' +
+        'Build with: cd crates/openfang && cargo build -p openfang-napi --release',
+    });
+  });
+  router.get('/hands/active', (_req: Req, res: Res) => withEngine(res, (e) => e.listActiveHands()));
+  router.get('/hands/definitions', (_req: Req, res: Res) => withEngine(res, (e) => e.listHandDefinitions()));
+  router.post('/hands/:id/activate', (req: Req, res: Res) => withEngine(res, (e) => e.activateHand(id(req))));
+  router.post('/hands/:id/pause', (req: Req, res: Res) => withEngine(res, (e) => e.pauseHand(id(req))));
+  router.post('/hands/:id/resume', (req: Req, res: Res) => withEngine(res, (e) => e.resumeHand(id(req))));
+  router.post('/hands/:id/deactivate', (req: Req, res: Res) => withEngine(res, (e) => e.deactivateHand(id(req))));
 
-      // /api/openfang/foo?x=1 → http://127.0.0.1:4200/foo?x=1 (strip mount prefix).
-      const suffix = req.originalUrl.replace(/^\/api\/openfang/, '') || '/';
-      const target = `http://${h.listenAddr}${suffix}`;
+  // ---- Agents: list + full lifecycle -------------------------------------
+  router.get('/agents', (_req: Req, res: Res) => withEngine(res, (e) => e.listAgents()));
+  router.get('/agents/:id/sessions', (req: Req, res: Res) => withEngine(res, (e) => e.listAgentSessions(id(req))));
+  router.get('/agents/:id/usage', (req: Req, res: Res) => withEngine(res, (e) => e.sessionUsageCost(id(req))));
+  router.post('/agents/:id/message', (req: Req, res: Res) => {
+    const message = typeof req.body?.message === 'string' ? req.body.message : '';
+    if (message.trim() === '') {
+      res.status(400).json({ ok: false, reason: 'message is required' });
+      return;
+    }
+    withEngine(res, (e) => e.runAgent(id(req), message));
+  });
+  router.post('/agents/:id/activate', (req: Req, res: Res) => withEngine(res, (e) => e.activateAgent(id(req))));
+  router.post('/agents/:id/stop', (req: Req, res: Res) => withEngine(res, (e) => e.stopAgentRun(id(req))));
+  router.post('/agents/:id/kill', (req: Req, res: Res) => withEngine(res, (e) => e.killAgent(id(req))));
+  router.post('/agents/:id/reset', (req: Req, res: Res) => withEngine(res, (e) => e.resetSession(id(req))));
+  router.post('/agents/:id/clear', (req: Req, res: Res) => withEngine(res, (e) => e.clearAgentHistory(id(req))));
+  router.post('/agents/:id/model', (req: Req, res: Res) => {
+    const model = typeof req.body?.model === 'string' ? req.body.model : '';
+    if (model.trim() === '') {
+      res.status(400).json({ ok: false, reason: 'model is required' });
+      return;
+    }
+    const provider = typeof req.body?.provider === 'string' ? req.body.provider : null;
+    withEngine(res, (e) => e.setAgentModel(id(req), model, provider));
+  });
+  router.post('/agents/:id/skills', (req: Req, res: Res) => {
+    const skills = Array.isArray(req.body?.skills) ? req.body.skills.map((s: unknown) => String(s)) : [];
+    withEngine(res, (e) => e.setAgentSkills(id(req), skills));
+  });
 
-      const headers: Record<string, string> = {};
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (typeof value === 'string' && !OPENFANG_HOP_BY_HOP.has(key.toLowerCase())) {
-          headers[key] = value;
-        }
-      }
+  // ---- Triggers -----------------------------------------------------------
+  router.get('/triggers', (req: Req, res: Res) => {
+    const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : null;
+    withEngine(res, (e) => e.listTriggers(agentId));
+  });
+  router.post('/triggers/:id/remove', (req: Req, res: Res) => withEngine(res, (e) => e.removeTrigger(id(req))));
+  router.post('/triggers/:id/enabled', (req: Req, res: Res) => {
+    const enabled = req.body?.enabled === true;
+    withEngine(res, (e) => e.setTriggerEnabled(id(req), enabled));
+  });
 
-      const method = req.method.toUpperCase();
-      let body: string | undefined;
-      if (
-        method !== 'GET' &&
-        method !== 'HEAD' &&
-        req.body != null &&
-        typeof req.body === 'object' &&
-        Object.keys(req.body).length > 0
-      ) {
-        body = JSON.stringify(req.body);
-        headers['content-type'] = 'application/json';
-      }
-
-      try {
-        const upstream = await fetch(target, { method, headers, body });
-        res.status(upstream.status);
-        upstream.headers.forEach((value, key) => {
-          if (!OPENFANG_HOP_BY_HOP.has(key.toLowerCase())) res.setHeader(key, value);
-        });
-        const buf = Buffer.from(await upstream.arrayBuffer());
-        res.send(buf);
-      } catch (err) {
-        res.status(502).json({
-          agent: 'openfang',
-          status: 'proxy_error',
-          reason: err instanceof Error ? err.message : String(err),
-        });
-      }
-    },
-  );
+  // ---- Inventory: bindings / models / skills / usage ----------------------
+  router.get('/bindings', (_req: Req, res: Res) => withEngine(res, (e) => e.listBindings()));
+  router.get('/models', (_req: Req, res: Res) => withEngine(res, (e) => e.listModels()));
+  router.get('/skills', (_req: Req, res: Res) => withEngine(res, (e) => e.listSkills()));
+  router.post('/skills/reload', (_req: Req, res: Res) => withEngine(res, (e) => e.reloadSkills()));
+  router.get('/usage', (req: Req, res: Res) => {
+    const agentId = typeof req.query.agentId === 'string' ? req.query.agentId : null;
+    withEngine(res, (e) => e.usageSummary(agentId));
+  });
 
   return router;
 }

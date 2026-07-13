@@ -56,7 +56,7 @@ build_tensorzero() {
 build_openfang() {
   build_one "crates/openfang" "openfang-napi" \
     "libopenfang_napi" \
-    "$REPO/crates/openfang/target/release/openfang-napi.node"
+    "$REPO/crates/openfang/target/release/openfang_napi.node"
 }
 
 rc=0
