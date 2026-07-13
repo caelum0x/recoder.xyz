@@ -52,7 +52,7 @@ The desktop embeds `docker-backend` (the fused spine); `docker-backend` in-proce
 | Subsystem | Mode | Fuse into (seam) | Status |
 |---|---|---|---|
 | `py/ops-recorder` | subprocess/loopback | ✅ **DONE** — `ops-recorder-adapter.ts` forwards to py service behind `OPS_RECORDER_URL`; work-signals ingress accepts fused shape; degrade-safe; 27 tests (commit 9fd3cd517) |
-| `packages/recoder-browser-tools` | in-process | browser-check node (needs CJS dist first) | ⬜ open |
+| `packages/recoder-browser-tools` | in-process | browser-check node lazy-imports `@recoder/browser-tools` (playwright driver, fetch-probe fallback) | ✅ **DONE** — CJS dist built; import verified in-process (2026-07-13) |
 
 ## Wave B — Fuse the parked Rust crates (subprocess/UDS, build-gated)
 
@@ -62,7 +62,7 @@ Rust builds are heavy and the box is disk-constrained (per memory) — build out
 |---|---|---|---|
 | `crates/recoder-governance` | NAPI in-process (2026-07-13) | kernel linked natively in `packages/governance` | ✅ **DONE** — `.node` built + loads in-process via `conductor/governance-native.ts`; daemon fallback when `.node` absent; degrade-safe TS path exists; 160+ tests. |
 | `crates/openfang` | NAPI in-process (2026-07-13) | 45 methods in `conductor/openfang-native.ts` | ✅ **DONE** — `.node` built; agents/hands/triggers/workflows/extensions/memory/skills all in-process; `/api/agents/openfang/*` edge; degrade-safe TS dispatch; 17 native tests + e2e verified. |
-| `crates/tensorzero` | NAPI in-process (deferred) | `tensorzero-client.ts` native-first | ⏸ deferred (disk constraint) — binding exists, `.node` build pending; TS loopback client ready when `.node` absent. |
+| `crates/tensorzero` | NAPI in-process (2026-07-13) | `tensorzero-client.ts` native-first | ✅ **DONE** — `EmbeddedGateway` binding: the real TZ engine boots in-process; `postInference()` = embedded → loopback → direct-provider, each truthful. Built with `SQLX_OFFLINE=1`. |
 | `crates/lance` | NAPI in-process | `packages/rag` vector-store seam | ✅ **BUILT** — superseded by Qdrant in shipped product. |
 | `crates/claw-code-parity` | N/A (removed 2026-07-13) | eval/parity harness (not product runtime) | **REMOVED** — consumer degrades to TS fallback. |
 
@@ -99,11 +99,11 @@ Deeper than supervised-subprocess: each Rust crate gets a `#[napi]` cdylib bindi
 |---|---|---|---|---|
 | `recoder-governance` | ✅ `recoder-governance-napi` | ✅ `packages/governance` | ✅ **BUILT** — kernel linked in-process; `decide()` returns a verdict natively (socket = fallback) | 160/160 (69ac2debb) |
 | `lance` | ✅ `crates/lance/npm-bindings` | ✅ `packages/rag` | ✅ **BUILT** | 106 rag + 9 + 7 cargo (570a5076e) |
-| `tensorzero` | ✅ gateway-napi (sync surface only) | ✅ `tensorzero-client.ts` | ⏸ deferred (~4–6 GB) | 27 (64a68c1d9) |
+| `tensorzero` | ✅ gateway-napi (version/validate + `EmbeddedGateway` inference/feedback) | ✅ `tensorzero-client.ts` native-first | ✅ **BUILT (2026-07-13)** — engine boots in-process; routing verified | 27 + 16 client (c8d44608f) |
 | `openfang` | ✅ openfang-napi (gitignored subtree) | ✅ `conductor/openfang-native.ts` | ✅ **BUILT (2026-07-13)** — 45 methods; kernel + runtime/wasmtime + skills + hands in-process; verified end-to-end | 17 native (esbuild clean) |
 | `claw-code-parity` | ✅ claw-code-parity-napi | ✅ `a2a-openclaw-adapter.ts` | **REMOVED (2026-07-13)** — not product runtime; consumer degrades to TS fallback | N/A |
 
-**Status (2026-07-13):** openfang built + in-process. **Open items:** (1) reclaim disk (currently ~3.7 GB) then `cargo build --release` tensorzero `.node`; (2) wire `napi build` into `electron-builder` `asarUnpack` per-arch for the signed bundle (L5). claw-code-parity removed (not product runtime).
+**Status (2026-07-13):** ALL Wave E crates built + in-process (governance, lance, openfang, tensorzero). **Open item:** wire the `.node` artifacts into `electron-builder` `asarUnpack` per-arch for the signed bundle (L5). claw-code-parity removed (not product runtime).
 
 ## END-TO-END PROOF (2026-07-11) — the fused product RUNS, not just compiles
 
