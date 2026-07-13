@@ -4,17 +4,32 @@
  * When an agent finishes (completion-watcher detects exit), the conductor must run
  * an ordered post-run graph BEFORE handing the workspace to review:
  *
- *   verify (delivery summary) -> memory (reviewable candidate)
+ *   verify (delivery summary) -> browser-check -> memory (reviewable candidate)
+ *   verify -> approval (delivery gate) -> pull-request -> deploy
  *
  * Historically the watcher fired these inline as an unordered `Promise.all`. That
- * is ad-hoc sequencing the moment the graph grows (verify -> approve -> PR ->
- * deploy). This module fuses the OWNED @recoder/agent-workflows package onto the
- * real product path: it compiles the post-run steps into a `WorkflowDefinition`
- * (a `verification` node, then a `memory` node that `dependsOn` it) and executes
- * them with `AgentOsWorkflowRunner`, supplying conductor-backed handlers (ports)
- * that call the SAME real builders (`generateDeliverySummary` /
- * `generateMemoryCandidate`). The runner owns ordering, dependency-skip, and
- * per-node status; the conductor owns the work.
+ * is ad-hoc sequencing the moment the graph grows. This module fuses the OWNED
+ * @recoder/agent-workflows package onto the real product path: it compiles the
+ * post-run steps into a `WorkflowDefinition` (ordering expressed as `dependsOn`
+ * data) and executes them with `AgentOsWorkflowRunner`, supplying conductor-backed
+ * handlers (ports) that call the SAME real conductor capabilities
+ * (`generateDeliverySummary` / `generateMemoryCandidate` / `runBrowserCheck` /
+ * `checkDeliveryApproval` / `createWorkspacePr`). The runner owns ordering,
+ * dependency-skip, and per-node status; the conductor owns the work.
+ *
+ * DELIVERY BRANCH TRUTHS (INTEGRATION-PLAN §b.1 item 3 — approval/PR/deploy are
+ * REAL nodes, never fake successes):
+ *   - `approval` consults the real delivery gate (control-plane Approval records
+ *     via `checkDeliveryApproval`). An open gate is a truthful `skipped`
+ *     (reason: approval-pending) — the graph records that the human gate is open;
+ *     it does not park or poll.
+ *   - `pull-request` RE-CHECKS the gate itself (the runner only cascade-skips on
+ *     a FAILED dependency, so a skipped approval node would not stop it) and only
+ *     calls the real `createWorkspacePr` when the workspace explicitly opted into
+ *     automated PR delivery (`metadata.autoPr === true`) and no PR is already
+ *     recorded. Post-run NEVER opens a PR a human did not ask for.
+ *   - `deploy` is a truthful `skipped` (no conductor deploy target exists yet);
+ *     per the production rule deploys stay approval-gated — we never fake one.
  *
  * Additive + degrade-safe: this NEVER throws. If the runner is unavailable or any
  * node errors, the caller falls back to the prior inline behavior, and the
@@ -46,6 +61,10 @@ import {
   verificationNode,
   browserCheckNode,
   memoryNode,
+  approvalNode,
+  pullRequestNode,
+  deployNode,
+  type PullRequestNodeConfig,
   type WorkflowDefinition,
   type WorkflowNode,
   type WorkflowExecutionContext,
@@ -53,6 +72,8 @@ import {
 } from '@recoder/agent-workflows';
 import { generateDeliverySummary, generateMemoryCandidate } from './delivery-summary.js';
 import type { DeliverySummary, MemoryCandidate } from './delivery-summary.js';
+import { checkDeliveryApproval, type DeliveryAction } from './delivery-approval.js';
+import { createWorkspacePr } from './review-publish.js';
 import { runBrowserCheck } from './browser-check.js';
 import type { BrowserVerificationResult } from '@recoder/browser-verification';
 import { getWorkspace } from './workspace-service.js';
@@ -71,8 +92,20 @@ export interface PostRunWorkflowResult {
    * workspace had no preview URL (skipped) or the check was unavailable.
    */
   browserVerification: BrowserVerificationResult | null;
-  /** Per-node status from the workflow runner (for audit/metadata). */
-  nodeStatuses: { nodeId: string; kind: WorkflowNode['kind']; status: string }[];
+  /**
+   * Per-node status from the workflow runner (for audit/metadata). `output` and
+   * `error` are carried through so a truthful skip is auditable (WHY the approval
+   * / pull-request / deploy node did not act — e.g. `approval-pending`,
+   * `auto-pr-not-requested`, `no-deploy-target-configured`), not just THAT it
+   * skipped. Additive: existing consumers read only nodeId/kind/status.
+   */
+  nodeStatuses: {
+    nodeId: string;
+    kind: WorkflowNode['kind'];
+    status: string;
+    output?: Record<string, unknown>;
+    error?: string;
+  }[];
   /** Whether the runner drove the sequence (false => caller should fall back). */
   ranViaRunner: boolean;
   /**
@@ -101,11 +134,17 @@ export type RuntimeHandoffOutcome = {
 /**
  * Build the post-run delivery graph for a finished workspace.
  *
- * Ordering is expressed as data (the `memory` node `dependsOn` the `verification`
- * node), so the runner's topological order — not inline code — decides sequencing.
- * The memory node skips automatically if verification fails (dependency-skip).
+ * Ordering is expressed as data (`dependsOn` edges), so the runner's topological
+ * order — not inline code — decides sequencing. Two branches hang off `verify`:
+ *
+ *   verify -> browser-check -> memory          (evidence branch)
+ *   verify -> approval -> pull-request -> deploy  (delivery branch)
+ *
+ * Every downstream node skips automatically if verification FAILS
+ * (dependency-skip). Exported for tests: the graph SHAPE is a contract
+ * (INTEGRATION-PLAN §b.1 item 3 promises approval/PR/deploy as real nodes).
  */
-function buildPostRunDefinition(workspaceId: string): WorkflowDefinition {
+export function buildPostRunDefinition(workspaceId: string): WorkflowDefinition {
   const verify = verificationNode('post-run-verify', { workspaceId });
   // Browser-check runs AFTER verify (it only matters once the change is verified)
   // and BEFORE memory, so the proposed memory candidate can later carry the
@@ -123,11 +162,38 @@ function buildPostRunDefinition(workspaceId: string): WorkflowDefinition {
     ...memoryNode('post-run-memory', { workspaceId }),
     dependsOn: [verify.nodeId, browser.nodeId],
   };
+  // DELIVERY BRANCH — approval gates the outward-facing actions. It depends only
+  // on verify (not browser/memory): the human gate question is "may this change
+  // be delivered", which the evidence branch informs but does not block.
+  const approval: WorkflowNode = {
+    ...approvalNode('post-run-approval', { workspaceId, action: 'pr' satisfies DeliveryAction }),
+    dependsOn: [verify.nodeId],
+  };
+  // The pull-request node depends on approval for ORDERING, but its handler
+  // re-checks the delivery gate itself: the runner only cascade-skips on a FAILED
+  // dependency, and an open gate is a truthful `skipped` — so the edge alone
+  // cannot be trusted as the safety check (see the handler).
+  //
+  // The built package's PullRequestNodeConfig types repo/branch/title as required
+  // for externally-specified PRs; the conductor handler resolves all of those from
+  // the workspace record at EXECUTION time (createWorkspacePr reads the worktree),
+  // so build-time config truthfully carries only the workspace pointer.
+  const pr: WorkflowNode = {
+    ...pullRequestNode('post-run-pr', { workspaceId } as unknown as PullRequestNodeConfig),
+    dependsOn: [approval.nodeId],
+  };
+  // Deploy is the terminal delivery step. No conductor deploy target exists yet,
+  // so its handler always reports a truthful `skipped` — the node exists so the
+  // documented graph shape is real, without ever faking a deploy.
+  const deploy: WorkflowNode = {
+    ...deployNode('post-run-deploy', { workspaceId }),
+    dependsOn: [pr.nodeId],
+  };
   return {
     workflowId: `post-run_${workspaceId}`,
     name: 'Conductor post-run delivery',
     version: '1',
-    nodes: [verify, browser, memory],
+    nodes: [verify, browser, memory, approval, pr, deploy],
     metadata: { workspaceId, purpose: 'post-run-sequencing' },
   };
 }
@@ -251,95 +317,231 @@ async function emitPalRuntimeHandoff(
 }
 
 /**
+ * The outputs the node handlers capture as the graph executes, so the caller
+ * (completion-watcher) can attach them to the workspace exactly as before. A
+ * mutable record shared between the executor closure and `runPostRunDelivery` —
+ * the same capture pattern the previous inline closure used, made explicit so the
+ * executor can be exported for tests.
+ */
+export interface PostRunCapture {
+  summary: DeliverySummary | null;
+  candidate: MemoryCandidate | null;
+  browserVerification: BrowserVerificationResult | null;
+}
+
+/**
+ * Build the single `executeNode` port that dispatches every post-run node kind to
+ * the matching conductor capability. The runner still owns ordering /
+ * dependency-skip / status; each handler is degrade-safe (returns failed/skipped
+ * rather than throwing). Exported so tests can drive individual kinds (including
+ * the unhandled-kind fall-through) without a full runner pass.
+ */
+export function createPostRunNodeExecutor(
+  workspaceId: string,
+  capture: PostRunCapture,
+): (node: WorkflowNode, context: WorkflowExecutionContext) => Promise<WorkflowNodeHandlerResult> {
+  return async (node: WorkflowNode, _context: WorkflowExecutionContext): Promise<WorkflowNodeHandlerResult> => {
+    if (node.kind === 'verification') {
+      // Verify step: produce the delivery summary. A truthful non-zero exit is
+      // STILL a completed node (the summary captured it); only an exception
+      // fails the node, which the runner then uses to skip the dependents.
+      try {
+        const summary = await generateDeliverySummary(workspaceId);
+        capture.summary = summary;
+        return {
+          status: 'completed',
+          output: {
+            changedFiles: summary.changedFiles,
+            success: summary.success,
+            exitCode: summary.exitCode,
+          },
+        };
+      } catch (err) {
+        logger.warn({ workspaceId, err }, 'post-run verification node failed');
+        return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    if (node.kind === 'browser-check') {
+      // Browser-check step: verify the agent's preview/web output is healthy
+      // via @recoder/browser-verification. Degrade-safe — when there is no
+      // preview URL the node reports `skipped` (which does not skip memory).
+      try {
+        const outcome = await runBrowserCheck(workspaceId);
+        if (!outcome.attempted || !outcome.result) {
+          return { status: 'skipped', output: { reason: 'no-preview-url' } };
+        }
+        capture.browserVerification = outcome.result;
+        // The NODE completed (it ran and produced a truthful result) even when
+        // the preview itself is unhealthy — the unhealthy signal lives in
+        // `verificationStatus`, not in the node status, so downstream nodes
+        // (memory) still run and can carry the evidence.
+        return {
+          status: 'completed',
+          output: {
+            previewUrl: outcome.result.previewUrl,
+            verificationStatus: outcome.result.status,
+            checks: outcome.result.checks.length,
+          },
+        };
+      } catch (err) {
+        logger.warn({ workspaceId, err }, 'post-run browser-check node failed');
+        // A browser-check failure must NOT cascade-skip memory: report skipped.
+        return { status: 'skipped', error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    if (node.kind === 'memory') {
+      // Memory step: propose the reviewable candidate (may legitimately be null
+      // when there are no changes / notable logs).
+      try {
+        capture.candidate = await generateMemoryCandidate(workspaceId);
+        return { status: 'completed', output: { proposed: capture.candidate !== null } };
+      } catch (err) {
+        logger.warn({ workspaceId, err }, 'post-run memory node failed');
+        return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    if (node.kind === 'approval') {
+      // Approval step: consult the REAL delivery gate (control-plane Approval
+      // records, keyed by the workspace's taskId — see delivery-approval.ts).
+      // An approved record completes the node; an OPEN gate is a truthful
+      // `skipped` (approval-pending): the graph records that the human gate is
+      // open, it does NOT park or poll. The pull-request handler re-checks the
+      // gate itself, so this node's status is informational ordering, never the
+      // safety mechanism.
+      try {
+        const workspace = await getWorkspace(workspaceId);
+        if (!workspace) {
+          return { status: 'skipped', output: { reason: 'workspace-not-found' } };
+        }
+        const action: DeliveryAction = node.config?.action === 'merge' ? 'merge' : 'pr';
+        const check = await checkDeliveryApproval(workspace.taskId, action);
+        if (check.approved) {
+          return {
+            status: 'completed',
+            output: { approved: true, action, approvalId: check.approvalId },
+          };
+        }
+        return {
+          status: 'skipped',
+          output: { reason: 'approval-pending', action, detail: check.reason, approvalId: check.approvalId },
+        };
+      } catch (err) {
+        // Mirror the browser-check error style: a broken gate LOOKUP must not
+        // fail the whole post-run graph — skip truthfully (and, fail-closed, a
+        // skipped approval can never lead to a PR: the PR handler re-checks).
+        logger.warn({ workspaceId, err }, 'post-run approval node check failed');
+        return { status: 'skipped', error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    if (node.kind === 'pull-request') {
+      // Pull-request step — SAFETY-CRITICAL. The runner only cascade-skips on a
+      // FAILED dependency, so a skipped (approval-pending) approval node does NOT
+      // stop this node from executing. The handler therefore re-checks everything
+      // itself and only calls the real `createWorkspacePr` when:
+      //   (a) no PR is already recorded on the workspace (never duplicate), and
+      //   (b) the workspace explicitly opted into automated PR delivery via
+      //       `metadata.autoPr === true` — no conductor path sets this today, so
+      //       post-run NEVER opens a PR a human did not ask for, and
+      //   (c) the delivery gate approves the 'pr' action (fail closed).
+      // `createWorkspacePr` additionally enforces the gate internally (defense in
+      // depth) — this pre-check keeps an unapproved pass a truthful `skipped`
+      // instead of a thrown DeliveryApprovalRequiredError failing the graph.
+      let workspace: Workspace | null | undefined;
+      try {
+        workspace = await getWorkspace(workspaceId);
+      } catch (err) {
+        logger.warn({ workspaceId, err }, 'post-run pull-request node workspace lookup failed');
+        return { status: 'skipped', error: err instanceof Error ? err.message : String(err) };
+      }
+      if (!workspace) {
+        return { status: 'skipped', output: { reason: 'workspace-not-found' } };
+      }
+      const metadata = (workspace.metadata ?? {}) as Record<string, unknown>;
+      if (metadata.pr) {
+        return { status: 'skipped', output: { reason: 'pr-already-exists' } };
+      }
+      if (metadata.autoPr !== true) {
+        return { status: 'skipped', output: { reason: 'auto-pr-not-requested' } };
+      }
+      let gate: Awaited<ReturnType<typeof checkDeliveryApproval>>;
+      try {
+        gate = await checkDeliveryApproval(workspace.taskId, 'pr');
+      } catch (err) {
+        // checkDeliveryApproval is documented never-throws, but the gate failing
+        // in a surprising way must fail CLOSED (no PR), not fail the graph.
+        logger.warn({ workspaceId, err }, 'post-run pull-request gate re-check failed (fail closed)');
+        return { status: 'skipped', error: err instanceof Error ? err.message : String(err) };
+      }
+      if (!gate.approved) {
+        return { status: 'skipped', output: { reason: 'approval-pending', detail: gate.reason } };
+      }
+      try {
+        const result = await createWorkspacePr(workspaceId, {
+          title: `Recoder delivery: ${workspace.branch} (task ${workspace.taskId})`,
+        });
+        return {
+          status: 'completed',
+          output: { url: result.url, base: result.base, branch: result.branch },
+        };
+      } catch (err) {
+        // A failed PR must not fake success. `failed` is correct here (unlike the
+        // gate checks above): the runner treats it as a real delivery failure and
+        // the deploy node never runs.
+        logger.warn({ workspaceId, err }, 'post-run pull-request node failed');
+        return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    if (node.kind === 'deploy') {
+      // Deploy step: there is NO conductor deploy implementation yet, and per the
+      // production rule deploys are approval-gated customer-visible actions — so
+      // this is a truthful skip, never a fake completion. The node exists so the
+      // documented verify -> approve -> pr -> deploy graph shape is real; wiring a
+      // target later only changes this handler.
+      return { status: 'skipped', output: { reason: 'no-deploy-target-configured' } };
+    }
+
+    // Unhandled kinds: completing a node whose work never ran would be a
+    // fake-success bug (the exact failure mode this graph exists to prevent).
+    // Report a truthful `skipped` so an extended definition degrades visibly
+    // without hard-failing the run.
+    logger.warn({ workspaceId, nodeId: node.nodeId, kind: node.kind }, 'post-run node kind unhandled — skipping truthfully');
+    return { status: 'skipped', output: { reason: 'unhandled-node-kind', kind: node.kind } };
+  };
+}
+
+/**
  * Run the post-run delivery graph through the @recoder/agent-workflows runner.
  *
- * The runner calls back into these conductor-owned handlers:
- *   - `runVerification` -> `generateDeliverySummary` (the verify step)
- *   - `executeNode` (memory kind) -> `generateMemoryCandidate` (the propose step)
- *
- * Both share the captured `summary`/`candidate` so the watcher can attach them to
- * the workspace exactly as before. Never throws: on any failure it returns
- * whatever it managed to produce with `ranViaRunner: false` so the caller falls
- * back to the proven inline path.
+ * The runner calls back into the conductor-owned handlers built by
+ * `createPostRunNodeExecutor` (verify / browser-check / memory / approval /
+ * pull-request / deploy). The handlers share the `PostRunCapture` record so the
+ * watcher can attach summary/candidate/browser evidence to the workspace exactly
+ * as before. Never throws: on any failure it returns whatever it managed to
+ * produce with `ranViaRunner: false` so the caller falls back to the proven
+ * inline path.
  */
 export async function runPostRunDelivery(workspaceId: string): Promise<PostRunWorkflowResult> {
-  let summary: DeliverySummary | null = null;
-  let candidate: MemoryCandidate | null = null;
-  let browserVerification: BrowserVerificationResult | null = null;
+  const capture: PostRunCapture = {
+    summary: null,
+    candidate: null,
+    browserVerification: null,
+  };
 
   try {
     const definition = buildPostRunDefinition(workspaceId);
 
-    // A single `executeNode` port dispatches every node kind to the matching
-    // conductor builder. The runner still owns ordering/dependency-skip/status;
-    // each handler is degrade-safe (returns a failed node rather than throwing).
+    // A single `executeNode` port (built by createPostRunNodeExecutor) dispatches
+    // every node kind — verify / browser-check / memory / approval / pull-request
+    // / deploy — to the matching conductor capability. The runner still owns
+    // ordering/dependency-skip/status; each handler is degrade-safe (returns a
+    // failed/skipped node rather than throwing).
     const runner = new AgentOsWorkflowRunner({
-      executeNode: async (node: WorkflowNode, _context: WorkflowExecutionContext): Promise<WorkflowNodeHandlerResult> => {
-        if (node.kind === 'verification') {
-          // Verify step: produce the delivery summary. A truthful non-zero exit is
-          // STILL a completed node (the summary captured it); only an exception
-          // fails the node, which the runner then uses to skip the memory node.
-          try {
-            summary = await generateDeliverySummary(workspaceId);
-            return {
-              status: 'completed',
-              output: {
-                changedFiles: summary.changedFiles,
-                success: summary.success,
-                exitCode: summary.exitCode,
-              },
-            };
-          } catch (err) {
-            logger.warn({ workspaceId, err }, 'post-run verification node failed');
-            return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
-          }
-        }
-
-        if (node.kind === 'browser-check') {
-          // Browser-check step: verify the agent's preview/web output is healthy
-          // via @recoder/browser-verification. Degrade-safe — when there is no
-          // preview URL the node reports `skipped` (which does not skip memory).
-          try {
-            const outcome = await runBrowserCheck(workspaceId);
-            if (!outcome.attempted || !outcome.result) {
-              return { status: 'skipped', output: { reason: 'no-preview-url' } };
-            }
-            browserVerification = outcome.result;
-            // The NODE completed (it ran and produced a truthful result) even when
-            // the preview itself is unhealthy — the unhealthy signal lives in
-            // `verificationStatus`, not in the node status, so downstream nodes
-            // (memory) still run and can carry the evidence.
-            return {
-              status: 'completed',
-              output: {
-                previewUrl: outcome.result.previewUrl,
-                verificationStatus: outcome.result.status,
-                checks: outcome.result.checks.length,
-              },
-            };
-          } catch (err) {
-            logger.warn({ workspaceId, err }, 'post-run browser-check node failed');
-            // A browser-check failure must NOT cascade-skip memory: report skipped.
-            return { status: 'skipped', error: err instanceof Error ? err.message : String(err) };
-          }
-        }
-
-        if (node.kind === 'memory') {
-          // Memory step: propose the reviewable candidate (may legitimately be null
-          // when there are no changes / notable logs).
-          try {
-            candidate = await generateMemoryCandidate(workspaceId);
-            return { status: 'completed', output: { proposed: candidate !== null } };
-          } catch (err) {
-            logger.warn({ workspaceId, err }, 'post-run memory node failed');
-            return { status: 'failed', error: err instanceof Error ? err.message : String(err) };
-          }
-        }
-
-        // Future post-run kinds (approval/pull-request/deploy) are not wired yet;
-        // treat them as no-ops so an extended graph never hard-fails here.
-        return { status: 'completed' };
-      },
+      executeNode: createPostRunNodeExecutor(workspaceId, capture),
     });
 
     const run = await runner.run({ definition });
@@ -348,6 +550,8 @@ export async function runPostRunDelivery(workspaceId: string): Promise<PostRunWo
       nodeId: execution.nodeId,
       kind: execution.kind,
       status: execution.status,
+      output: execution.output,
+      error: execution.error,
     }));
 
     logger.info(
@@ -359,16 +563,16 @@ export async function runPostRunDelivery(workspaceId: string): Promise<PostRunWo
     // next-runtime handoff on the coordination handoff bus. Degrade-safe + never
     // throws; null when no next runtime was planned. Runs AFTER the graph so the
     // delivery summary (used for the from-runtime + run id) is available.
-    const runtimeHandoff = await emitPalRuntimeHandoff(workspaceId, summary);
+    const runtimeHandoff = await emitPalRuntimeHandoff(workspaceId, capture.summary);
 
-    return { summary, candidate, browserVerification, nodeStatuses, ranViaRunner: true, runtimeHandoff };
+    return { ...capture, nodeStatuses, ranViaRunner: true, runtimeHandoff };
   } catch (err) {
     // Degrade-safe: the runner / package was unavailable or threw unexpectedly. The
     // runtime-chain handoff still fires from whatever summary was captured (it has
     // its own try/catch and never throws), so a runner failure does not drop the
     // planned codex->claude->pi / CC->CC chain.
     logger.warn({ workspaceId, err }, 'post-run workflow runner unavailable — caller will fall back inline');
-    const runtimeHandoff = await emitPalRuntimeHandoff(workspaceId, summary).catch(() => null);
-    return { summary, candidate, browserVerification, nodeStatuses: [], ranViaRunner: false, runtimeHandoff };
+    const runtimeHandoff = await emitPalRuntimeHandoff(workspaceId, capture.summary).catch(() => null);
+    return { ...capture, nodeStatuses: [], ranViaRunner: false, runtimeHandoff };
   }
 }
