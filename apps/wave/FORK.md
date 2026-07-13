@@ -6,59 +6,71 @@ Per the architecture decision record ([`docs/architecture/RECODER-ENGINES.md` §
 Wave is the fork base because its **block model IS Recoder's cockpit**: a grid where each block is a
 terminal (a parallel agent's real TUI) or a web widget (diff / review / board / approvals).
 
+This is not "Wave with a Recoder widget" — it is the **Recoder product**, the way Cursor is VSCode.
+It boots into Recoder, is fully rebranded, has its cloud dependencies decoupled, and **builds**.
+
 ## Attribution (Apache-2.0)
-This is a derivative work of Wave Terminal. The upstream `LICENSE`, `NOTICE`, and all source
-copyright headers are preserved unchanged, as the license requires. Only the **product identity**
-(`name`, `productName`, `appId`) is rebranded to Recoder.
+A derivative work of Wave Terminal. The upstream `LICENSE`, `NOTICE`, and all source copyright headers
+are preserved unchanged, as the license requires. We rebrand **product identity**, never authorship —
+exactly as Cursor keeps VSCode's MIT notices. Load-bearing upstream internals are intentionally kept
+(the `wsh`/"WSH" RPC protocol, `wshrpc`, `WAVETERM_*` env var names, `Wave*` code symbols); only
+user-facing identity + the Go module path + the server binary name were changed.
 
 ## What this fork is (and isn't)
-- **Is:** L3 only — the terminal-native surface. It renders blocks; a block can be a live agent
-  session or a Recoder control-plane widget.
-- **Isn't:** an engine. `docker-backend` remains THE control plane; the 16 engines + governance + the
-  service fleet mount behind it **unchanged** (RECODER-ENGINES §10/§27). A fork is a surface swap,
-  never an engine swap.
+- **Is:** L3 — the terminal-native surface. It renders blocks; a block can be a live agent session or a
+  Recoder control-plane widget.
+- **Isn't:** an engine. `docker-backend` remains THE control plane; the engines + governance + service
+  fleet mount behind it unchanged (RECODER-ENGINES §10/§27). A fork is a surface swap, not an engine swap.
 
-## Integration seam
-Wave's frontend resolves its backend over env vars (`frontend/util/endpoints.ts`):
-`WAVE_SERVER_WEB_ENDPOINT` / `WAVE_SERVER_WS_ENDPOINT` → its Go `wavesrv`. Recoder integration:
-1. Keep `wavesrv` for block/terminal/layout management (its strength).
-2. Add a **Recoder conductor bridge**: blocks that call `docker-backend` `/api/conductor` (create/
-   observe/steer workspaces) and render the workspace's tmux session as a terminal block, plus
-   widget blocks for diff/review/approvals over `/api/agent-os` + `/api/mcp`.
-3. Point identity/auth at `recoder.xyz` (device-flow), reusing `packages/distribution`.
+## What has landed (Recoder-ification)
+- **Boots into Recoder** — the first-launch layout (`pkg/wcore/layout.go`) opens the `recoder` conductor
+  view (workspaces / launch agents), focused, with a terminal alongside; new-tab stays a terminal.
+- **Conductor bridge** — `frontend/app/view/recoder/`: the `recoder` block (workspace list + a
+  readiness-aware "Welcome to Recoder" getting-started panel from `/api/conductor/health/full`) and the
+  `recoder-terminal` block (streams a workspace's live agent TUI over the conductor
+  `/workspaces/:id/stream` websocket). Registered in `blockregistry.ts`; `defwidget@recoder` +
+  `defwidget@recoder-terminal` ship as launchable widgets. Backend URL from `getRecoderBackendUrl()`
+  (`window.__RECODER_BACKEND_URL__`, default `http://127.0.0.1:3100`).
+- **Full rebrand** — product strings → Recoder across emain (About/menus/quit/updater/app.setName) and
+  frontend; in-app links → recoder.xyz; logos → the Recoder cube (`public/logos/*`).
+- **Cloud decoupled** — `telemetry:enabled=false` + the `wcloud` sender inert unless
+  `RECODER_TELEMETRY_URL` is set (never POSTs to Wave); auto-updater no-ops unless `RECODER_UPDATE_FEED`
+  is set (never contacts Wave's release server); default AI preset + `DefaultAIEndpoint` +
+  `ai:baseurl` point at Recoder's governed gateway (`/api/gateway/v1`); Wave-cloud AI modes hidden.
+- **Internal → Recoder** — Go module path `github.com/wavetermdev/waveterm` →
+  `github.com/recoder/recoder-terminal` (239 files); backend server binary `wavesrv` → `recoder-server`.
+- **Vendor gap fixed** — `tsunami/build` (the tsunami app-builder Go pkg) was gitignored-away by the
+  broad `build/` rule and never committed; re-vendored from upstream v0.14.5 + a `.gitignore` negation.
+  Same for `apps/wave/public/` (assets), hidden by the bare `public` rule.
 
-## Build / run
-The conductor bridge has landed: `frontend/app/view/recoder/` (`recoder-endpoints.ts`,
-`recoder-model.ts`, `recoder.tsx`) registers a **`recoder`** block in `blockregistry.ts`, and
-`pkg/wconfig/defaultconfig/widgets.json` ships a `defwidget@recoder` so the conductor view is a
-first-class, launchable widget in the shell. The view fetches `/api/conductor/workspaces` from
-`getRecoderBackendUrl()` — `window.__RECODER_BACKEND_URL__`, default `http://127.0.0.1:3100`.
-
-`node_modules` is installed. Running the shell is a **two-part build** (Go backend + Electron/React
-frontend). It is heavy and produces a GUI, so it is a developer/CI step, not something verified here:
+## Build / run — VERIFIED
+Both halves build on this workstation (Go 1.25.6 + electron-vite). `node_modules` is installed;
+`task` (Taskfile runner) and Go must be on `PATH` (`/opt/homebrew/bin`, `/usr/local/go/bin`).
 
 ```bash
 cd apps/wave
 
-# 1. Build the Go backend (wavesrv). Canonical path uses Task:
-brew install go-task            # if `task` is not installed
-task build:backend:quickdev     # arm64 macOS, no codegen churn → dist/bin/wavesrv.arm64
-# (or the full `task build:backend` for all arches + wsh)
+# Backend (Go) — emits dist/bin/recoder-server.<arch>.  VERIFIED: exit 0.
+task build:backend:quickdev        # arm64 macOS quick path; or `task build:backend` for all arches + wsh
 
-# 2. Launch the Electron dev shell (spawns the wavesrv built above):
+# Frontend (React + emain + preload).  VERIFIED: exit 0 (~35s).
+npm run build:dev                  # electron-vite build --mode development
+
+# Run the dev shell (spawns the recoder-server built above):
 RECODER_BACKEND_URL=http://127.0.0.1:3100 npm run dev
 ```
 
-> **Disk note:** the workstation APFS volume runs ~98% full; a full `task build` (Go all-arches +
-> `electron-vite build`) can ENOSPC. Prefer `build:backend:quickdev` + `npm run dev` (dev server, no
-> packaged artifact) and reclaim space first (`pnpm store prune`) if a build fails on space.
+Start `docker-backend` on `:3100` first so the Recoder blocks have data (they degrade safely if it's
+down). **Disk note:** the APFS volume runs ~98% full; reclaim with `pnpm store prune` + `go clean -cache`
+before a full `task build` (Go all-arches + electron-vite) to avoid ENOSPC.
+
+## Not yet done (needs the app actually running to verify)
+1. **GUI launch** — a running-app pass to confirm the rebrand, logo appearance (the dark-bg logo may want
+   a light variant), and the conductor blocks render live.
+2. **`wsh` CLI rename** → `recoder` — deferred because `wsh` is PATH-installed and invoked by shell
+   integration on every terminal start; safe to do *in* the build+launch loop, dangerous blind.
+3. **App icon** (`build/*.icns`) — the dock/taskbar icon, separate from the in-app `public/logos/*`.
+4. **Full package** — `electron-builder` → signed `.dmg`, and identity/auth via `recoder.xyz` device-flow.
 
 Until this shell is the primary surface, the shipping app stays `apps/desktop` (the terminal-first
-Preact cockpit). **Not yet verified:** a full GUI launch — the bridge is wired + type-consistent with
-Wave's `ViewModel` contract, but the heavy two-part build has not been run in this environment.
-
-## Roadmap (L3 migration, after the engine phases)
-1. Bridge blocks → `docker-backend` conductor (terminal block per workspace).
-2. Widget blocks: diff/review, board, approvals, MCP tools.
-3. Auth via `recoder.xyz` device-flow.
-4. Rebrand assets/branding fully; ship as the primary shell when the backend is massive enough to warrant it.
+Preact cockpit).

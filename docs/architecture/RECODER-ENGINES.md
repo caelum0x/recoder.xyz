@@ -1,11 +1,18 @@
 # Recoder — The Massive Polyglot Agent OS Backend (the plan)
 
-> **Status: PLAN (locked 2026-07-12).** The desktop app (`apps/desktop`) embeds a **full Agent
-> Operating System backend** — not a CLI-in-tmux wrapper. `docker-backend` is the conductor that
-> supervises a **fleet of polyglot engines** (Rust daemons · Go services · Python ML services ·
+> **Status: IN PROGRESS (locked 2026-07-12; Phases 1–4 landed 2026-07-13).** The desktop app embeds a
+> **full Agent Operating System backend** — not a CLI-in-tmux wrapper. `docker-backend` is the conductor
+> that supervises a **fleet of polyglot engines** (Rust daemons · Go services · Python ML services ·
 > TS orchestration + agent runtimes), each exposed to any coding agent through the governed MCP/A2A
 > gate. This doc harnesses **all** of `c/ crates/ go/ py/ ts/ packages/` — nothing capable is left
 > parked. Execute phase-by-phase; update as phases land.
+>
+> **Delivered so far:** Phase 1 (fleet supervisor + gateway) · Phase 2 (code-intel + retrieval) ·
+> Phase 3 (browser engine + SSH substrate) · Phase 4 (coordination + workflow/hooks + PAL planning),
+> all governed through the interop host + agent bridge, each degrade-safe and unit-tested. Separately,
+> the **L3 terminal shell** (`apps/wave`, forked from Wave Terminal) is fully rebranded to Recoder and
+> **builds end-to-end** (Go backend + electron-vite frontend) — see [`../../apps/wave/FORK.md`](../../apps/wave/FORK.md).
+> **Remaining:** Phase 5 (platform/networking/connectors) · Phase 6 (docs) · shell GUI-launch verification.
 
 ---
 
@@ -193,28 +200,50 @@ Relocate → `vendor/`: `crates/claw-code-parity` · `go/multica`(provenance cop
 
 ## 6. Phased roadmap (massive, but ordered so nothing breaks)
 
-**Phase 0 — Clean** (frees the ~100%-full disk, shrinks the surface). Deletes/relocations above,
-by hand, sequentially, verified between each; regenerate lockfiles after deletes.
+**Phase 0 — Clean** ✅ (frees the ~100%-full disk, shrinks the surface). Deletes/relocations above,
+by hand, sequentially, verified between each; regenerate lockfiles after deletes. Landmine caught: a
+too-broad Giselle-cluster cleanup removed `@recoder/protocol`, breaking `pnpm install` for `rag`/`stream`
+— fixed by vendoring the used symbols (see [RAG-CONSOLIDATION](./RAG-CONSOLIDATION.md)).
 
-**Phase 1 — Fleet + Gateway** (the backbone that makes it "massive/polyglot"):
-`docker-backend/src/fleet/` supervisor + `crates/tensorzero` gateway daemon + the vector foundation.
+**Phase 1 — Fleet + Gateway** ✅ (the backbone that makes it "massive/polyglot"):
+`docker-backend/src/fleet/` declarative supervisor (11-service manifest, degrade-safe, probe-only) wired
+into `/health/full`; `docker-backend/src/gateway/` `LlmGatewayPort` over tensorzero + an OpenAI-compat
+`/v1/chat/completions`; the shared `vector-store.ts` foundation (Qdrant + BYOK embed).
 
-**Phase 2 — Intelligence engines (parallel):** E1 Code Intelligence (recodergit+GitHub+semantic) ·
-E2 Retrieval (new `packages/retrieval` + colbert) · E3 Memory (mem0 folded in).
+**Phase 2 — Intelligence engines** ✅ **(parallel):** E1 Code Intelligence — `packages/recodergit`
+`semantic-index` + a hybrid `repo.search` (semantic ⊕ keyword ⊕ github). E2 Retrieval — new owned
+`packages/retrieval` (chunk → embed → Qdrant → ColBERT) skinned as governed MCP `recoder.retrieval`.
+E3 Memory — mem0 seam. Bridge tools `recoder_retrieval_*`.
 
-**Phase 3 — Execution breadth:** E7 openfang + E8 OSS adapters as governed surfaces · E9 browser-use ·
-E6 Daytona/E2B remote substrate.
+**Phase 3 — Execution breadth** ✅ E9 Browser — owned `packages/agent-browser` (injectable driver, lazy
+puppeteer / `BROWSER_USE_URL`) as governed MCP `recoder.browser-use`. E6 remote substrate — durable-SSH
+`ssh-substrate` in `packages/substrate` + a real `SshExecPort` transport in
+`docker-backend/src/conductor/wiring/ssh-exec.ts` (env-gated, inert by default). (E7 openfang / E8 OSS
+adapters remain seams for a later pass.)
 
-**Phase 4 — Orchestration brain:** E11 PAL → run loop · E12 Workflow+hooks · E13 multica coordination ·
-E14 beads-adapter.
+**Phase 4 — Orchestration brain** ✅ E13 Coordination — advisory work-locks + conflict detection in
+`packages/coordination` (injectable store, multica-ready). E12 Workflow+hooks — `packages/workflow-engine`
+skinning `agent-workflows` + `agent-hooks` (`workflow.verify`/`capture_hook`). E11 PAL — in-proc `pal.plan`
+reusing `packages/pal`, **deny-biased on uncertainty**. E14 beads-adapter — already wired. All three new
+engines registered in `inproc-engines` + `IN_PROC_SERVERS` + `defaultServers` and reachable through the
+gated route; bridge tools `recoder_coordination_*` / `recoder_workflow_*` / `recoder_pal_plan`.
 
-**Phase 5 — Platform:** E16 networking (recoder-xds + ziti) · Connectors · ops-recorder work-signals.
+**Phase 5 — Platform** ⏳ E16 networking (recoder-xds + ziti) · Connectors · ops-recorder work-signals.
+_Partial:_ Wave-fork capability bridges landed as a side-track — `wsh recoder` CLI, Wave AI → governed
+gateway, `WaveSecretStore` (BYOK via Wave's native secret store), durable-SSH substrate.
 
-**Phase 6 — Docs:** rewrite `DIRECTORY-MAP.md` + `RECODER-CAPABILITIES.md` to this reality.
+**Phase 6 — Docs** ⏳ rewrite `DIRECTORY-MAP.md` + `RECODER-CAPABILITIES.md` to this reality (this update
+is a down payment: status header + this roadmap + FORK.md now reflect what shipped).
 
 Each phase = one focused workflow (parallel agents on disjoint files) integrated + verified by the
 orchestrator. Deletions are hand-done. Every engine is **degrade-safe** — the fleet can be missing any
 service and the desktop still runs.
+
+> **Engine-wiring checklist** (learned the hard way in Phase 2/3): a new MCP engine is NOT reachable
+> until, beyond `ENGINE_SERVERS` + `buildInProcEngineRouter`, you (1) register it in `interop-host.ts`
+> `IN_PROC_SERVERS` **and** `mcp-control.routes.ts` `defaultServers`; (2) rebuild `@recoder/agent-mcp`
+> dist; (3) build the engine package's dist. Else the gated `/api/mcp/.../call` route 404s. Verify with
+> the `interop-host.engines` / `interop-host.routes` / `mcp-control.routes` tests.
 
 ---
 
