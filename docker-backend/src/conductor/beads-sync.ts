@@ -190,6 +190,41 @@ export async function importReadyBeadsTasks(
   }
 }
 
+export type ReadyBeadsResult = {
+  ready: TaskSpec[];
+  skipped?: string;
+};
+
+/**
+ * READ-ONLY list of ready beads issues (as canonical TaskSpecs) for display — the
+ * board block. Fetches + converts through the same IssueTrackerPort seam as
+ * {@link importReadyBeadsTasks} but does NOT upsert into the repository.
+ *
+ * Degrade-safe: `bd` unavailable (or no injected client) or a CLI failure returns
+ * `{ ready: [], skipped }` — never throws, never fabricates issues.
+ */
+export async function listReadyBeadsTasks(
+  input: { spaceId: string; repo?: string },
+  deps: BeadsSyncDeps = {},
+): Promise<ReadyBeadsResult> {
+  if (!deps.client) {
+    const availability = beadsAvailability();
+    if (!availability.available) {
+      return { ready: [], skipped: availability.reason ?? 'bd unavailable' };
+    }
+  }
+
+  try {
+    const { service } = buildSyncService(deps);
+    const ready = await service.importReadyTasks({ spaceId: input.spaceId, repo: input.repo });
+    return { ready };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'beads ready failed';
+    logger.warn({ reason }, 'beads ready list failed — degrading to empty');
+    return { ready: [], skipped: reason };
+  }
+}
+
 export type ExportResult = {
   exported: boolean;
   externalId?: string;

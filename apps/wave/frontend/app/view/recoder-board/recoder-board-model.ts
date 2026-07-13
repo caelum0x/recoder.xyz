@@ -24,21 +24,6 @@ type BoardIssue = {
 //   not-connected  — backend down / probe failed
 type BoardStatus = "loading" | "ok" | "empty" | "unavailable" | "unreachable" | "not-connected";
 
-// The beads capability is exposed through the governed MCP bridge. The ready-list
-// call is a POST that runs through policy; on the loopback shell we have no internal
-// service key, so a denial/404 degrades to the "unreachable" state rather than error.
-const BoardServerId = "recoder.beads";
-const BoardTool = "beads.ready";
-
-// Minimal actor the /call route requires (it only checks the field is an object).
-// Governance decides the rest; we degrade truthfully when it says no.
-const BoardActor = {
-    agentId: "recoder-terminal",
-    displayName: "Recoder Terminal",
-    runtimeKind: "human",
-    vendorSurface: "recoder",
-};
-
 class RecoderBoardViewModel implements ViewModel {
     viewType: string;
     viewIcon: Atom<string>;
@@ -111,23 +96,17 @@ class RecoderBoardViewModel implements ViewModel {
         }
     }
 
-    // Returns the ready list on success (possibly empty), or null when the governed
-    // bridge is not reachable/authorized from the loopback shell.
+    // Ready work via the loopback-friendly conductor endpoint (read-only, no gate,
+    // no internal key). Returns the list on success (possibly empty), or null when
+    // the backend is unreachable.
     async fetchReady(): Promise<BoardIssue[] | null> {
         try {
-            const res = await fetch(
-                `${getRecoderBackendUrl()}/api/mcp/tools/${BoardServerId}/${BoardTool}/call`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ actor: BoardActor, args: {} }),
-                }
-            );
+            const res = await fetch(`${getRecoderBackendUrl()}/api/conductor/issues/ready`);
             if (!res.ok) {
                 return null;
             }
             const body = await res.json();
-            return normalizeIssues(body?.data?.result);
+            return normalizeIssues(body?.data?.ready);
         } catch {
             return null;
         }
@@ -185,8 +164,8 @@ function mapIssue(item: unknown): BoardIssue {
     if (!isRecord(item)) {
         return { id: "", title: "", priority: "" };
     }
-    const id = firstString(item.id, item.issueId, item.ref, item.externalId);
-    const title = firstString(item.title, item.summary, item.name, item.description);
+    const id = firstString(item.taskId, item.id, item.issueId, item.ref, item.externalId);
+    const title = firstString(item.title, item.goal, item.summary, item.name, item.description);
     return {
         id,
         title: title || id,

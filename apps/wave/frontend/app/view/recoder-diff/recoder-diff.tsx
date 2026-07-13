@@ -45,6 +45,8 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
     const loading = useAtomValue(model.loadingAtom);
     const diffLoading = useAtomValue(model.diffLoadingAtom);
     const diffStatus = useAtomValue(model.diffStatusAtom);
+    const merging = useAtomValue(model.mergingAtom);
+    const mergeStatus = useAtomValue(model.mergeStatusAtom);
 
     useEffect(() => {
         model.refresh();
@@ -77,7 +79,17 @@ function RecoderDiffView({ model }: ViewComponentProps<RecoderDiffViewModel>) {
                         ))}
                     </select>
                 )}
+                {selectedId != "" && (
+                    <button
+                        className="bg-accent/80 text-primary rounded px-2 py-0.5 text-sm hover:bg-accent transition-colors cursor-pointer disabled:opacity-50"
+                        disabled={merging}
+                        onClick={() => model.mergeSelected()}
+                    >
+                        {merging ? "Merging…" : "Merge"}
+                    </button>
+                )}
             </div>
+            {mergeStatus != "" && <div className="text-xs text-secondary">{mergeStatus}</div>}
 
             {showNotConnected && (
                 <div className="text-secondary text-sm">Not connected — start the Recoder backend to review workspace diffs.</div>
