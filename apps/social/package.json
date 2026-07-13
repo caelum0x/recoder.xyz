@@ -1,0 +1,24 @@
+{
+  "name": "recoder-social",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Recoder social layer — a thin supervised runtime that composes the compiled @recoder/connectors package (ConnectorPort adapters + trust boundary + dispatch pipeline) into a standalone service: boot -> truthful channel status -> gated inbound dispatch. Degrade-safe: with no channel tokens configured it starts, reports 'no channels configured', and keeps serving status.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup src/main.ts --format esm --dts",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@recoder/connectors": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "2.1.9"
+  }
+}
