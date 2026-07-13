@@ -228,12 +228,27 @@ reusing `packages/pal`, **deny-biased on uncertainty**. E14 beads-adapter — al
 engines registered in `inproc-engines` + `IN_PROC_SERVERS` + `defaultServers` and reachable through the
 gated route; bridge tools `recoder_coordination_*` / `recoder_workflow_*` / `recoder_pal_plan`.
 
-**Phase 5 — Platform** ⏳ E16 networking (recoder-xds + ziti) · Connectors · ops-recorder work-signals.
-_Partial:_ Wave-fork capability bridges landed as a side-track — `wsh recoder` CLI, Wave AI → governed
-gateway, `WaveSecretStore` (BYOK via Wave's native secret store), durable-SSH substrate.
+**Phase 5 — Platform** ⏳ E16 networking (recoder-xds + ziti) · Connectors (`ts/extracted-from-openclaw`)
+· ops-recorder work-signals. _Landed:_ a **notify** engine (`@recoder/agent-notify` → MCP `recoder.notify`,
+webhook to a human channel — the human-in-the-loop close), plus the Wave-fork capability bridges (`wsh
+recoder` CLI, Wave AI → governed gateway, `WaveSecretStore`, durable-SSH substrate). _Next, in order:_
+(1) a **connectors** engine skinning the openclaw gateway (Slack/Discord/Telegram send) — big, so build a
+thin send-only capability first; (2) **work-signals** over `py/ops-recorder`; (3) networking (xds/ziti) is
+cloud/teams-tier — defer until multi-machine is a real requirement (heavy, external).
 
-**Phase 6 — Docs** ⏳ rewrite `DIRECTORY-MAP.md` + `RECODER-CAPABILITIES.md` to this reality (this update
-is a down payment: status header + this roadmap + FORK.md now reflect what shipped).
+**Phase 5b — Shell cockpit (L3, side-track, LANDED).** The forked terminal (`apps/wave`) became a full
+governed cockpit — 11 blocks + cross-block flow + interactive session. See
+[RECODER-SHELL.md](./RECODER-SHELL.md).
+
+**Phase 6 — Docs** ⏳ (in progress) `RECODER-SHELL.md` written; status header + this roadmap + FORK.md +
+RECODER-CAPABILITIES reflect what shipped. Remaining: reconcile the large reference maps
+(`DIRECTORY-MAP.md`, `SURFACE-MAP.md`, `INTEGRATION-PLAN.md`, `DIAGRAMS.md`) to the engine reality.
+
+**The running-app frontier (needs a GUI, can't be done headless).** Everything above is source/build/test
+verified, but the Electron shell has not been launch-verified. The remaining app-gated work: visual/UX
+polish, the `wsh`→`recoder` CLI rename (shell-integration runtime — a terminal-startup risk that must be
+eyeballed), the app icon (`build/*.icns`), and a signed `electron-builder` `.dmg`. Do these with
+`cd apps/wave && task dev` on screen.
 
 Each phase = one focused workflow (parallel agents on disjoint files) integrated + verified by the
 orchestrator. Deletions are hand-done. Every engine is **degrade-safe** — the fleet can be missing any
