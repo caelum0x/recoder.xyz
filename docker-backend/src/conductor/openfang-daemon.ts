@@ -550,6 +550,39 @@ export function createOpenfangAgentRouter() {
     }
     withEngine(res, (e) => e.loadWorkflowsFromDir(dir));
   });
+  router.post('/workflows', (req: Req, res: Res) => {
+    const wf = req.body?.workflow;
+    if (wf == null) {
+      res.status(400).json({ ok: false, reason: 'workflow is required' });
+      return;
+    }
+    withEngine(res, (e) => e.registerWorkflow(typeof wf === 'string' ? wf : JSON.stringify(wf)));
+  });
+  router.post('/workflows/:id/run', (req: Req, res: Res) => {
+    const input = typeof req.body?.input === 'string' ? req.body.input : '';
+    withEngine(res, (e) => e.runWorkflow(id(req), input));
+  });
+
+  // ---- Events + trigger registration -------------------------------------
+  router.post('/events', (req: Req, res: Res) => {
+    const ev = req.body?.event;
+    if (ev == null) {
+      res.status(400).json({ ok: false, reason: 'event is required' });
+      return;
+    }
+    withEngine(res, (e) => e.publishEvent(typeof ev === 'string' ? ev : JSON.stringify(ev)));
+  });
+  router.post('/agents/:id/triggers', (req: Req, res: Res) => {
+    const pattern = req.body?.pattern;
+    const promptTemplate = typeof req.body?.promptTemplate === 'string' ? req.body.promptTemplate : '';
+    if (pattern == null || promptTemplate.trim() === '') {
+      res.status(400).json({ ok: false, reason: 'pattern and promptTemplate are required' });
+      return;
+    }
+    const patternJson = typeof pattern === 'string' ? pattern : JSON.stringify(pattern);
+    const maxFires = Number.isFinite(req.body?.maxFires) ? Number(req.body.maxFires) : 0;
+    withEngine(res, (e) => e.registerTrigger(id(req), patternJson, promptTemplate, maxFires));
+  });
 
   return router;
 }

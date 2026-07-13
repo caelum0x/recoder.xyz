@@ -473,6 +473,70 @@ impl OpenfangEngine {
         json!({ "ok": true, "loaded": count }).to_string()
     }
 
+    // ---- Workflows + events + trigger registration ------------------------
+
+    /// Register a workflow (JSON matching openfang's Workflow). Returns its id.
+    #[napi]
+    pub fn register_workflow(&self, workflow_json: String) -> String {
+        let workflow: openfang_kernel::workflow::Workflow = match serde_json::from_str(&workflow_json) {
+            Ok(w) => w,
+            Err(e) => return err_json(format!("invalid workflow json: {e}")),
+        };
+        let id = self.rt.block_on(self.kernel.register_workflow(workflow));
+        json!({ "ok": true, "workflow_id": id.0.to_string() }).to_string()
+    }
+
+    /// Run a registered workflow end-to-end (async). Returns `{ run_id, output }`.
+    #[napi]
+    pub fn run_workflow(&self, workflow_id: String, input: String) -> String {
+        let wid = match parse_uuid(&workflow_id) {
+            Ok(u) => openfang_kernel::workflow::WorkflowId(u),
+            Err(e) => return err_json(e),
+        };
+        match self.rt.block_on(self.kernel.run_workflow(wid, input)) {
+            Ok((run_id, output)) => {
+                json!({ "ok": true, "run_id": run_id.0.to_string(), "output": output }).to_string()
+            }
+            Err(e) => err_json(e),
+        }
+    }
+
+    /// Publish an event (JSON matching openfang's Event) onto the bus (async).
+    /// Returns the agents whose triggers fired: `[{ agent_id, message }]`.
+    #[napi]
+    pub fn publish_event(&self, event_json: String) -> String {
+        let event: openfang_types::event::Event = match serde_json::from_str(&event_json) {
+            Ok(ev) => ev,
+            Err(e) => return err_json(format!("invalid event json: {e}")),
+        };
+        let dispatched = self.rt.block_on(self.kernel.publish_event(event));
+        let fired: Vec<Value> = dispatched
+            .into_iter()
+            .map(|(agent_id, message)| json!({ "agent_id": agent_id.to_string(), "message": message }))
+            .collect();
+        json!({ "ok": true, "fired": fired }).to_string()
+    }
+
+    /// Register an event trigger for an agent. `pattern_json` matches openfang's
+    /// TriggerPattern; `max_fires` = 0 means unlimited. Returns the trigger id.
+    #[napi]
+    pub fn register_trigger(
+        &self,
+        agent_id: String,
+        pattern_json: String,
+        prompt_template: String,
+        max_fires: u32,
+    ) -> String {
+        let pattern: openfang_kernel::triggers::TriggerPattern = match serde_json::from_str(&pattern_json) {
+            Ok(p) => p,
+            Err(e) => return err_json(format!("invalid trigger pattern json: {e}")),
+        };
+        match self.kernel.register_trigger(parse_agent_id(&agent_id), pattern, prompt_template, max_fires as u64) {
+            Ok(id) => json!({ "ok": true, "trigger_id": id.0.to_string() }).to_string(),
+            Err(e) => err_json(e),
+        }
+    }
+
     // ---- Skills (writes) --------------------------------------------------
 
     /// Reload skills from disk into the live registry.
