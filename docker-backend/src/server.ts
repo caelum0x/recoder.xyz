@@ -12466,6 +12466,26 @@ void ensureColbertDaemon()
   })
   .catch((err) => logger.warn({ err }, 'colbert rerank sidecar boot step failed (non-fatal, staying on no-rerank path)'));
 
+// ops-recorder work-signals sidecar: when OPS_RECORDER_URL is set (external)
+// or python3 + py/ops-recorder/work-signals/main.py are present (and auth is
+// configured — OPS_RECORDER_API_KEY or OPS_RECORDER_AUTH_DISABLED=1), spawn/
+// supervise the loopback FastAPI stuck-work detector and export
+// OPS_RECORDER_URL so the existing forward seam (conductor/
+// ops-recorder-adapter.ts) connects. Degrade-safe: python/deps/auth absent →
+// the inline /work-signals ingest keeps working without the forward (no fake
+// success). Fire-and-forget; a sidecar problem never blocks boot.
+import { ensureOpsRecorderDaemon } from './conductor/ops-recorder-daemon.js';
+void ensureOpsRecorderDaemon()
+  .then((sidecar) => {
+    if (sidecar) {
+      logger.info(
+        { url: sidecar.url, mode: sidecar.mode },
+        'ops-recorder sidecar ready — work-signals forward seam connected',
+      );
+    }
+  })
+  .catch((err) => logger.warn({ err }, 'ops-recorder sidecar boot step failed (non-fatal, staying on no-forward path)'));
+
 // TensorZero LLM gateway: when TENSORZERO_URL is set (external) or a prebuilt
 // gateway binary is present (crates/tensorzero/crates/gateway — target/release|debug,
 // or TENSORZERO_BIN), connect/spawn it so inference calls route through the LLM
