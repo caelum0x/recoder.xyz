@@ -59,6 +59,46 @@
             }
         }
     },
+    "defwidget@recoder-tools": {
+        "display:order": -5.05,
+        "icon": "toolbox",
+        "label": "tools",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-tools"
+            }
+        }
+    },
+    "defwidget@recoder-health": {
+        "display:order": -5.04,
+        "icon": "heart-pulse",
+        "label": "health",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-health"
+            }
+        }
+    },
+    "defwidget@recoder-memory": {
+        "display:order": -5.03,
+        "icon": "brain",
+        "label": "memory",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-memory"
+            }
+        }
+    },
+    "defwidget@recoder-runs": {
+        "display:order": -5.02,
+        "icon": "wave-square",
+        "label": "runs",
+        "blockdef": {
+            "meta": {
+                "view": "recoder-runs"
+            }
+        }
+    },
     "defwidget@terminal": {
         "display:order": -5,
         "icon": "square-terminal",
