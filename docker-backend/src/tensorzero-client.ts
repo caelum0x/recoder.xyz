@@ -248,8 +248,16 @@ let _embeddedGatewayTried = false;
  * Boot (once) and return the in-process embedded gateway, or `undefined` when
  * the native addon is absent, lacks the `EmbeddedGateway` binding, or boot
  * fails (bad config, etc.). Never throws; never fakes success.
+ *
+ * Config resolution order (first hit wins):
+ *   1. TENSORZERO_CONFIG env var (explicit operator-provided config path).
+ *   2. `configFileOverride` argument (caller-materialized config path).
+ *   3. Config generated from Recoder's model registry (tensorzero-config.ts).
+ *   4. `null` — TensorZero's default empty config (degrade-safe baseline).
  */
-export async function getEmbeddedGateway(): Promise<TensorzeroEmbeddedGatewayInstance | undefined> {
+export async function getEmbeddedGateway(
+  configFileOverride?: string,
+): Promise<TensorzeroEmbeddedGatewayInstance | undefined> {
   if (_embeddedGatewayTried) return _embeddedGateway;
   _embeddedGatewayTried = true;
 
@@ -257,7 +265,18 @@ export async function getEmbeddedGateway(): Promise<TensorzeroEmbeddedGatewayIns
   if (!mod?.EmbeddedGateway || typeof mod.EmbeddedGateway.boot !== 'function') {
     return undefined;
   }
-  const configFile = process.env[TENSORZERO_CONFIG_ENV]?.trim() || null;
+  let configFile = process.env[TENSORZERO_CONFIG_ENV]?.trim() || configFileOverride?.trim() || null;
+  if (!configFile) {
+    // Generate a config from Recoder's model registry (TENSORZERO_MODELS +
+    // provider key envs). Returns undefined path when no usable models —
+    // then we boot the proven default empty config. Never throws.
+    try {
+      const { generateTensorzeroConfig } = await import('./tensorzero-config.js');
+      configFile = generateTensorzeroConfig().path ?? null;
+    } catch (err) {
+      logger.warn({ err }, 'tensorzero config generation failed — booting default config (degrade-safe)');
+    }
+  }
   try {
     _embeddedGateway = await mod.EmbeddedGateway.boot(configFile, null);
     logger.info(
