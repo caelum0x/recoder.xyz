@@ -81,6 +81,7 @@ import {
   listReadyBeadsTasks,
   exportTaskToBeads,
 } from './beads-sync.js';
+import { recallMemories, rememberCandidate, promoteMemory } from './beads-memory.js';
 import {
   parseWorkSignal,
   ingestWorkSignal,
@@ -1137,6 +1138,53 @@ export function createConductorRouter(): Router {
     const repo = typeof req.query.repo === 'string' ? req.query.repo : undefined;
     const result = await listReadyBeadsTasks({ spaceId, repo });
     res.json({ success: true, data: result });
+  });
+
+  // ---- Shared memory layer (beads issue graph) ----------------------------
+  // Candidates are ephemeral wisps; promote is the human/policy review step
+  // that makes a memory durable. Recall serves candidates + promoted alike.
+  router.get('/memory/recall', (req: Request, res: Response) => {
+    const query = typeof req.query.query === 'string' ? req.query.query : '';
+    if (!query.trim()) {
+      res.status(400).json({ success: false, error: 'query is required' });
+      return;
+    }
+    const scope = typeof req.query.scope === 'string' ? req.query.scope : undefined;
+    const limit = Number(req.query.limit);
+    const memories = recallMemories(query, {
+      scope,
+      limit: Number.isFinite(limit) ? limit : undefined,
+    });
+    res.json({ success: true, data: { memories } });
+  });
+
+  router.post('/memory/remember', (req: Request, res: Response) => {
+    const title = typeof req.body?.title === 'string' ? req.body.title : '';
+    const body = typeof req.body?.body === 'string' ? req.body.body : '';
+    if (!title.trim() || !body.trim()) {
+      res.status(400).json({ success: false, error: 'title and body are required' });
+      return;
+    }
+    const id = rememberCandidate({
+      title,
+      body,
+      scope: typeof req.body?.scope === 'string' ? req.body.scope : undefined,
+      discoveredFrom: typeof req.body?.discoveredFrom === 'string' ? req.body.discoveredFrom : undefined,
+    });
+    if (!id) {
+      res.status(503).json({ success: false, error: 'beads memory layer unavailable (bd not usable on this host)' });
+      return;
+    }
+    res.json({ success: true, data: { id } });
+  });
+
+  router.post('/memory/:id/promote', (req: Request, res: Response) => {
+    const ok = promoteMemory(String(req.params.id));
+    if (!ok) {
+      res.status(502).json({ success: false, error: 'promote failed (id unknown or bd unavailable)' });
+      return;
+    }
+    res.json({ success: true, data: { promoted: true } });
   });
 
   // Import ready beads issues into the canonical Agent OS task store. The adapter

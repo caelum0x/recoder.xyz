@@ -78,6 +78,11 @@ export function registerBeadsMcpTools(
     const args = ['create', title, '--json'];
     const description = str(input.args.description ?? input.args.body);
     if (description) args.push('-d', description);
+    // AGENTS.md: link newly discovered work with discovered-from:<parent-id>.
+    const discoveredFrom = str(input.args.discoveredFrom);
+    if (discoveredFrom) args.push('--deps', `discovered-from:${discoveredFrom}`);
+    const labels = str(input.args.labels);
+    if (labels) args.push('-l', labels);
     return { content: guard(() => parseJson(run(args))) };
   });
 
@@ -102,4 +107,57 @@ export function registerBeadsMcpTools(
   router.register(beadsMcpServer, 'beads.sync', async () => ({
     content: guard(() => parseJson(run(['vc', 'status']))),
   }));
+
+  // ---- Memory layer (bd IS the agents' shared memory) ----------------------
+  // Contract (AGENTS.md): agents never write durable memory directly. `remember`
+  // creates an EPHEMERAL wisp labeled `memory` (subject to TTL compaction) — a
+  // memory CANDIDATE with evidence. `memory.promote` (review step, policy-gated,
+  // deliberately NOT exposed as an agent bridge tool) copies it to the permanent
+  // Dolt-versioned table. `recall` searches candidates + promoted memories alike.
+
+  router.register(beadsMcpServer, 'beads.claim', async (input) => {
+    const id = str(input.args.id) ?? str(input.args.issueId);
+    if (!id) throw new Error('id is required');
+    return { content: guard(() => parseJson(run(['update', id, '--claim', '--json']))) };
+  });
+
+  router.register(beadsMcpServer, 'beads.note', async (input) => {
+    const id = str(input.args.id) ?? str(input.args.issueId);
+    const text = str(input.args.text ?? input.args.note);
+    if (!id) throw new Error('id is required');
+    if (!text) throw new Error('text is required');
+    return { content: guard(() => parseJson(run(['note', id, text, '--json']))) };
+  });
+
+  router.register(beadsMcpServer, 'beads.remember', async (input) => {
+    const title = str(input.args.title);
+    const body = str(input.args.body ?? input.args.evidence ?? input.args.description);
+    if (!title) throw new Error('title is required');
+    if (!body) throw new Error('body (the memory content + evidence) is required');
+    const labels = ['memory'];
+    const scope = str(input.args.scope);
+    if (scope) labels.push(`memory-scope:${scope}`);
+    const args = ['create', title, '--ephemeral', '-l', labels.join(','), '-d', body, '--json'];
+    const from = str(input.args.discoveredFrom ?? input.args.from);
+    if (from) args.push('--deps', `discovered-from:${from}`);
+    return { content: guard(() => parseJson(run(args))) };
+  });
+
+  router.register(beadsMcpServer, 'beads.recall', async (input) => {
+    const query = str(input.args.query);
+    if (!query) throw new Error('query is required');
+    // --status all: promoted (closed/permanent) memories still count as memory.
+    const args = ['search', query, '--label', 'memory', '--status', 'all', '--json'];
+    const limit = Number(input.args.limit);
+    args.push('-n', String(Number.isFinite(limit) && limit > 0 ? Math.min(limit, 50) : 10));
+    const scope = str(input.args.scope);
+    if (scope) args.push('--label', `memory-scope:${scope}`);
+    return { content: guard(() => parseJson(run(args))) };
+  });
+
+  router.register(beadsMcpServer, 'beads.memory_promote', async (input) => {
+    const id = str(input.args.id) ?? str(input.args.issueId);
+    if (!id) throw new Error('id is required');
+    return { content: guard(() => parseJson(run(['promote', id, '--json']))) };
+  });
 }

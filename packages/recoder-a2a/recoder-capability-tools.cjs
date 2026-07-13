@@ -65,6 +65,29 @@ const CAPABILITY_TOOLS = [
     },
   },
   {
+    name: 'recoder_issue_claim',
+    description: 'Atomically CLAIM an issue in the Recoder issue graph (beads/bd) before working on it — sets you as assignee + in_progress. Idempotent if already yours. Always claim before starting work.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Issue id (e.g. recoder-abcd)' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'recoder_issue_note',
+    description: 'Append a progress/evidence note to an issue in the Recoder issue graph (beads/bd) — your running memory on the work item. Use for findings, decisions, and gotchas as you go.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Issue id (e.g. recoder-abcd)' },
+        text: { type: 'string', description: 'The note to append' },
+      },
+      required: ['id', 'text'],
+    },
+  },
+  {
     name: 'recoder_issue_close',
     description: 'Close an issue in the Recoder issue graph (beads/bd) when its work is done.',
     inputSchema: {
@@ -488,6 +511,29 @@ function createCapabilityTools(options = {}) {
           return `Created issue ${id}: ${args.title}`;
         } catch (err) {
           return `issue create: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_issue_claim': {
+        if (!hasInteropAuth()) return unavailable('issue graph');
+        try {
+          await callInteropTool('recoder.beads', 'beads.claim', { id: String(args.id || '') });
+          return `Claimed issue ${args.id} (assignee=you, in_progress).`;
+        } catch (err) {
+          return `issue claim: ${errMsg(err)}`;
+        }
+      }
+
+      case 'recoder_issue_note': {
+        if (!hasInteropAuth()) return unavailable('issue graph');
+        try {
+          await callInteropTool('recoder.beads', 'beads.note', {
+            id: String(args.id || ''),
+            text: String(args.text || ''),
+          });
+          return `Noted on ${args.id}.`;
+        } catch (err) {
+          return `issue note: ${errMsg(err)}`;
         }
       }
 

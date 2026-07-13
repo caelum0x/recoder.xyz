@@ -31,6 +31,7 @@ import { createLogger } from '../logger.js';
 import { agentOsContainer } from '../agent-os/service-container';
 import { getWorkspace, listWorkspaceEvents } from './workspace-service.js';
 import { workspaceDiff } from './review.js';
+import { rememberCandidate } from './beads-memory.js';
 import { Governance } from '@recoder/governance';
 import type { Workspace, RunEvent } from '@recoder/agent-os';
 
@@ -176,6 +177,12 @@ export interface MemoryCandidate {
   scope: 'task' | 'project' | 'global';
   status: 'proposed';
   proposedAt: string;
+  /**
+   * bd id of the wisp persisted into the shared beads memory layer (recallable
+   * by every future launch; durable only after promote). Absent when bd was
+   * unavailable at proposal time — the candidate still lives in metadata.
+   */
+  beadsId?: string;
 }
 
 /**
@@ -279,7 +286,26 @@ export async function generateMemoryCandidate(workspaceId: string): Promise<Memo
     proposedAt: new Date().toISOString(),
   };
 
-  logger.info({ workspaceId, candidateId: candidate.candidateId }, 'memory candidate proposed');
+  // Persist the candidate into the SHARED memory layer (beads issue graph) as
+  // an ephemeral wisp: reviewable, recallable by every future agent launch, and
+  // durable only after an explicit promote. Degrade-safe: bd unavailable →
+  // candidate still lives in workspace metadata exactly as before.
+  const beadsId = rememberCandidate({
+    title: `[memory] ${content.slice(0, 100)}`,
+    body: [
+      content,
+      `Evidence: exit=${summary.exitCode} changedFiles=${summary.changedFiles} diff=${summary.diffStat}`,
+      summary.evidenceAuditHash ? `Audit tip: ${summary.evidenceAuditHash}` : '',
+      `Workspace: ${workspaceId} · Task: ${workspace.taskId}`,
+    ].filter(Boolean).join('\n'),
+    scope: 'task',
+  });
+  if (beadsId) candidate.beadsId = beadsId;
+
+  logger.info(
+    { workspaceId, candidateId: candidate.candidateId, beadsId },
+    'memory candidate proposed',
+  );
   return candidate;
 }
 

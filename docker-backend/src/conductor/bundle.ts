@@ -24,6 +24,7 @@ import { buildTaskContextPack } from '../git-context.js';
 import { fetchLibraryDocs, isContext7Available } from '../context7.js';
 import { mem0Search } from '../mem0-client.js';
 import { colbertRerank } from './colbert-rerank.js';
+import { recallMemories } from './beads-memory.js';
 import { createLogger } from '../logger';
 
 const logger = createLogger('conductor:bundle');
@@ -180,6 +181,25 @@ export async function enrichPrompt(input: EnrichPromptInput): Promise<EnrichedPr
     } catch (err) {
       logger.warn({ taskId: input.taskId, err }, 'task/git-nexus enrichment skipped');
     }
+  }
+
+  // Beads memory layer: recall from the ISSUE GRAPH (candidates + promoted
+  // memories, with evidence + provenance ids). This is the shared cross-agent
+  // memory of record — mem0 below stays as the per-user semantic layer.
+  try {
+    const graphMemories = recallMemories(input.prompt, { limit: 5 });
+    if (graphMemories.length) {
+      sections.push(
+        [
+          '## Shared memory (beads issue graph)',
+          ...graphMemories.map((m) => `- [${m.id}] ${m.title}${m.description ? ` — ${m.description.slice(0, 200)}` : ''}`),
+          '_Verify before relying on these; promote/refute via the issue graph._',
+        ].join('\n'),
+      );
+      sources.push('beads-memory');
+    }
+  } catch (err) {
+    logger.warn({ err }, 'beads memory recall skipped');
   }
 
   if (input.userId) {
