@@ -18,6 +18,10 @@ import { blockViewToIcon, blockViewToName } from "./blockutil";
 import { HelpViewModel } from "@/view/helpview/helpview";
 import { RecoderViewModel } from "@/app/view/recoder/recoder-model";
 import { RecoderTerminalViewModel } from "@/app/view/recoder/recoder-terminal-model";
+import { RecoderLaunchViewModel } from "@/app/view/recoder-launch/recoder-launch-model";
+import { RecoderApprovalsViewModel } from "@/app/view/recoder-approvals/recoder-approvals-model";
+import { RecoderDiffViewModel } from "@/app/view/recoder-diff/recoder-diff-model";
+import { RecoderBoardViewModel } from "@/app/view/recoder-board/recoder-board-model";
 import { TermViewModel } from "@/view/term/term-model";
 import { WaveAiModel } from "@/view/waveai/waveai";
 import { WebViewModel } from "@/view/webview/webview";
@@ -39,6 +43,10 @@ BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
 BlockRegistry.set("recoder", RecoderViewModel);
 BlockRegistry.set("recoder-terminal", RecoderTerminalViewModel);
+BlockRegistry.set("recoder-launch", RecoderLaunchViewModel);
+BlockRegistry.set("recoder-approvals", RecoderApprovalsViewModel);
+BlockRegistry.set("recoder-diff", RecoderDiffViewModel);
+BlockRegistry.set("recoder-board", RecoderBoardViewModel);
 
 function makeDefaultViewModel(viewType: string): ViewModel {
     const viewModel: ViewModel = {
