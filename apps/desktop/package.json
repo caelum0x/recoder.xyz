@@ -45,7 +45,9 @@
     "productName": "Recoder",
     "protocols": {
       "name": "Recoder",
-      "schemes": ["recoder"]
+      "schemes": [
+        "recoder"
+      ]
     },
     "mac": {
       "target": "dmg",
@@ -87,12 +89,16 @@
       {
         "from": "../../docker-backend/dist",
         "to": "backend/dist",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../../docker-backend/node_modules",
         "to": "backend/node_modules",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../../docker-backend/package.json",
@@ -101,7 +107,9 @@
       {
         "from": "../../docker-backend/data",
         "to": "backend/data-template",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../../c/tmux/tmux",
@@ -114,6 +122,14 @@
       {
         "from": "../../crates/lance/npm-bindings/target/release/lance_npm_bindings.node",
         "to": "native/lance_npm_bindings.node"
+      },
+      {
+        "from": "../../crates/openfang/target/release/openfang_napi.node",
+        "to": "native/openfang_napi.node"
+      },
+      {
+        "from": "../../crates/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
+        "to": "native/tensorzero_gateway_napi.node"
       }
     ],
     "asar": true,

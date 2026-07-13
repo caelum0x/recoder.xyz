@@ -49,9 +49,11 @@ build_governance() {
     "$REPO/crates/recoder-governance/target/release/recoder-governance-napi.node"
 }
 build_tensorzero() {
-  build_one "crates/tensorzero/crates" "tensorzero-gateway-napi" \
+  # SQLX_OFFLINE: tensorzero-auth sqlx macros need the committed .sqlx cache
+  # (and the ancestor-.env walk must stay dotenvy-parseable — see memory).
+  SQLX_OFFLINE=1 build_one "crates/tensorzero/crates" "tensorzero-gateway-napi" \
     "libtensorzero_gateway_napi" \
-    "$REPO/crates/tensorzero/crates/tensorzero-gateway-napi/target/release/tensorzero-gateway-napi.node"
+    "$REPO/crates/tensorzero/crates/target/release/tensorzero_gateway_napi.node"
 }
 build_openfang() {
   build_one "crates/openfang" "openfang-napi" \
