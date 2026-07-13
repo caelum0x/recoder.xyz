@@ -1,7 +1,7 @@
 {
   "name": "@recoder/dmux",
   "version": "5.9.0",
-  "description": "Recoder operator console — the optional grid view over N parallel Conductor agent panes (tmux + git worktrees). Vendored and owned by Recoder.",
+  "description": "Recoder operator console \u2014 the optional grid view over N parallel Conductor agent panes (tmux + git worktrees). Vendored and owned by Recoder.",
   "type": "module",
   "author": "Recoder (recoder.xyz)",
   "contributors": [
@@ -107,6 +107,5 @@
     "typescript": "^5.9.2",
     "vite": "^6.0.7",
     "vitest": "^1.6.1"
-  },
-  "packageManager": "pnpm@10.14.0"
+  }
 }
