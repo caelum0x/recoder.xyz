@@ -1,0 +1,60 @@
+{
+  "name": "@recoder/opencode-sdk",
+  "version": "0.1.0",
+  "description": "Recoder-branded opencode JS SDK: generated OpenAPI client plus createOpencodeServer() lifecycle spawner. Vendored from opencode packages/sdk/js (MIT).",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./v2": {
+      "types": "./dist/v2/index.d.ts",
+      "import": "./dist/v2/index.js"
+    },
+    "./v2/client": {
+      "types": "./dist/v2/client.d.ts",
+      "import": "./dist/v2/client.js"
+    },
+    "./v2/gen/client": {
+      "types": "./dist/v2/gen/client/index.d.ts",
+      "import": "./dist/v2/gen/client/index.js"
+    },
+    "./v2/server": {
+      "types": "./dist/v2/server.d.ts",
+      "import": "./dist/v2/server.js"
+    },
+    "./v2/types": {
+      "types": "./dist/v2/gen/types.gen.d.ts",
+      "import": "./dist/v2/gen/types.gen.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cross-spawn": "7.0.6"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "6.0.6",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.9"
+  }
+}

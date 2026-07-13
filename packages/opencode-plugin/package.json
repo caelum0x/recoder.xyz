@@ -1,0 +1,54 @@
+{
+  "name": "@recoder/opencode-plugin",
+  "version": "0.1.0",
+  "description": "Recoder-branded opencode plugin/hook contract: tool definitions, permission.ask hooks, WorkspaceAdapter, and the v2 effect/promise plugin surfaces. Vendored from opencode packages/plugin (MIT).",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tool": {
+      "types": "./dist/tool.d.ts",
+      "import": "./dist/tool.js"
+    },
+    "./v2/effect": {
+      "types": "./dist/v2/effect/index.d.ts",
+      "import": "./dist/v2/effect/index.js"
+    },
+    "./v2/effect/integration": {
+      "types": "./dist/v2/effect/integration.d.ts",
+      "import": "./dist/v2/effect/integration.js"
+    },
+    "./v2/effect/plugin": {
+      "types": "./dist/v2/effect/plugin.d.ts",
+      "import": "./dist/v2/effect/plugin.js"
+    },
+    "./v2/promise": {
+      "types": "./dist/v2/promise/index.d.ts",
+      "import": "./dist/v2/promise/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf .turbo dist node_modules",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "3.0.8",
+    "@recoder/opencode-sdk": "workspace:*",
+    "effect": "^3.21.0",
+    "zod": "4.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.9"
+  }
+}
