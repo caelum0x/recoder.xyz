@@ -24,12 +24,17 @@ Already deep-fused correctly (owned/pinned/bundled binary, driven by the conduct
 **Do:** (1) multi-arch CI build (only arm64-mac committed today); (2) deeper driver — replace capture-poll with a persistent tmux **control-mode (`-CC`)** client for real-time events; (3) **unify** `apps/wave`'s separate Go durable-shell onto the *same* c/tmux sessions (two restart mechanisms → one). **Needed: yes** (core).
 
 ### `crates/` — the native authorities (build the `.node`, load in-process)
-| Crate | Now | Target | Needed |
+Build all three with **`scripts/build-native-addons.sh [governance|tensorzero|openfang|all]`** — it
+cargo-builds each `-napi` cdylib and copies it to the `.node` path the TS loader probes (degrade-safe: a
+missing `.node` falls back to the Rust daemon / TS path). N-API is ABI-stable, so the `.node` is portable
+across Node versions.
+
+| Crate | Now | Target | Status |
 |---|---|---|---|
-| **recoder-governance** (moat) | Rust daemon (UDS) + `-napi` crate + FFI + TS fallback; **no `.node` built** | build `.node` → load in-process → make native the default, daemon/fallback the degrade | **yes — FIRST** |
-| **tensorzero** (LLM gateway) | reached as a TS HTTP client; `-napi` crate present, no `.node` | native `.node` for routing/cache; TS/pi-ai fallback | yes |
-| **openfang** (agent engine) | `-napi` crate compiles; no `.node`; subprocess/deferred | native `.node` in-process | yes (big) |
-| **claw-code-parity** | `-napi` + loader; eval/parity harness | **not product runtime** — dev/eval tool | **no** (defer/drop) |
+| **recoder-governance** (moat) | Rust daemon (UDS) + `-napi` crate + FFI + TS fallback | native `.node` loaded in-process | **✅ DONE (2026-07-13)** — `.node` built (`cargo build --release -p recoder-governance-napi`, 31s) + **loads + runs a real `decide()` + Merkle audit IN-PROCESS**. The TS facade (`packages/governance`) prefers it, degrades to daemon/TS when absent. |
+| **tensorzero** (LLM gateway) | TS HTTP client; `-napi` crate present | native `.node` for routing/cache; TS/pi-ai fallback | ⏳ **deferred (disk)** — build recipe in the script; the tensorzero crate graph is too large to build on the current ~7 GiB-free volume (ENOSPC risk). Run on a machine/CI with headroom. |
+| **openfang** (agent engine, 137K LOC) | `-napi` crate compiles; no `.node` | native `.node` in-process | ⏳ **deferred (disk)** — same; big build. |
+| **claw-code-parity** | eval/parity harness | **removed** (2026-07-13) — not product runtime; consumer degrades to TS fallback | ~~drop~~ **done** |
 
 ### `go/`
 | Component | Now | Target | Needed |
