@@ -131,7 +131,7 @@ Verdict (2026-07-13): L0→L4 + native governance + openfang are composed AND ru
 | `ts/opencode` | subprocess CLI under tmux (CORRECT for restart-survival — stays) | **own the binary** (pin + bundle an opencode install with the desktop, stop trusting PATH — beads pattern) AND **import its `client` package** in-process for the `in_process` substrate driver | workspace launches with the OWNED opencode; client lib drives an in-process run |
 | `ts/extracted-from-openclaw` | `@recoder/connectors` fused (workspace member) + cockpit block | **activate the gateway loop in-backend**: social-gateways channel drivers supervised BY the backend (telegram first), skills-reference folded into the skills registry | a real message ingresses → gated → conductor workspace, end-to-end |
 
-### G2 — Inference spine: tensorzero becomes THE LLM path
+### G2 — Inference spine: tensorzero becomes THE LLM path — **step 1 ✅ 2026-07-14** (config-gen: buildTensorzeroConfig from the model registry, 40/40; step 2 = run-loop reroute, next)
 | Today | Next phase | Acceptance |
 |---|---|---|
 | `EmbeddedGateway` boots in-process; `postInference` native-first but the conductor run-loop still calls providers directly | (1) generate TZ function configs from Recoder's model registry at boot; (2) route the RUN LOOP's inference through the embedded engine by default (BYOK keys injected as TZ credentials); (3) add streaming to the binding (`inference_stream` → napi async iterator); (4) wire `feedback()` to delivery outcomes (merge/approve = positive signal) | a conductor run completes with every LLM call routed through the in-process TZ engine, observable in its inference log |
@@ -142,14 +142,14 @@ Verdict (2026-07-13): L0→L4 + native governance + openfang are composed AND ru
 | 45-method `.node`; `/api/agents/openfang/*`; cockpit + wsh | (1) `openfang` as a RUNTIME in `runtime-commands.ts` — a conductor workspace whose agent IS an in-process openfang agent (spawn_agent from task spec, send_message per turn, session per workspace); (2) bridge openfang's event bus → RunEvents (publish_event both ways); (3) bind channels send/receive + cron + background-agent controls (the last unbound subsystems) | `POST /workspaces {runtimeId:"openfang"}` runs a task end-to-end with RunEvents in the audit trail |
 | `crates/recoder-governance` | native `decide()` already on the delivery path | extend the Merkle audit seal to EVERY conductor mutation (create/merge/archive/memory-promote) | audit verify passes over a full workspace lifecycle |
 
-### G4 — Data + memory engines
+### G4 — Data + memory engines — **beads ✅ 2026-07-14** (direct-SQL fast-path to the live dolt server, CLI = write path, 26/26; mem0/colbert self-activation = next)
 | Dir | Today | Next phase | Acceptance |
 |---|---|---|---|
 | `go/beads` | owned binary + CLI subprocess per call; memory layer live | **direct SQL reads** — the dolt sql-server ALREADY runs (`.beads/dolt-server.port`); connect a mysql2 client for hot reads (ready/search/recall), keep `bd` CLI for writes (its logic = the write path) | board + memory recall served with zero subprocess spawns |
 | `py/mem0` | TS authority default + optional loopback URL | **self-activating sidecar** (colbert pattern): backend spawns+supervises the mem0 server, owns the venv; loopback activates itself | mem0 recall live in enrichPrompt without any manual server start |
 | `py/colbert` | supervised sidecar ✅ | **owned model bootstrap**: checkpoint download to a Recoder cache dir on first health, `COLBERT_CHECKPOINT` defaulted | rerank_available:true after cold boot with no manual steps |
 
-### G5 — Python decision/browse engines: own them outright
+### G5 — Python decision/browse engines: own them outright — **pal ✅ 2026-07-14** (pal-mcp heuristics ported to packages/pal, 91/91 parity; browser-use owned-venv + ops-recorder default-on = next)
 | Dir | Today | Next phase | Acceptance |
 |---|---|---|---|
 | `py/browser-use` | registry entry gated on external python env | **app-owned sidecar** (colbert pattern): backend bootstraps the venv (`uv venv` + install + `playwright install chromium`), spawns `python -m browser_use.mcp`, supervises with backoff | browser task served by browser-use with zero manual env setup |
