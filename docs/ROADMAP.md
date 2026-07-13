@@ -109,7 +109,7 @@
 ---
 
 ## Always-on hygiene (parallel, never blocks shipping)
-- **Wire-up backlog** — **12/15 wired in-process** on the real product path (pal→createWorkspace, agent-workflows/hooks/schemas, beads live, agent-oss, document-preprocessor+rag, browser-verification(+lazy playwright), recoder-browser-tools, conductor-ui, design-tokens, animations-preact); 2 skipped (gateway/worker — engine already fused), 1 open (`ops-recorder` gitignored, now committable). See [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md).
+- **Wire-up backlog** — **12/15 wired in-process** on the real product path (pal→createWorkspace, agent-workflows/hooks/schemas, beads live, agent-oss, document-preprocessor+rag, browser-verification(+lazy playwright), recoder-browser-tools, conductor-ui, design-tokens, animations-preact); 2 skipped (gateway/worker — engine already fused), 1 open (`ops-recorder` gitignored, now committable). See [`architecture/RECODER-FUSION-PROGRAM.md`](./architecture/RECODER-FUSION-PROGRAM.md).
 - **Park vendored clones** under a labeled vendor area; drop dead dirs (see DIRECTORY-MAP §park/drop).
 - Truthful health everywhere; no fake-ready; `bd` for granular issues.
 
@@ -118,6 +118,6 @@
 ## How we work (so the docs stay followable)
 - This file = the *what next*. Check a box only when it runs end-to-end.
 - `DIRECTORY-MAP.md` = every tree → role/status/verdict (keep/wire-up/park/drop).
-- `WIRE-UP-BACKLOG.md` = the ordered list of built-things-not-yet-used → their consumer.
+- `architecture/RECODER-FUSION-PROGRAM.md` = the ordered list of built-things-not-yet-used → their consumer.
 - `ARCHITECTURE.md` = the design + the agent-execution model + Envoy/XDR/AMI.
 - Per-run evidence + decisions go in `tasks/` (lessons) and `bd` issues.

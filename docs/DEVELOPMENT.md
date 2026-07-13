@@ -87,7 +87,7 @@ them directly.
 > Read [`architecture/INTEGRATION-PLAN.md`](./architecture/INTEGRATION-PLAN.md) before
 > adding any cross-tree call; it also cross-links
 > [`CONDUCTOR-ARCHITECTURE.md`](./CONDUCTOR-ARCHITECTURE.md) and
-> [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md).
+> [`architecture/RECODER-FUSION-PROGRAM.md`](./architecture/RECODER-FUSION-PROGRAM.md).
 
 ---
 

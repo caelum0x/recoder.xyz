@@ -17,7 +17,7 @@
 > [`PRD.md`](../PRD.md) (requirements), [`PRODUCTS.md`](../PRODUCTS.md) (product line),
 > [`DIRECTORY-MAP.md`](../DIRECTORY-MAP.md) (every tree → verdict),
 > [`ROADMAP.md`](../ROADMAP.md) (milestones M0–M5), and
-> [`WIRE-UP-BACKLOG.md`](../WIRE-UP-BACKLOG.md) (built-but-unused → consumer).
+> [`RECODER-FUSION-PROGRAM.md (absorbed WIRE-UP-BACKLOG, removed 2026-07-14)`](./RECODER-FUSION-PROGRAM.md) (built-but-unused → consumer).
 >
 > This file answers a narrower question: **by what integration mode does each
 > directory connect, per surface, and in what order do we wire them?** It cites the
@@ -192,7 +192,7 @@ Each step is a small disjoint PR; flip the `DIRECTORY-MAP` verdict + check the
 ## (b) Per-surface wiring checklist
 
 Ordered lists of which dirs to fuse and how, per surface, **building on**
-[`WIRE-UP-BACKLOG.md`](../WIRE-UP-BACKLOG.md) (cited as `[WB#n]`) and the
+[`RECODER-FUSION-PROGRAM.md (absorbed WIRE-UP-BACKLOG, removed 2026-07-14)`](./RECODER-FUSION-PROGRAM.md) (cited as `[WB#n]`) and the
 [`ROADMAP`](../ROADMAP.md) milestones (cited as `[M#]`). This does not re-rank the
 backlog — it groups it by the surface that consumes it.
 
@@ -374,6 +374,6 @@ across a machine, a browser, or a trust domain?* → http-edge, signed.
 ---
 
 > Maintenance: when a wiring lands end-to-end, check its box in
-> [`WIRE-UP-BACKLOG.md`](../WIRE-UP-BACKLOG.md), flip the `DIRECTORY-MAP` verdict, and
+> [`RECODER-FUSION-PROGRAM.md (absorbed WIRE-UP-BACKLOG, removed 2026-07-14)`](./RECODER-FUSION-PROGRAM.md), flip the `DIRECTORY-MAP` verdict, and
 > (if it advances a milestone) tick it in [`ROADMAP.md`](../ROADMAP.md). This file
 > tracks **mode + order**, not status.

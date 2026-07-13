@@ -8,7 +8,7 @@ The doc system to follow. Read top to bottom.
 | [`PRODUCTS.md`](./PRODUCTS.md) | **The product line** — Desktop · Cloud · Teams/Enterprise · Agents/MCP, + pricing ladder + powered-by trees. |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | **How** — layers L0–L4, the **agent-execution model** (local tmux/dmux vs remote Daytona, BYOK), where Envoy/XDR/AMI fit. |
 | [`DIRECTORY-MAP.md`](./DIRECTORY-MAP.md) | **Every tree → its job** — all 129 dirs by layer, with kind/state/role/usedBy + keep/wire-up/park/drop verdicts. |
-| [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md) | **Built-but-unused → consumer** — the 15 packages to wire into the product (using all the folders *means working this list*). |
+| [`architecture/RECODER-FUSION-PROGRAM.md`](./architecture/RECODER-FUSION-PROGRAM.md) | **Built-but-unused → consumer** — the 15 packages to wire into the product (using all the folders *means working this list*). |
 | [`ROADMAP.md`](./ROADMAP.md) | **What to do, when** — milestones M0–M5, each step with owner-tree + a "done-when" that requires running end-to-end. |
 
 **Ground truth (current + authoritative — read these first; they reflect what has

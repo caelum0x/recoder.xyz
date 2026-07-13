@@ -2,7 +2,7 @@
 
 > **Owner mandate (2026-07-11):** Every directory, folder, and package fuses into ONE big Recoder — millions of LOC, the way Linux is built on Unix. Nothing is parked. The desktop embeds the fused product.
 >
-> **This overrides the "still park" list in `WIRE-UP-BACKLOG.md`.** The parked upstreams (tensorzero, lance, openfang, ziti, multica, browser-use, mem0, ops-recorder, claw-code-parity) are now IN SCOPE — each fused via its correct integration mode.
+> **This overrides the "still park" list in `RECODER-FUSION-PROGRAM.md (absorbed WIRE-UP-BACKLOG, removed 2026-07-14)`.** The parked upstreams (tensorzero, lance, openfang, ziti, multica, browser-use, mem0, ops-recorder, claw-code-parity) are now IN SCOPE — each fused via its correct integration mode.
 >
 > **Progress (2026-07-13).** Engine fusion Phases 1–4 landed (fleet+gateway · code-intel+retrieval · browser+ssh-substrate · coordination+workflow+pal), all governed + degrade-safe — see [RECODER-ENGINES §6](./RECODER-ENGINES.md) + [RECODER-CAPABILITIES](./RECODER-CAPABILITIES.md). L3 (the terminal shell) fused too: `apps/wave`, forked from Wave Terminal, is **fully rebranded to Recoder and builds end-to-end** (Go + electron-vite) — see [FORK.md](../../apps/wave/FORK.md). Remaining: L4/L5 (networking/connectors, signed packaging + GUI-launch verification).
 
@@ -89,7 +89,7 @@ Once fused into the backend, each capability gets a lazy-loaded cockpit panel vi
 
 ## Honest scope note
 
-This is a multi-session engineering program spanning ~6 languages and millions of LOC. It proceeds wave by wave, each wave a set of small, tested, end-to-end-verified fusions. Progress is tracked by flipping rows here and in `WIRE-UP-BACKLOG.md` / `DIRECTORY-MAP.md`. No wave is "done" until its consumer runs the fused code end-to-end.
+This is a multi-session engineering program spanning ~6 languages and millions of LOC. It proceeds wave by wave, each wave a set of small, tested, end-to-end-verified fusions. Progress is tracked by flipping rows here and in `RECODER-FUSION-PROGRAM.md (absorbed WIRE-UP-BACKLOG, removed 2026-07-14)` / `DIRECTORY-MAP.md`. No wave is "done" until its consumer runs the fused code end-to-end.
 
 ## Wave E — NAPI/FFI deep-linking (Rust crates INTO the Node binary) — owner decision 2026-07-11
 
