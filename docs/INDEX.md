@@ -63,8 +63,7 @@ MCP interop host + agent bridge (degrade-safe + unit-tested); the terminal shell
 | [`ROADMAP.md`](./ROADMAP.md) | What to build next — milestones M0–M5, each step with owner-tree and a "done-when" that requires running end-to-end. |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | The product architecture — layers L0–L4 and the local-tmux-vs-remote-Daytona agent-execution model (BYOK). |
 | [`DIRECTORY-MAP.md`](./DIRECTORY-MAP.md) | Every tree → its job, by layer, with kind/state/role/usedBy + keep/wire-up/park/drop verdicts. |
-| [`WIRE-UP-BACKLOG.md`](./WIRE-UP-BACKLOG.md) | Built-but-unused first-party code → its consumer; the list that "using all the folders" actually means. |
-| [`directory_list.md`](./directory_list.md) | Readable status-at-a-glance index of every meaningful tree → role → status. |
+| [`architecture/RECODER-FUSION-PROGRAM.md`](./architecture/RECODER-FUSION-PROGRAM.md) | Built-but-unused first-party code → its consumer; the list that "using all the folders" actually means. |
 
 ### Reference / background (kept)
 
