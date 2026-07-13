@@ -137,7 +137,7 @@ ensure_venv() {
   local svc="$1" vd; vd="$(venvdir "$svc")"
   if [[ "${svc}" == "mem0" ]]; then
     err "mem0: skipping auto-venv. It is a full upstream server needing its own"
-    err "      requirements (py/mem0/server/requirements.txt) + Postgres/pgvector."
+    err "      requirements (modules/memory/mem0/server/requirements.txt) + Postgres/pgvector."
     err "      Install manually, then 'up mem0' will launch uvicorn against it."
     return 1
   fi
@@ -319,7 +319,7 @@ Notes:
   - colbert/billing/ops auto-provision a per-service venv with ONLY lightweight deps.
   - Heavy ML deps (torch/faiss) are NEVER installed; colbert rerank degrades to a
     503 'rerank unavailable' until torch+colbert are installed manually.
-  - mem0 is a full upstream server: install py/mem0/server/requirements.txt + run
+  - mem0 is a full upstream server: install modules/memory/mem0/server/requirements.txt + run
     Postgres/pgvector yourself, then 'up mem0'.
 EOF
 }

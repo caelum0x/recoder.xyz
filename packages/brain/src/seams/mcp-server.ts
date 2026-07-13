@@ -30,7 +30,7 @@ import { createBrainTools, type BrainTool } from "./mcp-seam";
  * usable (if sparse) Brain.
  *
  * Memory authority: in-process TS Map (DEFAULT, always available) optionally
- * backed by the py/mem0 REST loopback when `MEM0_SERVICE_URL` (or the legacy
+ * backed by the modules/memory/mem0 REST loopback when `MEM0_SERVICE_URL` (or the legacy
  * `MEM0_BASE_URL`) is set. The loopback is degrade-safe — absent or unreachable
  * means the in-process store carries on alone, never failing the caller.
  */

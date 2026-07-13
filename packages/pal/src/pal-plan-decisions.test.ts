@@ -3,7 +3,7 @@
  * goal/scope → expected runtime + risk + approval + sandbox.
  *
  * Risk/approval logic here is Recoder-native (risk-model.ts,
- * approval-estimator.ts) — py/pal-mcp-server has no risk-tier or
+ * approval-estimator.ts) — modules/communication/pal-mcp-server has no risk-tier or
  * approval-gate computation. These tables pin the current contract.
  */
 import { describe, expect, it } from 'vitest';

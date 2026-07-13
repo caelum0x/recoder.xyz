@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build the Conductor's pinned substrate binaries: the vendored tmux (c/tmux/tmux)
-# and the reproducible bd / beads binary (go/beads/bin/bd).
+# Build the Conductor's pinned substrate binaries: the vendored tmux (modules/terminal/tmux/tmux)
+# and the reproducible bd / beads binary (modules/memory/beads/bin/bd).
 #
 # WHY THIS EXISTS
 # ---------------
 # The Conductor resolves its tmux via docker-backend/src/conductor/tmux-path.ts
-# (CONDUCTOR_TMUX_BIN > RECODER_TMUX_BUILD_PATH > <repo>/c/tmux/tmux > bare `tmux`)
+# (CONDUCTOR_TMUX_BIN > RECODER_TMUX_BUILD_PATH > <repo>/modules/terminal/tmux/tmux > bare `tmux`)
 # and its bd via packages/brain engine-resolver (BD_BIN > bare `bd`). Both have
 # build scripts, but nothing in setup/deploy ran them — so on a clean host the
 # pinned binaries were absent and the runtime silently fell back to whatever
@@ -37,8 +37,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-TMUX_BIN="$REPO_ROOT/c/tmux/tmux"
-BD_BIN_OUT="${RECODER_BD_OUT:-$REPO_ROOT/go/beads/bin/bd}"
+TMUX_BIN="$REPO_ROOT/modules/terminal/tmux/tmux"
+BD_BIN_OUT="${RECODER_BD_OUT:-$REPO_ROOT/modules/memory/beads/bin/bd}"
 
 FORCE="${SUBSTRATE_FORCE:-0}"
 STRICT="${SUBSTRATE_STRICT:-0}"
@@ -60,8 +60,8 @@ build_tmux() {
     info "tmux build skipped (SUBSTRATE_SKIP_TMUX=1)"
     return 0
   fi
-  if [ ! -f "$REPO_ROOT/c/tmux/tmux.c" ]; then
-    warn "vendored tmux source missing at c/tmux — cannot build pinned tmux"
+  if [ ! -f "$REPO_ROOT/modules/terminal/tmux/tmux.c" ]; then
+    warn "vendored tmux source missing at modules/terminal/tmux — cannot build pinned tmux"
     return 1
   fi
   if [ "$FORCE" != "1" ] && is_good "$TMUX_BIN"; then
@@ -73,10 +73,10 @@ build_tmux() {
     return 1
   fi
 
-  info "building pinned tmux from c/tmux"
+  info "building pinned tmux from modules/terminal/tmux"
   # The Makefile build-tmux target already picks configure-vs-manual; reuse the
   # same logic here so there is one source of truth for how tmux is compiled.
-  if command -v autoconf >/dev/null 2>&1 && [ -f "$REPO_ROOT/c/tmux/configure" ]; then
+  if command -v autoconf >/dev/null 2>&1 && [ -f "$REPO_ROOT/modules/terminal/tmux/configure" ]; then
     bash "$SCRIPT_DIR/build-tmux.sh" || { warn "configure-based tmux build failed"; }
   fi
   if ! is_good "$TMUX_BIN"; then
@@ -97,8 +97,8 @@ build_bd() {
     info "bd build skipped (SUBSTRATE_SKIP_BD=1)"
     return 0
   fi
-  if [ ! -f "$REPO_ROOT/go/beads/cmd/bd/main.go" ]; then
-    warn "vendored beads source missing at go/beads — cannot build pinned bd"
+  if [ ! -f "$REPO_ROOT/modules/memory/beads/cmd/bd/main.go" ]; then
+    warn "vendored beads source missing at modules/memory/beads — cannot build pinned bd"
     return 1
   fi
   if [ "$FORCE" != "1" ] && is_good "$BD_BIN_OUT"; then
@@ -110,12 +110,12 @@ build_bd() {
     return 1
   fi
 
-  info "building pinned bd from go/beads"
+  info "building pinned bd from modules/memory/beads"
   if RECODER_BD_OUT="$BD_BIN_OUT" bash "$SCRIPT_DIR/build-bd.sh"; then
     ok "pinned bd built: $BD_BIN_OUT"
     return 0
   fi
-  warn "bd build failed (check Go toolchain version vs go/beads/go.mod, and a C compiler for cgo); runtime will fall back to system bd"
+  warn "bd build failed (check Go toolchain version vs modules/memory/beads/go.mod, and a C compiler for cgo); runtime will fall back to system bd"
   return 1
 }
 

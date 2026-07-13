@@ -23,6 +23,7 @@ const a2a_sdk_1 = require("@recoder/a2a-sdk");
 const workspace_service_1 = require("./a2a/workspace.service");
 const agent_registry_service_1 = require("./a2a/agent-registry.service");
 const task_lifecycle_service_1 = require("./a2a/task-lifecycle.service");
+const bridge_auth_js_1 = require("./a2a/bridge-auth.js");
 const router = (0, express_1.Router)();
 exports.a2aRouter = router;
 // A2A Agent Card (standard A2A protocol discovery)
@@ -340,6 +341,9 @@ function parseEnvelopeFromUnknown(value, sourcePath = 'envelope') {
             version: asString(toRecord.version).trim() || undefined,
         },
         intent,
+        // payloadInput is runtime-validated as an array above; the gateway accepts
+        // loose parts, so we assert the strict element type for the canonical
+        // RecoderA2AEnvelope.payload (RecoderPayload[]) shape.
         payload: payloadInput,
         metadata,
         trace,
@@ -648,13 +652,6 @@ function verifyAdminToken(req) {
     }
     const scope = String(process.env.RECODER_A2A_ADMIN_TOKEN_SCOPE || '').trim() || null;
     return { ok: true, scope };
-}
-function verifyBridgeToken(req) {
-    const authHeader = String(req.header('authorization') || '');
-    const bearerToken = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
-    if (!bearerToken)
-        return { ok: false, status: 401, error: 'Unauthorized bridge token' };
-    return { ok: true };
 }
 function asBool(value, fallback) {
     if (typeof value === 'boolean')
@@ -2363,12 +2360,11 @@ function extractBearerToken(req) {
     return authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : '';
 }
 async function verifyBridgeTokenForRequest(req) {
-    const basic = verifyBridgeToken(req);
-    if (!basic.ok)
-        return basic;
     const bearerToken = extractBearerToken(req);
+    if (!bearerToken)
+        return { ok: false, status: 401, error: 'Unauthorized bridge token' };
     const staticToken = process.env.RECODER_A2A_BRIDGE_TOKEN || '';
-    if (staticToken && bearerToken === staticToken) {
+    if (staticToken && (0, bridge_auth_js_1.verifyBridgeBearer)(bearerToken, staticToken).ok) {
         const staticScope = String(process.env.RECODER_A2A_BRIDGE_TOKEN_SCOPE || '').trim() || null;
         return { ok: true, scope: staticScope, session: null };
     }

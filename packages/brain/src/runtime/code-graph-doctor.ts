@@ -172,7 +172,7 @@ export async function runCodeGraphDoctor(
       nodes: 0,
       edges: 0,
       detail:
-        "code graph unavailable — recodergit engine not callable (build ts/recodergit or set RECODERGIT_BIN)",
+        "code graph unavailable — recodergit engine not callable (build modules/github/recodergit or set RECODERGIT_BIN)",
     };
   }
 

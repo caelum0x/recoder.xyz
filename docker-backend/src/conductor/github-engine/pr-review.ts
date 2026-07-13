@@ -1,6 +1,6 @@
 /**
  * GitHub PR-review engine — wires the vendored `pr-swarm-review` prompt pack
- * (ts/recodergit/pr-swarm-review: orchestration.md + personas/01–07) into the
+ * (modules/github/recodergit/pr-swarm-review: orchestration.md + personas/01–07) into the
  * conductor as an importable capability.
  *
  * WHAT THIS IS: pr-swarm-review is NOT code — it is a CLI-neutral prompt pack

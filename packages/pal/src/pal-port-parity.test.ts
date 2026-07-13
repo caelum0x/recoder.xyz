@@ -1,6 +1,6 @@
 /**
  * Table-driven parity tests for the decision logic ported from
- * py/pal-mcp-server (zen-mcp-server fork). Each expected value is
+ * modules/communication/pal-mcp-server (zen-mcp-server fork). Each expected value is
  * derived from the documented Python behavior cited in the source files.
  */
 import { describe, expect, it } from 'vitest';

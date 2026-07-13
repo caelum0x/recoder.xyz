@@ -46,14 +46,14 @@ describe('resolveBeadsBin', () => {
     expect(resolveBeadsBin(env)).toBeUndefined();
   });
 
-  it('resolves the owned repo build go/beads/bin/bd when no env override is set', () => {
+  it('resolves the owned repo build modules/memory/beads/bin/bd when no env override is set', () => {
     existsFor(GO_MOD, OWNED_BIN);
     const resolved = resolveBeadsBin({ PATH: '' });
     expect(resolved).toBeDefined();
     expect(resolved!.endsWith(OWNED_BIN)).toBe(true);
   });
 
-  it('falls back to the vendored Makefile output go/beads/bd', () => {
+  it('falls back to the vendored Makefile output modules/memory/beads/bd', () => {
     existsFor(GO_MOD, MAKEFILE_BIN);
     const resolved = resolveBeadsBin({ PATH: '' });
     expect(resolved).toBeDefined();

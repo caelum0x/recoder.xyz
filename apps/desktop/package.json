@@ -112,11 +112,11 @@
         ]
       },
       {
-        "from": "../../c/tmux/tmux",
-        "to": "backend/c/tmux/tmux"
+        "from": "../../modules/terminal/tmux/tmux",
+        "to": "backend/modules/terminal/tmux/tmux"
       },
       {
-        "from": "../../crates/recoder-governance/target/release/recoder-governance-napi.node",
+        "from": "../../modules/governance/recoder-governance/target/release/recoder-governance-napi.node",
         "to": "native/recoder-governance-napi.node"
       },
       {
@@ -124,11 +124,11 @@
         "to": "native/lance_npm_bindings.node"
       },
       {
-        "from": "../../crates/openfang/target/release/openfang_napi.node",
+        "from": "../../modules/agent-engine/openfang/target/release/openfang_napi.node",
         "to": "native/openfang_napi.node"
       },
       {
-        "from": "../../crates/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
+        "from": "../../modules/inference/tensorzero/crates/target/release/tensorzero_gateway_napi.node",
         "to": "native/tensorzero_gateway_napi.node"
       }
     ],

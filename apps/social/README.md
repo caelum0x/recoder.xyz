@@ -32,7 +32,7 @@ with no channel tokens configured the app starts, logs
 - **Workspace membership:** `apps/social` is NOT yet listed in
   `pnpm-workspace.yaml` (owner action; see repo task notes). Local `tsc`,
   `vitest`, and `esbuild` already resolve `@recoder/connectors` through the root
-  `node_modules` link created by the existing `ts/extracted-from-openclaw`
+  `node_modules` link created by the existing `modules/social/openclaw`
   membership.
 - The channel SDKs (`grammy`, `@slack/bolt`, …) are optional peers of the
   connectors package. A configured channel whose SDK is missing degrades to a

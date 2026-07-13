@@ -2,7 +2,7 @@
  * @module multica-client
  *
  * Multica managed-agents/squads/assignment loopback adapter — fuses
- * `go/multica` as a backend-supervised subprocess/loopback HTTP client, gated
+ * `modules/squads/multica` as a backend-supervised subprocess/loopback HTTP client, gated
  * by env, degrade-safe when the binary or service is absent.
  *
  * Multica (https://multica.ai) is an open-source managed-agents platform:
@@ -12,7 +12,7 @@
  *
  * FUSION PATTERN (mirrors tensorzero-client.ts + openfang-daemon.ts):
  *   - We NEVER build the Go binary here. If no prebuilt binary is found
- *     (MULTICA_BIN env or go/multica/server/bin/multica-server) the client
+ *     (MULTICA_BIN env or modules/squads/multica/server/bin/multica-server) the client
  *     degrades safely: health() returns { available: false }, all calls
  *     return explicit not-available results, never faked success.
  *   - Alternatively, MULTICA_URL can point at an externally-managed instance
@@ -41,8 +41,8 @@
  *
  * Binary resolution order (first existing wins):
  *   1. MULTICA_BIN env (absolute path to a prebuilt binary).
- *   2. <repo>/go/multica/server/bin/multica-server.
- *   3. <repo>/go/multica/server/bin/server (alternate build name).
+ *   2. <repo>/modules/squads/multica/server/bin/multica-server.
+ *   3. <repo>/modules/squads/multica/server/bin/server (alternate build name).
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -86,7 +86,7 @@ const BACKOFF_CAP_MS = 30_000;
 
 /**
  * Walk up from this module's compiled location to the repo root (the directory
- * containing `go/multica`). Returns undefined if not found within 12 parents.
+ * containing `modules/squads/multica`). Returns undefined if not found within 12 parents.
  */
 function findRepoRoot(): string | undefined {
   const { existsSync: fsExists } = require('node:fs');

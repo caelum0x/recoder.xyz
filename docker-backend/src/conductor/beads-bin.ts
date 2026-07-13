@@ -2,17 +2,17 @@
  * beads-bin — OWNED-binary resolution for the `bd` (beads) CLI.
  *
  * The conductor should not trust whatever `bd` happens to be on PATH
- * (fusion docs §go/beads: subprocess-cli via PATH → "bundled owned binary").
+ * (fusion docs §modules/memory/beads: subprocess-cli via PATH → "bundled owned binary").
  * The owned artifact is built from the vendored Go source:
  *
- *   cd go/beads && go build -o bin/bd ./cmd/bd
+ *   cd modules/memory/beads && go build -o bin/bd ./cmd/bd
  *
  * Resolution order (first hit wins):
  *   1. `BEADS_BIN` env — an explicit absolute path. If set but missing, resolve
  *      to undefined (an explicit-but-broken override must not silently fall
  *      through to a different binary).
- *   2. The owned build output under the repo: `go/beads/bin/bd` (our build
- *      target), then `go/beads/bd` (the vendored Makefile's BUILD_DIR=. output).
+ *   2. The owned build output under the repo: `modules/memory/beads/bin/bd` (our build
+ *      target), then `modules/memory/beads/bd` (the vendored Makefile's BUILD_DIR=. output).
  *   3. PATH lookup — returns the bare name `bd` only when some PATH dir
  *      actually contains it, preserving prior spawn semantics.
  *
@@ -42,7 +42,7 @@ function moduleDir(): string {
   }
 }
 
-/** Bounded walk up to the repo root (dir containing the vendored go/beads). Never loops. */
+/** Bounded walk up to the repo root (dir containing the vendored modules/memory/beads). Never loops. */
 function findRepoRoot(startDir: string): string | undefined {
   let dir = startDir;
   for (let i = 0; i < 12; i++) {
@@ -66,7 +66,7 @@ function existsOnPath(name: string, env: NodeJS.ProcessEnv): boolean {
 
 /**
  * Resolve the `bd` binary the conductor should shell to, WITHOUT building it.
- * Order: BEADS_BIN env → owned repo build (`go/beads/bin/bd`) → PATH (`bd`).
+ * Order: BEADS_BIN env → owned repo build (`modules/memory/beads/bin/bd`) → PATH (`bd`).
  * Returns undefined when none is found (degrade-safe — callers skip cleanly).
  */
 export function resolveBeadsBin(env: NodeJS.ProcessEnv = process.env): string | undefined {

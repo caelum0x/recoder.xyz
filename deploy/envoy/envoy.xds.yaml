@@ -7,7 +7,7 @@
 #
 # Fallback / degrade-safe by design:
 #   - The `node.id` / `node.cluster` MUST be `recoder-mesh` — that is the NodeID the
-#     recoder-xds server snapshots against (go/recoder-xds/internal/server). A
+#     recoder-xds server snapshots against (modules/networking/recoder-xds/internal/server). A
 #     mismatch means Envoy receives no resources.
 #   - `static_resources` still carries the `xds_cluster` (how Envoy reaches the
 #     control plane) AND a real static `recoder_backend` cluster + a static

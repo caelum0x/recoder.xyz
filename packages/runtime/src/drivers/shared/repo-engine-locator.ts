@@ -44,7 +44,7 @@ export const REPO_ENGINE_CANDIDATES: Readonly<Record<string, readonly string[]>>
   dmux: ['modules/terminal/dmux/dmux'],
   'recoder-dmux': ['modules/terminal/dmux/dmux'],
   // @recoder/recodergit-engine — recodergit CLI.
-  recodergit: ['ts/recodergit/recodergit/dist/cli/index.js'],
+  recodergit: ['modules/github/recodergit/recodergit/dist/cli/index.js'],
 } as const;
 
 export type RepoEngineLocation = {

@@ -7,7 +7,7 @@ import type { McpServerRegistration } from '../registry';
  * governance decision `{ runtimeId, substrate, toolGrants[], risk, approvalRequired }`.
  *
  * This is a FAST, dependency-free complement to the external Python PAL MCP
- * server (`py/pal-mcp-server`); it does not replace or disturb it.
+ * server (`modules/communication/pal-mcp-server`); it does not replace or disturb it.
  *
  * The package stays runtime-agnostic: it owns NO planning logic and assumes no
  * config. The host (docker-backend) injects a concrete `PalPlanPort` backed by

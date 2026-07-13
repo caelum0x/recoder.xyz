@@ -20,9 +20,46 @@ let _puppeteer;
 async function getPuppeteer() {
     if (!_puppeteer) {
         const dynamicImport = new Function('m', 'return import(m)');
-        _puppeteer = await dynamicImport('puppeteer');
+        // Prefer full `puppeteer` (bundled Chromium) when installed; fall back to
+        // the lightweight `puppeteer-core` (no bundled browser — uses the system
+        // Chrome via executablePath). This keeps the install small on a near-full
+        // disk while still enabling live browsing.
+        try {
+            _puppeteer = await dynamicImport('puppeteer');
+        }
+        catch {
+            _puppeteer = await dynamicImport('puppeteer-core');
+        }
     }
     return _puppeteer.default || _puppeteer;
+}
+/**
+ * Resolve a Chrome/Chromium executable for puppeteer-core. Honors
+ * PUPPETEER_EXECUTABLE_PATH, else probes the common OS locations (macOS Chrome,
+ * Linux chromium/chrome). Returns undefined so full `puppeteer` uses its bundled
+ * browser when no system one is found.
+ */
+function resolveChromeExecutable() {
+    if (process.env.PUPPETEER_EXECUTABLE_PATH)
+        return process.env.PUPPETEER_EXECUTABLE_PATH;
+    const candidates = [
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+    ];
+    for (const c of candidates) {
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            if (require('node:fs').existsSync(c))
+                return c;
+        }
+        catch {
+            /* ignore */
+        }
+    }
+    return undefined;
 }
 // Session state stored per project
 const sessions = new Map();
@@ -64,7 +101,7 @@ async function browserLaunch(projectId, url, config) {
                 '--disable-gpu',
                 '--disable-software-rasterizer',
             ],
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+            executablePath: resolveChromeExecutable(),
         });
         const page = await browser.newPage();
         const consoleLogs = [];
@@ -241,6 +278,50 @@ async function browserExecute(projectId, script) {
     }
     try {
         const { page, consoleLogs } = session;
+        // =========================================================================
+        // SECURITY -- TRUST BOUNDARY (hardened after root compromise)
+        //
+        // `script` is CALLER-SUPPLIED JavaScript that is evaluated via
+        // `new Function(code)` inside the page context below. This is an
+        // intentional capability (arbitrary in-page JS execution) that cannot be
+        // removed without breaking the feature, so callers of browserExecute() MUST
+        // be treated as TRUSTED. The guards below are defense-in-depth only -- they
+        // reject the most obviously dangerous payloads and cap the input size; they
+        // are NOT a sandbox. Do NOT rely on them as the sole control: enforce
+        // authn/authz, work-locks, and approval gates at the call site. The Function
+        // constructor runs in the page's (not Node's) scope and has no access to the
+        // enclosing closure, but it still has full access to the page DOM, cookies,
+        // local/session storage, and any network the page can reach.
+        // =========================================================================
+        if (typeof script !== 'string') {
+            return { success: false, error: 'Execute failed: script must be a string' };
+        }
+        const MAX_SCRIPT_LENGTH = 100_000; // 100 KB guard against abusive payloads
+        if (script.length === 0) {
+            return { success: false, error: 'Execute failed: script must not be empty' };
+        }
+        if (script.length > MAX_SCRIPT_LENGTH) {
+            return {
+                success: false,
+                error: `Execute failed: script exceeds maximum length of ${MAX_SCRIPT_LENGTH} characters`,
+            };
+        }
+        // Reject obviously dangerous patterns. This is a coarse blocklist, not a
+        // parser -- it stops casual misuse and known exfiltration/escape primitives.
+        const FORBIDDEN_PATTERNS = [
+            { pattern: /\bimport\s*\(/, label: 'dynamic import()' },
+            { pattern: /\brequire\s*\(/, label: 'require()' },
+            { pattern: /\bprocess\b/, label: 'process access' },
+            { pattern: /\bglobalThis\b/, label: 'globalThis access' },
+            { pattern: /\b(eval|Function)\s*\(/, label: 'nested eval/Function' },
+            { pattern: /\bnew\s+Function\b/, label: 'nested Function constructor' },
+            { pattern: /\bdebugger\b/, label: 'debugger statement' },
+        ];
+        for (const { pattern, label } of FORBIDDEN_PATTERNS) {
+            if (pattern.test(script)) {
+                return { success: false, error: `Execute failed: forbidden pattern (${label})` };
+            }
+        }
         const result = await page.evaluate((code) => {
             try {
                 // Use Function constructor instead of eval - no access to enclosing scope

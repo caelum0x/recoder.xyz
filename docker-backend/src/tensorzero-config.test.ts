@@ -5,7 +5,7 @@
  *   - registryFromEnv(): TENSORZERO_MODELS parsing, key-env gating, aliases,
  *     unknown providers, and the empty-env degrade path.
  *   - buildTensorzeroConfig(): [models] + [functions] TOML shape matching the
- *     schema in crates/tensorzero (docs + ui/fixtures), api_key_location uses
+ *     schema in modules/inference/tensorzero (docs + ui/fixtures), api_key_location uses
  *     env var NAMES only, api_base for local providers, name dedupe, and the
  *     stable `recoder_default` alias.
  *   - writeTensorzeroConfig(): materializes to a temp path; returns undefined

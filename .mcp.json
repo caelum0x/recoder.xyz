@@ -45,7 +45,7 @@
       }
     },
     "pal": {
-      "command": "/Users/arhansubasi/recoder.xyz/py/pal-mcp-server/.pal_venv/bin/python",
+      "command": "/Users/arhansubasi/recoder.xyz/modules/communication/pal-mcp-server/.pal_venv/bin/python",
       "args": [
         "server.py"
       ],

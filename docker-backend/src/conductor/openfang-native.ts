@@ -15,13 +15,13 @@
  *
  * Resolution order for the `.node` (first existing wins):
  *   1. `OPENFANG_NATIVE_ADDON` env — absolute path to a prebuilt `.node`.
- *   2. `<repo>/crates/openfang/target/{release,debug}/openfang_napi.node`
+ *   2. `<repo>/modules/agent-engine/openfang/target/{release,debug}/openfang_napi.node`
  *      (the shared workspace target — where `cargo build -p openfang-napi` puts it,
  *      after the cdylib is copied to the `.node` name).
- *   3. `<repo>/crates/openfang/crates/openfang-napi/target/{release,debug}/openfang_napi.node`
+ *   3. `<repo>/modules/agent-engine/openfang/modules/agent-engine/openfang-napi/target/{release,debug}/openfang_napi.node`
  *      (per-crate target fallback).
  *
- * Build:  cd crates/openfang && cargo build -p openfang-napi --release
+ * Build:  cd modules/agent-engine/openfang && cargo build -p openfang-napi --release
  *         then copy target/release/libopenfang_napi.<dylib|so|dll> → openfang_napi.node
  *         (scripts/build-native-addons.sh openfang does this automatically).
  */
@@ -100,7 +100,7 @@ export interface OpenfangEngineClass {
 
 /**
  * The openfang-napi native addon surface. Mirrors the `#[napi]` exports in
- * `crates/openfang/crates/openfang-napi/src/lib.rs`.
+ * `modules/agent-engine/openfang/modules/agent-engine/openfang-napi/src/lib.rs`.
  */
 export interface OpenfangNativeAddon {
   /** Fast liveness probe — returns `true`. */
@@ -126,7 +126,7 @@ let _engineTried = false;
  */
 let _requireOverride: ((addonPath: string) => OpenfangNativeAddon) | undefined;
 
-/** Walk up from `__dirname` to the repo root (dir containing `crates/openfang/Cargo.toml`). */
+/** Walk up from `__dirname` to the repo root (dir containing `modules/agent-engine/openfang/Cargo.toml`). */
 function findRepoRoot(): string | undefined {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { existsSync: fsExists } = require('node:fs') as typeof import('node:fs');
@@ -139,7 +139,7 @@ function findRepoRoot(): string | undefined {
     return undefined;
   }
   for (let i = 0; i < 12; i++) {
-    if (fsExists(pathJoin(dir, 'crates', 'openfang', 'Cargo.toml'))) {
+    if (fsExists(pathJoin(dir, 'modules', 'agent-engine', 'openfang', 'Cargo.toml'))) {
       return dir;
     }
     const parent = pathDirname(dir);
@@ -172,8 +172,8 @@ export function resolveNativeAddonPath(env: NodeJS.ProcessEnv = process.env): st
 
   const root = findRepoRoot();
   if (root) {
-    const wsTarget = join(root, 'crates', 'openfang', 'target');
-    const crateTarget = join(root, 'crates', 'openfang', 'crates', 'openfang-napi', 'target');
+    const wsTarget = join(root, 'modules', 'agent-engine', 'openfang', 'target');
+    const crateTarget = join(root, 'modules', 'agent-engine', 'openfang', 'crates', 'openfang-napi', 'target');
     candidates.push(
       join(wsTarget, 'release', 'openfang_napi.node'),
       join(wsTarget, 'debug', 'openfang_napi.node'),
@@ -196,7 +196,7 @@ export function loadNativeAddon(env: NodeJS.ProcessEnv = process.env): OpenfangN
   if (!addonPath) {
     logger.info(
       'openfang native addon (.node) not built — staying on subprocess/loopback path. ' +
-        'Build with: cd crates/openfang && cargo build -p openfang-napi --release',
+        'Build with: cd modules/agent-engine/openfang && cargo build -p openfang-napi --release',
     );
     return undefined;
   }

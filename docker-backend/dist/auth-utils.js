@@ -6,7 +6,9 @@ exports.isLikelySandboxProjectId = isLikelySandboxProjectId;
 exports.getAnonymousIdFromRequest = getAnonymousIdFromRequest;
 exports.resolveA2ASystemSession = resolveA2ASystemSession;
 exports.resolveInternalServiceSession = resolveInternalServiceSession;
+exports.extractPlatformApiKeyCandidate = extractPlatformApiKeyCandidate;
 exports.isStrictAuthMode = isStrictAuthMode;
+exports.safeEqual = safeEqual;
 const node_crypto_1 = require("node:crypto");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SAFE_ANONYMOUS_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
@@ -141,6 +143,25 @@ function resolveInternalServiceSession(req, configuredKey = process.env.INTERNAL
         userId: `internal:${serviceId}`,
         sessionId: `internal:${serviceId}`,
     };
+}
+/**
+ * The platform API key (sk_…) a request presents, or null. Primary transport is
+ * `x-api-key`; `Authorization: Bearer sk_…` is equally valid — the desktop
+ * cockpit sends its minted embedded-backend key as a bearer. A non-sk_ bearer
+ * is a session token, never a key candidate. Pure header inspection — the
+ * caller still validates the key against the store.
+ */
+function extractPlatformApiKeyCandidate(headers) {
+    const fromHeader = firstHeaderValue(headers['x-api-key'])?.trim();
+    if (fromHeader?.startsWith('sk_'))
+        return fromHeader;
+    const authorization = firstHeaderValue(headers.authorization);
+    if (authorization?.startsWith('Bearer ')) {
+        const bearer = authorization.slice('Bearer '.length).trim();
+        if (bearer.startsWith('sk_'))
+            return bearer;
+    }
+    return null;
 }
 function isStrictAuthMode() {
     // Allow explicit override via STRICT_AUTH=false for local sandbox development.

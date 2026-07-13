@@ -1,5 +1,0 @@
-export { AccountTable, AccountStateTable, ControlAccountTable } from "@recoder/opencode-core/account/sql"
-export { ProjectTable } from "@recoder/opencode-core/project/sql"
-export { SessionTable, MessageTable, PartTable, TodoTable } from "@recoder/opencode-core/session/sql"
-export { SessionShareTable } from "@recoder/opencode-core/share/sql"
-export { WorkspaceTable } from "@recoder/opencode-core/control-plane/workspace.sql"

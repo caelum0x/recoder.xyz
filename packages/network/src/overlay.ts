@@ -11,7 +11,7 @@
  * second layer: an identity-based zero-trust overlay (OpenZiti). The overlay's
  * heavy implementation is PARK-VENDOR and stays out of this package:
  *
- *   - `go/ziti`                                    — the OpenZiti controller /
+ *   - `modules/networking/ziti`                                    — the OpenZiti controller /
  *                                                    router / SDK source tree
  *                                                    (vendored, built via the
  *                                                    repo Makefile, never a Go

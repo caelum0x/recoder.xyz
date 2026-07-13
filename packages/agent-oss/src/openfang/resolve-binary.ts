@@ -2,7 +2,7 @@ import { accessSync, constants } from 'node:fs';
 import { delimiter, join } from 'node:path';
 
 /**
- * Result of attempting to locate the `openfang` CLI binary (crates/openfang,
+ * Result of attempting to locate the `openfang` CLI binary (modules/agent-engine/openfang,
  * the Rust autonomous-agent Agent OS). The Rust engine is never built here —
  * we only resolve a binary that already exists on PATH, in an env override,
  * or in a conventional repo `target/` directory.
@@ -15,7 +15,7 @@ const BINARY_NAME = 'openfang';
 
 /** Env var an operator can set to point at a specific openfang binary. */
 export const OPENFANG_BINARY_ENV = 'OPENFANG_BINARY';
-/** Env var pointing at a checkout of the openfang Rust workspace (crates/openfang). */
+/** Env var pointing at a checkout of the openfang Rust workspace (modules/agent-engine/openfang). */
 export const OPENFANG_HOME_ENV = 'OPENFANG_HOME';
 
 function isExecutableFile(candidate: string): boolean {
@@ -94,7 +94,7 @@ export function resolveOpenFangBinary(): OpenFangBinaryResolution {
     available: false,
     reason:
       `openfang binary not found. Set ${OPENFANG_BINARY_ENV} to an executable, ` +
-      `set ${OPENFANG_HOME_ENV} to a built crates/openfang checkout, or place ${BINARY_NAME} on PATH.`,
+      `set ${OPENFANG_HOME_ENV} to a built modules/agent-engine/openfang checkout, or place ${BINARY_NAME} on PATH.`,
     searched,
   };
 }

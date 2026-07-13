@@ -1,7 +1,7 @@
 /**
  * @module tensorzero-client
  *
- * TensorZero LLM gateway loopback adapter — fuses `crates/tensorzero` as a
+ * TensorZero LLM gateway loopback adapter — fuses `modules/inference/tensorzero` as a
  * backend-supervised loopback HTTP service and provides a thin degrade-safe
  * client consumed by the run loop for provider calls and inference logging.
  *
@@ -12,7 +12,7 @@
  *
  * FUSION PATTERN (mirrors openfang-daemon.ts + governance-daemon.ts):
  *   - We NEVER build the Rust binary here. If no prebuilt binary is found
- *     (TENSORZERO_BIN env or crates/tensorzero target/{release,debug}/gateway)
+ *     (TENSORZERO_BIN env or modules/inference/tensorzero target/{release,debug}/gateway)
  *     the client gracefully reports "gateway unavailable" and the runtime falls
  *     back to direct provider calls — truthful, never faked.
  *   - The supervisor spawns the binary once on boot, waits for /health 200,
@@ -40,8 +40,8 @@
  *
  * Binary resolution order (first existing wins):
  *   1. TENSORZERO_BIN env (absolute path to a prebuilt binary).
- *   2. <repo>/crates/tensorzero/crates/gateway/target/release/gateway.
- *   3. <repo>/crates/tensorzero/crates/gateway/target/debug/gateway.
+ *   2. <repo>/modules/inference/tensorzero/crates/gateway/target/release/gateway.
+ *   3. <repo>/modules/inference/tensorzero/crates/gateway/target/debug/gateway.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -90,8 +90,8 @@ interface TensorzeroGatewayNapiModule {
  * Build candidate absolute paths for the `tensorzero-gateway-napi.node` file.
  * Resolution order:
  *   1. `TENSORZERO_GATEWAY_NAPI_NODE` env var (explicit override for CI/deploy).
- *   2. `<repo>/crates/tensorzero/crates/tensorzero-gateway-napi/target/release/tensorzero_gateway_napi.node`
- *   3. `<repo>/crates/tensorzero/crates/tensorzero-gateway-napi/target/debug/tensorzero_gateway_napi.node`
+ *   2. `<repo>/modules/inference/tensorzero/modules/inference/tensorzero-gateway-napi/target/release/tensorzero_gateway_napi.node`
+ *   3. `<repo>/modules/inference/tensorzero/modules/inference/tensorzero-gateway-napi/target/debug/tensorzero_gateway_napi.node`
  *   4. Co-located `tensorzero-gateway-napi.node` next to the running JS (deploy layout).
  *
  * This module compiles as CommonJS (`"module": "commonjs"` in tsconfig.json) so
@@ -136,7 +136,7 @@ function buildGatewayNapiCandidates(): string[] {
       const binaryName = 'tensorzero_gateway_napi.node';
       // The cargo WORKSPACE target dir (where `cargo build -p tensorzero-gateway-napi`
       // actually emits — same layout lesson as openfang_napi.node).
-      const wsTarget = join(dir, 'crates', 'tensorzero', 'crates', 'target');
+      const wsTarget = join(dir, 'modules', 'inference', 'tensorzero', 'crates', 'target');
       candidates.push(join(wsTarget, 'release', binaryName));
       candidates.push(join(wsTarget, 'debug', binaryName));
       // Legacy per-crate target locations (kept for prebuilt artifacts).
@@ -336,7 +336,7 @@ const BACKOFF_CAP_MS = 30_000;
 
 /**
  * Walk up from this module's compiled location to the repo root (the directory
- * containing `crates/tensorzero`). Returns undefined if not found within 12
+ * containing `modules/inference/tensorzero`). Returns undefined if not found within 12
  * parents (never loops).
  */
 function findRepoRoot(): string | undefined {
@@ -351,7 +351,7 @@ function findRepoRoot(): string | undefined {
   }
   for (let i = 0; i < 12; i++) {
     // Detect the repo root by the presence of the tensorzero crate workspace.
-    if (fsExists(pathJoin(dir, 'crates', 'tensorzero', 'crates', 'Cargo.toml'))) {
+    if (fsExists(pathJoin(dir, 'modules', 'inference', 'tensorzero', 'crates', 'Cargo.toml'))) {
       return dir;
     }
     const parent = pathDirname(dir);
@@ -376,7 +376,7 @@ export function resolveTensorzeroBin(env: NodeJS.ProcessEnv = process.env): stri
   if (!root) return undefined;
 
   const { join } = require('node:path') as typeof import('node:path');
-  const base = join(root, 'crates', 'tensorzero', 'crates', 'gateway', 'target');
+  const base = join(root, 'modules', 'inference', 'tensorzero', 'crates', 'gateway', 'target');
   const candidates = [
     join(base, 'release', DAEMON_BIN_NAME),
     join(base, 'debug', DAEMON_BIN_NAME),
@@ -742,7 +742,7 @@ export async function tensorzeroHealth(): Promise<TensorzeroHealth> {
       mode: 'unconfigured',
       reason: binPath
         ? 'Binary found but daemon not yet started'
-        : `Set ${TENSORZERO_URL_ENV} or build crates/tensorzero to enable the gateway`,
+        : `Set ${TENSORZERO_URL_ENV} or build modules/inference/tensorzero to enable the gateway`,
     };
   }
 

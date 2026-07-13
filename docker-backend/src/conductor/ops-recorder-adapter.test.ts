@@ -144,7 +144,7 @@ describe('opsRecorderShapeToDetail', () => {
     expect(detail).toContain('Add retry to payment webhook');
     expect(detail).toContain('Failing CI for 3 days');
     expect(detail).toContain('high');
-    expect(reportedBy).toBe('py/ops-recorder');
+    expect(reportedBy).toBe('modules/signals/ops-recorder');
   });
 
   it('includes optional fields when present', () => {

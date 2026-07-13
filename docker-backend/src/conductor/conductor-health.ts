@@ -74,7 +74,7 @@ export interface ConductorHealth {
   services: {
     /** `bd`/beads CLI (go) — shelled by the agent-os task sync when on PATH. */
     beads: { available: boolean; bin: string; version?: string; reason?: string };
-    /** `py/colbert` rerank seam — connected when `COLBERT_RERANK_URL` is set. */
+    /** `modules/memory/colbert` rerank seam — connected when `COLBERT_RERANK_URL` is set. */
     colbertRerank: { available: boolean; url?: string };
   };
   /**

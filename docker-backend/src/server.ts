@@ -12411,7 +12411,7 @@ if (agentOsContainer.repositoryDriver === 'postgres' && agentOsContainer.pgPool)
   })().catch((err) => logger.warn({ err }, 'Agent OS migration boot step failed (non-fatal)'));
 }
 // Owned Rust governance kernel: when the prebuilt governance daemon binary is
-// present (crates/recoder-governance — target/release|debug, or
+// present (modules/governance/recoder-governance — target/release|debug, or
 // RECODER_GOVERNANCE_DAEMON), spawn it on boot so conductor delivery decisions
 // route through the real Rust kernel over its UDS. Degrade-safe: when the binary
 // is absent (the default — we never BUILD the crate here) governance stays on the
@@ -12429,7 +12429,7 @@ void ensureGovernanceDaemon()
   .catch((err) => logger.warn({ err }, 'governance daemon boot step failed (non-fatal, degrading to pure-TS)'));
 
 // OpenFang autonomous agent engine: when the prebuilt openfang binary is
-// present (crates/openfang — target/release|debug, or OPENFANG_BIN), spawn it
+// present (modules/agent-engine/openfang — target/release|debug, or OPENFANG_BIN), spawn it
 // on boot as a loopback subprocess so the OSS dispatch path can drive real
 // RunEvents. A2A boundary: Recoder owns task/approval/memory; openfang only
 // emits RunEvents. Degrade-safe: when the binary is absent the backend stays
@@ -12448,7 +12448,7 @@ void ensureOpenfangDaemon()
   .catch((err) => logger.warn({ err }, 'openfang daemon boot step failed (non-fatal, degrading to pure-TS dispatch)'));
 
 // ColBERT rerank sidecar: when COLBERT_RERANK_URL is set (external) or python3
-// + py/colbert/rerank_server.py are present, spawn/supervise the loopback
+// + modules/memory/colbert/rerank_server.py are present, spawn/supervise the loopback
 // Flask rerank service and export COLBERT_RERANK_URL so the existing
 // `colbertRerank` seam (conductor/colbert-rerank.ts) connects. Degrade-safe:
 // python/torch/entrypoint absent → the conductor stays on the identity
@@ -12467,7 +12467,7 @@ void ensureColbertDaemon()
   .catch((err) => logger.warn({ err }, 'colbert rerank sidecar boot step failed (non-fatal, staying on no-rerank path)'));
 
 // ops-recorder work-signals sidecar: when OPS_RECORDER_URL is set (external)
-// or python3 + py/ops-recorder/work-signals/main.py are present (and auth is
+// or python3 + modules/signals/ops-recorder/work-signals/main.py are present (and auth is
 // configured — OPS_RECORDER_API_KEY or OPS_RECORDER_AUTH_DISABLED=1), spawn/
 // supervise the loopback FastAPI stuck-work detector and export
 // OPS_RECORDER_URL so the existing forward seam (conductor/
@@ -12487,7 +12487,7 @@ void ensureOpsRecorderDaemon()
   .catch((err) => logger.warn({ err }, 'ops-recorder sidecar boot step failed (non-fatal, staying on no-forward path)'));
 
 // TensorZero LLM gateway: when TENSORZERO_URL is set (external) or a prebuilt
-// gateway binary is present (crates/tensorzero/crates/gateway — target/release|debug,
+// gateway binary is present (modules/inference/tensorzero/crates/gateway — target/release|debug,
 // or TENSORZERO_BIN), connect/spawn it so inference calls route through the LLM
 // gateway for logging, routing, and experiment tracking. Degrade-safe: when
 // unconfigured/absent the run loop falls back to direct provider calls (no fake
@@ -13420,7 +13420,7 @@ app.use(createAgentSkillProfilesRouter({ authenticateRequest }));
 app.use(createLlmRouterRouter({ authenticateRequest }));
 
 // ── TensorZero LLM Gateway API ───────────────────────────────────────────────
-// Degrade-safe loopback adapter for TensorZero (crates/tensorzero). Surfaces
+// Degrade-safe loopback adapter for TensorZero (modules/inference/tensorzero). Surfaces
 // inference logging + routing at /api/gateway/*. Returns 503 when unconfigured.
 
 app.use(createTensorzeroRouter({ authenticateRequest }));

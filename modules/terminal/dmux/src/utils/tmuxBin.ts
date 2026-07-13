@@ -2,7 +2,7 @@
  * Resolve the tmux binary @recoder/dmux drives.
  *
  * @recoder/dmux is the optional operator console over Recoder's Conductor substrate.
- * The Conductor pins a vendored tmux C binary (built from `c/tmux`) and drives it via
+ * The Conductor pins a vendored tmux C binary (built from `modules/terminal/tmux`) and drives it via
  * its CLI — never `tmux` from a random PATH. dmux MUST use the same binary so the
  * operator console and the headless conductor sessions share one tmux server.
  *
@@ -12,7 +12,7 @@
  *   1. DMUX_TMUX_BIN          — dmux-specific override (absolute path).
  *   2. CONDUCTOR_TMUX_BIN     — Conductor's pinned-binary override (absolute path).
  *   3. RECODER_TMUX_BUILD_PATH — the built vendored binary path.
- *   4. <repo>/c/tmux/tmux     — vendored build discovered by walking up to repo root.
+ *   4. <repo>/modules/terminal/tmux/tmux     — vendored build discovered by walking up to repo root.
  *   5. 'tmux'                 — system PATH (last resort, never assumed present).
  */
 import { existsSync } from 'node:fs';
@@ -49,7 +49,7 @@ function resolveVendoredTmux(): string | undefined {
   const fromEnv = firstExistingEnv('RECODER_TMUX_BUILD_PATH');
   if (fromEnv) return fromEnv;
 
-  // Walk up from this module to the Recoder repo root (the dir containing c/tmux/tmux.c).
+  // Walk up from this module to the Recoder repo root (the dir containing modules/terminal/tmux/tmux.c).
   let dir = HERE;
   for (let i = 0; i < 12; i++) {
     if (pathExists(path.join(dir, 'c', 'tmux', 'tmux.c'))) {

@@ -44,7 +44,9 @@ const path = __importStar(require("path"));
 const fs_1 = require("fs");
 const child_process_1 = require("child_process");
 const util_1 = require("util");
-const execAsync = (0, util_1.promisify)(child_process_1.exec);
+// Use execFile (argument array, no shell) to prevent command injection via
+// attacker-controlled file/dir paths. See CVE-class: command-injection.
+const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
 const docker = new dockerode_1.default();
 /**
  * Copy files into running container
@@ -64,7 +66,7 @@ async function mountFiles(containerId, files) {
                 const containerPath = `/workspace/${fileName}`;
                 // Create tar archive of single file
                 const tarPath = `/tmp/mount-${Date.now()}.tar`;
-                await execAsync(`tar -cf ${tarPath} -C "${path.dirname(filePath)}" "${fileName}"`);
+                await execFileAsync('tar', ['-cf', tarPath, '-C', path.dirname(filePath), fileName]);
                 // Upload to container
                 await container.putArchive((0, fs_1.createReadStream)(tarPath), { path: '/workspace' });
                 // Cleanup
@@ -88,7 +90,7 @@ async function mountDirectory(containerId, dirPath) {
     const containerPath = `/workspace/${dirName}`;
     // Create tar archive of directory
     const tarPath = `/tmp/mount-dir-${Date.now()}.tar`;
-    await execAsync(`tar -cf ${tarPath} -C "${path.dirname(dirPath)}" "${dirName}"`);
+    await execFileAsync('tar', ['-cf', tarPath, '-C', path.dirname(dirPath), dirName]);
     // Upload to container
     await container.putArchive((0, fs_1.createReadStream)(tarPath), { path: '/workspace' });
     // Cleanup

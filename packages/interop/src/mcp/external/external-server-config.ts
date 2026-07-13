@@ -2,7 +2,7 @@
  * Configuration for an EXTERNAL stdio MCP server that interop supervises.
  *
  * "External" means a real OS process we did not write and do not trust beyond
- * its declared contract — e.g. the cloned Python `py/pal-mcp-server`. We host it
+ * its declared contract — e.g. the cloned Python `modules/communication/pal-mcp-server`. We host it
  * over stdio MCP and gate every call through the same authorize→risk→policy→
  * audit path as in-proc servers. This config is the *trusted* declaration of how
  * to launch and bound the process; the process's *self-description* (its

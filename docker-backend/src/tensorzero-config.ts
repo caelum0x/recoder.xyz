@@ -16,7 +16,7 @@
  *      each with a `default` chat_completion variant pointing at the model.
  *   3. Materializes the TOML to a temp path for `EmbeddedGateway.boot()`.
  *
- * CONFIG SHAPE (verified against crates/tensorzero docs + ui/fixtures):
+ * CONFIG SHAPE (verified against modules/inference/tensorzero docs + ui/fixtures):
  *
  *   [models."openai/gpt-4o-mini"]
  *   routing = ["openai"]
@@ -107,7 +107,7 @@ export const TENSORZERO_DEFAULT_FUNCTION = 'recoder_default';
 // ---------------------------------------------------------------------------
 
 interface TzProviderMapping {
-  /** TensorZero provider `type` (verified against crates/tensorzero docs). */
+  /** TensorZero provider `type` (verified against modules/inference/tensorzero docs). */
   tzType: string;
   /** Env var NAME for the key (mirrors llm-router's keyEnv). */
   keyEnv?: string;

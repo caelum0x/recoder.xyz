@@ -22,7 +22,7 @@ export type { OpenFangBinaryResolution };
 
 /**
  * Agent profile for OpenFang — the Rust autonomous-agent CLI living at
- * crates/openfang. OpenFang is registered as a dispatchable OSS engine: a
+ * modules/agent-engine/openfang. OpenFang is registered as a dispatchable OSS engine: a
  * workspace can run through the `openfang` binary as a subprocess when it is
  * present on the host, and degrades safely (no run, honest event) when absent.
  *

@@ -4,9 +4,37 @@
  * Spawns and manages MCP servers inside user containers
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.NPX_SERVERS = exports.PREINSTALLED_SERVERS = exports.mcpManager = void 0;
+exports.PYTHON_SERVERS = exports.NPX_SERVERS = exports.PREINSTALLED_SERVERS = exports.mcpManager = void 0;
 const child_process_1 = require("child_process");
 const events_1 = require("events");
+/**
+ * SECURITY: MCP server stdout is untrusted subprocess output. Reject anything
+ * that is not a plain JSON object whose routing fields have the expected
+ * primitive types, so malformed/hostile payloads cannot drive the dispatch
+ * logic below. This does not constrain `result`/`params`, which are forwarded
+ * verbatim to callers exactly as before.
+ */
+function isValidJsonRpcMessage(value) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return false;
+    }
+    const msg = value;
+    // `id`, when present, must be a JSON-RPC primitive id (string or number).
+    if ('id' in msg && msg.id !== undefined) {
+        if (typeof msg.id !== 'string' && typeof msg.id !== 'number') {
+            return false;
+        }
+    }
+    // `method`, when present, must be a string.
+    if ('method' in msg && msg.method !== undefined && typeof msg.method !== 'string') {
+        return false;
+    }
+    // A message must be routable as a response (has id) or a notification (has method).
+    if (msg.id === undefined && typeof msg.method !== 'string') {
+        return false;
+    }
+    return true;
+}
 // Idle timeout - kill servers after 5 minutes of inactivity
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 // Max servers per project
@@ -261,14 +289,29 @@ class MCPManager extends events_1.EventEmitter {
             if (!line.trim())
                 continue;
             try {
-                const message = JSON.parse(line);
+                // SECURITY: This data comes from arbitrary subprocess stdout (a spawned
+                // MCP server, possibly an npx-fetched package — see NPX_SERVERS below).
+                // It is fully untrusted. Validate shape before acting on any field so
+                // malformed/hostile JSON is rejected rather than processed.
+                const parsed = JSON.parse(line);
+                if (!isValidJsonRpcMessage(parsed)) {
+                    // Drop messages that don't look like JSON-RPC (logging noise, junk,
+                    // or hostile payloads). Same effect as the prior non-JSON branch.
+                    continue;
+                }
+                const message = parsed;
                 // Handle response
                 if (message.id !== undefined) {
                     const pending = instance.pendingRequests.get(String(message.id));
                     if (pending) {
                         instance.pendingRequests.delete(String(message.id));
                         if (message.error) {
-                            pending.reject(new Error(message.error.message || 'MCP error'));
+                            const errMsg = typeof message.error === 'object' &&
+                                message.error !== null &&
+                                typeof message.error.message === 'string'
+                                ? message.error.message
+                                : 'MCP error';
+                            pending.reject(new Error(errMsg));
                         }
                         else {
                             pending.resolve(message.result);
@@ -276,7 +319,7 @@ class MCPManager extends events_1.EventEmitter {
                     }
                 }
                 // Handle notifications
-                if (message.method && !message.id) {
+                if (typeof message.method === 'string' && message.id === undefined) {
                     this.emit('notification', {
                         projectId,
                         serverId,
@@ -344,7 +387,15 @@ exports.PREINSTALLED_SERVERS = {
         args: ['/opt/mcp-servers/node_modules/@modelcontextprotocol/server-time/dist/index.js'],
     },
 };
-// Servers that need npx (not pre-installed, for custom or API-key required servers)
+// SECURITY / SUPPLY-CHAIN RISK: these entries spawn `npx -y <package>`, which
+// downloads and executes an npm package at runtime inside the user container.
+// `-y` auto-confirms install, and arbitrary `command`/`args` can also be passed
+// to startServer() from elsewhere, so this is an arbitrary-code-execution and
+// supply-chain surface (a compromised/typo-squatted package runs with the
+// container's privileges). Do NOT remove this without a replacement: instead
+// pin versions/integrity, restrict to an allowlist, and run in a locked-down
+// sandbox. Untrusted stdout from these processes is shape-checked in
+// processBuffer() via isValidJsonRpcMessage().
 exports.NPX_SERVERS = {
     github: {
         name: 'GitHub',
@@ -374,5 +425,43 @@ exports.NPX_SERVERS = {
         command: 'npx',
         args: ['-y', '@modelcontextprotocol/server-slack'],
         env: { SLACK_BOT_TOKEN: '', SLACK_TEAM_ID: '' },
+    },
+};
+/**
+ * First-party Python-based MCP servers.
+ *
+ * Degrade-safe: each entry is only surfaced in the catalog when the
+ * corresponding opt-in env flag is set to `"1"` (checked at call-site in
+ * mcp.routes.ts). If the Python runtime or the server's dependencies are
+ * absent the spawn will fail cleanly — the manager already handles that by
+ * marking the instance `error` and returning `{ success: false }`.
+ *
+ * Spawn env: follows the same pattern as the entries above — only the keys
+ * listed in `env` are forwarded beyond what the manager already merges from
+ * `process.env` in `startServer()`.  Do NOT add secrets here; pass them at
+ * start-time via the client's `config.env` payload.
+ *
+ * Launch command:
+ *   `python -m browser_use.mcp` (requires browser-use installed in the
+ *   Python env that `python` resolves to inside the user container).
+ *   The module entrypoint runs `asyncio.run(main())` which starts the MCP
+ *   stdio server — identical to the documented `uvx browser-use --mcp` path
+ *   but usable without uvx/uv when the package is already installed.
+ */
+exports.PYTHON_SERVERS = {
+    'browser-use': {
+        name: 'Browser Use',
+        command: 'python',
+        args: ['-m', 'browser_use.mcp'],
+        // Degrade-safe gate: server is only offered/spawnable when BROWSER_USE_ENABLED=1
+        enabledByEnv: 'BROWSER_USE_ENABLED',
+        // MCP tool calls to this server route through estimateMcpToolRisk() in
+        // packages/agent-mcp — tool names containing "browser" already resolve to
+        // 'medium' risk, so approval gates apply automatically.
+        env: {
+            // Suppress browser-use's own verbose logging on MCP stdio paths.
+            BROWSER_USE_LOGGING_LEVEL: 'critical',
+            BROWSER_USE_SETUP_LOGGING: 'false',
+        },
     },
 };
