@@ -335,7 +335,8 @@
       "esbuild",
       "lightningcss",
       "sharp",
-      "canvas"
+      "canvas",
+      "electron"
     ]
   },
   "engines": {

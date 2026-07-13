@@ -3,6 +3,11 @@ packages:
   - apps/agent-gateway
   - apps/agent-worker
   - apps/mobile
+  # The Recoder terminal (Wave fork) — member so the shell can workspace:* import
+  # @recoder/* packages (Cursor-style shell fusion). tsunami/frontend is its
+  # build-time sub-app (was an npm sub-workspace); docs/ stays standalone-npm.
+  - apps/wave
+  - apps/wave/tsunami/frontend
   - shared
   - packages/*
   - scripts
