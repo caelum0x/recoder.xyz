@@ -11,11 +11,26 @@
 import type { MemoryStore } from '@recoder/agent-memory';
 import type { MemoryCandidate, MemoryItem } from '@recoder/agent-os';
 import type { AgentOsRepository } from '../repositories/agent-os.repository';
+import { rememberCandidate } from '../../conductor/beads-memory.js';
 
 export function createRepositoryMemoryStore(repository: AgentOsRepository): MemoryStore {
   return {
     async createCandidate(candidate: MemoryCandidate): Promise<MemoryCandidate> {
-      return repository.upsertMemoryCandidate(candidate);
+      const stored = await repository.upsertMemoryCandidate(candidate);
+      // Mirror into the SHARED beads memory layer (ephemeral wisp) so every
+      // future agent launch recalls it from the issue graph (bundle.ts recall).
+      // The repository remains the store-of-record; the mirror is best-effort
+      // and degrade-safe (bd unavailable → repository copy untouched, nothing
+      // faked, nothing thrown).
+      rememberCandidate({
+        title: `[memory] ${stored.title}`,
+        body: [
+          stored.body,
+          `Candidate: ${stored.candidateId} · scope: ${stored.scope}`,
+        ].join('\n'),
+        scope: stored.scope,
+      });
+      return stored;
     },
     async listCandidates(scope?: string): Promise<MemoryCandidate[]> {
       const all = await repository.listMemoryCandidates();
