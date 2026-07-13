@@ -67,9 +67,23 @@ const logger = createLogger('tensorzero-client');
 // these functions return undefined / throw — the callers fall back gracefully.
 // ---------------------------------------------------------------------------
 
+/** The embedded gateway class (the full TZ engine, in-process — no HTTP server). */
+interface TensorzeroEmbeddedGatewayInstance {
+  /** POST /inference equivalent; params/result are JSON strings. Never blocks the loop (async). */
+  inference(paramsJson: string): Promise<string>;
+  /** POST /feedback equivalent; params/result are JSON strings. */
+  feedback(paramsJson: string): Promise<string>;
+}
+
+interface TensorzeroEmbeddedGatewayClass {
+  boot(configFile?: string | null, clickhouseUrl?: string | null): Promise<TensorzeroEmbeddedGatewayInstance>;
+}
+
 interface TensorzeroGatewayNapiModule {
   gatewayVersion(): string;
   validateConfigPath(configPath: string): Promise<void>;
+  /** Present in builds that include the embedded-gateway binding. */
+  EmbeddedGateway?: TensorzeroEmbeddedGatewayClass;
 }
 
 /**
@@ -112,8 +126,14 @@ function buildGatewayNapiCandidates(): string[] {
       'tensorzero-gateway-napi',
     );
     if (existsSync(crateDir)) {
-      const base = join(crateDir, 'target');
       const binaryName = 'tensorzero_gateway_napi.node';
+      // The cargo WORKSPACE target dir (where `cargo build -p tensorzero-gateway-napi`
+      // actually emits — same layout lesson as openfang_napi.node).
+      const wsTarget = join(dir, 'crates', 'tensorzero', 'crates', 'target');
+      candidates.push(join(wsTarget, 'release', binaryName));
+      candidates.push(join(wsTarget, 'debug', binaryName));
+      // Legacy per-crate target locations (kept for prebuilt artifacts).
+      const base = join(crateDir, 'target');
       candidates.push(join(base, 'release', binaryName));
       candidates.push(join(base, 'debug', binaryName));
       break;
@@ -206,9 +226,52 @@ export async function nativeValidateConfigPath(configPath: string): Promise<bool
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Embedded gateway — the full TZ engine IN-PROCESS (no HTTP server, no
+// subprocess). Boot is lazy + memoized; failures degrade to the loopback path.
+// ---------------------------------------------------------------------------
+
+/** Config file for the embedded gateway (same file the subprocess would use). */
+export const TENSORZERO_CONFIG_ENV = 'TENSORZERO_CONFIG';
+
+let _embeddedGateway: TensorzeroEmbeddedGatewayInstance | undefined;
+let _embeddedGatewayTried = false;
+
+/**
+ * Boot (once) and return the in-process embedded gateway, or `undefined` when
+ * the native addon is absent, lacks the `EmbeddedGateway` binding, or boot
+ * fails (bad config, etc.). Never throws; never fakes success.
+ */
+export async function getEmbeddedGateway(): Promise<TensorzeroEmbeddedGatewayInstance | undefined> {
+  if (_embeddedGatewayTried) return _embeddedGateway;
+  _embeddedGatewayTried = true;
+
+  const mod = tryLoadGatewayNapiModule();
+  if (!mod?.EmbeddedGateway || typeof mod.EmbeddedGateway.boot !== 'function') {
+    return undefined;
+  }
+  const configFile = process.env[TENSORZERO_CONFIG_ENV]?.trim() || null;
+  try {
+    _embeddedGateway = await mod.EmbeddedGateway.boot(configFile, null);
+    logger.info(
+      { configFile },
+      'TensorZero embedded gateway booted IN-PROCESS — inference routes natively (no HTTP hop)',
+    );
+    return _embeddedGateway;
+  } catch (err) {
+    logger.warn(
+      { err, configFile },
+      'TensorZero embedded gateway boot failed — degrading to loopback/subprocess path',
+    );
+    return undefined;
+  }
+}
+
 /** Reset the native module cache (for testing only). */
 export function __resetNativeGatewayModuleForTest(): void {
   _nativeGatewayModule = null;
+  _embeddedGateway = undefined;
+  _embeddedGatewayTried = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -549,6 +612,32 @@ export interface TensorzeroInferenceResult {
 export async function postInference(
   input: TensorzeroInferenceInput,
 ): Promise<TensorzeroInferenceResult> {
+  // FUSION: prefer the embedded in-process gateway (full TZ engine, no HTTP hop).
+  // On a native-call failure we fall through to the loopback path truthfully —
+  // the error is logged, never swallowed into a fake success.
+  const embedded = await getEmbeddedGateway();
+  if (embedded) {
+    try {
+      const raw = await embedded.inference(JSON.stringify(input));
+      const r = JSON.parse(raw) as {
+        inference_id?: string;
+        content?: unknown;
+        usage?: { input_tokens?: number; output_tokens?: number };
+      };
+      return {
+        routed: true,
+        inference_id: r.inference_id,
+        content: r.content,
+        usage: r.usage,
+      };
+    } catch (err) {
+      logger.warn(
+        { err, function_name: input.function_name },
+        'embedded TensorZero inference failed — trying loopback gateway path',
+      );
+    }
+  }
+
   const h = tensorzeroHandle();
   if (!h) {
     return {
