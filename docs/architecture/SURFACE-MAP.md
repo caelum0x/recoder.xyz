@@ -234,7 +234,7 @@ is **legitimate cross-machine edge traffic**, not in-process avoidance.
 | `go/ziti` | OpenZiti zero-trust overlay | vendored-park | Cross-machine encrypted tunneling (thin adapter) | park |
 | `go/multica` | Multi-agent task-tracking platform | vendored-park | Source ref for claim/dispatch semantics (ported) | park |
 | `py/ops-recorder` | Work-signals API (detectors/storage) | http-edge | Fleet telemetry / anomaly tracking (**wire-up**) | wire-up |
-| `crates/openfang` | Rust autonomous-agent runtime | subprocess-cli / NAPI (native-first) | E7 governed autonomous-agent surface — seamed via the fleet, degrade → pure-TS OSS dispatch (`.node` build deferred) | wire-up |
+| `crates/openfang` | Rust autonomous-agent runtime | NAPI in-process (2026-07-13) | E7 governed autonomous-agent surface — fused in-process via `conductor/openfang-native.ts`, degrade → pure-TS OSS dispatch | wired |
 | `deploy` | AMI / compose / Envoy self-host manifests | http-edge | Recoder Cloud as a machine image in the customer VPC | keep-supporting |
 
 ---
@@ -272,7 +272,7 @@ CLIs they drive run as **`subprocess-cli` under tmux**.
 | `ts/oh-my-openagent` | opencode harness for Conductor | subprocess-cli | opencode plugin (provenance origin) | keep-core |
 | `ts/open-agents` | In-process ToolLoopAgent runtime | in-process-import | Core executor for the in-process driver | keep-core |
 | `docker-backend/vendor/opencode` | Un-rebranded opencode clone (sidecar) | subprocess-cli | Fallback/reference opencode image | park |
-| `crates/claw-code-parity` | Claude Code parity test harness | subprocess-cli | Parity validation suite | park |
+| `crates/claw-code-parity` | ~~Claude Code parity test harness~~ | N/A (removed 2026-07-13) | Not product runtime; consumer degrades to TS fallback | del |
 | **LLM provider layer** | | | | |
 | `packages/language-model` | Multi-provider LLM abstraction | in-process-import | Provider registry + capability mapping | keep-core |
 | `packages/language-model-registry` | LLM registry + resolver | in-process-import | Declarative model registration | keep-core |
@@ -352,8 +352,8 @@ the assembly logic is fused in-process.
 | `packages/langfuse` | Langfuse observability vendor; zero importers (agency-cluster orphan). |
 | `packages/lance` / `crates/lance` | Intended vector-store substrate; never wired. |
 | `crates/tensorzero` | LLM-gateway/eval candidate; not adopted. |
-| `crates/openfang` | Provenance for the owned governance/runtime port; no live consumer. |
-| `crates/claw-code-parity` | Claude Code parity reference harness. |
+| `crates/openfang` | **DONE (2026-07-13)** — Compiled into NAPI `.node` and fused in-process; 45 methods; agent engine + hands + triggers + workflows in-process. See `conductor/openfang-native.ts`. |
+| `crates/claw-code-parity` | **REMOVED (2026-07-13)** — Eval harness, not product runtime; consumer degrades to TS fallback. |
 | `go/ziti` | OpenZiti zero-trust overlay behind a thin adapter; cross-machine only, not local path. |
 | `go/multica` | Source ref for coordination claim/dispatch semantics (ported into owned code). |
 

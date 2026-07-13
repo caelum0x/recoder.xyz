@@ -37,7 +37,7 @@ through MCP tools — every call passing `authorize → risk → execute → aud
 apps/desktop (Electron)
  └─ docker-backend  ── THE CONDUCTOR: supervises the fleet, mounts engines, exposes
      │                 /api/{conductor,agent-os,mcp,a2a,connectors,network}
-     ├─ Rust daemons     governance(UDS) · openfang(HTTP :4200) · tensorzero-gateway(HTTP)
+     ├─ Rust daemons     governance(UDS) · openfang(in-process NAPI, 2026-07-13+) · tensorzero-gateway(HTTP)
      ├─ Go services      recoder-xds(Envoy xDS) · ziti(overlay) · beads(bd) · multica(dispatch)
      ├─ Python services  colbert(rerank) · mem0(memory) · browser-use(web) · ops-recorder(signals)
      ├─ TS in-process    agent-os · runtime · brain · recodergit · coordination · pal · workflows · interop/mcp
@@ -52,7 +52,7 @@ apps/desktop (Electron)
 |---|---|---|---|
 | **C** | `c/tmux` | The `tmux_worktree` substrate binary the conductor drives | pinned binary |
 | **Rust** | `crates/recoder-governance` | Merkle-chained tamper-evident **audit + policy kernel** | UDS daemon |
-| | `crates/openfang` | **Autonomous agent engine** (Rust Agent OS) — a governed execution surface | HTTP subprocess :4200 / NAPI |
+| | `crates/openfang` | **Autonomous agent engine** (Rust Agent OS) — a governed execution surface | NAPI in-process (2026-07-13+) |
 | | `crates/tensorzero` | **LLM Gateway** — provider routing, caching, observability, experiments (**adopt**) | HTTP daemon |
 | | `crates/claw-code-parity` | Harness-parity reference | → `vendor/` |
 | **Go** | `go/recoder-xds` | **Envoy xDS control plane** — dynamic default-deny service mesh | service |
@@ -97,8 +97,8 @@ engine; MCP is only the skin.
    `packages/{pi-*,recoder-code}`. Drives every coding CLI headless. API: `/api/conductor`.
 6. **Substrate** — `packages/substrate` + `c/tmux` + Daytona/E2B (`agent-sandbox`). Worktree+tmux
    local; remote sandboxes for cloud/teams.
-7. **Autonomous Engine** — `crates/openfang`. A Rust autonomous agent OS as a governed, replaceable
-   execution surface (HTTP :4200 / NAPI). Degrade-safe: absent → pure-TS OSS dispatch.
+7. **Autonomous Engine** — `crates/openfang`. A Rust autonomous agent OS compiled into a NAPI `.node` and
+   fused in-process as a governed, replaceable execution surface (2026-07-13+). Degrade-safe: absent → pure-TS OSS dispatch.
 8. **OSS Adapters** — `packages/agent-oss` (langgraph/crewai/autogen/e2b/daytona/…) as governed,
    replaceable surfaces behind the substrate.
 9. **Sandbox / Browser Automation** — `py/browser-use` + `packages/recoder-browser-tools` +
@@ -133,7 +133,7 @@ loopback-only, health-checked, and **degrade-safe** (absent → truthful fallbac
 | Service | Lang | Transport | Supervisor seam | Fallback when absent |
 |---|---|---|---|---|
 | governance daemon | Rust | UDS | `packages/governance` facade | in-proc TS policy (fail-closed) |
-| openfang engine | Rust | HTTP :4200 / NAPI | `conductor/openfang-daemon.ts` | pure-TS OSS dispatch |
+| openfang engine | Rust | NAPI in-process (2026-07-13+) | `conductor/openfang-native.ts` | pure-TS OSS dispatch |
 | tensorzero gateway | Rust | HTTP | NEW `gateway/tensorzero-daemon.ts` | pi-ai direct BYOK |
 | recoder-xds | Go | gRPC/ADS | `network/*` | static Envoy bootstrap |
 | ziti | Go | overlay | `agent-oss` openziti-adapter | loopback only |
@@ -746,12 +746,15 @@ export const FLEET: FleetService[] = [
     health: { kind: 'uds-ping', path: '$GOV_SOCK' },
     degradeTo: 'in-proc TS policy facade (fail-closed cloud / seal-loopback solo)' },
 
-  { id: 'openfang',    lang: 'rust',
-    resolveBinary: () => bin('openfang'),                           // crates/openfang
-    spawn: (env, port) => ['openfang', 'serve', '--addr', `127.0.0.1:${port}`],
-    port: 4200,
-    health: { kind: 'http', url: 'http://127.0.0.1:4200/health', auth: 'OPENFANG_API_KEY' },
-    degradeTo: 'pure-TS OSS dispatch (packages/agent-oss)' },
+  // openfang is NAPI in-process (2026-07-13+), not a spawned binary.
+  // See docker-backend/src/conductor/openfang-native.ts: loads the `.node` at startup.
+  // Old HTTP :4200 spawn config (deprecated):
+  // { id: 'openfang',    lang: 'rust',
+  //   resolveBinary: () => bin('openfang'),
+  //   spawn: (env, port) => ['openfang', 'serve', '--addr', `127.0.0.1:${port}`],
+  //   port: 4200,
+  //   health: { kind: 'http', url: 'http://127.0.0.1:4200/health', auth: 'OPENFANG_API_KEY' },
+  //   degradeTo: 'pure-TS OSS dispatch (packages/agent-oss)' },
 
   { id: 'tensorzero',  lang: 'rust',
     resolveBinary: () => bin('tensorzero-gateway'),                 // crates/tensorzero

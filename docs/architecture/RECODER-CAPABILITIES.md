@@ -52,9 +52,9 @@ executor/native build pending · **catalog** = registered, executor not yet boun
 |---|---|---|
 | `recoder-governance` | Deny-biased policy + tamper-evident Merkle audit on every delivery. The moat. Compiled `.node`, native-first, daemon + UDS fallback, pure-TS fail-closed fallback. | **wired** |
 | `lance` | ~~In-process columnar/vector store~~ | **removed** (Phase 0) — RAG now uses Qdrant via `vector-store.ts` + `@recoder/retrieval`; see [RAG-CONSOLIDATION](./RAG-CONSOLIDATION.md) |
-| `openfang` | Autonomous Agent-OS execution engine (137K-LOC Rust) as a swappable authority. Subprocess + native-first seams. | **partial** (`.node` build deferred) |
-| `tensorzero` | Unified multi-provider LLM gateway (<1ms p99) + inference observability + fallbacks — one governed, logged path for every model call. | **partial** (`.node` deferred) |
-| `claw-code-parity` | Coding-agent parity/eval harness. | **partial** |
+| `openfang` | Autonomous Agent-OS execution engine (137K-LOC Rust) as a swappable authority. NAPI in-process + native-first seams (2026-07-13). | **wired** (45 methods, in-process via `conductor/openfang-native.ts`) |
+| `tensorzero` | Unified multi-provider LLM gateway (<1ms p99) + inference observability + fallbacks — one governed, logged path for every model call. | **partial** (NAPI `.node` deferred — disk constraint) |
+| `claw-code-parity` | ~~Coding-agent parity/eval harness~~ | **removed** (2026-07-13) — eval harness, not product runtime; consumer degrades to TS fallback |
 
 ### `go/` — networking, issue-tracking, xDS
 | Capability | What it gives the agent | Status |
