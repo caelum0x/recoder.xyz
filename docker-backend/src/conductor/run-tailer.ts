@@ -28,6 +28,7 @@ import {
 import { agentOsContainer } from '../agent-os/service-container';
 import { createLogger } from '../logger';
 import { getSubstrate } from './substrate.js';
+import { startControlModeTail, type ControlModeTail } from './tmux-control-mode.js';
 
 const logger = createLogger('conductor:tail');
 
@@ -119,11 +120,37 @@ const repositorySink: RunEventSink = {
  * terminal `completed` when the session ends (or `failed` on non-zero exit /
  * max-time stop). Idempotent per workspace; returns a stop handle.
  */
+/**
+ * Active control-mode attachments by workspace. Kept OUTSIDE the package tail
+ * registry so the opt-in listener can be torn down from both stop paths
+ * (handle.stop and stopRunTail) without changing the package contract.
+ */
+const controlModeTails = new Map<string, ControlModeTail>();
+
 export function startRunTail(input: RunTailInput): TailHandle {
   // Resolve the registered substrate once; the package tailer polls its
   // capture/alive/exitCode (exitCode is optional on the package contract).
   const substrate = getSubstrate(input.substrate) as unknown as TailSubstrate;
-  return startPackageRunTail(
+  // Opt-in (TMUX_CONTROL_MODE=1) real-time event stream: wraps the substrate so
+  // capture() is suppressed while the -CC client is healthy and transparently
+  // delegates back to the poller on any degrade. Returns undefined when the
+  // flag is off / substrate isn't tmux — the poller path is byte-for-byte
+  // untouched in that (default) case.
+  const controlMode = startControlModeTail({
+    workspaceId: input.workspaceId,
+    taskId: input.taskId,
+    runId: input.runId,
+    agentId: input.agentId,
+    sessionName: input.sessionName,
+    substrateId: input.substrate,
+    inner: substrate,
+    sink: repositorySink,
+  });
+  if (controlMode) {
+    controlModeTails.get(input.workspaceId)?.stop();
+    controlModeTails.set(input.workspaceId, controlMode);
+  }
+  const handle = startPackageRunTail(
     {
       workspaceId: input.workspaceId,
       taskId: input.taskId,
@@ -135,7 +162,7 @@ export function startRunTail(input: RunTailInput): TailHandle {
       maxMs: input.maxMs,
     },
     {
-      substrate,
+      substrate: controlMode?.substrate ?? substrate,
       sink: repositorySink,
       registry,
       clock: systemClock,
@@ -143,9 +170,28 @@ export function startRunTail(input: RunTailInput): TailHandle {
       logger: loggerPort,
     },
   );
+  if (!controlMode) return handle;
+  return {
+    stop: () => {
+      stopControlModeFor(input.workspaceId);
+      handle.stop();
+    },
+  };
+}
+
+function stopControlModeFor(workspaceId: string): void {
+  const cm = controlModeTails.get(workspaceId);
+  if (!cm) return;
+  controlModeTails.delete(workspaceId);
+  try {
+    cm.stop();
+  } catch {
+    // Teardown of the opt-in listener must never break the poller's stop path.
+  }
 }
 
 export function stopRunTail(workspaceId: string): void {
+  stopControlModeFor(workspaceId);
   stopPackageRunTail(registry, workspaceId);
 }
 
