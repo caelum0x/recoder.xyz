@@ -22,9 +22,9 @@ function existsFor(...suffixes: string[]): void {
   );
 }
 
-const GO_MOD = join('go', 'beads', 'go.mod');
-const OWNED_BIN = join('go', 'beads', 'bin', 'bd');
-const MAKEFILE_BIN = join('go', 'beads', 'bd');
+const GO_MOD = join('apps', 'desktop', 'server', 'engines', 'beads', 'go.mod');
+const OWNED_BIN = join('apps', 'desktop', 'server', 'engines', 'beads', 'bin', 'bd');
+const MAKEFILE_BIN = join('apps', 'desktop', 'server', 'engines', 'beads', 'bd');
 
 describe('resolveBeadsBin', () => {
   beforeEach(() => {
@@ -46,14 +46,14 @@ describe('resolveBeadsBin', () => {
     expect(resolveBeadsBin(env)).toBeUndefined();
   });
 
-  it('resolves the owned repo build modules/memory/beads/bin/bd when no env override is set', () => {
+  it('resolves the owned repo build apps/desktop/server/engines/beads/bin/bd when no env override is set', () => {
     existsFor(GO_MOD, OWNED_BIN);
     const resolved = resolveBeadsBin({ PATH: '' });
     expect(resolved).toBeDefined();
     expect(resolved!.endsWith(OWNED_BIN)).toBe(true);
   });
 
-  it('falls back to the vendored Makefile output modules/memory/beads/bd', () => {
+  it('falls back to the vendored Makefile output apps/desktop/server/engines/beads/bd', () => {
     existsFor(GO_MOD, MAKEFILE_BIN);
     const resolved = resolveBeadsBin({ PATH: '' });
     expect(resolved).toBeDefined();

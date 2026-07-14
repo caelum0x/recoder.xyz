@@ -4,7 +4,7 @@ import type { BrainTask } from "../domain/task-graph.types";
 import { resolveExecEngine } from "../runtime/engine-resolver";
 
 /**
- * REAL {@link TaskGraphPort}, backed by the actual beads engine (modules/memory/beads) via
+ * REAL {@link TaskGraphPort}, backed by the actual beads engine (apps/desktop/server/engines/beads) via
  * its `bd` CLI — the same durable issue graph the repo tracks work in.
  *
  * `related` shells `bd ready --json` (the ready-work query) behind an INJECTABLE

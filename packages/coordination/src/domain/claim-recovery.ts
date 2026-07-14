@@ -1,6 +1,6 @@
 /**
  * ClaimRecoveryWindow — ports multica's `claimResponseRecoveryWindow`
- * (modules/squads/multica server/internal/service/task.go). After a claim is taken, an
+ * (apps/desktop/server/engines/multica server/internal/service/task.go). After a claim is taken, an
  * in-flight start cannot be reclaimed until the recovery window elapses, so a
  * slow runtime that has not yet emitted a RunStarted event is not double-dispatched.
  */

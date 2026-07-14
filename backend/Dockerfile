@@ -20,7 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 # Only the inputs the substrate build needs (keeps the layer cache tight).
 COPY c/ ./c/
-COPY go/ ./go/
+COPY apps/desktop/server/engines/beads/ ./apps/desktop/server/engines/beads/
+COPY apps/desktop/server/engines/recoder-xds/ ./apps/desktop/server/engines/recoder-xds/
 COPY scripts/build-substrate-binaries.sh scripts/build-tmux.sh \
      scripts/build-tmux-manual.sh scripts/build-bd.sh ./scripts/
 # Build both. Never fail the image build: a substrate build problem must degrade
@@ -29,17 +30,18 @@ COPY scripts/build-substrate-binaries.sh scripts/build-tmux.sh \
 RUN bash scripts/build-substrate-binaries.sh || true \
     && mkdir -p /out \
     && { [ -x c/tmux/tmux ]      && cp c/tmux/tmux      /out/tmux || echo "substrate: tmux not built"; } \
-    && { [ -x go/beads/bin/bd ]  && cp go/beads/bin/bd  /out/bd   || echo "substrate: bd not built";   } \
+    && { [ -x apps/desktop/server/engines/beads/bin/bd ]  && cp apps/desktop/server/engines/beads/bin/bd  /out/bd   || echo "substrate: bd not built";   } \
     && touch /out/.keep
 
-# Also build the Recoder Envoy xDS control plane (go/recoder-xds). Go is already
+# Also build the Recoder Envoy xDS control plane (apps/desktop/server/engines/recoder-xds).
+# Go is already
 # in this stage, so this is cheap. recoder-xds serves DYNAMIC LDS/CDS/RDS over ADS
 # so a running Envoy gets live network-config updates without a restart; the static
 # bootstrap (deploy/envoy/envoy.selfhost.yaml) is the fallback when it is absent.
 # Degrade-safe: a build failure must NOT break the backend image — the recoder-xds
 # compose service simply won't have a binary and Envoy keeps using its static
 # config. CGO is disabled for a portable, statically-friendly binary.
-RUN cd go/recoder-xds \
+RUN cd apps/desktop/server/engines/recoder-xds \
     && { CGO_ENABLED=0 go build -trimpath -o /out/recoder-xds ./cmd/recoder-xds \
          && echo "substrate: recoder-xds built"; } \
     || echo "substrate: recoder-xds not built (Envoy keeps static bootstrap)"

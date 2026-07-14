@@ -2,7 +2,7 @@
  * squad-leader-policy — leader review / no-action gating.
  *
  * Ports multica's squad-leader no-action evaluation
- * (`modules/squads/multica/server/internal/service/squad_no_action.go`,
+ * (`apps/desktop/server/engines/multica/server/internal/service/squad_no_action.go`,
  * `HasSquadLeaderNoActionEvaluationForTask`) fused with the A2A squad team
  * model (`backend/src/a2a/squad.service.ts`). The rule, ported (not
  * transpiled):

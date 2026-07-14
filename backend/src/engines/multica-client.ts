@@ -2,7 +2,7 @@
  * @module multica-client
  *
  * Multica managed-agents/squads/assignment loopback adapter — fuses
- * `modules/squads/multica` as a backend-supervised subprocess/loopback HTTP client, gated
+ * `apps/desktop/server/engines/multica` as a backend-supervised subprocess/loopback HTTP client, gated
  * by env, degrade-safe when the binary or service is absent.
  *
  * Multica (https://multica.ai) is an open-source managed-agents platform:
@@ -12,7 +12,7 @@
  *
  * FUSION PATTERN (mirrors tensorzero-client.ts + openfang-daemon.ts):
  *   - We NEVER build the Go binary here. If no prebuilt binary is found
- *     (MULTICA_BIN env or modules/squads/multica/server/bin/multica-server) the client
+ *     (MULTICA_BIN env or apps/desktop/server/engines/multica/server/bin/multica-server) the client
  *     degrades safely: health() returns { available: false }, all calls
  *     return explicit not-available results, never faked success.
  *   - Alternatively, MULTICA_URL can point at an externally-managed instance
@@ -41,8 +41,8 @@
  *
  * Binary resolution order (first existing wins):
  *   1. MULTICA_BIN env (absolute path to a prebuilt binary).
- *   2. <repo>/modules/squads/multica/server/bin/multica-server.
- *   3. <repo>/modules/squads/multica/server/bin/server (alternate build name).
+ *   2. <repo>/apps/desktop/server/engines/multica/server/bin/multica-server.
+ *   3. <repo>/apps/desktop/server/engines/multica/server/bin/server (alternate build name).
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -86,7 +86,7 @@ const BACKOFF_CAP_MS = 30_000;
 
 /**
  * Walk up from this module's compiled location to the repo root (the directory
- * containing `modules/squads/multica`). Returns undefined if not found within 12 parents.
+ * containing `apps/desktop/server/engines/multica`). Returns undefined if not found within 12 parents.
  */
 function findRepoRoot(): string | undefined {
   const { existsSync: fsExists } = require('node:fs');
@@ -98,7 +98,7 @@ function findRepoRoot(): string | undefined {
     return undefined;
   }
   for (let i = 0; i < 12; i++) {
-    if (fsExists(pathJoin(dir, 'go', 'multica', 'README.md'))) {
+    if (fsExists(pathJoin(dir, 'apps', 'desktop', 'server', 'engines', 'multica', 'README.md'))) {
       return dir;
     }
     const parent = pathDirname(dir);
@@ -122,7 +122,7 @@ export function resolveMulticaBin(env: NodeJS.ProcessEnv = process.env): string 
   const root = findRepoRoot();
   if (!root) return undefined;
 
-  const binDir = path.join(root, 'go', 'multica', 'server', 'bin');
+  const binDir = path.join(root, 'apps', 'desktop', 'server', 'engines', 'multica', 'server', 'bin');
   const candidates = [
     path.join(binDir, 'multica-server'),
     path.join(binDir, 'server'),

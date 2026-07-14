@@ -54,7 +54,7 @@ describe('multica-client: binary resolution (no build)', () => {
   });
 
   it('returns undefined or an existing path when env is empty (no build triggered)', () => {
-    // With no explicit override, the resolver scans the repo modules/squads/multica/server/bin/ dir.
+    // With no explicit override, the resolver scans the repo apps/desktop/server/engines/multica/server/bin/ dir.
     // Whatever it finds must be either undefined or an actually existing path —
     // it MUST NOT build anything.
     const resolved = resolveMulticaBin({});

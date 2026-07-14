@@ -44,3 +44,11 @@ docsite/
 .superpowers
 docs/superpowers
 .claude
+
+# Vendored Go engines (server/engines/*) keep their own tracked/ignored status:
+# the app-level rules above (bin/, .claude, ...) must not swallow engine content.
+# Each engine's nested .gitignore still applies (deeper files take precedence).
+!server/engines/**/bin/
+!server/engines/**/bin/**
+!server/engines/**/.claude
+!server/engines/**/.claude/**

@@ -44,14 +44,14 @@ site: ## Build the marketing site
 	cd site && pnpm build
 
 # ---- Go ----
-bd: ## Build the reproducible, version-stamped bd binary (go/beads/bin/bd)
+bd: ## Build the reproducible, version-stamped bd binary (apps/desktop/server/engines/beads/bin/bd)
 	./scripts/build-bd.sh
 
 go-beads: ## Compile-check all beads packages (cgo + gms_pure_go)
-	cd go/beads && . ./.buildflags && go build -tags gms_pure_go ./...
+	cd apps/desktop/server/engines/beads && . ./.buildflags && go build -tags gms_pure_go ./...
 
 go-ziti: ## Build ziti zero-trust mesh (HEAVY)
-	cd go/ziti && go build ./...
+	cd apps/desktop/server/engines/ziti && go build ./...
 
 # ---- Rust (each its own Cargo workspace; HEAVY, disk-hungry -> CI) ----
 rust-openfang: ## Build OpenFang kernel (HEAVY)

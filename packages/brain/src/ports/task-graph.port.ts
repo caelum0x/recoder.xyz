@@ -1,6 +1,6 @@
 import type { BrainTask } from "../domain/task-graph.types";
 
-/** Durable task graph, bound to the owned beads (modules/memory/beads) via beads-adapter. */
+/** Durable task graph, bound to the owned beads (apps/desktop/server/engines/beads) via beads-adapter. */
 export interface TaskGraphPort {
   related(query: string, limit: number): Promise<BrainTask[]>;
   update(id: string, status: string, note?: string): Promise<void>;
