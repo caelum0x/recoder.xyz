@@ -214,8 +214,16 @@ exit code), `health`, `governance-write`; `pnpm test:contracts:agent-os`,
 
 ## Phase 6 — Engines Integration + Inference Gateway (the multi-language boundary)
 
+> **Owner mandate (2026-07-15):** each OSS engine in `backend/engines/{py,rust}/*`
+> becomes a DEEP backend module that exercises the engine's REAL surface in place
+> (mem0's full memory API, tensorzero inference+feedback+config, openfang's ~51
+> napi methods, governance's policy/approval/audit crates, browser-use's real agent
+> loop, colbert rerank+index, ops-recorder detectors, pal multi-model+clink) — NOT
+> the current thin "couple-file" `*-client.ts` wrappers, which this phase REPLACES.
+> Use the engine from its own dir via the fusion ladder; never copy into packages/.
+
 **Goal:** the one governed engine seam (napi/daemon/sidecar/cli supervisors + MCP
-host) and the LLM gateway that funnels every inference call.
+host) exposing DEEP engine modules, and the LLM gateway that funnels every inference call.
 
 **6a — Engines:**
 1. `ports/*` + `types.ts` + `config.ts` + `constants.ts`.
