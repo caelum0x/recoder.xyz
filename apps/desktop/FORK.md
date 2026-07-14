@@ -1,6 +1,6 @@
 # Recoder Terminal — a fork of Wave Terminal
 
-`apps/wave` is **Recoder's terminal-native shell (L3)**, forked from
+`apps/desktop` is **Recoder's terminal-native shell (L3)**, forked from
 [**Wave Terminal**](https://github.com/wavetermdev/waveterm) (© Command Line Inc, **Apache-2.0**).
 Per the architecture decision record ([`docs/architecture/RECODER-ENGINES.md` §27](../../docs/architecture/RECODER-ENGINES.md)),
 Wave is the fork base because its **block model IS Recoder's cockpit**: a grid where each block is a
@@ -41,14 +41,14 @@ user-facing identity + the Go module path + the server binary name were changed.
   `github.com/recoder/recoder-terminal` (239 files); backend server binary `wavesrv` → `recoder-server`.
 - **Vendor gap fixed** — `tsunami/build` (the tsunami app-builder Go pkg) was gitignored-away by the
   broad `build/` rule and never committed; re-vendored from upstream v0.14.5 + a `.gitignore` negation.
-  Same for `apps/wave/public/` (assets), hidden by the bare `public` rule.
+  Same for `apps/desktop/public/` (assets), hidden by the bare `public` rule.
 
 ## Build / run — VERIFIED
 Both halves build on this workstation (Go 1.25.6 + electron-vite). `node_modules` is installed;
 `task` (Taskfile runner) and Go must be on `PATH` (`/opt/homebrew/bin`, `/usr/local/go/bin`).
 
 ```bash
-cd apps/wave
+cd apps/desktop
 
 # Backend (Go) — emits dist/bin/recoder-server.<arch>.  VERIFIED: exit 0.
 task build:backend:quickdev        # arm64 macOS quick path; or `task build:backend` for all arches + wsh
@@ -72,5 +72,5 @@ before a full `task build` (Go all-arches + electron-vite) to avoid ENOSPC.
 3. **App icon** (`build/*.icns`) — the dock/taskbar icon, separate from the in-app `public/logos/*`.
 4. **Full package** — `electron-builder` → signed `.dmg`, and identity/auth via `recoder.xyz` device-flow.
 
-Until this shell is the primary surface, the shipping app stays `apps/desktop` (the terminal-first
-Preact cockpit).
+Until this shell is the primary surface, the shipping app stays `apps/desktop/cockpit` (the
+terminal-first Preact cockpit).

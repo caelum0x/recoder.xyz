@@ -60,7 +60,7 @@ export interface WaveSecretStoreOptions {
 
 /**
  * Secret name validation mirrors Wave's own rule
- * (apps/wave/pkg/wconfig/secretstore.go): a letter followed by letters,
+ * (apps/desktop/pkg/secretstore/secretstore.go): a letter followed by letters,
  * digits, and underscores. Rejecting invalid names up front avoids passing
  * unexpected `name=value` shapes to `wsh secret set`.
  */

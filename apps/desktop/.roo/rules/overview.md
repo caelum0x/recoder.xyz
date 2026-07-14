@@ -7,7 +7,7 @@ Recoder Terminal is Recoder's AI-native terminal shell — the desktop surface w
 ## Top-Level Directory Structure
 
 ```
-apps/wave/  (Recoder Terminal)
+apps/desktop/  (Recoder Terminal)
 ├── emain/              # Electron main process code
 ├── frontend/           # React application (renderer process)
 ├── cmd/                # Go command-line applications

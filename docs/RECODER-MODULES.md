@@ -180,7 +180,7 @@ interface TerminalModule {
 unrelated things; dmux's pane/streaming/worker engines are unused.
 **Deep target:** ONE `TerminalModule` where tmux is the session substrate and dmux is the multiplexing
 brain over it — pane lifecycle, real-time streaming (control-mode), operator grid, attention — a single
-coherent terminal layer the conductor AND the shell's operator view both consume. Unify apps/wave's
+coherent terminal layer the conductor AND the shell's operator view both consume. Unify apps/desktop's
 separate Go durable-shell onto these same sessions (two restart mechanisms → one).
 **Build:** (a) module owns session lifecycle + the dmux pane/layout/attention engines together; (b)
 control-mode default-on feeding dmux's pane model; (c) wave shell on the same tmux sessions.
