@@ -13,12 +13,12 @@ backups/
 dist/
 build/
 out/
-# Exception: apps/wave/tsunami/build is a SOURCE package (the tsunami app-builder:
+# Exception: apps/desktop/tsunami/build is a SOURCE package (the tsunami app-builder:
 # TsunamiBuild/BuildOpts/FindGoExecutable/…), not build output. The broad build/
 # rule above wrongly excluded it, so it was never vendored and the Go backend
 # could not compile. Re-include it.
-!apps/wave/tsunami/build/
-!apps/wave/tsunami/build/**
+!apps/desktop/tsunami/build/
+!apps/desktop/tsunami/build/**
 .next/
 .nuxt/
 .vuepress/dist
@@ -442,16 +442,16 @@ public
 # breaks fresh-checkout builds (e.g. site/public/logo.png). Re-include real ones.
 !site/public/
 !site/public/**
-# apps/wave/public = the Wave-fork shell's served static assets (logos, fonts,
+# apps/desktop/public = the Wave-fork shell's served static assets (logos, fonts,
 # fontawesome). Same landmine — un-ignore so the fork builds from a fresh checkout.
-!apps/wave/public/
-!apps/wave/public/**
+!apps/desktop/public/
+!apps/desktop/public/**
 
-# apps/wave/build = electron-builder packaging inputs (entitlements.mac.plist,
+# apps/desktop/build = electron-builder packaging inputs (entitlements.mac.plist,
 # icon.icns). Same broad-`build/` landmine — un-ignore so mac packaging works
 # from a fresh checkout (NOT build output; electron-vite emits to dist/).
-!apps/wave/build/
-!apps/wave/build/**
+!apps/desktop/build/
+!apps/desktop/build/**
 
 # Vuepress build output
 .vuepress/dist

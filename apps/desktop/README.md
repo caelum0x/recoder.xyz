@@ -1,211 +1,117 @@
-# Recoder Desktop
+<p align="center">
+  <a href="https://www.waveterm.dev">
+	<picture>
+		<source media="(prefers-color-scheme: dark)" srcset="./assets/wave-dark.png">
+		<source media="(prefers-color-scheme: light)" srcset="./assets/wave-light.png">
+		<img alt="Wave Terminal Logo" src="./assets/wave-light.png" width="240">
+	</picture>
+  </a>
+  <br/>
+</p>
 
-Minimal Electron wrapper for the Recoder web application with deep linking support.
+# Wave Terminal
 
-## Features
+<div align="center">
 
-- Native macOS/Windows/Linux desktop app
-- Deep linking for magic link authentication (`recoder://` protocol)
-- Integrated navigation controls (back, forward, reload, copy URL)
-- Keyboard shortcuts (Cmd+Left/Right, Cmd+R, Cmd+Shift+C)
+[English](README.md) | [한국어](README.ko.md) | [繁體中文](README.zh-TW.md)
 
-## Development
+</div>
 
-```bash
-npm install
-npm start
-```
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fwavetermdev%2Fwaveterm.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fwavetermdev%2Fwaveterm?ref=badge_shield)
 
-## Building
+Wave is an open-source, AI-integrated terminal for macOS, Linux, and Windows. It works with any AI model. Bring your own API keys for OpenAI, Claude, or Gemini, or run local models via Ollama and LM Studio. No accounts required.
 
-Build for your platform:
+Wave also supports durable SSH sessions that survive network interruptions and restarts, with automatic reconnection. Edit remote files with a built-in graphical editor and preview files inline without leaving the terminal.
 
-```bash
-npm run build:mac          # macOS (with signing if .env exists)
-npm run build:mac:unsigned # macOS (quick, no signing)
-npm run build:win          # Windows
-npm run build:linux        # Linux
-```
+![WaveTerm Screenshot](./assets/wave-screenshot.webp)
 
-Or build for all platforms:
+## Key Features
 
-```bash
-npm run build
-```
+- Wave AI - Context-aware terminal assistant that reads your terminal output, analyzes widgets, and performs file operations
+- Durable SSH Sessions - Remote terminal sessions survive connection interruptions, network changes, and Wave restarts with automatic reconnection
+- Flexible drag & drop interface to organize terminal blocks, editors, web browsers, and AI assistants
+- Built-in editor for editing remote files with syntax highlighting and modern editor features
+- Rich file preview system for remote files (markdown, images, video, PDFs, CSVs, directories)
+- Quick full-screen toggle for any block - expand terminals, editors, and previews for better visibility, then instantly return to multi-block view
+- AI chat widget with support for multiple models (OpenAI, Claude, Azure, Perplexity, Ollama)
+- Command Blocks for isolating and monitoring individual commands
+- One-click remote connections with full terminal and file system access
+- Secure secret storage using native system backends - store API keys and credentials locally, access them across SSH sessions
+- Rich customization including tab themes, terminal styles, and background images
+- Powerful `wsh` command system for managing your workspace from the CLI and sharing data between terminal sessions
+- Connected file management with `wsh file` - seamlessly copy and sync files between local and remote SSH hosts
 
-**Note:** For signed macOS builds, create a `.env` file with Apple credentials (see `LOCAL-BUILD.md`).
+## Wave AI
 
-## Configuration
+Wave AI is your context-aware terminal assistant with access to your workspace:
 
-Set `APP_URL` environment variable to load a different URL:
+- **Terminal Context**: Reads terminal output and scrollback for debugging and analysis
+- **File Operations**: Read, write, and edit files with automatic backups and user approval
+- **CLI Integration**: Use `wsh ai` to pipe output or attach files directly from the command line
+- **BYOK Support**: Bring your own API keys for OpenAI, Claude, Gemini, Azure, and other providers
+- **Local Models**: Run local models with Ollama, LM Studio, and other OpenAI-compatible providers
+- **Free Beta**: Included AI credits while we refine the experience
+- **Coming Soon**: Command execution (with approval)
 
-```bash
-APP_URL=http://localhost:3000 npm start
-```
-
-By default, it loads `https://recoder.xyz/`.
-
-Workflow backend/auth parity settings:
-
-```bash
-DOCKER_BACKEND_URL=http://localhost:3100
-RECODER_SESSION_TOKEN=...   # preferred (internal /api/agent/workflow)
-RECODER_API_KEY=...         # fallback (public /api/v1/agent/workflow)
-RECODER_WORKFLOW_FETCH_RETRIES=2
-RECODER_WORKFLOW_STRICT_CONTRACT=true
-RECODER_A2A_ADMIN_TOKEN=...      # required for /api/a2a/bridge/* admin routes
-RECODER_A2A_BRIDGE_ID=desktop-default
-RECODER_DESKTOP_AGENT_ID=recoder-desktop
-```
-
-`agent:getWorkflowPlan` now returns backend diagnostics (`backend`, `fallbackReason`) in addition to `source` and `workflow`, matching OpenClaw contract visibility for automation and troubleshooting.
-When strict contract mode is enabled (`RECODER_WORKFLOW_STRICT_CONTRACT=true` or request payload `strict: true`), contract mismatch/missing markers force local fallback with explicit diagnostics.
-
-Delegated-task IPC surface:
-- `window.recoderDesktop.delegateTask(payload)` -> enqueue delegated bridge job
-- `window.recoderDesktop.getDelegatedTaskStatus({ jobId })` -> single status lookup
-- `window.recoderDesktop.pollDelegatedTaskStatus({ jobId, intervalMs, timeoutMs })` -> polling helper
+Learn more in our [Wave AI documentation](https://docs.waveterm.dev/waveai) and [Wave AI Modes documentation](https://docs.waveterm.dev/waveai-modes).
 
 ## Installation
 
-For end users, see [INSTALLATION.md](./INSTALLATION.md) for detailed installation instructions including how to bypass macOS Gatekeeper on first launch.
+Wave Terminal works on macOS, Linux, and Windows.
 
-## Cockpit (conductor board)
+Platform-specific installation instructions can be found [here](https://docs.waveterm.dev/gettingstarted).
 
-The desktop app ships a bundled **Cockpit** — the conductor.build-style board
-where you run and review coding agents. It is a self-contained Preact bundle in
-[`cockpit/`](./cockpit/) that the Electron shell loads via `loadFile` (no dev
-server). The shell injects `window.__RECODER_COCKPIT__ = { backendUrl, token }`
-so the renderer authenticates its `/api/conductor/*` calls with your real
-recoder.xyz session — it never fabricates data.
+You can also install Wave Terminal directly from: [www.waveterm.dev/download](https://www.waveterm.dev/download).
 
-Open it from the **View** menu:
+### Minimum requirements
 
-| Menu item | Shortcut | Opens |
-| --- | --- | --- |
-| View → Open Cockpit | `Cmd/Ctrl+Shift+K` | The conductor board |
-| View → Open dmux Console | `Cmd/Ctrl+Shift+D` | The cockpit on the **dmux** view |
+Wave Terminal runs on the following platforms:
 
-Inside the cockpit, top-level view tabs make each surface discoverable:
-**Board** (lifecycle columns: Queued → Running → Review → Done), **Sessions**
-(live tmux+worktree agent sessions and their terminals), **dmux** (the dmux
-operator console — availability, the tmux sessions dmux can observe, and a
-launcher), and **Connectors** (chat-channel health).
+- macOS 11 or later (arm64, x64)
+- Windows 10 1809 or later (x64)
+- Linux based on glibc-2.28 or later (Debian 10, RHEL 8, Ubuntu 20.04, etc.) (arm64, x64)
 
-### Product flow (create → run → review → terminate)
+The WSH helper runs on the following platforms:
 
-1. **Create** — Board → *New workspace*. Pick a repo path, write the task
-   prompt, and choose an installed runtime (only available agent CLIs are
-   selectable). Submitting `POST /api/conductor/workspaces` launches a
-   tmux+worktree workspace; the new card appears in **Queued**.
-2. **Run** — As the conductor advances the workspace (`setting_up → ready →
-   running`), the card moves to **Running**. Select it to watch the live
-   `RunEvent` log (`GET …/events`) and, once work exists, the reviewable diff
-   (`GET …/diff`).
-3. **Review** — When the workspace reaches `awaiting_review` the card moves to
-   **Review**, where *Open PR* / *Merge* become enabled exactly when the backend
-   state machine allows them.
-4. **Terminate** — *Archive* (`POST …/archive`) ends the workspace; the card
-   lands in **Done**.
+- macOS 11 or later (arm64, x64)
+- Windows 10 or later (x64)
+- Linux Kernel 2.6.32 or later (x64), Linux Kernel 3.1 or later (arm64)
 
-### dmux
+## Roadmap
 
-[dmux](https://github.com/justmiles/dmux) is the operator console for the shared
-tmux server the conductor runs agents on. The **dmux** view (and the *Open dmux
-Console* menu item) render `GET /api/conductor/dmux` — real availability, the
-pinned/system tmux binary, and the conductor tmux sessions dmux can observe — and
-let you launch the dmux TUI for a repo. When dmux is not installed the panel says
-so truthfully with the backend's own reason string; nothing is faked.
+Wave is constantly improving! Our roadmap will be continuously updated with our goals for each release. You can find it [here](./ROADMAP.md).
 
-### Cockpit tests
+Want to provide input to our future releases? Connect with us on [Discord](https://discord.gg/XfvZ334gwU) or open a [Feature Request](https://github.com/wavetermdev/waveterm/issues/new/choose)!
 
-The cockpit has an integration smoke harness that boots the **real** cockpit UI
-(the production `<App/>` Preact tree, its real API client and state machine) in
-jsdom against a real in-process **stub conductor** HTTP server it owns
-(`cockpit/src/test/stub-conductor.ts`), and drives the full
-create → events → diff → terminate flow plus dmux discoverability:
+## Links
 
-```bash
-cd cockpit
-pnpm run check-types   # tsc --noEmit
-pnpm test              # vitest run (unit + integration)
-pnpm run build         # esbuild bundle -> dist/
-```
+- Homepage &mdash; https://www.waveterm.dev
+- Download Page &mdash; https://www.waveterm.dev/download
+- Documentation &mdash; https://docs.waveterm.dev
+- X &mdash; https://x.com/wavetermdev
+- Discord Community &mdash; https://discord.gg/XfvZ334gwU
 
-## Deep Linking
+## Building from Source
 
-The app registers the `recoder://` protocol for magic link authentication:
+See [Building Wave Terminal](BUILD.md).
 
-1. User enters email in desktop app
-2. Magic link email contains `recoder://auth/callback?code=xxx`
-3. User clicks link in email
-4. Operating system opens Recoder Desktop app
-5. App handles auth callback and logs user in
+## Contributing
 
-The protocol is automatically registered when the app is installed.
+Wave uses GitHub Issues for issue tracking.
 
-## Code Signing & Notarization (macOS)
+Find more information in our [Contributions Guide](CONTRIBUTING.md), which includes:
 
-macOS distribution is handled by two electron-builder hooks wired in
-`package.json`:
+- [Ways to contribute](CONTRIBUTING.md#contributing-to-wave-terminal)
+- [Contribution guidelines](CONTRIBUTING.md#before-you-start)
 
-- **Code signing** uses the hardened runtime
-  (`build.mac.hardenedRuntime: true`) with the entitlements in
-  [`entitlements.mac.plist`](./entitlements.mac.plist). Those entitlements
-  enable V8 JIT (required for Electron), let `node-pty` fork child processes
-  (`com.apple.security.inherit`), and allow outbound network traffic.
-- **Notarization** runs in the `afterSign` hook
-  ([`notarize.js`](./notarize.js)), which submits the signed `.app` to Apple's
-  notary service with `notarytool` (via `@electron/notarize`) and staples the
-  ticket so Gatekeeper accepts the app offline.
+### Sponsoring Wave ❤️
 
-### Notarization is degrade-safe
+If Wave Terminal is useful to you or your company, consider sponsoring development.
 
-`notarize.js` is **gated on Apple credentials** and never breaks a build that
-lacks them:
+Sponsorship helps support the time spent building and maintaining the project.
 
-- **No credentials** → notarization is skipped with a clear log line
-  (`⏭️  Skipping notarization …`) and the build still succeeds (unsigned /
-  un-notarized — fine for local dev).
-- **Credentials present but notarization fails** → the build fails loudly, so CI
-  cannot publish an un-notarized artifact that looks successful.
+- https://github.com/sponsors/wavetermdev
 
-Two credential strategies are supported (set one fully):
+## License
 
-| Strategy | Required environment variables |
-| --- | --- |
-| Apple ID + app-specific password | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` |
-| App Store Connect API key | `APPLE_API_KEY` (path to `.p8`), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` |
-
-A **partial** set (e.g. `APPLE_ID` without `APPLE_TEAM_ID`) is treated as "not
-configured" and skipped rather than attempted-and-failed. See
-[`.env.example`](./.env.example) and [INSTALLATION.md](./INSTALLATION.md#release-environment-macos-signing--notarization)
-for the full env reference.
-
-### Ad-hoc fallback
-
-If you build without Apple credentials, the artifact is ad-hoc signed:
-- ✅ App is signed and not reported as "damaged"
-- ⚠️ Not notarized (requires a paid Apple Developer account)
-- 📝 Users must right-click → Open on first launch (see INSTALLATION.md)
-
-For production notarization in CI, provide the GitHub secrets listed under
-[Release Ops](#release-ops).
-
-## Release Ops
-
-Desktop production release flow is automated with root-level commands:
-
-```bash
-pnpm run check:desktop-release-readiness
-pnpm run set:desktop-release-secrets -- --from-env-file .env.desktop-release --write
-pnpm run closeout:desktop-release -- v1.0.0 --write
-pnpm run verify:desktop-release -- v1.0.0
-```
-
-Required GitHub secrets for mac signed/notarized release:
-- `DESKTOP_CSC_LINK`
-- `DESKTOP_CSC_KEY_PASSWORD`
-- `DESKTOP_APPLE_ID`
-- `DESKTOP_APPLE_APP_SPECIFIC_PASSWORD`
-- `DESKTOP_APPLE_TEAM_ID`
+Wave Terminal is licensed under the Apache-2.0 License. For more information on our dependencies, see [here](./ACKNOWLEDGEMENTS.md).

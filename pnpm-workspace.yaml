@@ -3,11 +3,13 @@ packages:
   - apps/mobile
   # openclaw social layer for agents (Wave G1) — composes @recoder/connectors
   - apps/social
-  # The Recoder terminal (Wave fork) — member so the shell can workspace:* import
-  # @recoder/* packages (Cursor-style shell fusion). tsunami/frontend is its
+  # The Recoder desktop app (Wave-fork shell, moved from apps/wave) — member so
+  # the shell can workspace:* import @recoder/* packages. tsunami/frontend is its
   # build-time sub-app (was an npm sub-workspace); docs/ stays standalone-npm.
-  - apps/wave
-  - apps/wave/tsunami/frontend
+  # NOTE: apps/desktop/cockpit is intentionally NOT a member (own lockfile,
+  # installed with pnpm install --ignore-workspace).
+  - apps/desktop
+  - apps/desktop/tsunami/frontend
   - shared
   - packages/*
   - scripts
@@ -109,4 +111,5 @@ exclude:
   - '**/.nx/**'
   - packages-local-backup
   - infra
-  - apps/desktop
+  # keep the parked legacy npm shell out of the pnpm workspace
+  - apps/desktop/legacy-shell
