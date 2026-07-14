@@ -1,7 +1,5 @@
 packages:
   - backend
-  - apps/agent-gateway
-  - apps/agent-worker
   - apps/mobile
   # openclaw social layer for agents (Wave G1) — composes @recoder/connectors
   - apps/social
