@@ -16,7 +16,7 @@ truthful about current depth — where a layer is shallow, it says so.
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
 │ APPS (surfaces / products — no capability logic)                                        │
-│   apps/desktop (cockpit, embeds the backend) · apps/wave (durable shell)                │
+│   apps/desktop (Wave-fork shell + cockpit, embeds the backend)                          │
 │   apps/social (connectors runtime) · apps/agent-gateway · apps/agent-worker · mobile    │
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ consume ONLY over edges (HTTP/WS/MCP/A2A) — never reach into a module directly

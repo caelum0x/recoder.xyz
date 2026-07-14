@@ -8,7 +8,7 @@ import {
 /**
  * Fake runner that emulates the `wsh secret` CLI surface against an
  * in-memory map, matching Wave's output format
- * (apps/wave/cmd/wsh/cmd/wshcmd-secret.go).
+ * (apps/desktop/cmd/wsh/cmd/wshcmd-secret.go).
  */
 function makeFakeRunner(initial: Record<string, string> = {}): CommandRunner {
 	const store = new Map<string, string>(Object.entries(initial));
