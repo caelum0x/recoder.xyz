@@ -684,7 +684,7 @@ The kernel emits a startup warning when a binding sets `channel_id` for a non-su
 
 ## Writing Custom Adapters
 
-To add support for a new messaging platform, implement the `ChannelAdapter` trait. The trait is defined in `modules/agent-engine/openfang-channels/src/types.rs`.
+To add support for a new messaging platform, implement the `ChannelAdapter` trait. The trait is defined in `crates/openfang-channels/src/types.rs`.
 
 ### The ChannelAdapter Trait
 
@@ -735,7 +735,7 @@ pub trait ChannelAdapter: Send + Sync {
 
 ### 1. Define Your Adapter
 
-Create `modules/agent-engine/openfang-channels/src/myplatform.rs`:
+Create `crates/openfang-channels/src/myplatform.rs`:
 
 ```rust
 use crate::types::{
@@ -812,7 +812,7 @@ impl ChannelAdapter for MyPlatformAdapter {
 
 ### 2. Register the Module
 
-In `modules/agent-engine/openfang-channels/src/lib.rs`:
+In `crates/openfang-channels/src/lib.rs`:
 
 ```rust
 pub mod myplatform;
@@ -820,7 +820,7 @@ pub mod myplatform;
 
 ### 3. Wire It Into the Bridge
 
-In `modules/agent-engine/openfang-api/src/channel_bridge.rs`, add initialization logic for your adapter alongside the existing adapters.
+In `crates/openfang-api/src/channel_bridge.rs`, add initialization logic for your adapter alongside the existing adapters.
 
 ### 4. Add Config Support
 
@@ -840,7 +840,7 @@ Add it to the `ChannelsConfig` struct and `config.toml` parsing. The `overrides`
 
 ### 5. Add CLI Setup Wizard
 
-In `modules/agent-engine/openfang-cli/src/main.rs`, add a case to `cmd_channel_setup` with step-by-step instructions for your platform.
+In `crates/openfang-cli/src/main.rs`, add a case to `cmd_channel_setup` with step-by-step instructions for your platform.
 
 ### 6. Test
 

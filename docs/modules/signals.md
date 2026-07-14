@@ -1,6 +1,6 @@
 # SIGNALS module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/signals/ops-recorder
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): backend/engines/py/ops-recorder
 
 **Interface:** `ingest · query · onSignal · health`
 

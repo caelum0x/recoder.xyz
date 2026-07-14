@@ -1,6 +1,6 @@
 # GITHUB module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/github/recodergit + gh CLI
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/engines/recodergit + gh CLI
 
 **Interface:** `analyzeRepo · domainMap · reviewPR · openPR · comment · search · health`
 

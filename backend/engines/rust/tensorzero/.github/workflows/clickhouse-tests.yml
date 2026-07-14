@@ -143,13 +143,13 @@ jobs:
         if: matrix.replicated == false
         env:
           TENSORZERO_CLICKHOUSE_VERSION: ${{ matrix.clickhouse_version.tag }}
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up --no-build --wait
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up --no-build --wait
 
       - name: Launch replicated ClickHouse container for E2E tests
         if: matrix.replicated == true
         env:
           TENSORZERO_CLICKHOUSE_VERSION: ${{ matrix.clickhouse_version.tag }}
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.replicated.yml up --no-build --wait
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.replicated.yml up --no-build --wait
 
       # Make an HTTP request to ClickHouse and check that the version matches '${{ matrix.clickhouse_version }}'
       - name: Check ClickHouse version
@@ -168,8 +168,8 @@ jobs:
             -e TENSORZERO_CLICKHOUSE_URL \
             -e R2_ACCESS_KEY_ID \
             -e R2_SECRET_ACCESS_KEY \
-            -v $(pwd)/modules/inference/tensorzero-core/tests/e2e:/app/tensorzero-core/tests/e2e:ro \
-            -v $(pwd)/modules/inference/tensorzero-core/fixtures:/app/tensorzero-core/fixtures:ro \
+            -v $(pwd)/crates/tensorzero-core/tests/e2e:/app/tensorzero-core/tests/e2e:ro \
+            -v $(pwd)/crates/tensorzero-core/fixtures:/app/tensorzero-core/fixtures:ro \
             --add-host howdy.tensorzero.com:127.0.0.1 \
             tensorzero/gateway-e2e:sha-$GITHUB_SHA \
             --config-file 'tensorzero-core/tests/e2e/config/{tensorzero,object-storage-disabled}.*.toml'
@@ -192,8 +192,8 @@ jobs:
           docker run --rm --network host \
             -e TENSORZERO_CLICKHOUSE_URL=http://chuser:chpassword@localhost:8123/tensorzero_e2e_tests \
             -e TENSORZERO_CLICKHOUSE_CLUSTER_NAME \
-            -v $(pwd)/modules/inference/tensorzero-core/tests/e2e:/app/tensorzero-core/tests/e2e:ro \
-            -v $(pwd)/modules/inference/tensorzero-core/fixtures:/app/tensorzero-core/fixtures:ro \
+            -v $(pwd)/crates/tensorzero-core/tests/e2e:/app/tensorzero-core/tests/e2e:ro \
+            -v $(pwd)/crates/tensorzero-core/fixtures:/app/tensorzero-core/fixtures:ro \
             tensorzero/gateway-e2e:sha-$GITHUB_SHA \
             --config-file 'tensorzero-core/tests/e2e/config/{tensorzero,object-storage-disabled}.*.toml' \
             --run-clickhouse-migrations
@@ -205,8 +205,8 @@ jobs:
             -e TENSORZERO_CLICKHOUSE_CLUSTER_NAME \
             -e R2_ACCESS_KEY_ID \
             -e R2_SECRET_ACCESS_KEY \
-            -v $(pwd)/modules/inference/tensorzero-core/tests/e2e:/app/tensorzero-core/tests/e2e:ro \
-            -v $(pwd)/modules/inference/tensorzero-core/fixtures:/app/tensorzero-core/fixtures:ro \
+            -v $(pwd)/crates/tensorzero-core/tests/e2e:/app/tensorzero-core/tests/e2e:ro \
+            -v $(pwd)/crates/tensorzero-core/fixtures:/app/tensorzero-core/fixtures:ro \
             --add-host howdy.tensorzero.com:127.0.0.1 \
             tensorzero/gateway-e2e:sha-$GITHUB_SHA \
             --config-file 'tensorzero-core/tests/e2e/config/{tensorzero,object-storage-disabled}.*.toml'
@@ -234,7 +234,7 @@ jobs:
         env:
           TENSORZERO_CLICKHOUSE_VERSION: ${{ matrix.clickhouse_version.tag }}
         run: |
-          docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.replicated.yml logs -t
+          docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.replicated.yml logs -t
 
       - name: Print ClickHouse error logs (replicated)
         if: always() && matrix.replicated == true
@@ -273,7 +273,7 @@ jobs:
         env:
           TENSORZERO_CLICKHOUSE_VERSION: ${{ matrix.clickhouse_version.tag }}
         run: |
-          docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml logs -t
+          docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml logs -t
 
       - name: Print ClickHouse error logs (non-replicated)
         if: always() && matrix.replicated == false

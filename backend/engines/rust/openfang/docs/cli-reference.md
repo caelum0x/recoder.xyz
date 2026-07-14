@@ -16,7 +16,7 @@ Running `openfang` with no subcommand launches the interactive TUI (terminal use
 ### From source (cargo)
 
 ```bash
-cargo install --path modules/agent-engine/openfang-cli
+cargo install --path crates/openfang-cli
 ```
 
 ### Build from workspace

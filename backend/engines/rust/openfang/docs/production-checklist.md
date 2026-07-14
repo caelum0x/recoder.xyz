@@ -35,7 +35,7 @@ Save both values. You need them for steps 2 and 3.
 
 **Status:** BLOCKING — the placeholder must be replaced before building.
 
-Open `modules/agent-engine/openfang-desktop/tauri.conf.json` and replace:
+Open `crates/openfang-desktop/tauri.conf.json` and replace:
 
 ```json
 "pubkey": "PLACEHOLDER_REPLACE_WITH_GENERATED_PUBKEY"
@@ -90,7 +90,7 @@ Set `certificateThumbprint` in `tauri.conf.json` under `bundle.windows` and add 
 
 **Status:** VERIFY — icons may be placeholders.
 
-The following icon files must exist in `modules/agent-engine/openfang-desktop/icons/`:
+The following icon files must exist in `crates/openfang-desktop/icons/`:
 
 | File | Size | Usage |
 |---|---|---|
@@ -202,7 +202,7 @@ Once steps 1-8 are complete:
 
 ```bash
 # Ensure version matches everywhere
-grep '"version"' modules/agent-engine/openfang-desktop/tauri.conf.json
+grep '"version"' crates/openfang-desktop/tauri.conf.json
 grep '^version' Cargo.toml
 
 # Commit any final changes

@@ -89,7 +89,7 @@ jobs:
         env:
           SERVICES: ${{ matrix.services }}
         run: >
-          docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.live.yml --profile provider-proxy
+          docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.live.yml --profile provider-proxy
           up $SERVICES -d --wait
 
       - name: Run cache tests
@@ -98,7 +98,7 @@ jobs:
           TEST_FILTER: ${{ matrix.test_filter }}
           VALKEY_URL: ${{ matrix.valkey_url }}
         run: |
-          docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.live.yml --profile provider-proxy run --no-deps --rm \
+          docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.live.yml --profile provider-proxy run --no-deps --rm \
             -e TENSORZERO_CI=1 \
             -e TENSORZERO_INTERNAL_TEST_CACHE_BACKEND="$CACHE_BACKEND_ENV" \
             -e TENSORZERO_VALKEY_URL="$VALKEY_URL" \
@@ -114,4 +114,4 @@ jobs:
 
       - name: Print logs
         if: always()
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.live.yml --profile provider-proxy logs -t
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.live.yml --profile provider-proxy logs -t

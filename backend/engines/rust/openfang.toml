@@ -2,16 +2,16 @@
 # =====================================================
 #
 # This is a Recoder-authored, production-oriented config for the openfang
-# sidecar. It is derived from `modules/agent-engine/openfang/openfang.toml.example` (the
+# sidecar. It is derived from `backend/engines/rust/openfang/openfang.toml.example` (the
 # upstream example) and tuned for running openfang as a backend sidecar behind
 # the Recoder control plane.
 #
-# IMPORTANT — this file is checked into the Recoder repo (the upstream
-# `modules/agent-engine/openfang/` clone is gitignored). It contains NO secrets: every API
+# IMPORTANT — this file is checked into the Recoder repo. It contains NO
+# secrets: every API
 # key / token is referenced *by environment variable name only* (the `*_env`
 # fields). The actual secret values are injected at runtime via the process
 # environment (e.g. docker-compose `environment:`, PM2 `env`, or the host
-# shell). See `modules/agent-engine/openfang/.env.example` for the full env var list.
+# shell). See `backend/engines/rust/openfang/.env.example` for the full env var list.
 #
 # Deploy this file by mounting/copying it to the openfang home as
 # `config.toml`. openfang resolves its home in this order (openfang-types
@@ -19,7 +19,7 @@
 #   1. $OPENFANG_HOME            (the Docker image sets OPENFANG_HOME=/data)
 #   2. ~/.openfang
 # and loads `<home>/config.toml`. So in the published Docker image:
-#   cp modules/agent-engine/openfang.toml /data/config.toml
+#   cp backend/engines/rust/openfang.toml /data/config.toml
 # or bind-mount it read-only to /data/config.toml.
 #
 # ---------------------------------------------------------------------------

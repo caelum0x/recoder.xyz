@@ -110,7 +110,7 @@ pnpm -F @recoder/governance build         # tsup dual ESM/CJS + d.ts
 
 ## Deferred (see governance.md)
 
-The Rust daemon + IPC/FFI (`modules/governance/recoder-governance-*`), the OPA evaluator
+The Rust daemon + IPC/FFI (`backend/engines/rust/recoder-governance-*`), the OPA evaluator
 backend, the SQLite-persisted audit store + signed Merkle checkpoints, the
 ops-recorder Python work-signal feed, and full replay reconstruction are **not**
 built here. The TS package ships the fail-safe fallback that those pieces degrade

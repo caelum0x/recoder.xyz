@@ -91,7 +91,7 @@ jobs:
           done
 
       - name: Build `tensorzero-node`
-        working-directory: modules/inference/tensorzero-node
+        working-directory: crates/tensorzero-node
         run: pnpm build:debug
 
       - name: Login to Docker Hub

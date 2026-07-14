@@ -1,6 +1,6 @@
 # TERMINAL module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/terminal/tmux + ts/dmux
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): apps/desktop/engines/tmux + apps/desktop/engines/dmux
 
 **Interface:** `createSession · attach · panes · layout · attention · send · health`
 

@@ -8,12 +8,12 @@ rebinds them on boot. See `docs/CONDUCTOR-ARCHITECTURE.md`.
 
 ## tmux — vendored + pinned binary
 
-Per the architecture (LOCKED §8c): tmux is a vendored C binary (`modules/terminal/tmux`), pinned in
+Per the architecture (LOCKED §8c): tmux is a vendored C binary (`apps/desktop/engines/tmux`), pinned in
 the runtime image and driven via its CLI. We own it by vendoring + building + pinning,
 never reimplementing it (the node-pty `session-mux` attempt was reverted).
 
-- **Build:** `make build-tmux` → produces `modules/terminal/tmux/tmux`.
-- **Pin:** set `RECODER_TMUX_BUILD_PATH=/path/to/modules/terminal/tmux/tmux` (or `CONDUCTOR_TMUX_BIN`).
+- **Build:** `make build-tmux` → produces `apps/desktop/engines/tmux/tmux`.
+- **Pin:** set `RECODER_TMUX_BUILD_PATH=/path/to/apps/desktop/engines/tmux/tmux` (or `CONDUCTOR_TMUX_BIN`).
 - **Fallback:** if neither is set, the conductor uses the system `tmux` on PATH.
 - **Resolution:** `tmux-path.ts` exports `TMUX_BIN` (resolved once at import). Every
   `exec(TMUX_BIN, …)` call in the conductor routes through it — no hardcoded `'tmux'`.

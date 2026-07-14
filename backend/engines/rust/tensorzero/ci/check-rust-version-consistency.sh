@@ -76,13 +76,13 @@ check_dockerfile \
   "uses rust:$RUST_VERSION"
 
 check_dockerfile \
-  "modules/inference/tensorzero-core/tests/e2e/Dockerfile.live" \
+  "crates/tensorzero-core/tests/e2e/Dockerfile.live" \
   "FROM lukemathwalker/cargo-chef:" \
   "rust-$RUST_MAJOR_MINOR" \
   "cargo-chef uses rust-$RUST_MAJOR_MINOR"
 
 check_dockerfile \
-  "modules/inference/tensorzero-core/tests/mock-provider-api/Dockerfile" \
+  "crates/tensorzero-core/tests/mock-provider-api/Dockerfile" \
   "FROM lukemathwalker/cargo-chef:" \
   "rust-$RUST_MAJOR_MINOR" \
   "cargo-chef uses rust-$RUST_MAJOR_MINOR"
@@ -91,8 +91,8 @@ check_dockerfile \
 DOCKERFILES=(
   "crates/provider-proxy/Dockerfile"
   "crates/evaluations/Dockerfile"
-  "modules/inference/tensorzero-core/tests/e2e/Dockerfile.gateway.e2e"
-  "modules/inference/tensorzero-core/tests/e2e/Dockerfile.clickhouse"
+  "crates/tensorzero-core/tests/e2e/Dockerfile.gateway.e2e"
+  "crates/tensorzero-core/tests/e2e/Dockerfile.clickhouse"
   "ui/fixtures/Dockerfile.unit"
 )
 

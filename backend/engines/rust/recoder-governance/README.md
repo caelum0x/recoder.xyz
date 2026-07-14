@@ -4,7 +4,7 @@ The deep (Rust) tier under the already-shipped TypeScript governance facade in
 `packages/governance`.
 
 This is a **small standalone cargo workspace** — intentionally **not** inside the
-gitignored vendored clones (`modules/agent-engine/openfang`, `crates/claw-code-parity`). It is
+gitignored vendored clones (`backend/engines/rust/openfang`, `crates/claw-code-parity`). It is
 first-party, owned Recoder code.
 
 ## What's in this slice
@@ -49,7 +49,7 @@ sha256( seq " " timestamp " " actor " " action " " detail " " outcome " " prevHa
 ## Verify
 
 ```bash
-cd modules/governance/recoder-governance
+cd backend/engines/rust/recoder-governance
 cargo fmt --check
 cargo clippy --workspace --all-targets
 cargo check --workspace

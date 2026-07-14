@@ -1,6 +1,6 @@
 # MEMORY module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/memory/mem0 + modules/memory/beads (dolt) + modules/memory/colbert
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): backend/engines/py/mem0 + apps/desktop/server/engines/beads (dolt) + backend/engines/py/colbert
 
 **Interface:** `recall (fuse+rerank) · remember · promote · forget · relate · health`
 

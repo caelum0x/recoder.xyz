@@ -1,5 +1,5 @@
 minimumReleaseAge: 4320
 
 packages:
-  - "modules/inference/tensorzero-node"
+  - "crates/tensorzero-node"
   - "ui"

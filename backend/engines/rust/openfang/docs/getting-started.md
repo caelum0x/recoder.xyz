@@ -57,7 +57,7 @@ Or build from source:
 ```bash
 git clone https://github.com/RightNow-AI/openfang.git
 cd openfang
-cargo install --path modules/agent-engine/openfang-cli
+cargo install --path crates/openfang-cli
 ```
 
 ### Option 5: Docker

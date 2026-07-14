@@ -1,6 +1,6 @@
 # AGENT-ENGINE module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/agent-engine/openfang
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): backend/engines/rust/openfang
 
 **Interface:** `asRuntime · hands · activateHand · run · onEvent · health`
 

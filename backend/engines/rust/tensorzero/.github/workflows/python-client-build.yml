@@ -72,7 +72,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@b1bd829e37fef14c63f19162034228a2f3dc1021 # v1.50.0
         with:
-          working-directory: ./modules/inference/tensorzero-python
+          working-directory: ./crates/tensorzero-python
           target: ${{ matrix.platform.target }}
           args: --release --out dist -i python3.10
           # sccache: ${{ inputs.use_cache }}
@@ -82,11 +82,11 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: wheels-linux-${{ matrix.platform.target }}
-          path: ./modules/inference/tensorzero-python/dist
+          path: ./crates/tensorzero-python/dist
 
       - name: Check built wheel
         run: |
-          ./ci/check-local-wheel.sh ./modules/inference/tensorzero-python/dist/tensorzero*.whl
+          ./ci/check-local-wheel.sh ./crates/tensorzero-python/dist/tensorzero*.whl
 
   musllinux:
     name: musllinux
@@ -138,7 +138,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@b1bd829e37fef14c63f19162034228a2f3dc1021 # v1.50.0
         with:
-          working-directory: ./modules/inference/tensorzero-python
+          working-directory: ./crates/tensorzero-python
           target: ${{ matrix.platform.target }}
           args: --release --out dist -i python3.10
           # sccache: ${{ inputs.use_cache }}
@@ -148,11 +148,11 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: wheels-musllinux-${{ matrix.platform.target }}
-          path: ./modules/inference/tensorzero-python/dist
+          path: ./crates/tensorzero-python/dist
 
       - name: Check built musl wheel
         run: |
-          ./ci/check-musl-wheel.sh ./modules/inference/tensorzero-python/dist/tensorzero*.whl
+          ./ci/check-musl-wheel.sh ./crates/tensorzero-python/dist/tensorzero*.whl
 
   windows:
     name: windows
@@ -203,7 +203,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@b1bd829e37fef14c63f19162034228a2f3dc1021 # v1.50.0
         with:
-          working-directory: ./modules/inference/tensorzero-python
+          working-directory: ./crates/tensorzero-python
           target: ${{ matrix.platform.target }}
           args: --release --out dist -i python3.10
           # sccache: ${{ inputs.use_cache }}
@@ -212,11 +212,11 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: wheels-windows-${{ matrix.platform.target }}
-          path: ./modules/inference/tensorzero-python/dist
+          path: ./crates/tensorzero-python/dist
 
       - name: Check built wheel
         run: |
-          ./ci/check-local-wheel.sh ./modules/inference/tensorzero-python/dist/tensorzero*.whl
+          ./ci/check-local-wheel.sh ./crates/tensorzero-python/dist/tensorzero*.whl
         shell: bash
 
   macos:
@@ -275,7 +275,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@b1bd829e37fef14c63f19162034228a2f3dc1021 # v1.50.0
         with:
-          working-directory: ./modules/inference/tensorzero-python
+          working-directory: ./crates/tensorzero-python
           target: ${{ matrix.platform.target }}
           args: --release --out dist -i python3.10
           # sccache: ${{ inputs.use_cache }}
@@ -284,11 +284,11 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: wheels-macos-${{ matrix.platform.target }}
-          path: ./modules/inference/tensorzero-python/dist
+          path: ./crates/tensorzero-python/dist
 
       - name: Check built wheel
         run: |
-          ./ci/check-local-wheel.sh ./modules/inference/tensorzero-python/dist/tensorzero*.whl
+          ./ci/check-local-wheel.sh ./crates/tensorzero-python/dist/tensorzero*.whl
 
   sdist:
     name: sdist
@@ -303,7 +303,7 @@ jobs:
       - name: Build sdist
         uses: PyO3/maturin-action@b1bd829e37fef14c63f19162034228a2f3dc1021 # v1.50.0
         with:
-          working-directory: ./modules/inference/tensorzero-python
+          working-directory: ./crates/tensorzero-python
           command: sdist
           args: --out dist
 
@@ -311,7 +311,7 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: wheels-sdist
-          path: ./modules/inference/tensorzero-python/dist
+          path: ./crates/tensorzero-python/dist
 
       - name: Install uv
         uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
@@ -323,7 +323,7 @@ jobs:
           for attempt in 1 2 3; do
             # No per-attempt timeout: this builds the wheel from the sdist
             # (full Rust compile, ~10 min), not a network op.
-            if ./ci/check-local-wheel.sh ./modules/inference/tensorzero-python/dist/tensorzero-*.tar.gz; then
+            if ./ci/check-local-wheel.sh ./crates/tensorzero-python/dist/tensorzero-*.tar.gz; then
               break
             fi
             if [ $attempt -eq 3 ]; then
@@ -336,7 +336,7 @@ jobs:
       - name: Run twine on sdist
         run: |
           uv pip install twine==6.2.0
-          uv run twine check ./modules/inference/tensorzero-python/dist/tensorzero-*.tar.gz
+          uv run twine check ./crates/tensorzero-python/dist/tensorzero-*.tar.gz
 
   check-artifacts:
     name: check-artifacts

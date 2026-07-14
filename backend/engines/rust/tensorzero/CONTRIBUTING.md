@@ -113,7 +113,7 @@ cargo test-unit
 1. Launch the test containers
 
    ```bash
-   docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up --wait
+   docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up --wait
    ```
 
 2. Set the relevant environment variables (`TENSORZERO_CLICKHOUSE_URL` and model provider API keys like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.). See the [credential docs](https://www.tensorzero.com/docs/deployment/tensorzero-gateway#set-up-model-provider-credentials) for the full list.
@@ -140,7 +140,7 @@ cargo test-unit
 1. Launch the test containers
 
    ```bash
-   docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up --wait
+   docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up --wait
    ```
 
 2. Set the relevant environment variables (`TENSORZERO_CLICKHOUSE_URL` and model provider API keys like `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.). See the [credential docs](https://www.tensorzero.com/docs/deployment/tensorzero-gateway#set-up-model-provider-credentials) for the full list.

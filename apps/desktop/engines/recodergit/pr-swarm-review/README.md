@@ -30,9 +30,9 @@ same lanes sequentially in one agent (**Solo mode**) with an identical output co
 
 | CLI | How to invoke | Adapter file |
 |-----|---------------|--------------|
-| **Claude Code** | `/recodergit-pr-swarm-review <PR>` (Swarm mode; dispatches the 7 `recodergit-*` subagents) | `.claude/skills/recodergit-pr-swarm-review/SKILL.md` + `.claude/agenmodules/github/recodergit-*.md` |
+| **Claude Code** | `/recodergit-pr-swarm-review <PR>` (Swarm mode; dispatches the 7 `recodergit-*` subagents) | `.claude/skills/recodergit-pr-swarm-review/SKILL.md` + `.claude/agents/recodergit-*.md` |
 | **Gemini CLI** | `/recodergit-pr-swarm-review <PR>` | `.gemini/commands/recodergit-pr-swarm-review.toml` |
-| **GitHub Copilot** | `/recodergit-pr-swarm-review` (then paste the PR) | `.github/prompmodules/github/recodergit-pr-swarm-review.prompt.md` |
+| **GitHub Copilot** | `/recodergit-pr-swarm-review` (then paste the PR) | `.github/prompts/recodergit-pr-swarm-review.prompt.md` |
 | **Cursor** | `/recodergit-pr-swarm-review` (then paste the PR) | `.cursor/commands/recodergit-pr-swarm-review.md` |
 | **Codex CLI** | Ask: "run the RecoderGit PR swarm review for <PR>" (Codex reads `AGENTS.md`) — or install the user-level prompt below | `AGENTS.md` § PR Swarm Review |
 | **Any AGENTS.md-aware agent** | Ask it to "follow `pr-swarm-review/orchestration.md` for <PR>" | `AGENTS.md` § PR Swarm Review |
@@ -40,7 +40,7 @@ same lanes sequentially in one agent (**Solo mode**) with an identical output co
 ### Codex (optional user-level slash command)
 
 Codex prompts are user-level only (not repo-shareable). To get a `/recodergit-pr-swarm-review`
-slash command, create `~/.codex/prompmodules/github/recodergit-pr-swarm-review.md`:
+slash command, create `~/.codex/prompts/recodergit-pr-swarm-review.md`:
 
 ```markdown
 ---

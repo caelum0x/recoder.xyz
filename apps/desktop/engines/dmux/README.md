@@ -37,7 +37,7 @@ dmux drives the **same pinned tmux binary** as the Conductor, resolved identical
 `backend/src/conductor/tmux-path.ts`:
 
 1. `DMUX_TMUX_BIN` / `CONDUCTOR_TMUX_BIN` (absolute path override)
-2. `RECODER_TMUX_BUILD_PATH` or the vendored `modules/terminal/tmux/tmux` build
+2. `RECODER_TMUX_BUILD_PATH` or the vendored `apps/desktop/engines/tmux/tmux` build
 3. system `tmux` on PATH (last resort)
 
 Because both halves share one tmux server, dmux observes and interacts with the

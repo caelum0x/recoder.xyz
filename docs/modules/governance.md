@@ -1,6 +1,6 @@
 # GOVERNANCE module
 
-**Domain owner.** Uses the OSS engine(s) **in place** (never copied): modules/governance/recoder-governance
+**Domain owner.** Uses the OSS engine(s) **in place** (never copied): backend/engines/rust/recoder-governance
 
 **Interface:** `decide · sealAudit · verify · health`
 

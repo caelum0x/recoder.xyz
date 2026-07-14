@@ -49,7 +49,7 @@ jobs:
             clickhouse-tests-merge-queue:
               - 'crates/**'
             clickhouse-tests-pr:
-              - 'modules/inference/tensorzero-core/src/db/**'
+              - 'crates/tensorzero-core/src/db/**'
             client-tests:
               - '**'
               - '!**/README.md'
@@ -267,7 +267,7 @@ jobs:
         shell: bash
 
       - name: Install dependencies
-        working-directory: modules/inference/tensorzero-node
+        working-directory: crates/tensorzero-node
         run: |
           for attempt in 1 2 3; do
             if timeout 5m pnpm install --frozen-lockfile; then
@@ -281,7 +281,7 @@ jobs:
           done
 
       - name: Build Node.js bindings
-        working-directory: modules/inference/tensorzero-node
+        working-directory: crates/tensorzero-node
         run: pnpm build-bindings
 
       - name: Check for git diff after building bindings
@@ -293,7 +293,7 @@ jobs:
         uses: namespace-actions/upload-artifact@9a78c62e083914789d908952f9773e42744b9f68 # v1.0.0
         with:
           name: node-bindings
-          path: modules/inference/tensorzero-node/lib/bindings
+          path: crates/tensorzero-node/lib/bindings
           retention-days: 7
 
       - name: Check tensorzero-node bindings are properly exported
@@ -517,17 +517,17 @@ jobs:
           uvx ruff@0.14.0 format --check .
 
       - name: "Python: Pyo3 Client: Build and install dependencies"
-        working-directory: modules/inference/tensorzero-python
+        working-directory: crates/tensorzero-python
         run: uv sync
 
       - name: "Python: PyO3 Client: pyright"
-        working-directory: modules/inference/tensorzero-python
+        working-directory: crates/tensorzero-python
         run: |
           uv pip install pyright==1.1.394
           uv run pyright
 
       - name: "Python: PyO3 Client: stubtest"
-        working-directory: modules/inference/tensorzero-python
+        working-directory: crates/tensorzero-python
         run: |
           uv run stubtest tensorzero.tensorzero
 
@@ -1038,7 +1038,7 @@ jobs:
           echo "TENSORZERO_POSTGRES_URL=postgres://postgres:postgres@localhost:5432/tensorzero-e2e-tests" >> $GITHUB_ENV
 
       - name: Launch Postgres
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up --no-build postgres gateway-postgres-migrations fixtures-postgres -d --wait
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up --no-build postgres gateway-postgres-migrations fixtures-postgres -d --wait
 
       - name: Test (Rust)
         working-directory: crates
@@ -1046,7 +1046,7 @@ jobs:
 
       - name: Print docker compose logs
         if: always()
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml logs -t
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml logs -t
 
   # Run endpoint tests against both ClickHouse and Postgres backends
   endpoint-tests:
@@ -1134,7 +1134,7 @@ jobs:
           echo "TENSORZERO_INTERNAL_TEST_OBSERVABILITY_BACKEND=postgres" >> $GITHUB_ENV
 
       - name: Launch dependency services
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up --wait
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up --wait
 
       - name: Build the gateway for E2E tests
         working-directory: crates
@@ -1168,7 +1168,7 @@ jobs:
 
       - name: Print docker compose logs
         if: always()
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml logs -t
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml logs -t
 
       - name: Print e2e logs
         if: always()
@@ -1248,7 +1248,7 @@ jobs:
           echo "TENSORZERO_GATEWAY_TAG=sha-$GITHUB_SHA" >> $GITHUB_ENV
 
       - name: Make sure dependency services are up
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up --wait
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up --wait
 
       - name: Launch the gateway for E2E tests
         working-directory: crates
@@ -1270,7 +1270,7 @@ jobs:
 
       - name: Print docker compose logs
         if: always()
-        run: docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml logs -t
+        run: docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml logs -t
 
       - name: Print e2e logs
         if: always()
@@ -1434,7 +1434,7 @@ jobs:
 
       - name: Launch ClickHouse container for E2E tests
         run: |
-          docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml up clickhouse -d --wait
+          docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml up clickhouse -d --wait
 
       - name: Set up .env file for production deployment tests
         env:
@@ -1458,7 +1458,7 @@ jobs:
       - name: Take down docker compose for production deployment tests
         run: |
           docker compose -f ci/check-production-deployment-docker-compose/docker-compose.yml down
-          docker compose -f modules/inference/tensorzero-core/tests/e2e/docker-compose.yml down
+          docker compose -f crates/tensorzero-core/tests/e2e/docker-compose.yml down
 
   live-tests:
     if: ${{ needs.detect-changes.outputs.live-tests == 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}

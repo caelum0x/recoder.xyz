@@ -214,11 +214,11 @@ openfang agent spawn agents/my-agent/agent.toml
 
 ## How to Add a New Channel Adapter
 
-Channel adapters live in `modules/agent-engine/openfang-channels/src/`. Each adapter implements the `ChannelAdapter` trait.
+Channel adapters live in `crates/openfang-channels/src/`. Each adapter implements the `ChannelAdapter` trait.
 
 ### Steps
 
-1. Create a new file: `modules/agent-engine/openfang-channels/src/myplatform.rs`
+1. Create a new file: `crates/openfang-channels/src/myplatform.rs`
 
 2. Implement the `ChannelAdapter` trait (defined in `types.rs`):
 
@@ -252,17 +252,17 @@ impl ChannelAdapter for MyPlatformAdapter {
 }
 ```
 
-3. Register the module in `modules/agent-engine/openfang-channels/src/lib.rs`:
+3. Register the module in `crates/openfang-channels/src/lib.rs`:
 
 ```rust
 pub mod myplatform;
 ```
 
-4. Wire it up in the channel bridge (`modules/agent-engine/openfang-api/src/channel_bridge.rs`) so the daemon starts it alongside other adapters.
+4. Wire it up in the channel bridge (`crates/openfang-api/src/channel_bridge.rs`) so the daemon starts it alongside other adapters.
 
 5. Add configuration support in `openfang-types` config structs (add a `[channels.myplatform]` section).
 
-6. Add CLI setup wizard instructions in `modules/agent-engine/openfang-cli/src/main.rs` under `cmd_channel_setup`.
+6. Add CLI setup wizard instructions in `crates/openfang-cli/src/main.rs` under `cmd_channel_setup`.
 
 7. Write tests and submit a PR.
 
@@ -270,7 +270,7 @@ pub mod myplatform;
 
 ## How to Add a New Tool
 
-Built-in tools are defined in `modules/agent-engine/openfang-runtime/src/tool_runner.rs`.
+Built-in tools are defined in `crates/openfang-runtime/src/tool_runner.rs`.
 
 ### Steps
 
