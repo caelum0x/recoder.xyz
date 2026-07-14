@@ -5,7 +5,7 @@
  * The dmux import is mocked through the injectable `loadAttentionModule` seam,
  * so no real tmux (and no real dmux load) is needed for the logic tests. One
  * integration test exercises the REAL default loader against the vendored
- * ts/dmux dist to prove the lazy file-URL import genuinely works.
+ * apps/desktop/engines/dmux dist to prove the lazy file-URL import genuinely works.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { existsSync } from 'node:fs';

@@ -1,6 +1,6 @@
 /**
  * Conductor operator-grid — computes a dmux-style operator grid over conductor
- * workspaces (Wave G1 backend fusion of ts/dmux `LayoutCalculator`).
+ * workspaces (Wave G1 backend fusion of apps/desktop/engines/dmux `LayoutCalculator`).
  *
  * dmux's `LayoutCalculator` (dist/layout/LayoutCalculator.js) is a PURE scoring
  * algorithm: given a pane count + terminal dimensions + comfort config it returns
@@ -37,7 +37,7 @@ export interface OperatorGridWorkspace {
   state: string;
 }
 
-/** dmux layout comfort config (mirrors ts/dmux src/utils/layoutManager.ts). */
+/** dmux layout comfort config (mirrors apps/desktop/engines/dmux src/utils/layoutManager.ts). */
 export interface DmuxLayoutConfig {
   SIDEBAR_WIDTH: number;
   MIN_COMFORTABLE_WIDTH: number;
@@ -86,7 +86,7 @@ export type DmuxLayoutModuleLoader = () => Promise<DmuxLayoutModule | null>;
 
 /**
  * dmux exposes its PURE engine submodules as clean subpath exports (added to
- * ts/dmux/package.json for the Recoder fusion) — so we import the specifier
+ * apps/desktop/engines/dmux/package.json for the Recoder fusion) — so we import the specifier
  * directly instead of resolving the package root + joining dist paths. The root
  * "." export runs app setup on import; this subpath is side-effect-free.
  */

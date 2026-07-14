@@ -483,7 +483,7 @@ describe('Embedded terminal — tmux binary resolution', () => {
   }
 
   it('prefers an existing renderer-supplied CONDUCTOR_TMUX_BIN', () => {
-    const bin = '/opt/recoder/c/tmux/tmux';
+    const bin = '/opt/recoder/apps/desktop/engines/tmux/tmux';
     const resolved = resolveTmuxBin({ CONDUCTOR_TMUX_BIN: bin }, (p) => p === bin, undefined);
     expect(resolved).toBe(bin);
   });
@@ -505,7 +505,7 @@ describe('Embedded terminal — tmux binary resolution', () => {
     const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf-8');
     expect(mainSrc).toContain('function resolveTmuxBin');
     expect(mainSrc).toContain('resolveVendoredTmux');
-    expect(mainSrc).toContain("path.join(dir, 'c', 'tmux', 'tmux.c')");
+    expect(mainSrc).toContain("path.join(dir, 'apps', 'desktop', 'engines', 'tmux', 'tmux.c')");
     // When the renderer asks for bare/empty tmux, main substitutes the binary.
     expect(mainSrc).toContain('wantsTmux');
   });
@@ -546,7 +546,7 @@ describe('Embedded terminal — env hardening (renderer allowlist)', () => {
     const env = buildPtyEnv(
       { PATH: '/usr/bin', SECRET: 'keep' },
       { TERM: 'xterm-256color', EVIL: 'rm -rf', PATH: '/tmp/evil' },
-      '/c/tmux/tmux',
+      '/engines/tmux/tmux',
     );
     expect(env.TERM).toBe('xterm-256color');
     expect(env.EVIL).toBeUndefined();

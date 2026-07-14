@@ -216,7 +216,7 @@ exports.default = async function afterPack(context) {
     if (!fs.existsSync(tmuxBin)) {
       fail(
         `vendored tmux binary missing (${tmuxBin}). The conductor substrate would ` +
-          'report tmux:false. Check the c/tmux/tmux extraResources entry.',
+          'report tmux:false. Check the engines/tmux/tmux extraResources entry.',
       );
     }
     try {

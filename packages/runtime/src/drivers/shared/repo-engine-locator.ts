@@ -20,7 +20,7 @@ import path from 'node:path';
 const REPO_MARKERS = ['pnpm-workspace.yaml', 'AGENTS.md'] as const;
 
 /** Directory (relative to repo root) that holds the customized engines. */
-const TS_ENGINES_DIR = 'ts';
+const TS_ENGINES_DIR = 'apps/desktop/engines';
 
 /**
  * Maps a CLI binary name to candidate repo-built entrypoints (relative to repo
@@ -41,10 +41,10 @@ export const REPO_ENGINE_CANDIDATES: Readonly<Record<string, readonly string[]>>
   'oh-my-opencode': ['ts/oh-my-openagent/bin/oh-my-opencode.js'],
   'recoder-opencode': ['ts/oh-my-openagent/bin/oh-my-opencode.js'],
   // @recoder/dmux — tmux orchestrator CLI (executable node shim).
-  dmux: ['modules/terminal/dmux/dmux'],
-  'recoder-dmux': ['modules/terminal/dmux/dmux'],
+  dmux: ['apps/desktop/engines/dmux/dmux'],
+  'recoder-dmux': ['apps/desktop/engines/dmux/dmux'],
   // @recoder/recodergit-engine — recodergit CLI.
-  recodergit: ['modules/github/recodergit/recodergit/dist/cli/index.js'],
+  recodergit: ['apps/desktop/engines/recodergit/recodergit/dist/cli/index.js'],
 } as const;
 
 export type RepoEngineLocation = {

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build the Conductor's pinned substrate binaries: the vendored tmux (modules/terminal/tmux/tmux)
+# Build the Conductor's pinned substrate binaries: the vendored tmux (apps/desktop/engines/tmux/tmux)
 # and the reproducible bd / beads binary (apps/desktop/server/engines/beads/bin/bd).
 #
 # WHY THIS EXISTS
 # ---------------
 # The Conductor resolves its tmux via backend/src/conductor/tmux-path.ts
-# (CONDUCTOR_TMUX_BIN > RECODER_TMUX_BUILD_PATH > <repo>/modules/terminal/tmux/tmux > bare `tmux`)
+# (CONDUCTOR_TMUX_BIN > RECODER_TMUX_BUILD_PATH > <repo>/apps/desktop/engines/tmux/tmux > bare `tmux`)
 # and its bd via packages/brain engine-resolver (BD_BIN > bare `bd`). Both have
 # build scripts, but nothing in setup/deploy ran them — so on a clean host the
 # pinned binaries were absent and the runtime silently fell back to whatever
@@ -37,7 +37,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-TMUX_BIN="$REPO_ROOT/modules/terminal/tmux/tmux"
+TMUX_BIN="$REPO_ROOT/apps/desktop/engines/tmux/tmux"
 BD_BIN_OUT="${RECODER_BD_OUT:-$REPO_ROOT/apps/desktop/server/engines/beads/bin/bd}"
 
 FORCE="${SUBSTRATE_FORCE:-0}"
@@ -60,8 +60,8 @@ build_tmux() {
     info "tmux build skipped (SUBSTRATE_SKIP_TMUX=1)"
     return 0
   fi
-  if [ ! -f "$REPO_ROOT/modules/terminal/tmux/tmux.c" ]; then
-    warn "vendored tmux source missing at modules/terminal/tmux — cannot build pinned tmux"
+  if [ ! -f "$REPO_ROOT/apps/desktop/engines/tmux/tmux.c" ]; then
+    warn "vendored tmux source missing at apps/desktop/engines/tmux — cannot build pinned tmux"
     return 1
   fi
   if [ "$FORCE" != "1" ] && is_good "$TMUX_BIN"; then
@@ -73,10 +73,10 @@ build_tmux() {
     return 1
   fi
 
-  info "building pinned tmux from modules/terminal/tmux"
+  info "building pinned tmux from apps/desktop/engines/tmux"
   # The Makefile build-tmux target already picks configure-vs-manual; reuse the
   # same logic here so there is one source of truth for how tmux is compiled.
-  if command -v autoconf >/dev/null 2>&1 && [ -f "$REPO_ROOT/modules/terminal/tmux/configure" ]; then
+  if command -v autoconf >/dev/null 2>&1 && [ -f "$REPO_ROOT/apps/desktop/engines/tmux/configure" ]; then
     bash "$SCRIPT_DIR/build-tmux.sh" || { warn "configure-based tmux build failed"; }
   fi
   if ! is_good "$TMUX_BIN"; then

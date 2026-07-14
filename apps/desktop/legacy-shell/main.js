@@ -161,21 +161,21 @@ function resolveRepoRoot() {
 // pinned/vendored build. Resolution order matches the backend resolver exactly:
 //   1. CONDUCTOR_TMUX_BIN env override (absolute path to a pinned binary).
 //   2. RECODER_TMUX_BUILD_PATH if it exists.
-//   3. The vendored binary built from c/tmux, walking up from this module and
+//   3. The vendored binary built from apps/desktop/engines/tmux, walking up from this module and
 //      also checking the resolved repo root + packaged resourcesPath.
 //   4. Bare 'tmux' on PATH (last resort — never assumed present).
 
 /**
- * Walk up from a start dir (≤10 levels) looking for the c/tmux source marker;
- * if found and the built `c/tmux/tmux` binary exists, return its absolute path.
+ * Walk up from a start dir (≤10 levels) looking for the apps/desktop/engines/tmux source marker;
+ * if found and the built `apps/desktop/engines/tmux/tmux` binary exists, return its absolute path.
  * @param {string} startDir
  * @returns {string | undefined}
  */
 function findVendoredTmuxFrom(startDir) {
   let dir = startDir;
   for (let i = 0; i < 10; i++) {
-    if (fs.existsSync(path.join(dir, 'c', 'tmux', 'tmux.c'))) {
-      const built = path.join(dir, 'c', 'tmux', 'tmux');
+    if (fs.existsSync(path.join(dir, 'apps', 'desktop', 'engines', 'tmux', 'tmux.c'))) {
+      const built = path.join(dir, 'apps', 'desktop', 'engines', 'tmux', 'tmux');
       if (fs.existsSync(built)) return built;
       break;
     }
@@ -189,7 +189,7 @@ function findVendoredTmuxFrom(startDir) {
 /**
  * Resolve the vendored tmux binary for the main process. In dev it is found by
  * walking up from this module or the repo root; in a packaged build the repo
- * walk fails, so we also check `<resourcesPath>/c/tmux/tmux`.
+ * walk fails, so we also check `<resourcesPath>/backend/engines/tmux/tmux`.
  * @returns {string | undefined}
  */
 function resolveVendoredTmux() {
@@ -204,7 +204,7 @@ function resolveVendoredTmux() {
 
   // Packaged: the vendored binary ships under resourcesPath.
   if (process.resourcesPath) {
-    const packaged = path.join(process.resourcesPath, 'c', 'tmux', 'tmux');
+    const packaged = path.join(process.resourcesPath, 'backend', 'engines', 'tmux', 'tmux');
     if (fs.existsSync(packaged)) return packaged;
   }
   return undefined;

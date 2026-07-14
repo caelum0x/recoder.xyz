@@ -52,3 +52,16 @@ docs/superpowers
 !server/engines/**/bin/**
 !server/engines/**/.claude
 !server/engines/**/.claude/**
+
+# Vendored TS/C engines (engines/*) keep their own tracked/ignored status too:
+# the app-level rules above (bindings/, .claude, bin/, ...) must not swallow
+# engine content. Each engine's nested .gitignore still applies.
+!engines/**/bindings/
+!engines/**/bindings/**
+!engines/**/bin/
+!engines/**/bin/**
+!engines/**/.claude
+!engines/**/.claude/**
+# ...but never local Claude settings (normally caught by the user-global ignore,
+# which the re-include above would otherwise override):
+engines/**/.claude/settings.local.json

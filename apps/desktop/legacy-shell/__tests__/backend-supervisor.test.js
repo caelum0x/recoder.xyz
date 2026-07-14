@@ -128,21 +128,21 @@ describe('pickFreePort', () => {
 });
 
 describe('resolveTmuxBin', () => {
-  it('uses the repo c/tmux/tmux path in dev when it exists', () => {
-    const existsSync = (p) => p === '/repo/c/tmux/tmux';
+  it('uses the repo apps/desktop/engines/tmux/tmux path in dev when it exists', () => {
+    const existsSync = (p) => p === '/repo/apps/desktop/engines/tmux/tmux';
     const bin = resolveTmuxBin({ isPackaged: false, repoRoot: '/repo', existsSync });
-    expect(bin).toBe('/repo/c/tmux/tmux');
+    expect(bin).toBe('/repo/apps/desktop/engines/tmux/tmux');
   });
 
   it('prefers the bundled extraResources path when packaged', () => {
-    const existsSync = (p) => p === '/Resources/backend/c/tmux/tmux';
+    const existsSync = (p) => p === '/Resources/backend/engines/tmux/tmux';
     const bin = resolveTmuxBin({
       isPackaged: true,
       repoRoot: '/repo',
       resourcesPath: '/Resources',
       existsSync,
     });
-    expect(bin).toBe('/Resources/backend/c/tmux/tmux');
+    expect(bin).toBe('/Resources/backend/engines/tmux/tmux');
   });
 
   it('returns a best-effort default (never empty) when nothing exists', () => {
@@ -184,7 +184,7 @@ describe('assembleBackendEnv', () => {
       baseEnv,
       port: 45678,
       dataDir: '/ud/backend-data',
-      tmuxBin: '/repo/c/tmux/tmux',
+      tmuxBin: '/repo/apps/desktop/engines/tmux/tmux',
       apiKeyHashSalt: 'salt123',
       internalServiceKey: 'internal123',
     });
@@ -193,9 +193,9 @@ describe('assembleBackendEnv', () => {
     expect(env.STRICT_AUTH).toBe('false');
     expect(env.API_KEY_HASH_SALT).toBe('salt123');
     expect(env.INTERNAL_SERVICE_KEY).toBe('internal123');
-    expect(env.CONDUCTOR_TMUX_BIN).toBe('/repo/c/tmux/tmux');
-    expect(env.RECODER_TMUX_BUILD_PATH).toBe('/repo/c/tmux/tmux');
-    expect(env.TMUX_BIN).toBe('/repo/c/tmux/tmux');
+    expect(env.CONDUCTOR_TMUX_BIN).toBe('/repo/apps/desktop/engines/tmux/tmux');
+    expect(env.RECODER_TMUX_BUILD_PATH).toBe('/repo/apps/desktop/engines/tmux/tmux');
+    expect(env.TMUX_BIN).toBe('/repo/apps/desktop/engines/tmux/tmux');
     expect(env.PATH).toBe('/bin'); // base env preserved
     // Embedded desktop lowers the admission disk floor to 2GB (lightweight
     // worktrees on a single-user laptop), overridable via base env.

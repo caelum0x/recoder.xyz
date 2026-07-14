@@ -4,7 +4,7 @@
  * The dmux import is mocked through the injectable `loadLayoutModule` seam, so
  * no real tmux (and no real dmux load) is needed for the logic tests. One
  * integration test exercises the REAL default loader against the vendored
- * ts/dmux dist to prove the lazy file-URL import genuinely works and is
+ * apps/desktop/engines/dmux dist to prove the lazy file-URL import genuinely works and is
  * side-effect free (no `.gitignore` write in cwd).
  */
 import { describe, it, expect } from 'vitest';

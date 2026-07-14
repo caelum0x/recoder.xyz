@@ -84,7 +84,7 @@ const engineCmd = resolveEngineCmd();
 
 test(
   "REAL indexer -> code-graph doctor reports live edges + assembleForTask yields non-empty repo context",
-  { skip: engineCmd ? false : "recodergit engine not built (modules/github/recodergit)" },
+  { skip: engineCmd ? false : "recodergit engine not built (apps/desktop/engines/recodergit)" },
   async () => {
     const engine = engineCmd!;
     const repoRoot = buildAndIndexFixture(engine);

@@ -14,9 +14,9 @@ packages:
   - shared
   - packages/*
   - scripts
-  - modules/social/openclaw
+  - apps/desktop/engines/openclaw
   # dmux operator-console engine (Wave G1 full adaptation — backend imports its modules)
-  - modules/terminal/dmux
+  - apps/desktop/engines/dmux
 
 catalog:
   '@ai-sdk/anthropic': ^0.0.39

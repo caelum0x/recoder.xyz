@@ -28,11 +28,11 @@ function touchExecutable(path: string): void {
 function makeRepo(): string {
   const root = freshDir();
   writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages: []\n', 'utf-8');
-  mkdirSync(join(root, 'ts'), { recursive: true });
+  mkdirSync(join(root, 'apps', 'desktop', 'engines'), { recursive: true });
   return root;
 }
 
-test('findRepoRoot walks up to the marker+ts/ root', () => {
+test('findRepoRoot walks up to the marker+engines root', () => {
   const root = makeRepo();
   const deep = join(root, 'packages', 'runtime', 'src', 'drivers', 'shared');
   mkdirSync(deep, { recursive: true });
@@ -40,17 +40,17 @@ test('findRepoRoot walks up to the marker+ts/ root', () => {
 });
 
 test('findRepoRoot returns undefined outside a checkout', () => {
-  const orphan = freshDir(); // no marker, no ts/
+  const orphan = freshDir(); // no marker, no engines dir
   assert.equal(findRepoRoot(orphan), undefined);
 });
 
-test('findRepoRoot requires BOTH a marker and a ts/ dir', () => {
-  // ts/ but no marker
+test('findRepoRoot requires BOTH a marker and an engines dir', () => {
+  // engines dir but no marker
   const a = freshDir();
-  mkdirSync(join(a, 'ts'), { recursive: true });
+  mkdirSync(join(a, 'apps', 'desktop', 'engines'), { recursive: true });
   assert.equal(findRepoRoot(a), undefined);
 
-  // marker but no ts/
+  // marker but no engines dir
   const b = freshDir();
   writeFileSync(join(b, 'pnpm-workspace.yaml'), '', 'utf-8');
   assert.equal(findRepoRoot(b), undefined);
@@ -67,7 +67,7 @@ test('locateRepoEngine resolves a known engine when the build exists', () => {
 });
 
 test('locateRepoEngine returns found:false when the build is absent', () => {
-  const root = makeRepo(); // ts/ dir but no engine artifact
+  const root = makeRepo(); // engines dir but no engine artifact
   const result = locateRepoEngine({ binary: 'codex', repoRoot: root });
   assert.equal(result.found, false);
   assert.equal(result.resolvedPath, undefined);

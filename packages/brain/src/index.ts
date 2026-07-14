@@ -24,7 +24,7 @@ export {
   runBrainMcpStdio,
 } from "./seams/mcp-server";
 
-// Repo-intelligence adapter (the modules/github/recodergit fusion seam)
+// Repo-intelligence adapter (the apps/desktop/engines/recodergit fusion seam)
 export { ContextPackRepoIntel, createRepoIntel } from "./repo/repo-intel-adapter";
 
 // Real RecoderGit-backed repo intelligence (opt-in, degrade-safe to the mock)
