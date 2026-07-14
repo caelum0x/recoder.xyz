@@ -205,7 +205,7 @@ while :; do
       '$REPO_ROOT/apps/studio.giselles.ai'
       '$REPO_ROOT/apps/ui.giselles.ai'
       '$REPO_ROOT/backend'
-      '$REPO_ROOT/docker-backend'
+      '$REPO_ROOT/backend'
       '$REPO_ROOT/openclaw'
       '$REPO_ROOT/packages'
       '$REPO_ROOT/recoder-agency'
@@ -270,8 +270,8 @@ while :; do
     record_lane_result $? "A1"
   fi
 
-  run_lane "A1" "docker-backend unit tests" \
-    pnpm -C "$REPO_ROOT/docker-backend" test -- --runInBand
+  run_lane "A1" "backend unit tests" \
+    pnpm -C "$REPO_ROOT/backend" test -- --runInBand
   record_lane_result $? "A1-docker"
 
   run_lane "A4" "backend supabase guard" \

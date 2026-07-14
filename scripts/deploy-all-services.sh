@@ -235,7 +235,7 @@ rsync -az --timeout=120 --progress \
   --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc' \
   --exclude='.cache' --exclude='.parcel-cache' --exclude='.swc' \
   --exclude='*.mp4' --exclude='*.mov' --exclude='*.zip' --exclude='*.tar.gz' \
-  --exclude='docker-backend/data' --exclude='docker-backend/data/***' \
+  --exclude='backend/data' --exclude='backend/data/***' \
   --exclude='apps/mobile' \
   --include='packages/*/dist/***' --include='shared/dist/***' \
   --exclude='recoder-web/dist' \
@@ -250,7 +250,7 @@ set -euo pipefail
 cd "${REMOTE_DIR}"
 
 # Keep deploy-only/local runtime artifacts out of the tracked server checkout.
-git restore --source=HEAD --worktree -- docker-backend/data >/dev/null 2>&1 || true
+git restore --source=HEAD --worktree -- backend/data >/dev/null 2>&1 || true
 rm -rf .playwright-mcp
 find . -maxdepth 1 -type f -name '*.png' -delete
 
@@ -287,7 +287,7 @@ cd /root/recoder.xyz
 # Validate required env files exist before building
 echo "--- Validating required env files ---"
 MISSING_ENV=0
-for envfile in app/.env.production docker-backend/.env recoder-agents/.env.local; do
+for envfile in app/.env.production backend/.env recoder-agents/.env.local; do
   if [ ! -f "$envfile" ]; then
     echo "FATAL: Missing required env file: $envfile"
     MISSING_ENV=1
@@ -306,7 +306,7 @@ bash scripts/check-hetzner-db-env-drift.sh
 echo "--- Checking Docker disk pressure ---"
 bash scripts/check-hetzner-docker-disk-pressure.sh
 
-echo "--- Checking docker-backend build context cleanliness ---"
+echo "--- Checking backend build context cleanliness ---"
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 TARGET_BRANCH="${DEPLOY_BRANCH:-}"
 BUILD_CONTEXT_COMPARE_REF="HEAD"
@@ -319,10 +319,10 @@ elif [[ -n "$CURRENT_BRANCH" && "$CURRENT_BRANCH" != "HEAD" ]]; then
   git fetch origin "$CURRENT_BRANCH"
   BUILD_CONTEXT_COMPARE_REF="origin/${CURRENT_BRANCH}"
 fi
-GIT_COMPARE_REF="$BUILD_CONTEXT_COMPARE_REF" bash scripts/check-hetzner-docker-backend-build-context.sh
+GIT_COMPARE_REF="$BUILD_CONTEXT_COMPARE_REF" bash scripts/check-hetzner-backend-build-context.sh
 
-echo "--- Checking docker-backend dist parity ---"
-bash scripts/check-docker-backend-dist-parity.sh
+echo "--- Checking backend dist parity ---"
+bash scripts/check-backend-dist-parity.sh
 
 # Prevent concurrent deploy runs from racing on container names.
 if command -v flock >/dev/null 2>&1; then
@@ -335,7 +335,7 @@ fi
 
 CONTAINER_NAMES=(
   recoder-redis
-  recoder-docker-backend
+  recoder-backend
   recoder-frontend
   recoder-app
 )
@@ -418,9 +418,9 @@ docker compose -f docker-compose.deploy.yml --profile build-base build recoder-b
 require_docker_image "recoder-workspace:latest"
 echo "[$(date -u)] recoder-base built"
 
-echo "--- Building docker-backend ---"
-docker build -f docker-backend/Dockerfile -t recoderxyz-docker-backend:latest .
-echo "[$(date -u)] docker-backend built"
+echo "--- Building backend ---"
+docker build -f backend/Dockerfile -t recoderxyz-backend:latest .
+echo "[$(date -u)] backend built"
 
 echo "--- Building recoder-app ---"
 docker build -f app/Dockerfile -t recoderxyz-recoder-app:latest .
@@ -448,7 +448,7 @@ echo "--- Waiting for services to start ---"
 sleep 10
 
 echo "--- Waiting for service health ---"
-for service in redis docker-backend recoder-frontend recoder-app; do
+for service in redis backend recoder-frontend recoder-app; do
   for i in $(seq 1 30); do
     CID=$(docker compose -f docker-compose.deploy.yml ps -q "$service" 2>/dev/null || true)
     if [ -n "$CID" ]; then
@@ -543,7 +543,7 @@ check_service() {
   fi
 }
 
-check_service "docker-backend(:3100)" curl -sf http://localhost:3100/health
+check_service "backend(:3100)" curl -sf http://localhost:3100/health
 check_service "recoder-app(:3000)" curl -sf http://localhost:3000/api/health
 check_service "recoder-frontend(:3001)" curl -sf -o /dev/null -w "%{http_code}" http://localhost:3001
 
@@ -616,7 +616,7 @@ echo ""
 echo "=== Deployment complete ==="
 echo ""
 echo "Services:"
-echo "  docker-backend:    http://77.42.23.19:3100"
+echo "  backend:    http://77.42.23.19:3100"
 echo "  recoder-frontend:  http://77.42.23.19:3001"
 echo ""
 echo "A2A Secrets (save these):"

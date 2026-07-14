@@ -1,7 +1,7 @@
 /**
  * HandoffDepthExceededError / HandoffCycleError — depth + cycle guards on the
  * delegation chain. MERGED from the depth-exceeded + circular-detection paths
- * of `docker-backend/src/a2a/delegation-chain.service.ts`.
+ * of `backend/src/a2a/delegation-chain.service.ts`.
  */
 
 import { CoordinationError } from './coordination-error';

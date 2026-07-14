@@ -2,7 +2,7 @@
 # Build the `bd` (beads) issue-tracker binary reproducibly from modules/memory/beads.
 #
 # The Conductor uses beads (`bd`) for the related-task graph it folds into a
-# BrainContext bundle (docker-backend/src/conductor/bundle.ts). Today the only
+# BrainContext bundle (backend/src/conductor/bundle.ts). Today the only
 # working `bd` is a developer-local `go install`; this script makes the binary
 # reproducible from the vendored modules/memory/beads source so any host (laptop, CI, the
 # runtime image) can produce an identical, version-stamped binary.

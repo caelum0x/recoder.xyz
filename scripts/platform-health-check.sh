@@ -84,7 +84,7 @@ run_check "recoder-agents" "recoder-agents" "npm run build" false || failures=$(
 run_check "apps-mobile" "apps/mobile" "npm run typecheck" false || failures=$((failures + 1))
 run_check "apps-desktop" "apps/desktop" "npm run lint" false || failures=$((failures + 1))
 run_check "backend" "backend" "npm run build" false || failures=$((failures + 1))
-run_check "docker-backend" "docker-backend" "npm run build" true || failures=$((failures + 1))
+run_check "backend" "backend" "npm run build" true || failures=$((failures + 1))
 
 echo "Report written to: $REPORT_PATH"
 cat "$REPORT_PATH"

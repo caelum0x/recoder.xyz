@@ -2,7 +2,7 @@
  * delta — the run-tailer's incremental pane delta (design §4.7).
  *
  * Promoted verbatim from the inline prefix-diff in
- * docker-backend/src/conductor/run-tailer.ts. When a new capture extends the
+ * backend/src/conductor/run-tailer.ts. When a new capture extends the
  * previous one (the common terminal append case) we emit only the new suffix;
  * otherwise (a scroll/clear changed the prefix) we emit the whole capture. The
  * emitted text is trimmed and capped to the last MAX_DELTA_CHARS characters so a

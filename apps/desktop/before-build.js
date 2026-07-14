@@ -23,7 +23,7 @@ const cockpitDist = path.join(cockpitDir, 'dist');
 
 // Repo root is two levels up from apps/desktop; the embedded backend lives here.
 const repoRoot = path.resolve(__dirname, '..', '..');
-const backendDir = path.join(repoRoot, 'docker-backend');
+const backendDir = path.join(repoRoot, 'backend');
 
 const assetsDir = path.join(__dirname, 'assets');
 const iconGenerator = path.join(__dirname, 'scripts', 'generate-icon.js');
@@ -42,7 +42,7 @@ function runIn(cwd, cmd) {
 }
 
 /**
- * Build the embedded docker-backend dist so extraResources ships a fresh
+ * Build the embedded backend dist so extraResources ships a fresh
  * compiled backend, including dist/conductor/mint-conductor-key.js (the packaged
  * supervisor runs this to mint the local conductor key). We fail the build if
  * the two load-bearing entrypoints are missing afterwards, so we never package
@@ -54,12 +54,12 @@ function buildEmbeddedBackend() {
 
   if (!fs.existsSync(path.join(backendDir, 'node_modules', '.bin', 'tsc'))) {
     throw new Error(
-      `[before-build] docker-backend devDependencies (tsc) not installed at ${backendDir}. ` +
+      `[before-build] backend devDependencies (tsc) not installed at ${backendDir}. ` +
         'Install backend deps before packaging the desktop app.',
     );
   }
 
-  console.log('[before-build] building embedded docker-backend (tsc)');
+  console.log('[before-build] building embedded backend (tsc)');
   runIn(backendDir, 'npx tsc');
 
   if (!fs.existsSync(serverEntry)) {

@@ -4,13 +4,13 @@ import { XdrSink } from '../src/xdr/sink';
 import type { NetworkSecurityEvent } from '../src/types';
 import { newGovernanceAuditSink } from './governance-ports';
 
-const KNOWN = 'spiffe://recoder.xyz/svc/docker-backend';
+const KNOWN = 'spiffe://recoder.xyz/svc/backend';
 
 function ev(over: Partial<NetworkSecurityEvent>): NetworkSecurityEvent {
   return {
     timestamp: '2026-06-28T00:00:00.000Z',
     method: 'GET',
-    path: '/docker-backend/api',
+    path: '/backend/api',
     responseCode: 200,
     sourceIp: '10.0.0.5',
     ...over,
@@ -63,11 +63,11 @@ describe('XDR (a) anomalous_principal', () => {
 // --- (c) unexpected_egress ---------------------------------------------------
 
 describe('XDR (c) unexpected_egress', () => {
-  const config = makeDetectionConfig({ egressAllowlist: ['docker-backend', 'recoder-app'] });
+  const config = makeDetectionConfig({ egressAllowlist: ['backend', 'recoder-app'] });
 
   it('FIRES when a request egresses to a non-allowlisted destination', () => {
     const events = [
-      ev({ upstream: 'docker-backend' }),
+      ev({ upstream: 'backend' }),
       ev({ upstream: 'attacker-c2.example.com', sourceIp: '10.0.0.9' }),
     ];
     const d = detect(events, config).find((x) => x.ruleId === 'unexpected_egress');
@@ -76,7 +76,7 @@ describe('XDR (c) unexpected_egress', () => {
   });
 
   it('does NOT fire when every destination is allowlisted (benign)', () => {
-    const events = [ev({ upstream: 'docker-backend' }), ev({ upstream: 'recoder-app' })];
+    const events = [ev({ upstream: 'backend' }), ev({ upstream: 'recoder-app' })];
     expect(detect(events, config).filter((x) => x.ruleId === 'unexpected_egress')).toHaveLength(0);
   });
 
@@ -152,7 +152,7 @@ describe('XdrSink seals the new detections into the Merkle audit chain', () => {
 
   it('(c) unexpected_egress is written to the audit sink', () => {
     const audit = newGovernanceAuditSink();
-    const sink = new XdrSink(audit, { config: makeDetectionConfig({ egressAllowlist: ['docker-backend'] }) });
+    const sink = new XdrSink(audit, { config: makeDetectionConfig({ egressAllowlist: ['backend'] }) });
     const tip0 = sink.auditTip();
     const result = sink.ingestEvents([ev({ upstream: 'attacker-c2' })]);
     expect(result.detections.some((x) => x.ruleId === 'unexpected_egress')).toBe(true);
@@ -181,10 +181,10 @@ describe('XdrSink seals the new detections into the Merkle audit chain', () => {
   it('benign traffic seals NOTHING (empty chain stays at genesis)', () => {
     const audit = newGovernanceAuditSink();
     const sink = new XdrSink(audit, {
-      config: makeDetectionConfig({ knownPrincipals: [KNOWN], egressAllowlist: ['docker-backend'] }),
+      config: makeDetectionConfig({ knownPrincipals: [KNOWN], egressAllowlist: ['backend'] }),
     });
     const events = Array.from({ length: 10 }, () =>
-      ev({ principal: KNOWN, upstream: 'docker-backend' }),
+      ev({ principal: KNOWN, upstream: 'backend' }),
     );
     const result = sink.ingestEvents(events);
     expect(result.detections).toHaveLength(0);

@@ -3,12 +3,12 @@
  * dev-boot-proof.js
  *
  * Headless end-to-end proof that the desktop BackendSupervisor genuinely boots
- * the embedded docker-backend (tmux + the engines host), mints a real platform
+ * the embedded backend (tmux + the engines host), mints a real platform
  * key, and that GET /api/conductor/health returns 200 with the substrate shape
  * { available, git, tmux, tmuxBin }.
  *
  * This is the DEV path (isPackaged:false): it runs `tsx src/server.ts` from the
- * repo docker-backend exactly as the packaged app would run dist/server.js, and
+ * repo backend exactly as the packaged app would run dist/server.js, and
  * mints via the real dev-mint-conductor-key script — no Electron runtime needed.
  *
  * Prints the real HTTP status + body, then stops the supervisor cleanly.

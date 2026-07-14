@@ -9,7 +9,7 @@
  * the exact JSON shapes documented in:
  *   - packages/agent-os/src/domain/workspace.ts (Workspace, WorkspaceState)
  *   - packages/agent-os/src/domain/event.ts (RunEvent)
- *   - docker-backend/src/conductor/conductor.routes.ts (routes + envelopes)
+ *   - backend/src/conductor/conductor.routes.ts (routes + envelopes)
  *
  * State is mutable and driven by the cockpit's real requests so the integration
  * test can walk the create -> events -> diff -> terminate lifecycle and assert

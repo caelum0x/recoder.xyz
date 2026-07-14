@@ -2,7 +2,7 @@
  * delegation-chain-service — depth + cycle tracking + result propagation for a
  * delegation chain.
  *
- * MERGED from `docker-backend/src/a2a/delegation-chain.service.ts`. The original
+ * MERGED from `backend/src/a2a/delegation-chain.service.ts`. The original
  * was a stateful `EventEmitter` over a mutable `Map<string, DelegationRequest>`.
  * Here the chain is an IMMUTABLE `DelegationChain` value: every operation returns
  * a NEW chain, depth/cycle validation reuses the extracted pure guards

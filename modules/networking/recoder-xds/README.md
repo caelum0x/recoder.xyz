@@ -7,7 +7,7 @@ library. It serves **dynamic** LDS / CDS / RDS over the ADS gRPC API.
 
 ## Why this exists
 
-`docker-backend/src/network` already **generates a static Envoy bootstrap**
+`backend/src/network` already **generates a static Envoy bootstrap**
 (listeners / clusters / ext_authz / access-log) from a `NetworkConfig` and serves
 it at `GET /api/network/envoy-config`. That is fine for a one-shot `envoy -c`
 boot, but it cannot push live changes.
@@ -26,7 +26,7 @@ generator.
 
 ```
 cmd/recoder-xds/        boot: load config -> build snapshot -> serve ADS + /healthz
-internal/config/        NetworkConfig (mirrors docker-backend/src/network/types.ts)
+internal/config/        NetworkConfig (mirrors backend/src/network/types.ts)
 internal/snapshot/      NetworkConfig -> real Envoy v3 protos -> cache.Snapshot
 internal/server/        ADS gRPC server over a go-control-plane SnapshotCache
 ```
@@ -34,7 +34,7 @@ internal/server/        ADS gRPC server over a go-control-plane SnapshotCache
 ## What the snapshot contains
 
 - **Clusters** (CDS): one `STRICT_DNS` cluster per recoder upstream
-  (`docker-backend`, `recoder-app`, `recoder-agents`, `recoder-pm`,
+  (`backend`, `recoder-app`, `recoder-agents`, `recoder-pm`,
   `recoder-agency`) plus the `recoder_ext_authz` cluster.
 - **Listener** (LDS): a single HTTPS ingress listener whose filter chain has a
   downstream TLS transport socket (optionally mTLS / require-client-cert) and an
@@ -44,7 +44,7 @@ internal/server/        ADS gRPC server over a go-control-plane SnapshotCache
 - **Route config** (RDS): a catch-all virtual host that path-routes `/<service>/`
   prefixes to each upstream cluster. Delivered dynamically via RDS, not inlined.
 - **Access log**: JSON file access log with the exact key set the XDR parser
-  (`docker-backend/src/network/xdr`) expects.
+  (`backend/src/network/xdr`) expects.
 
 ## Run
 
@@ -59,7 +59,7 @@ go build ./...
 ./recoder-xds --config-file ./network.json
 
 # Or fetch the config from a backend endpoint that returns a NetworkConfig:
-./recoder-xds --config-url http://docker-backend:3100/api/network/config
+./recoder-xds --config-url http://backend:3100/api/network/config
 ```
 
 ### Flags / env

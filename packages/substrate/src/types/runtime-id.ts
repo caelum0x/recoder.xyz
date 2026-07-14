@@ -1,7 +1,7 @@
 /**
  * ConductorRuntimeId — the coding-agent CLIs Conductor can drive headless.
  *
- * Promoted verbatim from docker-backend/src/conductor/runtime-commands.ts.
+ * Promoted verbatim from backend/src/conductor/runtime-commands.ts.
  * A subset of agent-os `AgentSurface`; the `command/` module maps each id to its
  * real binary + headless invocation.
  */

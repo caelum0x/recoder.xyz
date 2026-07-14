@@ -36,7 +36,7 @@ echo ""
 echo "[3/4] Creating default tenant and API token..."
 API_TOKEN=$(docker exec "$HATCHET_ENGINE" /hatchet-admin token create \
   --tenant-id default \
-  --name "recoder-docker-backend" \
+  --name "recoder-backend" \
   2>/dev/null || echo "")
 
 if [ -z "$API_TOKEN" ]; then
@@ -54,7 +54,7 @@ echo "  HATCHET_CLIENT_TOKEN=$API_TOKEN"
 echo "  HATCHET_MASTER_ENCRYPTION_KEY=$MASTER_KEY"
 echo "  HATCHET_JWT_SECRET=$JWT_SECRET"
 echo ""
-echo "Then restart docker-backend:"
-echo "  docker compose -f docker-compose.deploy.yml restart docker-backend"
+echo "Then restart backend:"
+echo "  docker compose -f docker-compose.deploy.yml restart backend"
 echo ""
 echo "Dashboard: http://localhost:8084"

@@ -6,7 +6,7 @@ import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import { getRecoderBackendUrl } from "../recoder/recoder-endpoints";
 import { RecoderConnectorsView } from "./recoder-connectors";
 
-// Per-channel health from GET /api/connectors (docker-backend connectors bridge).
+// Per-channel health from GET /api/connectors (backend connectors bridge).
 // Fields are allowlisted during normalization — anything token-like the API might
 // ever grow is never carried into the UI model.
 type ConnectorChannel = {

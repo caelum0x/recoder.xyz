@@ -20,9 +20,9 @@ WEB_ENV_FILES=(
 )
 
 DOCKER_ENV_FILES=(
-  "$REPO_ROOT/docker-backend/.env"
-  "$REPO_ROOT/docker-backend/.env.production"
-  "$REPO_ROOT/docker-backend/.env.example"
+  "$REPO_ROOT/backend/.env"
+  "$REPO_ROOT/backend/.env.production"
+  "$REPO_ROOT/backend/.env.example"
   "$REPO_ROOT/.env.production"
   "$REPO_ROOT/.env"
 )
@@ -89,7 +89,7 @@ WEB_ENV="$(first_file_with_key "INTERNAL_SERVICE_KEY" "${WEB_ENV_FILES[@]}" || t
 DOCKER_ENV="$(first_file_with_key "INTERNAL_SERVICE_KEY" "${DOCKER_ENV_FILES[@]}" || true)"
 
 if [[ -z "$APP_ENV" || -z "$DOCKER_ENV" ]]; then
-  echo "could not find required env files for app/docker-backend" >&2
+  echo "could not find required env files for app/backend" >&2
   echo "app file: ${APP_ENV:-missing}" >&2
   echo "web file: ${WEB_ENV:-missing (optional retired surface)}" >&2
   echo "docker file: ${DOCKER_ENV:-missing}" >&2
@@ -104,7 +104,7 @@ if [[ -n "$WEB_ENV" ]]; then
 fi
 
 require_nonempty "app INTERNAL_SERVICE_KEY ($APP_ENV)" "$APP_INTERNAL_SERVICE_KEY"
-require_nonempty "docker-backend INTERNAL_SERVICE_KEY ($DOCKER_ENV)" "$DOCKER_INTERNAL_SERVICE_KEY"
+require_nonempty "backend INTERNAL_SERVICE_KEY ($DOCKER_ENV)" "$DOCKER_INTERNAL_SERVICE_KEY"
 if [[ -n "$WEB_ENV" ]]; then
   require_nonempty "recoder-web INTERNAL_SERVICE_KEY ($WEB_ENV)" "$WEB_INTERNAL_SERVICE_KEY"
 fi
@@ -141,7 +141,7 @@ QUEUE_BACKEND="$(echo "$QUEUE_BACKEND" | tr '[:upper:]' '[:lower:]')"
 
 REDIS_URL_VALUE="$(read_env_value "$DOCKER_ENV" "REDIS_URL")"
 if [[ "$QUEUE_BACKEND" == "redis" ]]; then
-  require_nonempty "docker-backend REDIS_URL ($DOCKER_ENV)" "$REDIS_URL_VALUE"
+  require_nonempty "backend REDIS_URL ($DOCKER_ENV)" "$REDIS_URL_VALUE"
 fi
 
 BILLING_MODE_RAW="${BILLING_ACTIONS_ENABLED:-}"
@@ -168,14 +168,14 @@ fi
 DOCKER_MAIN_SITE_INTERNAL_URL="$(read_env_value "$DOCKER_ENV" "MAIN_SITE_INTERNAL_URL")"
 
 if [[ -n "$WEB_MAIN_SITE_INTERNAL_URL" && -n "$DOCKER_MAIN_SITE_INTERNAL_URL" && "$WEB_MAIN_SITE_INTERNAL_URL" != "$DOCKER_MAIN_SITE_INTERNAL_URL" ]]; then
-  echo "MAIN_SITE_INTERNAL_URL mismatch between recoder-web and docker-backend" >&2
+  echo "MAIN_SITE_INTERNAL_URL mismatch between recoder-web and backend" >&2
   echo "web:    $WEB_MAIN_SITE_INTERNAL_URL" >&2
   echo "docker: $DOCKER_MAIN_SITE_INTERNAL_URL" >&2
   exit 1
 fi
 
 if [[ -n "$APP_MAIN_SITE_INTERNAL_URL" && -n "$DOCKER_MAIN_SITE_INTERNAL_URL" && "$APP_MAIN_SITE_INTERNAL_URL" != "$DOCKER_MAIN_SITE_INTERNAL_URL" ]]; then
-  echo "MAIN_SITE_INTERNAL_URL mismatch between app and docker-backend" >&2
+  echo "MAIN_SITE_INTERNAL_URL mismatch between app and backend" >&2
   echo "app:    $APP_MAIN_SITE_INTERNAL_URL" >&2
   echo "docker: $DOCKER_MAIN_SITE_INTERNAL_URL" >&2
   exit 1

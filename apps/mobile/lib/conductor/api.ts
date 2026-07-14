@@ -1,7 +1,7 @@
 /**
  * Conductor / Agent OS API client (mobile monitor + approve).
  *
- * Talks to the Recoder control-plane surfaces on docker-backend:
+ * Talks to the Recoder control-plane surfaces on backend:
  *   - GET  /api/conductor/workspaces                      list workspaces + run state
  *   - GET  /api/conductor/workspaces/:id/events           RunEvents for a workspace
  *   - GET  /api/agent-os/runs                             canonical Agent OS runs
@@ -9,7 +9,7 @@
  *   - POST /api/agent-os/approvals/:id/approve            decide -> approved
  *   - POST /api/agent-os/approvals/:id/reject             decide -> rejected
  *
- * Base URL: the control plane lives on docker-backend, NOT the `/v1` python
+ * Base URL: the control plane lives on backend, NOT the `/v1` python
  * backend that `API_URL` points at. It is configured via
  * EXPO_PUBLIC_CONDUCTOR_API_URL and falls back to API_URL (so a single-host dev
  * setup still works). Auth reuses the shared session bearer token.

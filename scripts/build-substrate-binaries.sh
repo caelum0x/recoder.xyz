@@ -4,7 +4,7 @@
 #
 # WHY THIS EXISTS
 # ---------------
-# The Conductor resolves its tmux via docker-backend/src/conductor/tmux-path.ts
+# The Conductor resolves its tmux via backend/src/conductor/tmux-path.ts
 # (CONDUCTOR_TMUX_BIN > RECODER_TMUX_BUILD_PATH > <repo>/modules/terminal/tmux/tmux > bare `tmux`)
 # and its bd via packages/brain engine-resolver (BD_BIN > bare `bd`). Both have
 # build scripts, but nothing in setup/deploy ran them — so on a clean host the
@@ -17,7 +17,7 @@
 #                   and continues; it never fails the whole setup/deploy. The
 #                   runtime already degrades truthfully when a binary is absent.
 #   - reusable:     invoked from `make substrate-binaries` AND from the
-#                   docker-backend image build (Dockerfile), so the deployed
+#                   backend image build (Dockerfile), so the deployed
 #                   container ships the pinned binaries instead of apt's tmux.
 #
 # After a successful build it prints the env exports the runtime expects:

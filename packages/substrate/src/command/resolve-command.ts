@@ -1,7 +1,7 @@
 /**
  * resolveRuntimeCommand — runtime + prompt → the shell command line to run.
  *
- * Promoted verbatim from docker-backend/src/conductor/runtime-commands.ts, now
+ * Promoted verbatim from backend/src/conductor/runtime-commands.ts, now
  * throwing typed SubstrateErrors instead of bare Errors (design §8).
  */
 import type { ResolvedRuntimeCommand, RuntimeCommandOptions } from '../types/command.js';

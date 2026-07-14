@@ -32,7 +32,7 @@ export const gitNexusMcpServer: McpServerRegistration = {
 /**
  * The host injects how Git Nexus tools resolve a repository on disk. The package
  * stays runtime-agnostic: it never assumes the backend's filesystem layout or a
- * default repo root. The host (docker-backend) supplies the concrete resolver.
+ * default repo root. The host (backend) supplies the concrete resolver.
  */
 export type GitNexusPort = {
   /**

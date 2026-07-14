@@ -11,7 +11,7 @@ import type { McpServerRegistration } from '../registry';
  * release`), which throws on conflict and is bound to the agent-os `WorkLockService`
  * + in-memory state callbacks. This skin is the owned-engine mirror of
  * `retrieval-server.ts`: the package owns NO engine logic and assumes no backing
- * store. The host (docker-backend) injects a concrete `CoordinationPort` built over
+ * store. The host (backend) injects a concrete `CoordinationPort` built over
  * `@recoder/coordination`'s advisory engine + an injectable lock store (in-memory
  * default; a Go `multica` daemon or DB store later). Every handler degrades
  * truthfully — the engine returns a `not_configured` status (never throws, never

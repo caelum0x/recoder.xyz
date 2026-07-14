@@ -1,6 +1,6 @@
 /**
  * Bounded set / ring — MERGED from the `_localEventIds` + `LOCAL_ID_CAP`
- * trimming logic in `docker-backend/src/a2a/a2a-event-bus.ts`. Used by the
+ * trimming logic in `backend/src/a2a/a2a-event-bus.ts`. Used by the
  * dedup ledger and event retention to keep recent-id memory bounded.
  *
  * Immutable: every mutation returns a new BoundedSet (per coding-style).

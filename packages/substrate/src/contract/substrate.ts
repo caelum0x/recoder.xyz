@@ -1,7 +1,7 @@
 /**
  * ConductorSubstrate — the swappable execution layer under a workspace.
  *
- * Promoted from docker-backend/src/conductor/substrate.ts (the contract is
+ * Promoted from backend/src/conductor/substrate.ts (the contract is
  * verbatim; `capabilities()` is added per design §4.1). A substrate provisions
  * isolation + launches the agent, and lets the orchestration layer capture
  * output, check liveness, produce a reviewable diff, and tear down. The

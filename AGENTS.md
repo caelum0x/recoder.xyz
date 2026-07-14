@@ -99,7 +99,7 @@ Recoder should behave like an agent control plane, not a prompt library.
   **[docs/architecture/RECODER-CAPABILITIES.md](docs/architecture/RECODER-CAPABILITIES.md)**
   for the canonical capability map and the connection backlog (binding each as
   an MCP tool the agents can call, behind the governance gate).
-- Primary runtime: `docker-backend/` (the control plane: conductor + agent-os +
+- Primary runtime: `backend/` (the control plane: conductor + agent-os +
   MCP host). The desktop app embeds it.
 
 ## Core Engineering Philosophy

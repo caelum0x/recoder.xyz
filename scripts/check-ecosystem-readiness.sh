@@ -218,12 +218,12 @@ fi
 
 # --------------------------------------------------
 echo ""
-echo "=== Track 2: Main Branch (app + recoder-web + docker-backend) ==="
+echo "=== Track 2: Main Branch (app + recoder-web + backend) ==="
 echo ""
 
 WEB_ENV="$REPO_ROOT/recoder-web/.env.local"
 WEB_ENV_ALT="$REPO_ROOT/recoder-web/.env"
-DOCKER_ENV="$REPO_ROOT/docker-backend/.env"
+DOCKER_ENV="$REPO_ROOT/backend/.env"
 
 if [[ -f "$WEB_ENV" ]]; then
   WEB_ACTIVE="$WEB_ENV"
@@ -331,7 +331,7 @@ OPENCLAW_ENV_ALT="$OPENCLAW_ROOT/.env.local"
 check_file_exists "$OPENCLAW_ROOT/extensions/recoder-plugin/index.ts" "OpenClaw plugin"
 check_file_exists "$OPENCLAW_ROOT/extensions/recoder-plugin/src/tools/recoder-tool.ts" "OpenClaw plugin"
 check_file_exists "$OPENCLAW_ROOT/extensions/recoder-plugin/src/services/api-key-manager.ts" "OpenClaw plugin"
-check_file_exists "$REPO_ROOT/docker-backend/src/public-api/routes/openclaw-keys.ts" "Recoder API"
+check_file_exists "$REPO_ROOT/backend/src/public-api/routes/openclaw-keys.ts" "Recoder API"
 
 if [[ -f "$OPENCLAW_ENV" ]]; then
   OPENCLAW_ACTIVE_ENV="$OPENCLAW_ENV"

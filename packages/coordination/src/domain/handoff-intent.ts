@@ -2,7 +2,7 @@
  * HandoffIntent — the parsed intent of a handoff. MERGED from the
  * `'handoff' | 'delegate' | 'review' | 'message'` union + `INTENT_PREFIXES`
  * (`handoff:`/`delegate:`/`review:`) in
- * `docker-backend/src/a2a/autonomous-routing.service.ts`. Extended with `merge`
+ * `backend/src/a2a/autonomous-routing.service.ts`. Extended with `merge`
  * per the design (the pipeline merge stage).
  */
 

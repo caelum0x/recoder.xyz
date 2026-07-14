@@ -1,7 +1,7 @@
 /**
  * RUNTIME_SPECS — the real headless invocation per coding-agent CLI.
  *
- * Promoted VERBATIM from docker-backend/src/conductor/runtime-commands.ts. These
+ * Promoted VERBATIM from backend/src/conductor/runtime-commands.ts. These
  * are production invocations of the actual installed agent CLIs (no stubs):
  * Claude Code, Codex, opencode, Recoder Code, pi, Gemini CLI, Qwen Code, crush.
  *

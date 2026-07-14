@@ -128,7 +128,7 @@ run_step "4/5 Sensitive key presence audit (no values)" \
     audit_file='$OUT_DIR/$RUN_ID-audit.txt'
     bash '$REPO_ROOT/scripts/credential-rotation-audit.sh' remote | tee \"\$audit_file\"
     grep -Eq '^=== recoder-app ===' \"\$audit_file\"
-    grep -Eq '^=== recoder-docker-backend ===' \"\$audit_file\"
+    grep -Eq '^=== recoder-backend ===' \"\$audit_file\"
     grep -Eq '^=== recoder-redis ===' \"\$audit_file\"
     $(typeset -f check_key_group)
     check_key_group \"\$audit_file\" 'database' '(DATABASE_URL|AUTH_DATABASE_URL)=SET'

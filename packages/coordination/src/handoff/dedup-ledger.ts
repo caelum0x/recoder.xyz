@@ -2,7 +2,7 @@
  * dedup-ledger — at-least-once delivery → effectively-once.
  *
  * MERGED from the `_localEventIds` Set + `LOCAL_ID_CAP` trimming in
- * `docker-backend/src/a2a/a2a-event-bus.ts`. The original kept a mutable Set on
+ * `backend/src/a2a/a2a-event-bus.ts`. The original kept a mutable Set on
  * the bus instance and skipped re-emitting events it had already published.
  * Here it is a first-class, IMMUTABLE in-memory ledger built on the foundation's
  * `BoundedSet` (which already encodes the cap+trim logic). The durable side

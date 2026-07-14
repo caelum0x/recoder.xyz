@@ -414,7 +414,7 @@ describe('BackendSupervisor.start', () => {
     expect(spawn).toHaveBeenCalled();
     const [command, args] = spawn.mock.calls[0];
     expect(command).toContain('tsx');
-    expect(args[0]).toContain('docker-backend/src/server.ts');
+    expect(args[0]).toContain('backend/src/server.ts');
     // getAuth exposes the supervised backendUrl + minted key
     const auth = sup.getAuth();
     expect(auth).toEqual({ backendUrl: 'http://127.0.0.1:45678', apiKey: 'sk_test_minted_key' });

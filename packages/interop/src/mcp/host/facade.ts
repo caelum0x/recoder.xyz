@@ -7,7 +7,7 @@ import type { HostCallOutcome } from "./host";
 /**
  * `McpHost` — the public facade that composes the in-proc gated host with the
  * external-process supervisor into one entry point for consumers (e.g.
- * docker-backend's thin MCP routes).
+ * backend's thin MCP routes).
  *
  * One object owns: the catalog-gated registry, the authorize→risk→policy→audit
  * call gate, per-agent sessions, AND the supervised external stdio servers (the

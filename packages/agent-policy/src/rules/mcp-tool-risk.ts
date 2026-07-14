@@ -7,7 +7,9 @@ export function evaluateMcpToolRisk(input: PolicyInput): PolicyDecision | null {
     return null;
   }
 
-  if (/secret|billing|production|deploy|delete|branch\.push|pr\.create/.test(input.target.toolName)) {
+  // 'clink' spawns a subprocess CLI (code execution); the outer CLI may be gated
+  // but its clink-spawned child is not, so treat clink itself as high-risk.
+  if (/secret|billing|production|deploy|delete|branch\.push|pr\.create|clink/.test(input.target.toolName)) {
     return decision(input, 'needs_approval', `MCP tool is high-risk: ${input.target.toolName}`);
   }
 

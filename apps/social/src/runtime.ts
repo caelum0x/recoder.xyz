@@ -117,7 +117,7 @@ export class SocialRuntime {
         : config.agent.enabled
           ? createPiEmbeddedRunner()
           : null;
-    // The SAME trust boundary the docker-backend bridge applies: allowlist is
+    // The SAME trust boundary the backend bridge applies: allowlist is
     // the sole authorization source, DMs are NOT silently open, `/`-prefixed
     // text counts as a control command, empty allowlist authorizes nobody.
     this.gatePolicy = makeAllowlistGatePolicy({

@@ -1,6 +1,6 @@
 /**
  * Command resolution types — promoted from
- * docker-backend/src/conductor/runtime-commands.ts.
+ * backend/src/conductor/runtime-commands.ts.
  *
  * These describe how a runtime + prompt becomes the exact headless CLI line that
  * the substrate runs inside its isolation.

@@ -2,7 +2,7 @@
  * depth-guard — pure enforcement of the maximum delegation-chain depth.
  *
  * MERGED from the depth-validation path of
- * `docker-backend/src/a2a/delegation-chain.service.ts` (`delegate()` computes
+ * `backend/src/a2a/delegation-chain.service.ts` (`delegate()` computes
  * `parent.depth + 1` and throws when it exceeds `config.maxDepth`). Extracted
  * here as a pure predicate + a typed-error gate so it is independently testable
  * and reusable by the delegation-chain service.

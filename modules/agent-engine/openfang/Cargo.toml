@@ -4,7 +4,7 @@
 # trimmed to the openfang-kernel dependency graph plus the Recoder NAPI binding
 # crate (openfang-napi). Building `-p openfang-napi` compiles the actual engine
 # (kernel + runtime/wasmtime + memory/sqlite + channels + skills + hands + wire +
-# extensions) into a `.node` that the docker-backend loads IN-PROCESS — the way
+# extensions) into a `.node` that the backend loads IN-PROCESS — the way
 # Cursor compiled VSCode in, not an HTTP subprocess.
 #
 # The CLI / desktop (tauri) / api / migrate frontends are intentionally excluded:

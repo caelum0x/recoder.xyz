@@ -653,7 +653,7 @@ export class RecoderGitMcpRepoIntel implements RepoIntelPort {
       taskId: input.task.taskId,
       repoMap: input.repoMap ?? {
         repoRoot: input.repoRoot,
-        packageGlobs: ["packages/*", "apps/*", "docker-backend"],
+        packageGlobs: ["packages/*", "apps/*", "backend"],
         indexedAt,
       },
       dependencyGraph,

@@ -1,5 +1,5 @@
 // Orchestration barrel — multi-agent dispatch patterns (MERGED from
-// docker-backend/src/a2a/multi-dispatch.service.ts + task-result-aggregator.ts).
+// backend/src/a2a/multi-dispatch.service.ts + task-result-aggregator.ts).
 
 export * from './plan';
 export * from './direct';

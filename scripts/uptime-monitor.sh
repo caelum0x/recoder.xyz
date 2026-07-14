@@ -18,12 +18,12 @@ check() {
 check "recoder-app" "http://localhost:3000" "200"
 check "recoder-agents" "http://localhost:3001" "200"
 check "api-backend" "http://localhost:8000/v1/health" "200"
-check "docker-backend" "http://localhost:3100/health" "200"
+check "backend" "http://localhost:3100/health" "200"
 check "recoder-pm" "http://localhost:3004" "307"
 check "recoder-agency" "http://localhost:3007" "307"
 
 # Docker containers
-mandatory_container="recoder-docker-backend"
+mandatory_container="recoder-backend"
 status=$(docker inspect --format='{{.State.Running}}' "$mandatory_container" 2>/dev/null)
 if [ "$status" != "true" ]; then
   DOWN_SERVICES="$DOWN_SERVICES $mandatory_container(stopped)"

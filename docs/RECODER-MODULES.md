@@ -15,7 +15,7 @@
     │            They consume the backend over its edges. No capability logic lives here.
     ▼ consume
   MODULES        The capabilities. Each is a DIRECTORY, used in place:
-    │              docker-backend  → the HOST module (conductor + agent-os; composes the rest)
+    │              backend  → the HOST module (conductor + agent-os; composes the rest)
     │              packages/*      → shared first-party contracts (agent-os, a2a-sdk, pal, …)
     │              ts/*            → recodergit (github) · dmux (terminal-mux) · extracted-from-openclaw (social)
     │              py/*            → mem0 · colbert (memory) · browser-use · ops-recorder · pal-mcp
@@ -27,10 +27,10 @@
 ```
 
 **Rules:**
-- A **module = an OSS directory used directly.** docker-backend imports/spawns/reads it in place. We do
+- A **module = an OSS directory used directly.** backend imports/spawns/reads it in place. We do
   NOT copy an engine into `packages/`. `packages/*` is only for genuinely-shared first-party contracts.
 - A **capability that composes several modules** (e.g. MEMORY = mem0 + beads + colbert) gets a thin
-  cohesive **composer** inside the host module (`docker-backend/src/modules/<domain>/`). The DEPTH lives
+  cohesive **composer** inside the host module (`backend/src/modules/<domain>/`). The DEPTH lives
   in the engine dirs; the composer only fuses + exposes one interface + truthful health. It must MOVE the
   scattered consumer code behind it (not add a 4th copy).
 - **Edit the OSS source in its own dir** when the fusion needs it — that dir is ours (e.g. the dmux
@@ -39,8 +39,8 @@
 
 ## The rule of a good module composer
 
-When docker-backend composes engine-modules into a domain capability, the composer is real when:
-1. **One domain, one owner** — `docker-backend/src/modules/<domain>/` is the single place that fuses the
+When backend composes engine-modules into a domain capability, the composer is real when:
+1. **One domain, one owner** — `backend/src/modules/<domain>/` is the single place that fuses the
    engine dirs for that domain (it does not re-implement them).
 2. **Cohesive interface** — full verb set of the domain; callers depend on it, never on a raw dist.
 3. **Consumes engines from their dirs** — mem0/beads/colbert/openfang/tensorzero are read/imported/spawned
@@ -107,7 +107,7 @@ interface SocialModule {
 }
 ```
 **Today:** `@recoder/connectors` package (the real pipeline: registry, hostile-by-default gate, dispatch,
-pi-runner) at `modules/social/openclaw` + `apps/social` (composition) + `docker-backend/src/connectors/`
+pi-runner) at `modules/social/openclaw` + `apps/social` (composition) + `backend/src/connectors/`
 (ingress + gateway). SEVEN per-channel `ConnectorPort` adapters are live and dispatch-tested
 (telegram/slack/signal/imessage/whatsapp/line/feishu); the **discord** adapter is exported but **not
 truly extracted** (still OpenClaw bot-core-coupled, ~172 type errors from un-ported clusters). The pieces
@@ -208,7 +208,7 @@ interface CommunicationModule {
 `recoder.pal-plan` in-proc behind the interop gate) + A2A scattered across `a2a/*` + the conductor's
 runtime dispatch. Only the `pal.plan` slice is ported to `@recoder/pal`; the vendored Python
 `modules/communication/pal-mcp-server` (multi-model orchestration, conversation threading, `clink` subagent bridge,
-codereview/consensus/planner workflows) is **NOT run/supervised** by docker-backend and its heavy
+codereview/consensus/planner workflows) is **NOT run/supervised** by backend and its heavy
 orchestration is stranded. pal decisions aren't yet the conductor's actual planner on the launch path.
 **Deep target:** a `CommunicationModule` that IS the conductor's decision layer (every workspace launch
 calls `plan()` for runtime/risk/approval) and the A2A spine (agent handoff/messaging). pal's consensus +
@@ -319,8 +319,8 @@ needs one).
 ## 11. NETWORKING module — `modules/networking/` (cloud tier — build now, mesh at cloud launch)
 **Domain:** zero-trust mesh + service control plane. **Engine dirs:** `modules/networking/ziti` (OpenZiti — zero-trust
 networking, cryptographic identity per connection, dark services) + `modules/networking/recoder-xds` (real Envoy xDS
-control plane — dynamic LDS/CDS/RDS over ADS, the live equivalent of `docker-backend/src/network`'s static
-bootstrap). **Today:** degrade-safe `ziti-client.ts`; `docker-backend/src/network` generates the static
+control plane — dynamic LDS/CDS/RDS over ADS, the live equivalent of `backend/src/network`'s static
+bootstrap). **Today:** degrade-safe `ziti-client.ts`; `backend/src/network` generates the static
 Envoy bootstrap. **Deep target:** a `NetworkingModule` exposing mesh identity + peer status + LIVE xDS
 push as diagnostics now, activated at cloud/teams launch. **Build:** owned-binary builds out-of-band;
 health/diagnostics surface; mesh deferred to cloud.

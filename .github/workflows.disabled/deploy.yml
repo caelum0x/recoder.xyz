@@ -118,7 +118,7 @@ jobs:
 
             # ── Batch 1: parallel builds ──
             echo ""
-            echo ">>> Batch 1: Building app, recoder-frontend, docker-backend, openclaw..."
+            echo ">>> Batch 1: Building app, recoder-frontend, backend, openclaw..."
 
             BUILD_FAILURES=0
 
@@ -135,8 +135,8 @@ jobs:
             PID_FRONTEND=$!
 
             (
-              cd /root/recoder.xyz/docker-backend && npm install && npm run build
-              echo "  [batch1] docker-backend build complete"
+              cd /root/recoder.xyz/backend && npm install && npm run build
+              echo "  [batch1] backend build complete"
             ) &
             PID_DOCKER=$!
 
@@ -201,7 +201,7 @@ jobs:
             # ── Create log directories for PM2 ──
             echo ""
             echo ">>> Ensuring log directories exist..."
-            mkdir -p /root/recoder.xyz/logs/{recoder-app,recoder-frontend,docker-backend,recoder-backend,recoder-pm,recoder-studio,recoder-agency,openclaw}
+            mkdir -p /root/recoder.xyz/logs/{recoder-app,recoder-frontend,backend,recoder-backend,recoder-pm,recoder-studio,recoder-agency,openclaw}
 
             # ── Deploy nginx config ──
             echo ""
@@ -228,7 +228,7 @@ jobs:
             )
 
             DOCKER_SERVICES=(
-              "docker-backend|https://api.recoder.xyz/health"
+              "backend|https://api.recoder.xyz/health"
               "openclaw-gateway|https://openclaw.recoder.xyz/health"
             )
 

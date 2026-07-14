@@ -6,7 +6,7 @@
  * its CLI — never `tmux` from a random PATH. dmux MUST use the same binary so the
  * operator console and the headless conductor sessions share one tmux server.
  *
- * This mirrors `docker-backend/src/conductor/tmux-path.ts` exactly so both halves agree.
+ * This mirrors `backend/src/conductor/tmux-path.ts` exactly so both halves agree.
  *
  * Resolution order (first hit wins):
  *   1. DMUX_TMUX_BIN          — dmux-specific override (absolute path).

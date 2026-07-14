@@ -1,0 +1,2208 @@
+[
+  {
+    "id": "sse_mnl4l1ju00006c26",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.786Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mnl4l1kq00012a65",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.818Z",
+    "data": {
+      "agentId": "recoder_web",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mnl4l1kr0002a76a",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.819Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mnl4l1kr0003c6de",
+    "type": "agent.online",
+    "timestamp": "2026-04-05T02:11:33.819Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:51:05.485Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:51:05.486Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T15:51:05.486Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:51:05.486Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:51:05.493Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:51:05.493Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:51:05.493Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "order-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 1
+    }
+  },
+  {
+    "id": "order-2",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 2
+    }
+  },
+  {
+    "id": "order-3",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 3
+    }
+  },
+  {
+    "id": "order-4",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 4
+    }
+  },
+  {
+    "id": "order-5",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 5
+    }
+  },
+  {
+    "id": "order-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 6
+    }
+  },
+  {
+    "id": "order-7",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 7
+    }
+  },
+  {
+    "id": "order-8",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.251Z",
+    "data": {
+      "seq": 8
+    }
+  },
+  {
+    "id": "order-9",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 9
+    }
+  },
+  {
+    "id": "order-10",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 10
+    }
+  },
+  {
+    "id": "order-11",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 11
+    }
+  },
+  {
+    "id": "order-12",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 12
+    }
+  },
+  {
+    "id": "order-13",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 13
+    }
+  },
+  {
+    "id": "order-14",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 14
+    }
+  },
+  {
+    "id": "order-15",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 15
+    }
+  },
+  {
+    "id": "order-16",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 16
+    }
+  },
+  {
+    "id": "order-17",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 17
+    }
+  },
+  {
+    "id": "order-18",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 18
+    }
+  },
+  {
+    "id": "order-19",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 19
+    }
+  },
+  {
+    "id": "order-20",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 20
+    }
+  },
+  {
+    "id": "order-21",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 21
+    }
+  },
+  {
+    "id": "order-22",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 22
+    }
+  },
+  {
+    "id": "order-23",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 23
+    }
+  },
+  {
+    "id": "order-24",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 24
+    }
+  },
+  {
+    "id": "order-25",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:01.252Z",
+    "data": {
+      "seq": 25
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T15:52:26.760Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "order-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.768Z",
+    "data": {
+      "seq": 1
+    }
+  },
+  {
+    "id": "order-2",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.768Z",
+    "data": {
+      "seq": 2
+    }
+  },
+  {
+    "id": "order-3",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.768Z",
+    "data": {
+      "seq": 3
+    }
+  },
+  {
+    "id": "order-4",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 4
+    }
+  },
+  {
+    "id": "order-5",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 5
+    }
+  },
+  {
+    "id": "order-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 6
+    }
+  },
+  {
+    "id": "order-7",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 7
+    }
+  },
+  {
+    "id": "order-8",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 8
+    }
+  },
+  {
+    "id": "order-9",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 9
+    }
+  },
+  {
+    "id": "order-10",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 10
+    }
+  },
+  {
+    "id": "order-11",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 11
+    }
+  },
+  {
+    "id": "order-12",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 12
+    }
+  },
+  {
+    "id": "order-13",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 13
+    }
+  },
+  {
+    "id": "order-14",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 14
+    }
+  },
+  {
+    "id": "order-15",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 15
+    }
+  },
+  {
+    "id": "order-16",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 16
+    }
+  },
+  {
+    "id": "order-17",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 17
+    }
+  },
+  {
+    "id": "order-18",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 18
+    }
+  },
+  {
+    "id": "order-19",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 19
+    }
+  },
+  {
+    "id": "order-20",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 20
+    }
+  },
+  {
+    "id": "order-21",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 21
+    }
+  },
+  {
+    "id": "order-22",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 22
+    }
+  },
+  {
+    "id": "order-23",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 23
+    }
+  },
+  {
+    "id": "order-24",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 24
+    }
+  },
+  {
+    "id": "order-25",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:04:30.769Z",
+    "data": {
+      "seq": 25
+    }
+  },
+  {
+    "id": "reconnect-1",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:05:42.628Z",
+    "data": {
+      "index": 1
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:05:43.139Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:05:43.141Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:05:43.212Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:05:43.212Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-04-20T16:06:40.038Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "reconnect-1",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:34:25.442Z",
+    "data": {
+      "index": 1
+    }
+  },
+  {
+    "id": "reconnect-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:34:25.448Z",
+    "data": {
+      "index": 2
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:34:25.757Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:34:25.757Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-06-12T16:34:25.757Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T16:34:25.757Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:34:25.757Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:34:25.757Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T16:34:25.757Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "reconnect-1",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:34:56.311Z",
+    "data": {
+      "index": 1
+    }
+  },
+  {
+    "id": "reconnect-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:34:56.316Z",
+    "data": {
+      "index": 2
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:35:33.367Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:35:33.367Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-06-12T16:35:33.367Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T16:35:33.367Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:35:33.367Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:35:33.367Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T16:35:33.367Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "order-1",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 1
+    }
+  },
+  {
+    "id": "order-2",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 2
+    }
+  },
+  {
+    "id": "order-3",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 3
+    }
+  },
+  {
+    "id": "order-4",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 4
+    }
+  },
+  {
+    "id": "order-5",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 5
+    }
+  },
+  {
+    "id": "order-6",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 6
+    }
+  },
+  {
+    "id": "order-7",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 7
+    }
+  },
+  {
+    "id": "order-8",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 8
+    }
+  },
+  {
+    "id": "order-9",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.201Z",
+    "data": {
+      "seq": 9
+    }
+  },
+  {
+    "id": "order-10",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 10
+    }
+  },
+  {
+    "id": "order-11",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 11
+    }
+  },
+  {
+    "id": "order-12",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 12
+    }
+  },
+  {
+    "id": "order-13",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 13
+    }
+  },
+  {
+    "id": "order-14",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 14
+    }
+  },
+  {
+    "id": "order-15",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 15
+    }
+  },
+  {
+    "id": "order-16",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 16
+    }
+  },
+  {
+    "id": "order-17",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 17
+    }
+  },
+  {
+    "id": "order-18",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 18
+    }
+  },
+  {
+    "id": "order-19",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 19
+    }
+  },
+  {
+    "id": "order-20",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 20
+    }
+  },
+  {
+    "id": "order-21",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 21
+    }
+  },
+  {
+    "id": "order-22",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 22
+    }
+  },
+  {
+    "id": "order-23",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 23
+    }
+  },
+  {
+    "id": "order-24",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 24
+    }
+  },
+  {
+    "id": "order-25",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:36:45.202Z",
+    "data": {
+      "seq": 25
+    }
+  },
+  {
+    "id": "reconnect-1",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:40:14.043Z",
+    "data": {
+      "index": 1
+    }
+  },
+  {
+    "id": "reconnect-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:40:15.312Z",
+    "data": {
+      "index": 2
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:40:16.926Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:40:16.932Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-06-12T16:40:16.932Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T16:40:16.932Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T16:40:16.932Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-06-12T16:40:16.932Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T16:40:16.932Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-06-12T17:07:13.705Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T17:07:13.705Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-06-12T17:07:13.705Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T17:07:13.705Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T17:07:13.705Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-06-12T17:07:13.705Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T17:07:13.705Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-06-12T17:07:50.150Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T17:07:50.150Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-06-12T17:07:50.150Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T17:07:50.150Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T17:07:50.150Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-06-12T17:07:50.150Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T17:07:50.150Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "mix-1",
+    "type": "task.started",
+    "timestamp": "2026-06-12T17:09:10.045Z",
+    "data": {
+      "id": "mix-1"
+    }
+  },
+  {
+    "id": "mix-2",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T17:09:10.045Z",
+    "data": {
+      "id": "mix-2"
+    }
+  },
+  {
+    "id": "mix-3",
+    "type": "task.input-required",
+    "timestamp": "2026-06-12T17:09:10.045Z",
+    "data": {
+      "id": "mix-3"
+    }
+  },
+  {
+    "id": "mix-4",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T17:09:10.045Z",
+    "data": {
+      "id": "mix-4"
+    }
+  },
+  {
+    "id": "mix-5",
+    "type": "task.completed",
+    "timestamp": "2026-06-12T17:09:10.045Z",
+    "data": {
+      "id": "mix-5"
+    }
+  },
+  {
+    "id": "mix-6",
+    "type": "task.started",
+    "timestamp": "2026-06-12T17:09:10.045Z",
+    "data": {
+      "id": "mix-6"
+    }
+  },
+  {
+    "id": "mix-7",
+    "type": "task.failed",
+    "timestamp": "2026-06-12T17:09:10.045Z",
+    "data": {
+      "id": "mix-7"
+    }
+  },
+  {
+    "id": "sse_mqwsszim00006ce9",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.126Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwsszim00018c4e",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.126Z",
+    "data": {
+      "agentId": "recoder-agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwsszim000239a3",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.126Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwsszin00030750",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.127Z",
+    "data": {
+      "agentId": "recoder-pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwsszin00040c14",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.127Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwsszin0005417a",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.127Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwsszin00068157",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.127Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwsszin0007adac",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:14:10.127Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fn0000477d",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.915Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fo0001f7e4",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.916Z",
+    "data": {
+      "agentId": "recoder-agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fo0002e2bd",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.916Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fo000364cc",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.916Z",
+    "data": {
+      "agentId": "recoder-pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fo0004e426",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.916Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fo0005cdb7",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.916Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fo0006db90",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.916Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqwtd5fo00075f95",
+    "type": "agent.online",
+    "timestamp": "2026-06-27T20:29:50.916Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqzaj7xm0000add7",
+    "type": "agent.online",
+    "timestamp": "2026-06-29T14:05:59.914Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqzaj7xm00014a07",
+    "type": "agent.online",
+    "timestamp": "2026-06-29T14:05:59.914Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqzaj7xm0002dbfc",
+    "type": "agent.online",
+    "timestamp": "2026-06-29T14:05:59.914Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqzaj7xm0003cc0e",
+    "type": "agent.online",
+    "timestamp": "2026-06-29T14:05:59.914Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqzaj7xn0004112b",
+    "type": "agent.online",
+    "timestamp": "2026-06-29T14:05:59.914Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mqzaj7xn0005453c",
+    "type": "agent.online",
+    "timestamp": "2026-06-29T14:05:59.915Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgpmrc30000ed3b",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T18:40:44.258Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgpmrc30001c277",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T18:40:44.259Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgpmrc300028e36",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T18:40:44.259Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgpmrc3000311c3",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T18:40:44.259Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgpmrc40004128a",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T18:40:44.260Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgpmrc400055e4a",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T18:40:44.260Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgrue4k0000b189",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T19:42:39.620Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgrue4l00019922",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T19:42:39.621Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgrue4l0002369c",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T19:42:39.621Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgrue4l000342ce",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T19:42:39.621Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgrue4l00040e3b",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T19:42:39.621Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgrue4l0005c4d2",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T19:42:39.621Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgwz0tj0000cfc8",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:06:13.735Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgwz0tj0001c2dc",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:06:13.735Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgwz0tk00028390",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:06:13.736Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgwz0tk00039218",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:06:13.736Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgwz0tk00047dd7",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:06:13.736Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgwz0tk00052132",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:06:13.736Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgx170g0000bfbc",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:07:55.072Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgx170g00017420",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:07:55.072Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgx170g000213b3",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:07:55.072Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgx170g000312a1",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:07:55.072Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgx170h00048a05",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:07:55.073Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrgx170h0005a7a7",
+    "type": "agent.online",
+    "timestamp": "2026-07-11T22:07:55.073Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrh2ecy000000a88",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T00:38:07.368Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrh2ecy100014a73",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T00:38:07.369Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrh2ecy1000256db",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T00:38:07.369Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrh2ecy100039af0",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T00:38:07.369Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrh2ecy10004cdf3",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T00:38:07.369Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrh2ecy10005b0f0",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T00:38:07.369Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhml6fo000076d6",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:03:17.844Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhml6fp0001babc",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:03:17.845Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhml6fp000255c5",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:03:17.845Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhml6fp0003fa56",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:03:17.845Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhml6fp0004e3ee",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:03:17.845Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhml6fp000515df",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:03:17.845Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhmt47200006e4b",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:09:28.190Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhmt47200014abf",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:09:28.190Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhmt47200024210",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:09:28.190Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhmt47200038bbd",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:09:28.190Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhmt47200046095",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:09:28.190Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhmt4720005899b",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:09:28.190Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnp0mj0000e7a1",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:34:16.555Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnp0mj00015ab1",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:34:16.555Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnp0mj000286b8",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:34:16.555Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnp0mj00035c59",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:34:16.555Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnp0mk00048e84",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:34:16.556Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnp0mk00053bcc",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:34:16.556Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnuxr80000c24d",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:38:52.772Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnuxr80001ff2d",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:38:52.772Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnuxr8000259da",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:38:52.772Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnuxr80003d19b",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:38:52.772Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnuxr80004f682",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:38:52.772Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhnuxr800050a2a",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:38:52.772Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrho283n0000f7cb",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:44:32.771Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrho283n0001d050",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:44:32.771Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrho283n00021231",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:44:32.771Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrho283n000328fc",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:44:32.771Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrho283n0004c338",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:44:32.771Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrho283o0005b784",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T10:44:32.772Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu19pi00000b39",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:31:45.894Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu19pi000166eb",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:31:45.894Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu19pi0002d4ad",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:31:45.894Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu19pi0003fdd5",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:31:45.894Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu19pi000437e8",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:31:45.894Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu19pi00051bc3",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:31:45.894Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu8vdx0000e18d",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:37:40.581Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu8vdx00018c1a",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:37:40.581Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu8vdx0002845d",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:37:40.581Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu8vdx000331a5",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:37:40.581Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu8vdx0004d23a",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:37:40.581Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhu8vdx0005e38e",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T13:37:40.581Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhv4suq0000b147",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:02:30.290Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhv4suq00019908",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:02:30.290Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhv4suq000200da",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:02:30.290Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhv4sur000320ae",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:02:30.291Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhv4sur0004e31b",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:02:30.291Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhv4sur00058396",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:02:30.291Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhvek2e0000d517",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:10:05.462Z",
+    "data": {
+      "agentId": "recoder-app",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhvek2e00017fbe",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:10:05.462Z",
+    "data": {
+      "agentId": "recoder-studio",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhvek2e00027156",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:10:05.462Z",
+    "data": {
+      "agentId": "openclaw",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhvek2e000366cb",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:10:05.462Z",
+    "data": {
+      "agentId": "recoder_backend",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhvek2e000403cc",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:10:05.462Z",
+    "data": {
+      "agentId": "recoder_pm",
+      "status": "healthy"
+    }
+  },
+  {
+    "id": "sse_mrhvek2e0005f3f6",
+    "type": "agent.online",
+    "timestamp": "2026-07-12T14:10:05.462Z",
+    "data": {
+      "agentId": "recoder_agency",
+      "status": "healthy"
+    }
+  }
+]

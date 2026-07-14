@@ -2,7 +2,7 @@
  * check: stale_presence — an agent reports `busy`/`online`/`idle` but its
  * heartbeat is older than the timeout, so it is really gone.
  *
- * MERGED from `docker-backend/src/a2a/heartbeat-tracker.service.ts`: the sweep
+ * MERGED from `backend/src/a2a/heartbeat-tracker.service.ts`: the sweep
  * marks an agent offline when `now - lastHeartbeatAt >= timeoutMs`
  * (`HEARTBEAT_TIMEOUT_MS`, default 90s/5min). This check is the pure, snapshot
  * form of that sweep — the impure heal then marks the agent offline via

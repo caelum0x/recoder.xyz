@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - { name: 'docker-backend', path: 'docker-backend', install: 'pnpm install', test: 'pnpm test', node: '20' }
+          - { name: 'backend', path: 'backend', install: 'pnpm install', test: 'pnpm test', node: '20' }
           - { name: 'app', path: 'app', install: 'pnpm install', test: 'pnpm test', node: '20' }
           - { name: 'desktop', path: 'apps/desktop', install: 'npm ci', test: 'npx vitest run', node: '20' }
           - { name: 'recoder-studio', path: 'recoder-studio', install: 'pnpm install', test: 'pnpm test', node: '24' }
@@ -149,12 +149,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install docker-backend
-        working-directory: docker-backend
+      - name: Install backend
+        working-directory: backend
         run: pnpm install
 
-      - name: Run docker-backend integration tests
-        working-directory: docker-backend
+      - name: Run backend integration tests
+        working-directory: backend
         run: pnpm test
         env:
           CI: true

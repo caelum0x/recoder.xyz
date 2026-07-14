@@ -115,9 +115,9 @@ fi
 run_step "studio deploy governance checks" \
   pnpm -C "$ROOT_DIR/apps/studio.giselles.ai" run ci:test:deploy-governance
 
-if ! run_step "docker-backend ci determinism (frozen)" pnpm -C "$ROOT_DIR/docker-backend" run ci:install-and-check; then
-  echo "[phase1] SKIP local fallback: redundant for docker-backend (same deterministic gate)"
-  record_step "docker-backend ci determinism (local fallback)" "skipped" "0" "skipped_redundant"
+if ! run_step "backend ci determinism (frozen)" pnpm -C "$ROOT_DIR/backend" run ci:install-and-check; then
+  echo "[phase1] SKIP local fallback: redundant for backend (same deterministic gate)"
+  record_step "backend ci determinism (local fallback)" "skipped" "0" "skipped_redundant"
 fi
 
 write_status_report

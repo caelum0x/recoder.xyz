@@ -1,7 +1,7 @@
 /**
  * capability-matcher — required/preferred/platform/tier capability scoring.
  *
- * MERGED from `docker-backend/src/a2a/capability-matcher.service.ts`
+ * MERGED from `backend/src/a2a/capability-matcher.service.ts`
  * (`scoreAgent`/`matchAgents` 0–100 algorithm). Decoupled from the
  * `getAgentRegistryService()` singleton: it scores a `DirectoryAgent` (read via
  * `AgentDirectoryPort`) against a `CapabilityRequirements` value. Pure: no IO,

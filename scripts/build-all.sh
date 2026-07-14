@@ -126,7 +126,7 @@ print_status "Building from: $PROJECT_ROOT"
 if [ "$CLEAN_BUILD" = "true" ]; then
     print_status "Cleaning previous builds..."
     rm -rf packages/*/dist packages/*/out packages/*/build
-    rm -rf backend/dist docker-backend/dist
+    rm -rf backend/dist backend/dist
     print_success "Clean completed"
 fi
 
@@ -148,7 +148,7 @@ build_package "CLI Package" "packages/cli"
 build_package "Backend API" "backend"
 
 # 4. Build docker backend
-build_package "Docker Backend" "docker-backend"
+build_package "Docker Backend" "backend"
 
 # 5. Build web dashboard (if exists)
 if [ -d "packages/web" ]; then
@@ -163,7 +163,7 @@ if [ "$SKIP_TESTS" != "true" ]; then
     test_package "Shared Package" "packages/shared"
     test_package "CLI Package" "packages/cli"
     test_package "Backend API" "backend"
-    test_package "Docker Backend" "docker-backend"
+    test_package "Docker Backend" "backend"
 fi
 
 # Build examples if requested

@@ -28,7 +28,7 @@ truthful about current depth — where a layer is shallow, it says so.
 └───────────────────────────────────────────────────────────────────────────────────────┘
         ▲ expose  │  every write passes the governance gate first
 ┌───────────────────────────────────────────────────────────────────────────────────────┐
-│ MODULES (12 domain composers — docker-backend/src/modules/<domain>/)                    │
+│ MODULES (12 domain composers — backend/src/modules/<domain>/)                    │
 │   memory · social · github · terminal · communication · inference                       │
 │   agent-engine · governance · browsing · signals · networking · squads                  │
 │   Each fuses its engine dirs behind ONE governed, health-truthful interface.            │
@@ -77,7 +77,7 @@ the backend integrates it today, and the honest depth gap.
 | `modules/signals/ops-recorder` | SIGNALS | composer | cockpit (work-signals coordination) | `conductor/ops-recorder-daemon.ts` supervises `uvicorn main:app` (loopback :8073) with an auth preflight (won't spawn keyless); `ops-recorder-adapter.ts` forwards ingest/query. | Only ingest+query used; the service's own GH/Linear detectors are bypassed; local JSON store; **missing a LICENSE** (Recoder-authored). |
 | `modules/communication/pal-mcp-server` | COMMUNICATION | composer | cockpit indirectly (MCP registry, LLM router) | **NOT a sidecar.** Live path is the owned `@recoder/pal`; `pal-plan-engine.ts` registers `recoder.pal-plan` in-proc behind the interop gate (additive, does not disturb the Python server). | Only the `pal.plan` slice is ported; multi-model orchestration, conversation threading, and the `clink` subagent bridge are stranded in the vendored Python. |
 | `modules/github/recodergit` | GITHUB | engine | backend engine + MCP tools (agents in workspaces) | `agent-os/recodergit-service.ts` resolves the vendored engine dist (`.../recodergit/dist/cli/index.js`) + supervises `recodergit mcp --http`. Separate wrapper pkg `@recoder/recodergit` (packages/recodergit, **distinct** from the engine) via `git-context.ts`. | GitHub capability split across TWO engines (recodergit code-graph + `github-engine.ts` gh ops); PolyForm-Noncommercial **license gate**; `modules/github/recodergit` is NOT a root workspace member. |
-| `modules/social/openclaw` | SOCIAL | engine | apps/social; `/api/connectors` edge | `@recoder/connectors` (registry + hostile-by-default gate + dispatch + pi-runner); `docker-backend/src/connectors/` is the real ingress + gateway; 7 live per-channel `ConnectorPort` adapters (telegram/slack/signal/imessage/whatsapp/line/feishu). Root workspace member. | Backend owns no Social **module** yet (connectors is a lib, apps/social is a separate process); the discord adapter is not truly extracted (still bot-core-coupled, 172 type errors). |
+| `modules/social/openclaw` | SOCIAL | engine | apps/social; `/api/connectors` edge | `@recoder/connectors` (registry + hostile-by-default gate + dispatch + pi-runner); `backend/src/connectors/` is the real ingress + gateway; 7 live per-channel `ConnectorPort` adapters (telegram/slack/signal/imessage/whatsapp/line/feishu). Root workspace member. | Backend owns no Social **module** yet (connectors is a lib, apps/social is a separate process); the discord adapter is not truly extracted (still bot-core-coupled, 172 type errors). |
 | `modules/squads/multica` | SQUADS | engine | desktop cockpit board (target) | `multica-client.ts` supervises a degrade-safe loopback subprocess (127.0.0.1:38080, never builds); `routes/multica.routes.ts` (503 when absent); `a2a/squad.service.ts` is the LOCAL authoritative squad state (multica is optional enrichment). | Deep target is a PORT of its distinctive ideas (squads = leader-routing; autopilots = cron→beads→run) into the conductor — NOT deeper subprocess wiring. |
 | `modules/networking/ziti` | NETWORKING | engine | none (cloud tier; diagnostics) | `ziti-client.ts` is a degrade-safe REST client to an **external** Ziti controller (identity provisioning + OTT enrollment JWTs); `routes/ziti.routes.ts`. Vendored Go source not built/supervised. | Only the controller REST identity surface is used; no mesh / dark-service data plane; deferred to the cloud/teams tier. |
 | `modules/networking/recoder-xds` | NETWORKING | engine | none (cloud tier; diagnostics) | First-party Go xDS control plane (gRPC ADS on :18000). **NOT wired as a live client yet** — only `fleet/manifest.ts` registers it as a supervisable sidecar. The TS side generates the STATIC Envoy bootstrap (`/api/network/envoy-config`). | Nothing pushes the live `NetworkConfig` into its snapshot cache (no live LDS/CDS/RDS in prod); deferred to the cloud/teams tier. |
@@ -86,7 +86,7 @@ the backend integrates it today, and the honest depth gap.
 
 | Dir | Role | Layer |
 |---|---|---|
-| `docker-backend` | **HOST** — the Express + express-ws control plane that composes every module (conductor + agent-os + MCP host). Owns `src/modules/memory` + `src/modules/github` today. | composer |
+| `backend` | **HOST** — the Express + express-ws control plane that composes every module (conductor + agent-os + MCP host). Owns `src/modules/memory` + `src/modules/github` today. | composer |
 | `packages/*` (agent-os, a2a-sdk, agent-mcp, agent-policy, governance, pal, coordination, network, substrate, brain, retrieval, interop, runtime, conductor-ui, agent-events/instructions/memory/runtimes/workflows) | First-party **contract** packages — domain types + pure decision helpers + engine ports. Thin by design; depth lives in the host composers. | edge |
 | `apps/*` (desktop, wave, social, agent-gateway, agent-worker, mobile) | **Surfaces.** Consume the backend over its edges. No capability logic. | surface |
 
@@ -107,7 +107,7 @@ the backend integrates it today, and the honest depth gap.
 - Each engine is a single capability; it does not know which module composes it.
 
 ### Modules
-- **May:** fuse several engine dirs into ONE domain capability under `docker-backend/src/modules/<domain>/`.
+- **May:** fuse several engine dirs into ONE domain capability under `backend/src/modules/<domain>/`.
 - **Must:** expose the full verb set of the domain, report per-engine health honestly, route writes through the governance gate, and **move** the scattered consumer code behind the interface (not add a 4th copy).
 - **Must not:** re-implement an engine, or leak a raw engine dist to callers. Callers depend on the module, never on `mem0-client`/`beads-sql`/etc. directly.
 - Today only `memory/` and `github/` composers are started; the other ten capabilities exist but are SCATTERED across `src/` — consolidation behind one composer per domain is the open work.
@@ -148,7 +148,7 @@ Native-first, subprocess-second, http-last. Every path degrades to a truthful `d
 
 ## Where this is honestly shallow today
 
-- **Modules are mostly not built yet.** Only `memory/` + `github/` composers are started; the other ten domains are scattered across `docker-backend/src/`. The build order (MEMORY → GITHUB → TERMINAL → INFERENCE → COMMUNICATION → AGENT-ENGINE → SOCIAL) is in RECODER-MODULES.md.
+- **Modules are mostly not built yet.** Only `memory/` + `github/` composers are started; the other ten domains are scattered across `backend/src/`. The build order (MEMORY → GITHUB → TERMINAL → INFERENCE → COMMUNICATION → AGENT-ENGINE → SOCIAL) is in RECODER-MODULES.md.
 - **Several "engines" are only reachable as optional env-contract HTTP seams** that nothing spawns: `modules/memory/mem0` (`MEM0_BASE_URL`), `modules/browsing/browser-use` (`BROWSER_USE_URL`). Their real depth is unused; the live paths are the owned TS packages.
 - **AGENT-ENGINE + NETWORKING are registered but not dispatchable/live:** openfang's runtime driver can't be resolved (closed union); recoder-xds gets no live config push. Both are wired as future capabilities.
 - **Two GitHub engines, two terminal restart mechanisms, five memory recall copies** — the consolidation work is exactly moving these behind one composer per domain.

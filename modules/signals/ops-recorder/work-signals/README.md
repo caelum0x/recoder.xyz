@@ -50,7 +50,7 @@ curl -X POST http://127.0.0.1:8000/work-signals/sync/linear \
 
 ### Ingest + query surface (for the Recoder backend)
 
-This service is consumed by `docker-backend` at the `/work-signals` edge
+This service is consumed by `backend` at the `/work-signals` edge
 (http-edge per `docs/architecture/INTEGRATION-PLAN.md` §d.4 / WIRE-UP #10).
 The backend does not need the GitHub/Linear *sync* paths: it pushes already
 detected stuck work in and queries the normalized signals back out.

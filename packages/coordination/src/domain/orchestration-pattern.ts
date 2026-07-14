@@ -1,6 +1,6 @@
 /**
  * OrchestrationPattern — multi-agent dispatch shapes. MERGED from
- * `docker-backend/src/a2a/multi-dispatch.service.ts`.
+ * `backend/src/a2a/multi-dispatch.service.ts`.
  *
  *  - `direct`      — single best agent.
  *  - `fan_out`     — N agents in parallel over disjoint lock scopes.

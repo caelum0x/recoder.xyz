@@ -1,7 +1,7 @@
 /**
  * embed — the `EmbeddingPort` shape the retrieval engine consumes. It is
  * INJECTED, never constructed here: the concrete embedder lives in the backend's
- * shared vector foundation (`docker-backend/src/agent-os/mcp/vector-store.ts`,
+ * shared vector foundation (`backend/src/agent-os/mcp/vector-store.ts`,
  * `createEmbeddingPort`). This module only re-declares the structural contract so
  * `packages/retrieval` stays runtime-agnostic and unit-testable with a fake.
  *

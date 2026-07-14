@@ -2,7 +2,7 @@
  * run-tailer — stream a running agent's terminal output into the control-plane
  * RunEvent log (the audit trail + UI/A2A source). Design §4.7.
  *
- * Promoted substrate-pure from docker-backend/src/conductor/run-tailer.ts: it
+ * Promoted substrate-pure from backend/src/conductor/run-tailer.ts: it
  * polls the INJECTED substrate's capture()/alive()/exitCode() (not tmux
  * directly), emits `started` → `log` (incremental, capped delta) → terminal
  * `completed`/`failed` through an injected RunEventSink port, and uses injected

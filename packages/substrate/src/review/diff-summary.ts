@@ -1,6 +1,6 @@
 /**
  * Diff-summary parsing — promoted verbatim from the duplicated `changedFiles`
- * logic in docker-backend/src/conductor/substrate-tmux.ts and
+ * logic in backend/src/conductor/substrate-tmux.ts and
  * substrate-daytona.ts. Pure: counts the changed files a `git diff --stat`
  * reports (one line per file, each containing a `|` separator) plus the
  * untracked files (which a `--stat` against the base does not include).

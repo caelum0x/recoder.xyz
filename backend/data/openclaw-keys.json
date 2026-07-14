@@ -1,0 +1,14 @@
+{
+  "keys": [
+    [
+      "telegram:test-agent-123",
+      {
+        "apiKeyId": "277f9411-e3b1-417a-a728-32eb96462699",
+        "hashedKey": "c16ca8ad25004d801d0f42c50711df5d7385b064e2dcbabfcebc9c396ceea552",
+        "openclawUserId": "test-agent-123",
+        "openclawChannel": "telegram",
+        "createdAt": 1770300729335
+      }
+    ]
+  ]
+}

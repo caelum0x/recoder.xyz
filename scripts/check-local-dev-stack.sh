@@ -32,8 +32,8 @@ else
   echo "SKIP: recoder-web unit tests (retired surface missing)"
 fi
 
-run_step "docker-backend unit tests" \
-  pnpm -C "$REPO_ROOT/docker-backend" test -- --runInBand
+run_step "backend unit tests" \
+  pnpm -C "$REPO_ROOT/backend" test -- --runInBand
 
 echo ""
 echo "========================================="

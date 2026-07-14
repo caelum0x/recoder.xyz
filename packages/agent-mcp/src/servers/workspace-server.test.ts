@@ -4,6 +4,7 @@ import type { AgentProfile } from '@recoder/agent-os';
 import { McpRegistry } from '../registry';
 import { McpToolRouter } from '../host/tool-router';
 import { estimateMcpToolRisk } from '../policy/tool-risk';
+import { evaluatePolicy } from '@recoder/agent-policy';
 import {
   registerWorkspaceMcpTools,
   workspaceMcpServer,
@@ -21,7 +22,7 @@ function actor(): AgentProfile {
 
 /**
  * In-memory implementation of the injected workspace control-plane port — the
- * SAME contract docker-backend's conductor implements over its store of record.
+ * SAME contract backend's conductor implements over its store of record.
  * The MCP handlers do REAL calls against this; tests assert state materializes
  * and that an un-approved merge surfaces a truthful error (no faked success).
  */
@@ -184,4 +185,20 @@ test('workspace.merge surfaces the delivery-approval gate instead of faking succ
 
 test('workspace.merge is classified high-risk (delivery action) by the risk estimator', () => {
   assert.equal(estimateMcpToolRisk('workspace.merge'), 'high');
+});
+
+// 'clink' spawns a subprocess CLI (code execution): the outer CLI can be gated
+// while its clink-spawned child is not, so clink itself MUST be high-risk and,
+// under the default policy, route a tool.call through needs_approval.
+test('clink is classified high-risk by the risk estimator', () => {
+  assert.equal(estimateMcpToolRisk('clink'), 'high');
+});
+
+test('clink tool.call routes through needs_approval under the default policy', () => {
+  const policyDecision = evaluatePolicy({
+    actor: actor(),
+    action: 'tool.call',
+    target: { toolName: 'clink' },
+  });
+  assert.equal(policyDecision.effect, 'needs_approval');
 });

@@ -7,7 +7,7 @@
 #   2. Build toolchain (Node/pnpm + Go + autotools) to compile the backend dist
 #      and the pinned substrate binaries (make substrate-binaries)
 #   3. The repo, staged at /opt/recoder
-#   4. The docker-backend image pre-built into the local Docker cache
+#   4. The backend image pre-built into the local Docker cache
 #   5. A systemd unit (recoder-selfhost.service) that runs the compose stack on boot
 #
 # The repo is expected to already be present at /tmp/recoder-src (uploaded by the
@@ -71,7 +71,7 @@ if ! command -v docker >/dev/null 2>&1; then
   $SUDO systemctl enable docker
 fi
 
-# --- Node.js + pnpm (to build docker-backend/dist) ---
+# --- Node.js + pnpm (to build backend/dist) ---
 if ! command -v node >/dev/null 2>&1; then
   log "installing Node.js ${NODE_MAJOR}"
   curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | $SUDO -E bash -
@@ -106,9 +106,9 @@ log "building substrate binaries (make substrate-binaries)"
 make substrate-binaries || log "WARNING substrate build degraded; runtime falls back to system tmux/bd"
 
 # --- Build the backend dist the Dockerfile requires ---
-log "building docker-backend dist"
-if [ ! -f docker-backend/dist/server.js ]; then
-  ( cd docker-backend && pnpm install --no-frozen-lockfile && pnpm build )
+log "building backend dist"
+if [ ! -f backend/dist/server.js ]; then
+  ( cd backend && pnpm install --no-frozen-lockfile && pnpm build )
 fi
 
 # --- Ensure pi-mono-dist exists (Dockerfile COPY is unconditional) ---
@@ -136,8 +136,8 @@ for required in \
 done
 
 # --- Pre-build the backend image into the local Docker cache ---
-log "pre-building the docker-backend image (backend + recoder-xds reuse this tag)"
-$SUDO docker build -f docker-backend/Dockerfile -t recoder/docker-backend:selfhost .
+log "pre-building the backend image (backend + recoder-xds reuse this tag)"
+$SUDO docker build -f backend/Dockerfile -t recoder/backend:selfhost .
 
 # --- Pre-build the governance daemon image (own small Rust image) ---
 # Baked now so first boot does not need a Rust toolchain or registry access. The

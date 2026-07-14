@@ -2,7 +2,7 @@
  * Conductor API client — every panel renders from a REAL fetch to
  * `${backendUrl}/api/conductor/...`. No mock data anywhere.
  *
- * Endpoints wired (docker-backend/src/conductor/conductor.routes.ts, mounted at
+ * Endpoints wired (backend/src/conductor/conductor.routes.ts, mounted at
  * /api/conductor in server.ts):
  *   GET  /workspaces                      list board cards
  *   POST /workspaces                      create a workspace

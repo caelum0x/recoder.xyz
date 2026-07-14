@@ -88,7 +88,7 @@ jobs:
   # (amd64 on ubuntu-latest, arm64 on ubuntu-24.04-arm) and merged into a
   # manifest list. This avoids QEMU emulation, which was making the Next.js
   # arm64 build run for 30+ minutes per release.
-  docker-backend-build:
+  backend-build:
     needs: verify
     strategy:
       fail-fast: false
@@ -157,11 +157,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  docker-backend-merge:
-    needs: [verify, docker-backend-build]
+  backend-merge:
+    needs: [verify, backend-build]
     runs-on: ubuntu-latest
     concurrency:
-      group: release-docker-backend-${{ github.ref }}
+      group: release-backend-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - name: Download digests
@@ -323,7 +323,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/multica-web:${{ steps.meta.outputs.version }}
 
   helm-chart:
-    needs: [verify, docker-backend-merge, docker-web-merge]
+    needs: [verify, backend-merge, docker-web-merge]
     if: github.repository_owner == 'multica-ai'
     runs-on: ubuntu-latest
     concurrency:

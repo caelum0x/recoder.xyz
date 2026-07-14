@@ -87,25 +87,25 @@
     ],
     "extraResources": [
       {
-        "from": "../../docker-backend/dist",
+        "from": "../../backend/dist",
         "to": "backend/dist",
         "filter": [
           "**/*"
         ]
       },
       {
-        "from": "../../docker-backend/node_modules",
+        "from": "../../backend/node_modules",
         "to": "backend/node_modules",
         "filter": [
           "**/*"
         ]
       },
       {
-        "from": "../../docker-backend/package.json",
+        "from": "../../backend/package.json",
         "to": "backend/package.json"
       },
       {
-        "from": "../../docker-backend/data",
+        "from": "../../backend/data",
         "to": "backend/data-template",
         "filter": [
           "**/*"

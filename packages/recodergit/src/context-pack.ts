@@ -41,7 +41,7 @@ export function createContextPack(input: CreateContextPackInput): ContextPack {
     taskId: input.task.taskId,
     repoMap: input.repoMap ?? {
       repoRoot: input.repoRoot,
-      packageGlobs: ['packages/*', 'apps/*', 'docker-backend'],
+      packageGlobs: ['packages/*', 'apps/*', 'backend'],
       indexedAt: new Date().toISOString(),
     },
     dependencyGraph: input.dependencyGraph ?? createEmptyDependencyGraph(input.repoRoot),

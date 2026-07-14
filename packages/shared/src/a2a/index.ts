@@ -2,7 +2,7 @@
  * @module @recoder/shared/a2a
  *
  * Shared A2A (Agent-to-Agent) protocol types, enums, and utilities.
- * Used by docker-backend, Spaces, and MCP packages.
+ * Used by backend, Spaces, and MCP packages.
  */
 
 // ---------------------------------------------------------------------------
@@ -260,7 +260,7 @@ export class InMemoryCollaborationService implements CollaborationService {
 
 export class RedisBackedPersistenceAdapter {
   constructor(private redisUrl?: string) {}
-  // Placeholder — the actual Redis persistence is in docker-backend
+  // Placeholder — the actual Redis persistence is in backend
 }
 
 // ---------------------------------------------------------------------------

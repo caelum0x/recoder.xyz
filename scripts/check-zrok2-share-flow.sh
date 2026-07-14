@@ -45,8 +45,8 @@ ZROK2_FRONTEND_CONTAINER="$(
 DOCKER_BACKEND_CONTAINER="$(
   find_running_container \
     "${DOCKER_BACKEND_CONTAINER:-}" \
-    "recoder-docker-backend" \
-    'docker-backend'
+    "recoder-backend" \
+    'backend'
 )"
 
 ZROK2_API_ENDPOINT="${ZROK2_API_ENDPOINT:-http://127.0.0.1:18080}"

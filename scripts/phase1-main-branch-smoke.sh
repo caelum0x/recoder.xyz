@@ -16,7 +16,7 @@ Phase 1 main-branch smoke wrapper.
 Runs:
 1) recoder-web BYOK readiness
 2) recoder-web public API readiness
-3) docker-backend queue readiness (redis expected by default)
+3) backend queue readiness (redis expected by default)
 4) billing-mode decision validation
 5) optional full BYOK smoke (if BYOK secret env vars are present)
 
@@ -50,7 +50,7 @@ fi
 
 echo "== Phase 1 Main-Branch Smoke =="
 echo "recoder-web: $RECODER_WEB_URL"
-echo "docker-backend: $BACKEND_URL"
+echo "backend: $BACKEND_URL"
 echo "expectedQueueBackend: $EXPECTED_QUEUE_BACKEND"
 echo "billingActionsEnabled: $BILLING_ACTIONS_ENABLED"
 

@@ -1,7 +1,7 @@
 /**
  * HandoffEnvelope — the signed/dedup-keyed transport envelope a handoff travels
  * in. The `dedupKey` makes delivery effectively-once (MERGED from the
- * `_localEventIds` dedup in `docker-backend/src/a2a/a2a-event-bus.ts`); the
+ * `_localEventIds` dedup in `backend/src/a2a/a2a-event-bus.ts`); the
  * optional `signature` is the sign/verify seam for cross-agent A2A interop.
  */
 

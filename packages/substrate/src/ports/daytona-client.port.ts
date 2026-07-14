@@ -3,9 +3,9 @@
  * (design §4.9 / §7).
  *
  * Dependency inversion is what lets `@recoder/substrate` provide a real remote
- * substrate WITHOUT importing `docker-backend`'s `getDaytonaClient()` or the
+ * substrate WITHOUT importing `backend`'s `getDaytonaClient()` or the
  * `@recoder/sandbox-daytona` SDK. The backend's
- * `docker-backend/src/conductor/wiring/*` adapter wraps the concrete
+ * `backend/src/conductor/wiring/*` adapter wraps the concrete
  * `DaytonaClient` (or the SDK) onto this minimal interface and passes a
  * `createDaytonaSubstrate({ client, logger })` into `createSubstrateRegistry`.
  *

@@ -3,7 +3,7 @@
  * `ParsedHandoffIntent`.
  *
  * MERGED from `parseIntent` + `INTENT_PREFIXES` in
- * `docker-backend/src/a2a/autonomous-routing.service.ts`. Kept PURE: no service
+ * `backend/src/a2a/autonomous-routing.service.ts`. Kept PURE: no service
  * lookups, no IO. The original returned a `'message'` sentinel for non-delegation
  * mentions; here we return `null` for that case (the coordination domain has no
  * `'message'` intent — `HANDOFF_INTENTS` is handoff|delegate|review|merge), so a

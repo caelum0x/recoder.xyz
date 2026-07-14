@@ -1,6 +1,6 @@
 # Recoder Self-Host
 
-One-command self-hosted Recoder: the control plane (`docker-backend`) plus its
+One-command self-hosted Recoder: the control plane (`backend`) plus its
 data dependencies (Postgres, Redis, Qdrant) behind an Envoy edge proxy. This is
 master-plan wave 6 — *single-command self-hosted Recoder (compose + daemon)*.
 
@@ -13,11 +13,11 @@ Everything here lives in `deploy/`, `scripts/`, and the top-level
 
 | Service   | Image                          | Port (host) | Purpose                                   |
 |-----------|--------------------------------|-------------|-------------------------------------------|
-| backend   | built from `docker-backend/Dockerfile` | `3100`      | Recoder control plane (the product)       |
+| backend   | built from `backend/Dockerfile` | `3100`      | Recoder control plane (the product)       |
 | postgres  | `postgres:17`                  | internal    | `recoder_main` + `recoder_backend` + `recoder_pm` |
 | redis     | `redis:7`                      | internal    | sessions + A2A bus                        |
 | qdrant    | `qdrant/qdrant`                | internal    | vector store (mem0 / embeddings)          |
-| recoder-xds | reuses `recoder/docker-backend:selfhost` | internal (18000/18001) | Envoy **xDS (ADS)** control plane — dynamic LDS/CDS/RDS |
+| recoder-xds | reuses `recoder/backend:selfhost` | internal (18000/18001) | Envoy **xDS (ADS)** control plane — dynamic LDS/CDS/RDS |
 | recoder-governance | built from `deploy/governance-daemon.Dockerfile` | internal (UDS) | owned **Rust governance daemon** on a shared socket |
 | envoy     | `envoyproxy/envoy:v1.31`       | `8080`, `9901` | L7 edge proxy + admin                  |
 
@@ -33,7 +33,7 @@ was unavailable.
 control plane (built on the official `go-control-plane`). It serves **dynamic**
 LDS/CDS/RDS over ADS gRPC so a running Envoy receives live listener/cluster/route
 updates **without a restart**, mirroring the `NetworkConfig` that
-`docker-backend/src/network` generates statically.
+`backend/src/network` generates statically.
 
 - The `recoder-xds` compose service **reuses the backend image** (the binary is
   baked at `/opt/recoder/bin/recoder-xds`) and just overrides the entrypoint — no
@@ -73,11 +73,11 @@ IPC over a Unix-domain socket at `$GOVERNANCE_SOCKET`.
 - **Docker** + **Docker Compose v2** (or legacy `docker-compose`).
 - The backend image is built with the **repo root as build context** (the
   `Dockerfile` copies sibling paths: `packages/`, `shared/`, `pi-mono-dist/`,
-  `c/`, `go/`, `scripts/`, and the prebuilt `docker-backend/dist/server.js`).
+  `c/`, `go/`, `scripts/`, and the prebuilt `backend/dist/server.js`).
 - **Build the backend dist before the first bring-up** (the Dockerfile asserts
-  `docker-backend/dist/server.js` exists):
+  `backend/dist/server.js` exists):
   ```bash
-  cd docker-backend && pnpm install && pnpm build && cd ..
+  cd backend && pnpm install && pnpm build && cd ..
   ```
 - **`pi-mono-dist/`** is copied by the Dockerfile for the optional Pi
   coding-agent SDK. If you have a real build, place it at the repo root. If you
@@ -255,12 +255,12 @@ packer build -only='null.recoder' \
 1. Installs Docker Engine + compose plugin, Node 20 + pnpm, Go.
 2. rsyncs the uploaded repo to `/opt/recoder`.
 3. `make substrate-binaries` (degrade-safe).
-4. Builds `docker-backend/dist` if absent; ensures `pi-mono-dist/` exists.
+4. Builds `backend/dist` if absent; ensures `pi-mono-dist/` exists.
 5. **Asserts** the required self-host artifacts are staged (compose file, env
    template, up/down scripts, governance Dockerfile, both Envoy configs, the
    Postgres init script) — fails the build now, not at boot, if any is missing.
 6. Pre-builds **both** images into the local Docker cache:
-   `recoder/docker-backend:selfhost` (backend + `recoder-xds` reuse this tag) and
+   `recoder/backend:selfhost` (backend + `recoder-xds` reuse this tag) and
    `recoder/governance-daemon:selfhost`.
 7. **Pre-pulls the pinned third-party images** (`postgres:17`, `redis:7`,
    `qdrant/qdrant:latest`, `envoyproxy/envoy:v1.31-latest`) so a machine booted in

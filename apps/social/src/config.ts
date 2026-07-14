@@ -1,7 +1,7 @@
 /**
  * recoder-social config — env-driven, no secrets in code, truthful defaults.
  *
- * Reuses the CONNECTORS_* env surface the docker-backend connectors bridge
+ * Reuses the CONNECTORS_* env surface the backend connectors bridge
  * already defines (with RECODER_CONNECTORS_* / OPENCLAW_* prefixes honored via
  * the package's readConnectorEnv) so an operator configures ONE env vocabulary
  * regardless of which runtime hosts the connectors. App-only knobs (the status

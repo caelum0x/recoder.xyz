@@ -12,8 +12,8 @@
  * the sidebar shows no stat — never a fabricated 0/0 or a guessed number.
  *
  * Source of truth:
- *  - docker-backend/src/conductor/completion-watcher.ts (metadata.delivery)
- *  - docker-backend/src/conductor/delivery-summary.ts (diffStat = git diff --stat)
+ *  - backend/src/conductor/completion-watcher.ts (metadata.delivery)
+ *  - backend/src/conductor/delivery-summary.ts (diffStat = git diff --stat)
  */
 import type { Workspace } from '../types';
 

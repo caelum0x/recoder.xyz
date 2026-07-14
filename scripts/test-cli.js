@@ -80,9 +80,9 @@ ENGINE_URL=http://localhost:3002
         stdio: 'pipe' 
       });
       
-      // Build docker-backend
+      // Build backend
       execSync('npm run build', { 
-        cwd: path.join(rootDir, 'docker-backend'), 
+        cwd: path.join(rootDir, 'backend'), 
         stdio: 'pipe' 
       });
       

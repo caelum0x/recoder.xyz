@@ -2,7 +2,7 @@
  * SubstrateNotRegisteredError — no substrate is wired for the requested id.
  *
  * Promoted from the truthful throw in
- * docker-backend/src/conductor/substrate.ts#getSubstrate.
+ * backend/src/conductor/substrate.ts#getSubstrate.
  */
 import type { WorkspaceSubstrate } from '@recoder/agent-os';
 import { SubstrateError } from './substrate-error.js';

@@ -1,7 +1,7 @@
 /**
  * CoordinationEvent — a CloudEvent-shaped envelope for every coordination
  * transition published on the bus / outbox. MERGED from the event shape +
- * scoped subscription keys in `docker-backend/src/a2a/a2a-event-bus.ts`.
+ * scoped subscription keys in `backend/src/a2a/a2a-event-bus.ts`.
  */
 
 export type CoordinationEventType =

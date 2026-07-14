@@ -1,7 +1,7 @@
 /**
  * ConductorClient — the typed web client for the Recoder Conductor control plane.
  *
- * Wraps the real routes in docker-backend/src/conductor/conductor.routes.ts
+ * Wraps the real routes in backend/src/conductor/conductor.routes.ts
  * (mounted under /api/conductor). Every response uses the {success,data}
  * envelope; this client unwraps `data` and throws a typed {@link ConductorError}
  * on `{success:false}` or a non-2xx status.

@@ -9,7 +9,7 @@ import type { McpServerRegistration } from '../registry';
  *
  * agent-mcp stays runtime-agnostic: it never owns workspace state, never assumes
  * a substrate, worktree layout, or git remote. It operates ONLY over the
- * {@link WorkspaceRepositoryPort} the host (docker-backend) injects, exactly like
+ * {@link WorkspaceRepositoryPort} the host (backend) injects, exactly like
  * the tasks and git_nexus servers inject their ports.
  */
 export const workspaceMcpServer: McpServerRegistration = {
@@ -80,7 +80,7 @@ export type WorkspaceMergeResult = {
 };
 
 /**
- * The injected workspace control-plane port. A runtime backend (docker-backend's
+ * The injected workspace control-plane port. A runtime backend (backend's
  * conductor) implements this over its store of record. Every method must degrade
  * truthfully: a missing workspace yields a real not-found error; an un-approved
  * merge throws an approval error rather than fabricating `merged: true`.

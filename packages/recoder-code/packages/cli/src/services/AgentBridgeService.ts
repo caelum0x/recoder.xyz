@@ -1,7 +1,7 @@
 /**
  * Agent Bridge Service
  *
- * Connects recoder-code CLI to the A2A workspace system on docker-backend
+ * Connects recoder-code CLI to the A2A workspace system on backend
  * via WebSocket. Enables local agents to:
  *   - Register as workspace members
  *   - Receive task assignments in real-time

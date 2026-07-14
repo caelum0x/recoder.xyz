@@ -1,5 +1,5 @@
 packages:
-  - docker-backend
+  - backend
   - apps/agent-gateway
   - apps/agent-worker
   - apps/mobile

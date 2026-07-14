@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://recoder.xyz"><strong>Recoder</strong></a> &nbsp;&middot;&nbsp;
-  <a href="../../docker-backend/src/conductor/README.md"><strong>Conductor</strong></a>
+  <a href="../../backend/src/conductor/README.md"><strong>Conductor</strong></a>
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@ It is vendored and owned by Recoder under `ts/dmux`, forked from the original
 ### Shared tmux server (the Conductor bridge)
 
 dmux drives the **same pinned tmux binary** as the Conductor, resolved identically to
-`docker-backend/src/conductor/tmux-path.ts`:
+`backend/src/conductor/tmux-path.ts`:
 
 1. `DMUX_TMUX_BIN` / `CONDUCTOR_TMUX_BIN` (absolute path override)
 2. `RECODER_TMUX_BUILD_PATH` or the vendored `modules/terminal/tmux/tmux` build
@@ -42,7 +42,7 @@ dmux drives the **same pinned tmux binary** as the Conductor, resolved identical
 
 Because both halves share one tmux server, dmux observes and interacts with the
 Conductor's `recoder-*` sessions. The backend launches/attaches dmux via
-`docker-backend/src/conductor/dmux-adapter.ts`, propagating the pinned tmux env so the
+`backend/src/conductor/dmux-adapter.ts`, propagating the pinned tmux env so the
 console and the headless conductor always agree on which tmux they drive.
 
 ## Quick Start
@@ -110,7 +110,7 @@ dmux can use default branch behavior or let you override branch details when cre
 
 ## Documentation
 
-- Conductor: **[docker-backend/src/conductor/README.md](../../docker-backend/src/conductor/README.md)**.
+- Conductor: **[backend/src/conductor/README.md](../../backend/src/conductor/README.md)**.
 - Operator-console maintainer guide: **[AGENTS.md](./AGENTS.md)** (config dirs, hooks, agent registry).
 
 ## Contributing

@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsup';
 
-// Dual CJS + ESM build so both module systems (e.g. CJS docker-backend and
+// Dual CJS + ESM build so both module systems (e.g. CJS backend and
 // ESM consumers) can import @recoder/browser-tools from the published dist.
 //
 // playwright is a peerDependency and is referenced only via `import type`

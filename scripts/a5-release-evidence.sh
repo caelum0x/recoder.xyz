@@ -55,7 +55,7 @@ echo "production_scope: $PRODUCTION_SCOPE" | tee -a "$LOG_FILE"
 
 run_step "A5 structure: required repos present" /bin/zsh -lc '
   set -euo pipefail
-  req=(backend docker-backend apps/mobile recoder-agency recoder-pm)
+  req=(backend backend apps/mobile recoder-agency recoder-pm)
   for d in "${req[@]}"; do
     [[ -d "$d" ]] || { echo "missing directory: $d" >&2; exit 1; }
   done

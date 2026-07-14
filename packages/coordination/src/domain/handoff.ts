@@ -2,7 +2,7 @@
  * Handoff — a typed, depth-bounded transfer of work from one agent to another.
  *
  * Fuses the autonomous-routing handoff flow + delegation-chain shape from
- * `docker-backend/src/a2a/{autonomous-routing,delegation-chain}.service.ts`:
+ * `backend/src/a2a/{autonomous-routing,delegation-chain}.service.ts`:
  * from/to, intent, prompt, depth, parent, and lifecycle status.
  */
 

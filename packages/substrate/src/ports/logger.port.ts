@@ -1,7 +1,7 @@
 /**
  * LoggerPort — the structured logging seam (design §4.9 / §7).
  *
- * The substrate package never imports `docker-backend`'s logger; the backend
+ * The substrate package never imports `backend`'s logger; the backend
  * injects a concrete pino-backed adapter, tests inject a recording or no-op
  * logger. Interface only: no behavior lives here.
  */

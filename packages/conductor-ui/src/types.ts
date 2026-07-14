@@ -5,7 +5,7 @@
  * Source of truth:
  *  - packages/agent-os/src/domain/workspace.ts (Workspace, WorkspaceState)
  *  - packages/agent-os/src/domain/event.ts (RunEvent)
- *  - docker-backend/src/conductor/conductor.routes.ts (routes + {success,data} envelopes)
+ *  - backend/src/conductor/conductor.routes.ts (routes + {success,data} envelopes)
  *  - apps/desktop/cockpit/src/types.ts (the same shapes, re-used here verbatim)
  *
  * These describe what the backend returns; this package never invents fields the

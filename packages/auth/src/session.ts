@@ -33,7 +33,7 @@ export type AuthSession = {
  * This is the core verification function used by:
  * - Next.js apps (via cookies)
  * - Python backend (via direct DB lookup)
- * - docker-backend (via HTTP call or direct DB lookup)
+ * - backend (via HTTP call or direct DB lookup)
  */
 export async function verifySessionToken(
   rawToken: string

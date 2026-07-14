@@ -3,7 +3,7 @@
  *
  * Dependency inversion is what lets `@recoder/substrate` provide a remote,
  * SSH-backed substrate WITHOUT opening real sockets in the engine or importing
- * a concrete SSH client. The backend's `docker-backend/src/conductor/wiring/*`
+ * a concrete SSH client. The backend's `backend/src/conductor/wiring/*`
  * adapter provides the concrete transport (a real impl shells
  * `ssh -o BatchMode=yes <host> <command>` over Wave's durable SSH session, which
  * survives reconnects) and passes `createSshSubstrate({ exec, config })` into

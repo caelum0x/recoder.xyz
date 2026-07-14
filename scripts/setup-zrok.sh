@@ -67,11 +67,11 @@ docker exec -e ZROK_ADMIN_TOKEN="$ZROK_ADMIN_TOKEN" "$ZROK_CONTAINER" \
   }
 echo ""
 
-# 3. Create a service account for docker-backend
-echo "[3/5] Creating docker-backend service account..."
+# 3. Create a service account for backend
+echo "[3/5] Creating backend service account..."
 ZROK_TOKEN=$(docker exec -e ZROK_ADMIN_TOKEN="$ZROK_ADMIN_TOKEN" "$ZROK_CONTAINER" \
   zrok admin create account \
-    --email "docker-backend@recoder.xyz" \
+    --email "backend@recoder.xyz" \
     --password "$(openssl rand -hex 16)" \
   2>/dev/null | grep -oP 'token:\s*\K\S+' || echo "")
 
@@ -82,10 +82,10 @@ if [ -z "$ZROK_TOKEN" ]; then
 fi
 echo ""
 
-# 4. Enable the environment for docker-backend
+# 4. Enable the environment for backend
 echo "[4/5] Enabling environment..."
 docker exec -e ZROK_TOKEN="$ZROK_TOKEN" "$ZROK_CONTAINER" \
-  zrok enable --headless --description "recoder-docker-backend" 2>&1 || {
+  zrok enable --headless --description "recoder-backend" 2>&1 || {
     echo "Environment enable failed (may need manual setup via web console)"
   }
 echo ""
@@ -151,8 +151,8 @@ echo "  (typically via the existing *.recoder.xyz wildcard)"
 echo ""
 echo "Public HTTPS should use the main recoder wildcard/origin certificate."
 echo ""
-echo "Then restart docker-backend + zrok:"
-echo "  docker compose -f docker-compose.deploy.yml restart docker-backend zrok-controller zrok-frontend"
+echo "Then restart backend + zrok:"
+echo "  docker compose -f docker-compose.deploy.yml restart backend zrok-controller zrok-frontend"
 echo ""
 echo "For the deployed zrok2 stack, run:"
 echo "  ./scripts/check-zrok2-share-flow.sh"

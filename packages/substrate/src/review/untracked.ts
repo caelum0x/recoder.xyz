@@ -1,6 +1,6 @@
 /**
  * Untracked-file parsing — promoted verbatim from the duplicated logic in
- * docker-backend/src/conductor/substrate-tmux.ts and substrate-daytona.ts
+ * backend/src/conductor/substrate-tmux.ts and substrate-daytona.ts
  * (`git status --porcelain` → `??` lines). Pure: a string in, a list out.
  *
  * `git status --porcelain` prefixes untracked entries with `?? ` (two status

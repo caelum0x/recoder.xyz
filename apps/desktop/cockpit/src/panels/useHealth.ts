@@ -6,7 +6,7 @@
  * to declare "I need the dmux subsystem" or "I need the substrate" without each
  * panel making its own health fetch.
  *
- * CURRENT BACKEND SHAPE (docker-backend/src/conductor/conductor.routes.ts):
+ * CURRENT BACKEND SHAPE (backend/src/conductor/conductor.routes.ts):
  *   GET /api/conductor/health/full → ConductorHealth with top-level keys:
  *     status, substrate, runtimes, resources, activeTails, dmux, workspaces
  *

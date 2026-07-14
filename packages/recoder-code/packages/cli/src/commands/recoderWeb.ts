@@ -296,7 +296,7 @@ async function startSync(): Promise<void> {
     await new Promise(() => {});
   } else {
     console.log('❌ Failed to connect to platform');
-    console.log('💡 Make sure docker-backend is running');
+    console.log('💡 Make sure backend is running');
   }
 }
 
