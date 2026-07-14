@@ -7,7 +7,7 @@ vars:
     APP_NAME: "Wave"
     BIN_DIR: "bin"
     VERSION:
-        sh: node version.cjs
+        sh: node app/version.cjs
     RMRF: '{{if eq OS "windows"}}powershell -NoProfile -NonInteractive Remove-Item -Force -Recurse -ErrorAction SilentlyContinue{{else}}rm -rf{{end}}'
     DATE: '{{if eq OS "windows"}}powershell -NoProfile -NonInteractive Get-Date -UFormat{{else}}date{{end}}'
     ARTIFACTS_BUCKET: waveterm-github-artifacts/staging-w2
@@ -17,6 +17,7 @@ vars:
 tasks:
     electron:dev:
         desc: Run the Electron application via the Vite dev server (enables hot reloading).
+        dir: app
         cmd: npm run dev
         aliases:
             - dev
@@ -33,6 +34,7 @@ tasks:
 
     electron:start:
         desc: Run the Electron application directly.
+        dir: app
         cmd: npm run start
         aliases:
             - start
@@ -47,6 +49,7 @@ tasks:
 
     electron:quickdev:
         desc: Run the Electron application via the Vite dev server (quick dev - no docsite, arm64 only, no generate, no wsh).
+        dir: app
         cmd: npm run dev
         deps:
             - npm:install
@@ -60,20 +63,21 @@ tasks:
 
     preview:
         desc: Run the standalone component preview server with HMR (no Electron, no backend).
-        dir: frontend/preview
+        dir: app/frontend/preview
         cmd: npx vite
         deps:
             - npm:install
 
     build:preview:
         desc: Build the component preview server for static deployment.
-        dir: frontend/preview
+        dir: app/frontend/preview
         cmd: npx vite build
         deps:
             - npm:install
 
     electron:winquickdev:
         desc: Run the Electron application via the Vite dev server (quick dev - Windows amd64 only, no generate, no wsh).
+        dir: app
         cmd: npm run dev
         deps:
             - npm:install
@@ -123,6 +127,7 @@ tasks:
 
     package:
         desc: Package the application for the current platform.
+        dir: app
         cmds:
             - pnpm run build:prod && pnpm exec electron-builder -c electron-builder.config.cjs -p never {{.CLI_ARGS}}
         deps:
@@ -133,6 +138,7 @@ tasks:
 
     build:frontend:dev:
         desc: Build the frontend in development mode.
+        dir: app
         cmd: npm run build:dev
         deps:
             - npm:install
@@ -148,28 +154,28 @@ tasks:
         cmds:
             - task: build:server:quickdev
         sources:
-            - go.mod
-            - go.sum
-            - pkg/**/*.go
-            - pkg/**/*.sh
-            - cmd/**/*.go
+            - server/go.mod
+            - server/go.sum
+            - server/pkg/**/*.go
+            - server/pkg/**/*.sh
+            - server/cmd/**/*.go
             - tsunami/go.mod
             - tsunami/go.sum
             - tsunami/**/*.go
-            - package.json
+            - app/package.json
 
     build:schema:
         desc: Build the schema for configuration.
         sources:
-            - "cmd/generateschema/*.go"
-            - "pkg/wconfig/*.go"
+            - "server/cmd/generateschema/*.go"
+            - "server/pkg/wconfig/*.go"
         generates:
-            - "dist/schema/**/*"
+            - "app/dist/schema/**/*"
         cmds:
-            - go run cmd/generateschema/main-generateschema.go
-            - cmd: '{{.RMRF}} "dist/schema"'
+            - cd server && go run cmd/generateschema/main-generateschema.go
+            - cmd: '{{.RMRF}} "app/dist/schema"'
               ignore_error: true
-            - task: copyfiles:'schema':'dist/schema'
+            - task: copyfiles:'schema':'app/dist/schema'
 
     build:server:
         desc: Build the recoder-server component.
@@ -181,20 +187,20 @@ tasks:
             - go:mod:tidy
             - generate
         sources:
-            - "cmd/server/*.go"
-            - "pkg/**/*.go"
-            - "pkg/**/*.json"
-            - "pkg/**/*.sh"
+            - "server/cmd/server/*.go"
+            - "server/pkg/**/*.go"
+            - "server/pkg/**/*.json"
+            - "server/pkg/**/*.sh"
             - tsunami/**/*.go
-            - package.json
+            - app/package.json
         generates:
-            - dist/bin/recoder-server.*
+            - app/dist/bin/recoder-server.*
 
     build:server:macos:
         desc: Build the recoder-server component for macOS (Darwin) platforms (generates artifacts for both arm64 and amd64).
         platforms: [darwin]
         cmds:
-            - cmd: rm -f dist/bin/recoder-server*
+            - cmd: rm -f app/dist/bin/recoder-server*
               ignore_error: true
             - task: build:server:internal
               vars:
@@ -210,13 +216,13 @@ tasks:
         deps:
             - go:mod:tidy
         sources:
-            - "cmd/server/*.go"
-            - "pkg/**/*.go"
-            - "pkg/**/*.json"
-            - "pkg/**/*.sh"
+            - "server/cmd/server/*.go"
+            - "server/pkg/**/*.go"
+            - "server/pkg/**/*.json"
+            - "server/pkg/**/*.sh"
             - "tsunami/**/*.go"
         generates:
-            - dist/bin/recoder-server.*
+            - app/dist/bin/recoder-server.*
 
     build:backend:quickdev:windows:
         desc: Build only the recoder-server component for quickdev (Windows amd64 only, no generate, no wsh).
@@ -229,19 +235,19 @@ tasks:
         deps:
             - go:mod:tidy
         sources:
-            - "cmd/server/*.go"
-            - "pkg/**/*.go"
-            - "pkg/**/*.json"
-            - "pkg/**/*.sh"
+            - "server/cmd/server/*.go"
+            - "server/pkg/**/*.go"
+            - "server/pkg/**/*.json"
+            - "server/pkg/**/*.sh"
             - "tsunami/**/*.go"
         generates:
-            - dist/bin/recoder-server.x64.exe
+            - app/dist/bin/recoder-server.x64.exe
 
     build:server:windows:
         desc: Build the recoder-server component for Windows platforms (only generates artifacts for the current architecture).
         platforms: [windows]
         cmds:
-            - cmd: powershell -NoProfile -NonInteractive -Command "Remove-Item -Force -ErrorAction SilentlyContinue -Path dist/bin/recoder-server*"
+            - cmd: powershell -NoProfile -NonInteractive -Command "Remove-Item -Force -ErrorAction SilentlyContinue -Path app/dist/bin/recoder-server*"
               ignore_error: true
             - task: build:server:internal
               vars:
@@ -254,7 +260,7 @@ tasks:
         desc: Build the recoder-server component for Linux platforms (only generates artifacts for the current architecture).
         platforms: [linux]
         cmds:
-            - cmd: rm -f dist/bin/recoder-server*
+            - cmd: rm -f app/dist/bin/recoder-server*
               ignore_error: true
             - task: build:server:internal
               vars:
@@ -268,7 +274,7 @@ tasks:
             vars:
                 - ARCHS
         cmd:
-            cmd: CGO_ENABLED=1 GOARCH={{.GOARCH}} {{.GO_ENV_VARS}} go build -tags "osusergo,sqlite_omit_load_extension" -ldflags "{{.GO_LDFLAGS}} -X main.BuildTime=$({{.DATE}} +'%Y%m%d%H%M') -X main.WaveVersion={{.VERSION}}" -o dist/bin/recoder-server.{{if eq .GOARCH "amd64"}}x64{{else}}{{.GOARCH}}{{end}}{{exeExt}} cmd/server/main-server.go
+            cmd: cd server && CGO_ENABLED=1 GOARCH={{.GOARCH}} {{.GO_ENV_VARS}} go build -tags "osusergo,sqlite_omit_load_extension" -ldflags "{{.GO_LDFLAGS}} -X main.BuildTime=$({{.DATE}} +'%Y%m%d%H%M') -X main.WaveVersion={{.VERSION}}" -o ../app/dist/bin/recoder-server.{{if eq .GOARCH "amd64"}}x64{{else}}{{.GOARCH}}{{end}}{{exeExt}} cmd/server/main-server.go
             for:
                 var: ARCHS
                 split: ","
@@ -278,10 +284,10 @@ tasks:
     build:wsh:
         desc: Build the wsh component for all possible targets.
         cmds:
-            - cmd: rm -f dist/bin/wsh*
+            - cmd: rm -f app/dist/bin/wsh*
               platforms: [darwin, linux]
               ignore_error: true
-            - cmd: powershell -NoProfile -NonInteractive -Command "Remove-Item -Force -ErrorAction SilentlyContinue -Path dist/bin/wsh*"
+            - cmd: powershell -NoProfile -NonInteractive -Command "Remove-Item -Force -ErrorAction SilentlyContinue -Path app/dist/bin/wsh*"
               platforms: [windows]
               ignore_error: true
             - task: build:wsh:parallel
@@ -289,11 +295,11 @@ tasks:
             - go:mod:tidy
             - generate
         sources:
-            - "cmd/wsh/**/*.go"
-            - "pkg/**/*.go"
-            - package.json
+            - "server/cmd/wsh/**/*.go"
+            - "server/pkg/**/*.go"
+            - app/package.json
         generates:
-            - "dist/bin/wsh*"
+            - "app/dist/bin/wsh*"
 
     build:wsh:parallel:
         deps:
@@ -342,44 +348,45 @@ tasks:
                 - GOOS
                 - GOARCH
                 - VERSION
-        cmd: (CGO_ENABLED=0 GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -ldflags="-s -w -X main.BuildTime=$({{.DATE}} +'%Y%m%d%H%M') -X main.WaveVersion={{.VERSION}}" -o dist/bin/wsh-{{.VERSION}}-{{.GOOS}}.{{.NORMALIZEDARCH}}{{.EXT}} cmd/wsh/main-wsh.go)
+        cmd: (cd server && CGO_ENABLED=0 GOOS={{.GOOS}} GOARCH={{.GOARCH}} go build -ldflags="-s -w -X main.BuildTime=$({{.DATE}} +'%Y%m%d%H%M') -X main.WaveVersion={{.VERSION}}" -o ../app/dist/bin/wsh-{{.VERSION}}-{{.GOOS}}.{{.NORMALIZEDARCH}}{{.EXT}} cmd/wsh/main-wsh.go)
         internal: true
 
     build:tsunamiscaffold:
         desc: Build and copy tsunami scaffold to dist directory.
         cmds:
-            - cmd: "{{.RMRF}} dist/tsunamiscaffold"
+            - cmd: "{{.RMRF}} app/dist/tsunamiscaffold"
               ignore_error: true
-            - task: copyfiles:'tsunami/frontend/scaffold':'dist/tsunamiscaffold'
-            - cmd: '{{if eq OS "windows"}}powershell -NoProfile -NonInteractive Copy-Item -Path tsunami/templates/empty-gomod.tmpl -Destination dist/tsunamiscaffold/go.mod{{else}}cp tsunami/templates/empty-gomod.tmpl dist/tsunamiscaffold/go.mod{{end}}'
+            - task: copyfiles:'tsunami/frontend/scaffold':'app/dist/tsunamiscaffold'
+            - cmd: '{{if eq OS "windows"}}powershell -NoProfile -NonInteractive Copy-Item -Path tsunami/templates/empty-gomod.tmpl -Destination app/dist/tsunamiscaffold/go.mod{{else}}cp tsunami/templates/empty-gomod.tmpl app/dist/tsunamiscaffold/go.mod{{end}}'
         deps:
             - tsunami:scaffold
         sources:
             - "tsunami/frontend/dist/**/*"
             - "tsunami/templates/**/*"
         generates:
-            - "dist/tsunamiscaffold/**/*"
+            - "app/dist/tsunamiscaffold/**/*"
 
     generate:
         desc: Generate Typescript bindings for the Go backend.
         cmds:
-            - go run cmd/generatets/main-generatets.go
-            - go run cmd/generatego/main-generatego.go
+            - cd server && go run cmd/generatets/main-generatets.go
+            - cd server && go run cmd/generatego/main-generatego.go
         deps:
             - build:schema
         sources:
-            - "cmd/generatego/*.go"
-            - "cmd/generatets/*.go"
-            - "pkg/**/*.go"
+            - "server/cmd/generatego/*.go"
+            - "server/cmd/generatets/*.go"
+            - "server/pkg/**/*.go"
         # don't add generates key (otherwise will always execute)
 
     outdated:
         desc: Check for outdated packages using npm-check-updates.
+        dir: app
         cmd: npx npm-check-updates@latest
 
     version:
         desc: Get the current package version, or bump version if args are present. To pass args to `version.cjs`, add them after `--`. See `version.cjs` for usage definitions for the arguments.
-        cmd: node version.cjs {{.CLI_ARGS}}
+        cmd: node app/version.cjs {{.CLI_ARGS}}
 
     artifacts:upload:
         desc: Uploads build artifacts to the staging bucket in S3. To add additional AWS CLI arguments, add them after `--`.
@@ -446,7 +453,7 @@ tasks:
               vars:
                   GOOS: darwin
                   GOARCH: arm64
-            - cp dist/bin/wsh-{{.VERSION}}-darwin.arm64 ~/Library/Application\ Support/waveterm-dev/bin/wsh
+            - cp app/dist/bin/wsh-{{.VERSION}}-darwin.arm64 ~/Library/Application\ Support/waveterm-dev/bin/wsh
 
     dev:clearconfig:
         desc: Clear the config directory for waveterm-dev
@@ -461,6 +468,7 @@ tasks:
 
     check:ts:
         desc: Typecheck TypeScript code (frontend and electron).
+        dir: app
         cmd: npx tsc --noEmit
         deps:
             - npm:install
@@ -469,7 +477,7 @@ tasks:
         desc: Initialize the project for development.
         cmds:
             - pnpm install
-            - go mod tidy
+            - cd server && go mod tidy
             - cd docs && npm install
 
     dev:cleardata:windows:
@@ -491,20 +499,20 @@ tasks:
         desc: Runs `pnpm install` (workspace member — lockfile lives at the monorepo root)
         internal: true
         generates:
-            - node_modules/**/*
+            - app/node_modules/**/*
         sources:
             - ../../pnpm-lock.yaml
-            - package.json
-        cmd: pnpm install
+            - app/package.json
+        cmd: cd app && pnpm install
 
     go:mod:tidy:
         desc: Runs `go mod tidy`
         internal: true
         generates:
-            - go.sum
+            - server/go.sum
         sources:
-            - go.mod
-        cmd: go mod tidy
+            - server/go.mod
+        cmd: cd server && go mod tidy
 
     copyfiles:*:*:
         desc: Recursively copy directory and its contents.
@@ -514,9 +522,9 @@ tasks:
     clean:
         desc: clean make/dist directories
         cmds:
-            - cmd: '{{.RMRF}} "make"'
+            - cmd: '{{.RMRF}} "app/make"'
               ignore_error: true
-            - cmd: '{{.RMRF}} "dist"'
+            - cmd: '{{.RMRF}} "app/dist"'
               ignore_error: true
 
     tsunami:demo:todo:
@@ -650,6 +658,7 @@ tasks:
 
     godoc:
         desc: Start the Go documentation server for the root module
+        dir: server
         cmd: $(go env GOPATH)/bin/pkgsite -http=:6060
 
     tsunami:godoc:

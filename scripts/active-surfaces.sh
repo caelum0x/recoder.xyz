@@ -8,7 +8,7 @@ ACTIVE_SURFACES=(
   "backend"
   "recoder-agents"
   "apps/mobile"
-  "apps/desktop"
+  "apps/desktop/app"
   "recoder-pm"
   "recoder-agency"
   "packages/shared"

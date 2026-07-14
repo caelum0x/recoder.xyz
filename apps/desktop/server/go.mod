@@ -90,4 +90,4 @@ replace github.com/kevinburke/ssh_config => github.com/wavetermdev/ssh_config v0
 
 replace github.com/creack/pty => github.com/photostorm/pty v1.1.19-0.20230903182454-31354506054b
 
-replace github.com/recoder/recoder-terminal/tsunami => ./tsunami
+replace github.com/recoder/recoder-terminal/tsunami => ../tsunami

@@ -106,7 +106,7 @@ const config = {
         },
     },
     appImage: {
-        license: "LICENSE",
+        license: "../LICENSE",
     },
     snap: {
         base: "core22",

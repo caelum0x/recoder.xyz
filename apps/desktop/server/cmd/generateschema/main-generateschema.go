@@ -16,12 +16,12 @@ import (
 	"github.com/recoder/recoder-terminal/pkg/wconfig"
 )
 
-const WaveSchemaSettingsFileName = "schema/settings.json"
-const WaveSchemaConnectionsFileName = "schema/connections.json"
-const WaveSchemaAiPresetsFileName = "schema/aipresets.json"
-const WaveSchemaWidgetsFileName = "schema/widgets.json"
-const WaveSchemaBackgroundsFileName = "schema/backgrounds.json"
-const WaveSchemaWaveAIFileName = "schema/waveai.json"
+const WaveSchemaSettingsFileName = "../schema/settings.json"
+const WaveSchemaConnectionsFileName = "../schema/connections.json"
+const WaveSchemaAiPresetsFileName = "../schema/aipresets.json"
+const WaveSchemaWidgetsFileName = "../schema/widgets.json"
+const WaveSchemaBackgroundsFileName = "../schema/backgrounds.json"
+const WaveSchemaWaveAIFileName = "../schema/waveai.json"
 
 // ViewNameType is a string type whose JSON Schema offers enum suggestions for the most
 // common widget view names while still accepting any arbitrary string value.

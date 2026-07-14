@@ -82,7 +82,7 @@ else
 fi
 run_check "recoder-agents" "recoder-agents" "npm run build" false || failures=$((failures + 1))
 run_check "apps-mobile" "apps/mobile" "npm run typecheck" false || failures=$((failures + 1))
-run_check "apps-desktop" "apps/desktop" "npm run lint" false || failures=$((failures + 1))
+run_check "apps-desktop" "apps/desktop/app" "npm run lint" false || failures=$((failures + 1))
 run_check "backend" "backend" "npm run build" false || failures=$((failures + 1))
 run_check "backend" "backend" "npm run build" true || failures=$((failures + 1))
 

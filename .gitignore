@@ -442,21 +442,21 @@ public
 # breaks fresh-checkout builds (e.g. site/public/logo.png). Re-include real ones.
 !site/public/
 !site/public/**
-# apps/desktop/public = the Wave-fork shell's served static assets (logos, fonts,
+# apps/desktop/app/public = the Wave-fork shell's served static assets (logos, fonts,
 # fontawesome). Same landmine — un-ignore so the fork builds from a fresh checkout.
-!apps/desktop/public/
-!apps/desktop/public/**
+!apps/desktop/app/public/
+!apps/desktop/app/public/**
 
-# apps/desktop/build = electron-builder packaging inputs (entitlements.mac.plist,
+# apps/desktop/app/build = electron-builder packaging inputs (entitlements.mac.plist,
 # icon.icns). Same broad-`build/` landmine — un-ignore so mac packaging works
 # from a fresh checkout (NOT build output; electron-vite emits to dist/).
-!apps/desktop/build/
-!apps/desktop/build/**
+!apps/desktop/app/build/
+!apps/desktop/app/build/**
 
-# apps/desktop/pkg/secretstore = Go SOURCE hit by the broad `*secret*` rule (the
-# known secret-glob landmine — hides source, breaks fresh-checkout builds).
-!apps/desktop/pkg/secretstore/
-!apps/desktop/pkg/secretstore/**
+# apps/desktop/server/pkg/secretstore = Go SOURCE hit by the broad `*secret*` rule
+# (the known secret-glob landmine — hides source, breaks fresh-checkout builds).
+!apps/desktop/server/pkg/secretstore/
+!apps/desktop/server/pkg/secretstore/**
 
 # Cockpit + tsunami frontend static assets, hit by the bare `public` rule.
 !apps/desktop/cockpit/public/
